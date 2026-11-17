@@ -5,10 +5,7 @@ import { reflowCorners } from "./corner-layout.js";
 
 export const S = 1920 / 2960; // stage px per NGUI unit (the game fits 2960 units to the width)
 export const TAN10 = Math.tan((10 * Math.PI) / 180); // the game's 10 degree incline
-/**
- * Deep-copy JSON data.
- * @returns {*} The copy.
- */
+/** Deep-copy JSON data. */
 export const clone = (o) => JSON.parse(JSON.stringify(o));
 /** Find an element by id. */
 export const $ = (id) => document.getElementById(id);
@@ -97,7 +94,6 @@ export function wrapPath(path, fsMax, fsMin, maxW, maxLines = 3) {
 /**
  * Put an invisible button over a rendered widget.
  * @param {number[]} rect [left, top, width, height] in stage pixels.
- * @returns {HTMLButtonElement} The button.
  */
 export function hitButton(host, [l, t, w, h], fn, name, z = 50) {
   const b = document.createElement("button");

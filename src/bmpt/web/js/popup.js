@@ -207,7 +207,7 @@ function shown(el) {
 /**
  * The elements Tab can stop at inside a box, in order: enabled, drawn and not inert; a hidden or inert part is
  * skipped whole.
- * @returns {HTMLElement[]} The stops.
+ * @returns {HTMLElement[]}
  */
 export function tabStops(box) {
   const out = [];
@@ -291,7 +291,7 @@ addEventListener("keydown", trapKey);
  *     be answered with one of its buttons.
  * @param {{el?: HTMLElement|null, loading?: boolean}} [options] el: the popup's own layer, when the host holds
  *     several; loading: keep the layer hidden and inert until reveal().
- * @returns {PopupEntry} The stack entry.
+ * @returns {PopupEntry}
  */
 export function opened(host, close, { el = null, loading = false } = {}) {
   if (loading && el) {
@@ -408,14 +408,14 @@ export async function sequence(steps) {
 /**
  * The selection of a list popup with several cards ticked, to start with: every card that can be ticked.
  * @param {{key: string, disabled?: boolean}[]} items
- * @returns {Set<string>} The keys.
+ * @returns {Set<string>}
  */
 export const selectable = (items) => new Set(items.filter((it) => !it.disabled).map((it) => it.key));
 /**
  * The selection with a key ticked or unticked; a card that cannot be ticked leaves it as it is.
  * @param {Set<string>} selection
  * @param {{key: string, disabled?: boolean}[]} items
- * @returns {Set<string>} The new selection.
+ * @returns {Set<string>}
  */
 export function toggled(selection, items, key) {
   const it = items.find((x) => x.key === key);
@@ -826,7 +826,7 @@ export function disabledConfirm(frame) {
  * @param {((how: string) => void)|null} close Closes the popup; null for a popup that must be answered with a
  *     button (the backdrop and Escape do nothing).
  * @param {{el?: HTMLElement|null}} [options] el: the popup's own layer, when the host holds several.
- * @returns {PopupEntry} The stack entry.
+ * @returns {PopupEntry}
  */
 export function closable(view, host, close, { el = null } = {}) {
   const back = view.nodes.get("Center/BlackBg/BlackBgClickArea")?.els[0];
@@ -952,7 +952,7 @@ export function checkbox(name, x, y, caption, on, maxW) {
  * @param {string} path The checkbox node's path.
  * @param {{checked: boolean, label?: string}} state The checkbox's state, flipped on a click.
  * @param {(checked: boolean) => void} [onChange]
- * @returns {HTMLButtonElement|null} The hit button.
+ * @returns {HTMLButtonElement|null}
  */
 export function wireCheck(host, view, path, state, onChange) {
   const tick = view.nodes.get(`${path}/Type_ON/Check/Icon`)?.els[0];
@@ -1231,7 +1231,7 @@ export const tickPlace = (card) => [
  * @param {boolean|null} [tick] Null, or whether the card is ticked, for a list whose cards are ticked apart
  *     from being shown (listPopup tick): a check box at the card's top right corner, the selection frame then
  *     without its check (it marks the card the details show).
- * @returns {NguiNode} The card's node.
+ * @returns {NguiNode}
  */
 export function listCard(it, x, y, selected, card = LP.card, kind = null, tick = null) {
   const { w, h, bar } = card;

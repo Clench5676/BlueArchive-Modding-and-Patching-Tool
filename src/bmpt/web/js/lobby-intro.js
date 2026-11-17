@@ -205,7 +205,7 @@ export function blend(volumes) {
  * The clips of a Spine track that play at a time (weight above 0: from their start to their end).
  * @param {{t: number, d: number}[]} clips The track's clips: start and duration.
  * @param {number} t The time in seconds.
- * @returns {object[]} The clips playing.
+ * @returns {object[]}
  */
 export const playingAt = (clips, t) => clips.filter((c) => t >= c.t && t < c.t + c.d);
 

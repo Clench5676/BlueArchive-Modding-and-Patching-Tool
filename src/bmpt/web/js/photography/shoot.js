@@ -20,7 +20,7 @@ function notify(callback, ...args) {
  * @param {(shot: object) => void} [options.onCaptured] Called once the picture is taken (failures only logged).
  * @param {(result: object, payload: object) => void} [options.onSaved] Called once it is saved.
  * @param {() => boolean} [options.alive] False ends the shot with an AbortError.
- * @returns {Promise<object>} What save returned.
+ * @returns {Promise<object>}
  */
 export async function photograph({
   bridge,

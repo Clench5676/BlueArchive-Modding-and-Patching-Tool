@@ -369,7 +369,7 @@ function update(next) {
 
 /**
  * Read mods.state again and draw the switch.
- * @returns {Promise<object>} The state.
+ * @returns {Promise<object>}
  */
 export async function refresh() {
   update(await rpc("mods.state").catch(() => null));
@@ -849,10 +849,7 @@ export async function openHelp() {
   await Popup.message({ title: T("mods.switch"), lines, width: 2098, fitTogether: [0, 1], plain: true });
 }
 
-/**
- * Settings' mod cache cleanup: a library job; kept originals stay, Off needs them.
- * @returns {Promise<boolean>} Whether it ran.
- */
+/** Settings' mod cache cleanup: a library job; kept originals stay, Off needs them. */
 export async function clearBuilt() {
   try {
     const id = await rpc("mods.clearBuilt");

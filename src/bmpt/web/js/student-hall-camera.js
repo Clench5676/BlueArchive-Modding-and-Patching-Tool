@@ -10,7 +10,7 @@ const clamp = (n, low, high) => Math.max(low, Math.min(high, n));
 
 /**
  * Keep a scene view valid: the scale 1 to 3 and the offset so the scene covers the stage.
- * @returns {SceneView} The valid view.
+ * @returns {SceneView}
  */
 export function constrainScene(view) {
   const scale = clamp(Number(view.scale) || 1, 1, 3);
@@ -51,7 +51,6 @@ export function sceneViewport(view = HOME) {
  * @param {() => boolean} [options.blocked] Whether input is held, for a popup or a drag.
  * @param {(view: SceneView) => void} [options.onChange]
  * @param {object} [options.env] The window, for the tests.
- * @returns {object} The camera's controls.
  */
 export function createSceneCamera({
   host,

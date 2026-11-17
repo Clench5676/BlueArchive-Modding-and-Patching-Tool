@@ -39,7 +39,7 @@ const pick = (value, allowed, fallback) => (allowed.includes(value) ? value : fa
 /**
  * A stored or edited view with every field valid (the server keeps the same rules: webui/state.py roster_view).
  * @param {*} v The stored or edited view; anything that is not an object gives the defaults.
- * @returns {RosterView} The valid view.
+ * @returns {RosterView}
  */
 export function normalizeView(v) {
   const src = v && typeof v === "object" ? v : {};
@@ -76,7 +76,6 @@ export const filtering = (filters) =>
  * Fold a text for searching: case, width, kana and separators (brackets, dots, commas, dashes, quotes and the
  * marks inside official names such as Shiroko*Terror, Golconde&Decalcomania or a "?" title), so a name typed
  * without them is found.
- * @returns {string} The folded text.
  */
 export function fold(str) {
   return String(str ?? "")
@@ -264,7 +263,7 @@ export function arrange(
 /**
  * The cards in the roster's order, in one list.
  * @param {{families?: object[]}} data The roster data of roster.list.
- * @returns {object[]} The cards.
+ * @returns {object[]}
  */
 export const order = (data, view, opts) => arrange(data, view, opts).groups.flatMap((g) => g.items);
 

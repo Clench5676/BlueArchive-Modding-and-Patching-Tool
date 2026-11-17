@@ -328,7 +328,7 @@ const clipId = (name) =>
     .replace(/_new$/, "");
 /**
  * The looping idle of a layer (rest-pose.js, which the thumbnails choose with too).
- * @returns {string|null} The animation name.
+ * @returns {string|null}
  */
 export function idleOf(data, layer, info = current?.info) {
   if (layer.rest) return layer.rest.name;
@@ -341,7 +341,7 @@ export function idleOf(data, layer, info = current?.info) {
  * stars and sweat of other lobbies.
  * @param {string|null} idle
  * @param {(name: string) => object|undefined} clip Gives a clip (lobby.json clips).
- * @returns {string[]} The clip names.
+ * @returns {string[]}
  */
 export function idleClips(info, name, idle, clip) {
   const pool = info?.idles?.[name] || [];
@@ -620,7 +620,7 @@ const safeRects = rectCache(2 * 1024 * 1024); // the same source and geometry id
  * @param {string[]} talks
  * @param {(layer: object, name: string) => {track: number, next?: string, sync?: string[]}} clip Gives the
  *     clip's track, next and sync.
- * @returns {Array<[number, object]>} The poses.
+ * @returns {Array<[number, object]>}
  */
 export function clipPoses(layers, info, talks, clip) {
   const out = [];
@@ -665,7 +665,7 @@ export function clipPoses(layers, info, talks, clip) {
  * @param {Uint8Array} bad
  * @param {number} gw The grid's width in cells.
  * @param {number} [band] How far from P's sides the cells are checked.
- * @returns {CellRect} The shrunk rect.
+ * @returns {CellRect}
  */
 export function shrinkRect(P, bad, gw, band = BAND) {
   const r = { ...P };
@@ -1103,7 +1103,6 @@ const viewOf = (m, md = mode) => ({ ...(md === "full" ? m.full : m.left) });
  * A layer's spine-player viewport for a view: the view in that skeleton's own units (also the game's view, for
  * the post-processing's screen).
  * @param {{x: number, y: number, scale: number}} l
- * @returns {object} The viewport.
  */
 export const layerViewport = (v, l) => ({
   x: (v.x - l.x) / l.scale,
@@ -1343,7 +1342,7 @@ export const ZOOM_MODES = ["game", "art", "unlocked", "custom"];
  * ZOOM_OUT_MAX game views across.
  * @param {{mode: string, custom?: number}} zoom
  * @param {object} m The lobby's rects (measure).
- * @returns {ViewRect} The bounds.
+ * @returns {ViewRect}
  */
 export function zoomBounds(zoom, m, G) {
   const full = rectOf(m.full),
@@ -2344,10 +2343,7 @@ export function reveal(restart = true) {
 export function setIntro(on) {
   introOn = on !== false;
 }
-/**
- * Wait for the lobby's intro to end, be skipped or be missing (the switch card's still waits for it).
- * @returns {Promise<void>} Settles then.
- */
+/** Wait for the lobby's intro to end, be skipped or be missing (the switch card's still waits for it). */
 export function introDone() {
   const c = current;
   return c?.ready ? c.ready.then(() => c.intro?.done()) : Promise.resolve();
@@ -2514,7 +2510,7 @@ function boneOf(skeleton, name) {
 export const effects = (opts) => current?.fx?.stats(opts) || null;
 /**
  * For checks: the layers' players, bottom first.
- * @returns {object[]} The players.
+ * @returns {object[]}
  */
 export const layerPlayers = () => players.filter((p) => p.bamtLayer);
 
@@ -2858,7 +2854,7 @@ function soundsOf(p, entry, c) {
 /**
  * For checks: each layer's random-timing clips (seconds until each plays next) and tracks, and the sound keys
  * played lately (also while muted).
- * @returns {object[]} The runs.
+ * @returns {object[]}
  */
 export const clipRuns = () =>
   players
@@ -2871,13 +2867,13 @@ export const clipRuns = () =>
     }));
 /**
  * For checks: the sound keys played lately.
- * @returns {object[]} The log entries.
+ * @returns {object[]}
  */
 export const soundLog = () => Sfx.log.slice();
 /**
  * A sequence's lines, one per voice clip.
  * @param {{cues: {clip: string}[]}} seq
- * @returns {string[]} The lines.
+ * @returns {string[]}
  */
 export const textOf = (seq) => seq.cues.map((c) => lineOf(lines[c.clip])).filter(Boolean);
 

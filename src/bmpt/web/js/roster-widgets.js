@@ -21,7 +21,7 @@ export function searchTree(collection) {
  * together when the width changes.
  * @param {number} width The body's width in units.
  * @param {boolean} filtered Whether a display setting filters the list (the funnel shows in blue).
- * @returns {NguiNode} The button body.
+ * @returns {NguiNode}
  */
 export function sortBody(collection, fitted, width, filtered) {
   const body = clone(find(collection, "SeletControl/TopMenu/SortBtn/Btn_Normal"));
@@ -46,7 +46,7 @@ export function sortBody(collection, fitted, width, filtered) {
 /**
  * The order button's body, showing one arrow.
  * @param {boolean} ascending True for the up arrow, false for the down arrow.
- * @returns {NguiNode} The button body.
+ * @returns {NguiNode}
  */
 export function orderBody(collection, ascending) {
   const body = clone(find(collection, "SeletControl/TopMenu/OrderBtn/Btn_Normal"));

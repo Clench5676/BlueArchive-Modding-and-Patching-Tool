@@ -56,7 +56,6 @@ function swap(src, from, to) {
 /**
  * A lobby program's vertex GLSL for three.js: 3D positions through the object's model-view and the camera's
  * projection.
- * @returns {string} The GLSL source.
  */
 export function vertex3d(kind) {
   let src = swap(vertexSource(kind), "#version 300 es\n", "");
@@ -69,7 +68,6 @@ export function vertex3d(kind) {
  * A lobby program's fragment GLSL for three.js: the textures read with V flipped (glTF images are stored top
  * row first, Unity's UV origin is the bottom-left corner), the colour encoded to sRGB at the end
  * (premultiplied: u_premul 1, the colour divided by the alpha first).
- * @returns {string} The GLSL source.
  */
 export function fragment3d(kind) {
   let src = swap(fragmentSource(kind), "#version 300 es\n", "");
@@ -117,7 +115,7 @@ export function blendOf(mat) {
 /**
  * Convert a three.js matrix (column-major 4 x 4) to a particles.js matrix (row-major 3 x 4).
  * @param {THREE.Matrix4} m
- * @returns {number[]} The 12 numbers.
+ * @returns {number[]}
  */
 export const rows = (m) => {
   const e = m.elements;

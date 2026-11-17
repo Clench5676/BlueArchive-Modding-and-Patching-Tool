@@ -110,16 +110,12 @@ export function reappliable(entries, result) {
   return updated.filter((e) => !held.has(`${e.install}|${e.core}`));
 }
 
-/**
- * The mods a drift prompt's entries are configured with ("mod:<id>"), for mods.impact {ids}.
- */
+/** The mods a drift prompt's entries are configured with ("mod:<id>"), for mods.impact {ids}. */
 export const configuredMods = (entries) => [
   ...new Set((entries || []).map((e) => /^mod:(.+)$/.exec(e?.configured || "")?.[1]).filter(Boolean)),
 ];
 
-/**
- * The keys of the entries whose configured mod's rig an update changed (from mods.impact {ids}).
- */
+/** The keys of the entries whose configured mod's rig an update changed (from mods.impact {ids}). */
 export function heldKeys(entries, impacts) {
   const changed = new Set((impacts || []).filter((m) => m.impact === "rig_changed").map((m) => m.id));
   return new Set(
@@ -135,14 +131,10 @@ let names = async () => (e) => e?.variant || e?.core || "";
 let goTo = async () => {}; // main.js: a mod's student page with its switch open on the mod
 let busy = false;
 let pending = null; // a check's outcome waiting for the first screen: {result, reapplied, failed}
-/**
- * Whether a check or a repair is running.
- */
+/** Whether a check or a repair is running. */
 export const isBusy = () => busy;
 
-/**
- * Follow game updates while the program runs: the game services are rebuilt for the new resource version.
- */
+/** Follow game updates while the program runs: the game services are rebuilt for the new resource version. */
 export function init(options = {}) {
   if (options.names) names = options.names;
   if (options.go) goTo = options.go;
@@ -156,9 +148,7 @@ export function init(options = {}) {
   });
 }
 
-/**
- * Go To: the mod's student page with its switch open on the mod.
- */
+/** Go To: the mod's student page with its switch open on the mod. */
 export const open = (mod) =>
   Promise.resolve(goTo({ id: mod.id, variant: mod.target, kind: mod.kind })).catch((err) =>
     console.error("impact", err),
@@ -298,9 +288,7 @@ export async function gate() {
 export const heldOf = (result) =>
   (result?.mods || []).filter((m) => m.impact === "rig_changed" && !(m.repaired_id && !m.configured));
 
-/**
- * A card's key: its mod, else its core.
- */
+/** A card's key: its mod, else its core. */
 export const modKey = (mod) => mod?.id || `${mod?.core || ""}`;
 
 /**
@@ -659,7 +647,7 @@ export async function heldDetails(entries) {
 
 /**
  * Fix from outside the summary (the switch help's Details).
- * @returns {Promise<object[]>} The mods fixed.
+ * @returns {Promise<object[]>}
  */
 export async function repair(mods) {
   if (busy || !mods?.length) return [];
@@ -744,9 +732,7 @@ export async function view({ always = true } = {}) {
   return location.hash !== before;
 }
 
-/**
- * The list, only when the last check left mods to update (view).
- */
+/** The list, only when the last check left mods to update (view). */
 export const show = () => view({ always: false });
 
 /**

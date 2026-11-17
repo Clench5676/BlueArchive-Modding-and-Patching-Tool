@@ -43,7 +43,6 @@ export function extraPlays(r, rnd = Math.random) {
 /**
  * Add handlers to a track entry's events, keeping any it has (spine-ts calls entry.listener). Entries are
  * pooled, so a handler must let go of the entry on dispose.
- * @returns {object} The entry.
  */
 export function listen(entry, handlers) {
   const old = entry.listener || {};

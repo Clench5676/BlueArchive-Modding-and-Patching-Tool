@@ -11,7 +11,6 @@ import { onCapturePriorityChange, popupCapturesOpen, popupItem, captureEligible 
  * The version of a variant's 3D stills: it changes when the model's files or any model mod of the family
  * change.
  * @param {number} [generation] A number the caller raises to make every still new.
- * @returns {string} The version.
  */
 export const modelStillVersion = (family, variant, generation = 0) =>
   JSON.stringify([

@@ -113,7 +113,6 @@ function targets(gl, r, w, h) {
  * texel times the max radius scaled from 1080p).
  * @param {number} radius The volume's max radius.
  * @param {number} screenW The game screen's width in canvas pixels.
- * @returns {number} The tap spacing.
  */
 export const tapPixels = (radius, screenW) => 1.33333333 * radius * (screenW / 1080);
 

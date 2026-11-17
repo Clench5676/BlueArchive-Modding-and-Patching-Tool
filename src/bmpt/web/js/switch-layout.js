@@ -113,7 +113,7 @@ export function cardInkBounds(tree) {
  * Place the cards of a list in rows on the paper.
  * @param {object} grid The grid (switchGrid).
  * @param {{left: number, right: number, top: number}} paper The paper's box.
- * @returns {object[]} The cards' boxes.
+ * @returns {object[]}
  */
 export function placeSwitchCards(trees, { columns, pitch, rowH, horizontal, leftAligned }, paper) {
   const boxes = trees.map(cardInkBounds);

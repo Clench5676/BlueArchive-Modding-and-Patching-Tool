@@ -18,7 +18,6 @@ export const barCentre = (fill = FILL, height = BAR_HEIGHT) => ((fill.top + fill
 /**
  * The padding under the bar's content that makes flex centring use the fill's centre instead of the whole
  * height's.
- * @returns {number} The padding.
  */
 export const barPadding = (centre, height = BAR_HEIGHT) => Math.max(0, height - 2 * centre);
 

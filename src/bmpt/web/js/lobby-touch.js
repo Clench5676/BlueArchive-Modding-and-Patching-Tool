@@ -297,7 +297,7 @@ export function wheelStep(e) {
  * sends.
  * @param {number} [now] The time of the event in milliseconds.
  * @param {{at: number, kind: string|null}} [last] The previous scroll: its time and the kind it was read as.
- * @returns {"mouse"|"trackpad"} The device kind.
+ * @returns {"mouse"|"trackpad"}
  */
 export function wheelKind(e, now = performance.now(), last = scroll) {
   const step = wheelStep(e);

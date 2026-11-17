@@ -106,7 +106,7 @@ export function memoryMemo(maxBytes = 32 * 1024 * 1024, maxEntries = 128) {
  * Break a dialogue's text into lines that fit a width.
  * @param {(line: string, fontSize: number) => number} measure
  * @param {string} [lang] The language tag, for the break rules.
- * @returns {string[]} The lines.
+ * @returns {string[]}
  */
 export function wrapDialogue(text, fontSize, maxWidth, measure, lang = "en") {
   const segmenter = typeof Intl.Segmenter === "function" ? new Intl.Segmenter(lang, { granularity: "word" }) : null;
@@ -160,7 +160,6 @@ export function balloonPosition(rect, size, bounds = { left: 24, top: 36, right:
  * The size and flip of a balloon's body sprite.
  * @param {{w_: number, h_: number, flip?: number}} sprite
  * @param {{width: number, height: number}} [meta] The atlas sprite's size.
- * @returns {object} The body's box.
  */
 export function balloonBody(sprite, meta = BALLOON_BODY) {
   const [top, right, bottom, left] = spriteBorders(meta);
@@ -776,7 +775,6 @@ export function lobbyBalloon(
  * @param {Function} [options.later] setTimeout, for the tests.
  * @param {Function} [options.cancel] clearTimeout, for the tests.
  * @param {Function} [options.raf] requestAnimationFrame, for the tests.
- * @returns {object} The controls.
  */
 export function createLobbyDialogue({
   host,

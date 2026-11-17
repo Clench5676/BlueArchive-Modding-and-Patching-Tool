@@ -21,7 +21,6 @@ export const hallScale = (value) =>
 /**
  * The scale a placed portrait is drawn at.
  * @param {{scale: number}} entry
- * @returns {number} The scale.
  */
 export const portraitScale = (entry, globalScale = HALL_SCALE.default) =>
   PORTRAIT_BASE_SCALE * entry.scale * hallScale(globalScale);
@@ -116,7 +115,7 @@ async function loadPageAlpha(texture, load) {
 /**
  * The pages read so far; null means not read yet or unreadable, and picking then treats the attachment as
  * opaque.
- * @returns {object|null} The page's alpha.
+ * @returns {object|null}
  */
 export const readyAlpha = (texture) => pages.get(texture) || null;
 /**
@@ -416,7 +415,6 @@ export const PORTRAIT_TOOLBAR_HEIGHT = 62 + (SPACE.l * 1920) / LOBBY_UI_WIDTH + 
  * @param {{x: number, y: number, width: number, height: number}} rect The portrait's rect on the stage.
  * @param {object[]} [obstacles] The rects of controls the toolbar must not cover.
  * @param {{x: number, y: number}|null} [head] The portrait's visible head in stage units.
- * @returns {object} The toolbar's boxes.
  */
 export function portraitToolbarLayout(rect, count, obstacles = [], head = null) {
   const scale = 1920 / LOBBY_UI_WIDTH,

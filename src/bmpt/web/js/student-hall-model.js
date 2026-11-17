@@ -195,7 +195,7 @@ export function pickerData(choices, kind = null) {
  * @param {object[]} choices
  * @param {(names: object) => string} label Gives the UI language's name.
  * @param {string|null} [kind]
- * @returns {object[]} The students.
+ * @returns {object[]}
  */
 export function studentChoices(choices, view, query, label, locale, kind = null) {
   return order(pickerData(choices, kind), normalizeView(view), {
@@ -227,7 +227,7 @@ function sourceMatches(choice, words) {
  * The picker's portrait rows: one per student, with the portraits that match the search.
  * @param {object[]} choices
  * @param {(names: object) => string} label Gives the UI language's name.
- * @returns {object[]} The rows.
+ * @returns {object[]}
  */
 export function portraitRows(choices, view, query, label, locale) {
   const mods = choices.filter((c) => c.kind === "spr");
@@ -250,7 +250,7 @@ export function portraitRows(choices, view, query, label, locale) {
  * @param {string|null} selected
  * @param {object} [viewed] The students already viewed in the picker.
  * @param {(names: object) => string} [label] Gives the UI language's name.
- * @returns {object[]} The lobbies.
+ * @returns {object[]}
  */
 export function memorialChoices(
   choices,
@@ -329,7 +329,7 @@ export function contentBounds(rootBox, toolbarBoxes = [], navBox = null) {
  *     while it is still there.
  * @param {string|null} [options.id]
  * @param {string[]} [options.ids]
- * @returns {string|null} The new selection.
+ * @returns {string|null}
  */
 export function portraitSelection(selected, { type, id = null, ids = [] }) {
   if (["end", "escape"].includes(type)) return null;
@@ -344,7 +344,7 @@ export function portraitSelection(selected, { type, id = null, ids = [] }) {
  * The choices a placed portrait can be replaced with: the choices of its student that are not placed yet.
  * @param {object[]} choices
  * @param {object[]} placed
- * @returns {object[]} The choices.
+ * @returns {object[]}
  */
 export function portraitReplacements(entry, choices, placed) {
   const current = choices.find((choice) => choice.kind === "spr" && sourceKey(choice) === sourceKey(entry));

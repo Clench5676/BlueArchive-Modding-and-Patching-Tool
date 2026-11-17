@@ -712,7 +712,6 @@ export const discard = (result) =>
  * @param {string} [options.discard] The Discard button's label.
  * @param {boolean} [options.convert] A graft's review may end with "convert" (the converter route for what it
  *     refused).
- * @returns {Promise<boolean>} True when accepted.
  */
 export function review(
   id,

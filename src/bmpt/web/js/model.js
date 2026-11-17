@@ -55,7 +55,6 @@ const TWEEN = 450;
  * @param {number} [fov] The vertical field of view in degrees.
  * @param {number} [base] The formation screen's distance.
  * @param {number} [margin] The margin kept in stage px.
- * @returns {number} The distance.
  */
 export function frameDistance(box, frame, fov = FORMATION_VIEW.fov, base = FORMATION_VIEW.distance, margin = 24) {
   const t = 2 * Math.tan(THREE.MathUtils.degToRad(fov) / 2); // the visible height per unit of distance
@@ -79,7 +78,6 @@ export function frameDistance(box, frame, fov = FORMATION_VIEW.fov, base = FORMA
  * @param {{y: number, h: number}} frame The frame point and the host's height in stage px.
  * @param {number} [fov] The vertical field of view in degrees.
  * @param {number} [margin] The margin kept in stage px.
- * @returns {number} The distance.
  */
 export function bustDistance(box, face, frame, fit, fov = FORMATION_VIEW.fov, margin = 24) {
   const t = 2 * Math.tan(THREE.MathUtils.degToRad(fov) / 2);
@@ -91,7 +89,6 @@ export function bustDistance(box, face, frame, fit, fov = FORMATION_VIEW.fov, ma
  * The zoom's place between the fit (0) and the bust (1) of a zoom range, in the zoom's own steps (a notch or a
  * pinch multiplies the distance); below 0 further back than the fit.
  * @param {object} options
- * @returns {number} The place.
  */
 export function zoomShare(distance, { fit, min }) {
   return fit > min && distance > 0 ? Math.log(fit / distance) / Math.log(fit / min) : 0;
@@ -114,7 +111,6 @@ export function liftShare(distance, range) {
  * (the target's lift goes on from where it was); further back, as the same multiple of the fit (up to 1.3).
  * @param {{fit: number, min: number}} from
  * @param {{fit: number, min: number}} to
- * @returns {number} The new distance.
  */
 export function carryZoom(distance, from, to) {
   if (distance < from.fit) return to.fit * Math.pow(to.min / to.fit, Math.min(1, zoomShare(distance, from)));
@@ -126,16 +122,12 @@ export function carryZoom(distance, from, to) {
  * NOTCHES of them from the fit to the bust; a faster spin's bigger steps zoom further.
  * @param {number} px The wheel step in pixels.
  * @param {number} span ln(fit / bust) of the zoom range.
- * @returns {number} The factor.
  */
 export function wheelZoom(px, span) {
   return px ? Math.exp((Math.sign(px) * Math.max(Math.abs(px), NOTCH) * span) / (NOTCH * NOTCHES)) : 1;
 }
 
-/**
- * The camera distance's factor for a pinch whose fingers spread by a scale (> 1 closes in).
- * @returns {number} The factor.
- */
+/** The camera distance's factor for a pinch whose fingers spread by a scale (> 1 closes in). */
 export const pinchZoom = (scale) => (scale > 0 ? Math.pow(scale, -PINCH) : 1);
 
 /**
@@ -144,7 +136,7 @@ export const pinchZoom = (scale) => (scale > 0 ? Math.pow(scale, -PINCH) : 1);
  * @param {number} share The zoom's place (zoomShare).
  * @param {THREE.Box3} box The chibi's box around the formation target.
  * @param {number} lift The target's rise above the formation target.
- * @returns {THREE.Vector3} The same pan.
+ * @returns {THREE.Vector3}
  */
 export function clampPan(pan, share, box, lift) {
   const s = clamp(share, 0, 1);
@@ -158,7 +150,7 @@ export function clampPan(pan, share, box, lift) {
  * Take the zoom's state before a scroll that may turn out a swipe (attachInput).
  * @param {{goal: number|null, tween: object|null, distance: () => number}} view The view: goal (the distance a
  *     zoom eases to), tween (the glide) and distance().
- * @returns {{goal: number|null, tween: object|null, zoomed: boolean, distance: number}} The state.
+ * @returns {{goal: number|null, tween: object|null, zoomed: boolean, distance: number}}
  */
 export function saveZoom(view) {
   return { goal: view.goal, tween: view.tween, zoomed: !!view.tween?.zoomed, distance: view.distance() };
@@ -328,7 +320,7 @@ export function visibleStillFrame(pixels, width, height, margin = 24) {
  * @param {THREE.PerspectiveCamera} camera
  * @param {THREE.Vector3} target
  * @param {{x: number, y: number}} frame The frame point in px.
- * @returns {THREE.PerspectiveCamera} The still's camera.
+ * @returns {THREE.PerspectiveCamera}
  */
 export function stillCamera(camera, target, fit, frame, w, h) {
   const c = camera.clone();
@@ -435,7 +427,7 @@ export function facingBones(root) {
  * read while the formation idle looks into the formation camera; null without the bones.
  * @param {object|null} bones The bones, as facingBones gives them.
  * @param {THREE.Vector3} [front] The front view's direction.
- * @returns {THREE.Vector3|null} The forward.
+ * @returns {THREE.Vector3|null}
  */
 export function headFront(bones, front = HOME) {
   if (!bones) return null;
@@ -450,7 +442,7 @@ export function headFront(bones, front = HOME) {
  * @param {object|null} bones The bones, as facingBones gives them.
  * @param {THREE.Vector3} [out]
  * @param {THREE.Vector3|null} [front] The head's forward (headFront).
- * @returns {THREE.Vector3|null} The direction.
+ * @returns {THREE.Vector3|null}
  */
 export function facingOf(bones, out = new THREE.Vector3(), front = null) {
   if (!bones) return null;
@@ -506,7 +498,7 @@ export function anchorNode(root) {
  * @param {THREE.Vector3} position
  * @param {THREE.Vector3} rest The anchor when the view was measured.
  * @param {THREE.Vector3} [out]
- * @returns {THREE.Vector3} The offset.
+ * @returns {THREE.Vector3}
  */
 export function followOffset(position, rest, out = new THREE.Vector3()) {
   return out.set(position.x - rest.x, 0, position.z - rest.z);
@@ -1577,10 +1569,7 @@ export function hide(host) {
 export function frame(mode) {
   view?.frameTo(mode);
 }
-/**
- * Wait until the camera has arrived at its framing.
- * @returns {Promise<void>} Settles then.
- */
+/** Wait until the camera has arrived at its framing. */
 export function settled() {
   return new Promise((resolve) => {
     const check = () => (view?.tween ? requestAnimationFrame(check) : resolve());
@@ -1594,7 +1583,7 @@ export function settled() {
 export const actions = () => view?.actions() || [];
 /**
  * The action in play.
- * @returns {string|null} The action's key.
+ * @returns {string|null}
  */
 export const current = () => view?.current || null;
 /**
@@ -1607,7 +1596,7 @@ export function play(name) {
 /**
  * The shown model's clips by name (the GLB's extras.clips), for the action bar (clip-names.js actionsOf); empty
  * before a model is shown.
- * @returns {string[]} The names.
+ * @returns {string[]}
  */
 export const clipNames = () => view?.json?.extras?.clips || [];
 /**
@@ -1654,7 +1643,7 @@ export const snapshot = () => view?.snapshot() || null;
 /**
  * For checks: the camera's distance, the zoom's goal, range and place, the target's lift, the pan and the
  * follow, and where the anchor (the hips) projects on the canvas (-1..1 across and up).
- * @returns {object|null} The state.
+ * @returns {object|null}
  */
 export function zoomState() {
   if (!view?.limits) return null;

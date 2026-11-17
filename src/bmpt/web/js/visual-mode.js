@@ -153,7 +153,6 @@ export async function exitControl(host, layout) {
  * @param {HTMLElement} o.uiHost The element for the buttons.
  * @param {() => object[]} o.players Gives every portrait player on the stage.
  * @param {() => void} o.onBack Called when Back is pressed.
- * @returns {Promise<boolean>} Whether it opened.
  */
 export async function open(o) {
   if (!(await ensureSpine()) || o.alive?.() === false) return false;

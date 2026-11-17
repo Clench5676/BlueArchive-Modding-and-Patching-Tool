@@ -9,7 +9,6 @@ const TOUCH_SLOP = 9,
  * would land.
  * @param {() => HTMLElement} marker
  * @param {number} pitch The distance between two cards.
- * @returns {object} The feedback's controls.
  */
 export function dragFeedback(visual, marker, pitch, count) {
   let ghost = null,

@@ -74,7 +74,7 @@ function settleDrag(host, signal) {
 
 /**
  * Load the prefabs the Hall's modals and controls are drawn from.
- * @returns {Promise<object>} The loaded layouts.
+ * @returns {Promise<object>}
  */
 export async function ready() {
   if (!assets) {
@@ -440,7 +440,7 @@ export function backgroundPreviewBox() {
 export const PREVIEW_SLANT = 1080 * Math.tan(Math.PI / 18);
 /**
  * Draw the preview's rhombus frame (the memorial lobby card's 10 degree incline) into an element.
- * @returns {Promise<RenderView>} What was drawn.
+ * @returns {Promise<RenderView>}
  * @param {{left: number, top: number, width: number, height: number}} box
  */
 export async function previewFrame(host, { left, top, width, height }) {
@@ -571,7 +571,6 @@ export const retainedButtonSize = (captions, width, height) =>
  * Draw a button that keeps the full-row body.
  * @param {number[]} box The body's box [x, y, w, h].
  * @param {object} [opts] As for button().
- * @returns {Promise<HTMLButtonElement>} The button.
  */
 export const retainedButton = (host, name, caption, box, action, opts = {}) =>
   drawButton(host, name, caption, box, action, { ...opts, fs: opts.size ?? 40, min: opts.size ?? 26, retained: true });
@@ -582,7 +581,6 @@ export const retainedButton = (host, name, caption, box, action, opts = {}) =>
  * otherwise.
  * @param {number[]} box The body's box [x, y, w, h].
  * @param {object} [opts]
- * @returns {Promise<HTMLButtonElement>} The button.
  * @param {string} [opts.captionSite] The wording site, which makes a caption that cannot fit throw.
  * @param {number} [opts.height] The body height in stage pixels where the site sets it (buttonBox); the token's
  *     otherwise.
@@ -633,7 +631,7 @@ async function drawButton(
  * @param {string|object} value The text, or a prepared caption.
  * @param {number[]} box [x, y, w] of the caption in stage pixels.
  * @param {object} [options]
- * @returns {Promise<RenderView>} What was drawn.
+ * @returns {Promise<RenderView>}
  */
 export async function caption(host, value, [x, y, width], { size = 40, align = 1 } = {}) {
   await ready();
@@ -674,7 +672,6 @@ export function area(host, box, height, key, { width = box[2], horizontal = fals
  * @param {object} [options]
  * @param {(() => void)|null} [options.onEscape] Called on Escape in the box, which closes the search first as
  *     the roster's does (not the key that ends a conversion).
- * @returns {Promise<HTMLInputElement>} The input.
  */
 export async function search(host, query, onChange, [x, y, width] = [130, 172, 560], { onEscape = null } = {}) {
   await ready();
@@ -942,7 +939,6 @@ export const TRASH = Object.freeze({ grey: "#8a96a3", red: "#e0474c", atlas: "Ca
  * is over it; a click asks the caller to remove the item. The icon is the Hall's own Remove (CCG_Icon_Dump),
  * its shape a mask over the colour.
  * @param {number[]} box [x, y, w, h] of the button.
- * @returns {Promise<HTMLButtonElement>} The button.
  */
 export async function trashButton(host, name, label, [x, y, width, height], action) {
   const hit = hitButton(host, [x, y, width, height], action, label, 96);
@@ -984,7 +980,7 @@ export async function trashButton(host, name, label, [x, y, width, height], acti
 /**
  * Draw the queue's panel.
  * @param {number[]} box The panel's box [x, y, w, h].
- * @returns {Promise<RenderView>} What was drawn.
+ * @returns {Promise<RenderView>}
  */
 export async function queuePanel(host, [x, y, width, height]) {
   await ready();
@@ -1001,7 +997,6 @@ export async function queuePanel(host, [x, y, width, height]) {
 /**
  * Draw the marker that shows where a dragged queue card would land.
  * @param {number} pitch The distance between two queue cards.
- * @returns {Promise<HTMLElement>} The marker.
  */
 export async function queueMarker(host, pitch) {
   await ready();
@@ -1038,7 +1033,7 @@ export async function queueMarker(host, pitch) {
 /**
  * The tree of a student card, as the formation screen draws it.
  * @param {{key: string, name: string, portrait?: string, thumb?: string}} item
- * @returns {NguiNode} The card's tree.
+ * @returns {NguiNode}
  */
 export function formationCardTree(formation, item, selected) {
   const tree = clone(
@@ -1140,7 +1135,6 @@ export async function panel(host, name, [x, y, width, height], title) {
  * @param {number} [options.x] The toolbar's left edge.
  * @param {number} [options.scale] The toolbar's size under the width's fit (the memorial editor's one size
  *     down).
- * @returns {Promise<HTMLElement>} The search button.
  */
 export async function rosterToolbar(
   host,
@@ -1226,7 +1220,7 @@ export async function rosterToolbar(
  * The tree of a row's plate: the collection sort plate supplies its white sliced body, native incline and
  * shadow.
  * @param {number[]} box [w, h] of the plate.
- * @returns {NguiNode} The plate's tree.
+ * @returns {NguiNode}
  */
 export function rowPlateTree(collection, [width, height], margin = 32) {
   const tree = clone(NGUI.find(collection, "SeletControl/TopMenu/SortBtn/Btn_Normal"));
@@ -1241,7 +1235,7 @@ export function rowPlateTree(collection, [width, height], margin = 32) {
 /**
  * Draw a row's plate.
  * @param {number[]} box [w, h] of the plate.
- * @returns {Promise<RenderView>} What was drawn.
+ * @returns {Promise<RenderView>}
  */
 export async function rowPlate(host, [width, height]) {
   await ready();
@@ -1262,7 +1256,7 @@ export async function rowPlate(host, [width, height]) {
  * @param {string} [options.key] A key that keeps the scroll position between drawings.
  * @param {Map<string, number>} [options.positions]
  * @param {(error: Error) => void} [options.onError]
- * @returns {Promise<void>[]} The pending draws.
+ * @returns {Promise<void>[]}
  */
 export function virtualArea(
   host,
@@ -1387,7 +1381,6 @@ export function virtualArea(
  * Draw the order button of a toolbar.
  * @param {boolean} ascending Whether the order is ascending (the up arrow shows).
  * @param {number[]} box [x, y, w, h] of the button.
- * @returns {Promise<HTMLButtonElement>} The button.
  */
 export async function orderButton(host, ascending, action, [x, y, width, height]) {
   await ready();

@@ -32,7 +32,7 @@ export function frameClass(width = "S") {
  * Explicit heights fit the content; omitted heights keep the scrolling viewer's exemplar height.
  * @param {string|number} width A class name or the width the content needs.
  * @param {number} [height] The height the content needs, clamped to the frame's range; 0 for the class's own.
- * @returns {PopupFrame} The frame.
+ * @returns {PopupFrame}
  */
 export function frameGeometry(width, height = 0) {
   const size = frameClass(width);

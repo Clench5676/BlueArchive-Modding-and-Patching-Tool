@@ -26,7 +26,6 @@ function encode(bytes) {
  * @param {number} [options.timeout] The most milliseconds the optional storage may hold a thumbnail's
  *     readiness.
  * @param {(bytes: ArrayBuffer) => string} [options.makeUrl] Makes an object URL of PNG bytes.
- * @returns {object} The cache's controls.
  */
 export function createPreviewCache({
   request = rpc,

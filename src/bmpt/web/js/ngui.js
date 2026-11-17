@@ -998,7 +998,7 @@ const layouts = new Map();
  * Cold exports scan prefab bundles and can wait for a lobby's bundle locks. The scene owns the slow-load
  * indicator and navigation cancellation; elapsed time alone does not make a valid server response fail.
  * @param {string} name "Root" for a prefab root, or "Root.Node" for the first node of that name inside it.
- * @returns {Promise<NguiNode>} The layout tree.
+ * @returns {Promise<NguiNode>}
  */
 export function layout(name) {
   if (!layouts.has(name)) {

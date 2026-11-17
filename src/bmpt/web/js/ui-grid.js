@@ -38,7 +38,7 @@ function sides(padding) {
 
 /**
  * The box inside another once padding is taken off.
- * @returns {Box} The inner box.
+ * @returns {Box}
  */
 export function inset(b, padding) {
   const [top, right, bottom, left] = sides(padding);
@@ -182,7 +182,6 @@ export function textItem(ui, text, type, { maxW = Infinity, lines = 1 } = {}) {
  * The width of a control that follows its caption: the caption's width and the pad on each side, at least minW.
  * @param {{fs: number, pad: number, minW?: number}} control
  * @param {(caption: string, fs: number) => number} measure The caption's width at a size.
- * @returns {number} The control's width.
  */
 export const controlWidth = (control, caption, measure) =>
   Math.max(control.minW ?? 0, measure(caption, control.fs) + 2 * control.pad);

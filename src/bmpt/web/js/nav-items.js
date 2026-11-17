@@ -27,7 +27,6 @@ export const ITEMS = Object.freeze(
 /**
  * Whether an entry is greyed: exactly when it has a classic tab and no web screen.
  * @param {NavItem} item
- * @returns {boolean} True when greyed.
  */
 export const greyed = (item) => !!item.classic && !item.route;
 
@@ -78,7 +77,7 @@ export const handOffPrompt = (item, T) => ({
  *     prompt.
  * @param {(tab: string) => Promise<void>} options.open Hands over to the classic UI on that tab.
  * @param {(on: boolean) => Promise<void>} options.savePrompt
- * @returns {Promise<"route"|"cancel"|"open">} What happened.
+ * @returns {Promise<"route"|"cancel"|"open">}
  */
 export async function activate(item, { prompt = true, go, ask, open, savePrompt }) {
   if (!greyed(item)) {

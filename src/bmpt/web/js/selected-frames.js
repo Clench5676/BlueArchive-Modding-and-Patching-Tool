@@ -17,13 +17,11 @@ const widget = (n) => n.widgets.find((w) => "sprite" in w);
 const textOf = (n) => n.widgets.find((w) => "text" in w);
 /**
  * The state a source card shows: applied, previewed or none.
- * @returns {"applied"|"preview"|null} The state.
+ * @returns {"applied"|"preview"|null}
  */
 export const sourceCardState = (applied, previewed) => (applied ? "applied" : previewed ? "preview" : null);
 
-/**
- * The box of the prefab's number label: its font size and size in prefab units, which a caption has to fit.
- */
+/** The box of the prefab's number label: its font size and size in prefab units, which a caption has to fit. */
 export function badgeCaptionBox(slot) {
   const label = child(slot, "Mulligan_IndexLabel"),
     text = label && textOf(label);

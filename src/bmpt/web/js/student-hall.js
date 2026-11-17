@@ -1314,7 +1314,6 @@ async function fullscreenExit(close) {
 /**
  * A token for the Hall's state that changes whenever a close would lose something: the page, the draft, its
  * kind and the pending writes.
- * @returns {string} The token.
  */
 export const closeRevision = () => JSON.stringify([page, store?.current(), store?.kind(), pendingWrites]);
 

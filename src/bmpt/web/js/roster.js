@@ -86,10 +86,7 @@ export function invalidate() {
 export function init(prefs) {
   view = { ...normalizeView(prefs), scroll: 0 };
 }
-/**
- * Whether the roster groups the variants of one character.
- * @returns {boolean} True when grouped.
- */
+/** Whether the roster groups the variants of one character. */
 export const merged = () => view.merged;
 
 let saveTimer = 0;
@@ -122,7 +119,7 @@ function opts(extra = {}) {
  * The cards in the roster's order, as it shows them (the detail screen's arrows step through these).
  * @param {object} [options]
  * @param {boolean} [options.unfiltered] True: the whole roster in the same order.
- * @returns {object[]} The cards.
+ * @returns {object[]}
  */
 export function order(rosterData, { unfiltered = false } = {}) {
   return orderOf(rosterData, view, opts({ unfiltered }));

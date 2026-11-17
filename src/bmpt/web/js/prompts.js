@@ -70,7 +70,7 @@ export const entryBase = (entry, state) =>
  * @param {object} [options]
  * @param {boolean} [options.dismissed] Include the dismissed entries.
  * @param {boolean} [options.enabled] Whether mods are on.
- * @returns {{listed: object[], apart: object[]}} The entries.
+ * @returns {{listed: object[], apart: object[]}}
  */
 export function promptEntries(entries, which, { dismissed = false, enabled = true } = {}) {
   const open = (e) => dismissed || !e.dismissed;
@@ -579,7 +579,6 @@ async function untrackedPrompt(lists, s) {
 /**
  * Add to Library: the library.adopt job (allowed while the game runs), with a result popup for failures.
  * @param {object[]} entries The entries to add.
- * @returns {Promise<boolean>} Whether it ran.
  */
 export async function adopt(entries) {
   let id;

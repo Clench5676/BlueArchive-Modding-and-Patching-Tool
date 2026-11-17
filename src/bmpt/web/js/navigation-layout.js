@@ -19,7 +19,7 @@ export const navigationOrigin = (tree, scale, width = 260) => [
  * @param {NavItem} item
  * @param {boolean} greyed Whether the entry hands over to the classic UI: it shows the dimmed icon only.
  * @param {number} index The entry's index; picks a donor when no donor has the icon.
- * @returns {NguiNode} The entry's node.
+ * @returns {NguiNode}
  */
 export function navigationEntry(grid, item, caption, greyed, index, width = 260) {
   const donor =
