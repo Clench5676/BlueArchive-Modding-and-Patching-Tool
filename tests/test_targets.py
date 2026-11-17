@@ -253,7 +253,7 @@ CALL_SITES = [
         "_game_files",
         "_install_direct",
     )
-] + [("src/bmpt/webui/batch_import.py", "BatchImport", "_judge")]
+] + [("src/bmpt/webui/batch_judge.py", "JudgeMixin", "_judge")]
 #: what only the resolver may do: upstream's planner and matcher, the newest-date and part rules
 FORBIDDEN_CALLS = {
     "plan_mod_install",

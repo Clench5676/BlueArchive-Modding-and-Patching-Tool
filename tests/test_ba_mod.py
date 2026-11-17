@@ -6,7 +6,7 @@ import zipfile
 import pytest
 
 from bmpt.library import ba_mod
-from bmpt.webui import batch_import, export_service
+from bmpt.webui import batch_candidates, batch_import, export_service
 
 from test_batch_import import analyze, env  # noqa: F401 - fixtures
 from test_library import make_mod, setup_library  # noqa: F401 - fixtures
@@ -152,11 +152,11 @@ def test_a_claim_orders_the_guesses_but_never_adds_or_removes_one():
         {"server": s, "platform": p, "detected": True} for s in ("global", "japan") for p in ("android", "windows")
     ]
     package = {"target": {"server": "japan", "platform": "windows"}}
-    ordered = batch_import.claimed_first(choices, package)
+    ordered = batch_candidates.claimed_first(choices, package)
     assert ordered[0] == {"server": "japan", "platform": "windows", "detected": True}
     assert sorted(map(str, ordered)) == sorted(map(str, choices))
-    assert batch_import.claimed_first(choices, None) == choices
-    assert batch_import.claimed_first(choices[:1], package) == choices[:1]
+    assert batch_candidates.claimed_first(choices, None) == choices
+    assert batch_candidates.claimed_first(choices[:1], package) == choices[:1]
 
 
 def test_an_exported_package_imports_with_its_manifest_trusted(env):
