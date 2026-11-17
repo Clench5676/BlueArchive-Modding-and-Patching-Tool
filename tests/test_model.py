@@ -20,6 +20,7 @@ from bmpt.catalog import Catalog, model_core
 from bmpt.gameassets import AssetCache, AssetNotFound, GameAssets
 from bmpt.gameassets import model
 from bmpt.gameassets import model_glb
+from bmpt.gameassets import model_service
 from bmpt.gameassets import service
 from bmpt.gameassets.discovery import cab_names, is_model_dependency
 from ba_modding_toolkit.searching import get_search_dirs
@@ -939,7 +940,7 @@ def test_model_glb_cache_hit_does_not_wait_for_export_lock(tmp_path, monkeypatch
         def __exit__(self, *args):
             pass
 
-    monkeypatch.setattr(service, "_MODEL_LOCK", UnrelatedExport())
+    monkeypatch.setattr(model_service, "_MODEL_LOCK", UnrelatedExport())
     assert game.model_glb("ch0242") == b"glTF cached"
     assert not (tmp_path / "cache").exists()
 
@@ -1453,7 +1454,7 @@ def test_field_index_holds_field_npcs_by_id(tmp_path, monkeypatch):
         def __exit__(self, *exc):
             return False
 
-    monkeypatch.setattr(service, "open_bundle", Env)
+    monkeypatch.setattr(model_service, "open_bundle", Env)
     assert game.field_model_cores() == {"np0009", "np0143", "ch0171"}
     assert [Path(p).name for p in game._field_index()["np0143"]] == [first, second]
 

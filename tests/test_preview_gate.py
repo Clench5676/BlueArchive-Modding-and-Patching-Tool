@@ -234,7 +234,7 @@ def test_a_preview_waiting_for_the_model_lock_a_job_holds_is_told(told, holder_f
     """The model lock held by a job (the costume check's export): a preview's wait for it is not its own time."""
     from contextlib import nullcontext
 
-    from bmpt.gameassets.service import _ModelLock
+    from bmpt.gameassets.service_base import _ModelLock
 
     lock, held, release = _ModelLock(), threading.Event(), threading.Event()
 

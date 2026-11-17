@@ -1382,7 +1382,7 @@ def _cross_build(view, tmp_path, source, target="azusa_original", results=None):
 
 def _fx(graph):
     """The halo particles' reader of a model export (service.model_glb's)."""
-    from bmpt.gameassets.service import _FxResolver
+    from bmpt.gameassets.service_base import _FxResolver
 
     return lambda objects: _FxResolver(graph, dict(objects), {}).resolve
 

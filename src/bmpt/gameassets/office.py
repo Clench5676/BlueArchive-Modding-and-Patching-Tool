@@ -101,7 +101,7 @@ def material_description(form: dict, material: dict | None = None) -> dict:
 def _add_materials(game, path: Path, tree: dict) -> set[Path]:
     """Resolve only active background UITexture materials, preserving the prefab's own geometry."""
     from .model import BundleGraph
-    from .service import _MODEL_LOCK
+    from .service_base import _MODEL_LOCK
 
     nodes = {}
 

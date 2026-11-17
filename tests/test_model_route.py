@@ -155,7 +155,7 @@ def test_indexed_npc_model_can_preview_without_a_student_entry(tmp_path):
 def test_prefab_overrides_keep_every_dated_prefab_bundle_of_a_slot():
     """Yuuka's prefabs span two dated bundles of one slot; the official copies of both stand in for each
     one, and a mod of another release for the newest only."""
-    from bmpt.gameassets.service import prefab_overrides
+    from bmpt.gameassets.model_service import prefab_overrides
 
     old = Path("character-yuuka_original-_mxload-2024-11-18_assets_all_3807259161.bundle")
     new = Path("character-yuuka_original-_mxload-2025-07-25_assets_all_3996351917.bundle")
