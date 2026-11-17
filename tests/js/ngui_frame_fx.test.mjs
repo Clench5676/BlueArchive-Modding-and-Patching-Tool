@@ -172,7 +172,8 @@ function shaderOut(effect, g) {
     alpha: Math.min(1, g * tint[3] * tint[3] * effect.material.colors._Color[3]),
   };
 }
-const gameOver = (light, alpha, behind) => toSrgb(light + toLinear(behind) * (1 - alpha)); // the blend, then the display encoding
+// the blend, then the display encoding
+const gameOver = (light, alpha, behind) => toSrgb(light + toLinear(behind) * (1 - alpha));
 // a straight-alpha composite, for comparison: the colour light / alpha, clamped, over the card by alpha
 const straightOver = (light, alpha, behind) =>
   alpha <= 0 ? behind : toSrgb(Math.min(1, light / alpha)) * alpha + behind * (1 - alpha);
@@ -195,7 +196,8 @@ for (const [name, fx] of rings) {
         }
     }
     assert.ok(worst.darker > -1e-9, `${name}: ${worst.darker} darker than the game`);
-    assert.ok(worst.brighter < 0.33, `${name}: ${worst.brighter} brighter than the game`); // partly lit channels only, measured 0.316
+    // partly lit channels only, measured 0.316
+    assert.ok(worst.brighter < 0.33, `${name}: ${worst.brighter} brighter than the game`);
   });
 
   test(`${name}: over black the light is the game's, and a lit channel the mask does not cover stays the game's over white`, () => {

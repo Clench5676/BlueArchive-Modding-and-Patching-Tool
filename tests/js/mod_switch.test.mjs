@@ -1174,7 +1174,8 @@ test("the help fits its opening lines together in every locale, with and without
           const texts = [ui.mods.helpOn, ui.mods.helpOff];
           const frame = walk(dialog).find((e) => e.dataset.path === "Center/Popup/Base/BG");
           assert.ok(Math.abs(parseFloat(frame.style.width) / scale - 2098) < 0.02, "help takes class L");
-          const fs = Math.max(40, Math.min(...texts.map((text) => NGUI.fitText(text, 48, 40, 2098 - 200, 6).fs))); // POPUP_TYPE.text
+          // POPUP_TYPE.text
+          const fs = Math.max(40, Math.min(...texts.map((text) => NGUI.fitText(text, 48, 40, 2098 - 200, 6).fs)));
           const lines = texts.map((_, i) =>
             walk(dialog).find((e) => e.dataset.path === `Center/Popup/Lines/Line_${i}`),
           );

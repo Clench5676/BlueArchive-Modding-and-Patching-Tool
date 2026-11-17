@@ -1787,7 +1787,8 @@ test("mod aliases save and clear from the current value and both switch pencils 
         await aliasKey(input, { keyCode: 229 });
         assert.equal(rpcRequests.length, start, "input method confirmation cannot save");
         await finish(t, aliasKey(input));
-        assert.equal(aliasInput(), null, "the alias editor is closed"); // its own layer: other layers of the host are not its to clear
+        // its own layer: other layers of the host are not its to clear
+        assert.equal(aliasInput(), null, "the alias editor is closed");
         assert.equal(currentCell().getAttribute("aria-label"), input.value);
         const original = walk(hosts.ngui).find((e) => e.dataset.path?.endsWith("Data_Widget/OriginalName"));
         assert.equal(original.getAttribute("aria-label"), core);
@@ -2047,7 +2048,8 @@ test("cancel, close, backdrop and Escape discard an alias draft without saving",
       await walk(layer)
         .find((e) => e.dataset.action === how)
         .click();
-    assert.equal(aliasInput(), null, "the alias editor is closed"); // its own layer: other layers of the host are not its to clear
+    // its own layer: other layers of the host are not its to clear
+    assert.equal(aliasInput(), null, "the alias editor is closed");
   }
   assert.equal(rpcRequests.length, start);
 });
@@ -2081,7 +2083,8 @@ test("failed alias saves keep the draft, and repeated Enter submits once", async
     resolve({ result: { id: "test", alias: input.value } });
     await pending;
     assert.equal(saved.alias, "Retry alias");
-    assert.equal(aliasInput(), null, "the alias editor is closed"); // its own layer: other layers of the host are not its to clear
+    // its own layer: other layers of the host are not its to clear
+    assert.equal(aliasInput(), null, "the alias editor is closed");
   } finally {
     ModAlias.close();
     renameReply = saveAlias;
@@ -2098,7 +2101,8 @@ test("leaving detail closes the mod alias editor", async (t) => {
       .click();
     assert.ok(aliasInput());
     Detail.hide();
-    assert.equal(aliasInput(), null, "the alias editor is closed"); // its own layer: other layers of the host are not its to clear
+    // its own layer: other layers of the host are not its to clear
+    assert.equal(aliasInput(), null, "the alias editor is closed");
   } finally {
     Detail.hide();
     await flush();
@@ -3271,7 +3275,8 @@ for (const enabled of [true, false])
       assert.equal(document.activeElement, visualButton("Btn_HideUI"), "The replacement switch retains keyboard focus");
       assert.equal(hosts["fs-exit"].hidden, false, "Back remains available in the lobby");
       const s = 1920 / 2960,
-        backBounds = [960 + (-1354 - 171 / 2) * s, 540 - (650 + 126 / 2) * s, 171 * s, 126 * s]; // the Back button's size
+        // the Back button's size
+        backBounds = [960 + (-1354 - 171 / 2) * s, 540 - (650 + 126 / 2) * s, 171 * s, 126 * s];
       ["left", "top", "width", "height"].forEach((key, index) =>
         assert.ok(
           Math.abs(parseFloat(hosts["fs-exit"].style[key]) - backBounds[index]) < 0.02,

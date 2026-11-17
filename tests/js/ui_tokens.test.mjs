@@ -803,7 +803,8 @@ for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"])
           `${locale} ${keys}: footer width ${width / S}`,
         );
       }
-      const floor = bodyH === COMPACT_BUTTON_H ? Tokens.TYPE.micro.min : B.fsMin; // a compact body holds one line down to TYPE.micro's floor
+      // a compact body holds one line down to TYPE.micro's floor
+      const floor = bodyH === COMPACT_BUTTON_H ? Tokens.TYPE.micro.min : B.fsMin;
       const fits = NGUI.fitGroup(captions, B.fs, floor, Math.max(B.minW, width / S) - B.fitInset, 2, {
         maxH: bodyH - B.boxInsetH,
       });

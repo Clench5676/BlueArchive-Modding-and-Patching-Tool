@@ -1292,7 +1292,8 @@ test("switch detail actions retain the prefab pattern at every button width and 
         box = (el) => ["left", "top", "width", "height"].map((key) => parseFloat(el.style[key]));
       const [x, y, w, _h] = box(body),
         [dx, dy, dw, dh] = box(corner),
-        k = ((count < 4 ? 104 : 88) / 177) * S; // the Sort prefab's 177-high body drawn at the XS height, four on one XXS row
+        // the Sort prefab's 177-high body drawn at the XS height, four on one XXS row
+        k = ((count < 4 ? 104 : 88) / 177) * S;
       near(x + w - dx - dw, 4 * k);
       near(dy - y, 6 * k);
       near(dw, 126 * k);
@@ -3923,7 +3924,8 @@ test("release-note button captions fit the resized UIPopup_Sort branches in all 
       for (const [i, child] of controls.entries()) {
         const w = labels[i],
           body = NGUI.find(child, "BG (1)");
-        assert.deepEqual(child.pos, [(i - 0.5) * (bodyW + POPUP_FRAME.footer.gap), 0]); // two bodies, the shared gap apart
+        // two bodies, the shared gap apart
+        assert.deepEqual(child.pos, [(i - 0.5) * (bodyW + POPUP_FRAME.footer.gap), 0]);
         assert.deepEqual(child.scale, [1, 1]);
         assert.deepEqual(body.pos, [0, 0]);
         assert.deepEqual([body.widgets[0].w_, body.widgets[0].h_], [bodyW, control.h]);
@@ -6314,7 +6316,8 @@ for (const lang of ["en-US", "zh-CN", "th-TH"])
           if (kind === "model")
             assert.ok(NGUI.find(tree, "Name").pos[1] > chipY[0] + 1, `${what}: the model's chips under its name`);
           // the chips are the S chip and the actions are tagged as buttons
-          assert.ok([Tokens.CHIP_TIERS.S.h, Tokens.CHIP_TIERS.XS.h].includes(NGUI.find(tree, "Chip_0").widgets[0].h_)); // XS where S would not fit
+          // XS where S would not fit
+          assert.ok([Tokens.CHIP_TIERS.S.h, Tokens.CHIP_TIERS.XS.h].includes(NGUI.find(tree, "Chip_0").widgets[0].h_));
           assert.equal(NGUI.find(tree, "Chip_0").widgets[0].tier, "chip");
           assert.equal(NGUI.find(tree, "Act_0/Body").widgets.find((w) => "sprite" in w).tier, "button");
         }
