@@ -44,7 +44,7 @@ export const captionWidth = (captions, size = B.caption) => {
 };
 
 // The details panel's box, one size under the prefab's (the panel one size down): captions and values 34
-// (TYPE.badge, the size under the box's 38), values down to 26 as before, rows 56 high at least.
+// (TYPE.badge, the size under the box's 38), values down to 26, rows 56 high at least.
 export const STATS_BOX_S = Object.freeze({
   caption: 34,
   value: Object.freeze({ fs: 34, fsMin: 26, lines: 3 }),

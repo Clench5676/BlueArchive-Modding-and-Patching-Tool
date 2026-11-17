@@ -44,7 +44,8 @@ const COLUMNS = Object.freeze({
   badgeMin: 330, // a badge is this wide at least (1.5 x the prefab's 220)
   metaMin: 360, // the metadata keeps this much of the text column beside the badge (the badge never leaves the line);
   // only a badge that would leave it less goes to its own line (no shipped status in any language does)
-  counts: Object.freeze({ left: 120, list: 780, result: 500 }), // a merged row's counts block: where it starts, and how wide
+  // a merged row's counts block: where it starts, and how wide
+  counts: Object.freeze({ left: 120, list: 780, result: 500 }),
 });
 // NGUI's label box: a line of text takes this much of its size; a badge's label sits in a background SPACE.hair
 // beyond it above and below
@@ -477,7 +478,7 @@ export function importArtwork(ui, layouts) {
     },
     // MailboxContent/List_01 (unread) and List_02 (muted/read): the real card, title, divider and meta slots.
     // The sender becomes the aligned kind column; TimeLimit becomes status; receipt/expiry become metadata/reason.
-    // The beta type scale is a floor. Content changes geometry, never the
+    // The type scale (TYPE.dense) is a floor. Content changes geometry, never the
     // type size of other fields or rows (including hidden result states).
     rowTextSize() {
       return ROW_TEXT_SIZE;
@@ -834,7 +835,7 @@ export function importArtwork(ui, layouts) {
       // the ink of the badge's text, not its line box, is centred on the badge (every state, one baseline per language)
       statusLabel.pos = [0, badgeMid - labelBox / 2];
       // The control shares the badge background's vertical box and ends at the right column. A wrapped badge or a
-      // control that cannot fit keeps the old layout: one gap below the badge, its right edge on the badge's, with a
+      // control that cannot fit stacks under the badge: one gap below it, its right edge on the badge's, with a
       // gap under the control inside the grown card.
       let reserved = null;
       if (control && badge) {

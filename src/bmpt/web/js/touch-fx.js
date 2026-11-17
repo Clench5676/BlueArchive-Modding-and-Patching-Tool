@@ -56,7 +56,8 @@ function ramp(keys, t) {
 export const gradient = (g, t) => [...ramp(g.colors, t), ramp(g.alphas, t)];
 
 // the FX_Touch prefab, as stored
-const SPARK_SCALE = 0.3078823983669281; // Ring (3) and Ring (4) transform scale (scaling mode Local: shape, size, speed)
+// Ring (3) and Ring (4) transform scale (scaling mode Local: shape, size, speed)
+const SPARK_SCALE = 0.3078823983669281;
 const SPARK = {
   scale: SPARK_SCALE,
   start: 0.5377358198165894, // start colour (grey)

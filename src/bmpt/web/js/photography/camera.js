@@ -107,6 +107,6 @@ export const actionCaption = (entry, T) =>
   Number.isFinite(entry?.n) ? T("lobby.dialogue", { n: entry.n }) : entry?.anim;
 // The right edge and the neighbouring grid and mode controls stay where they are.
 export const OCCLUSION_BUTTON = Object.freeze([1352, 25, 196, 76]);
-// The toolbar's text buttons (Occlusion Guide, Grid) share one caption size: the largest up to 38 units at which every caption
-// fits its 196 x 76 body (18 clear of each side, 8 above and below) on up to two lines. Stage px.
+// The toolbar's text buttons (Occlusion Guide, Grid) share one caption size: the largest up to 38 units at which
+// every caption fits its 196 x 76 body (18 clear of each side, 8 above and below) on up to two lines. Stage px.
 export const TOOLBAR_CAPTION = Object.freeze({ size: 38, min: 26, width: 196 - 36, height: 76 - 16 });

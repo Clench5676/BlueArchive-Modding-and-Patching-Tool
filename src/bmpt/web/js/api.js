@@ -242,7 +242,7 @@ export function waitJob(
 }
 
 // asset URLs
-// The bootstrap epoch bypasses legacy max-age entries. Every new light response
+// The bootstrap epoch bypasses stale max-age entries. Every new light response
 // also revalidates its schema/content ETag, including after game resource changes.
 let assetContext = "";
 /**

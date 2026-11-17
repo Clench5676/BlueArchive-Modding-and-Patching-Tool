@@ -186,7 +186,8 @@ function galleryReveal(index) {
     top = Math.floor(Math.max(0, index) / columns) * pitch[1];
   return top + pitch[1] <= cards.h ? 0 : top * S;
 }
-// The captions of the two text buttons, one size for both states of the grid button too, so nothing changes size on a click.
+// The captions of the two text buttons, one size for both states of the grid button too, so nothing changes size
+// on a click.
 const toolbarCaptions = () => {
   const { caption } = photographyToolbarLayout();
   return NGUI.fitGroup([P("occlusion"), P("gridOn"), P("gridOff")], caption.size, caption.min, caption.width, 2, {
@@ -305,7 +306,8 @@ async function whiteButton(
       paddingBottom: "0px",
       justifyContent: "center",
     });
-    // The layer is not in the document yet, where computed style is empty: the size is the one the label was drawn with.
+    // The layer is not in the document yet, where computed style is empty: the size is the one the label was drawn
+    // with.
     label.style.translate = `0 ${NGUI.inkShift(fit?.text ?? caption, parseFloat(label.style.fontSize))}px`;
   }
   const hit = hitButton(wrapper, box, safe(action), caption, 90);
@@ -659,8 +661,8 @@ async function playbackButton(host) {
   hit.setAttribute("aria-pressed", String(paused));
 }
 
-// The list's whole box takes the pointer, blank space and frame included: the pan surface below never sees a press, a wheel
-// or its grab cursor there, and a wheel over the cards' gaps scrolls the list.
+// The list's whole box takes the pointer, blank space and frame included: the pan surface below never sees a
+// press, a wheel or its grab cursor there, and a wheel over the cards' gaps scrolls the list.
 function choiceShield(host, box) {
   const shield = document.createElement("div");
   shield.className = "photo-choice-shield";

@@ -697,7 +697,8 @@ async function saveSetting(key, value) {
 // release, each key press). The input is unseen: its focus shows as a ring on the thumb. A drag the system
 // cancels (pointercancel) is undone: the thumb and the input go back to the saved value and nothing is saved. A
 // slider is {path, name, value (0 to 1), steps, set(f), label?, text?(f)} ---
-export const SLIDER_THUMB = 40; // px: the input's native thumb (app.css .slider-range), so its centre travels the drawn thumb's 632 units
+// px: the input's native thumb (app.css .slider-range), so its centre travels the drawn thumb's 632 units
+export const SLIDER_THUMB = 40;
 function wireSlider(host, view, s) {
   const bar = view.nodes.get(s.path)?.els[0],
     thumbEntry = view.nodes.get(`${s.path}/Thumb`);

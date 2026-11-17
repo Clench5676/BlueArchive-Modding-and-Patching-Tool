@@ -137,7 +137,8 @@ export function candidates(fam, v, kind = "spr", costumes = null, families = nul
     .flatMap((o) => o.modList || [])
     .filter((m) => m.kind === kind)
     .filter((m) => kind === "spr" || !m.core || !own || cores.includes(m.core));
-  const across = (kind === "spr" || kind === "model") && !!own; // Cross-variant adaptation requires an actual local target.
+  // cross-variant adaptation requires an actual local target
+  const across = (kind === "spr" || kind === "model") && !!own;
   const others = !across
     ? []
     : kind === "model"
