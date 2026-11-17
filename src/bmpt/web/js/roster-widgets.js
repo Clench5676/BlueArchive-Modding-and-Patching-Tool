@@ -5,6 +5,11 @@ import { emptyBlock } from "./empty-block.js";
 import { CONTROL, SPACE } from "./ui-tokens.js";
 import { row } from "./ui-grid.js";
 
+/**
+ * The game's search field, emptied.
+ * @param {NguiNode} collection The UICharacterCollection layout.
+ * @returns {NguiNode} A copy of the CharacterSearch node.
+ */
 export function searchTree(collection) {
   const box = clone(find(collection, "SeletControl/CharacterSearch"));
   const input = find(box, "SearchName/SearchNameArea/InputField");
@@ -12,7 +17,15 @@ export function searchTree(collection) {
   return box;
 }
 
-// Keep the roster's funnel line, expand marker, caption and inclined shadow together when the width changes.
+/**
+ * The sort button's body for a width. The roster's funnel line, expand marker, caption and inclined shadow stay
+ * together when the width changes.
+ * @param {NguiNode} collection The UICharacterCollection layout.
+ * @param {{text: string, fs: number}} fitted The fitted caption.
+ * @param {number} width The body's width in units.
+ * @param {boolean} filtered Whether a display setting filters the list (the funnel shows in blue).
+ * @returns {NguiNode} The button body.
+ */
 export function sortBody(collection, fitted, width, filtered) {
   const body = clone(find(collection, "SeletControl/TopMenu/SortBtn/Btn_Normal"));
   const shrink = 622 - width;
@@ -33,6 +46,12 @@ export function sortBody(collection, fitted, width, filtered) {
   return body;
 }
 
+/**
+ * The order button's body, showing one arrow.
+ * @param {NguiNode} collection The UICharacterCollection layout.
+ * @param {boolean} ascending True for the up arrow, false for the down arrow.
+ * @returns {NguiNode} The button body.
+ */
 export function orderBody(collection, ascending) {
   const body = clone(find(collection, "SeletControl/TopMenu/OrderBtn/Btn_Normal"));
   find(body, "Icon_down").active = !ascending;
@@ -40,8 +59,16 @@ export function orderBody(collection, ascending) {
   return body;
 }
 
-// a list popup's cards for its search and sort: found by their name, full name, original name, key and any further
-// terms of their own (an item's ``terms``: a model's dev ids)
+/**
+ * A list popup's cards for its search and sort: found by their name, full name, original name, key and any
+ * further terms of their own (an item's `terms`: a model's dev ids).
+ * @param {object[]} items The cards.
+ * @param {object} [options] The search and the sort.
+ * @param {string} [options.query] The search text.
+ * @param {string} [options.sort] "name" sorts by label; anything else keeps the order.
+ * @param {boolean} [options.ascending] False reverses the order.
+ * @returns {object[]} The cards that match.
+ */
 export function pickerItems(items, { query = "", sort = "default", ascending = true } = {}) {
   const terms = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
   const list = items.filter((item) =>
@@ -61,7 +88,15 @@ import { T } from "./i18n.js";
 import { SORTS, filtering } from "./roster-order.js";
 const { find, node, label, fitText } = NGUI;
 
-// The student roster's toolbar: its Group Alts checkbox, the two segment filters, search, sort and order.
+/**
+ * The student roster's toolbar fit: its Group Alts checkbox, the two segment filters, search, sort and order.
+ * @param {RosterView} view The view; its sort picks the sort button's caption.
+ * @param {object} [options] The room.
+ * @param {string} [options.title] The toolbar's title.
+ * @param {number} [options.left] The left edge in units.
+ * @param {number} [options.right] The right edge in units.
+ * @returns {object|null} The fit, as toolbarFit gives it.
+ */
 export function toolbarLayout(view, { title = T("roster.title"), left = -1270, right = 1412 } = {}) {
   return toolbarFit({
     title,
@@ -77,13 +112,27 @@ export function toolbarLayout(view, { title = T("roster.title"), left = -1270, r
   });
 }
 
-// A toolbar's fit, right to left from the order button, with the most generous sizes at which everything stands after
-// the title (the first step that fits; the last one regardless, ``fits`` says): a checkbox, the segment filters (``filters``:
-// the three captions of each), the search, sort and order tools. ``sorts``: every caption the sort button can show (it is as
-// wide as its longest, so choosing another moves nothing), ``sortAt``: the shown one; ``check``: the checkbox's caption.
-// The roster takes -1270 to 1412 after its title; a list popup its own width and no title (popup.js).
-// icons: how many icon toggles (the search button's body, another icon) stand before search (a list popup's)
-// spread: the checkbox and the filters from the left edge, the tools at the right (a list popup's)
+/**
+ * Fit a toolbar, right to left from the order button, with the most generous sizes at which everything stands
+ * after the title (the first step that fits; the last one regardless, `fits` says): a checkbox, the segment
+ * filters, the search, sort and order tools. The roster takes -1270 to 1412 after its title; a list popup its
+ * own width and no title.
+ * @param {object} options What the toolbar holds.
+ * @param {string} [options.title] The title the toolbar follows.
+ * @param {number} options.left The left edge in units.
+ * @param {number} options.right The right edge in units.
+ * @param {string[][]} options.filters The three captions of each segment filter.
+ * @param {string[]} options.sorts Every caption the sort button can show (it is as wide as its longest, so
+ *     choosing another moves nothing).
+ * @param {number} [options.sortAt] The index of the shown caption.
+ * @param {string|null} [options.check] The checkbox's caption; null for no checkbox.
+ * @param {number} [options.icons] How many icon toggles stand before search (a list popup's).
+ * @param {boolean} [options.spread] The checkbox and the filters from the left edge, the tools at the right (a
+ *     list popup's).
+ * @returns {object|null} The fit: sizes (segW, sortW, cbW, titleFs), the centres of the order, sort and search
+ *     buttons, the right edge of each filter (seg1, seg2), the checkbox's left, `filters` ({right, labels} per
+ *     filter), the boxes and `fits`; null when no step fits.
+ */
 export function toolbarFit({ title = "", left, right, filters, sorts, sortAt = 0, check, icons = 0, spread = false }) {
   // the last three steps only a list popup's narrower list reaches (the L class)
   const steps = [
@@ -111,7 +160,7 @@ export function toolbarFit({ title = "", left, right, filters, sorts, sortAt = 0
     const cbW = cbText ? 131 + glyphsOf(cbText.text, cbText.fs) + 46 : 0;
     // The segmented prefab keeps its three adjoining slots; composed groups use SPACE.l. Search and order share
     // UICharacterCollection/SeletControl/TopMenu/SearchBtn/Btn_Normal's own 150 x 116-unit body. Sort and order
-    // also keep their prefab's 116-unit height; the segmented filters keep 104. Caption fitting tiers stay as before.
+    // also keep their prefab's 116-unit height; the segmented filters keep 104.
     const h = CONTROL.toolbar.h,
       iconW = 150;
     const nativeH = 116;
@@ -162,14 +211,19 @@ export function toolbarFit({ title = "", left, right, filters, sorts, sortAt = 0
   return null;
 }
 
-// UICharacterCollection/SeletControl/LeftInfo_Empty, in its own units (y up) from its root: Arona's picture (Image_Inven_Empty,
-// a 943 box at y -318) over the faint disc, and the message under them (Label_Locale at y -589). Measured on the official
-// texture, 1024 square: its ink (alpha above 16) lies in rows 93 to 620.
+// UICharacterCollection/SeletControl/LeftInfo_Empty, in its own units (y up) from its root: Arona's picture
+// (Image_Inven_Empty, a 943 box at y -318) over the faint disc, and the message under them (Label_Locale at y
+// -589). Measured on the official texture, 1024 square: its ink (alpha above 16) lies in rows 93 to 620.
 export const EMPTY_LIST = { label: -589, picture: { y: -318, size: 943, inkTop: 93 / 1024 } };
 
-// Where LeftInfo_Empty's root goes (units, y up) so that its ink, from the top of Arona's picture to the bottom of the message,
-// is centred on `centre` (units): the middle of the paper the eye sees (the whole of it, or what the open search box leaves).
-// label: the message's widget as drawn (its text and font size).
+/**
+ * Where LeftInfo_Empty's root goes so that its ink, from the top of Arona's picture to the bottom of the
+ * message, is centred on `centre`: the middle of the paper the eye sees (the whole of it, or what the open
+ * search box leaves).
+ * @param {number} centre The centre in units, y up.
+ * @param {{text: string, fontSize: number}} label The message's widget as drawn.
+ * @returns {number} The root's y in units, y up.
+ */
 export function emptyListY(centre, label) {
   const { picture } = EMPTY_LIST;
   const pictureTop = picture.y + picture.size / 2 - picture.inkTop * picture.size;
@@ -180,9 +234,16 @@ export function emptyListY(centre, label) {
   return -at.title / S - EMPTY_LIST.label;
 }
 
-// The toolbar's three toggles as hit areas, in SeletControl's units: the six segments of the two filters and Group Alts.
-// Each has its box [x, y, width, height] (centre), its name (the caption it draws, "All" in both filters), whether its
-// setting is on (aria-pressed) and apply(view), which sets it.
+/**
+ * The toolbar's three toggles as hit areas, in SeletControl's units: the six segments of the two filters and
+ * Group Alts.
+ * @param {RosterView} view The view.
+ * @param {object} lay The toolbar fit, as toolbarFit gives it.
+ * @param {number} [segY] The y of the segments' centre.
+ * @returns {{box: number[], name: string, pressed: boolean, apply: (target: RosterView) => void}[]} Each
+ *     toggle's box [x, y, width, height] (centre), its name (the caption it draws, "All" in both filters),
+ *     whether its setting is on (aria-pressed) and apply(view), which sets it.
+ */
 export function toggleHits(view, lay, segY = 720 - 219 - 50.2) {
   const segments = (key, values, labels, centre) =>
     values.map((value, i) => ({
@@ -208,10 +269,17 @@ export function toggleHits(view, lay, segY = 720 - 219 - 50.2) {
 }
 
 // Where the toolbar's controls stand in SeletControl's units (y up from TopMenu's origin): their visual centre line.
-export const TOOLBAR_CENTRE_Y = -219 - 50.2; // UICharacterCollection/SeletControl/TopMenu/FilterBtn's authored centre line
+// UICharacterCollection/SeletControl/TopMenu/FilterBtn's authored centre line
+export const TOOLBAR_CENTRE_Y = -219 - 50.2;
 
-// What a toolbar shows of its state: one entry per filter of the layout (its node's name and the active segment), the
-// checkbox, the sort button's funnel (a display setting filters the list) and the order arrow. The roster's own, from its view.
+/**
+ * What the roster's toolbar shows of a view: one entry per filter of the layout (its node's name and the active
+ * segment), the checkbox, the sort button's funnel (a display setting filters the list) and the order arrow.
+ * @param {RosterView} view The view.
+ * @returns
+ *     {{filters: {name: string, active: number}[], checked: boolean, filtered: boolean, ascending: boolean}}
+ *     The state.
+ */
 export const rosterToolbarState = (view) => ({
   filters: [
     { name: "ModFilter", active: { all: 0, mods: 1, none: 2 }[view.mods] },
@@ -222,8 +290,16 @@ export const rosterToolbarState = (view) => ({
   ascending: view.order !== "desc",
 });
 
-// Shared complete UICharacterCollection toolbar; callers retain their own list and title. ``state``: what it shows
-// (``rosterToolbarState``), for a list popup's own.
+/**
+ * Build the complete UICharacterCollection toolbar; callers keep their own list and title.
+ * @param {NguiNode} collection The UICharacterCollection layout.
+ * @param {NguiNode|null} checkbox The checkbox layout.
+ * @param {RosterView} view The view.
+ * @param {boolean} searching Whether the search box is open (its button is pressed).
+ * @param {object|null} [lay] The toolbar fit.
+ * @param {object} [state] What the toolbar shows (`rosterToolbarState`), for a list popup's own.
+ * @returns {NguiNode} The toolbar's node tree.
+ */
 export function toolbarTree(
   collection,
   checkbox,

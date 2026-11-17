@@ -1,11 +1,25 @@
-// UICharacterCollection/SeletControl/Top/BG_W/Bg, Common_Top_Menu_Bg.
-// Keep the existing 310/20 source cuts and exact 172/11 stage-pixel caps.
+// UICharacterCollection/SeletControl/Top/BG_W/Bg, Common_Top_Menu_Bg: 310/20 source cuts and exact 172/11
+// stage-pixel caps.
 import { slicedImage } from "./ngui.js";
 import { spriteUrl } from "./api.js";
 import { withTimeout } from "./async.js";
 export const BAR_CUTS = Object.freeze([0, 20, 0, 310]);
 export const BAR_BORDER_SCALES = Object.freeze([0, 11 / 20, 0, 172 / 310]);
+/**
+ * The raster density of the bar's image.
+ * @param {number} [dpi] The device pixel ratio.
+ * @param {number} [scale] Stage pixels per NGUI unit of the header.
+ * @returns {number} Pixels per stage pixel, at least 2.
+ */
 export const barDensity = (dpi = 1, scale = 1) => Math.max(2, dpi * scale);
+/**
+ * Draw the bar's sliced image.
+ * @param {number} width The bar's width in units.
+ * @param {number} height The bar's height in units.
+ * @param {number} [scale] Stage pixels per unit.
+ * @param {number} [dpi] The device pixel ratio.
+ * @returns {Promise<string>} The URL of the image.
+ */
 export const barImage = (width, height, scale = 1, dpi = globalThis.devicePixelRatio || 1) =>
   slicedImage(
     spriteUrl("Common", "Common_Top_Menu_Bg"),
@@ -16,9 +30,18 @@ export const barImage = (width, height, scale = 1, dpi = globalThis.devicePixelR
     barDensity(dpi, scale),
   );
 
-// Each bar retains its published image while a replacement raster encodes and
-// decodes. Resize bursts replace the pending request; only one draw runs at once
-// and each draw starts in an animation frame.
+/**
+ * Make a function that paints a bar's background. Each bar keeps its published image while a replacement raster
+ * encodes and decodes; resize bursts replace the pending request, only one draw runs at once and each draw
+ * starts in an animation frame.
+ * @param {object} [options] Replaceable steps, for the tests.
+ * @param {(width: number, height: number, scale: number, dpi: number) => Promise<string>} [options.raster]
+ *     Draws the image.
+ * @param {(fn: () => void) => void} [options.frame] Runs a draw in an animation frame.
+ * @param {(url: string) => Promise<HTMLImageElement>} [options.decode] Decodes the image.
+ * @returns {(bar: HTMLElement, scale: number) => Promise<void>} Paints a bar; settles when its newest request
+ *     is painted.
+ */
 export function createTopBarPainter({
   raster = barImage,
   frame = (fn) => requestAnimationFrame(fn),

@@ -1,13 +1,29 @@
-// UICharacterDetail/Inventory_ListControl/NUITop_Scenes/Top/Right/Lobby:
-// right anchor 1480, local x -98.8, centred 62-unit Home sprite => 98.8 - 62/2.
-// Use this authored side inset for scene corners on both axes; retain the toolbar's own row alignment.
+// UICharacterDetail/Inventory_ListControl/NUITop_Scenes/Top/Right/Lobby: right anchor 1480, local x -98.8,
+// centred 62-unit Home sprite => 98.8 - 62/2. This authored side inset is used for scene corners on both axes;
+// the toolbar keeps its own row alignment.
 export const CORNER_UNITS = 98.8 - 62 / 2;
 export const CORNER_MARGIN = (CORNER_UNITS * 1920) / 2960;
 
-// All inputs except the source widget box are viewport CSS pixels. Output is in stage pixels,
-// including the area outside a letterboxed stage, so the inset is always measured from the window.
-// insets (chrome-motion.js): how far an immersive scene's top bar and bottom menu reach into the window now, and the top
-// bar's offset, which the macOS window buttons share. Scene controls make room for a bar the pointer brought back.
+/**
+ * Place a scene control in a corner of the window.
+ * All inputs except the source widget box are viewport CSS pixels. The output is in stage pixels, including the
+ * area outside a letterboxed stage, so the inset is always measured from the window. Scene controls make room
+ * for a bar the pointer brought back.
+ * @param {number[]} box The control's box [x, y, width, height] in stage units.
+ * @param {object} options Where it goes.
+ * @param {string} options.corner "top-left", "top-right", "bottom-left" or "bottom-right".
+ * @param {boolean} [options.immersive] Whether the scene is immersive (its bars reach into the window by
+ *     `insets`).
+ * @param {number} options.width The window's width.
+ * @param {number} options.height The window's height.
+ * @param {DOMRect} options.stage The stage's rect.
+ * @param {number} [options.barBottom] The top bar's bottom edge, for a scene that is not immersive.
+ * @param {{active?: boolean, bounds?: DOMRect}|null} [options.native] The native window controls.
+ * @param {{top?: number, bottom?: number, offset?: number}|null} [options.insets] chrome-motion.js: how far an
+ *     immersive scene's top bar and bottom menu reach into the window now, and the top bar's offset, which the
+ *     macOS window buttons share.
+ * @returns {number[]} The box [x, y, width, height] in stage units.
+ */
 export function cornerBox(
   box,
   {
@@ -29,7 +45,8 @@ export function cornerBox(
   const y = bottom
     ? height - margin - box[3] * scale - (immersive ? insets?.bottom || 0 : 0)
     : (immersive ? insets?.top || 0 : barBottom) + margin;
-  // Only the visible body can displace a control. Keep its larger prefab hit area; native controls take their own clicks.
+  // Only the visible body can displace a control. Keep its larger prefab hit area; native controls take their own
+  // clicks.
   const lift = insets?.offset || 0,
     edge = x + box[2] * scale,
     foot = y + box[3] * scale;
@@ -78,6 +95,13 @@ function place(element, entry) {
   // CSS translate composes with the prefab's slide animation on transform.
   element.style.translate = `${next[0] - entry.box[0]}px ${next[1] - entry.box[1]}px`;
 }
+/**
+ * Keep a control in a corner of the window: it is placed now and again whenever the window changes
+ * (reflowCorners).
+ * @param {HTMLElement} element The control.
+ * @param {number[]} box The control's prefab box [x, y, width, height].
+ * @param {object} options As for cornerBox: corner and immersive.
+ */
 export function bindCorner(element, box, options) {
   if (!element || !box) return;
   let entry = registered.get(element);
@@ -89,7 +113,11 @@ export function bindCorner(element, box, options) {
   Object.assign(entry, { box, options });
   place(element, entry);
 }
-// An immersive scene's control centred on the stage's top or bottom edge (the photography shutter).
+/**
+ * Keep an immersive scene's control centred on the stage's top or bottom edge (the photography shutter).
+ * @param {HTMLElement} element The control.
+ * @param {"top"|"bottom"} edge The edge.
+ */
 export function bindEdge(element, edge) {
   if (!element) return;
   let entry = registered.get(element);
@@ -101,6 +129,9 @@ export function bindEdge(element, edge) {
   Object.assign(entry, { box: null, options: { edge } });
   place(element, entry);
 }
+/**
+ * Place every bound control again, after the window or the bars changed.
+ */
 export function reflowCorners() {
   for (const entry of controls) {
     const element = entry.ref.deref();

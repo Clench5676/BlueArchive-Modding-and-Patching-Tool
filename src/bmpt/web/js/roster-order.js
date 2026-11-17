@@ -1,9 +1,7 @@
 // The student list's cards and their order for a view (merge, segment filters, the display settings' filters and
 // sort, the search), shared by the roster and the detail screen's arrows. No DOM: the tests run it in Node.
-//   arrange(data, view, opts) -> { groups: [{ id: "mods" | "none", items }], total }  the cards as the roster shows them
-//   order(data, view, opts)   -> the same cards in one list
-//   neighbour(list, full, at, delta) -> the card before or after the shown variant (or family, merged)
-//   visit(data, key)          the recently viewed order after a visit, in the roster's data
+// arrange gives the cards as the roster shows them, order the same cards in one list, neighbour the card before
+// or after the shown variant (or family, merged), visit the recently viewed order after a visit.
 import { studentName } from "./names.js";
 
 export const SORTS = ["recent", "added", "name", "mods", "default"];
@@ -27,7 +25,22 @@ export const DEFAULT_VIEW = Object.freeze({
 
 const pick = (value, allowed, fallback) => (allowed.includes(value) ? value : fallback);
 
-// a stored or edited view with every field valid (the server keeps the same rules: webui/state.py roster_view)
+/**
+ * What the roster list shows and in what order.
+ * @typedef {object} RosterView
+ * @property {boolean} merged Group the variants of one character.
+ * @property {"all"|"mods"|"none"} mods The mods segment filter.
+ * @property {"all"|"yes"|"no"} recruit The recruitment segment filter.
+ * @property {string} sort The sort key, one of SORTS.
+ * @property {"asc"|"desc"} order The direction.
+ * @property {Object<string, string[]>} filters The options that are on in each of the display settings' FILTERS groups.
+ */
+
+/**
+ * A stored or edited view with every field valid (the server keeps the same rules: webui/state.py roster_view).
+ * @param {*} v The stored or edited view; anything that is not an object gives the defaults.
+ * @returns {RosterView} The valid view.
+ */
 export function normalizeView(v) {
   const src = v && typeof v === "object" ? v : {};
   const filters = {};
@@ -46,7 +59,12 @@ export function normalizeView(v) {
   };
 }
 
-// a group narrows only when some but not all of its options are on
+/**
+ * Whether the display settings' filters narrow the list: a group narrows only when some but not all of its
+ * options are on.
+ * @param {Object<string, string[]>|undefined} filters The options on in each group.
+ * @returns {boolean} True when some group narrows.
+ */
 export const filtering = (filters) =>
   Object.entries(FILTERS).some(([g, options]) => {
     const on = filters?.[g] || [];
@@ -54,8 +72,13 @@ export const filtering = (filters) =>
   });
 
 // --- search: every name language, the aliases and the file id, case, width, kana and separators folded ---
-// separators: brackets, dots, commas, dashes, quotes and the marks inside official names (Shiroko*Terror,
-// Golconde&Decalcomania, a "?" title), so a name typed without them is found
+/**
+ * Fold a text for searching: case, width, kana and separators (brackets, dots, commas, dashes, quotes and the
+ * marks inside official names such as Shiroko*Terror, Golconde&Decalcomania or a "?" title), so a name typed
+ * without them is found.
+ * @param {string} str The text.
+ * @returns {string} The folded text.
+ */
 export function fold(str) {
   return String(str ?? "")
     .normalize("NFKC")
@@ -63,6 +86,11 @@ export function fold(str) {
     .replace(/[\u3041-\u3096]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 0x60)) // hiragana as katakana
     .replace(/[\s()[\]{}\u00b7\u30fb\u3001\uff0c,.\-_'"*&!?]/g, "");
 }
+/**
+ * Split a search text into its folded words.
+ * @param {string} query The search text.
+ * @returns {string[]} The words.
+ */
 export const terms = (query) =>
   String(query ?? "")
     .split(/\s+/)
@@ -201,8 +229,19 @@ function comparator(view, collator) {
   return (a, b) => b.favorite - a.favorite || sign * safe(by(a, b)) || a.n - b.n;
 }
 
-// opts: query (search text), label ({lang: value} -> the UI language's value), collator (Intl.Collator for names),
-// unfiltered (true: the whole roster in the view's order, for stepping from a card the view hides)
+/**
+ * Arrange the roster's cards for a view.
+ * @param {{families?: object[]}} data The roster data of roster.list.
+ * @param {RosterView} view The view.
+ * @param {object} [options] The search and the language.
+ * @param {string} [options.query] The search text.
+ * @param {(names: object) => *} [options.label] Gives the UI language's value of a {lang: value} object.
+ * @param {Intl.Collator|null} [options.collator] Compares names.
+ * @param {boolean} [options.unfiltered] True: the whole roster in the view's order, for stepping from a card
+ *     the view hides.
+ * @returns {{groups: {id: "mods"|"none", items: object[]}[], total: number}} The cards in their groups and the
+ *     number of cards before filtering.
+ */
 export function arrange(
   data,
   view,
@@ -226,11 +265,25 @@ export function arrange(
   return { groups, total: all.length };
 }
 
+/**
+ * The cards in the roster's order, in one list.
+ * @param {{families?: object[]}} data The roster data of roster.list.
+ * @param {RosterView} view The view.
+ * @param {object} [opts] As for arrange.
+ * @returns {object[]} The cards.
+ */
 export const order = (data, view, opts) => arrange(data, view, opts).groups.flatMap((g) => g.items);
 
 // a visit to a variant in roster.list's data, as the server records it (webui/state.py UiState.visit: first in the
 // recently viewed, the ones before it one down, at most RECENT_MAX kept), so the list has it without a new roster.list
 export const RECENT_MAX = 50;
+/**
+ * Record a visit to a variant in roster.list's data, as the server does (webui/state.py UiState.visit: first in
+ * the recently viewed, the ones before it one down, at most RECENT_MAX kept), so the list has it without a new
+ * roster.list.
+ * @param {{families?: object[]}} data The roster data; updated in place.
+ * @param {string} key The visited variant's key.
+ */
 export function visit(data, key) {
   const vs = (data?.families || []).flatMap((f) => f.variants || []);
   const was = vs.find((v) => v.key === key)?.recent ?? Infinity;
@@ -240,9 +293,16 @@ export function visit(data, key) {
   }
 }
 
-// the card delta steps away from the shown one (at: {family, variant, merged}) in list, wrapping round; a variant
-// the list hides (another chip of the family, a deep link) steps to the nearest listed card after or before its place
-// in full (the unfiltered order, or a function making it). Null when there is nowhere else to go.
+/**
+ * Find the card a step away from the shown one in a list, wrapping round.
+ * A variant the list hides (another chip of the family, a deep link) steps to the nearest listed card after or
+ * before its place in full.
+ * @param {object[]} list The cards as shown.
+ * @param {object[]|(() => object[])|null} full The unfiltered order, or a function making it.
+ * @param {{family: string, variant: string, merged: boolean}} at The shown card.
+ * @param {number} delta The step, +1 or -1.
+ * @returns {object|null} The card, or null when there is nowhere else to go.
+ */
 export function neighbour(list, full, at, delta) {
   const usable = list.filter((c) => c.spr || c.lobby || c.model || c.storedKinds?.length);
   if (!usable.length) return null;
