@@ -47,7 +47,7 @@ def test_the_release_a_mod_follows_is_the_closest_and_clearly_closer_than_the_in
     assert archive.best([old], {"other": drawn_old["page"]}, installed) is None
 
 
-def test_the_archive_keeps_each_rig_once_and_the_newest_few(tmp_path):
+def test_the_archive_keeps_each_rig_once_and_every_distinct_one(tmp_path):
     store = archive.RigArchive(tmp_path / "rigs")
     mask = {"page": archive.alpha_mask(page([(0, 0, 32, 32)]))}
     assert store.add("Test_spr", "Test.atlas", b"atlas 0", "Test.skel", b"skel 0", "layout 0", mask)
@@ -57,16 +57,17 @@ def test_the_archive_keeps_each_rig_once_and_the_newest_few(tmp_path):
     assert store.read(kept.atlas_sha1) == b"atlas 0" and store.read(kept.skeleton_sha1) == b"skel 0"
     assert store.read("../index.json") is None
     generation = store.generation()
-    for i in range(1, archive.KEEP + 2):
+    count = 12
+    for i in range(1, count):
         store.add("test_spr", "Test.atlas", f"atlas {i}".encode(), "Test.skel", f"skel {i}".encode(), f"layout {i}", mask)
     assert store.generation() > generation
     rigs = store.rigs("test_spr")
-    assert len(rigs) == archive.KEEP and rigs[0].layout == "layout 2" and rigs[-1].layout == f"layout {archive.KEEP + 1}"
-    assert store.read(kept.atlas_sha1) is None  # the oldest went with its objects
-    assert len(list((tmp_path / "rigs" / "objects").iterdir())) == 2 * archive.KEEP
+    assert len(rigs) == count and rigs[0].layout == "layout 0" and rigs[-1].layout == f"layout {count - 1}"
+    assert store.read(kept.atlas_sha1) == b"atlas 0"  # no release is ever dropped
+    assert len(list((tmp_path / "rigs" / "objects").iterdir())) == 2 * count
     store.set_stamp("install", "stamp")
     again = archive.RigArchive(tmp_path / "rigs")  # from disk
-    assert again.stamp("install") == "stamp" and len(again.rigs("test_spr")) == archive.KEEP
+    assert again.stamp("install") == "stamp" and len(again.rigs("test_spr")) == count
     assert np.array_equal(again.rigs("test_spr")[0].unpacked()["page"], mask["page"])
 
 

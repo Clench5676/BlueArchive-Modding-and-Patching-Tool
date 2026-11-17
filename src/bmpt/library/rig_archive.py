@@ -38,8 +38,6 @@ VERSION = 1
 MASK = 128
 #: alpha above this counts as drawn
 ALPHA = 16
-#: distinct rigs kept per portrait core; the oldest go first
-KEEP = 8
 #: a kept release is taken when its masks overlap the mod's this much at least (intersection over union, the mean over
 #: the atlas's pages) and this much more than the release installed now. Measured on the update of 2026-11-10: a
 #: portrait's old texture against its own release 1.0, against the new release's of the 128 changed portraits median
@@ -198,7 +196,8 @@ class RigArchive:
     def add(self, core: str, atlas: str, atlas_data: bytes, skeleton: str, skeleton_data: bytes, layout: str,
             masks: Mapping[str, np.ndarray]) -> bool:
         """Keep one official rig of a portrait core (its atlas and skeleton, named and as bytes, the atlas's layout and
-        its pages' masks). False when it is kept already. The oldest go beyond KEEP per core."""
+        its pages' masks). False when it is kept already. Every distinct rig is kept: an entry is added only when a
+        release changes a rig, and a dropped one could no longer repair a mod drawn for it."""
         atlas_sha1, skeleton_sha1 = hashlib.sha1(atlas_data).hexdigest(), hashlib.sha1(skeleton_data).hexdigest()
         if self.has(core, atlas_sha1, skeleton_sha1):
             return False
@@ -216,16 +215,8 @@ class RigArchive:
             data = self._load()
             items = data["rigs"].setdefault(core.lower(), [])
             items.append(item)
-            dropped = items[:-KEEP]
-            del items[:-KEEP]
             self._save()
             self._generation += 1
-            kept = {sha1 for entries in data["rigs"].values() for entry in entries
-                    for sha1 in (entry.get("atlasSha1"), entry.get("skeletonSha1"))}
-        for entry in dropped:
-            for sha1 in (entry.get("atlasSha1"), entry.get("skeletonSha1")):
-                if isinstance(sha1, str) and sha1 not in kept and len(sha1) == 40 and sha1.isalnum():
-                    (self.folder / "objects" / sha1).unlink(missing_ok=True)
         return True
 
     def read(self, sha1: str) -> bytes | None:
