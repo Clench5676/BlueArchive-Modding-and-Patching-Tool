@@ -46,9 +46,11 @@ _HOME = re.compile(r"(?i)(?:[A-Z]:[/\\](?:Users|Documents and Settings)[/\\]|/(?
 # end in _assets_all_<n> or _scenes_all_<n>, or are Unity's built-in shaders (<32 hex>_unitybuiltinshaders_<n>); an
 # apostrophe occurs only inside a name (a raid scene, "netzach's"), so quotes around a name stay outside it. A match
 # never starts right after an apostrophe inside a word: that keeps the search linear on long untrusted names.
-_GAME_NAME = re.compile(r"(?i)(?<![\w.\-])(?<![\w.\-]')(?:(?:[a-z0-9_.\-]+(?:'[a-z0-9_.\-]+)*_(?:assets|scenes)_all_\d+"
-                        r"|[0-9a-f]{32}_unitybuiltinshaders_\d+)\.bundle(?:\.backup)?|cab-[0-9a-f]{32}(?:\.[a-z]+)?"
-                        r"|[a-z0-9_]+\.glb)(?![\w.\-])")
+_GAME_NAME = re.compile(
+    r"(?i)(?<![\w.\-])(?<![\w.\-]')(?:(?:[a-z0-9_.\-]+(?:'[a-z0-9_.\-]+)*_(?:assets|scenes)_all_\d+"
+    r"|[0-9a-f]{32}_unitybuiltinshaders_\d+)\.bundle(?:\.backup)?|cab-[0-9a-f]{32}(?:\.[a-z]+)?"
+    r"|[a-z0-9_]+\.glb)(?![\w.\-])"
+)
 # A log record's own head (milliseconds, level, logger) is never part of an asset name.
 _LOG_HEAD = re.compile(r"^\d{3} (?:DEBUG|INFO|WARNING|ERROR|CRITICAL) [\w.]+: ")
 READ_TIMEOUT = 0.1
@@ -90,11 +92,12 @@ def private_text(text: str, secrets: set[str]) -> str:
         field = match[0]
         head = _LOG_HEAD.match(field)
         head = head[0] if head else ""
-        rest = field[len(head):]
+        rest = field[len(head) :]
         matches = list(_ASSET_EXTENSION.finditer(rest))
         if not matches:
             return field
-        return head + " ".join("[asset]." + m[1] for m in matches) + rest[matches[-1].end():]
+        return head + " ".join("[asset]." + m[1] for m in matches) + rest[matches[-1].end() :]
+
     text = _ASSET_FIELD.sub(asset_field, text)
     text = redact(text, secrets)
     return re.sub("\0(\\d+)\0", lambda m: kept[int(m[1])], text)
@@ -104,10 +107,19 @@ def clean(value: Any, secrets: set[str], depth: int = 0, *, filename: bool = Fal
     if depth > 8:
         return "[truncated]"
     if isinstance(value, dict):
-        return {str(k): ("[redacted]" if re.search(
-            r"token|secret|password|passwd|api.?key|authorization|cookie", str(k), re.I) else clean(
-                v, secrets, depth + 1, filename=str(k).lower() in {"file", "files", "filename", "filenames", "path", "paths"}))
-                for k, v in list(value.items())[:100]}
+        return {
+            str(k): (
+                "[redacted]"
+                if re.search(r"token|secret|password|passwd|api.?key|authorization|cookie", str(k), re.I)
+                else clean(
+                    v,
+                    secrets,
+                    depth + 1,
+                    filename=str(k).lower() in {"file", "files", "filename", "filenames", "path", "paths"},
+                )
+            )
+            for k, v in list(value.items())[:100]
+        }
     if isinstance(value, (list, tuple, deque)):
         return [clean(v, secrets, depth + 1, filename=filename) for v in list(value)[-40:]]
     if isinstance(value, str):
@@ -150,16 +162,21 @@ def differing_game_files(folder: Path, official: dict[str, steam_records.Officia
         return {"count": len(names), "names": sorted(names)[:GAME_FILE_NAMES]}
 
     unlisted = [name for name in present if name not in official]
-    return {"listed": len(official), "present": len(present),
-            "sizeChanged": group([name for name, entry in official.items()
-                                  if name in present and present[name] != entry.size]),
-            "missing": group([name for name in official if name not in present]),
-            "notListed": {**group([name for name in unlisted if _GAME_NAME.fullmatch(name)]), "count": len(unlisted)}}
+    return {
+        "listed": len(official),
+        "present": len(present),
+        "sizeChanged": group(
+            [name for name, entry in official.items() if name in present and present[name] != entry.size]
+        ),
+        "missing": group([name for name in official if name not in present]),
+        "notListed": {**group([name for name in unlisted if _GAME_NAME.fullmatch(name)]), "count": len(unlisted)},
+    }
 
 
 def configured_language(data_dir: Path) -> str:
     """Read only the UI preference, before startup loads settings or detects a game."""
     import toml
+
     try:
         with (data_dir / "config.toml").open("r", encoding="utf-8") as stream:
             value = toml.loads(stream.read(DATA_CAP)).get("AppSettings", {}).get("language")
@@ -186,24 +203,49 @@ def import_row(entry: dict, secrets: set[str]) -> dict:
     target = entry.get("target") if isinstance(entry.get("target"), dict) else {}
     files = entry.get("files") if isinstance(entry.get("files"), list) else []
     route = " -> ".join(f"{side.get('server') or '?'}/{side.get('platform') or '?'}" for side in (source, target))
-    return clean(with_ref({"id": entry.get("id"), "kind": entry.get("kind"), "state": entry.get("state"),
-                  "reason": entry.get("reason"), "code": detail.get("code") or entry.get("reason")
-                  or ("mod_parts_missing" if entry.get("state") == "incomplete" else None),
-                  "ref": detail.get("ref"),
-                  "params": detail.get("params") or entry.get("params", {}),
-                  "files": [{"filename": file.get("path"),
-                             "part": parse_filename(str(file.get("path", "")).replace("\\", "/").rsplit("/", 1)[-1]).res_type}
-                            for file in files if isinstance(file, dict)],
-                  "source": source, "target": target, "conversionRoute": route,
-                  "selected": entry.get("selected"), "libraryId": entry.get("libraryId"),
-                  # what the check read of the files (build target, Unity, own CABs) and the CABs nothing held
-                  "bundles": entry.get("bundles"), "missing": entry.get("missing"),
-                  # how each file found its official parts, every guessed source tried, and whether the import
-                  # preview composed the row: a refused row that previewed disagrees with the preview's rule
-                  "resolution": entry.get("resolution"),
-                  "attempts": [with_ref(attempt) if isinstance(attempt, dict) else attempt
-                               for attempt in entry["attempts"]] if isinstance(entry.get("attempts"), list) else None,
-                  "previewed": entry.get("previewed")}), secrets)
+    return clean(
+        with_ref(
+            {
+                "id": entry.get("id"),
+                "kind": entry.get("kind"),
+                "state": entry.get("state"),
+                "reason": entry.get("reason"),
+                "code": detail.get("code")
+                or entry.get("reason")
+                or ("mod_parts_missing" if entry.get("state") == "incomplete" else None),
+                "ref": detail.get("ref"),
+                "params": detail.get("params") or entry.get("params", {}),
+                "files": [
+                    {
+                        "filename": file.get("path"),
+                        "part": parse_filename(
+                            str(file.get("path", "")).replace("\\", "/").rsplit("/", 1)[-1]
+                        ).res_type,
+                    }
+                    for file in files
+                    if isinstance(file, dict)
+                ],
+                "source": source,
+                "target": target,
+                "conversionRoute": route,
+                "selected": entry.get("selected"),
+                "libraryId": entry.get("libraryId"),
+                # what the check read of the files (build target, Unity, own CABs) and the CABs nothing held
+                "bundles": entry.get("bundles"),
+                "missing": entry.get("missing"),
+                # how each file found its official parts, every guessed source tried, and whether the import
+                # preview composed the row: a refused row that previewed disagrees with the preview's rule
+                "resolution": entry.get("resolution"),
+                "attempts": [
+                    with_ref(attempt) if isinstance(attempt, dict) else attempt for attempt in entry["attempts"]
+                ]
+                if isinstance(entry.get("attempts"), list)
+                else None,
+                "previewed": entry.get("previewed"),
+            }
+        ),
+        secrets,
+    )
 
 
 def import_snapshot(value: Any, secrets: set[str]) -> dict | None:
@@ -218,15 +260,24 @@ def import_snapshot(value: Any, secrets: set[str]) -> dict | None:
         if size > DATA_CAP // 2:
             break
         rows.append(row)
-    return {"phase": clean(value.get("phase"), secrets), "revision": clean(value.get("revision"), secrets),
-            "total": len(value["rows"]), "omitted": len(value["rows"]) - len(rows), "rows": rows}
+    return {
+        "phase": clean(value.get("phase"), secrets),
+        "revision": clean(value.get("revision"), secrets),
+        "total": len(value["rows"]),
+        "omitted": len(value["rows"]) - len(rows),
+        "rows": rows,
+    }
 
 
 def environment(safe_mode: bool = False, language: str | None = None) -> dict:
-    return {"app": {"version": updater.current_version(), "build": "compiled" if updater.is_compiled() else "source"},
-            "os": {"name": platform.system(), "version": platform.version(), "arch": platform.machine()},
-            "locale": locale.getlocale()[0], "language": language or i18n_manager.lang,
-            "webview": native.engine_info(), "safeMode": safe_mode}
+    return {
+        "app": {"version": updater.current_version(), "build": "compiled" if updater.is_compiled() else "source"},
+        "os": {"name": platform.system(), "version": platform.version(), "arch": platform.machine()},
+        "locale": locale.getlocale()[0],
+        "language": language or i18n_manager.lang,
+        "webview": native.engine_info(),
+        "safeMode": safe_mode,
+    }
 
 
 def log_tail(path: Path, secrets: set[str]) -> str | None:
@@ -274,13 +325,28 @@ class Reports:
             return False
         try:
             if isinstance(context, dict):
-                self.frontend = clean({k: context[k] for k in ("page", "phase", "language", "userAgent", "screen", "webgl", "timings")
-                                       if k in context}, self.secrets)
+                self.frontend = clean(
+                    {
+                        k: context[k]
+                        for k in ("page", "phase", "language", "userAgent", "screen", "webgl", "timings")
+                        if k in context
+                    },
+                    self.secrets,
+                )
                 if "batchImport" in context:
                     self.imports = import_snapshot(context["batchImport"], self.secrets)
             if not isinstance(event, dict):
                 return False
-            item = clean(with_ref({k: event[k] for k in ("message", "stack", "page", "phase", "kind", "source", "code", "ref", "params") if k in event}), self.secrets)
+            item = clean(
+                with_ref(
+                    {
+                        k: event[k]
+                        for k in ("message", "stack", "page", "phase", "kind", "source", "code", "ref", "params")
+                        if k in event
+                    }
+                ),
+                self.secrets,
+            )
             key = json.dumps(item, sort_keys=True)
             self._seen = {k: t for k, t in self._seen.items() if now - t < 60}
             while self._times and now - self._times[0] >= 60:
@@ -336,6 +402,7 @@ class Reports:
             if task is None:
                 task = {"done": threading.Event(), "value": None}
                 self._reads[key] = task
+
                 def run():
                     try:
                         task["value"] = read()
@@ -343,6 +410,7 @@ class Reports:
                         pass
                     finally:
                         task["done"].set()
+
                 threading.Thread(target=run, name="bamt-report-" + key, daemon=True).start()
         finally:
             self._reads_lock.release()
@@ -383,16 +451,21 @@ class Reports:
             folder = Path(item["folder"])
             official = files.bundles(folder)
             if official:
-                out.append({"install": item.get("id"), "server": item.get("server"),
-                            **differing_game_files(folder, official)})
+                out.append(
+                    {"install": item.get("id"), "server": item.get("server"), **differing_game_files(folder, official)}
+                )
         return out
 
     def _local_snapshot(self) -> dict:
         if not self._lock.acquire(timeout=READ_TIMEOUT):
             return {}
         try:
-            return {"game": dict(self.game), "frontend": dict(self.frontend), "frontendErrors": list(self.errors),
-                    "lastFailedJob": self.last_job}
+            return {
+                "game": dict(self.game),
+                "frontend": dict(self.frontend),
+                "frontendErrors": list(self.errors),
+                "lastFailedJob": self.last_job,
+            }
         finally:
             self._lock.release()
 
@@ -427,28 +500,46 @@ class Reports:
         s = self.services
         self._start("gameFiles", self.game_files)  # Steam's file list and the stats run while the rest is read
         # Build identity is trusted metadata, separate from payload redaction and filenames.
-        app = {"version": read("version", updater.current_version) or "unknown",
-               "build": "compiled" if updater.is_compiled() else "source"}
-        data = {"created": datetime.now().astimezone().isoformat(timespec="seconds"),
-                "privacy": "Redacted: home paths, user names, hostnames, credentials and file names other than the game's own. Local only; no upload.",
-                "safeMode": self.safe_mode,
-                "os": read("os", lambda: {"name": platform.system(), "version": platform.version(), "arch": platform.machine()}),
-                "locale": read("locale", lambda: locale.getlocale()[0]), "language": read("language", self.language),
-                "webview": read("webview", native.engine_info),
-                **dict.fromkeys(("game", "frontend", "frontendErrors", "lastFailedJob")),
-                **(read("local", self._local_snapshot) or {}),
-                "libraryCounts": read("library", self.library_counts),
-                "consent": read("consent", lambda: (s.state.diagnostic_state() or {}).get("consent") if hasattr(s.state, "diagnostic_state")
-                                else {"uiAssets": s.state.consent, "spine": s.state.spine_consent}) if s else None,
-                "timings": read("timings", lambda: s.timings.snapshot()) if s else None,
-                # what was still running when the report was taken: a timed-out request has no timing yet
-                "running": read("running", spans.active),
-                "previousBackendError": read("previous", self._previous_error)}
+        app = {
+            "version": read("version", updater.current_version) or "unknown",
+            "build": "compiled" if updater.is_compiled() else "source",
+        }
+        data = {
+            "created": datetime.now().astimezone().isoformat(timespec="seconds"),
+            "privacy": "Redacted: home paths, user names, hostnames, credentials and file names other than the game's own. Local only; no upload.",
+            "safeMode": self.safe_mode,
+            "os": read(
+                "os", lambda: {"name": platform.system(), "version": platform.version(), "arch": platform.machine()}
+            ),
+            "locale": read("locale", lambda: locale.getlocale()[0]),
+            "language": read("language", self.language),
+            "webview": read("webview", native.engine_info),
+            **dict.fromkeys(("game", "frontend", "frontendErrors", "lastFailedJob")),
+            **(read("local", self._local_snapshot) or {}),
+            "libraryCounts": read("library", self.library_counts),
+            "consent": read(
+                "consent",
+                lambda: (
+                    (s.state.diagnostic_state() or {}).get("consent")
+                    if hasattr(s.state, "diagnostic_state")
+                    else {"uiAssets": s.state.consent, "spine": s.state.spine_consent}
+                ),
+            )
+            if s
+            else None,
+            "timings": read("timings", lambda: s.timings.snapshot()) if s else None,
+            # what was still running when the report was taken: a timed-out request has no timing yet
+            "running": read("running", spans.active),
+            "previousBackendError": read("previous", self._previous_error),
+        }
         sanitized = read("redaction", lambda: clean(data, self.secrets))
-        return {**(sanitized if sanitized is not None else dict.fromkeys(data)), "app": app,
-                "batchImport": read("batchImport", self.import_list),
-                # Names are the game's own or left out (differing_game_files); no paths, so no redaction pass.
-                "gameFiles": self.optional("gameFiles", self.game_files, deadline, GAME_FILES_TIMEOUT)}
+        return {
+            **(sanitized if sanitized is not None else dict.fromkeys(data)),
+            "app": app,
+            "batchImport": read("batchImport", self.import_list),
+            # Names are the game's own or left out (differing_game_files); no paths, so no redaction pass.
+            "gameFiles": self.optional("gameFiles", self.game_files, deadline, GAME_FILES_TIMEOUT),
+        }
 
     def generate(self, *, automatic: bool = False, trigger: dict | None = None) -> dict:
         if not self._writing.acquire(timeout=COLLECTION_TIMEOUT):
@@ -457,30 +548,69 @@ class Reports:
             deadline = time.monotonic() + COLLECTION_TIMEOUT
             data = self.snapshot(deadline)
             if isinstance(trigger, dict):
-                data["triggeringError"] = self.optional("trigger", lambda: clean(with_ref({
-                    k: trigger[k] for k in ("kind", "code", "ref", "params", "message") if k in trigger}), self.secrets), deadline)
+                data["triggeringError"] = self.optional(
+                    "trigger",
+                    lambda: clean(
+                        with_ref({k: trigger[k] for k in ("kind", "code", "ref", "params", "message") if k in trigger}),
+                        self.secrets,
+                    ),
+                    deadline,
+                )
             folders = self.optional("folders", native.report_folders, deadline) or []
-            logs = {name: self.optional(name, lambda name=name: log_tail(
-                self.log_path if name == "webui.log" else self.data_dir / name, self.secrets), deadline)
-                    for name in LOG_NAMES}
+            logs = {
+                name: self.optional(
+                    name,
+                    lambda name=name: log_tail(
+                        self.log_path if name == "webui.log" else self.data_dir / name, self.secrets
+                    ),
+                    deadline,
+                )
+                for name in LOG_NAMES
+            }
             last = data["lastFailedJob"] or {}
             phase = (data["frontend"] or {}).get("phase", "startup")
             latest = data["frontendErrors"][-1] if data["frontendErrors"] else {}
-            reason = " ".join(str((data.get("triggeringError") or {}).get("code") or last.get("code") or latest.get("code") or latest.get("message") or phase).split())[:160]
+            reason = " ".join(
+                str(
+                    (data.get("triggeringError") or {}).get("code")
+                    or last.get("code")
+                    or latest.get("code")
+                    or latest.get("message")
+                    or phase
+                ).split()
+            )[:160]
             os_info = data["os"] or {}
-            summary = (f"BAMT {data['app']['version']} | {os_info.get('name')} {os_info.get('arch')} | {data['language']}\n"
-                       f"{reason} | Safe mode: {self.safe_mode}\n")
+            summary = (
+                f"BAMT {data['app']['version']} | {os_info.get('name')} {os_info.get('arch')} | {data['language']}\n"
+                f"{reason} | Safe mode: {self.safe_mode}\n"
+            )
             data = {"summary": summary, **data}
             encoded = json.dumps(data, ensure_ascii=False, indent=2)
             # A malicious error payload must not inflate the archive. Keep the latest bounded fields.
-            for field in ("previousBackendError", "frontendErrors", "lastFailedJob", "frontend", "timings", "running", "triggeringError", "batchImport",
-                          "gameFiles"):
+            for field in (
+                "previousBackendError",
+                "frontendErrors",
+                "lastFailedJob",
+                "frontend",
+                "timings",
+                "running",
+                "triggeringError",
+                "batchImport",
+                "gameFiles",
+            ):
                 if len(encoded.encode("utf-8")) <= DATA_CAP:
                     break
                 data[field] = "[Truncated]"
                 encoded = json.dumps(data, ensure_ascii=False, indent=2)
-            report = summary + "\n" + "\n\n".join(
-                f"[{key}]\n{json.dumps(value, ensure_ascii=False, indent=2)}" for key, value in data.items() if key != "summary")
+            report = (
+                summary
+                + "\n"
+                + "\n\n".join(
+                    f"[{key}]\n{json.dumps(value, ensure_ascii=False, indent=2)}"
+                    for key, value in data.items()
+                    if key != "summary"
+                )
+            )
             version = re.sub(r"[^A-Za-z0-9.+-]", "_", str(data["app"]["version"]))
             stem = f"BAMT-report-{version}-{datetime.now():%Y%m%d-%H%M}" + ("-auto" if automatic else "")
             folders = [self.data_dir, *folders] if automatic else [*folders, self.data_dir]
@@ -546,7 +676,15 @@ class Reports:
             data.pop("previousBackendError", None)
             data["error"] = private_text("".join(traceback.format_exception(exc_type, exc, tb)), self.secrets)[-32000:]
             encoded = json.dumps(data, ensure_ascii=False)
-            for field in ("frontendErrors", "frontend", "lastFailedJob", "timings", "running", "batchImport", "gameFiles"):
+            for field in (
+                "frontendErrors",
+                "frontend",
+                "lastFailedJob",
+                "timings",
+                "running",
+                "batchImport",
+                "gameFiles",
+            ):
                 if len(encoded.encode("utf-8")) <= DATA_CAP:
                     break
                 data[field] = "[Truncated]"
@@ -558,9 +696,14 @@ class Reports:
             except OSError:
                 logger.warning("Backend snapshot kept in memory")
             self.generate(automatic=True)
-            reports = sorted((p for p in self.data_dir.glob("BAMT-report-*.zip")
-                              if re.search(r"-\d{8}-\d{4}-auto(?:-\d+)?\.zip$", p.name)),
-                             key=lambda p: p.stat().st_mtime)
+            reports = sorted(
+                (
+                    p
+                    for p in self.data_dir.glob("BAMT-report-*.zip")
+                    if re.search(r"-\d{8}-\d{4}-auto(?:-\d+)?\.zip$", p.name)
+                ),
+                key=lambda p: p.stat().st_mtime,
+            )
             for path in reports[:-3]:
                 path.unlink()
         except Exception:

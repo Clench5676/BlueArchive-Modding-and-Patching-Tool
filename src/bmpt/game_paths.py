@@ -38,8 +38,14 @@ WINE_STEAM_DIRS = (r"C:\Program Files (x86)\Steam", r"C:\Program Files\Steam")
 
 # Apple's data folders under ~/Library/Application Support (some are privacy-protected); never scanned
 _SKIPPED_SUPPORT_DIRS = {
-    "AddressBook", "CallHistoryDB", "CallHistoryTransactions", "CloudDocs",
-    "FaceTime", "FileProvider", "Knowledge", "MobileSync",
+    "AddressBook",
+    "CallHistoryDB",
+    "CallHistoryTransactions",
+    "CloudDocs",
+    "FaceTime",
+    "FileProvider",
+    "Knowledge",
+    "MobileSync",
 }
 
 
@@ -67,6 +73,7 @@ def find_game_dirs(region: GameRegion) -> list[Path]:
 
 # --- Windows ---
 
+
 def _windows_candidates(region: GameRegion) -> Iterator[Path]:
     import winreg
 
@@ -93,6 +100,7 @@ def _windows_candidates(region: GameRegion) -> Iterator[Path]:
 
 # --- macOS / Linux ---
 
+
 def _unix_candidates(region: GameRegion) -> Iterator[Path]:
     for prefix in _wine_prefixes():
         if (prefix / "drive_c").is_dir():
@@ -104,6 +112,7 @@ def _unix_candidates(region: GameRegion) -> Iterator[Path]:
 
 def wine_prefix_candidates(prefix: Path, region: GameRegion) -> Iterator[Path]:
     """Install directories recorded in one Wine prefix (registry first, then Steam libraries)"""
+
     def to_host(windows_path: str) -> Path | None:
         return wine_to_host(prefix, windows_path)
 
@@ -169,24 +178,25 @@ def reg_value(registry: str, key_path: str, name: str) -> str | None:
     if not key_match:
         return None
     end = registry.find("\n[", key_match.end())
-    section = registry[key_match.end():end if end >= 0 else len(registry)]
-    value_match = re.search(
-        r'^"' + re.escape(name) + r'"="((?:[^"\\]|\\.)*)"', section, re.IGNORECASE | re.MULTILINE
-    )
+    section = registry[key_match.end() : end if end >= 0 else len(registry)]
+    value_match = re.search(r'^"' + re.escape(name) + r'"="((?:[^"\\]|\\.)*)"', section, re.IGNORECASE | re.MULTILINE)
     return _unescape_reg(value_match[1]) if value_match else None
 
 
 def _unescape_reg(value: str) -> str:
     """Undo the escaping of Wine registry strings (\\\\, \\" and \\x#### for non-ASCII characters)"""
+
     def replace(match: re.Match) -> str:
         escaped = match[1]
         if escaped[0] == "x" and len(escaped) > 1:
             return chr(int(escaped[1:], 16))
         return escaped
+
     return re.sub(r"\\(x[0-9a-fA-F]{1,4}|.)", replace, value)
 
 
 # --- Steam ---
+
 
 def steam_app_dirs(steam_dir: Path, to_host: Callable[[str], Path | None]) -> Iterator[Path]:
     """Install directories of Blue Archive in every library of a Steam client
@@ -201,7 +211,9 @@ def steam_app_dirs(steam_dir: Path, to_host: Callable[[str], Path | None]) -> It
     libraries += [path for path in map(to_host, vdf_values(library_folders, "path")) if path]
     for library in libraries:
         try:
-            manifest = (library / "steamapps" / f"appmanifest_{STEAM_APP_ID}.acf").read_text(encoding="utf-8", errors="replace")
+            manifest = (library / "steamapps" / f"appmanifest_{STEAM_APP_ID}.acf").read_text(
+                encoding="utf-8", errors="replace"
+            )
         except OSError:
             continue
         for install_dir in vdf_values(manifest, "installdir")[:1]:
@@ -239,6 +251,7 @@ def vdf_values(text: str, key: str) -> list[str]:
 
 
 # --- helpers ---
+
 
 def _unique_dirs(candidates: Iterable[Path]) -> list[Path]:
     """Existing directories in order, without duplicates (compared after resolving links)

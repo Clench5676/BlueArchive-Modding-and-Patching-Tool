@@ -17,7 +17,8 @@ CONTAINER = re.compile(r"(?:^|/)(spinebackground|spinelobbies|spinecharacters)/(
 MODEL_CONTAINER = re.compile(r"(?:^|/)(?:characters|npcs|addressableasset/character)/([a-z0-9_]+)(?:/|\.)", re.I)
 MODEL_ROLE = (
     r"(?:(?:cut_?in)_)?(?:body|face|hair|head|eyemouth|eyesmouth|eyebrow|halo|weapon|"
-    r"formation|cafe|victory|normal|stand|idle)(?:_[a-z0-9_]+)?(?:\.[a-z0-9]+)?")
+    r"formation|cafe|victory|normal|stand|idle)(?:_[a-z0-9_]+)?(?:\.[a-z0-9]+)?"
+)
 MODEL_ASSET = re.compile(r"^([a-z][a-z0-9_]*?)_" + MODEL_ROLE + r"$", re.I)
 MODEL_PREFAB = re.compile(r"^(?:echelon|cafe|strategy)_([a-z0-9_]+)(?:\.prefab)?$", re.I)
 
@@ -37,20 +38,32 @@ def content_cores(path: Path) -> set[str]:
     names = {name.replace("\\", "/").lower() for name in names}
     parsed = parse_filename(path.name.removesuffix(".backup"))
     special_file = kind_of(parsed.core, parsed.category) == "lobby" and (
-        parsed.category != "spinelobbies" or kind_of(parsed.core) != "lobby")
+        parsed.category != "spinelobbies" or kind_of(parsed.core) != "lobby"
+    )
     special = {}
     for name in names:
         match = CONTAINER.search(name)
-        if match and (match[1] == "spinebackground" or (
-                match[2] == parsed.core.lower() and kind_of(parsed.core, match[1]) == "lobby"
-                and (match[1] != "spinelobbies" or kind_of(parsed.core) != "lobby"))):
+        if match and (
+            match[1] == "spinebackground"
+            or (
+                match[2] == parsed.core.lower()
+                and kind_of(parsed.core, match[1]) == "lobby"
+                and (match[1] != "spinelobbies" or kind_of(parsed.core) != "lobby")
+            )
+        ):
             special[name] = match[2]
     container_kinds: dict[str, set[str]] = {}
     # Asset paths in a Spine folder named by a core (spinelobbies/aru_home/...) belong to that core, whatever the names
     # inside it: the game's own files keep layers, effects and misspellings there that look like other cores (Aru's
     # Aru_scene, CH0060's CH0060BG_home, CH9996's CH0996_home, FX_Wakamo_home, a Hanako_home skeleton in Hare's lobby).
-    owners = {name: folder[2] for name in names if name not in special and (folder := CONTAINER.search(name))
-              and folder[1] != "spinebackground" and CORE.fullmatch(folder[2])}
+    owners = {
+        name: folder[2]
+        for name in names
+        if name not in special
+        and (folder := CONTAINER.search(name))
+        and folder[1] != "spinebackground"
+        and CORE.fullmatch(folder[2])
+    }
     model_names = {name: model[1].lower() for name in names if (model := MODEL_CONTAINER.search(name))}
     # Asset paths name the model a bundle replaces; only without them do prefab and object names identify it.
     contained = bool(model_names)
@@ -71,8 +84,7 @@ def content_cores(path: Path) -> set[str]:
         if model_cores:
             bare = Path(normalized).name
             # Prefabs and containers own the core; cut-in bodies and animation slots add roles to it.
-            matches = {core for core in model_cores
-                       if re.fullmatch(re.escape(core) + "_" + MODEL_ROLE, bare, re.I)}
+            matches = {core for core in model_cores if re.fullmatch(re.escape(core) + "_" + MODEL_ROLE, bare, re.I)}
             if not matches and (model := MODEL_ASSET.fullmatch(bare)):
                 if contained:
                     # Object names beside asset paths are free-form in the game's own files (bones, clips, props,
@@ -114,7 +126,8 @@ def content_cores(path: Path) -> set[str]:
                     cores.add(stem)
                     continue
                 kinds = container_kinds.get(stem) or {
-                    "home" if kind_of(parsed.core, parsed.category) == "lobby" else "spr"}
+                    "home" if kind_of(parsed.core, parsed.category) == "lobby" else "spr"
+                }
                 cores.update(f"{stem}_{kind}" for kind in kinds)
     return cores
 
@@ -136,13 +149,22 @@ def identify(path: Path, name: str, catalog, *, filename_only: bool = False) -> 
             raise ServiceError("mod_target_unknown", file=path)
         return name, declared.key, declared_kind
     cores = content_cores(path)
-    resolved = [(core, (resolve_model(core[6:]) if core.startswith("model:") else resolve(core)))
-                for core in sorted(cores)]
+    resolved = [
+        (core, (resolve_model(core[6:]) if core.startswith("model:") else resolve(core))) for core in sorted(cores)
+    ]
     if any(variant is None for _, variant in resolved):
         raise ServiceError("mod_target_unknown", file=path)
-    targets = {(variant.key, "model" if core.startswith("model:") else
-                "lobby" if getattr(variant, "spine_category", None) else kind_of(core))
-               for core, variant in resolved}
+    targets = {
+        (
+            variant.key,
+            "model"
+            if core.startswith("model:")
+            else "lobby"
+            if getattr(variant, "spine_category", None)
+            else kind_of(core),
+        )
+        for core, variant in resolved
+    }
     if len(targets) > 1:
         raise ServiceError("mod_target_ambiguous", file=path)
     if not targets:
@@ -166,4 +188,4 @@ def identify(path: Path, name: str, catalog, *, filename_only: bool = False) -> 
     prefix = parsed.prefix.replace(f"-{parsed.core}-", f"-{core}-", 1)
     if parsed.category:
         prefix = prefix.replace(f"-{parsed.category}-", f"-{category}-", 1)
-    return prefix + name[len(parsed.prefix):], target, kind
+    return prefix + name[len(parsed.prefix) :], target, kind

@@ -107,19 +107,31 @@ def _refs_clone(source: Path, target: Path) -> None:
     from ctypes import wintypes
 
     class Extents(ctypes.Structure):
-        _fields_ = [("FileHandle", wintypes.HANDLE), ("SourceFileOffset", ctypes.c_int64),
-                    ("TargetFileOffset", ctypes.c_int64), ("ByteCount", ctypes.c_int64)]
+        _fields_ = [
+            ("FileHandle", wintypes.HANDLE),
+            ("SourceFileOffset", ctypes.c_int64),
+            ("TargetFileOffset", ctypes.c_int64),
+            ("ByteCount", ctypes.c_int64),
+        ]
 
     kernel = ctypes.WinDLL("kernel32", use_last_error=True)
     kernel.GetDiskFreeSpaceW.argtypes = [wintypes.LPCWSTR, *([ctypes.POINTER(wintypes.DWORD)] * 4)]
     kernel.GetDiskFreeSpaceW.restype = wintypes.BOOL
-    kernel.DeviceIoControl.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.LPVOID, wintypes.DWORD,
-                                      wintypes.LPVOID, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD),
-                                      wintypes.LPVOID]
+    kernel.DeviceIoControl.argtypes = [
+        wintypes.HANDLE,
+        wintypes.DWORD,
+        wintypes.LPVOID,
+        wintypes.DWORD,
+        wintypes.LPVOID,
+        wintypes.DWORD,
+        ctypes.POINTER(wintypes.DWORD),
+        wintypes.LPVOID,
+    ]
     kernel.DeviceIoControl.restype = wintypes.BOOL
     sectors, sector_size, free, total = (wintypes.DWORD() for _ in range(4))
-    if not kernel.GetDiskFreeSpaceW(source.anchor, ctypes.byref(sectors), ctypes.byref(sector_size),
-                                   ctypes.byref(free), ctypes.byref(total)):
+    if not kernel.GetDiskFreeSpaceW(
+        source.anchor, ctypes.byref(sectors), ctypes.byref(sector_size), ctypes.byref(free), ctypes.byref(total)
+    ):
         raise ctypes.WinError(ctypes.get_last_error())
     cluster = sectors.value * sector_size.value
     with source.open("r+b") as input_stream, target.open("x+b") as output:
@@ -131,12 +143,19 @@ def _refs_clone(source: Path, target: Path) -> None:
         output.truncate(size)
         offset = 0
         while offset < aligned:
-            count = min(aligned - offset, (1024 ** 3 // cluster) * cluster)
+            count = min(aligned - offset, (1024**3 // cluster) * cluster)
             extents = Extents(msvcrt.get_osfhandle(input_stream.fileno()), offset, offset, count)
             returned = wintypes.DWORD()
-            if not kernel.DeviceIoControl(msvcrt.get_osfhandle(output.fileno()), 0x00098344,
-                                          ctypes.byref(extents), ctypes.sizeof(extents), None, 0,
-                                          ctypes.byref(returned), None):
+            if not kernel.DeviceIoControl(
+                msvcrt.get_osfhandle(output.fileno()),
+                0x00098344,
+                ctypes.byref(extents),
+                ctypes.sizeof(extents),
+                None,
+                0,
+                ctypes.byref(returned),
+                None,
+            ):
                 raise ctypes.WinError(ctypes.get_last_error())
             offset += count
         if aligned < size:

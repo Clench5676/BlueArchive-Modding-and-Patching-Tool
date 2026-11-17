@@ -21,8 +21,16 @@ from test_webui import app, services, call, rpc
 
 
 def node(name, children=(), widgets=(), **kwargs):
-    return {"name": name, "active": True, "pos": [10, -20], "scale": [1.2, .8], "rotZ": 0,
-            "widgets": list(widgets), "children": list(children), **kwargs}
+    return {
+        "name": name,
+        "active": True,
+        "pos": [10, -20],
+        "scale": [1.2, 0.8],
+        "rotZ": 0,
+        "widgets": list(widgets),
+        "children": list(children),
+        **kwargs,
+    }
 
 
 @pytest.fixture
@@ -37,25 +45,49 @@ def installed(tmp_path, monkeypatch):
     texture_names = {"DayFront": record, "NightFront": record, "UnusedPrivate": record}
     trees = {}
     for key, (root, branch, _, _) in office.BACKGROUNDS.items():
-        front = node("Front", widgets=[{"cls": "UITexture", "texture": key.title() + "Front", "w_": 3160,
-            "h_": 2220, "depth": 9, "pivot": 4, "color": "#ffffff/0.45"}])
+        front = node(
+            "Front",
+            widgets=[
+                {
+                    "cls": "UITexture",
+                    "texture": key.title() + "Front",
+                    "w_": 3160,
+                    "h_": 2220,
+                    "depth": 9,
+                    "pivot": 4,
+                    "color": "#ffffff/0.45",
+                }
+            ],
+        )
         trees[root] = node(root, [node("Ancestor", [node(branch, [front]), node("Student")]), node("Dialog")])
     calls = []
+
     @contextmanager
     def bundle(path):
         calls.append(("bundle", path.name))
         roots = [spec[0] for spec in office.BACKGROUNDS.values() if spec[3] == path.name]
         yield SimpleNamespace(container={f"Assets/UI/{root}.prefab": None for root in roots}, objects=[])
+
     monkeypatch.setattr(office, "open_bundle", bundle)
     monkeypatch.setattr(office, "export_layout", lambda env, root, names: copy.deepcopy(trees[root]))
+
     def scan(selected):
         calls.append(("textures", [path.name for path in selected]))
         return {"textures": copy.deepcopy(texture_names), "names": {}}
-    game = SimpleNamespace(_paths=lambda: list(paths), _lock=lambda key: RLock(), _indexes={}, _cab_index=lambda **kw: {},
-        _cab_discovery=lambda: SimpleNamespace(batch=nullcontext), _resolve_cabs=lambda *args: {},
-        _scan_textures=scan, _texture_index=lambda: {"names": {}, "textures": {}})
-    return SimpleNamespace(game=game, paths=paths, texture_path=texture_path, texture_names=texture_names,
-                           trees=trees, calls=calls)
+
+    game = SimpleNamespace(
+        _paths=lambda: list(paths),
+        _lock=lambda key: RLock(),
+        _indexes={},
+        _cab_index=lambda **kw: {},
+        _cab_discovery=lambda: SimpleNamespace(batch=nullcontext),
+        _resolve_cabs=lambda *args: {},
+        _scan_textures=scan,
+        _texture_index=lambda: {"names": {}, "textures": {}},
+    )
+    return SimpleNamespace(
+        game=game, paths=paths, texture_path=texture_path, texture_names=texture_names, trees=trees, calls=calls
+    )
 
 
 def test_office_inventory_scans_only_lobby_textures_and_preserves_original_geometry(installed):
@@ -96,6 +128,7 @@ def test_install_without_lobby_textures_has_no_office_choice(installed):
 def test_unreadable_lobby_texture_does_not_break_hall_background_options(installed):
     def fail(paths):
         raise ServiceError("asset_load_failed")
+
     installed.game._scan_textures = fail
     assert office.choices(installed.game) == []
 
@@ -110,10 +143,12 @@ def test_renamed_prefab_fallback_accepts_lowercase_container_paths(installed, mo
     replacement = old.with_name("ui-uilobbyelement-new-version.bundle")
     old.rename(replacement)
     installed.paths[installed.paths.index(old)] = replacement
+
     @contextmanager
     def bundle(path):
         root = "lobbycommon" if path == replacement else "lobbycommonnight"
         yield SimpleNamespace(container={f"assets/ui/{root}.prefab": None}, objects=[])
+
     monkeypatch.setattr(office, "open_bundle", bundle)
     assert [choice["name"] for choice in office.choices(installed.game)] == ["office-day", "office-night"]
 
@@ -140,11 +175,13 @@ def test_changed_shared_layer_refreshes_only_its_required_bundle(installed):
     env.game._texture_index = lambda: {"names": {}, "textures": {"SharedHalo": record}}
     scan = env.game._scan_textures
     refreshed = []
+
     def textures(paths):
         if paths == [shared_path]:
             refreshed.append(shared_path)
             return {"names": {}, "textures": copy.deepcopy(current)}
         return scan(paths)
+
     env.game._scan_textures = textures
     assert office.texture_record(env.game, "day", "SharedHalo")["path_id"] == 1
     current["SharedHalo"]["path_id"] = 2
@@ -186,7 +223,9 @@ def test_hall_accepts_explicit_office_ids_only(name):
 
 
 def test_office_routes_keep_existing_ui_consent_and_read_only_endpoints(app, services, monkeypatch):
-    monkeypatch.setattr(services.game, "office_layout", lambda key: {"tree": {"name": key}, "textures": {}}, raising=False)
+    monkeypatch.setattr(
+        services.game, "office_layout", lambda key: {"tree": {"name": key}, "textures": {}}, raising=False
+    )
     monkeypatch.setattr(services.game, "office_texture", lambda key, name: b"\x89PNG full-resolution", raising=False)
     status, headers, _ = call(app, "/asset/office/day/layout.json")
     assert status == "200 OK" and headers["Cache-Control"] == "no-store"
@@ -204,7 +243,11 @@ def test_hall_options_include_office_choices_and_retain_collection_fallback(app,
     monkeypatch.setattr(services.game, "office_backgrounds", lambda: office.choices(installed.game), raising=False)
     result = rpc(app, "hall.options")
     assert "error" not in result, result
-    assert [entry["name"] for entry in result["result"]["backgrounds"]] == ["office-day", "office-night", "BG_Test_Collection"]
+    assert [entry["name"] for entry in result["result"]["backgrounds"]] == [
+        "office-day",
+        "office-night",
+        "BG_Test_Collection",
+    ]
     installed.paths.remove(installed.texture_path)
     result = rpc(app, "hall.options")["result"]
     assert result["backgrounds"] == [{"name": "BG_Test_Collection", "url": "/asset/art/bg/BG_Test_Collection"}]
@@ -212,9 +255,19 @@ def test_hall_options_include_office_choices_and_retain_collection_fallback(app,
 
 def shader_form(src=5, dst=1, source_name="<noninit>"):
     field = lambda value, name="<noninit>": {"val": value, "name": name}
-    blend = {"srcBlend": field(src, source_name), "destBlend": field(dst), "srcBlendAlpha": field(src),
-             "destBlendAlpha": field(dst), "blendOp": field(0), "blendOpAlpha": field(0), "colMask": field(15)}
-    return {"m_Name": "Unlit/Transparent Colored Additive", "m_SubShaders": [{"m_Passes": [{"m_State": {"rtBlend0": blend}}]}]}
+    blend = {
+        "srcBlend": field(src, source_name),
+        "destBlend": field(dst),
+        "srcBlendAlpha": field(src),
+        "destBlendAlpha": field(dst),
+        "blendOp": field(0),
+        "blendOpAlpha": field(0),
+        "colMask": field(15),
+    }
+    return {
+        "m_Name": "Unlit/Transparent Colored Additive",
+        "m_SubShaders": [{"m_Passes": [{"m_State": {"rtBlend0": blend}}]}],
+    }
 
 
 def test_office_shader_fixed_blend_ignores_unused_material_properties():
@@ -229,9 +282,11 @@ def test_material_dependencies_invalidate_geometry_without_scanning_shader_as_te
     env = installed
     shader = env.paths[-1]
     description = office.material_description(shader_form())
+
     def annotate(game, path, tree):
         tree["widgets"].append({"material": copy.deepcopy(description)})
         return {shader}
+
     monkeypatch.setattr(office, "_add_materials", annotate)
     assert office.layout(env.game, "night")["tree"]["widgets"][-1]["material"]["dst"] == 1
     description["dst"] = 10
@@ -242,27 +297,52 @@ def test_material_dependencies_invalidate_geometry_without_scanning_shader_as_te
 
 def test_ui_texture_uses_material_shader_override_instead_of_default_shader(installed, monkeypatch):
     from bmpt.gameassets import model
+
     def obj(pid, kind, data):
         return SimpleNamespace(path_id=pid, type=SimpleNamespace(name=kind), data=data)
+
     root = obj(1, "GameObject", {"m_Name": "Root"})
     light = obj(2, "GameObject", {"m_Name": "Light"})
     root_transform = obj(11, "Transform", {"m_GameObject": {"m_PathID": 1}, "m_Father": {"m_PathID": 0}})
     light_transform = obj(12, "Transform", {"m_GameObject": {"m_PathID": 2}, "m_Father": {"m_PathID": 11}})
-    ui = obj(3, "MonoBehaviour", {"m_GameObject": {"m_PathID": 2}, "mTexture": {}, "mWidth": 100,
-        "mMat": {"m_PathID": 4}, "mShader": {"m_PathID": 5}})
+    ui = obj(
+        3,
+        "MonoBehaviour",
+        {
+            "m_GameObject": {"m_PathID": 2},
+            "mTexture": {},
+            "mWidth": 100,
+            "mMat": {"m_PathID": 4},
+            "mShader": {"m_PathID": 5},
+        },
+    )
     material = obj(4, "Material", {"m_Shader": {"m_PathID": 6}, "m_SavedProperties": {"m_Floats": [("_SrcBlend", 1)]}})
     default = obj(5, "Shader", {"m_ParsedForm": shader_form(dst=10)})
     additive = obj(6, "Shader", {"m_ParsedForm": shader_form()})
     pointers = {o.path_id: o for o in (material, default, additive)}
     path = installed.paths[0]
+
     class Graph:
         loaded = [str(path), str(installed.paths[-1])]
-        def __init__(self, *args, **kwargs): pass
-        def __enter__(self): return self
-        def __exit__(self, *args): pass
-        def add(self, path): return SimpleNamespace(objects=[root, light, root_transform, light_transform, ui])
-        def tree(self, value): return value.data
-        def deref(self, owner, pointer): return pointers.get((pointer or {}).get("m_PathID"))
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def add(self, path):
+            return SimpleNamespace(objects=[root, light, root_transform, light_transform, ui])
+
+        def tree(self, value):
+            return value.data
+
+        def deref(self, owner, pointer):
+            return pointers.get((pointer or {}).get("m_PathID"))
+
     monkeypatch.setattr(model, "BundleGraph", Graph)
     tree = node("Root", [node("Light", widgets=[{"texture": "Light"}])])
     assert office._add_materials(installed.game, path, tree) == {installed.paths[-1]}

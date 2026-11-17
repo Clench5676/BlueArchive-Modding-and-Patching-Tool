@@ -25,9 +25,19 @@ def services(env):
 
 
 def run(env, scope="library", target=None, progress=lambda *_: None):
-    return export_service.export_zip(services(env), env.library, env.library.current_pin(), scope=scope,
-        target=target, folder=env.tmp / "exports", server="global", platform="windows", kind=None,
-        log=lambda *_: None, progress=progress)
+    return export_service.export_zip(
+        services(env),
+        env.library,
+        env.library.current_pin(),
+        scope=scope,
+        target=target,
+        folder=env.tmp / "exports",
+        server="global",
+        platform="windows",
+        kind=None,
+        log=lambda *_: None,
+        progress=progress,
+    )
 
 
 def contents(result):
@@ -40,14 +50,14 @@ def test_library_export_prepares_existing_mods_without_mutating_library_or_game(
     env = setup_library
     # A Windows export gives each file the CRC fix (auto follows the install); a fixed mod passes through unchanged.
     source = make_mod(env.original, env.tmp / "upload", fixed=True)
-    mod, = env.library.add([source])
+    (mod,) = env.library.add([source])
     state = (env.root / "state.json").read_bytes()
     game = env.original.read_bytes()
     result = run(env)
     manifest, files = contents(result)
     assert result["count"] == 1
     assert manifest["target"] == {"server": "global", "platform": "windows"}
-    entry, = manifest["mods"]
+    (entry,) = manifest["mods"]
     assert entry["source"] == f"mod:{mod.id}"
     assert files[export_service._member_path(entry["directory"], source.name)] == source.read_bytes()
     assert (env.root / "state.json").read_bytes() == state
@@ -57,12 +67,19 @@ def test_library_export_prepares_existing_mods_without_mutating_library_or_game(
 
 def test_an_export_names_each_mod_and_its_step_on_the_progress_line(setup_library):
     env = setup_library
-    mod, = env.library.add([make_mod(env.original, env.tmp / "upload", fixed=True)])
+    (mod,) = env.library.add([make_mod(env.original, env.tmp / "upload", fixed=True)])
     reported = []
     run(env, progress=lambda *args: reported.append(args))
     lines = [p for (p,) in reported]
-    assert lines and all(p["current"] == 1 and p["total"] == 1 and p["action"] == "export" and p["variant"] == mod.target
-                         and p["kind"] == mod.kind and p["core"] == mod.core for p in lines)
+    assert lines and all(
+        p["current"] == 1
+        and p["total"] == 1
+        and p["action"] == "export"
+        and p["variant"] == mod.target
+        and p["kind"] == mod.kind
+        and p["core"] == mod.core
+        for p in lines
+    )
     assert lines[0]["step"] == "import.step.export" and lines[-1]["fraction"] == 1.0
     assert [p["fraction"] for p in lines] == sorted(p["fraction"] for p in lines)
 
@@ -70,7 +87,7 @@ def test_an_export_names_each_mod_and_its_step_on_the_progress_line(setup_librar
 def test_applied_uses_desired_manifest_while_disabled(setup_library):
     env = setup_library
     source = make_mod(env.original, env.tmp / "upload")
-    mod, = env.library.add([source])
+    (mod,) = env.library.add([source])
     other = make_mod(env.original, env.tmp / "other", payload=b"other mod")
     env.library.add([other])
     env.library.profiles.update(lambda data: data.update(enabled=False))
@@ -106,10 +123,13 @@ def test_failed_export_never_publishes_partial_archive(setup_library, monkeypatc
     elif stage == "verify":
         monkeypatch.setattr(zipfile.ZipFile, "testzip", lambda _: "damaged.bundle")
     else:
+
         def fail(*args, **kwargs):
             raise OSError("locked output")
-        monkeypatch.setattr(zipfile.ZipFile if stage == "write" else export_service.os,
-                            "write" if stage == "write" else "replace", fail)
+
+        monkeypatch.setattr(
+            zipfile.ZipFile if stage == "write" else export_service.os, "write" if stage == "write" else "replace", fail
+        )
     with pytest.raises((OSError, ServiceError)):
         run(env)
     assert list(before.iterdir()) == [existing]
@@ -148,7 +168,7 @@ def test_single_original_variant_archive_uses_current_bundle_names(setup_library
         env.original.with_name(env.original.name + ".backup").write_bytes(expected)
         env.original.write_bytes(make_mod(env.original, env.tmp / "external").read_bytes())
     manifest, files = contents(run(env, "single", "variant:test"))
-    entry, = manifest["mods"]
+    (entry,) = manifest["mods"]
     assert files[export_service._member_path(entry["directory"], env.original.name)] == expected
 
 
@@ -159,14 +179,19 @@ def test_foreign_platform_mod_is_rebuilt_with_real_unity_payload(setup_library, 
     monkeypatch.setattr(integrity, "metadata", bundle_metadata)
     monkeypatch.setattr(resolver, "sharing_keys", REAL_SHARING_KEYS)
     official_bundle(env)
-    source = old_bundle(env.tmp / "input" / env.original.name, source_platform, cab="CAB-source",
-                        payload=b"modded", references=["com.nexon.bluearchive"])
+    source = old_bundle(
+        env.tmp / "input" / env.original.name,
+        source_platform,
+        cab="CAB-source",
+        payload=b"modded",
+        references=["com.nexon.bluearchive"],
+    )
     # A library may contain Mods imported for another previously selected installation.
     record = env.library._store({source.name: source}, "foreign", "test", "spr", user_added=True)
     original_bytes = env.original.read_bytes()
     source_bytes = source.read_bytes()
-    manifest, files = contents(run(env, "single", f'mod:{record["id"]}'))
-    entry, = manifest["mods"]
+    manifest, files = contents(run(env, "single", f"mod:{record['id']}"))
+    (entry,) = manifest["mods"]
     output = env.tmp / "prepared.bundle"
     output.write_bytes(files[export_service._member_path(entry["directory"], env.original.name)])
     bundle = Bundle.load(output)
@@ -182,15 +207,30 @@ def test_cross_server_mod_is_prepared_against_selected_target(setup_library, mon
     monkeypatch.setattr(integrity, "metadata", bundle_metadata)
     monkeypatch.setattr(resolver, "sharing_keys", REAL_SHARING_KEYS)
     official_bundle(env)
-    source = old_bundle(env.tmp / "input" / env.original.name, 19, cab="CAB-global",
-                        payload=b"global mod", references=["com.nexon.bluearchive"])
+    source = old_bundle(
+        env.tmp / "input" / env.original.name,
+        19,
+        cab="CAB-global",
+        payload=b"global mod",
+        references=["com.nexon.bluearchive"],
+    )
     record = env.library._store({source.name: source}, "global", "test", "spr", user_added=True)
     pin = replace(env.library.current_pin(), server="japan")
-    result = export_service.export_zip(services(env), env.library, pin, scope="single", target=f'mod:{record["id"]}',
-        folder=env.tmp / "exports", server="japan", platform="windows", kind=None,
-        log=lambda *_: None, progress=lambda *_: None)
+    result = export_service.export_zip(
+        services(env),
+        env.library,
+        pin,
+        scope="single",
+        target=f"mod:{record['id']}",
+        folder=env.tmp / "exports",
+        server="japan",
+        platform="windows",
+        kind=None,
+        log=lambda *_: None,
+        progress=lambda *_: None,
+    )
     manifest, files = contents(result)
-    entry, = manifest["mods"]
+    (entry,) = manifest["mods"]
     output = env.tmp / "japan.bundle"
     output.write_bytes(files[export_service._member_path(entry["directory"], env.original.name)])
     bundle = Bundle.load(output)
@@ -216,7 +256,7 @@ def test_options_use_serialized_platform_and_real_default_directory(setup_librar
 
 def test_source_change_during_archive_write_cannot_publish(setup_library, monkeypatch):
     env = setup_library
-    mod, = env.library.add([make_mod(env.original, env.tmp / "upload")])
+    (mod,) = env.library.add([make_mod(env.original, env.tmp / "upload")])
     write = zipfile.ZipFile.write
 
     def changed(archive, path, *args, **kwargs):
@@ -244,16 +284,19 @@ def test_each_exported_mod_carries_a_package_manifest(setup_library):
     (catalog / "BundleRevision").write_bytes("﻿478339".encode())
     (catalog / "Windows" / "catalog_Windows.hash").write_text("01a02066e18c3b4540fbb2278c8d7b06")
     source = make_mod(env.original, env.tmp / "upload", fixed=True)
-    mod, = env.library.add([source])
+    (mod,) = env.library.add([source])
     result = run(env)
     manifest, files = contents(result)
-    entry, = manifest["mods"]
+    (entry,) = manifest["mods"]
     data = package(result, entry["directory"])
     assert data["format_version"] == "1.0" and data["created_by"]["tool"] == "BMPT"
     assert (data["kind"], data["core"]) == ("portrait", "test_spr")
-    assert data["target"] == {"server": "global", "platform": "windows", "release": {
-        "bundle_revision": 478339, "catalog_hash": "01a02066e18c3b4540fbb2278c8d7b06"}}
-    item, = data["files"]
+    assert data["target"] == {
+        "server": "global",
+        "platform": "windows",
+        "release": {"bundle_revision": 478339, "catalog_hash": "01a02066e18c3b4540fbb2278c8d7b06"},
+    }
+    (item,) = data["files"]
     assert item == {"path": source.name, "sha256": entry["files"][0]["sha256"], "role": "mod"}
     assert "skeletons" not in data  # nothing of the header-only test bundles reads as Spine
 
@@ -270,7 +313,7 @@ def test_a_portrait_export_carries_the_official_skel_and_atlas_it_lacks(setup_li
     env = setup_library
     rig = game_bundle(env.game_dir, part="002", payload=b"official rig")
     source = make_mod(env.original, env.tmp / "upload", fixed=True)
-    mod, = env.library.add([source])
+    (mod,) = env.library.add([source])
 
     def read(path):
         if "_002_" in path.name:
@@ -294,13 +337,14 @@ def test_a_mod_with_its_own_atlas_carries_no_official_one(setup_library, monkeyp
     rig = game_bundle(env.game_dir, part="002", payload=b"official rig")
     texture = make_mod(env.original, env.tmp / "upload", fixed=True)
     atlas = make_mod(rig, env.tmp / "upload", payload=b"own rig!", fixed=True)
-    mod, = env.library.add([texture, atlas])
+    (mod,) = env.library.add([texture, atlas])
 
     def read(path):
         if "_002_" in path.name:
             own = path.read_bytes() == atlas.read_bytes()
-            return integrity.Contents(atlases={"test_spr.atlas": ATLAS + (b"\n" if own else b"")},
-                                      skeletons={"test_spr.skel": b"skel"})
+            return integrity.Contents(
+                atlases={"test_spr.atlas": ATLAS + (b"\n" if own else b"")}, skeletons={"test_spr.skel": b"skel"}
+            )
         return integrity.Contents(textures={"test_spr": (4, 4)})
 
     monkeypatch.setattr(export_service, "_contents", read)
@@ -313,14 +357,15 @@ def test_a_scene_export_carries_only_the_rigs_of_the_pages_it_paints(setup_libra
     env = setup_library
     painted = game_bundle(env.game_dir, part="002", payload=b"rig one")
     other = game_bundle(env.game_dir, part="004", payload=b"rig two")
-    mod, = env.library.add([make_mod(env.original, env.tmp / "upload", fixed=True)])
+    (mod,) = env.library.add([make_mod(env.original, env.tmp / "upload", fixed=True)])
 
     def read(path):
         if "_002_" in path.name:
             return integrity.Contents(atlases={"test_spr.atlas": ATLAS}, skeletons={"test_spr.skel": b"skel"})
         if "_004_" in path.name:
-            return integrity.Contents(atlases={"scene.atlas": ATLAS.replace(b"test_spr.png", b"scene.png")},
-                                      skeletons={"scene.skel": b"skel"})
+            return integrity.Contents(
+                atlases={"scene.atlas": ATLAS.replace(b"test_spr.png", b"scene.png")}, skeletons={"scene.skel": b"skel"}
+            )
         return integrity.Contents(textures={"test_spr": (4, 4)})
 
     monkeypatch.setattr(export_service, "_contents", read)

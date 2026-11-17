@@ -23,58 +23,59 @@ INTERNAL_CODES = {
 # These assignments are permanent. Append a new name within its block; never renumber an old one.
 BLOCKS = (
     (
-        'bad_params busy classic_failed classic_open data_dir_readonly dev_path_outside failed folder_changed '
-        'internal job_not_found lines_unavailable native_only native_unavailable not_enough_space path_not_found '
-        'profiles_unreadable reveal_failed safe_restart_unavailable scan_off state_changed unknown_method '
+        "bad_params busy classic_failed classic_open data_dir_readonly dev_path_outside failed folder_changed "
+        "internal job_not_found lines_unavailable native_only native_unavailable not_enough_space path_not_found "
+        "profiles_unreadable reveal_failed safe_restart_unavailable scan_off state_changed unknown_method "
     ).split(),
     (
-        'catalog_data_invalid catalog_family_not_found catalog_variant_not_found game_directory_missing '
-        'game_file_locked game_file_not_found game_file_outside_resources game_not_found game_running '
-        'game_status_unavailable original_invalid original_unavailable steam_busy variant_incompatible '
-        'variant_not_found untested_build game_file_denied game_app_denied game_disk_full '
-        'game_file_write_failed '
+        "catalog_data_invalid catalog_family_not_found catalog_variant_not_found game_directory_missing "
+        "game_file_locked game_file_not_found game_file_outside_resources game_not_found game_running "
+        "game_status_unavailable original_invalid original_unavailable steam_busy variant_incompatible "
+        "variant_not_found untested_build game_file_denied game_app_denied game_disk_full "
+        "game_file_write_failed "
     ).split(),
     (
-        'bundle_invalid conflict conversion_failed conversion_names game_file_conflict mod_parts_missing '
-        'mod_platform_mismatch mod_platform_unknown mod_release_mismatch mod_target_ambiguous mod_target_mismatch '
-        'mod_target_unknown mod_unity_version_mismatch mod_unsupported no_matching_assets no_target '
-        'platform_unsupported required_asset_apply_failed required_asset_extract_failed '
-        'required_asset_stream_missing required_assets_unmatched source_conflict source_unknown '
-        'source_unsupported spine_version target_unknown unreadable unsupported '
-        'archive_invalid '
+        "bundle_invalid conflict conversion_failed conversion_names game_file_conflict mod_parts_missing "
+        "mod_platform_mismatch mod_platform_unknown mod_release_mismatch mod_target_ambiguous mod_target_mismatch "
+        "mod_target_unknown mod_unity_version_mismatch mod_unsupported no_matching_assets no_target "
+        "platform_unsupported required_asset_apply_failed required_asset_extract_failed "
+        "required_asset_stream_missing required_assets_unmatched source_conflict source_unknown "
+        "source_unsupported spine_version target_unknown unreadable unsupported "
+        "archive_invalid "
     ).split(),
     (
-        'asset_delete_confirm asset_official crc_fix_failed entry_changed export_empty export_target_unavailable '
-        'library_io_error library_operation_failed library_recovery_pending library_state_unreadable '
-        'library_target_not_empty mod_apply_failed mod_in_use mod_in_use_elsewhere mod_last_copy mod_not_found '
-        'mod_update_failed '
+        "asset_delete_confirm asset_official crc_fix_failed entry_changed export_empty export_target_unavailable "
+        "library_io_error library_operation_failed library_recovery_pending library_state_unreadable "
+        "library_target_not_empty mod_apply_failed mod_in_use mod_in_use_elsewhere mod_last_copy mod_not_found "
+        "mod_update_failed "
     ).split(),
     (
-        'asset_extraction_failed asset_load_failed atlas_remap_asset_ambiguous atlas_remap_atlas_missing '
-        'atlas_remap_bounds atlas_remap_invalid atlas_remap_page_ambiguous atlas_remap_page_missing '
-        'atlas_remap_property atlas_remap_region_ambiguous atlas_remap_regions_missing atlas_remap_source_missing '
-        'atlas_remap_structure atlas_remap_target_mismatch atlas_remap_redrawn old_rig_animations '
-        'old_rig_unavailable graft_unavailable graft_refused graft_page_missing graft_region_too_large '
-        'graft_spine_licence converter_consent converter_unavailable converter_download_failed converter_mismatch '
-        'converter_failed converter_unreadable converter_missing converter_drift '
+        "asset_extraction_failed asset_load_failed atlas_remap_asset_ambiguous atlas_remap_atlas_missing "
+        "atlas_remap_bounds atlas_remap_invalid atlas_remap_page_ambiguous atlas_remap_page_missing "
+        "atlas_remap_property atlas_remap_region_ambiguous atlas_remap_regions_missing atlas_remap_source_missing "
+        "atlas_remap_structure atlas_remap_target_mismatch atlas_remap_redrawn old_rig_animations "
+        "old_rig_unavailable graft_unavailable graft_refused graft_page_missing graft_region_too_large "
+        "graft_spine_licence converter_consent converter_unavailable converter_download_failed converter_mismatch "
+        "converter_failed converter_unreadable converter_missing converter_drift "
     ).split(),
     (
-        'alias_too_long alias_too_many hall_conflict hall_duplicate_memorial hall_duplicate_portrait '
-        'hall_last_memorial hall_last_portrait photo_apply_failed photo_capture_unavailable '
-        'photo_delete_other_variant photo_in_use photo_invalid photo_library_invalid photo_missing '
-        'photo_target_unavailable lobby_camera_failed lobby_camera_unsupported '
+        "alias_too_long alias_too_many hall_conflict hall_duplicate_memorial hall_duplicate_portrait "
+        "hall_last_memorial hall_last_portrait photo_apply_failed photo_capture_unavailable "
+        "photo_delete_other_variant photo_in_use photo_invalid photo_library_invalid photo_missing "
+        "photo_target_unavailable lobby_camera_failed lobby_camera_unsupported "
     ).split(),
     (
-        'update_check_failed update_checksum_mismatch update_download_failed update_restart_failed '
-        'update_unavailable update_unsupported '
+        "update_check_failed update_checksum_mismatch update_download_failed update_restart_failed "
+        "update_unavailable update_unsupported "
     ).split(),
 )
 
 
 def test_registry_has_permanent_unique_references_and_domain_blocks():
     assert list(REGISTRY) == sorted(REGISTRY)
-    expected = {name: f"E{block}{number:03}" for block, names in enumerate(BLOCKS, 1)
-                for number, name in enumerate(names, 1)}
+    expected = {
+        name: f"E{block}{number:03}" for block, names in enumerate(BLOCKS, 1) for number, name in enumerate(names, 1)
+    }
     assert {name: item["code"] for name, item in REGISTRY.items()} == expected
     assert len({item["code"] for item in REGISTRY.values()}) == len(REGISTRY)
     for name, item in REGISTRY.items():
@@ -128,16 +129,23 @@ def test_every_frontend_error_literal_is_registered_or_an_allowlisted_internal_s
 
 def test_service_error_json_adds_ref_and_keeps_name_params_and_existing_ids():
     assert ServiceError("mod_parts_missing", id="row-1", files=[Path("part.bundle")]).to_json() == {
-        "code": "mod_parts_missing", "ref": "E3006", "params": {"id": "row-1", "files": ["part.bundle"]}}
+        "code": "mod_parts_missing",
+        "ref": "E3006",
+        "params": {"id": "row-1", "files": ["part.bundle"]},
+    }
     assert ServiceError("not_registered", count=2).to_json() == {"code": "not_registered", "params": {"count": 2}}
     assert code_of("not_registered") is None and level_of("not_registered") is None
     assert code_of(None) is None and level_of({}) is None
 
 
-@pytest.mark.parametrize("name,ref,level", [
-    ("mod_parts_missing", "E3006", logging.WARNING), ("busy", "E1002", logging.INFO),
-    ("not_registered", None, logging.WARNING),
-])
+@pytest.mark.parametrize(
+    "name,ref,level",
+    [
+        ("mod_parts_missing", "E3006", logging.WARNING),
+        ("busy", "E1002", logging.INFO),
+        ("not_registered", None, logging.WARNING),
+    ],
+)
 @pytest.mark.parametrize("translated", [False, True])
 def test_rpc_logs_service_verdict_once_with_reference_and_compact_params(caplog, name, ref, level, translated):
     error = ServiceError(name, files=[Path("part.bundle")], count=2)
@@ -162,20 +170,31 @@ def test_rpc_generated_errors_also_carry_and_log_their_references(caplog):
         raise ValueError("broken")
 
     with caplog.at_level(logging.INFO):
-        cases = [("missing", {}, "unknown_method"), ("needs_value", [1], "bad_params"),
-                 ("needs_value", {}, "bad_params"), ("needs_value", {"value": 1}, "internal")]
+        cases = [
+            ("missing", {}, "unknown_method"),
+            ("needs_value", [1], "bad_params"),
+            ("needs_value", {}, "bad_params"),
+            ("needs_value", {"value": 1}, "internal"),
+        ]
         for method, params, name in cases:
             error = rpc.call(method, params)["error"]
             assert error["code"] == name and error["ref"] == code_of(name)
-    coded = [record.getMessage().split(" ", 2)[:2] for record in caplog.records
-             if re.match(r"E[1-7]\d{3} ", record.getMessage())]
+    coded = [
+        record.getMessage().split(" ", 2)[:2]
+        for record in caplog.records
+        if re.match(r"E[1-7]\d{3} ", record.getMessage())
+    ]
     assert coded == [[code_of(name), name] for _, _, name in cases]
 
 
-@pytest.mark.parametrize("name,ref,level", [
-    ("mod_parts_missing", "E3006", logging.WARNING), ("busy", "E1002", logging.INFO),
-    ("not_registered", None, logging.WARNING),
-])
+@pytest.mark.parametrize(
+    "name,ref,level",
+    [
+        ("mod_parts_missing", "E3006", logging.WARNING),
+        ("busy", "E1002", logging.INFO),
+        ("not_registered", None, logging.WARNING),
+    ],
+)
 @pytest.mark.parametrize("translated", [False, True])
 def test_job_logs_service_verdict_once_without_changing_job_id(caplog, name, ref, level, translated):
     error = ServiceError(name, count=2)
@@ -217,10 +236,12 @@ def test_unexpected_job_failure_carries_and_logs_the_internal_reference(caplog):
         with caplog.at_level(logging.INFO, logger="bmpt.webui.jobs"):
             jid = jobs.submit("import", fail)
             assert jobs.wait(jid, 5)
-        assert jobs.get(jid).error == {"code": "internal", "ref": "E1009",
-                                       "params": {"error": "RuntimeError: broken"}}
-        coded = [(record.levelno, record.getMessage()) for record in caplog.records
-                 if record.getMessage().startswith("E1009 internal ")]
+        assert jobs.get(jid).error == {"code": "internal", "ref": "E1009", "params": {"error": "RuntimeError: broken"}}
+        coded = [
+            (record.levelno, record.getMessage())
+            for record in caplog.records
+            if record.getMessage().startswith("E1009 internal ")
+        ]
         assert coded == [(logging.WARNING, 'E1009 internal {"error":"RuntimeError: broken"}')]
     finally:
         jobs.shutdown()

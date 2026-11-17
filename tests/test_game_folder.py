@@ -39,10 +39,17 @@ def env(tmp_path):
     """Real Services, so game_found runs for real (the game is not injected); the library and catalog are fakes."""
     data = tmp_path / "data"
     data.mkdir()
-    services = Services(Settings(data / "config.toml"), data, state=UiState(data / "webui.json"), cache=object(),
-                        catalog=FakeCatalog(), library=FakeLibrary())
-    app = WebApp(build_api(services), services.events, assets=services.asset, token="tok",
-                 consent=lambda: services.state.consent)
+    services = Services(
+        Settings(data / "config.toml"),
+        data,
+        state=UiState(data / "webui.json"),
+        cache=object(),
+        catalog=FakeCatalog(),
+        library=FakeLibrary(),
+    )
+    app = WebApp(
+        build_api(services), services.events, assets=services.asset, token="tok", consent=lambda: services.state.consent
+    )
     yield type("Env", (), {"tmp": tmp_path, "services": services, "app": app, "settings": services.settings})
     services.close()
 
@@ -66,11 +73,15 @@ def test_empty_and_parent_folders_are_refused_and_nothing_is_saved(env, key):
 
 def test_install_root_and_resource_folder_are_accepted(env):
     root = install(env.tmp / "installed")
-    assert rpc(env.app, "settings.set", key="gameDir.global", value=str(root))["result"]["gameDirs"]["global"] == str(root)
+    assert rpc(env.app, "settings.set", key="gameDir.global", value=str(root))["result"]["gameDirs"]["global"] == str(
+        root
+    )
     assert rpc(env.app, "app.info")["result"]["gameFound"] is True
     # choosing the resource folder itself stays valid
     resource = root / RESOURCE
-    assert rpc(env.app, "settings.set", key="gameDir.global", value=str(resource))["result"]["gameDirs"]["global"] == str(resource)
+    assert rpc(env.app, "settings.set", key="gameDir.global", value=str(resource))["result"]["gameDirs"][
+        "global"
+    ] == str(resource)
     assert rpc(env.app, "app.info")["result"]["gameFound"] is True
     # the other server has its own folder
     japan = install(env.tmp / "japan")
@@ -112,6 +123,7 @@ def test_only_atlas_bundle_files_count(env):
 def test_the_predicate_reads_names_only(tmp_path, monkeypatch):
     install(tmp_path)
     from bmpt.gameassets import discovery  # imported before files are forbidden
+
     assert discovery.is_atlas
     for name in ("open", "read_bytes", "read_text"):
         monkeypatch.setattr(Path, name, lambda *a, **k: pytest.fail("read a file"), raising=False)
@@ -175,6 +187,7 @@ def test_the_verdict_is_kept_while_the_folders_are_unchanged(env, monkeypatch):
     env.settings.save()
     calls = []
     from ba_modding_toolkit import searching
+
     real = searching.is_game_install
     monkeypatch.setattr(searching, "is_game_install", lambda base: calls.append(base) or real(base))
     assert all(env.services.game_found() for _ in range(5))

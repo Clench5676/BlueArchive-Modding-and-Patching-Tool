@@ -54,16 +54,22 @@ def bundle_names(dirs: Iterable[Path]) -> list[str]:
     names: set[str] = set()
     for directory in dirs:
         with os.scandir(directory) as entries:
-            names.update(entry.name for entry in entries
-                         if entry.name.endswith(".bundle") and entry.is_file(follow_symlinks=False))
+            names.update(
+                entry.name
+                for entry in entries
+                if entry.name.endswith(".bundle") and entry.is_file(follow_symlinks=False)
+            )
     return sorted(names)
 
 
 def encode(build: str, versions: Iterable[str], names: Iterable[str]) -> dict:
     """One server's entry of the data file."""
     keys = sorted({name_key(name) for name in names})
-    return {"build": str(build), "versions": list(dict.fromkeys(versions)),
-            "names": base64.b64encode(b"".join(keys)).decode("ascii")}
+    return {
+        "build": str(build),
+        "versions": list(dict.fromkeys(versions)),
+        "names": base64.b64encode(b"".join(keys)).decode("ascii"),
+    }
 
 
 def decode(data: dict) -> dict[str, Tested]:
@@ -73,7 +79,7 @@ def decode(data: dict) -> dict[str, Tested]:
     out = {}
     for server, entry in (data.get("servers") or {}).items():
         raw = base64.b64decode(entry["names"])
-        keys = frozenset(raw[i:i + KEY_BYTES] for i in range(0, len(raw), KEY_BYTES))
+        keys = frozenset(raw[i : i + KEY_BYTES] for i in range(0, len(raw), KEY_BYTES))
         out[server] = Tested(server, str(entry.get("build") or ""), frozenset(entry.get("versions") or ()), keys)
     return out
 

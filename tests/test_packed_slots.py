@@ -22,8 +22,12 @@ GROUP = "ui-uilobbyelement-_mxload-prefabs-2025-07-02"
 
 def cab_bundle(folder, cab: str, payload: bytes, *, name: str | None = None):
     """A UnityFS bundle with one node named ``cab``, named after its group and CRC (or ``name``)."""
-    info = (bytes(16) + struct.pack(">iIIHiqqI", 1, len(payload), len(payload), 0, 1, 0, len(payload), 0)
-            + cab.encode() + b"\0")
+    info = (
+        bytes(16)
+        + struct.pack(">iIIHiqqI", 1, len(payload), len(payload), 0, 1, 0, len(payload), 0)
+        + cab.encode()
+        + b"\0"
+    )
     header = b"UnityFS\0" + struct.pack(">I", 7) + b"5.x.x\0" + b"2021.3.0f1\0"
     padding = bytes(-(len(header) + 20) % 16)
     header += struct.pack(">qIII", len(header) + 20 + len(padding) + len(info) + len(payload), len(info), len(info), 64)
@@ -68,8 +72,10 @@ def test_mods_of_two_bundles_of_one_packed_group_are_two_slots_applied_side_by_s
     untouched = c.read_bytes()
     mods = []
     for path, letter in ((a, "a"), (b, "b")):
-        source = cab_bundle(env.tmp / f"upload-{letter}", cab(letter), f"modded prefab {letter}".encode(), name=path.name)
-        mod, = env.library.add([source], kind="other", direct=True)
+        source = cab_bundle(
+            env.tmp / f"upload-{letter}", cab(letter), f"modded prefab {letter}".encode(), name=path.name
+        )
+        (mod,) = env.library.add([source], kind="other", direct=True)
         mods.append((mod, source))
     (first, first_source), (second, second_source) = mods
     assert first.target != second.target
@@ -86,7 +92,7 @@ def test_a_slot_an_earlier_build_shared_moves_to_the_files_own_slot(packed):
     env = packed
     a = env.prefabs[0]
     source = cab_bundle(env.tmp / "upload", cab("a"), b"modded prefab a", name=a.name)
-    mod, = env.library.add([source], kind="other", direct=True)
+    (mod,) = env.library.add([source], kind="other", direct=True)
     env.library.apply(mod.target, f"mod:{mod.id}", kind="other")
     pin = env.library.current_pin()
     own, shared = core_of(a.name), "other:" + hashlib.sha256(repr(part_of(a.name)).encode()).hexdigest()
@@ -123,11 +129,16 @@ def test_every_official_memorial_lobby_prefab_gets_its_own_slot(tmp_path):
 
     settings = Settings(tmp_path / "config.toml")
     settings.set("game_resource_dir", str(GAME_DIR))
-    library = ModLibrary(tmp_path / "library", FakeCatalog(FakeVariant("test", "test_spr", "test_home")), object(),
-                         settings)
+    library = ModLibrary(
+        tmp_path / "library", FakeCatalog(FakeVariant("test", "test_spr", "test_home")), object(), settings
+    )
     pin = library.current_pin()
-    prefabs = sorted(path for folder in pin.dirs for path in folder.iterdir()
-                     if path.name.startswith("ui-uilobbyelement-_mxload-prefabs-"))
+    prefabs = sorted(
+        path
+        for folder in pin.dirs
+        for path in folder.iterdir()
+        if path.name.startswith("ui-uilobbyelement-_mxload-prefabs-")
+    )
     assert len({path.name.rsplit("_", 1)[0] for path in prefabs}) < len(prefabs)  # names that differ only in the CRC
     library.note_packed([prefabs[0]], pin)
     index = library._index(pin)

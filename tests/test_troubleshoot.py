@@ -18,8 +18,9 @@ class FakeSteam:
     """Steam's file list: every given file as it is now (official), by name."""
 
     def __init__(self, *paths):
-        self.files = {path.name: OfficialFile(len(data := path.read_bytes()), hashlib.sha1(data).hexdigest())
-                      for path in paths}
+        self.files = {
+            path.name: OfficialFile(len(data := path.read_bytes()), hashlib.sha1(data).hexdigest()) for path in paths
+        }
 
     def bundles(self, _folder):
         return dict(self.files)
@@ -45,7 +46,9 @@ def test_apply_official_writes_official_files_keeps_the_configuration_and_leaves
     assert data["enabled"] is True and world.folder()["configured"] == {}
     saved = data["troubleshoot"]["folders"][world.key()]
     assert {core: entry["source"] for core, entry in saved.items()} == {
-        "test_spr": f"mod:{portrait.id}", "test_home": f"mod:{home.id}"}
+        "test_spr": f"mod:{portrait.id}",
+        "test_home": f"mod:{home.id}",
+    }
     assert troubleshoot.status(world.library) == {"active": True, "count": 2, "since": data["troubleshoot"]["since"]}
     # one mod at a time: a choice writes at once again
     applied = world.library.apply("test", f"mod:{portrait.id}")
@@ -115,8 +118,15 @@ def test_after_apply_official_every_listed_bundle_matches_steam(world):
     world.library.apply("test", f"mod:{portrait.id}")
     world.library.apply("test", f"mod:{home.id}", kind="lobby")
     result = troubleshoot.apply_official(world.library, _pins(world))
-    assert result.check == {"verified": True, "checked": 2, "changed": [], "changedCount": 0, "missing": [],
-                            "missingCount": 0, "unverified": []}
+    assert result.check == {
+        "verified": True,
+        "checked": 2,
+        "changed": [],
+        "changedCount": 0,
+        "missing": [],
+        "missingCount": 0,
+        "unverified": [],
+    }
     assert result.to_json()["check"]["verified"] is True
 
 

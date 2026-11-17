@@ -8,6 +8,7 @@ from ba_modding_toolkit.bundle import Bundle
 if TYPE_CHECKING:
     from conftest import UpdateCase
 
+
 # 案例数据缺失时 conftest 参数化为空参数集，测试自动跳过
 class TestPlanModInstall:
     def test_direct_replace(self, update_case: "UpdateCase", tmp_path: Path):

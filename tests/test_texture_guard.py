@@ -32,21 +32,64 @@ real_install = pytest.mark.skipif(not GAME_DIR.is_dir(), reason="No local game i
 
 CRUNCHED = {TF.DXT1Crunched, TF.DXT5Crunched, TF.ETC_RGB4Crunched, TF.ETC2_RGBA8Crunched}
 # Formats whose decoders read past short input unless the size is checked first, and the ones that only raise
-NATIVE = [TF.ETC_RGB4, TF.ETC_RGB4_3DS, TF.ETC_RGBA8_3DS, TF.ETC2_RGB, TF.ETC2_RGBA1, TF.ETC2_RGBA8,
-          TF.EAC_R, TF.EAC_R_SIGNED, TF.EAC_RG, TF.EAC_RG_SIGNED, TF.PVRTC_RGB2, TF.PVRTC_RGBA2, TF.PVRTC_RGB4,
-          TF.PVRTC_RGBA4, TF.ATC_RGB4, TF.ATC_RGBA8]
-OTHER = [TF.DXT1, TF.DXT3, TF.DXT5, TF.BC4, TF.BC5, TF.BC7, TF.ASTC_RGB_4x4, TF.ASTC_RGBA_6x6, TF.ASTC_RGBA_12x12,
-         TF.ASTC_HDR_8x8, TF.Alpha8, TF.ARGB4444, TF.RGB24, TF.RGBA32, TF.RGB565, TF.BGRA32, TF.RGBAHalf, TF.R8,
-         TF.RGB48]
+NATIVE = [
+    TF.ETC_RGB4,
+    TF.ETC_RGB4_3DS,
+    TF.ETC_RGBA8_3DS,
+    TF.ETC2_RGB,
+    TF.ETC2_RGBA1,
+    TF.ETC2_RGBA8,
+    TF.EAC_R,
+    TF.EAC_R_SIGNED,
+    TF.EAC_RG,
+    TF.EAC_RG_SIGNED,
+    TF.PVRTC_RGB2,
+    TF.PVRTC_RGBA2,
+    TF.PVRTC_RGB4,
+    TF.PVRTC_RGBA4,
+    TF.ATC_RGB4,
+    TF.ATC_RGBA8,
+]
+OTHER = [
+    TF.DXT1,
+    TF.DXT3,
+    TF.DXT5,
+    TF.BC4,
+    TF.BC5,
+    TF.BC7,
+    TF.ASTC_RGB_4x4,
+    TF.ASTC_RGBA_6x6,
+    TF.ASTC_RGBA_12x12,
+    TF.ASTC_HDR_8x8,
+    TF.Alpha8,
+    TF.ARGB4444,
+    TF.RGB24,
+    TF.RGBA32,
+    TF.RGB565,
+    TF.BGRA32,
+    TF.RGBAHalf,
+    TF.R8,
+    TF.RGB48,
+]
 DECODABLE = sorted(set(Texture2DConverter.CONV_TABLE) - CRUNCHED, key=int)
 CRASHING_SITE_FORMAT = int(TF.ETC2_RGBA8)
 
 
 def texture(width, height, texture_format, data, name="page", **fields):
     """A real Texture2D object with the declared size and data."""
-    result = Texture2D(image_data=bytes(data), m_CompleteImageSize=len(data), m_Height=height, m_ImageCount=1,
-                       m_IsReadable=True, m_LightmapFormat=0, m_Name=name, m_TextureDimension=2,
-                       m_TextureFormat=int(texture_format), m_TextureSettings=None, m_Width=width)
+    result = Texture2D(
+        image_data=bytes(data),
+        m_CompleteImageSize=len(data),
+        m_Height=height,
+        m_ImageCount=1,
+        m_IsReadable=True,
+        m_LightmapFormat=0,
+        m_Name=name,
+        m_TextureDimension=2,
+        m_TextureFormat=int(texture_format),
+        m_TextureSettings=None,
+        m_Width=width,
+    )
     for key, value in fields.items():
         setattr(result, key, value)
     return result
@@ -76,11 +119,13 @@ def no_decoder(monkeypatch, no_native):
     def parse(*args, **kwargs):
         no_native.calls.append("parse_image_data")
         raise AssertionError("decoder used: parse_image_data")
+
     monkeypatch.setattr(Texture2DConverter, "parse_image_data", parse)
     return no_native
 
 
 # --- the shared check ---------------------------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize("texture_format", NATIVE + OTHER, ids=lambda f: f.name)
 def test_large_declared_size_with_short_data_is_refused_before_any_decoder(no_decoder, texture_format):
@@ -114,11 +159,46 @@ def test_exact_size_is_accepted_and_one_byte_less_is_refused(texture_format, siz
         guard.check_texture(texture(*size, texture_format, bytes(need - 1)))
 
 
-DECODES = [TF.Alpha8, TF.ARGB4444, TF.RGB24, TF.RGBA32, TF.ARGB32, TF.RGB565, TF.BGR24, TF.RGBA4444, TF.BGRA32,
-           TF.RGBAHalf, TF.R8, TF.RGB48, TF.DXT1, TF.DXT3, TF.DXT5, TF.BC4, TF.BC5, TF.BC7, TF.ETC_RGB4,
-           TF.ETC_RGB4_3DS, TF.ETC_RGBA8_3DS, TF.ETC2_RGB, TF.ETC2_RGBA1, TF.ETC2_RGBA8, TF.EAC_R, TF.EAC_R_SIGNED,
-           TF.EAC_RG, TF.EAC_RG_SIGNED, TF.ATC_RGB4, TF.ATC_RGBA8, TF.PVRTC_RGB2, TF.PVRTC_RGBA2, TF.PVRTC_RGB4,
-           TF.PVRTC_RGBA4, TF.ASTC_RGB_4x4, TF.ASTC_RGBA_6x6, TF.ASTC_RGBA_10x10, TF.ASTC_HDR_8x8]
+DECODES = [
+    TF.Alpha8,
+    TF.ARGB4444,
+    TF.RGB24,
+    TF.RGBA32,
+    TF.ARGB32,
+    TF.RGB565,
+    TF.BGR24,
+    TF.RGBA4444,
+    TF.BGRA32,
+    TF.RGBAHalf,
+    TF.R8,
+    TF.RGB48,
+    TF.DXT1,
+    TF.DXT3,
+    TF.DXT5,
+    TF.BC4,
+    TF.BC5,
+    TF.BC7,
+    TF.ETC_RGB4,
+    TF.ETC_RGB4_3DS,
+    TF.ETC_RGBA8_3DS,
+    TF.ETC2_RGB,
+    TF.ETC2_RGBA1,
+    TF.ETC2_RGBA8,
+    TF.EAC_R,
+    TF.EAC_R_SIGNED,
+    TF.EAC_RG,
+    TF.EAC_RG_SIGNED,
+    TF.ATC_RGB4,
+    TF.ATC_RGBA8,
+    TF.PVRTC_RGB2,
+    TF.PVRTC_RGBA2,
+    TF.PVRTC_RGB4,
+    TF.PVRTC_RGBA4,
+    TF.ASTC_RGB_4x4,
+    TF.ASTC_RGBA_6x6,
+    TF.ASTC_RGBA_10x10,
+    TF.ASTC_HDR_8x8,
+]
 
 
 @pytest.mark.parametrize("texture_format", DECODES, ids=lambda f: f.name)
@@ -139,9 +219,27 @@ def test_a_texture_still_decodes_to_the_same_pixels(tmp_path):
         assert guard.texture_image(declared).tobytes() == declared.image.tobytes()
 
 
-@pytest.mark.parametrize("texture_format", [TF.RGBA32, TF.RGB24, TF.Alpha8, TF.R8, TF.DXT1, TF.DXT5, TF.BC4, TF.BC5,
-                                            TF.BC7, TF.ETC_RGB4, TF.ETC2_RGB, TF.ETC2_RGBA8, TF.ASTC_RGB_4x4,
-                                            TF.ASTC_RGBA_6x6, TF.ASTC_RGBA_12x12], ids=lambda f: f.name)
+@pytest.mark.parametrize(
+    "texture_format",
+    [
+        TF.RGBA32,
+        TF.RGB24,
+        TF.Alpha8,
+        TF.R8,
+        TF.DXT1,
+        TF.DXT5,
+        TF.BC4,
+        TF.BC5,
+        TF.BC7,
+        TF.ETC_RGB4,
+        TF.ETC2_RGB,
+        TF.ETC2_RGBA8,
+        TF.ASTC_RGB_4x4,
+        TF.ASTC_RGBA_6x6,
+        TF.ASTC_RGBA_12x12,
+    ],
+    ids=lambda f: f.name,
+)
 @pytest.mark.parametrize("size", [(13, 7), (33, 65), (1, 1)], ids=lambda s: "x".join(map(str, s)))
 def test_required_size_matches_what_unitypy_encodes(texture_format, size):
     data, encoded = Texture2DConverter.image_to_texture2d(Image.new("RGBA", size), texture_format)
@@ -149,6 +247,7 @@ def test_required_size_matches_what_unitypy_encodes(texture_format, size):
 
 
 # --- encoding single-channel images -----------------------------------------------------------------------
+
 
 def bc4_image(width=12, height=9, seed=7):
     """An L image as UnityPy decodes a BC4 texture (the format of the game's single-channel FX textures)."""
@@ -166,8 +265,23 @@ def test_unitypy_still_cannot_pack_an_l_image():
         Texture2DConverter.image_to_texture2d(bc4_image(), TF.BC4)
 
 
-@pytest.mark.parametrize("texture_format", [TF.BC4, TF.Alpha8, TF.R8, TF.EAC_R, TF.RGBA32, TF.RGB24, TF.DXT1,
-                                            TF.DXT5, TF.BC7, TF.ETC2_RGBA8, TF.ASTC_RGBA_6x6], ids=lambda f: f.name)
+@pytest.mark.parametrize(
+    "texture_format",
+    [
+        TF.BC4,
+        TF.Alpha8,
+        TF.R8,
+        TF.EAC_R,
+        TF.RGBA32,
+        TF.RGB24,
+        TF.DXT1,
+        TF.DXT5,
+        TF.BC7,
+        TF.ETC2_RGBA8,
+        TF.ASTC_RGBA_6x6,
+    ],
+    ids=lambda f: f.name,
+)
 def test_a_single_channel_image_encodes_into_every_target_format(texture_format):
     source = bc4_image()
     data, encoded = Texture2DConverter.image_to_texture2d(guard.encodable_image(source, texture_format), texture_format)
@@ -190,10 +304,8 @@ def test_only_l_images_are_changed():
 
 def test_a_bc4_texture_from_a_mod_applies_to_a_bc4_texture(tmp_path):
     source, target = bc4_image(seed=7), bc4_image(seed=90)
-    write_bundle(tmp_path / "mod.bundle", {}, {"noise": source.convert("RGBA")}, skeleton=None,
-                 texture_format=TF.BC4)
-    write_bundle(tmp_path / "game.bundle", {}, {"noise": target.convert("RGBA")}, skeleton=None,
-                 texture_format=TF.BC4)
+    write_bundle(tmp_path / "mod.bundle", {}, {"noise": source.convert("RGBA")}, skeleton=None, texture_format=TF.BC4)
+    write_bundle(tmp_path / "game.bundle", {}, {"noise": target.convert("RGBA")}, skeleton=None, texture_format=TF.BC4)
     patch, _ = Bundle.load(tmp_path / "mod.bundle").extract_patch({"Texture2D"}, "name_type")
     assert patch[("noise", "Texture2D")].mode == "L"
     game = Bundle.load(tmp_path / "game.bundle")
@@ -207,8 +319,9 @@ def test_a_bc4_texture_from_a_mod_applies_to_a_bc4_texture(tmp_path):
     assert guard.texture_image(data).tobytes() == source.tobytes()
 
 
-@pytest.mark.parametrize("size", [(0, 4), (4, 0), (0, 0), (-4, 4), (4, -1), (16385, 1), (1, 16385), (None, 4),
-                                  (4.0, 4), (True, 4)])
+@pytest.mark.parametrize(
+    "size", [(0, 4), (4, 0), (0, 0), (-4, 4), (4, -1), (16385, 1), (1, 16385), (None, 4), (4.0, 4), (True, 4)]
+)
 def test_sizes_outside_the_range_are_refused_whatever_the_data(no_decoder, size):
     with pytest.raises(guard.TextureRefused):
         guard.check_texture(texture(*size, TF.RGBA32, bytes(1 << 20)))
@@ -219,6 +332,7 @@ def test_the_games_font_placeholders_are_refused_without_touching_any_file(monke
     # 0x0 with no data and an empty stream path: decoding one makes UnityPy open a path that resolves to a folder
     def resource(*args):
         raise AssertionError("resource read")
+
     monkeypatch.setattr(ResourceReader, "get_resource_data", resource)
     stream = SimpleNamespace(path="", offset=0, size=0)
     placeholder = texture(0, 0, TF.RGBA32, b"", name="Font Texture", m_StreamData=stream)
@@ -283,7 +397,7 @@ def test_switch_swizzled_sizes_use_the_padded_size_and_a_huge_shift_is_refused_a
         declared.object_reader = SimpleNamespace(platform=BuildTarget.Switch, version=(2021, 3, 0, 0))
         return declared
 
-    blob = [0] * 8 + [1, 0, 0, 0] + [0] * 4          # two GOBs per block
+    blob = [0] * 8 + [1, 0, 0, 0] + [0] * 4  # two GOBs per block
     block = TextureSwizzler.TEXTURE_FORMAT_BLOCK_SIZE_MAP[TF.RGBA32]
     width, height = TextureSwizzler.get_padded_texture_size(20, 20, *block, 2)
     need = width * height * 4
@@ -307,8 +421,9 @@ PAGE_ATLAS = atlas_text([("page.png", (20, 18), [("body", -1, (4, 3), (6, 4), (6
 
 def crashing(tmp_path, name=BUNDLE, folder="mod"):
     """A real UnityFS bundle whose page declares 8192x8192 in a format whose native decoder reads past short data."""
-    return write_bundle(tmp_path / folder / name, {"test.atlas": PAGE_ATLAS},
-                        {"page": (8192, 8192, CRASHING_SITE_FORMAT, bytes(64))})
+    return write_bundle(
+        tmp_path / folder / name, {"test.atlas": PAGE_ATLAS}, {"page": (8192, 8192, CRASHING_SITE_FORMAT, bytes(64))}
+    )
 
 
 def test_spine_extraction_refuses_the_bundle(tmp_path, no_decoder):
@@ -357,15 +472,21 @@ def test_atlas_remap_inputs_refuse_the_texture_like_an_unreadable_one(tmp_path, 
 
 def collection_game(tmp_path):
     name = "uis-01_common-14_charactercollect-_mxload-2024-11-18_000_assets_all_1238120891.bundle"
-    path = write_bundle(tmp_path / "game" / name, {}, {"Student_Portrait_CH0192_Collection":
-                        (8192, 8192, CRASHING_SITE_FORMAT, bytes(64))}, skeleton=None)
+    path = write_bundle(
+        tmp_path / "game" / name,
+        {},
+        {"Student_Portrait_CH0192_Collection": (8192, 8192, CRASHING_SITE_FORMAT, bytes(64))},
+        skeleton=None,
+    )
     return path, GameAssets([path.parent], AssetCache(root=tmp_path / "cache"))
 
 
 def test_collection_art_refuses_the_texture(tmp_path, no_decoder):
     path, game = collection_game(tmp_path)
-    for read in (lambda: game.collection_portrait("Student_Portrait_CH0192_Collection"),
-                 lambda: game.collection_portrait_from("Student_Portrait_CH0192_Collection", [path])):
+    for read in (
+        lambda: game.collection_portrait("Student_Portrait_CH0192_Collection"),
+        lambda: game.collection_portrait_from("Student_Portrait_CH0192_Collection", [path]),
+    ):
         with pytest.raises(ServiceError) as caught:
             read()
         assert caught.value.code == "bundle_invalid" and caught.value.params == {"file": path.name}
@@ -375,8 +496,17 @@ def test_collection_art_refuses_the_texture(tmp_path, no_decoder):
 def fake_env(monkeypatch, tmp_path, declared, cab="CAB-test", path_id=42):
     @contextmanager
     def open_bundle(path):
-        yield SimpleNamespace(objects=[SimpleNamespace(path_id=path_id, assets_file=SimpleNamespace(name=cab),
-                                                       type=SimpleNamespace(name="Texture2D"), read=lambda: declared)])
+        yield SimpleNamespace(
+            objects=[
+                SimpleNamespace(
+                    path_id=path_id,
+                    assets_file=SimpleNamespace(name=cab),
+                    type=SimpleNamespace(name="Texture2D"),
+                    read=lambda: declared,
+                )
+            ]
+        )
+
     (tmp_path / "fake.bundle").write_bytes(b"fake")
     monkeypatch.setattr(service, "open_bundle", open_bundle)
     located = {"cab-test": str(tmp_path / "fake.bundle")}
@@ -389,8 +519,10 @@ def test_selection_frame_and_lobby_effect_textures_refuse_the_texture(tmp_path, 
     slot = {"frameEffect": {"material": {"tex": {"_Tex_Main": {"id": "cab-test_42"}}}}}
     monkeypatch.setattr(game, "layout", lambda root, path: slot)
     monkeypatch.setattr(game, "lobby_info", lambda core: {"fx": {"textures": {"cab-test_42": {}}}})
-    for read in (lambda: game.selection_frame_texture("cab-test_42"),
-                 lambda: game.lobby_fx_texture("core", "cab-test_42")):
+    for read in (
+        lambda: game.selection_frame_texture("cab-test_42"),
+        lambda: game.lobby_fx_texture("core", "cab-test_42"),
+    ):
         with pytest.raises(ServiceError) as caught:
             read()
         assert caught.value.code == "bundle_invalid" and caught.value.params == {"file": "fake.bundle"}
@@ -410,8 +542,11 @@ def test_atlas_sprite_pixels_refuse_the_texture(tmp_path, monkeypatch, no_decode
 
 def test_chibi_export_refuses_the_texture(no_decoder):
     owner = "/somewhere/character-ch0001-_mxload-2026-01-01.bundle"
-    obj = SimpleNamespace(assets_file=SimpleNamespace(name="CAB-A"), path_id=7,
-                          read=lambda: texture(8192, 8192, CRASHING_SITE_FORMAT, bytes(64)))
+    obj = SimpleNamespace(
+        assets_file=SimpleNamespace(name="CAB-A"),
+        path_id=7,
+        read=lambda: texture(8192, 8192, CRASHING_SITE_FORMAT, bytes(64)),
+    )
     exporter = model._Exporter(SimpleNamespace(locations={"cab-a": owner}), "ch0001")
     with pytest.raises(ServiceError) as caught:
         exporter.texture(obj)
@@ -425,8 +560,9 @@ def test_chibi_export_refuses_the_texture(no_decoder):
 def test_page_assembly_refuses_the_texture(tmp_path, no_decoder):
     source = crashing(tmp_path)
     with pytest.raises(ValueError, match="bounds check"):
-        refine_assembly.assemble_mod([source], Image.new("RGBA", (20, 18)), tmp_path / "out", atlas_name="test.atlas",
-                                     page_name="page.png")
+        refine_assembly.assemble_mod(
+            [source], Image.new("RGBA", (20, 18)), tmp_path / "out", atlas_name="test.atlas", page_name="page.png"
+        )
     assert no_decoder.calls == []
 
 
@@ -442,10 +578,12 @@ def test_page_assembly_checks_the_page_it_decodes_itself(tmp_path, monkeypatch):
     def spy(data, width, height, *args, **kwargs):
         decoded.append(width)
         return parse(data, width, height, *args, **kwargs)
+
     monkeypatch.setattr(Texture2DConverter, "parse_image_data", spy)
     with pytest.raises(ValueError, match="bounds check"):
-        refine_assembly.assemble_mod([source], Image.new("RGBA", (20, 18)), tmp_path / "out", atlas_name="test.atlas",
-                                     page_name="page.png")
+        refine_assembly.assemble_mod(
+            [source], Image.new("RGBA", (20, 18)), tmp_path / "out", atlas_name="test.atlas", page_name="page.png"
+        )
     assert 8192 not in decoded
 
 
@@ -466,6 +604,7 @@ def test_portrait_edit_refuses_a_texture_it_cannot_check(tmp_path):
 
 # --- official files pass unchanged --------------------------------------------------------------------------------
 
+
 def spaced(items, count):
     """``count`` items spread evenly over a sorted list, the same on every run."""
     items = sorted(items)
@@ -484,8 +623,11 @@ def test_official_spine_cores_and_ui_bundles_pass_the_check(tmp_path):
     backgrounds = group_bundles(game._paths(), "spinebackground")
     # the first portraits include 4096 pages; the rest of each sample is spread over the sorted cores
     chosen = sorted(set(sorted(portraits)[:25]) | set(spaced(portraits, 15)))
-    spine = ([portraits[core] for core in chosen] + [lobbies[core] for core in spaced(lobbies, 16)]
-             + [backgrounds[core] for core in spaced(backgrounds, 13)])
+    spine = (
+        [portraits[core] for core in chosen]
+        + [lobbies[core] for core in spaced(lobbies, 16)]
+        + [backgrounds[core] for core in spaced(backgrounds, 13)]
+    )
     ui = [[path] for path in spaced([p for p in game._paths() if is_atlas(p) or is_texture(p)], 24)]
     assert len(spine) >= 40 and len(ui) >= 20
     checked, pages = 0, set()

@@ -52,6 +52,7 @@ RESULT_KEYS = ("failed", "stuck", "left", "held")  # a toggle's entries that bri
 
 # --- the model ---
 
+
 @dataclass(frozen=True)
 class MenuItem:
     """One line of the menu. ``action`` is what a click does: ``toggle``, ``drift``, ``open`` or ``quit``. A line
@@ -78,8 +79,12 @@ def _text(strings: dict[str, str], key: str, **values: Any) -> str:
 def clickable(snapshot: dict[str, Any] | None) -> bool:
     """Whether Enable Mods can be clicked: a snapshot is there, nothing makes the switch unavailable and no toggle is
     queued or running (nor writes queued for the classic window)."""
-    return bool(snapshot) and not snapshot.get("reason") and snapshot.get("available", True) is not False \
+    return (
+        bool(snapshot)
+        and not snapshot.get("reason")
+        and snapshot.get("available", True) is not False
         and not snapshot.get("busy")
+    )
 
 
 def _working(snapshot: dict[str, Any], strings: dict[str, str]) -> str:
@@ -113,8 +118,11 @@ def tray_menu(snapshot: dict[str, Any] | None, strings: dict[str, str]) -> list[
     drift = int((snapshot or {}).get("drift") or 0)
     if drift > 0 and (snapshot or {}).get("scan") is True:
         items.append(MenuItem("drift", _text(strings, "tray.drift", n=drift)))
-    items += [SEPARATOR, MenuItem("open", _text(strings, "settings.classic.open")),
-              MenuItem("quit", _text(strings, "tray.quit"))]
+    items += [
+        SEPARATOR,
+        MenuItem("open", _text(strings, "settings.classic.open")),
+        MenuItem("quit", _text(strings, "tray.quit")),
+    ]
     return items
 
 
@@ -150,6 +158,7 @@ def needs_window(state: str, result: Any) -> bool:
 
 
 # --- the controller ---
+
 
 class Backend(Protocol):
     def start(self) -> None:
@@ -356,8 +365,9 @@ class Tray:
             self._jobs.discard(job.id)
         if needs_window(job.state, job.result):
             # never on the job worker: raising waits for the UI thread
-            threading.Thread(target=self._guarded, args=(self.s.raise_window,), name="bamt-tray-raise",
-                             daemon=True).start()
+            threading.Thread(
+                target=self._guarded, args=(self.s.raise_window,), name="bamt-tray-raise", daemon=True
+            ).start()
 
     def _quit(self) -> None:
         """``app.quit``'s rules; while a writer job runs, the window comes to the front with the busy toast."""
@@ -485,7 +495,8 @@ class CocoaTray:
                 menu.addItem_(NSMenuItem.separatorItem())
                 continue
             entry = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
-                item.label, "clicked:" if item.action else None, "")
+                item.label, "clicked:" if item.action else None, ""
+            )
             if item.action:
                 entry.setTarget_(self._target)
             entry.setTag_(index)
@@ -522,6 +533,7 @@ class CocoaTray:
 
 # --- Windows: NotifyIcon on pywebview's WinForms thread ---
 
+
 class WinFormsTray:
     """A ``NotifyIcon`` with a ``ContextMenuStrip``, made on the window's WinForms thread (``window.native.Invoke``),
     or, when that fails, on an STA thread of its own with its own message loop. A left click (or double click) opens
@@ -554,8 +566,9 @@ class WinFormsTray:
                 form.Invoke(Func[Type](self._make_on_form))
                 return
             except Exception:
-                logger.warning("the window's thread is unavailable; the tray icon gets a thread of its own",
-                               exc_info=True)
+                logger.warning(
+                    "the window's thread is unavailable; the tray icon gets a thread of its own", exc_info=True
+                )
         self._start_thread()
 
     def _make_on_form(self) -> None:
@@ -695,4 +708,4 @@ class WinFormsTray:
 
 
 def _clip(text: str) -> str:
-    return text if len(text) <= TOOLTIP_MAX else text[:TOOLTIP_MAX - 1] + "…"
+    return text if len(text) <= TOOLTIP_MAX else text[: TOOLTIP_MAX - 1] + "…"

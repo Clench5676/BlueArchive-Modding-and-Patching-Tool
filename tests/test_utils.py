@@ -7,13 +7,14 @@ from ba_modding_toolkit.utils import (
     parse_hex_bytes,
 )
 
+
 class TestParseHexBytes:
     def test_parse_hex_bytes_with_prefix(self):
         result = parse_hex_bytes("0x08080808")
-        assert result == b'\x08\x08\x08\x08'
-        
+        assert result == b"\x08\x08\x08\x08"
+
         result = parse_hex_bytes("0XABCDEF")
-        assert result == b'\xab\xcd\xef'
+        assert result == b"\xab\xcd\xef"
 
     def test_parse_hex_bytes_without_prefix(self):
         result = parse_hex_bytes("hello")
@@ -36,17 +37,17 @@ class TestImageUtils:
     def test_bleed_image_basic(self):
         img = Image.new("RGBA", (100, 100), (255, 0, 0, 255))
         result = bleed_image(img)
-        
+
         assert result.size == img.size
         assert result.mode == "RGBA"
 
     def test_bleed_image_preserves_alpha(self):
         img = Image.new("RGBA", (50, 50), (0, 255, 0, 128))
         original_alpha = img.getchannel("A")
-        
+
         result = bleed_image(img)
         result_alpha = result.getchannel("A")
-        
+
         assert list(original_alpha.getdata()) == list(result_alpha.getdata())
 
     def test_bleed_image_alpha_threshold(self):
@@ -67,5 +68,5 @@ class TestImageUtils:
     def test_bleed_image_no_transparent_pixels(self):
         img = Image.new("RGBA", (10, 10), (255, 255, 255, 255))
         result = bleed_image(img)
-        
+
         assert result == img

@@ -53,11 +53,14 @@ class Contents:
             getattr(self, key).update(getattr(other, key))
 
     def spine(self) -> dict:
-        return {"skeletons": {name: {"version": get_skel_version(data),
-                                    "data": base64.b64encode(data).decode("ascii")}
-                              for name, data in self.skeletons.items()},
-                "atlases": {name: data.decode("utf-8-sig", errors="replace") for name, data in self.atlases.items()},
-                "textures": self.textures}
+        return {
+            "skeletons": {
+                name: {"version": get_skel_version(data), "data": base64.b64encode(data).decode("ascii")}
+                for name, data in self.skeletons.items()
+            },
+            "atlases": {name: data.decode("utf-8-sig", errors="replace") for name, data in self.atlases.items()},
+            "textures": self.textures,
+        }
 
 
 class Inspection:
@@ -66,8 +69,9 @@ class Inspection:
     def __init__(self, asset_types: set[str] | None = None, *, header_only_missing: bool = False):
         self.header_only_missing = header_only_missing
         self.missing_cabs: set[str] = set()
-        self.asset_types = frozenset(asset_types if asset_types is not None else
-                                    {"Texture2D", "TextAsset", "Mesh", "AnimationClip"})
+        self.asset_types = frozenset(
+            asset_types if asset_types is not None else {"Texture2D", "TextAsset", "Mesh", "AnimationClip"}
+        )
         self._revisions: dict[Path, tuple[int, ...]] = {}
         self._bundles: dict[Path, Bundle] = {}
         self._contents: dict[Path, Contents] = {}
@@ -139,17 +143,23 @@ class Inspection:
         if not parts:
             return None
         own = set().union(*(part.files for part in parts))
-        return {"platforms": sorted(set().union(*(part.platforms for part in parts))),
-                "unity": sorted(set().union(*(part.versions for part in parts))),
-                "cabs": sorted(name for name in (contents.files if contents else meta.files)
-                               if not name.endswith((".bundle", ".backup")))[:SUMMARY_CABS],
-                "references": len(contents.references - own) if contents else None}
+        return {
+            "platforms": sorted(set().union(*(part.platforms for part in parts))),
+            "unity": sorted(set().union(*(part.versions for part in parts))),
+            "cabs": sorted(
+                name
+                for name in (contents.files if contents else meta.files)
+                if not name.endswith((".bundle", ".backup"))
+            )[:SUMMARY_CABS],
+            "references": len(contents.references - own) if contents else None,
+        }
 
     def keys(self, path: Path) -> set[AssetKey]:
         self.check(path)
         if path not in self._keys:
-            types = REPLACEABLE_ASSET_TYPES if "ALL" in self.asset_types else {
-                AssetType[name] for name in self.asset_types}
+            types = (
+                REPLACEABLE_ASSET_TYPES if "ALL" in self.asset_types else {AssetType[name] for name in self.asset_types}
+            )
             self._keys[path] = self.bundle(path).get_asset_keys("name_type", types)
         self.check(path)
         return self._keys[path]
@@ -160,8 +170,11 @@ class Inspection:
         update that rebuilt the part (objects added or dropped, another dependency) changes them, though the part
         keeps its name but for the CRC and its CABs. Read from the headers alone."""
         contents = self.metadata(path)
-        return (frozenset(contents.files), tuple(sorted(contents.layout.items())),
-                tuple(sorted(contents.externals.items())))
+        return (
+            frozenset(contents.files),
+            tuple(sorted(contents.layout.items())),
+            tuple(sorted(contents.externals.items())),
+        )
 
     def readable_keys(self, path: Path, *, targets: tuple[Path, ...] = ()) -> set[AssetKey]:
         self.check(path)
@@ -171,7 +184,11 @@ class Inspection:
         if cache_key not in self._readable:
             # Use the execution reader, including texture decoding and mesh stream resolution.
             # Source choices select conversion routes; they do not override serialized Unity metadata.
-            scope = UpdateScope([self.bundle(target) for target in targets], "name_type", self.asset_types) if targets else None
+            scope = (
+                UpdateScope([self.bundle(target) for target in targets], "name_type", self.asset_types)
+                if targets
+                else None
+            )
             patch, _ = self.bundle(path).extract_patch(self.asset_types, "name_type", scope=scope)
             self._readable[cache_key] = (set(patch) - {"__mode__"}) | (scope.unchanged if scope else set())
         self.validate()
@@ -250,8 +267,16 @@ def inspect(path: Path, *, allow_unknown: bool = False, inspection: Inspection |
     for obj in bundle.env.objects:
         if obj.type.name == "AssetBundle":
             data = obj.read()
-            result.names.update(filter(None, [getattr(data, "m_Name", ""),
-                getattr(data, "m_AssetBundleName", ""), *getattr(data, "m_Dependencies", [])]))
+            result.names.update(
+                filter(
+                    None,
+                    [
+                        getattr(data, "m_Name", ""),
+                        getattr(data, "m_AssetBundleName", ""),
+                        *getattr(data, "m_Dependencies", []),
+                    ],
+                )
+            )
         if obj.type.name == "Texture2D":
             data = obj.read()
             result.textures[texture_key(data.m_Name)] = (data.m_Width, data.m_Height)
@@ -277,26 +302,35 @@ def inspect(path: Path, *, allow_unknown: bool = False, inspection: Inspection |
 
 def check_platform(contents: Contents, path: Path, expected: set[str]) -> None:
     if contents.platforms != expected:
-        raise ServiceError("mod_platform_mismatch", file=path.name,
-                           platform=", ".join(sorted(contents.platforms)), expected=", ".join(sorted(expected)))
+        raise ServiceError(
+            "mod_platform_mismatch",
+            file=path.name,
+            platform=", ".join(sorted(contents.platforms)),
+            expected=", ".join(sorted(expected)),
+        )
 
 
 def check_format(contents: Contents, path: Path, expected: Contents) -> None:
     """A copied or rebuilt bundle must use the target's serialized Unity format."""
     check_platform(contents, path, expected.platforms)
     if contents.versions != expected.versions:
-        raise ServiceError("mod_unity_version_mismatch", file=path.name,
-                           version=", ".join(sorted(contents.versions)),
-                           expected=", ".join(sorted(expected.versions)))
+        raise ServiceError(
+            "mod_unity_version_mismatch",
+            file=path.name,
+            version=", ".join(sorted(contents.versions)),
+            expected=", ".join(sorted(expected.versions)),
+        )
 
 
-def references_changed_objects(path: Path, changed: dict[str, set[int]], removed_cabs: set[str],
-                               inspection: Inspection) -> bool:
+def references_changed_objects(
+    path: Path, changed: dict[str, set[int]], removed_cabs: set[str], inspection: Inspection
+) -> bool:
     """Inspect external PPtrs without resolving them or following paths outside the install.
 
     External tables identify candidate consumers cheaply. Only those consumers need their
     objects read; an unreadable consumer cannot prove an object safe to remove or retype.
     """
+
     def pointers(value, external: dict[int, str]) -> bool:
         if isinstance(value, dict):
             file_id, path_id = value.get("m_FileID"), value.get("m_PathID")

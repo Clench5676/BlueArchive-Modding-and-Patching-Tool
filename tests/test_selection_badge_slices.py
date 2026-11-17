@@ -39,7 +39,9 @@ def _uniform_runs(image):
 @pytest.mark.parametrize("sprite", ["Common_Icon_Mulligan_1", "Common_Icon_Mulligan_2"])
 def test_official_badge_horizontal_slices(official_badge_assets, sprite):
     _, game = official_badge_assets
-    shipped = json.loads(SOURCE.read_text().split("export const SELECTION_BADGE_SLICES = ", 1)[1].split(";", 1)[0])[sprite]
+    shipped = json.loads(SOURCE.read_text().split("export const SELECTION_BADGE_SLICES = ", 1)[1].split(";", 1)[0])[
+        sprite
+    ]
     meta = game.atlases()["Common"][sprite]
     assert (meta["width"], meta["height"]) == (shipped["width"], shipped["height"]) == (64, 69)
     assert [meta.get("border" + side, 0) for side in ("Left", "Right", "Top", "Bottom")] == [0, 0, 0, 0]

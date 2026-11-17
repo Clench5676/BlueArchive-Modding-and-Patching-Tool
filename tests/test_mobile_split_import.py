@@ -23,6 +23,7 @@ MOBILE_DATE = "2025-07-02"
 
 def types_of(path: Path) -> set[str]:
     import UnityPy
+
     return {obj.type.name for obj in UnityPy.load(str(path)).objects}
 
 
@@ -37,8 +38,11 @@ def mobile_copy(official: Path, folder: Path, part: str) -> Path:
     parsed = parse_filename(official.name)
     path = folder / f"{parsed.prefix}{part}-{MOBILE_DATE}_assets_all_{parsed.crc}.bundle"
     bundle = UnityPy.load(str(official)).file
-    renames = {key: "CAB-" + hashlib.md5((key + part).encode()).hexdigest()
-               for key in bundle.files if key.startswith("CAB-") and not key.endswith(".resS")}
+    renames = {
+        key: "CAB-" + hashlib.md5((key + part).encode()).hexdigest()
+        for key in bundle.files
+        if key.startswith("CAB-") and not key.endswith(".resS")
+    }
     edits: dict[str, list[int]] = {}
     files = {}
     for key, inner in bundle.files.items():
@@ -61,7 +65,7 @@ def mobile_copy(official: Path, folder: Path, part: str) -> Path:
         name = renames.get(key.removesuffix(".resS"), key.removesuffix(".resS")) + ".resS"
         data = bytearray(files[name].bytes)
         for offset in offsets:
-            data[offset:offset + 16] = bytes(byte ^ 0x5A for byte in data[offset:offset + 16])
+            data[offset : offset + 16] = bytes(byte ^ 0x5A for byte in data[offset : offset + 16])
         changed = EndianBinaryReader(bytes(data))
         changed.flags = files[name].flags
         files[name] = changed
@@ -89,8 +93,9 @@ def mobile(tmp_path):
     if not root:
         pytest.skip("Set BAMT_TEST_GAME_DIR to a verified official development view")
     directories = get_search_dirs(Path(root))
-    official = sorted(path for directory in directories for path in directory.glob("*.bundle")
-                      if core_of(path.name) in CORES)
+    official = sorted(
+        path for directory in directories for path in directory.glob("*.bundle") if core_of(path.name) in CORES
+    )
     parts = {}
     for core in CORES:
         own = [path for path in official if core_of(path.name) == core]
@@ -119,8 +124,10 @@ def mobile(tmp_path):
     services = Services(settings, tmp_path / "app", cache=object(), game=game, catalog=catalog, library=library)
     services.game_found = lambda: False
     folder = tmp_path / "mod"
-    mods = {core: (mobile_copy(text, folder, "textassets"), mobile_copy(page, folder, "textures"))
-            for core, (text, page, _) in parts.items()}
+    mods = {
+        core: (mobile_copy(text, folder, "textassets"), mobile_copy(page, folder, "textures"))
+        for core, (text, page, _) in parts.items()
+    }
     try:
         yield SimpleNamespace(services=services, rpc=build_api(services), mods=mods, parts=parts, library=library)
     finally:
@@ -136,8 +143,9 @@ def test_mobile_parts_convert_into_parts_kept_under_older_dates_and_import(mobil
         assert row["source"] == {"server": "global", "platform": "android", "detected": True}
     text, page, _ = mobile.parts["ch0242_spr"]
     assert sorted(path.name for path in mobile.services.batch_import._latest[rows["spr"]["id"]].targets) == sorted(
-        [text.name, page.name])
-    result, = run(mobile, [rows["spr"]], enableAfterImport=False)
+        [text.name, page.name]
+    )
+    (result,) = run(mobile, [rows["spr"]], enableAfterImport=False)
     assert result["outcome"] == "updated" and result["libraryId"], result
     # The mod's page goes into the part dated 2024-11-18 that holds it; its unchanged skeleton part stays official.
     output = dict(mobile.library._record(result["libraryId"])["import_sources"][0]["output"])

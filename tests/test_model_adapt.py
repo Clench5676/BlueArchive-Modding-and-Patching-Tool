@@ -21,23 +21,32 @@ official = pytest.mark.skipif(not GAME_DIR.is_dir(), reason="Set BAMT_TEST_GAME_
 
 # --- pure parts ----------------------------------------------------------------------------------------------------
 
+
 def _pptr(pid, fid=0):
     return {"m_FileID": fid, "m_PathID": pid}
 
 
 def test_preload_ranges_grow_in_place_when_contiguous():
-    bundle = {"m_PreloadTable": [_pptr(i) for i in range(5)],
-              "m_Container": [["a.prefab", {"preloadIndex": 0, "preloadSize": 2, "asset": _pptr(1)}],
-                              ["b.prefab", {"preloadIndex": 2, "preloadSize": 3, "asset": _pptr(2)}]]}
+    bundle = {
+        "m_PreloadTable": [_pptr(i) for i in range(5)],
+        "m_Container": [
+            ["a.prefab", {"preloadIndex": 0, "preloadSize": 2, "asset": _pptr(1)}],
+            ["b.prefab", {"preloadIndex": 2, "preloadSize": 3, "asset": _pptr(2)}],
+        ],
+    }
     ma._extend_preload(bundle, {0: [_pptr(9, 1)]})
     assert [p["m_PathID"] for p in bundle["m_PreloadTable"]] == [0, 1, 9, 2, 3, 4]
     assert [(i["preloadIndex"], i["preloadSize"]) for _, i in bundle["m_Container"]] == [(0, 3), (3, 3)]
 
 
 def test_preload_ranges_with_gaps_get_a_copy_at_the_end():
-    bundle = {"m_PreloadTable": [_pptr(i) for i in range(6)],
-              "m_Container": [["a.prefab", {"preloadIndex": 1, "preloadSize": 2, "asset": _pptr(1)}],
-                              ["b.prefab", {"preloadIndex": 4, "preloadSize": 2, "asset": _pptr(2)}]]}
+    bundle = {
+        "m_PreloadTable": [_pptr(i) for i in range(6)],
+        "m_Container": [
+            ["a.prefab", {"preloadIndex": 1, "preloadSize": 2, "asset": _pptr(1)}],
+            ["b.prefab", {"preloadIndex": 4, "preloadSize": 2, "asset": _pptr(2)}],
+        ],
+    }
     ma._extend_preload(bundle, {1: [_pptr(9)]})
     assert [p["m_PathID"] for p in bundle["m_PreloadTable"]] == [0, 1, 2, 3, 4, 5, 4, 5, 9]
     assert [(i["preloadIndex"], i["preloadSize"]) for _, i in bundle["m_Container"]] == [(1, 2), (6, 3)]
@@ -46,24 +55,40 @@ def test_preload_ranges_with_gaps_get_a_copy_at_the_end():
 def test_entries_that_share_a_preload_range_keep_their_own_additions():
     """Two prefabs of one preload range: contiguous ranges grow by both entries' objects; with gaps, each entry gets a
     copy of its own range with its own objects."""
-    shared = {"m_PreloadTable": [_pptr(i) for i in range(4)],
-              "m_Container": [["a.prefab", {"preloadIndex": 0, "preloadSize": 2, "asset": _pptr(1)}],
-                              ["b.prefab", {"preloadIndex": 0, "preloadSize": 2, "asset": _pptr(2)}],
-                              ["c.prefab", {"preloadIndex": 2, "preloadSize": 2, "asset": _pptr(3)}]]}
+    shared = {
+        "m_PreloadTable": [_pptr(i) for i in range(4)],
+        "m_Container": [
+            ["a.prefab", {"preloadIndex": 0, "preloadSize": 2, "asset": _pptr(1)}],
+            ["b.prefab", {"preloadIndex": 0, "preloadSize": 2, "asset": _pptr(2)}],
+            ["c.prefab", {"preloadIndex": 2, "preloadSize": 2, "asset": _pptr(3)}],
+        ],
+    }
     ma._extend_preload(shared, {0: [_pptr(8)], 1: [_pptr(9), _pptr(8)]})
     assert [p["m_PathID"] for p in shared["m_PreloadTable"]] == [0, 1, 8, 9, 2, 3]
     assert [(i["preloadIndex"], i["preloadSize"]) for _, i in shared["m_Container"]] == [(0, 4), (0, 4), (4, 2)]
-    gaps = {"m_PreloadTable": [_pptr(i) for i in range(5)],
-            "m_Container": [["a.prefab", {"preloadIndex": 1, "preloadSize": 2, "asset": _pptr(1)}],
-                            ["b.prefab", {"preloadIndex": 1, "preloadSize": 2, "asset": _pptr(2)}]]}
+    gaps = {
+        "m_PreloadTable": [_pptr(i) for i in range(5)],
+        "m_Container": [
+            ["a.prefab", {"preloadIndex": 1, "preloadSize": 2, "asset": _pptr(1)}],
+            ["b.prefab", {"preloadIndex": 1, "preloadSize": 2, "asset": _pptr(2)}],
+        ],
+    }
     ma._extend_preload(gaps, {0: [_pptr(8)], 1: [_pptr(9)]})
     assert [p["m_PathID"] for p in gaps["m_PreloadTable"]] == [0, 1, 2, 3, 4, 1, 2, 8, 1, 2, 9]
     assert [(i["preloadIndex"], i["preloadSize"]) for _, i in gaps["m_Container"]] == [(5, 3), (8, 3)]
 
 
 def test_a_models_own_prefabs_are_chosen_by_their_names():
-    prefabs = dict.fromkeys(["ch0336", "echelon_ch0336", "ch0336_carrier", "echelon_ch0336_carrier",
-                             "field_npc_np0060_justice_student", "field_npc_np00601_other"])
+    prefabs = dict.fromkeys(
+        [
+            "ch0336",
+            "echelon_ch0336",
+            "ch0336_carrier",
+            "echelon_ch0336_carrier",
+            "field_npc_np0060_justice_student",
+            "field_npc_np00601_other",
+        ]
+    )
     assert set(ma.own_prefabs(prefabs, "ch0336")) == {"ch0336", "echelon_ch0336"}
     assert set(ma.own_prefabs(prefabs, "np0060")) == {"field_npc_np0060_justice_student"}
 
@@ -87,6 +112,7 @@ class _Object:
 
     def __init__(self, cab, path_id, tree):
         from types import SimpleNamespace
+
         self.assets_file, self.path_id, self.tree = SimpleNamespace(name=cab), path_id, tree
 
 
@@ -104,11 +130,26 @@ class _Objects:
 def _mouth_model(graph, cab, atlas, scale, grid, uv):
     """A model's costume (one primary part, an eye-mouth material second) and its mouth receiver."""
     texture = _Object(cab, 1, {"m_Name": "atlas"}) if atlas is None else atlas
-    material = _Object(cab, 2, {"m_SavedProperties": {
-        "m_TexEnvs": [("_MainTex", {"m_Texture": _pptr(0), "m_Scale": {"x": 1, "y": 1}, "m_Offset": {"x": 0, "y": 0}}),
-                      ("_MouthTileTex", {"m_Texture": _pptr(texture.path_id), "m_Scale": {"x": scale, "y": scale},
-                                         "m_Offset": dict(uv)})],
-        "m_Floats": [("_MouthTileCols", grid), ("_MouthTileRows", grid)]}})
+    material = _Object(
+        cab,
+        2,
+        {
+            "m_SavedProperties": {
+                "m_TexEnvs": [
+                    ("_MainTex", {"m_Texture": _pptr(0), "m_Scale": {"x": 1, "y": 1}, "m_Offset": {"x": 0, "y": 0}}),
+                    (
+                        "_MouthTileTex",
+                        {
+                            "m_Texture": _pptr(texture.path_id),
+                            "m_Scale": {"x": scale, "y": scale},
+                            "m_Offset": dict(uv),
+                        },
+                    ),
+                ],
+                "m_Floats": [("_MouthTileCols", grid), ("_MouthTileRows", grid)],
+            }
+        },
+    )
     renderer = _Object(cab, 3, {})
     receiver = _Object(cab, 4, {"MouthRenderer": _pptr(3), "MouthMaterialIndex": 1, "MouthDefaultUV": dict(uv)})
     graph.by.update({(o.assets_file.name, o.path_id): o for o in (texture, material, renderer, receiver)})
@@ -129,7 +170,10 @@ def test_a_mouth_on_another_atlas_takes_the_slots_atlas_and_default_tile():
     assert (mouth.part, mouth.index, mouth.uv) == (0, 1, {"x": 0.625, "y": 0.25})
     atlas, retiled, carried = ma.retiled_mouths(graph, slot, slot_costume, source_costume, mouth)
     assert retiled == {ma._key(material)}
-    assert atlas.material is slot_costume[0].materials[1] and atlas.grid == {"_MouthTileCols": 4.0, "_MouthTileRows": 4.0}
+    assert atlas.material is slot_costume[0].materials[1] and atlas.grid == {
+        "_MouthTileCols": 4.0,
+        "_MouthTileRows": 4.0,
+    }
     assert atlas.env["m_Scale"] == {"x": 1.0, "y": 1.0}
     assert carried.uv == {"x": 0.0, "y": 0.75} and mouth.uv == {"x": 0.625, "y": 0.25}
 
@@ -138,8 +182,13 @@ def test_a_mouth_on_another_atlas_takes_the_slots_atlas_and_default_tile():
     graph = _Objects(shared)
     slot, slot_costume, _ = _mouth_model(graph, "shared", shared, 0.5, 8.0, {"x": 0.5, "y": 0.875})
     source = ma.Skeleton(graph)
-    source.behaviours.append(_Object("shared", 14, {"MouthRenderer": _pptr(13), "MouthMaterialIndex": 1,
-                                                    "MouthDefaultUV": {"x": 0.125, "y": 0.5}}))
+    source.behaviours.append(
+        _Object(
+            "shared",
+            14,
+            {"MouthRenderer": _pptr(13), "MouthMaterialIndex": 1, "MouthDefaultUV": {"x": 0.125, "y": 0.5}},
+        )
+    )
     other = _Object("shared", 12, copy.deepcopy(slot_costume[0].materials[1].tree))
     renderer = _Object("shared", 13, {})
     graph.by.update({("shared", o.path_id): o for o in (other, renderer, source.behaviours[0])})
@@ -165,10 +214,12 @@ def _skeleton(bones):
 def _arm(forearm=1.0, twist=True):
     """An arm along +X: upper arm at 1 m height, forearm ``forearm`` m on, hand 1 m further; a Biped ForeTwist hangs off
     the upper arm, half way along the forearm."""
-    bones = [("Bip001", 0, (0, 0, 0), (0, 0, 0, 1)),
-             ("Bip001 L UpperArm", 1, (0, 1, 0), (0, 0, 0, 1)),
-             ("Bip001 L Forearm", 2, (forearm, 0, 0), (0, 0, 0, 1)),
-             ("Bip001 L Hand", 3, (1, 0, 0), (0, 0, 0, 1))]
+    bones = [
+        ("Bip001", 0, (0, 0, 0), (0, 0, 0, 1)),
+        ("Bip001 L UpperArm", 1, (0, 1, 0), (0, 0, 0, 1)),
+        ("Bip001 L Forearm", 2, (forearm, 0, 0), (0, 0, 0, 1)),
+        ("Bip001 L Hand", 3, (1, 0, 0), (0, 0, 0, 1)),
+    ]
     if twist:
         bones.append(("Bip001 L ForeTwist", 2, (forearm + 0.5, 0, 0), (0, 0, 0, 1)))
     return _skeleton(bones)
@@ -180,8 +231,10 @@ def _bent(skeleton):
     forearm, twist = skeleton.first("Bip001 L Forearm"), skeleton.first("Bip001 L ForeTwist")
     hand = skeleton.first("Bip001 L Hand")
     length = skeleton.nodes[forearm].local[0][0]
-    local = {forearm: ma.trs(skeleton.nodes[forearm].local[0], turn, (1, 1, 1)),
-             hand: ma.trs(skeleton.nodes[hand].local[0], (0, np.sin(np.pi / 8), 0, np.cos(np.pi / 8)), (1, 1, 1))}
+    local = {
+        forearm: ma.trs(skeleton.nodes[forearm].local[0], turn, (1, 1, 1)),
+        hand: ma.trs(skeleton.nodes[hand].local[0], (0, np.sin(np.pi / 8), 0, np.cos(np.pi / 8)), (1, 1, 1)),
+    }
     if twist is not None:
         local[twist] = ma.trs((length, 0, 0), turn, (1, 1, 1)) @ ma.trs((0.5, 0, 0), (0, 0, 0, 1), (1, 1, 1))
     return skeleton.world(local)
@@ -190,9 +243,15 @@ def _bent(skeleton):
 def _flat(points, joints):
     points = np.asarray(points, float)
     joints = np.asarray(joints, int).reshape(-1, 1)
-    return ma.Flat(points, np.c_[joints, np.zeros((len(points), 3), int)],
-                   np.c_[np.ones(len(points)), np.zeros((len(points), 3))], np.zeros((0, 2), int),
-                   np.zeros((0, 3), int), [0], np.repeat(np.eye(3)[None], len(points), axis=0))
+    return ma.Flat(
+        points,
+        np.c_[joints, np.zeros((len(points), 3), int)],
+        np.c_[np.ones(len(points)), np.zeros((len(points), 3))],
+        np.zeros((0, 2), int),
+        np.zeros((0, 3), int),
+        [0],
+        np.repeat(np.eye(3)[None], len(points), axis=0),
+    )
 
 
 def test_a_biped_bone_the_slot_lacks_goes_with_the_bone_it_moves_with():
@@ -213,8 +272,11 @@ def test_the_refit_carries_each_vertex_by_its_anchor():
     """A costume made for a longer forearm, refitted to the slot's: the hand's vertices move by the hand's
     joint gap, the upper arm's stay; a secondary bone's vertices go rigidly with its Biped anchor."""
     source = _arm(forearm=1.2, twist=False)
-    source.nodes.append(ma.Node("bone_cuff", "x", source.first("Bip001 L Hand"), ((0.1, 0, 0), (0, 0, 0, 1), (1, 1, 1)),
-                                None, None, True))
+    source.nodes.append(
+        ma.Node(
+            "bone_cuff", "x", source.first("Bip001 L Hand"), ((0.1, 0, 0), (0, 0, 0, 1), (1, 1, 1)), None, None, True
+        )
+    )
     target = _arm(forearm=1.0, twist=False)
     hand, upper, cuff = source.first("Bip001 L Hand"), source.first("Bip001 L UpperArm"), len(source.nodes) - 1
     flat = _flat([[0.5, 1.0, 0.0], [2.2, 1.0, 0.0], [2.4, 1.0, 0.0]], [upper, hand, cuff])
@@ -224,9 +286,12 @@ def test_the_refit_carries_each_vertex_by_its_anchor():
     # the shape change past the common move (the median: 0.2 m back): the upper arm's vertex, 0.2 m
     assert fit.largest == pytest.approx(0.2) and fit.size == pytest.approx(1.9)
     # a costume that only sits elsewhere as a whole changes no shape
-    whole = ma.refit(_arm(forearm=1.0, twist=False), _skeleton([("Bip001", 0, (0.5, 0, 0), (0, 0, 0, 1)),
-                                                               ("Bip001 L UpperArm", 1, (0, 1, 0), (0, 0, 0, 1))]),
-                     _flat([[0.7, 1.0, 0.0], [1.0, 1.2, 0.0]], [2, 2]), shape="moved")
+    whole = ma.refit(
+        _arm(forearm=1.0, twist=False),
+        _skeleton([("Bip001", 0, (0.5, 0, 0), (0, 0, 0, 1)), ("Bip001 L UpperArm", 1, (0, 1, 0), (0, 0, 0, 1))]),
+        _flat([[0.7, 1.0, 0.0], [1.0, 1.2, 0.0]], [2, 2]),
+        shape="moved",
+    )
     assert np.allclose(whole.vertices, [[0.2, 1.0, 0.0], [0.5, 1.2, 0.0]]) and whole.largest == pytest.approx(0.0)
 
 
@@ -234,9 +299,16 @@ def test_a_face_goes_with_the_head_whatever_its_eye_bones():
     """Midori (Battle)'s face on Midori: the eye bones (Bip001 bone_eye_D_L, named Bip001 like the Biped) rest
     elsewhere on the slot's face rig; refitting the eyelid by them pulled the eye out of the face. The face's vertices
     go rigidly with the head."""
+
     def head(eye_y):
-        return _skeleton([("Bip001", 0, (0, 0, 0), (0, 0, 0, 1)), ("Bip001 Head", 1, (0, 1, 0), (0, 0, 0, 1)),
-                          ("Bip001 bone_eye_D_L", 2, (0.05, eye_y, 0.08), (0, 0, 0, 1))])
+        return _skeleton(
+            [
+                ("Bip001", 0, (0, 0, 0), (0, 0, 0, 1)),
+                ("Bip001 Head", 1, (0, 1, 0), (0, 0, 0, 1)),
+                ("Bip001 bone_eye_D_L", 2, (0.05, eye_y, 0.08), (0, 0, 0, 1)),
+            ]
+        )
+
     source, target = head(0.0), head(-0.035)
     eye, top = source.first("Bip001 bone_eye_D_L"), source.first("Bip001 Head")
     assert ma.fit_anchor(target, source, eye) == (top, target.first("Bip001 Head"))
@@ -249,16 +321,25 @@ def test_the_head_goes_with_the_neck_not_onto_the_slots_head_joint():
     against 3.2). Carried onto the slot's Head joint, Yuzu's whole head rose 1.8 cm against the collar the neck and
     spine carry, and the neck between stretched. The head's vertices take the neck's move; the source's head joint
     lands below the slot's, and a halo following the head moves along."""
+
     def body(neck_y, head_y):
-        return _skeleton([("Bip001", 0, (0, 0, 0), (0, 0, 0, 1)), ("Bip001 Spine1", 1, (0, 0.9, 0), (0, 0, 0, 1)),
-                          ("Bip001 Neck", 2, (0, neck_y - 0.9, 0), (0, 0, 0, 1)),
-                          ("Bip001 Head", 3, (0, head_y - neck_y, 0), (0, 0, 0, 1)),
-                          ("bone_hair_00", 4, (0, 0.05, -0.03), (0, 0, 0, 1))])
+        return _skeleton(
+            [
+                ("Bip001", 0, (0, 0, 0), (0, 0, 0, 1)),
+                ("Bip001 Spine1", 1, (0, 0.9, 0), (0, 0, 0, 1)),
+                ("Bip001 Neck", 2, (0, neck_y - 0.9, 0), (0, 0, 0, 1)),
+                ("Bip001 Head", 3, (0, head_y - neck_y, 0), (0, 0, 0, 1)),
+                ("bone_hair_00", 4, (0, 0.05, -0.03), (0, 0, 0, 1)),
+            ]
+        )
+
     source, target = body(1.0, 1.032), body(0.98, 1.03)  # the slot's neck: 2 cm lower, its head joint as high
     spine, neck, head, hair = (source.first(n) for n in ("Bip001 Spine1", "Bip001 Neck", "Bip001 Head", "bone_hair_00"))
     # the collar, the neck, the chin, the crown and a lock of hair
-    flat = _flat([[0, 0.99, 0.02], [0, 1.01, 0.01], [0, 1.015, 0.04], [0, 1.1, 0], [0, 1.08, -0.04]],
-                 [spine, neck, head, head, hair])
+    flat = _flat(
+        [[0, 0.99, 0.02], [0, 1.01, 0.01], [0, 1.015, 0.04], [0, 1.1, 0], [0, 1.08, -0.04]],
+        [spine, neck, head, head, hair],
+    )
     for shape in ("moved", "refitted"):
         fit = ma.refit(target, source, flat, shape=shape)
         assert np.allclose(fit.vertices[:2], flat.vertices[:2] - [[0, 0, 0], [0, 0.02, 0]])  # the spine's, the neck's
@@ -266,11 +347,17 @@ def test_the_head_goes_with_the_neck_not_onto_the_slots_head_joint():
         assert np.allclose(fit.vertices[2:], flat.vertices[2:] - [0, 0.02, 0])
         assert np.allclose(fit.head, [0, -0.018, 0])  # its joint 1.8 cm below the slot's
     # a halo following the head moves along, in the head's space, its clamp box with it
-    turned = _skeleton([("Bip001", 0, (0, 0, 0), (0, 0, 0, 1)),
-                        ("Bip001 Head", 1, (0, 1.0, 0), (0, 0, np.sin(np.pi / 4), np.cos(np.pi / 4)))])
-    follower = {"TargetRelativePosition": {"x": 0.0, "y": 0.2, "z": 0.0},
-                "TargetRelativeRotation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
-                "ClampMinOffset": {"x": -0.1, "y": 0.1, "z": -0.1}}
+    turned = _skeleton(
+        [
+            ("Bip001", 0, (0, 0, 0), (0, 0, 0, 1)),
+            ("Bip001 Head", 1, (0, 1.0, 0), (0, 0, np.sin(np.pi / 4), np.cos(np.pi / 4))),
+        ]
+    )
+    follower = {
+        "TargetRelativePosition": {"x": 0.0, "y": 0.2, "z": 0.0},
+        "TargetRelativeRotation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
+        "ClampMinOffset": {"x": -0.1, "y": 0.1, "z": -0.1},
+    }
     ma._halo_shift(turned, follower, np.array([0, -0.018, 0]))
     assert [follower["TargetRelativePosition"][k] for k in "xyz"] == pytest.approx([-0.018, 0.2, 0.0])
     assert [follower["ClampMinOffset"][k] for k in "xyz"] == pytest.approx([-0.118, 0.1, -0.1])
@@ -282,14 +369,20 @@ def test_a_skirt_on_the_biped_root_and_a_bag_off_a_prop_go_with_the_body():
     rests 0.74 m aside, the refit took the skirt nowhere (no anchor on the body chain) and the bag stayed with the
     prefab's root: both were left beside her. The skirt is refitted by the Biped's root; the bag, carried by the spine
     under the source's clips, goes with the spine as one branch, never with a loose slot bone that happens to rest near it."""
+
     def body(x, prop):
-        bones = [("Bip001", 0, (x, 1.0, 0), (0, 0, 0, 1)), ("Bip001 Pelvis", 1, (0, 0, 0), (0, 0, 0, 1)),
-                 ("Bip001 Spine", 2, (0, 0.2, 0), (0, 0, 0, 1)), ("bone_skirt_F_00", 1, (0, -0.1, 0.1), (0, 0, 0, 1))]
+        bones = [
+            ("Bip001", 0, (x, 1.0, 0), (0, 0, 0, 1)),
+            ("Bip001 Pelvis", 1, (0, 0, 0), (0, 0, 0, 1)),
+            ("Bip001 Spine", 2, (0, 0.2, 0), (0, 0, 0, 1)),
+            ("bone_skirt_F_00", 1, (0, -0.1, 0.1), (0, 0, 0, 1)),
+        ]
         if prop:
             bones += [("prop_root", 0, (0, 0, 0), (0, 0, 0, 1)), ("bone_bag_00", 5, (x + 0.2, 1.2, 0), (0, 0, 0, 1))]
         else:
             bones += [("Glow", 0, (x + 0.2, 1.2, 0), (0, 0, 0, 1))]
         return _skeleton(bones)
+
     source, target = body(0.0, True), body(0.74, False)
     skirt, bag, spine = source.first("bone_skirt_F_00"), source.first("bone_bag_00"), source.first("Bip001 Spine")
     assert ma.fit_anchor(target, source, skirt) == (source.first("Bip001"), target.first("Bip001"))
@@ -327,15 +420,22 @@ def test_the_costume_is_taken_where_its_bindposes_draw_it():
 def test_a_face_is_drawn_as_bound_whatever_its_bones_rest_in():
     """Midori (Battle)'s brow bones rest 1.4 cm above their bind (an expression her clips replace); the face is
     drawn as bound, rigidly with the head, not with its brows raised (they came through Midori's bangs)."""
-    skeleton = _skeleton([("Bip001", 0, (0, 0, 0), (0, 0, 0, 1)), ("Bip001 Head", 1, (0, 1, 0), (0, 0, 0, 1)),
-                          ("Bip001 Xtra_eyeblowL1", 2, (0.05, 0.114, 0.08), (0, 0, 0, 1))])  # bound at 0.1 up
+    skeleton = _skeleton(
+        [
+            ("Bip001", 0, (0, 0, 0), (0, 0, 0, 1)),
+            ("Bip001 Head", 1, (0, 1, 0), (0, 0, 0, 1)),
+            ("Bip001 Xtra_eyeblowL1", 2, (0.05, 0.114, 0.08), (0, 0, 0, 1)),
+        ]
+    )  # bound at 0.1 up
     head, brow = skeleton.first("Bip001 Head"), skeleton.first("Bip001 Xtra_eyeblowL1")
     rest = skeleton.world()
     bound = [np.linalg.inv(rest[head]), np.linalg.inv(ma.trs((0.05, 1.1, 0.08), (0, 0, 0, 1), (1, 1, 1)))]
     mesh = {"m_BindPose": [{f"e{r}{c}": float(m[r, c]) for r in range(4) for c in range(4)} for m in bound]}
     part = ma.Part(0, None, mesh, [], ["face"], [head, brow], 3)
     vertices = np.array([[0.05, 1.1, 0.09], [0.0, 1.05, 0.1]])  # a brow vertex, a cheek vertex
-    skin = ma.Skin(vertices, np.array([[1, 0, 0, 0], [0, 0, 0, 0]]), np.c_[np.ones(2), np.zeros((2, 3))], np.array([[0, 1]]))
+    skin = ma.Skin(
+        vertices, np.array([[1, 0, 0, 0], [0, 0, 0, 0]]), np.c_[np.ones(2), np.zeros((2, 3))], np.array([[0, 1]])
+    )
     flat = ma.flatten(ma.Costume(skeleton, [part], [skin]), rest)
     assert np.allclose(flat.vertices, vertices)  # not 1.4 cm up
     assert ma.face_bone(skeleton, brow) and not ma.face_bone(skeleton, head)
@@ -350,9 +450,16 @@ def test_names_resolve_inside_the_rig_the_renderers_skin_to():
         def deref(self, owner, pointer):
             return pointer
 
-    skeleton = _skeleton([("HaloRoot", 0, (0, 2, 0), (0, 0, 0, 1)), ("Bip001", 1, (0, 0, 0), (0, 0, 0, 1)),
-                          ("Bip001 Head", 2, (0, 0.1, 0), (0, 0, 0, 1)), ("bone_halo", 2, (0, 0.2, 0), (0, 0, 0, 1)),
-                          ("Bip001", 0, (0, 0, 0), (0, 0, 0, 1)), ("Bip001 Head", 5, (0, 1.5, 0), (0, 0, 0, 1))])
+    skeleton = _skeleton(
+        [
+            ("HaloRoot", 0, (0, 2, 0), (0, 0, 0, 1)),
+            ("Bip001", 1, (0, 0, 0), (0, 0, 0, 1)),
+            ("Bip001 Head", 2, (0, 0.1, 0), (0, 0, 0, 1)),
+            ("bone_halo", 2, (0, 0.2, 0), (0, 0, 0, 1)),
+            ("Bip001", 0, (0, 0, 0), (0, 0, 0, 1)),
+            ("Bip001 Head", 5, (0, 1.5, 0), (0, 0, 0, 1)),
+        ]
+    )
     skeleton.graph = Graph()
     bones = [SimpleNamespace(assets_file=SimpleNamespace(name="cab"), path_id=i) for i in range(len(skeleton.nodes))]
     skeleton.by_transform = {("cab", i): i for i in range(len(skeleton.nodes))}
@@ -372,12 +479,17 @@ def test_stretch_counts_shrinking_as_growing():
 
 # --- official files ------------------------------------------------------------------------------------------------
 
+
 def _index(files):
     from bmpt.gameassets.discovery import cab_names
+
     index = {}
     for path in files:
-        if re.search(r"characters|-_mx-npcs-|^character-|-_mx-shaders-|-_mx-program-animators-|^field-|animatorbase|"
-                     r"prolog|-_mx-effectsfreezed-", path.name):
+        if re.search(
+            r"characters|-_mx-npcs-|^character-|-_mx-shaders-|-_mx-program-animators-|^field-|animatorbase|"
+            r"prolog|-_mx-effectsfreezed-",
+            path.name,
+        ):
             for cab in cab_names(path):
                 index[cab] = path
     return index
@@ -394,17 +506,34 @@ def _slot(files, dev):
 
 
 @official
-@pytest.mark.parametrize("target,source,field,parts,hem,physics", [
-    ("hina_original", "np0009", True, 1, "skirt smooth", True),   # Hina <- Hina (Pajamas), a field-mode model: Rule B
-    ("hina_original", "np0009", True, 1, "blend 0.5", False),     # the same without Optimize Physics: Rule A only
-    ("ch0172", "np0283", True, 1, "skirt smooth", True),           # Niko <- Niko (FOX EATS): her separate hands go;
-                                                                   # Rule B with the chains off her thighs
-    ("hoshino_original", "hoshino_swimsuit", False, 3, "rigid", False),  # a three-part costume: two renderers added
-    ("hoshino_swimsuit", "hoshino_original", False, 1, "rigid", False),  # the swimsuit's own extra parts draw nothing
-    ("ch0186", "mari_original", False, 1, "skirt smooth", True),   # Mari (Track) <- Mari: a compressed mesh; Rule B
-                                                                   # within the limit once the seam keeps its length
-    ("airi_original", "ch0251", False, 1, "rigid", False),         # Airi <- Airi (Band): past the limit (12.1) until
-])                                                                 # its worst edges are stiffened
+@pytest.mark.parametrize(
+    "target,source,field,parts,hem,physics",
+    [
+        (
+            "hina_original",
+            "np0009",
+            True,
+            1,
+            "skirt smooth",
+            True,
+        ),  # Hina <- Hina (Pajamas), a field-mode model: Rule B
+        ("hina_original", "np0009", True, 1, "blend 0.5", False),  # the same without Optimize Physics: Rule A only
+        ("ch0172", "np0283", True, 1, "skirt smooth", True),  # Niko <- Niko (FOX EATS): her separate hands go;
+        # Rule B with the chains off her thighs
+        ("hoshino_original", "hoshino_swimsuit", False, 3, "rigid", False),  # a three-part costume: two renderers added
+        (
+            "hoshino_swimsuit",
+            "hoshino_original",
+            False,
+            1,
+            "rigid",
+            False,
+        ),  # the swimsuit's own extra parts draw nothing
+        ("ch0186", "mari_original", False, 1, "skirt smooth", True),  # Mari (Track) <- Mari: a compressed mesh; Rule B
+        # within the limit once the seam keeps its length
+        ("airi_original", "ch0251", False, 1, "rigid", False),  # Airi <- Airi (Band): past the limit (12.1) until
+    ],
+)  # its worst edges are stiffened
 def test_official_costume_on_a_slot(view, tmp_path, target, source, field, parts, hem, physics):
     from ba_modding_toolkit.bundle import Bundle
     from ba_modding_toolkit.models import SaveOptions
@@ -416,10 +545,21 @@ def test_official_costume_on_a_slot(view, tmp_path, target, source, field, parts
 
     files, index = view
     slot = _slot(files, target)
-    sources = [p for p in files if p.name.startswith("field-character-_mxload")] if field else [
-        p for p in files if re.match(rf"character-{source}-_mxload", p.name)]
-    result = ma.adapt(index=index, resolver=None, target_files=slot, target_dev=target, source_files=sources,
-                      source_dev=source, open_writable=Bundle.load, physics=physics)
+    sources = (
+        [p for p in files if p.name.startswith("field-character-_mxload")]
+        if field
+        else [p for p in files if re.match(rf"character-{source}-_mxload", p.name)]
+    )
+    result = ma.adapt(
+        index=index,
+        resolver=None,
+        target_files=slot,
+        target_dev=target,
+        source_files=sources,
+        source_dev=source,
+        open_writable=Bundle.load,
+        physics=physics,
+    )
     assert result.parts == parts
     assert result.plan.stretch <= ma.stretch_limit(result.plan.own)
     # the hem: less pass-through than rigid weights, no clip 5 points worse, stretch within the limit
@@ -483,12 +623,22 @@ def test_official_costume_on_a_slot(view, tmp_path, target, source, field, parts
         # every prefab of the slot has the new bones, and the slot's clips turn the chains' first bones
         roots = {paths[skirt.node(k)] for k, parent in enumerate(skirt.parents) if parent < 0}
         for pointer in t_prefabs.values():
-            assert set(paths[skirt.base:]) <= {n.path for n in ma.Skeleton.of(graph, pointer.deref()).nodes}
+            assert set(paths[skirt.base :]) <= {n.path for n in ma.Skeleton.of(graph, pointer.deref()).nodes}
         own = {k: v for k, v in t_prefabs.items() if target in k}
         hashes = {zlib.crc32(path.encode()): path for path in roots}
-        turned = [c for c in ma.prefab_clips(graph, t, own) if all(roots == {hashes[b["path"]] for b in graph.tree(c)[
-            "m_ClipBindingConstant"]["genericBindings"] if b["path"] in hashes and b["attribute"] == attribute}
-            for attribute in (1, 2))]  # each first bone turned and moved
+        turned = [
+            c
+            for c in ma.prefab_clips(graph, t, own)
+            if all(
+                roots
+                == {
+                    hashes[b["path"]]
+                    for b in graph.tree(c)["m_ClipBindingConstant"]["genericBindings"]
+                    if b["path"] in hashes and b["attribute"] == attribute
+                }
+                for attribute in (1, 2)
+            )
+        ]  # each first bone turned and moved
         assert len(turned) == skirt.clips
     changes = {p.mesh.peek_name(): change for p, change in zip(ordered, hems.parts) if change is not None}
     drawn, empty, reweighted = [], 0, 0
@@ -506,7 +656,7 @@ def test_official_costume_on_a_slot(view, tmp_path, target, source, field, parts
         posed = ma.deform(skin, np.array([t_rest[b] for b in bones]) @ ma.bindposes(graph, mesh))
         fit = result.plan.fit
         k = [p.mesh.peek_name() for p in ordered].index(mesh.peek_name())
-        want = fit.vertices[fit.starts[k]:(fit.starts + [len(fit.vertices)])[k + 1]]
+        want = fit.vertices[fit.starts[k] : (fit.starts + [len(fit.vertices)])[k + 1]]
         assert np.abs(posed - want).max() < 1e-4
         drawn.append(mesh.peek_name())
         change = changes.get(mesh.peek_name())
@@ -525,7 +675,7 @@ def test_official_costume_on_a_slot(view, tmp_path, target, source, field, parts
     # the slot's own parts that now draw nothing: Mari (Track)'s three worn bottles too (model_props)
     assert empty == {"ch0172": 1, "hoshino_swimsuit": 2, "ch0186": 3}.get(target, 0)
     data = export_chibi(BundleGraph(adapted), prefab_files, target)
-    doc = json.loads(data[20:20 + struct.unpack_from("<I", data, 12)[0]])
+    doc = json.loads(data[20 : 20 + struct.unpack_from("<I", data, 12)[0]])
     assert {m["name"] for m in doc["meshes"]} >= set(drawn) and doc["animations"]
 
 
@@ -542,8 +692,16 @@ def test_official_rule_b_clip_edit_is_read_back_and_a_changed_curve_is_refused(v
     sources = [p for p in files if p.name.startswith("field-character-_mxload")]
 
     def build():
-        return ma.adapt(index=index, resolver=None, target_files=slot, target_dev="hina_original",
-                        source_files=sources, source_dev="np0009", open_writable=Bundle.load, physics=True)
+        return ma.adapt(
+            index=index,
+            resolver=None,
+            target_files=slot,
+            target_dev="hina_original",
+            source_files=sources,
+            source_dev="np0009",
+            open_writable=Bundle.load,
+            physics=True,
+        )
 
     checked = []
     real_error = ma.clip_edit_error
@@ -557,8 +715,10 @@ def test_official_rule_b_clip_edit_is_read_back_and_a_changed_curve_is_refused(v
     result = build()
     assert result.hems.skirt.clips >= 20 and len(checked) == result.hems.skirt.clips
     # each clip: the skirt's first bones and the face bones it moves (face_retarget), 7 curves each
-    assert all(problem is None and added % 7 == 0 and added >= 7 * len(result.hems.skirt.solver.roots)
-               for problem, added in checked)
+    assert all(
+        problem is None and added % 7 == 0 and added >= 7 * len(result.hems.skirt.solver.roots)
+        for problem, added in checked
+    )
 
     real_curves, edited = ma.skirt_curves, []
 
@@ -591,8 +751,15 @@ def test_official_costume_carries_a_shader_the_slot_does_not_load(view, tmp_path
     files, index = view
     slot = _slot(files, "hina_original")
     sources = [p for p in files if re.match(r"character-ch0230-_mxload", p.name)]
-    result = ma.adapt(index=index, resolver=None, target_files=slot, target_dev="hina_original", source_files=sources,
-                      source_dev="ch0230", open_writable=Bundle.load)
+    result = ma.adapt(
+        index=index,
+        resolver=None,
+        target_files=slot,
+        target_dev="hina_original",
+        source_files=sources,
+        source_dev="ch0230",
+        open_writable=Bundle.load,
+    )
     assert ma.CARRIED_SHADER in result.cautions  # the switch says so: the game holds two shaders of one name
     out = tmp_path / "out"
     out.mkdir()
@@ -621,9 +788,11 @@ def test_official_costume_carries_a_shader_the_slot_does_not_load(view, tmp_path
             name = tree["m_ParsedForm"]["m_Name"]
             carried.append(name)
             assert {k: v for k, v in tree.items() if k != "m_Dependencies"} == {
-                k: v for k, v in originals[name].items() if k != "m_Dependencies"}
-            assert [(obj.assets_file.externals[d["m_FileID"] - 1].path, d["m_PathID"]) for d in tree["m_Dependencies"]] == [
-                ("Library/unity default resources", d["m_PathID"]) for d in originals[name]["m_Dependencies"]]
+                k: v for k, v in originals[name].items() if k != "m_Dependencies"
+            }
+            assert [
+                (obj.assets_file.externals[d["m_FileID"] - 1].path, d["m_PathID"]) for d in tree["m_Dependencies"]
+            ] == [("Library/unity default resources", d["m_PathID"]) for d in originals[name]["m_Dependencies"]]
     assert carried == ["MX/C-Simple-Transparent"]
 
 
@@ -640,8 +809,15 @@ def test_official_added_parts_hang_below_the_primary_and_the_bounds_hold_the_pos
     files, index = view
     target, source = "hoshino_original", "hoshino_swimsuit"
     sources = [p for p in files if re.match(rf"character-{source}-_mxload", p.name)]
-    result = ma.adapt(index=index, resolver=None, target_files=_slot(files, target), target_dev=target,
-                      source_files=sources, source_dev=source, open_writable=Bundle.load)
+    result = ma.adapt(
+        index=index,
+        resolver=None,
+        target_files=_slot(files, target),
+        target_dev=target,
+        source_files=sources,
+        source_dev=source,
+        open_writable=Bundle.load,
+    )
     adapted = dict(index)
     for path, bundle in result.changed.items():
         ok, message = bundle.save(tmp_path / path.name, SaveOptions(perform_crc=True, compression="lz4"))
@@ -691,8 +867,15 @@ def test_official_a_costume_binds_to_the_rig_the_slot_draws_with(view, tmp_path,
 
     files, index = view
     sources = [p for p in files if re.match(rf"character-{source}-_mxload", p.name)]
-    result = ma.adapt(index=index, resolver=None, target_files=_slot(files, target), target_dev=target,
-                      source_files=sources, source_dev=source, open_writable=Bundle.load)
+    result = ma.adapt(
+        index=index,
+        resolver=None,
+        target_files=_slot(files, target),
+        target_dev=target,
+        source_files=sources,
+        source_dev=source,
+        open_writable=Bundle.load,
+    )
     adapted = dict(index)
     for path, bundle in result.changed.items():
         ok, message = bundle.save(tmp_path / path.name, SaveOptions(perform_crc=True, compression="lz4"))
@@ -723,8 +906,16 @@ def test_official_optimize_physics_swings_the_chains_the_source_turns(view, tmp_
     files, index = view
     target, source = "aris_original", "yuzu_original"
     sources = [p for p in files if re.match(rf"character-{source}-_mxload", p.name)]
-    result = ma.adapt(index=index, resolver=None, target_files=_slot(files, target), target_dev=target,
-                      source_files=sources, source_dev=source, open_writable=Bundle.load, physics=True)
+    result = ma.adapt(
+        index=index,
+        resolver=None,
+        target_files=_slot(files, target),
+        target_dev=target,
+        source_files=sources,
+        source_dev=source,
+        open_writable=Bundle.load,
+        physics=True,
+    )
     springs = result.hems.springs
     assert springs and all(s.solver.roots and s.clips >= 20 for s in springs), result.hems.summary()
     assert all(isinstance(s.solver, ma.ms.Spring) for s in springs)
@@ -741,15 +932,28 @@ def test_official_optimize_physics_swings_the_chains_the_source_turns(view, tmp_
                 names = {n.name for n in ma.Skeleton.of(graph, pointer.deref()).nodes}
                 assert set(spring.names) <= names
         t = ma.Skeleton.of(graph, prefabs[ma.choose_prefab(prefabs, target)].deref())
-        roots = {zlib.crc32(t.nodes[t.first(spring.names[r])].path.encode()) for spring in springs
-                 for r in spring.solver.roots}
-        turned = [c for c in ma.prefab_clips(graph, t, ma.own_prefabs(prefabs, target))
-                  if roots <= {b["path"] for b in graph.tree(c)["m_ClipBindingConstant"]["genericBindings"]
-                               if b["attribute"] == 2}]
+        roots = {
+            zlib.crc32(t.nodes[t.first(spring.names[r])].path.encode())
+            for spring in springs
+            for r in spring.solver.roots
+        }
+        turned = [
+            c
+            for c in ma.prefab_clips(graph, t, ma.own_prefabs(prefabs, target))
+            if roots
+            <= {b["path"] for b in graph.tree(c)["m_ClipBindingConstant"]["genericBindings"] if b["attribute"] == 2}
+        ]
         # a clip Yuzu has by name plays Yuzu's own keys, for every bone of the chain they turn
         bones = {zlib.crc32(t.nodes[t.first(name)].path.encode()) for spring in springs for name in spring.names}
-        keyed = [c for c in turned if len(bones & {b["path"] for b in graph.tree(c)["m_ClipBindingConstant"][
-            "genericBindings"] if b["attribute"] == 2}) > len(roots)]
+        keyed = [
+            c
+            for c in turned
+            if len(
+                bones
+                & {b["path"] for b in graph.tree(c)["m_ClipBindingConstant"]["genericBindings"] if b["attribute"] == 2}
+            )
+            > len(roots)
+        ]
     assert len(turned) == springs[0].clips
     assert keyed  # (Yuzu has every clip Aris has, by name)
 
@@ -762,13 +966,22 @@ def test_official_rule_b_takes_a_skirt_chain_off_a_thigh(view):
 
     files, index = view
     sources = [p for p in files if re.match(r"character-shun_original-_mxload", p.name)]
-    result = ma.adapt(index=index, resolver=None, target_files=_slot(files, "ibuki_original"),
-                      target_dev="ibuki_original", source_files=sources, source_dev="shun_original",
-                      open_writable=Bundle.load, physics=True)
+    result = ma.adapt(
+        index=index,
+        resolver=None,
+        target_files=_slot(files, "ibuki_original"),
+        target_dev="ibuki_original",
+        source_files=sources,
+        source_dev="shun_original",
+        open_writable=Bundle.load,
+        physics=True,
+    )
     skirt = result.hems.skirt
     assert skirt is not None, result.hems.summary()
     with ma.BundleGraph(index) as graph:
-        prefabs = ma._model_prefabs(graph, [p for p in _slot(files, "ibuki_original") if p.name.startswith("character-")])
+        prefabs = ma._model_prefabs(
+            graph, [p for p in _slot(files, "ibuki_original") if p.name.startswith("character-")]
+        )
         t = ma.Skeleton.of(graph, prefabs[ma.choose_prefab(prefabs, "ibuki_original")].deref())
     hangs = {t.nodes[skirt.anchor_of(k)].name for k, parent in enumerate(skirt.parents) if parent < 0}
     assert hangs == {"Bip001 Pelvis", "Bip001 R Thigh"}
@@ -787,15 +1000,26 @@ def test_official_another_characters_face_follows_the_slots_expressions_about_it
     from bmpt.gameassets.model import BundleGraph, _key, _prefabs
 
     files, index = view
-    same = ma.adapt(index=index, resolver=None, target_files=_slot(files, "midori_original"),
-                    target_dev="midori_original", source_files=[p for p in files if re.match(
-                        r"character-midori_en0004-_mxload", p.name)], source_dev="midori_en0004",
-                    open_writable=Bundle.load)
+    same = ma.adapt(
+        index=index,
+        resolver=None,
+        target_files=_slot(files, "midori_original"),
+        target_dev="midori_original",
+        source_files=[p for p in files if re.match(r"character-midori_en0004-_mxload", p.name)],
+        source_dev="midori_en0004",
+        open_writable=Bundle.load,
+    )
     assert same.hems.face is None
     target, source = "aris_original", "yuzu_original"
-    result = ma.adapt(index=index, resolver=None, target_files=_slot(files, target), target_dev=target,
-                      source_files=[p for p in files if re.match(rf"character-{source}-_mxload", p.name)],
-                      source_dev=source, open_writable=Bundle.load)
+    result = ma.adapt(
+        index=index,
+        resolver=None,
+        target_files=_slot(files, target),
+        target_dev=target,
+        source_files=[p for p in files if re.match(rf"character-{source}-_mxload", p.name)],
+        source_dev=source,
+        open_writable=Bundle.load,
+    )
     face = result.hems.face
     assert face is not None and len(face.sources) >= 12 and face.clips >= 10
     solver = face.solver
@@ -816,8 +1040,11 @@ def test_official_another_characters_face_follows_the_slots_expressions_about_it
         new0 = [np.linalg.inv(rest[head]) @ rest[n] for n in new]
         assert all(np.linalg.norm(a[:3, 3] - b[:3, 3]) > 1e-3 for a, b in zip(rel0, new0))  # apart at rest
         hashes = {zlib.crc32(t.nodes[n].path.encode()) for n in new}
-        clip = next(c for c in ma.prefab_clips(graph, t, ma.own_prefabs(prefabs, target))
-                    if hashes & {b["path"] for b in graph.tree(c)["m_ClipBindingConstant"]["genericBindings"]})
+        clip = next(
+            c
+            for c in ma.prefab_clips(graph, t, ma.own_prefabs(prefabs, target))
+            if hashes & {b["path"] for b in graph.tree(c)["m_ClipBindingConstant"]["genericBindings"]}
+        )
         times, pose, _ = t.clip_frames(graph.tree(clip))
         moved = 0
         for f in range(len(times)):
@@ -843,8 +1070,15 @@ def test_official_a_bag_mounted_on_an_upper_arm_hangs_from_the_shoulder(view):
 
     files, index = view
     sources = [p for p in files if re.match(r"character-ch0251-_mxload", p.name)]
-    result = ma.adapt(index=index, resolver=None, target_files=_slot(files, "airi_original"),
-                      target_dev="airi_original", source_files=sources, source_dev="ch0251", open_writable=Bundle.load)
+    result = ma.adapt(
+        index=index,
+        resolver=None,
+        target_files=_slot(files, "airi_original"),
+        target_dev="airi_original",
+        source_files=sources,
+        source_dev="ch0251",
+        open_writable=Bundle.load,
+    )
     with ma.BundleGraph(index) as graph:
         s_prefabs = _prefabs(graph, sources)
         s = ma.Skeleton.of(graph, s_prefabs[ma.choose_prefab(s_prefabs, "ch0251")].deref())
@@ -866,15 +1100,23 @@ def test_official_a_prop_the_clips_hold_on_the_body_goes_with_the_body(view):
 
     files, index = view
     sources = [p for p in files if re.match(r"character-ch0288-_mxload", p.name)]
-    result = ma.adapt(index=index, resolver=None, target_files=_slot(files, "hina_original"),
-                      target_dev="hina_original", source_files=sources, source_dev="ch0288", open_writable=Bundle.load)
+    result = ma.adapt(
+        index=index,
+        resolver=None,
+        target_files=_slot(files, "hina_original"),
+        target_dev="hina_original",
+        source_files=sources,
+        source_dev="ch0288",
+        open_writable=Bundle.load,
+    )
     with ma.BundleGraph(index) as graph:
         s_prefabs = _prefabs(graph, sources)
         s = ma.Skeleton.of(graph, s_prefabs[ma.choose_prefab(s_prefabs, "ch0288")].deref())
         t_prefabs = _prefabs(graph, [p for p in _slot(files, "hina_original") if p.name.startswith("character-")])
         t = ma.Skeleton.of(graph, t_prefabs[ma.choose_prefab(t_prefabs, "hina_original")].deref())
-        idle = s.poses(ma.pick(ma.prefab_clips(graph, s, ma.own_prefabs(s_prefabs, "ch0288")), ["Formation_Idle"]),
-                       frames=1)[0]
+        idle = s.poses(
+            ma.pick(ma.prefab_clips(graph, s, ma.own_prefabs(s_prefabs, "ch0288")), ["Formation_Idle"]), frames=1
+        )[0]
         parts = ma.roles(s, idle)
         parts = [p for p in parts if p.role == "primary"] + [p for p in parts if p.role == "costume"]  # as adapt does
         flat = ma.flatten(ma.Costume(s, parts, [ma.skin_of(p.mesh) for p in parts]), s.world())
@@ -885,8 +1127,10 @@ def test_official_a_prop_the_clips_hold_on_the_body_goes_with_the_body(view):
     rows = np.where(((flat.joints == wrench) & (flat.weights > 0)).any(axis=1))[0]
     assert len(rows)
     bound = np.c_[result.plan.fit.vertices[rows], np.ones(len(rows))] @ np.linalg.inv(t_rest[t_pelvis]).T
-    held = np.c_[flat.vertices[rows], np.ones(len(rows))] @ (
-        np.linalg.inv(idle[s_pelvis]) @ idle[wrench] @ np.linalg.inv(s_rest[wrench])).T
+    held = (
+        np.c_[flat.vertices[rows], np.ones(len(rows))]
+        @ (np.linalg.inv(idle[s_pelvis]) @ idle[wrench] @ np.linalg.inv(s_rest[wrench])).T
+    )
     assert np.abs(bound - held).max() < 0.01
     assert np.linalg.norm(bound[:, :3].mean(axis=0)) < 0.25  # at her hip, not 40 cm beside her
     # the cart, the bag and the screwdriver are props of their own renderers, not of the costume: never carried
@@ -903,14 +1147,21 @@ def test_official_a_head_set_on_a_longer_neck_keeps_its_neck(view):
     from bmpt.gameassets.model import _prefabs
 
     files, index = view
-    result = ma.adapt(index=index, resolver=None, target_files=_slot(files, "aris_original"),
-                      target_dev="aris_original", source_files=_slot(files, "yuzu_original"),
-                      source_dev="yuzu_original", open_writable=Bundle.load)
+    result = ma.adapt(
+        index=index,
+        resolver=None,
+        target_files=_slot(files, "aris_original"),
+        target_dev="aris_original",
+        source_files=_slot(files, "yuzu_original"),
+        source_dev="yuzu_original",
+        open_writable=Bundle.load,
+    )
     with ma.BundleGraph(index) as graph:
         s_prefabs = _prefabs(graph, [p for p in _slot(files, "yuzu_original") if p.name.startswith("character-")])
         s = ma.Skeleton.of(graph, s_prefabs[ma.choose_prefab(s_prefabs, "yuzu_original")].deref())
-        idle = s.poses(ma.pick(ma.prefab_clips(graph, s, ma.own_prefabs(s_prefabs, "yuzu_original")),
-                               ma.IDLE_CLIPS)[:1], frames=1)[0]
+        idle = s.poses(
+            ma.pick(ma.prefab_clips(graph, s, ma.own_prefabs(s_prefabs, "yuzu_original")), ma.IDLE_CLIPS)[:1], frames=1
+        )[0]
         parts = ma.roles(s, idle)
         parts = [p for p in parts if p.role == "primary"] + [p for p in parts if p.role == "costume"]  # as adapt does
         flat = ma.flatten(ma.Costume(s, parts, [ma.skin_of(p.mesh) for p in parts]), s.world())
@@ -949,16 +1200,20 @@ def test_official_bones_any_clip_scales_away_are_hidden(view):
 
 
 @official
-@pytest.mark.parametrize("target,source,index,uv,on_primary,default,atlas", [
-    # one shared mouth atlas: the source's default tile
-    ("azusa_original", "mashiro_original", 2, (0.125, 0.5), True, (0.125, 0.5), ("Character_Mouth", 0.5, 8.0)),
-    ("aris_original", "yuzu_original", 3, (0.125, 0.5), True, (0.125, 0.5), ("Character_Mouth", 0.5, 8.0)),
-    # the mouth on a part beside the primary; Hina's clips name cells of her own 4 x 4 atlas, Aoba draws the shared
-    # 8 x 8 one: the mouth takes Hina's atlas and default tile
-    ("hina_original", "ch0288", 3, (0.75, 0.625), False, (0.0, 0.75), ("Hina_Mouth", 1.0, 4.0)),
-])
-def test_official_mouth_receivers_follow_the_costume(view, tmp_path, target, source, index, uv, on_primary, default,
-                                                     atlas):
+@pytest.mark.parametrize(
+    "target,source,index,uv,on_primary,default,atlas",
+    [
+        # one shared mouth atlas: the source's default tile
+        ("azusa_original", "mashiro_original", 2, (0.125, 0.5), True, (0.125, 0.5), ("Character_Mouth", 0.5, 8.0)),
+        ("aris_original", "yuzu_original", 3, (0.125, 0.5), True, (0.125, 0.5), ("Character_Mouth", 0.5, 8.0)),
+        # the mouth on a part beside the primary; Hina's clips name cells of her own 4 x 4 atlas, Aoba draws the shared
+        # 8 x 8 one: the mouth takes Hina's atlas and default tile
+        ("hina_original", "ch0288", 3, (0.75, 0.625), False, (0.0, 0.75), ("Hina_Mouth", 1.0, 4.0)),
+    ],
+)
+def test_official_mouth_receivers_follow_the_costume(
+    view, tmp_path, target, source, index, uv, on_primary, default, atlas
+):
     """The slot's mouth receivers index the renderer's materials, now the source's in the source's order: they take
     the source receiver's material index, and point at the renderer drawing the source's mouth, an added part where
     the source's mouth is not on its primary. The slot's clips name mouth tiles as cells of the slot's own atlas: on
@@ -989,8 +1244,15 @@ def test_official_mouth_receivers_follow_the_costume(view, tmp_path, target, sou
         t_mouth = ma.mouth_of(t, t_costume)
         slot_atlas = ma.mouth_atlas(graph, t_costume[t_mouth.part].materials[t_mouth.index])
         slot_name = graph.deref(slot_atlas.material, slot_atlas.env["m_Texture"]).peek_name()
-    result = ma.adapt(index=index_, resolver=None, target_files=_slot(files, target), target_dev=target,
-                      source_files=sources, source_dev=source, open_writable=Bundle.load)
+    result = ma.adapt(
+        index=index_,
+        resolver=None,
+        target_files=_slot(files, target),
+        target_dev=target,
+        source_files=sources,
+        source_dev=source,
+        open_writable=Bundle.load,
+    )
     adapted = dict(index_)
     for path, bundle in result.changed.items():
         ok, message = bundle.save(tmp_path / path.name, SaveOptions(perform_crc=True, compression="lz4"))
@@ -1015,7 +1277,11 @@ def test_official_mouth_receivers_follow_the_costume(view, tmp_path, target, sou
                 drawn_atlas = ma.mouth_atlas(graph, materials[index])
                 assert drawn_atlas.texture == slot_atlas.texture and slot_name == atlas[0]  # the slot's own texture
                 texture = graph.deref(materials[index], drawn_atlas.env["m_Texture"])
-                assert (texture.peek_name(), drawn_atlas.env["m_Scale"]["x"], drawn_atlas.grid["_MouthTileCols"]) == atlas
+                assert (
+                    texture.peek_name(),
+                    drawn_atlas.env["m_Scale"]["x"],
+                    drawn_atlas.grid["_MouthTileCols"],
+                ) == atlas
                 receivers += 1
     assert receivers == 4  # one per prefab of the slot
 
@@ -1033,8 +1299,15 @@ def test_official_costume_takes_its_own_materials_on_a_body_drawn_from_two_mater
     files, index = view
     slot = _slot(files, "ch0058")
     sources = [p for p in files if re.match(r"character-hihumi_original-_mxload", p.name)]
-    result = ma.adapt(index=index, resolver=None, target_files=slot, target_dev="ch0058", source_files=sources,
-                      source_dev="hihumi_original", open_writable=Bundle.load)
+    result = ma.adapt(
+        index=index,
+        resolver=None,
+        target_files=slot,
+        target_dev="ch0058",
+        source_files=sources,
+        source_dev="hihumi_original",
+        open_writable=Bundle.load,
+    )
     out = tmp_path / "out"
     out.mkdir()
     for path, bundle in result.changed.items():
@@ -1052,8 +1325,17 @@ def test_official_costume_takes_its_own_materials_on_a_body_drawn_from_two_mater
     names = lambda part: [graph.tree(m)["m_Name"] for m in part.materials]  # noqa: E731
     body = next(p for p in ma.roles(t, None) if p.role == "primary")
     own = next(p for p in ma.roles(s, None) if p.role == "primary")
-    assert names(body) == names(own) == ["Hihumi_Original_Face", "Hihumi_Original_Eyebrow",
-                                         "Hihumi_Original_EyeMouth", "Hihumi_Original_Hair", "Hihumi_Original_Body"]
+    assert (
+        names(body)
+        == names(own)
+        == [
+            "Hihumi_Original_Face",
+            "Hihumi_Original_Eyebrow",
+            "Hihumi_Original_EyeMouth",
+            "Hihumi_Original_Hair",
+            "Hihumi_Original_Body",
+        ]
+    )
 
 
 def _cross_build(view, tmp_path, source, target="azusa_original", results=None):
@@ -1070,8 +1352,16 @@ def _cross_build(view, tmp_path, source, target="azusa_original", results=None):
     files, index = view
     slot = _slot(files, target)
     sources = [p for p in files if re.match(rf"(character-{source}-_mxload|assets-_mx-npcs-{source}-)", p.name)]
-    result = ma.adapt(index=index, resolver=None, target_files=slot, target_dev=target, source_files=sources,
-                      source_dev=source, open_writable=Bundle.load, halo=True)
+    result = ma.adapt(
+        index=index,
+        resolver=None,
+        target_files=slot,
+        target_dev=target,
+        source_files=sources,
+        source_dev=source,
+        open_writable=Bundle.load,
+        halo=True,
+    )
     if results is not None:
         results.append(result)
     out = tmp_path / "out"
@@ -1107,7 +1397,9 @@ def _official_objects_kept(slot, written, allowed):
         assert before.keys() <= after.keys()
         changed = {before[pid].type.name for pid in before if before[pid].get_raw_data() != after[pid].get_raw_data()}
         assert changed <= set(allowed) | {"AnimationClip"}, changed  # another face's bones get curves (face_retarget)
-        new.update({(after[pid].assets_file.name.lower(), pid): after[pid].type.name for pid in after.keys() - before.keys()})
+        new.update(
+            {(after[pid].assets_file.name.lower(), pid): after[pid].type.name for pid in after.keys() - before.keys()}
+        )
     return new
 
 
@@ -1121,8 +1413,11 @@ def test_official_cross_costume_carries_the_source_halo(view, tmp_path):
     from bmpt.gameassets.model import _key, _prefabs, export_chibi, model_root, mpos, read_mesh
 
     slot, sources, written, adapted, official, graph = _cross_build(view, tmp_path, "ch0171_enemy")
-    new = _official_objects_kept(slot, written, {"SkinnedMeshRenderer", "MeshRenderer", "MeshFilter", "AssetBundle",
-                                                 "Transform", "MonoBehaviour"})
+    new = _official_objects_kept(
+        slot,
+        written,
+        {"SkinnedMeshRenderer", "MeshRenderer", "MeshFilter", "AssetBundle", "Transform", "MonoBehaviour"},
+    )
     o_prefabs = _prefabs(official, [p for p in slot if p.name.startswith("character-")])
     before = ma.halo_of(ma.Skeleton.of(official, o_prefabs[ma.choose_prefab(o_prefabs, "azusa_original")].deref()))
     s = ma.Skeleton.of(official, model_root(official, sources, "ch0171_enemy")[0])
@@ -1145,9 +1440,15 @@ def test_official_cross_costume_carries_the_source_halo(view, tmp_path):
         got, want = read_mesh(halo.mesh.read()), read_mesh(source.mesh.read())
         assert np.allclose(got.vertices, want.vertices) and got.triangles == want.triangles and got.uv0 == want.uv0
         assert [new.get(_key(m)) for m in halo.materials] == ["Material"] * len(source.materials)
-        assert [graph.tree(m)["m_Name"] for m in halo.materials] == [official.tree(m)["m_Name"] for m in source.materials]
-        textures = [graph.deref(m, v["m_Texture"]) for m in halo.materials
-                    for _, v in graph.tree(m)["m_SavedProperties"]["m_TexEnvs"] if v["m_Texture"]["m_PathID"]]
+        assert [graph.tree(m)["m_Name"] for m in halo.materials] == [
+            official.tree(m)["m_Name"] for m in source.materials
+        ]
+        textures = [
+            graph.deref(m, v["m_Texture"])
+            for m in halo.materials
+            for _, v in graph.tree(m)["m_SavedProperties"]["m_TexEnvs"]
+            if v["m_Texture"]["m_PathID"]
+        ]
         assert textures and all(new.get(_key(texture)) == "Texture2D" for texture in textures)
         # drawn where Yukino's is, from the slot's own nodes; the follower takes her offsets
         world = t.world()
@@ -1155,23 +1456,37 @@ def test_official_cross_costume_carries_the_source_halo(view, tmp_path):
         for field in ma.FOLLOWER_OFFSETS:
             assert graph.tree(halo.follower)[field] == pytest.approx(official.tree(source.follower)[field])
     data = export_chibi(graph, prefab_files, "azusa_original")
-    doc = json.loads(data[20:20 + struct.unpack_from("<I", data, 12)[0]])
+    doc = json.loads(data[20 : 20 + struct.unpack_from("<I", data, 12)[0]])
     names = {m["name"] for m in doc["meshes"]}
     assert source.mesh.peek_name() in names and before.mesh.peek_name() not in names and doc["animations"]
     follower = doc["extras"]["haloFollower"]
     assert follower["relativePosition"] == pytest.approx(
-        list(mpos([official.tree(source.follower)["TargetRelativePosition"][k] for k in "xyz"])))
+        list(mpos([official.tree(source.follower)["TargetRelativePosition"][k] for k in "xyz"]))
+    )
 
 
 def test_only_leg_anchor_groups_set_to_follow_are_judged_again_by_pass_through():
     """Optimize Physics judges the leg-anchor groups the group choice set to follow again; a rigid group, a
     group of another Biped bone and an empty group are not among them."""
-    skeleton = _skeleton([("Bip001", 0, (0, 0, 0), (0, 0, 0, 1)), ("Bip001 Pelvis", 1, (0, 1, 0), (0, 0, 0, 1)),
-                          ("Bip001 L Thigh", 2, (0.1, 0, 0), (0, 0, 0, 1)), ("Bip001 R Thigh", 2, (-0.1, 0, 0), (0, 0, 0, 1)),
-                          ("Bip001 Spine", 2, (0, 0.2, 0), (0, 0, 0, 1))])
-    pelvis, left, right, spine = (skeleton.first(n) for n in ("Bip001 Pelvis", "Bip001 L Thigh", "Bip001 R Thigh", "Bip001 Spine"))
-    plan = ma.Plan({}, {pelvis: "follow", left: "rigid", right: "follow", spine: "follow"}, 1.0, 1.0,
-                   {pelvis: [10, 11], left: [12], right: [], spine: [13]})
+    skeleton = _skeleton(
+        [
+            ("Bip001", 0, (0, 0, 0), (0, 0, 0, 1)),
+            ("Bip001 Pelvis", 1, (0, 1, 0), (0, 0, 0, 1)),
+            ("Bip001 L Thigh", 2, (0.1, 0, 0), (0, 0, 0, 1)),
+            ("Bip001 R Thigh", 2, (-0.1, 0, 0), (0, 0, 0, 1)),
+            ("Bip001 Spine", 2, (0, 0.2, 0), (0, 0, 0, 1)),
+        ]
+    )
+    pelvis, left, right, spine = (
+        skeleton.first(n) for n in ("Bip001 Pelvis", "Bip001 L Thigh", "Bip001 R Thigh", "Bip001 Spine")
+    )
+    plan = ma.Plan(
+        {},
+        {pelvis: "follow", left: "rigid", right: "follow", spine: "follow"},
+        1.0,
+        1.0,
+        {pelvis: [10, 11], left: [12], right: [], spine: [13]},
+    )
     anchors = {pelvis, left, right}
     assert ma.followed_groups(plan, skeleton, anchors) == {pelvis: [10, 11]}
     assert ma.followed_groups(plan, skeleton, anchors | {spine}) == {pelvis: [10, 11], spine: [13]}
@@ -1191,8 +1506,17 @@ def test_optimize_physics_judges_a_followed_skirt_again_by_pass_through(view):
     sources = [p for p in files if re.match(r"character-ch0171_enemy-_mxload", p.name)]
 
     def build(physics):
-        return ma.adapt(index=index, resolver=None, target_files=slot, target_dev="azusa_original", source_files=sources,
-                        source_dev="ch0171_enemy", open_writable=Bundle.load, halo=True, physics=physics).hems
+        return ma.adapt(
+            index=index,
+            resolver=None,
+            target_files=slot,
+            target_dev="azusa_original",
+            source_files=sources,
+            source_dev="ch0171_enemy",
+            open_writable=Bundle.load,
+            halo=True,
+            physics=physics,
+        ).hems
 
     default = build(False)
     assert (default.rule, default.note, default.skirt, default.regrouped) == ("rigid", "no rigid cloth", None, False)
@@ -1210,16 +1534,37 @@ def test_optimize_physics_judges_a_followed_skirt_again_by_pass_through(view):
 def _skirt_case():
     """A source with a front skirt chain off the pelvis and a strap off the left thigh, on a slot of the same Biped
     without them; the cloth, two leg vertices per leg, and the plan's mapping and groups."""
-    biped = [("Bip001", 0, (0, 0, 0), (0, 0, 0, 1)), ("Bip001 Pelvis", 1, (0, 1, 0), (0, 0, 0, 1)),
-             ("Bip001 L Thigh", 2, (0.1, 0, 0), (0, 0, 0, 1)), ("Bip001 R Thigh", 2, (-0.1, 0, 0), (0, 0, 0, 1)),
-             ("Bip001 L Calf", 3, (0, -0.45, 0), (0, 0, 0, 1)), ("Bip001 R Calf", 4, (0, -0.45, 0), (0, 0, 0, 1)),
-             ("Bip001 L Foot", 5, (0, -0.45, 0), (0, 0, 0, 1)), ("Bip001 R Foot", 6, (0, -0.45, 0), (0, 0, 0, 1))]
-    chains = [("skirt_F_1", 2, (0, -0.05, 0.15), (0, 0, 0, 1)), ("skirt_F_2", 9, (0, -0.2, 0), (0, 0, 0, 1)),
-              ("strap_L_1", 3, (0.08, -0.05, 0), (0, 0, 0, 1)), ("strap_L_2", 11, (0, -0.2, 0), (0, 0, 0, 1))]
+    biped = [
+        ("Bip001", 0, (0, 0, 0), (0, 0, 0, 1)),
+        ("Bip001 Pelvis", 1, (0, 1, 0), (0, 0, 0, 1)),
+        ("Bip001 L Thigh", 2, (0.1, 0, 0), (0, 0, 0, 1)),
+        ("Bip001 R Thigh", 2, (-0.1, 0, 0), (0, 0, 0, 1)),
+        ("Bip001 L Calf", 3, (0, -0.45, 0), (0, 0, 0, 1)),
+        ("Bip001 R Calf", 4, (0, -0.45, 0), (0, 0, 0, 1)),
+        ("Bip001 L Foot", 5, (0, -0.45, 0), (0, 0, 0, 1)),
+        ("Bip001 R Foot", 6, (0, -0.45, 0), (0, 0, 0, 1)),
+    ]
+    chains = [
+        ("skirt_F_1", 2, (0, -0.05, 0.15), (0, 0, 0, 1)),
+        ("skirt_F_2", 9, (0, -0.2, 0), (0, 0, 0, 1)),
+        ("strap_L_1", 3, (0.08, -0.05, 0), (0, 0, 0, 1)),
+        ("strap_L_2", 11, (0, -0.2, 0), (0, 0, 0, 1)),
+    ]
     ts, ss = _skeleton(biped), _skeleton(biped + chains)
-    points = [(-0.05, 0.95, 0.16), (0.05, 0.95, 0.16), (-0.05, 0.75, 0.16), (0.05, 0.75, 0.16),  # the skirt
-              (0.18, 0.95, 0.02), (0.19, 0.95, -0.02), (0.18, 0.75, 0.02), (0.19, 0.75, -0.02),  # the strap
-              (0.1, 0.8, 0.05), (0.1, 0.5, 0.05), (-0.1, 0.8, 0.05), (-0.1, 0.5, 0.05)]  # the legs
+    points = [
+        (-0.05, 0.95, 0.16),
+        (0.05, 0.95, 0.16),
+        (-0.05, 0.75, 0.16),
+        (0.05, 0.75, 0.16),  # the skirt
+        (0.18, 0.95, 0.02),
+        (0.19, 0.95, -0.02),
+        (0.18, 0.75, 0.02),
+        (0.19, 0.75, -0.02),  # the strap
+        (0.1, 0.8, 0.05),
+        (0.1, 0.5, 0.05),
+        (-0.1, 0.8, 0.05),
+        (-0.1, 0.5, 0.05),
+    ]  # the legs
     joints = [9, 9, 10, 10, 11, 11, 12, 12, 3, 5, 4, 6]
     flat = _flat(points, joints)
     flat.edges = np.array([[0, 1], [0, 2], [1, 3], [2, 3], [4, 5], [4, 6], [5, 7], [6, 7], [1, 4]])
@@ -1246,8 +1591,22 @@ def test_a_regrouped_skirt_build_carries_its_own_new_bones():
     writable = np.ones(len(flat.vertices), bool)
     built = {}
     for name, p in (("default", plan), ("regrouped", lowered)):
-        built[name] = ma._skirt_candidates(ts, ss, p, flat, flat.vertices, dominant, cloth, legs, t_legs, s_legs,
-                                           mapped, columns, writable, [pelvis, thigh_l, thigh_r])
+        built[name] = ma._skirt_candidates(
+            ts,
+            ss,
+            p,
+            flat,
+            flat.vertices,
+            dominant,
+            cloth,
+            legs,
+            t_legs,
+            s_legs,
+            mapped,
+            columns,
+            writable,
+            [pelvis, thigh_l, thigh_r],
+        )
         assert built[name] and len({id(c.skirt) for c in built[name]}) == 1  # one build's candidates share its bones
         for candidate in built[name]:
             assert candidate.weights.shape[1] == len(columns) + len(candidate.skirt.sources)
@@ -1269,9 +1628,17 @@ def test_official_optimize_physics_builds_a_regrouped_skirt_with_its_own_bones(v
     files, index = view
     slot = _slot(files, "shigure_original")
     sources = [p for p in files if re.match(r"character-hina_original-_mxload", p.name)]
-    result = ma.adapt(index=index, resolver=None, target_files=slot, target_dev="shigure_original",
-                      source_files=sources, source_dev="hina_original", open_writable=Bundle.load, halo=True,
-                      physics=True)
+    result = ma.adapt(
+        index=index,
+        resolver=None,
+        target_files=slot,
+        target_dev="shigure_original",
+        source_files=sources,
+        source_dev="hina_original",
+        open_writable=Bundle.load,
+        halo=True,
+        physics=True,
+    )
     hems = result.hems
     assert hems.regrouped and hems.rule.startswith(ma.REGROUP + "skirt"), hems.summary()
     skirt = hems.skirt
@@ -1291,9 +1658,14 @@ def test_official_cross_costume_without_a_halo_hides_the_slots(view, tmp_path):
 
     slot, sources, written, adapted, official, graph = _cross_build(view, tmp_path, "ch9999")
     s_prefabs = _prefabs(official, sources)
-    assert ma.halo_of(ma.Skeleton.of(official, s_prefabs[ma.choose_prefab(s_prefabs, "ch9999")].deref())).shape == "none"
-    new = _official_objects_kept(slot, written, {"SkinnedMeshRenderer", "MeshRenderer", "MeshFilter", "AssetBundle",
-                                                 "Transform", "MonoBehaviour"})
+    assert (
+        ma.halo_of(ma.Skeleton.of(official, s_prefabs[ma.choose_prefab(s_prefabs, "ch9999")].deref())).shape == "none"
+    )
+    new = _official_objects_kept(
+        slot,
+        written,
+        {"SkinnedMeshRenderer", "MeshRenderer", "MeshFilter", "AssetBundle", "Transform", "MonoBehaviour"},
+    )
     assert "Mesh" in new.values()  # the costume's
     o_prefabs = _prefabs(official, [p for p in slot if p.name.startswith("character-")])
     before = ma.halo_of(ma.Skeleton.of(official, o_prefabs[ma.choose_prefab(o_prefabs, "azusa_original")].deref()))
@@ -1307,7 +1679,7 @@ def test_official_cross_costume_without_a_halo_hides_the_slots(view, tmp_path):
         assert not graph.tree(renderer)["m_Enabled"] and not graph.tree(filt)["m_Mesh"]["m_PathID"], name
         assert ma.halo_of(t).shape == "no mesh"
     data = export_chibi(graph, prefab_files, "azusa_original")
-    doc = json.loads(data[20:20 + struct.unpack_from("<I", data, 12)[0]])
+    doc = json.loads(data[20 : 20 + struct.unpack_from("<I", data, 12)[0]])
     assert before.mesh.peek_name() not in {m["name"] for m in doc["meshes"]} and doc["animations"]
 
 
@@ -1323,8 +1695,11 @@ def test_official_cross_costume_carries_a_skinned_halo(view, tmp_path):
     results = []
     slot, sources, written, adapted, official, graph = _cross_build(view, tmp_path, "np0229", "ch0145", results)
     moved = results[0].plan.fit.head if results[0].plan.fit.head is not None else np.zeros(3)
-    new = _official_objects_kept(slot, written, {"SkinnedMeshRenderer", "MeshRenderer", "MeshFilter", "AssetBundle",
-                                                 "Transform", "MonoBehaviour"})
+    new = _official_objects_kept(
+        slot,
+        written,
+        {"SkinnedMeshRenderer", "MeshRenderer", "MeshFilter", "AssetBundle", "Transform", "MonoBehaviour"},
+    )
     s = ma.Skeleton.of(official, model_root(official, sources, "np0229")[0])
     source = ma.halo_of(s)
     assert source.shape == "skinned" and s.nodes[source.bone].name == "bone_halo"
@@ -1357,8 +1732,11 @@ def test_official_cross_costume_carries_a_skinned_halo(view, tmp_path):
         head = world[target]
         turn = head[:3, :3] / np.linalg.norm(head[:3, :3], axis=0)
         followed = np.eye(4)
-        followed[:3, :3] = turn @ ma.trs((0, 0, 0), [q[k] for k in "xyzw"], (1, 1, 1))[:3, :3] * np.linalg.norm(
-            world[halo.root][:3, :3], axis=0)
+        followed[:3, :3] = (
+            turn
+            @ ma.trs((0, 0, 0), [q[k] for k in "xyzw"], (1, 1, 1))[:3, :3]
+            * np.linalg.norm(world[halo.root][:3, :3], axis=0)
+        )
         followed[:3, 3] = (head @ [p["x"], p["y"], p["z"], 1])[:3]
         drawn = followed @ np.linalg.inv(world[halo.root]) @ world[halo.node]
         head_s = np.linalg.norm(head[:3, :3], axis=0)
@@ -1369,16 +1747,19 @@ def test_official_cross_costume_carries_a_skinned_halo(view, tmp_path):
         assert np.allclose(np.linalg.inv(head) @ drawn, shifted, atol=1e-4), name
     assert checked
     data = export_chibi(graph, prefab_files, "ch0145")
-    doc = json.loads(data[20:20 + struct.unpack_from("<I", data, 12)[0]])
+    doc = json.loads(data[20 : 20 + struct.unpack_from("<I", data, 12)[0]])
     names = {m["name"] for m in doc["meshes"]}
     assert source.mesh.peek_name() in names and before.mesh.peek_name() not in names and doc["animations"]
 
 
 @official
-@pytest.mark.parametrize("source,shape", [
-    ("binah_original", "halo without a follower"),  # a boss: no head bone
-    ("chesed_original", "halo without a follower"),  # a boss: skinned to two bones of the body
-])
+@pytest.mark.parametrize(
+    "source,shape",
+    [
+        ("binah_original", "halo without a follower"),  # a boss: no head bone
+        ("chesed_original", "halo without a follower"),  # a boss: skinned to two bones of the body
+    ],
+)
 def test_official_a_halo_that_cannot_be_carried_hides_the_slots(view, source, shape):
     """After a swap the halo is the source's or none, never the slot's own. A source halo that cannot be
     carried (a boss's) hides Azusa's: the change carries nothing and hides her halo's node."""
@@ -1398,10 +1779,13 @@ def test_official_a_halo_that_cannot_be_carried_hides_the_slots(view, source, sh
 
 
 @official
-@pytest.mark.parametrize("source,nodes,particles,drawn", [
-    ("tsurugi_original", ["Tsurugi_Original_Halo", "FX_blood"], 1, 1),  # her mesh and a particle system beside it
-    ("ch0069", ["CH0069_Halo", "FX_CH0069_Halo"], 9, 8),  # Mika: nested particle systems, an Animator left out
-])
+@pytest.mark.parametrize(
+    "source,nodes,particles,drawn",
+    [
+        ("tsurugi_original", ["Tsurugi_Original_Halo", "FX_blood"], 1, 1),  # her mesh and a particle system beside it
+        ("ch0069", ["CH0069_Halo", "FX_CH0069_Halo"], 9, 8),  # Mika: nested particle systems, an Animator left out
+    ],
+)
 def test_official_a_particle_halo_is_carried_with_its_nodes(view, tmp_path, source, nodes, particles, drawn):
     """A halo with particles (Tsurugi's, Mika's) is carried with its nodes: below Azusa's followed node, new
     GameObjects, Transforms, renderers and particle systems as the source has them below its own, their meshes and
@@ -1410,9 +1794,20 @@ def test_official_a_particle_halo_is_carried_with_its_nodes(view, tmp_path, sour
     from bmpt.gameassets.model import _key, _prefabs, export_chibi, model_root
 
     slot, sources, written, adapted, official, graph = _cross_build(view, tmp_path, source)
-    new = _official_objects_kept(slot, written, {"SkinnedMeshRenderer", "MeshRenderer", "MeshFilter", "AssetBundle",
-                                                 "Transform", "MonoBehaviour", "ParticleSystem",
-                                                 "ParticleSystemRenderer"})
+    new = _official_objects_kept(
+        slot,
+        written,
+        {
+            "SkinnedMeshRenderer",
+            "MeshRenderer",
+            "MeshFilter",
+            "AssetBundle",
+            "Transform",
+            "MonoBehaviour",
+            "ParticleSystem",
+            "ParticleSystemRenderer",
+        },
+    )
     s = ma.Skeleton.of(official, model_root(official, sources, source)[0])
     halo = ma.halo_of(s)
     below = [s.nodes[i] for i in s.descendants(halo.root)]
@@ -1432,8 +1827,12 @@ def test_official_a_particle_halo_is_carried_with_its_nodes(view, tmp_path, sour
         assert all(new.get(_key(n.go)) == "GameObject" and new.get(_key(n.transform)) == "Transform" for n in added)
         for a, b in zip(added, below):
             assert np.allclose(np.concatenate(a.local), np.concatenate(b.local)) and a.active == b.active
-        kinds = [o.type.name for n in added for c in graph.tree(n.go)["m_Component"]
-                 if (o := graph.deref(n.go, c["component"])) is not None]
+        kinds = [
+            o.type.name
+            for n in added
+            for c in graph.tree(n.go)["m_Component"]
+            if (o := graph.deref(n.go, c["component"])) is not None
+        ]
         assert kinds.count("ParticleSystem") == particles and "Animator" not in kinds
         drawing = 0
         for n in added:
@@ -1450,7 +1849,7 @@ def test_official_a_particle_halo_is_carried_with_its_nodes(view, tmp_path, sour
             assert follower[field] == pytest.approx(official.tree(halo.follower)[field])
     assert checked
     data = export_chibi(graph, prefab_files, "azusa_original", fx=_fx(graph))
-    doc = json.loads(data[20:20 + struct.unpack_from("<I", data, 12)[0]])
+    doc = json.loads(data[20 : 20 + struct.unpack_from("<I", data, 12)[0]])
     names = {m["name"] for m in doc["meshes"]}
     assert nodes[0] in names and not any(n.startswith("Azusa_Original_Halo") for n in names) and doc["animations"]
     # The carried particles play in the slot's 3D preview, read from the slot's files
@@ -1464,7 +1863,9 @@ def test_official_a_particle_slot_hides_its_halo_and_takes_the_sources(view, tmp
     Azusa's halo comes as new nodes below Tsurugi's followed node."""
     from bmpt.gameassets.model import _prefabs, export_chibi
 
-    slot, sources, written, adapted, official, graph = _cross_build(view, tmp_path, "azusa_original", "tsurugi_original")
+    slot, sources, written, adapted, official, graph = _cross_build(
+        view, tmp_path, "azusa_original", "tsurugi_original"
+    )
     prefab_files = [p for p in written if p.name.startswith("character-")]
     checked = 0
     for name, pointer in _prefabs(graph, prefab_files).items():
@@ -1484,7 +1885,7 @@ def test_official_a_particle_slot_hides_its_halo_and_takes_the_sources(view, tmp
         assert graph.tree(graph.component(added.go, "MeshRenderer"))["m_Enabled"]
     assert checked
     data = export_chibi(graph, prefab_files, "tsurugi_original", fx=_fx(graph))
-    doc = json.loads(data[20:20 + struct.unpack_from("<I", data, 12)[0]])
+    doc = json.loads(data[20 : 20 + struct.unpack_from("<I", data, 12)[0]])
     names = {m["name"] for m in doc["meshes"]}
     assert "Azusa_Original_Halo" in names and "Tsurugi_Original_Halo" not in names
     assert "haloFx" not in doc["extras"]  # Her silenced drops do not play in the preview
@@ -1511,10 +1912,13 @@ def _locks_free() -> list[str]:
 
 
 @official
-@pytest.mark.parametrize("target,source,unfit", [
-    ("hina_original", "ch0230", False),    # built: Hina <- Hina (Dress)
-    ("hanako_original", "ch0209", True),   # past the stretch limit: Hanako <- Hanako (Swimsuit)
-])
+@pytest.mark.parametrize(
+    "target,source,unfit",
+    [
+        ("hina_original", "ch0230", False),  # built: Hina <- Hina (Dress)
+        ("hanako_original", "ch0209", True),  # past the stretch limit: Hanako <- Hanako (Swimsuit)
+    ],
+)
 def test_official_costume_build_leaves_no_bundle_locked(view, target, source, unfit):
     """A build opens many bundles, each under its path lock; it closes them all when it ends, built or
     refused, so an export on another thread never waits for them (an earlier build hung there). Past-limit pairs build
@@ -1523,8 +1927,15 @@ def test_official_costume_build_leaves_no_bundle_locked(view, target, source, un
 
     files, index = view
     sources = [p for p in files if re.match(rf"character-{source}-_mxload", p.name)]
-    result = ma.adapt(index=index, resolver=None, target_files=_slot(files, target), target_dev=target,
-                      source_files=sources, source_dev=source, open_writable=Bundle.load)
+    result = ma.adapt(
+        index=index,
+        resolver=None,
+        target_files=_slot(files, target),
+        target_dev=target,
+        source_files=sources,
+        source_dev=source,
+        open_writable=Bundle.load,
+    )
     assert result.changed and result.plan.unfit == unfit
     assert (result.plan.stretch > ma.stretch_limit(result.plan.own)) == unfit
     assert _locks_free() == []
@@ -1593,7 +2004,7 @@ def test_official_field_models_are_found_and_exported(tmp_path):
     assert (delivery.model, delivery.field_model) == (None, "np0283")
     assert catalog.variant("hina").field_model is None  # a battle model wins
     data = game.model_glb("np0009")
-    doc = json.loads(data[20:20 + struct.unpack_from("<I", data, 12)[0]])
+    doc = json.loads(data[20 : 20 + struct.unpack_from("<I", data, 12)[0]])
     assert doc["extras"]["prefab"] == "Field_Player_NP0009"
     assert "OL_NP0009_Body" in {m["name"] for m in doc["meshes"]}
     # its own Animancer clips, never another student's from the shared field bundle
@@ -1610,8 +2021,8 @@ NO_SLOT_MODELS = [
     ("np0133", "Field_NPC_NP0133", "npc", "OL_Field_NPC_NP0133", True),
     ("np0138", "Field_NPC_NP0138_NonWeapon", "npc", "OL_Attendant_Highlander_HG", True),
     ("np0143", "Field_NPC_NP0143_AR_Weapon", "npc", "OL_Soldier_Helmet_Aranchino_AR_Mesh", True),
-    ("np0206", "NP0206_Mesh", "asset", "NP0206_Body", True),        # Ayame (Corrupted), a story cutscene's model
-    ("np0229", "NP0229_Mesh", "asset", "NP0229_Body", True),        # Ayame (Twilight): both with their story clips
+    ("np0206", "NP0206_Mesh", "asset", "NP0206_Body", True),  # Ayame (Corrupted), a story cutscene's model
+    ("np0229", "NP0229_Mesh", "asset", "NP0229_Body", True),  # Ayame (Twilight): both with their story clips
     ("arona", "Arona_Original_Gacha", "asset", "OL_Arona_Original_Body", True),
     ("np0269", "NP0269_Body_Test", "asset", "NP0269_Body", False),  # Kei (Decagrammaton Body), a static mesh
 ]
@@ -1630,7 +2041,7 @@ def test_official_no_slot_models_are_found_and_exported(tmp_path):
         # a model of the variant's own bundles is its slot; a field-mode one has none
         assert (variant.model, variant.field_model) == ((key, None) if kind == "asset" else (None, key)), key
         data = game.model_glb(variant.model or variant.field_model)
-        doc = json.loads(data[20:20 + struct.unpack_from("<I", data, 12)[0]])
+        doc = json.loads(data[20 : 20 + struct.unpack_from("<I", data, 12)[0]])
         assert (doc["extras"]["prefab"], doc["extras"]["source"]) == (prefab, kind), key
         assert mesh in {m["name"] for m in doc["meshes"]}, key
         assert bool(doc.get("animations")) == idle, key
@@ -1638,13 +2049,13 @@ def test_official_no_slot_models_are_found_and_exported(tmp_path):
     # where they rest: never in the bind pose, never placed off the view where the shot needed them
     for core, prefix in (("np0206", "NP0206_Cutin_A_"), ("np0229", "NP0229_Cutin_B_")):
         data = game.model_glb(core)
-        doc = json.loads(data[20:20 + struct.unpack_from("<I", data, 12)[0]])
+        doc = json.loads(data[20 : 20 + struct.unpack_from("<I", data, 12)[0]])
         animations = doc["animations"]
         assert 1 < len(animations) <= 12 and all(a["name"].startswith(prefix) for a in animations), core
         assert [a["extras"]["slot"] for a in animations] == [f"Story_{k}" for k in range(1, len(animations) + 1)]
         names = [n.get("name") for n in doc["nodes"]]
         start = 20 + struct.unpack_from("<I", data, 12)[0]
-        binary = data[start + 8:]
+        binary = data[start + 8 :]
 
         def values(index):
             accessor, view = doc["accessors"][index], None
@@ -1661,7 +2072,7 @@ def test_official_no_slot_models_are_found_and_exported(tmp_path):
                     assert abs(moved[0] - rest[0]) < 1e-3 and abs(moved[2] - rest[2]) < 1e-3, (core, animation["name"])
     # Arona's idle switches the gacha faces off: her own clip, never the sack's beside it
     arona = game.model_glb("arona")
-    doc = json.loads(arona[20:20 + struct.unpack_from("<I", arona, 12)[0]])
+    doc = json.loads(arona[20 : 20 + struct.unpack_from("<I", arona, 12)[0]])
     assert [a["name"] for a in doc["animations"]] == ["Arona_Original_AroPla_Cacha_02_Idle"]
 
 
@@ -1723,7 +2134,7 @@ def test_official_costume_apply_restore_and_preview_on_clones(tmp_path):
     result = library.apply("hina", "variant:np0009", kind="model")
     assert result.unchanged or result.files
     data = game.model_glb("hina_original")
-    doc = json.loads(data[20:20 + struct.unpack_from("<I", data, 12)[0]])
+    doc = json.loads(data[20 : 20 + struct.unpack_from("<I", data, 12)[0]])
     assert "OL_NP0009_Body" in {m["name"] for m in doc["meshes"]}
     assert library.configured("hina").get("model") == "variant:np0009"
     library.restore("hina", kind="model")
@@ -1735,16 +2146,26 @@ def test_official_costume_apply_restore_and_preview_on_clones(tmp_path):
     assert library.optimize_costume("hina", "official", "Hina") == {"unneeded": True, "reason": "official"}
     made = library.optimize_costume("hina", "variant:np0009", "Pajamas")
     entry = next(m for m in library.mods() if m.id == made["mod"])
-    assert (entry.kind, entry.target, entry.optimized_from, entry.label_base) == ("model", "hina", "variant:np0009", "Pajamas")
+    assert (entry.kind, entry.target, entry.optimized_from, entry.label_base) == (
+        "model",
+        "hina",
+        "variant:np0009",
+        "Pajamas",
+    )
     assert "Pajamas" in entry.label and entry.label != "Pajamas"  # model.optimizedName
-    copy = {path.name: hashlib.sha1(path.read_bytes()).hexdigest() for path in library._paths(library._record(entry.id))}
+    copy = {
+        path.name: hashlib.sha1(path.read_bytes()).hexdigest() for path in library._paths(library._record(entry.id))
+    }
     assert copy.keys() <= official_bytes.keys() and any(switched[name] != sha for name, sha in copy.items())
     assert library.optimize_costume("hina", "variant:np0009", "Pajamas") == made
     library.apply("hina", f"mod:{entry.id}", kind="model")
-    assert {name: switched_now for name, switched_now in ((p.name, hashlib.sha1(p.read_bytes()).hexdigest()) for p in slot)
-            if name in copy} == copy
+    assert {
+        name: switched_now
+        for name, switched_now in ((p.name, hashlib.sha1(p.read_bytes()).hexdigest()) for p in slot)
+        if name in copy
+    } == copy
     data = game.model_glb("hina_original")
-    doc = json.loads(data[20:20 + struct.unpack_from("<I", data, 12)[0]])
+    doc = json.loads(data[20 : 20 + struct.unpack_from("<I", data, 12)[0]])
     assert "OL_NP0009_Body" in {m["name"] for m in doc["meshes"]}
     library.restore("hina", kind="model")
     assert {path.name: hashlib.sha1(path.read_bytes()).hexdigest() for path in slot} == official_bytes

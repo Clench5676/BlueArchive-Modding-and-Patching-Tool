@@ -216,9 +216,11 @@ def test_collection_art_is_lossless_and_survives_restart(tmp_path, monkeypatch):
     builds = []
     name = "Student_Portrait_Hero_Collection"
     monkeypatch.setattr(GameAssets, "_collection", lambda _: {name: {"bundle": bundle.name}})
+
     def image(self, record):
         builds.append(1)
         return Image.new("RGBA", (13, 17), (99, 20, 255, 123))
+
     monkeypatch.setattr(GameAssets, "_image", image)
     data = game.collection_portrait(name)
     restarted, _ = _game(tmp_path, PreviewCache(preview.root, allowed=True))
@@ -288,7 +290,9 @@ def test_model_preview_reuses_disk_exports_only_for_the_locations_its_rule_admit
     game, root = _game(tmp_path, preview)
     prefab = root / "character-ch0242-_mxload-2024-11-18_assets_all_1.bundle"
     prefab.write_bytes(b"")
-    kept = tmp_path / "library" / "originals" / "assets-_mx-npcs-en0002-_mxdependency-2024-11-18_005_assets_all_2.bundle"
+    kept = (
+        tmp_path / "library" / "originals" / "assets-_mx-npcs-en0002-_mxdependency-2024-11-18_005_assets_all_2.bundle"
+    )
     kept.parent.mkdir(parents=True)
     kept.write_bytes(b"official")
     builds = []
@@ -352,8 +356,14 @@ def test_missing_model_cab_is_not_persisted_and_new_dependency_exports_on_restar
     prefab.write_bytes(b"prefab")
     dependency = root / "extra.bundle"
     monkeypatch.setattr(GameAssets, "resource_version", property(lambda self: "same-catalog"))
-    monkeypatch.setattr(GameAssets, "_resolve_cabs", lambda self, wanted, hint=None: {"cab-extra": str(dependency)} if dependency.exists() else {})
-    owner = SimpleNamespace(assets_file=SimpleNamespace(name="cab-owner", externals=[SimpleNamespace(path="cab-extra")]))
+    monkeypatch.setattr(
+        GameAssets,
+        "_resolve_cabs",
+        lambda self, wanted, hint=None: {"cab-extra": str(dependency)} if dependency.exists() else {},
+    )
+    owner = SimpleNamespace(
+        assets_file=SimpleNamespace(name="cab-owner", externals=[SimpleNamespace(path="cab-extra")])
+    )
     builds = []
 
     @contextmanager
@@ -381,11 +391,17 @@ def test_missing_model_cab_is_not_persisted_and_new_dependency_exports_on_restar
 
 
 def test_engine_refs_and_missing_ids_in_loaded_cabs_do_not_disable_model_cache(tmp_path):
-    owner = SimpleNamespace(assets_file=SimpleNamespace(name="cab-owner", externals=[
-        SimpleNamespace(path="library/unity default resources"), SimpleNamespace(path="cab-loaded")]))
+    owner = SimpleNamespace(
+        assets_file=SimpleNamespace(
+            name="cab-owner",
+            externals=[SimpleNamespace(path="library/unity default resources"), SimpleNamespace(path="cab-loaded")],
+        )
+    )
+
     @contextmanager
     def opener(path):
         yield SimpleNamespace(objects=[])
+
     with model.BundleGraph({"cab-loaded": str(tmp_path / "loaded.bundle")}, opener=opener) as graph:
         assert graph.deref(owner, {"m_FileID": 1, "m_PathID": 100}) is None
         assert graph.deref(owner, {"m_FileID": 2, "m_PathID": 200}) is None
@@ -405,9 +421,12 @@ def test_real_complete_models_still_persist(tmp_path, monkeypatch, core):
     data = game.model_glb(core)
     assert data.startswith(b"glTF")
     assert list(preview.root.glob("*.preview")), "valid models must retain their cross-session cache"
-    restarted = GameAssets(directories, AssetCache(root=tmp_path / "light"),
-                           preview_cache=PreviewCache(preview.root, allowed=True))
-    monkeypatch.setattr(model, "export_chibi", lambda *args, **_: pytest.fail("Complete cached model was exported again"))
+    restarted = GameAssets(
+        directories, AssetCache(root=tmp_path / "light"), preview_cache=PreviewCache(preview.root, allowed=True)
+    )
+    monkeypatch.setattr(
+        model, "export_chibi", lambda *args, **_: pytest.fail("Complete cached model was exported again")
+    )
     assert restarted.model_glb(core) == data
 
 
@@ -417,8 +436,9 @@ def preview_services(tmp_path):
     state = UiState(tmp_path / "webui.json")
     state.set("preview_cache", False)
     cache = AssetCache(root=tmp_path / "cache")
-    services = Services(settings, tmp_path, state=state, cache=cache, game=FakeGame(),
-                        catalog=FakeCatalog(), library=FakeLibrary())
+    services = Services(
+        settings, tmp_path, state=state, cache=cache, game=FakeGame(), catalog=FakeCatalog(), library=FakeLibrary()
+    )
     services._preview_cache = PreviewCache(tmp_path / "cache" / "previews")
     yield services
     services.close()
@@ -435,8 +455,15 @@ def test_preview_cache_defaults_on_and_preserves_saved_choice(tmp_path, saved, e
     state = UiState(tmp_path / "webui.json")
     if saved is not None:
         state.set("preview_cache", saved)
-    services = Services(settings, tmp_path, state=state, cache=AssetCache(root=tmp_path / "cache"),
-                        game=FakeGame(), catalog=FakeCatalog(), library=FakeLibrary())
+    services = Services(
+        settings,
+        tmp_path,
+        state=state,
+        cache=AssetCache(root=tmp_path / "cache"),
+        game=FakeGame(),
+        catalog=FakeCatalog(),
+        library=FakeLibrary(),
+    )
     try:
         assert services.preview_cache.allowed is expected
         api = build_api(services)
@@ -462,15 +489,39 @@ def test_thumbnail_rpc_opt_in_clear_and_input_validation(preview_app, preview_se
     prefs = rpc(app, "settings.get")["result"]
     assert not prefs["previewCache"]
     generation = prefs["previewCacheGeneration"]
-    assert rpc(app, "preview.cachePut", renderer="spine", key="test", data=encoded, generation=generation)["result"] is False
+    assert (
+        rpc(app, "preview.cachePut", renderer="spine", key="test", data=encoded, generation=generation)["result"]
+        is False
+    )
     prefs = rpc(app, "settings.set", key="previewCache", value=True)["result"]
     generation = prefs["previewCacheGeneration"]
-    assert rpc(app, "preview.cacheGet", renderer="spine", key="test")["result"] == {"allowed": True, "generation": generation, "data": None}
-    assert rpc(app, "preview.cachePut", renderer="spine", key="test", data=encoded, generation=generation)["result"] is True
+    assert rpc(app, "preview.cacheGet", renderer="spine", key="test")["result"] == {
+        "allowed": True,
+        "generation": generation,
+        "data": None,
+    }
+    assert (
+        rpc(app, "preview.cachePut", renderer="spine", key="test", data=encoded, generation=generation)["result"]
+        is True
+    )
     assert rpc(app, "preview.cacheGet", renderer="spine", key="test")["result"]["data"] == encoded
-    assert call(app, "/api/rpc", method="POST", body={"method": "preview.cacheGet", "params": {"key": "test", "renderer": "spine"}}, token=None)[0] == "403 Forbidden"
+    assert (
+        call(
+            app,
+            "/api/rpc",
+            method="POST",
+            body={"method": "preview.cacheGet", "params": {"key": "test", "renderer": "spine"}},
+            token=None,
+        )[0]
+        == "403 Forbidden"
+    )
     for data in ("not base64", base64.b64encode(b"not a PNG").decode(), "A" * (3 * 1024 * 1024)):
-        assert rpc(app, "preview.cachePut", renderer="spine", key="test", data=data, generation=generation)["error"]["code"] == "bad_params"
+        assert (
+            rpc(app, "preview.cachePut", renderer="spine", key="test", data=data, generation=generation)["error"][
+                "code"
+            ]
+            == "bad_params"
+        )
     assert rpc(app, "preview.cacheGet", renderer="spine", key="x" * 4097)["error"]["code"] == "bad_params"
     # an entry belongs to the renderer that drew it; an unnamed or unknown renderer is refused
     assert rpc(app, "preview.cacheGet", renderer="model", key="test")["result"]["data"] is None
@@ -480,7 +531,10 @@ def test_thumbnail_rpc_opt_in_clear_and_input_validation(preview_app, preview_se
     cleared = rpc(app, "settings.clearCache")["result"]
     assert cleared["previewCache"] is True
     assert cleared["previewCacheGeneration"] != generation
-    assert rpc(app, "preview.cachePut", renderer="spine", key="test", data=encoded, generation=generation)["result"] is False
+    assert (
+        rpc(app, "preview.cachePut", renderer="spine", key="test", data=encoded, generation=generation)["result"]
+        is False
+    )
     assert rpc(app, "preview.cacheGet", renderer="spine", key="test")["result"]["data"] is None
     assert rpc(app, "settings.set", key="previewCache", value=False)["result"]["previewCache"] is False
     assert rpc(app, "settings.clearCache")["result"]["previewCache"] is False
@@ -488,9 +542,11 @@ def test_thumbnail_rpc_opt_in_clear_and_input_validation(preview_app, preview_se
 
 def test_model_revision_rpc_hashes_validated_glb(preview_app, preview_services, monkeypatch):
     calls = []
+
     def asset(path, query):
         calls.append((path, query))
         return AssetResponse(b"glTF exact bytes", "model/gltf-binary", False)
+
     monkeypatch.setattr(preview_services, "asset", asset)
     result = rpc(preview_app, "preview.modelRevision", variant="shiroko", source="mod:1")["result"]
     assert result["revision"] == hashlib.sha256(b"glTF exact bytes").hexdigest()
@@ -499,13 +555,20 @@ def test_model_revision_rpc_hashes_validated_glb(preview_app, preview_services, 
 
 
 def test_asset_revision_rpc_tracks_exact_background_and_framing_bytes(preview_app, preview_services, monkeypatch):
-    paths = ["/asset/art/bg/BG_Cafe_Collection.png", "/asset/spine/lobby/hero_home%40install/" + "a" * 64 + "/framing.json"]
+    paths = [
+        "/asset/art/bg/BG_Cafe_Collection.png",
+        "/asset/spine/lobby/hero_home%40install/" + "a" * 64 + "/framing.json",
+    ]
     calls = []
-    contents = {paths[0][len("/asset/"):]: b"PNG exact bytes",
-                paths[1][len("/asset/"):].replace("%40", "@"): b'{"view": [1, 2]}'}
+    contents = {
+        paths[0][len("/asset/") :]: b"PNG exact bytes",
+        paths[1][len("/asset/") :].replace("%40", "@"): b'{"view": [1, 2]}',
+    }
+
     def asset(path, query):
         calls.append((path, query))
         return AssetResponse(contents[path], "application/octet-stream", False)
+
     monkeypatch.setattr(preview_services, "asset", asset)
     assert rpc(preview_app, "preview.assetRevision", paths=paths)["error"]["code"] == "bad_params"
     assert not calls, "dependency work requires preview cache opt-in"
@@ -514,25 +577,35 @@ def test_asset_revision_rpc_tracks_exact_background_and_framing_bytes(preview_ap
     assert first["generation"] == preview_services.preview_cache.generation
     assert len(first["revision"]) == 64
     assert rpc(preview_app, "preview.assetRevision", paths=list(reversed(paths)))["result"] == first
-    contents[paths[0][len("/asset/"):]] = b"changed background"
+    contents[paths[0][len("/asset/") :]] = b"changed background"
     second = rpc(preview_app, "preview.assetRevision", paths=paths)["result"]
     assert second["revision"] != first["revision"]
-    contents[paths[1][len("/asset/"):].replace("%40", "@")] = b'{"view": [3, 4]}'
+    contents[paths[1][len("/asset/") :].replace("%40", "@")] = b'{"view": [3, 4]}'
     assert rpc(preview_app, "preview.assetRevision", paths=paths)["result"]["revision"] != second["revision"]
-    contents.pop(paths[0][len("/asset/"):])
+    contents.pop(paths[0][len("/asset/") :])
     assert rpc(preview_app, "preview.assetRevision", paths=paths)["error"]["code"] == "bad_params"
 
 
-@pytest.mark.parametrize("paths", [
-    [], ["/asset/art/bg/BG_Cafe.png"] * 3, "not a list", [None],
-    ["https://example.test/asset/art/bg/BG_Cafe.png"], ["//example.test/asset/art/bg/BG_Cafe.png"],
-    ["/asset/art/bg/BG_Cafe.png?other=true"], ["/asset/art/bg/BG_Cafe.png#fragment"],
-    ["/asset/art/bg/../BG_Cafe.png"], ["/asset/art/bg/BG_Cafe%2f..%2fother.png"],
-    ["/asset/ui/texture/BG_Cafe.png"], ["/asset/art/portrait/Student_Portrait.png"],
-    ["/asset/spine/lobby/hero_home/framing.json"],
-    ["/asset/spine/lobby/../" + "a" * 64 + "/framing.json"],
-    ["/asset/spine/lobby/hero_home/" + "a" * 64 + "/skeleton.skel"],
-])
+@pytest.mark.parametrize(
+    "paths",
+    [
+        [],
+        ["/asset/art/bg/BG_Cafe.png"] * 3,
+        "not a list",
+        [None],
+        ["https://example.test/asset/art/bg/BG_Cafe.png"],
+        ["//example.test/asset/art/bg/BG_Cafe.png"],
+        ["/asset/art/bg/BG_Cafe.png?other=true"],
+        ["/asset/art/bg/BG_Cafe.png#fragment"],
+        ["/asset/art/bg/../BG_Cafe.png"],
+        ["/asset/art/bg/BG_Cafe%2f..%2fother.png"],
+        ["/asset/ui/texture/BG_Cafe.png"],
+        ["/asset/art/portrait/Student_Portrait.png"],
+        ["/asset/spine/lobby/hero_home/framing.json"],
+        ["/asset/spine/lobby/../" + "a" * 64 + "/framing.json"],
+        ["/asset/spine/lobby/hero_home/" + "a" * 64 + "/skeleton.skel"],
+    ],
+)
 def test_asset_revision_rejects_non_dependency_urls(preview_app, preview_services, monkeypatch, paths):
     preview_services.set_preview_cache(True)
     monkeypatch.setattr(preview_services, "asset", lambda *args: pytest.fail("Invalid path reached asset service"))
@@ -546,7 +619,9 @@ def test_thumbnails_survive_a_game_update_but_not_another_install(preview_app, p
     app, services = preview_app, preview_services
     generation = rpc(app, "settings.set", key="previewCache", value=True)["result"]["previewCacheGeneration"]
     encoded = base64.b64encode(_png()).decode()
-    assert rpc(app, "preview.cachePut", renderer="spine", key="k", data=encoded, generation=generation)["result"] is True
+    assert (
+        rpc(app, "preview.cachePut", renderer="spine", key="k", data=encoded, generation=generation)["result"] is True
+    )
     services.game.resource_version = "rv2"  # the game updated
     assert rpc(app, "preview.cacheGet", renderer="spine", key="k")["result"]["data"] == encoded
     assert rpc(app, "preview.cacheGet", renderer="model", key="k")["result"]["data"] is None

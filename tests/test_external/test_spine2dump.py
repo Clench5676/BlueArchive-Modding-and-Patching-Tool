@@ -7,6 +7,7 @@ render_preview 的双后端一致性验证见 TestBackendAgreement（仅断言�
 像素级对比因尺寸语义差异（上限 vs 放大至充满）不做强断言，人工目检用
 .trae/scripts/compare_backends.py）。
 """
+
 from pathlib import Path
 
 import pytest
@@ -160,8 +161,10 @@ class TestAnimDiff:
         """bytes 目标与来源相同（含 atlas_text 占位写入路径）时无新增动画"""
         backend = Spine2Dump(spine2dump_path)
         atlas_text = skel_42.with_suffix(".atlas").read_text(encoding="utf-8")
-        assert check_skel_animation_diff(
-            SkelRef(skel_42), SkelRef(skel_42.read_bytes(), atlas_text=atlas_text), backend) == []
+        assert (
+            check_skel_animation_diff(SkelRef(skel_42), SkelRef(skel_42.read_bytes(), atlas_text=atlas_text), backend)
+            == []
+        )
 
     def test_diff_between_skels(self, skel_42: Path, large_skel_path: Path, spine2dump_path: Path):
         """两个不同 skel 的差异与 query 结果的集合差一致"""
@@ -173,13 +176,14 @@ class TestAnimDiff:
 
 
 class TestBackendAgreement:
-    def test_render_both_backends(self, skel_42: Path, spine_viewer_path: Path,
-                                  spine2dump_path: Path, tmp_path: Path):
+    def test_render_both_backends(self, skel_42: Path, spine_viewer_path: Path, spine2dump_path: Path, tmp_path: Path):
         """同一 skel 双后端渲染均成功（像素级对比依赖人工目检脚本）"""
         require_render_support()
         ok_viewer, msg_viewer = SpineViewer(spine_viewer_path).render_preview(
-            skel_42, tmp_path / "viewer.png", render_options=RENDER_PRESET_LOW)
+            skel_42, tmp_path / "viewer.png", render_options=RENDER_PRESET_LOW
+        )
         ok_dump, msg_dump = Spine2Dump(spine2dump_path).render_preview(
-            skel_42, tmp_path / "dump.png", render_options=RENDER_PRESET_LOW)
+            skel_42, tmp_path / "dump.png", render_options=RENDER_PRESET_LOW
+        )
         assert ok_viewer, msg_viewer
         assert ok_dump, msg_dump

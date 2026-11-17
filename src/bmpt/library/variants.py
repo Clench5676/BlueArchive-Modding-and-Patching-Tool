@@ -9,8 +9,9 @@ from bmpt.engine import AssetType, Bundle, LogFunc, Obj, ReplaceAssetType, SaveO
 from ..errors import ServiceError
 
 
-def adapt_variant_sources(sources: list[Path], targets: list[Path], directory: Path,
-                          asset_types: set[ReplaceAssetType], log: LogFunc) -> list[Path]:
+def adapt_variant_sources(
+    sources: list[Path], targets: list[Path], directory: Path, asset_types: set[ReplaceAssetType], log: LogFunc
+) -> list[Path]:
     """Rename source assets to target slots for the core's name/type matcher.
 
     Unity object IDs and character-specific names differ across variants. Adapt
@@ -48,10 +49,16 @@ def adapt_variant_sources(sources: list[Path], targets: list[Path], directory: P
             if obj.type in allowed:
                 target_slots[role(obj)].append(obj.peek_name() or "")
 
-    if not source_slots or source_slots.keys() != target_slots.keys() or any(
-            len(values) != len(target_slots[key]) or len(set(target_slots[key])) != len(values)
+    if (
+        not source_slots
+        or source_slots.keys() != target_slots.keys()
+        or any(
+            len(values) != len(target_slots[key])
+            or len(set(target_slots[key])) != len(values)
             or len({obj.peek_name() for obj in values}) != len(values)
-            for key, values in source_slots.items()):
+            for key, values in source_slots.items()
+        )
+    ):
         raise ServiceError("variant_incompatible")
     texture_names = {}
     adapted = []
@@ -69,7 +76,9 @@ def adapt_variant_sources(sources: list[Path], targets: list[Path], directory: P
             # and line endings; only rewrite known texture page filenames.
             data.m_Script = "".join(
                 texture_names.get(line.rstrip("\r\n").casefold(), line.rstrip("\r\n"))
-                + line[len(line.rstrip("\r\n")):] for line in data.m_Script.splitlines(keepends=True))
+                + line[len(line.rstrip("\r\n")) :]
+                for line in data.m_Script.splitlines(keepends=True)
+            )
         data.save()
 
     directory.mkdir(parents=True, exist_ok=True)

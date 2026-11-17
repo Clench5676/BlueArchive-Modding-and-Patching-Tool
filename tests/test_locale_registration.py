@@ -36,9 +36,13 @@ def test_engine_and_library_callers_keep_their_original_app_messages(lang, monke
             rebuild.UpdateScope.serialized(SimpleNamespace(env=SimpleNamespace(file=None)), obj)
         assert str(caught.value) == EXPECTED[lang]["stream"]
 
-        failure = ServiceError("required_asset_extract_failed", file="example.bundle", name="required.atlas", error="synthetic")
+        failure = ServiceError(
+            "required_asset_extract_failed", file="example.bundle", name="required.atlas", error="synthetic"
+        )
+
         def fail(*args, **kwargs):
             raise failure
+
         monkeypatch.setattr(rebuild.Bundle, "load", fail)
         result = rebuild.rebuild([tmp_path / "source"], [tmp_path / "target"], tmp_path, {"ALL"}, SaveOptions())
         assert not result.success and result.error is failure
@@ -67,7 +71,14 @@ def test_engine_values_win_nested_collisions_and_languages_fall_back(tmp_path, m
     engine.mkdir()
     extra.mkdir()
     (engine / "en-US.json").write_text(json.dumps({"shared": {"value": "Engine", "scalar": "Keep scalar"}}))
-    (extra / "en-US.json").write_text(json.dumps({"shared": {"value": "App", "added": "Extra", "scalar": {"nested": "App"}}, "app": {"fallback": "Fallback {name}"}}))
+    (extra / "en-US.json").write_text(
+        json.dumps(
+            {
+                "shared": {"value": "App", "added": "Extra", "scalar": {"nested": "App"}},
+                "app": {"fallback": "Fallback {name}"},
+            }
+        )
+    )
     (extra / "th-TH.json").write_text(json.dumps({"app": {"own": "Thai locale"}}))
     monkeypatch.setattr(i18n, "_locale_dirs", [])
     monkeypatch.setattr(i18n, "i18n_manager", i18n.I18n("en-US", str(engine)))

@@ -46,8 +46,14 @@ class _ExportLibrary:
 class _Preparation(BatchImport):
     def options(self) -> dict:
         # Export all transferable Mod content; import filters and output preferences do not apply.
-        return {**self.defaults(), "types": ["ALL"], "output": None, "skipUnchanged": False,
-                "crc": "auto", "strategy": "name_type"}
+        return {
+            **self.defaults(),
+            "types": ["ALL"],
+            "output": None,
+            "skipUnchanged": False,
+            "crc": "auto",
+            "strategy": "name_type",
+        }
 
 
 def _safe_name(value: str) -> str:
@@ -58,11 +64,22 @@ def _safe_name(value: str) -> str:
 
 def _member_name(path: Path) -> str:
     name = path.name
-    if (not name or name in (".", "..") or any(c in name for c in '\\/:<>"|?*')
-            or any(ord(c) < 32 for c in name) or name.endswith((".", " "))):
+    if (
+        not name
+        or name in (".", "..")
+        or any(c in name for c in '\\/:<>"|?*')
+        or any(ord(c) < 32 for c in name)
+        or name.endswith((".", " "))
+    ):
         raise ServiceError("mod_unsupported", file=name)
-    if name.split(".")[0].upper() in {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)),
-                                      *(f"LPT{i}" for i in range(1, 10))}:
+    if name.split(".")[0].upper() in {
+        "CON",
+        "PRN",
+        "AUX",
+        "NUL",
+        *(f"COM{i}" for i in range(1, 10)),
+        *(f"LPT{i}" for i in range(1, 10)),
+    }:
         raise ServiceError("mod_unsupported", file=name)
     return name
 
@@ -111,13 +128,29 @@ def _sources(library: Any, scope: str, target: str | None) -> tuple[list[str], l
         for core, entry in sorted(folder.get("configured", {}).items()):
             source = entry.get("source", "")
             if source.startswith("mod:"):
-                assignments.append({"server": folder.get("server", "global"), "core": core,
-                                    "variant": entry.get("variant"), "kind": entry.get("kind"), "source": source})
+                assignments.append(
+                    {
+                        "server": folder.get("server", "global"),
+                        "core": core,
+                        "variant": entry.get("variant"),
+                        "kind": entry.get("kind"),
+                        "source": source,
+                    }
+                )
     return sorted({entry["source"] for entry in assignments}), assignments
 
 
-def _prepare(services: Any, library: Any, source: str, pin: Any, target: dict,
-             work: Path, log: Any, progress: Any, kind: str | None = None) -> tuple[list[Path], dict]:
+def _prepare(
+    services: Any,
+    library: Any,
+    source: str,
+    pin: Any,
+    target: dict,
+    work: Path,
+    log: Any,
+    progress: Any,
+    kind: str | None = None,
+) -> tuple[list[Path], dict]:
     if source.startswith("variant:"):
         variant = source[8:]
         targets = library._game_files(variant, kind, pin)
@@ -139,23 +172,38 @@ def _prepare(services: Any, library: Any, source: str, pin: Any, target: dict,
         return prepared, {"source": source, "variant": variant, "kind": kind}
     record = library._record(source[4:])
     paths = library._paths(record)
-    entry = {"id": _safe_name(source), "core": core_of(paths[0].name), "kind": record["kind"],
-             "variant": library._target_of(record), "files": [{"path": str(path)} for path in paths]}
+    entry = {
+        "id": _safe_name(source),
+        "core": core_of(paths[0].name),
+        "kind": record["kind"],
+        "variant": library._target_of(record),
+        "files": [{"path": str(path)} for path in paths],
+    }
     candidate = Candidate({path.name: path for path in paths}, entry)
     preparation = _Preparation(services)
     preparation._judge(candidate, _ExportLibrary(library), pin, log, asset_types={"ALL"}, strategy="name_type")
     preparation._require_importable(candidate)
     if candidate.entry["target"] != target:
         raise ServiceError("export_target_unavailable")
-    prepared, _, _ = preparation._prepare(candidate, ImportSettings(services.settings, preparation.options()),
-                                          work, log, lambda _c, _phase, step: progress({"step": f"import.step.{step}"}))
+    prepared, _, _ = preparation._prepare(
+        candidate,
+        ImportSettings(services.settings, preparation.options()),
+        work,
+        log,
+        lambda _c, _phase, step: progress({"step": f"import.step.{step}"}),
+    )
     if not prepared:
         raise ServiceError("mod_update_failed")
     # Recheck complete prepared bundles against the requested install, including dependencies.
-    library._check_group({path.name: path for path in prepared}, pin, compatibility=False,
-                         variant_key=library._target_of(record))
-    return prepared, {"source": source, "variant": library._target_of(record), "kind": record["kind"],
-                      "name": library._label(record)}
+    library._check_group(
+        {path.name: path for path in prepared}, pin, compatibility=False, variant_key=library._target_of(record)
+    )
+    return prepared, {
+        "source": source,
+        "variant": library._target_of(record),
+        "kind": record["kind"],
+        "name": library._label(record),
+    }
 
 
 def _member_path(directory: str, name: str) -> str:
@@ -172,8 +220,9 @@ def _generated(library: Any, record: dict | None) -> bool:
     changed files are ``generated`` in the package manifest."""
     from ..library import lobby_camera, portrait_edit
 
-    return bool(record) and bool(library._optimized_from(record) or lobby_camera.meta_of(record)
-                                 or record.get(portrait_edit.TAG))
+    return bool(record) and bool(
+        library._optimized_from(record) or lobby_camera.meta_of(record) or record.get(portrait_edit.TAG)
+    )
 
 
 class _Package:
@@ -182,8 +231,9 @@ class _Package:
     (a Spine package carries them), and per skeleton which parts are the mod's. Best effort: a part that cannot be
     read is left out of ``skeletons`` and a file without a verified official copy counts as the mod's."""
 
-    def __init__(self, library: Any, pin: Any, live: dict[str, Path], record: dict | None, paths: list[Path],
-                 kind: str | None):
+    def __init__(
+        self, library: Any, pin: Any, live: dict[str, Path], record: dict | None, paths: list[Path], kind: str | None
+    ):
         from ..library import lobby_camera
 
         self.library, self.pin, self.live = library, pin, live
@@ -247,8 +297,11 @@ class _Package:
                 continue
             try:
                 contents = self.contents(official)
-                pages = {atlas_remap.texture_key(page) for name, text in contents.atlases.items()
-                         for page in atlas_remap.parse_atlas(text, name).pages}
+                pages = {
+                    atlas_remap.texture_key(page)
+                    for name, text in contents.atlases.items()
+                    for page in atlas_remap.parse_atlas(text, name).pages
+                }
             except Exception:  # an unreadable part is not carried; the package stays a plain mod for it
                 continue
             if (contents.atlases or contents.skeletons) and (painted is None or pages & painted):
@@ -278,15 +331,18 @@ class _Package:
         atlas_of = atlas_remap.pair_atlases(mine.atlases, mine.skeletons)
         result = []
         for name in sorted(mine.skeletons):
-            entry = {"name": ba_mod.skeleton_name(name),
-                     "skel": ba_mod.OFFICIAL if official.skeletons.get(name) == mine.skeletons[name] else ba_mod.MOD}
+            entry = {
+                "name": ba_mod.skeleton_name(name),
+                "skel": ba_mod.OFFICIAL if official.skeletons.get(name) == mine.skeletons[name] else ba_mod.MOD,
+            }
             atlas = atlas_of.get(name)
             if atlas is not None:
-                entry["atlas"] = (ba_mod.OFFICIAL if official.atlases.get(atlas) == mine.atlases[atlas]
-                                  else ba_mod.MOD)
+                entry["atlas"] = ba_mod.OFFICIAL if official.atlases.get(atlas) == mine.atlases[atlas] else ba_mod.MOD
                 try:
-                    pages = {atlas_remap.texture_key(page)
-                             for page in atlas_remap.parse_atlas(mine.atlases[atlas], atlas).pages}
+                    pages = {
+                        atlas_remap.texture_key(page)
+                        for page in atlas_remap.parse_atlas(mine.atlases[atlas], atlas).pages
+                    }
                 except (atlas_remap.RemapError, ValueError, UnicodeError):
                     pages = set()
                 roles = {holders[key] for key in pages if key in holders}
@@ -296,9 +352,20 @@ class _Package:
         return result
 
 
-def export_zip(services: Any, library: Any, pin: Any, *, scope: str, target: str | None,
-               folder: Path, server: str, platform: str, kind: str | None,
-               log: Any, progress: Any) -> dict:
+def export_zip(
+    services: Any,
+    library: Any,
+    pin: Any,
+    *,
+    scope: str,
+    target: str | None,
+    folder: Path,
+    server: str,
+    platform: str,
+    kind: str | None,
+    log: Any,
+    progress: Any,
+) -> dict:
     """Keep a snapshot locked until ZIP verification and atomic publication finish."""
     devmode.check_write(folder)
     folder.mkdir(parents=True, exist_ok=True)
@@ -309,11 +376,17 @@ def export_zip(services: Any, library: Any, pin: Any, *, scope: str, target: str
         sources, assignments = _sources(library, scope, target)
         if not sources:
             raise ServiceError("export_empty")
-        manifest = {"version": 1, "scope": scope, "target": {"server": server, "platform": platform},
-                    "mods": [], "assignments": assignments}
+        manifest = {
+            "version": 1,
+            "scope": scope,
+            "target": {"server": server, "platform": platform},
+            "mods": [],
+            "assignments": assignments,
+        }
         live = {path.name: path for group in library._index(pin).values() for path in group} if pin else {}
         release = ba_mod.release_of(list(pin.dirs), server, platform) if pin else {}
         from ..updater import current_version
+
         created_by = {"tool": "BMPT", "version": current_version()}
         try:
             with tempfile.NamedTemporaryFile(prefix=".mod-export-", suffix=".tmp", dir=folder, delete=False) as stream:
@@ -324,13 +397,25 @@ def export_zip(services: Any, library: Any, pin: Any, *, scope: str, target: str
                     line = mod_progress.ItemProgress(progress, len(sources), "export")
                     for i, source in enumerate(sources, 1):
                         record = library._records.get(source[4:]) if source.startswith("mod:") else None
-                        line.item(i, variant=library._target_of(record) if record else "",
-                                  kind=record["kind"] if record else "",
-                                  name=library._progress_name(record) if record else "",
-                                  core=core_of(record["files"][0]) if record and record.get("files") else "",
-                                  step=mod_progress.STEP_EXPORT)
-                        paths, metadata = _prepare(services, library, source, pin, manifest["target"],
-                                                   Path(staging), log, lambda p: line.step(p["step"]), kind)
+                        line.item(
+                            i,
+                            variant=library._target_of(record) if record else "",
+                            kind=record["kind"] if record else "",
+                            name=library._progress_name(record) if record else "",
+                            core=core_of(record["files"][0]) if record and record.get("files") else "",
+                            step=mod_progress.STEP_EXPORT,
+                        )
+                        paths, metadata = _prepare(
+                            services,
+                            library,
+                            source,
+                            pin,
+                            manifest["target"],
+                            Path(staging),
+                            log,
+                            lambda p: line.step(p["step"]),
+                            kind,
+                        )
                         line.done()
                         # one mod per archive sits at its root, beside its ba-mod.json; several get a folder each
                         directory = "" if scope == "single" else _safe_name(source)
@@ -341,8 +426,10 @@ def export_zip(services: Any, library: Any, pin: Any, *, scope: str, target: str
                         sources_ = [*paths, *(path for path, _ in companions)]
                         keys = [unicodedata.normalize("NFC", name).casefold() for name in names]
                         if len(set(keys)) != len(keys):
-                            raise ServiceError("game_file_conflict", file=next(
-                                name for name, key in zip(names, keys) if keys.count(key) > 1))
+                            raise ServiceError(
+                                "game_file_conflict",
+                                file=next(name for name, key in zip(names, keys) if keys.count(key) > 1),
+                            )
                         members, described = [], []
                         for index, (path, name) in enumerate(zip(sources_, names)):
                             before = path.stat()
@@ -353,14 +440,25 @@ def export_zip(services: Any, library: Any, pin: Any, *, scope: str, target: str
                             described.append((path, name, role))
                             after = path.stat()
                             if (before.st_ino, before.st_size, before.st_mtime_ns, before.st_ctime_ns) != (
-                                    after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns):
+                                after.st_ino,
+                                after.st_size,
+                                after.st_mtime_ns,
+                                after.st_ctime_ns,
+                            ):
                                 raise ServiceError("entry_changed")
                         document = ba_mod.document(
-                            created_by=created_by, kind=package.kind, core=package.core, server=server,
-                            platform=platform, release=release,
-                            files=[{"path": member["name"], "sha256": member["sha256"], "role": member["role"]}
-                                   for member in members],
-                            skeletons=package.skeletons(described))
+                            created_by=created_by,
+                            kind=package.kind,
+                            core=package.core,
+                            server=server,
+                            platform=platform,
+                            release=release,
+                            files=[
+                                {"path": member["name"], "sha256": member["sha256"], "role": member["role"]}
+                                for member in members
+                            ],
+                            skeletons=package.skeletons(described),
+                        )
                         archive.writestr(_member_path(directory, ba_mod.FILE_NAME), ba_mod.dumps(document))
                         manifest["mods"].append({**metadata, "directory": directory, "files": members})
                     archive.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
@@ -394,13 +492,21 @@ def register_api(rpc: Any, services: Any) -> None:
         with library._lock:
             current = _pin_target(library, services.settings, library.current_pin())
             targets = [_pin_target(library, services.settings, pin) for pin in _pins(library)]
-        return {"folder": str(Path(services.settings.get("output_dir")).expanduser().resolve()),
-                **current, "targets": targets}
+        return {
+            "folder": str(Path(services.settings.get("output_dir")).expanduser().resolve()),
+            **current,
+            "targets": targets,
+        }
 
     @rpc.method("export.start")
-    def start(scope: str, folder: str, server: str, platform: str, target: str | None = None,
-              kind: str | None = None) -> str:
-        if scope not in ("single", "library", "applied") or server not in mod_origin.SERVERS or platform not in mod_origin.PLATFORMS:
+    def start(
+        scope: str, folder: str, server: str, platform: str, target: str | None = None, kind: str | None = None
+    ) -> str:
+        if (
+            scope not in ("single", "library", "applied")
+            or server not in mod_origin.SERVERS
+            or platform not in mod_origin.PLATFORMS
+        ):
             raise ServiceError("bad_params", key="export")
         if not isinstance(folder, str) or not folder.strip() or kind not in (None, "spr", "lobby", "model", "other"):
             raise ServiceError("bad_params", key="folder")
@@ -409,6 +515,19 @@ def register_api(rpc: Any, services: Any) -> None:
         library = services.library
         with library._lock:
             pin = _target_pin(library, services.settings, server, platform)
-        return services.submit("export", lambda log, progress: export_zip(
-            services, library, pin, scope=scope, target=target, folder=destination, server=server,
-            platform=platform, kind=kind, log=log, progress=progress))
+        return services.submit(
+            "export",
+            lambda log, progress: export_zip(
+                services,
+                library,
+                pin,
+                scope=scope,
+                target=target,
+                folder=destination,
+                server=server,
+                platform=platform,
+                kind=kind,
+                log=log,
+                progress=progress,
+            ),
+        )

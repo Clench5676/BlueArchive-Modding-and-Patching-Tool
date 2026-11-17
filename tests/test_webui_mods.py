@@ -46,8 +46,9 @@ class Env:
         self.tmp = tmp
         self.game = tmp / "game"
         self.spr = game_bundle(self.game)
-        self.catalog = FakeCatalog(FakeVariant("test", "test_spr", "test_home"),
-                                   FakeVariant("other", "other_spr", family="other"))
+        self.catalog = FakeCatalog(
+            FakeVariant("test", "test_spr", "test_home"), FakeVariant("other", "other_spr", family="other")
+        )
         self.settings = self.make_settings(tmp / "config.toml", self.game)
         self.data = tmp / "data"
         self.processes = FakeProcesses({})
@@ -68,12 +69,30 @@ class Env:
 
     def services(self, data: Path | None = None, settings: Settings | None = None, game=object()):
         data = data or self.data
-        s = Services(settings or self.settings, data, state=UiState(data / "webui.json"), cache=object(), game=game,
-                     catalog=self.catalog,
-                     classic_options={"processes": self.processes, "popen": self.popen, "ready_timeout": 5.0,
-                                      "poll_timeout": 0.2, "command": lambda tab: ["tool", "--classic", "--control"]})
-        app = WebApp(build_api(s), s.events, assets=s.asset, token="tok", consent=lambda: s.state.consent,
-                     classic=s.classic.wsgi, raise_window=s.raise_window)
+        s = Services(
+            settings or self.settings,
+            data,
+            state=UiState(data / "webui.json"),
+            cache=object(),
+            game=game,
+            catalog=self.catalog,
+            classic_options={
+                "processes": self.processes,
+                "popen": self.popen,
+                "ready_timeout": 5.0,
+                "poll_timeout": 0.2,
+                "command": lambda tab: ["tool", "--classic", "--control"],
+            },
+        )
+        app = WebApp(
+            build_api(s),
+            s.events,
+            assets=s.asset,
+            token="tok",
+            consent=lambda: s.state.consent,
+            classic=s.classic.wsgi,
+            raise_window=s.raise_window,
+        )
         self.made.append(s)
         return s, app
 
@@ -81,8 +100,9 @@ class Env:
         """A classic child on the real channel: it reports ready and polls through the web app."""
         p = FakePopen(cmd, pid=4242, **kw)
         self.popens.append(p)
-        client = ctl.ControlClient(kw["env"][cl.ENV_URL], kw["env"][cl.ENV_TOKEN],
-                                   opener=WsgiOpener(self.app), poll_timeout=5)
+        client = ctl.ControlClient(
+            kw["env"][cl.ENV_URL], kw["env"][cl.ENV_TOKEN], opener=WsgiOpener(self.app), poll_timeout=5
+        )
         self.clients.append(client)
         client.start()
         client.report("ready", pid=p.pid, hwnd=0, exe="/apps/tool")
@@ -92,7 +112,7 @@ class Env:
         return install_key(install_root(game or self.game))
 
     def add(self, path: Path, payload: bytes = b"modded!!", fixed: bool = False):
-        entry, = self.s.library.add([make_mod(path, self.tmp / "input", payload, fixed)])
+        (entry,) = self.s.library.add([make_mod(path, self.tmp / "input", payload, fixed)])
         return entry
 
     def drain(self) -> list[tuple[str, dict]]:
@@ -114,8 +134,7 @@ class Env:
         """A classic window an earlier instance left open: classic.json naming a live classic process."""
         self.processes.table[pid] = (created, runs)
         self.data.mkdir(parents=True, exist_ok=True)
-        (self.data / cl.CLASSIC_JSON).write_text(json.dumps({"pid": pid, "exe": "tool", "hwnd": 0,
-                                                             "created": created}))
+        (self.data / cl.CLASSIC_JSON).write_text(json.dumps({"pid": pid, "exe": "tool", "hwnd": 0, "created": created}))
 
     def close(self):
         for c in self.clients:
@@ -141,8 +160,9 @@ def env(tmp_path, monkeypatch, header_only_bundles):
 
 def queue(env, method, params):
     """classic.queue (its own parameter is called method)."""
-    _, _, body = call(env.app, "/api/rpc", "POST", {"method": "classic.queue",
-                                                     "params": {"method": method, "params": params}})
+    _, _, body = call(
+        env.app, "/api/rpc", "POST", {"method": "classic.queue", "params": {"method": method, "params": params}}
+    )
     return json.loads(body)
 
 
@@ -172,8 +192,13 @@ def test_preview_save_is_persistent_and_independent_of_game_intent(env, enabled)
 
 
 def test_preview_save_refuses_foreign_missing_or_wrong_kind_sources(env):
-    for kind, source in [("spr", "mod:missing"), ("spr", "variant:other"), ("model", "official"),
-                         ("other", "official"), ("spr", "path:/outside")]:
+    for kind, source in [
+        ("spr", "mod:missing"),
+        ("spr", "variant:other"),
+        ("model", "official"),
+        ("other", "official"),
+        ("spr", "path:/outside"),
+    ]:
         result = rpc(env.app, "ui.preview", variant="test", kind=kind, source=source)
         assert "error" in result
     assert env.s.state.preview_sources(env.s.library.current_pin().key, "test") == {}
@@ -181,20 +206,49 @@ def test_preview_save_refuses_foreign_missing_or_wrong_kind_sources(env):
 
 # --- mods.state ---
 
-STATE_KEYS = {"installs", "current", "enabled", "available", "reason", "scan", "explained", "configured",
-              "pending", "stuck", "left", "unfinished", "drift", "untracked", "damaged", "sourceMissing",
-              "queued", "scanned", "tray", "traySupported", "busy", "progress"}
+STATE_KEYS = {
+    "installs",
+    "current",
+    "enabled",
+    "available",
+    "reason",
+    "scan",
+    "explained",
+    "configured",
+    "pending",
+    "stuck",
+    "left",
+    "unfinished",
+    "drift",
+    "untracked",
+    "damaged",
+    "sourceMissing",
+    "queued",
+    "scanned",
+    "tray",
+    "traySupported",
+    "busy",
+    "progress",
+}
 
 
 def test_mods_state_has_its_shape_and_answers_while_the_library_lock_is_held(env):
     state = rpc(env.app, "mods.state")["result"]
     assert STATE_KEYS <= set(state)
     pin = env.s.library.installs()[0]
-    assert state["installs"] == [{"id": pin.id, "key": env.key(), "server": "global", "folder": str(pin.root),
-                                  "named": True, "label": "Global", "distinct": None}]
+    assert state["installs"] == [
+        {
+            "id": pin.id,
+            "key": env.key(),
+            "server": "global",
+            "folder": str(pin.root),
+            "named": True,
+            "label": "Global",
+            "distinct": None,
+        }
+    ]
     assert (state["current"], state["enabled"], state["available"], state["reason"]) == (env.key(), True, True, None)
-    assert (state["scan"], state["explained"], state["busy"], state["queued"]) == (
-        None, False, False, 0)
+    assert (state["scan"], state["explained"], state["busy"], state["queued"]) == (None, False, False, 0)
     assert state["unfinished"] == {"pending": 0, "left": 0, "stuck": 0, "held": 0}
     # answered from the snapshot: another thread holding the library lock does not hold it up
     library, held, release = env.s.library, threading.Event(), threading.Event()
@@ -312,6 +366,7 @@ def test_no_known_install_is_game_not_found(env):
 
 # --- consent and preferences ---
 
+
 def test_the_scan_consent_and_the_preferences(env):
     app, s = env.app, env.s
     assert rpc(app, "mods.scan")["error"]["code"] == "scan_off"
@@ -419,6 +474,7 @@ def test_switching_off_cancels_pending_scans_and_releases_the_classic_queue(env,
 
 # --- installs ---
 
+
 def test_two_installs_of_one_server_are_labelled_by_their_folders(env):
     steam = env.tmp / "Steam"
     blue = env.tmp / "BlueArchive"
@@ -505,6 +561,7 @@ def test_another_data_directorys_toggle_shows_within_one_poll(env, monkeypatch):
 
 # --- jobs ---
 
+
 def test_the_toggle_job_its_events_and_the_snapshot(env):
     mod = env.add(env.spr)
     applied = env.job("actions.apply", variant="test", source=f"mod:{mod.id}")
@@ -544,7 +601,7 @@ def test_adding_mods_already_in_use_runs_while_the_game_runs(env, monkeypatch):
     env.spr.write_bytes(CRCUtils.apply_crc_fix(header_bundle(b"modded!!"), int(parse_filename(env.spr.name).crc)))
     env.s.library
     assert wait_for(lambda: events_named(env.drain(), "library.scanned"))
-    entry, = rpc(env.app, "mods.entries")["result"]
+    (entry,) = rpc(env.app, "mods.entries")["result"]
     monkeypatch.setattr(safety, "check_game_not_running", lambda: (_ for _ in ()).throw(ServiceError("game_running")))
     job = env.job("mods.adopt", entries=[{"install": entry["install"], "core": entry["core"]}])
     assert job.state == "done", job.error
@@ -558,10 +615,12 @@ def test_adding_mods_already_in_use_runs_while_the_game_runs(env, monkeypatch):
 
 def test_every_writer_job_publishes_library_changed(env):
     mod = env.add(env.spr)
-    for method, params in (("actions.apply", {"variant": "test", "source": f"mod:{mod.id}"}),
-                           ("actions.restore", {"variant": "test"}),
-                           ("mods.toggle", {"enabled": False, "expect": True}),
-                           ("mods.clearBuilt", {})):
+    for method, params in (
+        ("actions.apply", {"variant": "test", "source": f"mod:{mod.id}"}),
+        ("actions.restore", {"variant": "test"}),
+        ("mods.toggle", {"enabled": False, "expect": True}),
+        ("mods.clearBuilt", {}),
+    ):
         env.drain()
         job = env.job(method, **params)
         assert job.state == "done", (method, job.error)
@@ -594,6 +653,7 @@ def test_moving_the_library_takes_its_configuration_and_built_copies(env):
 
 
 # --- the classic window ---
+
 
 def test_writes_are_refused_while_a_classic_window_is_open_and_can_be_queued(env):
     mod = env.add(env.spr)
@@ -648,11 +708,9 @@ def test_a_queued_toggle_runs_once_the_watched_classic_window_closes(env):
     s.start_watch(run=False)
     env.orphan()
     s.watch.poll()
-    assert queue(env, "mods.toggle", {"enabled": False, "expect": True})["result"] \
-        == {"queued": 1}
+    assert queue(env, "mods.toggle", {"enabled": False, "expect": True})["result"] == {"queued": 1}
     # a toggle back to the stored intent removes it, a later one replaces it
-    assert queue(env, "mods.toggle", {"enabled": True, "expect": False})["result"] \
-        == {"queued": 0}
+    assert queue(env, "mods.toggle", {"enabled": True, "expect": False})["result"] == {"queued": 0}
     queue(env, "mods.toggle", {"enabled": False, "expect": True})
     env.drain()
     del env.processes.table[5555]  # the classic window ends
@@ -775,8 +833,7 @@ def test_a_restore_while_off_that_writes_nothing_runs_while_the_classic_window_i
     env.s.library.profiles.update(lambda data: data.update(enabled=False))
     env.orphan()
     assert rpc(env.app, "actions.restore", variant="test")["error"]["code"] == "classic_open"
-    assert queue(env, "actions.restore", {"variant": "test"})["result"] == \
-        {"queued": 1}
+    assert queue(env, "actions.restore", {"variant": "test"})["result"] == {"queued": 1}
 
 
 def test_a_restore_that_turns_out_to_write_is_refused_at_write_time(env):
@@ -943,9 +1000,12 @@ def test_game_writers_answer_while_the_classic_window_waits_for_ready(env, monke
         await_ready(child)
 
     def submit():
-        params = {"mods.toggle": {"enabled": False, "expect": True}, "mods.restoreDrift": {"entries": []},
-                  "actions.apply": {"variant": "test", "source": f"mod:{mod.id}"},
-                  "actions.restore": {"variant": "test"}}[method]
+        params = {
+            "mods.toggle": {"enabled": False, "expect": True},
+            "mods.restoreDrift": {"entries": []},
+            "actions.apply": {"variant": "test", "source": f"mod:{mod.id}"},
+            "actions.restore": {"variant": "test"},
+        }[method]
         submitting.update(rpc(env.app, method, **params))
         answered.set()
 
@@ -968,6 +1028,7 @@ def test_game_writers_answer_while_the_classic_window_waits_for_ready(env, monke
 
 
 # --- quitting and the single instance ---
+
 
 def test_app_quit(env):
     destroyed = []
@@ -1072,30 +1133,40 @@ def test_failed_build_finishes_the_apply_and_releases_its_locks(env, monkeypatch
 
 def test_background_add_switches_and_rescans_with_durable_file_progress(env, monkeypatch):
     env.s.state.set_scan_consent(True)
-    path = make_mod(env.spr, env.tmp / 'picker')
+    path = make_mod(env.spr, env.tmp / "picker")
     env.s.library
     assert env.s.jobs.wait(env.s._prune_job, 5)
     assert env.s.scanner.wait_idle(5)
     scans = []
-    monkeypatch.setattr(env.s.scanner, 'request', lambda **kw: scans.append(kw))
-    job = env.job('mods.add', paths=[str(path)], background=True)
-    assert job.state == 'done' and job.writes == 'game'
-    assert [(m['target'], m['kind']) for m in job.result['added']] == [('test', 'spr')]
-    assert job.to_json()['progress'] == {'id': job.id, 'current': 1, 'total': 1, 'sequence': 4,
-                                         'label': t('webui.progress.apply', name=path.name)}
-    assert job.result['applied'] == job.result['added'] and not job.result['failed']
+    monkeypatch.setattr(env.s.scanner, "request", lambda **kw: scans.append(kw))
+    job = env.job("mods.add", paths=[str(path)], background=True)
+    assert job.state == "done" and job.writes == "game"
+    assert [(m["target"], m["kind"]) for m in job.result["added"]] == [("test", "spr")]
+    assert job.to_json()["progress"] == {
+        "id": job.id,
+        "current": 1,
+        "total": 1,
+        "sequence": 4,
+        "label": t("webui.progress.apply", name=path.name),
+    }
+    assert job.result["applied"] == job.result["added"] and not job.result["failed"]
     assert env.spr.read_bytes() == path.read_bytes()
-    assert env.s.library.configured('test')['spr'] == f"mod:{job.result['added'][0]['id']}"
+    assert env.s.library.configured("test")["spr"] == f"mod:{job.result['added'][0]['id']}"
     assert scans
-    changed = events_named(env.drain(), 'library.changed')
-    assert changed[-1] == {'cores': ['test_spr'], 'kinds': ['spr'], 'mods': True}
-    restored = env.job('actions.restore', variant='test')
-    assert restored.state == 'done'
-    assert restored.to_json()['progress'] == {'id': restored.id, 'current': 1, 'total': 1, 'sequence': 1,
-                                              'label': t('webui.progress.restore', name=path.name)}
+    changed = events_named(env.drain(), "library.changed")
+    assert changed[-1] == {"cores": ["test_spr"], "kinds": ["spr"], "mods": True}
+    restored = env.job("actions.restore", variant="test")
+    assert restored.state == "done"
+    assert restored.to_json()["progress"] == {
+        "id": restored.id,
+        "current": 1,
+        "total": 1,
+        "sequence": 1,
+        "label": t("webui.progress.restore", name=path.name),
+    }
 
 
-@pytest.mark.parametrize('scan_finishes_first', [True, False])
+@pytest.mark.parametrize("scan_finishes_first", [True, False])
 def test_background_add_replaces_a_scan_it_invalidates(env, monkeypatch, scan_finishes_first):
     from bmpt.library.service import _View
 
@@ -1112,7 +1183,7 @@ def test_background_add_replaces_a_scan_it_invalidates(env, monkeypatch, scan_fi
             assert release.wait(5)
         return entries(view, pins, cancel, cores, **options)
 
-    monkeypatch.setattr(_View, 'entries', blocked)
+    monkeypatch.setattr(_View, "entries", blocked)
     scanned = env.s.scanner._on_done
 
     def completed(result, served):
@@ -1120,7 +1191,7 @@ def test_background_add_replaces_a_scan_it_invalidates(env, monkeypatch, scan_fi
         if result is None:
             dropped.set()
 
-    monkeypatch.setattr(env.s.scanner, '_on_done', completed)
+    monkeypatch.setattr(env.s.scanner, "_on_done", completed)
     add = env.s.library.add
 
     def overlapping(paths, progress=None, **kwargs):
@@ -1130,13 +1201,13 @@ def test_background_add_replaces_a_scan_it_invalidates(env, monkeypatch, scan_fi
             assert dropped.wait(5)  # the stale scan is already gone while add is still busy
         return result
 
-    monkeypatch.setattr(env.s.library, 'add', overlapping)
+    monkeypatch.setattr(env.s.library, "add", overlapping)
     env.s.request_scan()
     assert entered.wait(5)
     try:
-        path = make_mod(env.spr, env.tmp / 'picker')
-        job = env.job('mods.add', paths=[str(path)], background=True)
-        assert job.state == 'done'
+        path = make_mod(env.spr, env.tmp / "picker")
+        job = env.job("mods.add", paths=[str(path)], background=True)
+        assert job.state == "done"
     finally:
         release.set()
     assert env.s.scanner.wait_idle(5)
@@ -1145,80 +1216,80 @@ def test_background_add_replaces_a_scan_it_invalidates(env, monkeypatch, scan_fi
 
 
 def test_apply_rescans_other_cores_changed_by_global_pruning(env, monkeypatch):
-    other = game_bundle(env.game, 'other_spr')
+    other = game_bundle(env.game, "other_spr")
     env.s.set_scan_consent(True)
     assert env.s.scanner.wait_idle(5)
     mod_b = env.add(other)
-    assert env.job('actions.apply', variant='other', source=f'mod:{mod_b.id}').state == 'done'
+    assert env.job("actions.apply", variant="other", source=f"mod:{mod_b.id}").state == "done"
     assert env.s.scanner.wait_idle(5)
     before = {e.core: e for e in env.s.snapshot.entries()}
-    assert before['other_spr'].state == 'ok'
+    assert before["other_spr"].state == "ok"
     other.unlink()
-    game_bundle(env.game, 'other_spr', date='2026-02-01', payload=b'updated official')
+    game_bundle(env.game, "other_spr", date="2026-02-01", payload=b"updated official")
     scopes = []
     scan = env.s.library.scan
 
     def measured(*args, **kwargs):
-        scopes.append(kwargs.get('cores'))
+        scopes.append(kwargs.get("cores"))
         return scan(*args, **kwargs)
 
-    monkeypatch.setattr(env.s.library, 'scan', measured)
+    monkeypatch.setattr(env.s.library, "scan", measured)
     mod_a = env.add(env.spr)
-    assert env.job('actions.apply', variant='test', source=f'mod:{mod_a.id}').state == 'done'
+    assert env.job("actions.apply", variant="test", source=f"mod:{mod_a.id}").state == "done"
     assert env.s.scanner.wait_idle(5)
-    assert scopes == [{'test_spr', 'other_spr'}]
+    assert scopes == [{"test_spr", "other_spr"}]
     after = {e.core: e for e in env.s.snapshot.entries()}
-    assert after['other_spr'].state == 'updated'
-    assert after['test_spr'].configured == f'mod:{mod_a.id}'
+    assert after["other_spr"].state == "updated"
+    assert after["test_spr"].configured == f"mod:{mod_a.id}"
 
 
 def test_switch_rescans_only_changed_cores_and_preserves_other_snapshot_entries(env, monkeypatch):
     env.s.set_scan_consent(True)
     assert env.s.scanner.wait_idle(5)
-    other = game_bundle(env.game, 'other_spr')
-    keep = other.with_name(other.name + '.backup')
+    other = game_bundle(env.game, "other_spr")
+    keep = other.with_name(other.name + ".backup")
     keep.write_bytes(other.read_bytes())
-    other.write_bytes(header_bundle(b'outside mod') + b'crc!')
+    other.write_bytes(header_bundle(b"outside mod") + b"crc!")
     env.s.request_scan()
     assert env.s.scanner.wait_idle(5)
     before = {(e.install, e.core): e for e in env.s.snapshot.entries()}
-    assert (env.key(), 'other_spr') in before
+    assert (env.key(), "other_spr") in before
     scopes = []
     scan = env.s.library.scan
 
     def measured(*args, **kwargs):
-        scopes.append(kwargs.get('cores'))
+        scopes.append(kwargs.get("cores"))
         return scan(*args, **kwargs)
 
-    monkeypatch.setattr(env.s.library, 'scan', measured)
+    monkeypatch.setattr(env.s.library, "scan", measured)
     mod = env.add(env.spr)
-    job = env.job('actions.apply', variant='test', source=f'mod:{mod.id}')
-    assert job.state == 'done'
+    job = env.job("actions.apply", variant="test", source=f"mod:{mod.id}")
+    assert job.state == "done"
     assert env.s.scanner.wait_idle(5)
-    assert scopes == [{'test_spr'}]
+    assert scopes == [{"test_spr"}]
     after = {(e.install, e.core): e for e in env.s.snapshot.entries()}
-    assert after[(env.key(), 'other_spr')] == before[(env.key(), 'other_spr')]
-    assert after[(env.key(), 'test_spr')].configured == f'mod:{mod.id}'
+    assert after[(env.key(), "other_spr")] == before[(env.key(), "other_spr")]
+    assert after[(env.key(), "test_spr")].configured == f"mod:{mod.id}"
 
 
 def test_unchanged_apply_rescans_only_the_variants_cores(env, monkeypatch):
     env.s.set_scan_consent(True)
     assert env.s.scanner.wait_idle(5)
     mod = env.add(env.spr)
-    assert env.job('actions.apply', variant='test', source=f'mod:{mod.id}').state == 'done'
+    assert env.job("actions.apply", variant="test", source=f"mod:{mod.id}").state == "done"
     assert env.s.scanner.wait_idle(5)
     scopes = []
     scan = env.s.library.scan
 
     def measured(*args, **kwargs):
-        scopes.append(kwargs.get('cores'))
+        scopes.append(kwargs.get("cores"))
         return scan(*args, **kwargs)
 
-    monkeypatch.setattr(env.s.library, 'scan', measured)
-    job = env.job('actions.apply', variant='test', source=f'mod:{mod.id}')
-    assert job.state == 'done' and job.result['unchanged']
+    monkeypatch.setattr(env.s.library, "scan", measured)
+    job = env.job("actions.apply", variant="test", source=f"mod:{mod.id}")
+    assert job.state == "done" and job.result["unchanged"]
     assert env.s.scanner.wait_idle(5)
-    assert scopes == [{'test_spr'}]
+    assert scopes == [{"test_spr"}]
 
 
 def test_delete_rpc_is_a_library_writer_and_retains_source_when_classic_is_open(env):
@@ -1229,9 +1300,9 @@ def test_delete_rpc_is_a_library_writer_and_retains_source_when_classic_is_open(
     assert info == {"name": mod.label, "used": True}
     job = env.job("mods.remove", id=mod.id, confirm=True)
     assert job.state == "failed" and job.writes == "library"
-    assert job.error['code'] == 'classic_open'
+    assert job.error["code"] == "classic_open"
     assert env.s.library.mods() == [mod] and mod.file.exists()
-    assert env.s.library.configured("test")["spr"] == f'mod:{mod.id}'
+    assert env.s.library.configured("test")["spr"] == f"mod:{mod.id}"
     assert env.s.mods_state()["unfinished"]["pending"] == 0
 
 
@@ -1283,7 +1354,7 @@ def test_first_add_baselines_existing_mods_before_storing_new_ones(env, monkeypa
     assert len(mods) == 2 and old.id in {m.id for m in mods}
     assert env.s.state.seen_mods() == {old.id}
     assert UiState(path).seen_mods() == {old.id}
-    new, = [m for m in mods if m.id != old.id]
+    (new,) = [m for m in mods if m.id != old.id]
     assert new.user_added is (method in ("add", "background"))
 
 
@@ -1294,7 +1365,7 @@ def test_migrated_legacy_library_is_baselined_before_new_adds(env, state):
     legacy, _ = env.services(data=old)
     ids = set()
     for i in range(20):
-        mod, = legacy.library.add([make_mod(env.spr, env.tmp / "legacy-input", payload=f"old-{i}".encode())])
+        (mod,) = legacy.library.add([make_mod(env.spr, env.tmp / "legacy-input", payload=f"old-{i}".encode())])
         ids.add(mod.id)
     legacy.close(wait=5)
     library_state = old / "library" / "state.json"
@@ -1318,14 +1389,14 @@ def test_migrated_legacy_library_is_baselined_before_new_adds(env, state):
     assert UiState(migrated / "webui.json").seen_mods() == ids
     source = make_mod(env.spr, env.tmp / "new-input", payload=b"added after takeover")
     result = rpc(env.app, "mods.add", paths=[str(source)])["result"]
-    new, = result["added"]
+    (new,) = result["added"]
     assert new["user_added"] and new["id"] not in env.s.state.seen_mods()
     assert env.s.state.seen_mods() == ids
 
 
 def test_seen_rpc_writes_only_ui_state_and_preserves_seen_duplicates(env, monkeypatch):
     path = make_mod(env.spr, env.tmp / "picker")
-    mod, = rpc(env.app, "mods.add", paths=[str(path)])["result"]["added"]
+    (mod,) = rpc(env.app, "mods.add", paths=[str(path)])["result"]["added"]
     library = env.s.library
     # Startup pruning publishes its own change event; settle it before isolating the seen RPC.
     assert env.s.jobs.wait(env.s._prune_job, 10)
@@ -1358,7 +1429,9 @@ def test_add_rpc_uses_the_normal_switch_for_both_kinds_and_respects_mods_off(env
     assert result["applied" if enabled else "configured"] == result["added"]
     for entry in result["added"]:
         assert env.s.library.configured("test")[entry["kind"]] == f"mod:{entry['id']}"
-    assert [path.read_bytes() for path in (env.spr, lobby)] == ([path.read_bytes() for path in sources] if enabled else before)
+    assert [path.read_bytes() for path in (env.spr, lobby)] == (
+        [path.read_bytes() for path in sources] if enabled else before
+    )
 
 
 def test_compatibility_rpc_is_a_read_only_job_and_uses_the_current_install(env, monkeypatch):
@@ -1431,8 +1504,11 @@ def test_remap_rpc_is_read_only_and_accept_publishes_a_new_library_mod(env, monk
     assert job.result == {"preview": "review", "report": result.report}
     assert calls == [(entry.id, env.s.library.current_pin(), geometry)]
     # the redrawn check: a read-only job that hands the rest poses to the library
-    monkeypatch.setattr(env.s.library, "redrawn", lambda mod, geometry, pin=None: calls.append(("redrawn", mod, geometry))
-                        or {"redrawn": True, "overlap": 0.5})
+    monkeypatch.setattr(
+        env.s.library,
+        "redrawn",
+        lambda mod, geometry, pin=None: calls.append(("redrawn", mod, geometry)) or {"redrawn": True, "overlap": 0.5},
+    )
     job = env.job("actions.redrawn", mod=entry.id, geometry=geometry)
     assert job.state == "done" and job.writes is None and job.result == {"redrawn": True, "overlap": 0.5}
     assert calls[-1] == ("redrawn", entry.id, geometry)
@@ -1442,6 +1518,7 @@ def test_remap_rpc_is_read_only_and_accept_publishes_a_new_library_mod(env, monk
     assert job.state == "done" and job.writes == "library"
     assert job.result == result.to_json()
     from bmpt.webui.services import _changed_of
+
     assert _changed_of(result) == {"cores": [entry.core], "kinds": [entry.kind], "mods": True}
 
 
@@ -1480,13 +1557,13 @@ def test_a_scan_waits_for_the_writer_job_running_and_follows_it(env, monkeypatch
         scans.append(release.is_set())
         return scan(*args, **kwargs)
 
-    monkeypatch.setattr(env.s.library, 'scan', measured)
+    monkeypatch.setattr(env.s.library, "scan", measured)
 
     def writer(log, progress):
         started.set()
         assert release.wait(5)
 
-    job = env.s.submit('test.writer', writer, writes='game', library=env.s.library)
+    job = env.s.submit("test.writer", writer, writes="game", library=env.s.library)
     assert started.wait(5)
     env.s.request_scan()
     assert not env.s.scanner.wait_idle(0.6)  # waiting for the job, not scanning

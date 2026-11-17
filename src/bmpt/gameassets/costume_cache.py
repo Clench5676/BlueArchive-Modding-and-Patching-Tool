@@ -1,4 +1,5 @@
 """Bounded caches of derived costume poses, and lossless clip sampling."""
+
 from __future__ import annotations
 
 import hashlib
@@ -86,12 +87,19 @@ class PoseStore:
 
     @staticmethod
     def _valid(poses: np.ndarray, animated: np.ndarray) -> bool:
-        return (poses.dtype == np.float64 and poses.ndim == 4 and poses.shape[2:] == (4, 4)
-                and 0 < poses.shape[0] <= 3 and poses.shape[1] > 0
-                and poses.nbytes + animated.nbytes <= ENTRY_BYTES and np.isfinite(poses).all()
-                and animated.dtype == np.int64 and animated.ndim == 1
-                and len(animated) <= poses.shape[1]
-                and ((animated >= 0) & (animated < poses.shape[1])).all())
+        return (
+            poses.dtype == np.float64
+            and poses.ndim == 4
+            and poses.shape[2:] == (4, 4)
+            and 0 < poses.shape[0] <= 3
+            and poses.shape[1] > 0
+            and poses.nbytes + animated.nbytes <= ENTRY_BYTES
+            and np.isfinite(poses).all()
+            and animated.dtype == np.int64
+            and animated.ndim == 1
+            and len(animated) <= poses.shape[1]
+            and ((animated >= 0) & (animated < poses.shape[1])).all()
+        )
 
     def get(self, dev: str, token: str) -> tuple[np.ndarray, np.ndarray] | None:
         key = self._key(dev, token)
@@ -167,9 +175,24 @@ def clip_digest(tree: Mapping) -> str:
     # Content keys invalidate even in-place edits of the writer's trees. No
     # graph, tree or asset reader survives a build; only numerical samples do.
     samples = dense.get("m_SampleArray", [])
-    digest = hashlib.sha256(repr((CLIP_SCHEMA, muscle["m_StartTime"], muscle["m_StopTime"], tree.get("m_SampleRate"),
-                                 ns, nd, dense["m_FrameCount"], dense.get("m_BeginTime"), dense.get("m_SampleRate"),
-                                 len(streamed["data"]), len(samples), len(constant["data"]))).encode())
+    digest = hashlib.sha256(
+        repr(
+            (
+                CLIP_SCHEMA,
+                muscle["m_StartTime"],
+                muscle["m_StopTime"],
+                tree.get("m_SampleRate"),
+                ns,
+                nd,
+                dense["m_FrameCount"],
+                dense.get("m_BeginTime"),
+                dense.get("m_SampleRate"),
+                len(streamed["data"]),
+                len(samples),
+                len(constant["data"]),
+            )
+        ).encode()
+    )
     for values, dtype in ((streamed["data"], "<u4"), (samples, "<f8"), (constant["data"], "<f8")):
         digest.update(np.asarray(values, dtype=dtype).tobytes())
     return digest.hexdigest()
@@ -181,6 +204,7 @@ def memoize_pose(pose, token: str, indices: tuple[int, ...] | None = None, count
     The caller identifies the model revision, hierarchy, bindings and clip
     content. Copies keep solvers independent; the lock covers bookkeeping only.
     """
+
     def sampled(frame: int):
         key = f"frame|{token}|{frame}"
         found = _poses.get(key)
@@ -223,7 +247,7 @@ def decode_clip(tree: Mapping):
         count = int(layout[0])
         times, curves, at = values[:count].tolist(), {}, count
         for index, size in layout[1:].reshape(-1, 2):
-            curves[int(index)] = values[at:at + size].tolist()
+            curves[int(index)] = values[at : at + size].tolist()
             at += size
         for k, value in enumerate(constant["data"]):
             curves[ns + nd + k] = [value]

@@ -15,128 +15,128 @@ def builder(env, monkeypatch):
     calls = []
 
     def build(record, targets, work, log, progress, pin):
-        calls.append(record['id'])
+        calls.append(record["id"])
         work.mkdir(parents=True, exist_ok=True)
         output = work / targets[0].name
-        output.write_bytes(header_bundle(b'built:' + env.library._paths(record)[0].read_bytes()))
+        output.write_bytes(header_bundle(b"built:" + env.library._paths(record)[0].read_bytes()))
         return {targets[0]: output}
 
-    monkeypatch.setattr(env.library, '_install_direct', build)
+    monkeypatch.setattr(env.library, "_install_direct", build)
     return calls
 
 
-@pytest.mark.parametrize('configured_viewer', [False, True])
+@pytest.mark.parametrize("configured_viewer", [False, True])
 def test_reapply_reuses_only_a_referenced_build_after_restart(setup_library, monkeypatch, configured_viewer):
     env = setup_library
     if configured_viewer:
-        viewer = env.tmp / 'SpineViewerCLI.exe'
+        viewer = env.tmp / "SpineViewerCLI.exe"
         viewer.touch()
-        env.settings.set('spine_viewer_path', str(viewer))
-        env.settings.set('check_animations', True)
-    mod, = env.library.add([make_mod(env.original, env.tmp / 'upload')])
+        env.settings.set("spine_viewer_path", str(viewer))
+        env.settings.set("check_animations", True)
+    (mod,) = env.library.add([make_mod(env.original, env.tmp / "upload")])
     calls = builder(env, monkeypatch)
-    env.library.apply('test', f'mod:{mod.id}')
+    env.library.apply("test", f"mod:{mod.id}")
     built = env.original.read_bytes()
-    assert not (env.root / 'built').exists()
-    assert env.library.sizes('built')['builtSize'] == 0
-    assert env.library.apply('test', f'mod:{mod.id}').unchanged
+    assert not (env.root / "built").exists()
+    assert env.library.sizes("built")["builtSize"] == 0
+    assert env.library.apply("test", f"mod:{mod.id}").unchanged
     assert calls == [mod.id, mod.id]  # no configured instant-On copy yet
     env.library.toggle(False, True)
-    kept, = (env.root / 'built').iterdir()
-    assert kept.suffix == '.bundle' and kept.read_bytes() == built
+    (kept,) = (env.root / "built").iterdir()
+    assert kept.suffix == ".bundle" and kept.read_bytes() == built
     env.library.toggle(True, False)
     env.library = reload_library(env)
     calls = builder(env, monkeypatch)
-    assert env.library.apply('test', f'mod:{mod.id}').unchanged
+    assert env.library.apply("test", f"mod:{mod.id}").unchanged
     assert calls == []
-    assert env.library.sizes('built')['builtSize'] == kept.stat().st_size
+    assert env.library.sizes("built")["builtSize"] == kept.stat().st_size
     assert env.library.clear_built() == len(built)
-    assert env.library.sizes('built')['builtSize'] == 0
-    env.library.apply('test', f'mod:{mod.id}')
+    assert env.library.sizes("built")["builtSize"] == 0
+    env.library.apply("test", f"mod:{mod.id}")
     assert calls == [mod.id]
-    assert not list((env.root / 'built').iterdir())
+    assert not list((env.root / "built").iterdir())
 
 
-@pytest.mark.parametrize('core, kind', [('test_spr', 'spr'), ('test_home_gl', 'lobby')])
+@pytest.mark.parametrize("core, kind", [("test_spr", "spr"), ("test_home_gl", "lobby")])
 def test_restore_removes_the_only_retained_build_and_reapply_rebuilds(setup_library, monkeypatch, core, kind):
     env = setup_library
-    target = env.original if kind == 'spr' else game_bundle(env.game_dir, core)
+    target = env.original if kind == "spr" else game_bundle(env.game_dir, core)
     official = target.read_bytes()
-    mod, = env.library.add([make_mod(target, env.tmp / 'upload')])
+    (mod,) = env.library.add([make_mod(target, env.tmp / "upload")])
     builder(env, monkeypatch)
-    env.library.apply('test', f'mod:{mod.id}', kind=kind)
+    env.library.apply("test", f"mod:{mod.id}", kind=kind)
     env.library.toggle(False, True)
     env.library.toggle(True, False)
-    assert env.library.sizes('built')['builtSize'] > 0
-    env.library.restore('test', kind=kind)
+    assert env.library.sizes("built")["builtSize"] > 0
+    env.library.restore("test", kind=kind)
     assert target.read_bytes() == official
-    assert not list((env.root / 'built').rglob('*.bundle'))
-    assert env.library.sizes('built')['builtSize'] == 0
+    assert not list((env.root / "built").rglob("*.bundle"))
+    assert env.library.sizes("built")["builtSize"] == 0
     env.library = reload_library(env)
     calls = builder(env, monkeypatch)
-    env.library.apply('test', f'mod:{mod.id}', kind=kind)
+    env.library.apply("test", f"mod:{mod.id}", kind=kind)
     assert calls == [mod.id]
-    assert not list((env.root / 'built').iterdir())
+    assert not list((env.root / "built").iterdir())
 
 
-@pytest.mark.parametrize('kind', ['spr', 'lobby'])
+@pytest.mark.parametrize("kind", ["spr", "lobby"])
 def test_refused_apply_leaves_no_persistent_build(setup_library, monkeypatch, kind):
     env = setup_library
-    target = env.original if kind == 'spr' else game_bundle(env.game_dir, 'test_home_gl')
+    target = env.original if kind == "spr" else game_bundle(env.game_dir, "test_home_gl")
     official = target.read_bytes()
-    mod, = env.library.add([make_mod(target, env.tmp / 'upload')])
+    (mod,) = env.library.add([make_mod(target, env.tmp / "upload")])
     calls = builder(env, monkeypatch)
 
     def refuse(pin):
-        raise ServiceError('game_running')
+        raise ServiceError("game_running")
 
-    monkeypatch.setattr(env.library, '_write_check', refuse)
-    with pytest.raises(ServiceError, match='game_running'):
-        env.library.apply('test', f'mod:{mod.id}', kind=kind)
+    monkeypatch.setattr(env.library, "_write_check", refuse)
+    with pytest.raises(ServiceError, match="game_running"):
+        env.library.apply("test", f"mod:{mod.id}", kind=kind)
     # a refusal of the moment comes before anything is built
     assert calls == [] and target.read_bytes() == official
-    assert not (env.root / 'built').exists()
-    assert env.library.sizes('built')['builtSize'] == 0
+    assert not (env.root / "built").exists()
+    assert env.library.sizes("built")["builtSize"] == 0
 
 
-@pytest.mark.parametrize('change', ['source', 'options', 'copy', 'version', 'target', 'animation_check', 'viewer_path'])
+@pytest.mark.parametrize("change", ["source", "options", "copy", "version", "target", "animation_check", "viewer_path"])
 def test_changed_inputs_options_program_targets_and_corrupt_copy_force_rebuild(setup_library, monkeypatch, change):
     env = setup_library
-    mod, = env.library.add([make_mod(env.original, env.tmp / 'upload')])
+    (mod,) = env.library.add([make_mod(env.original, env.tmp / "upload")])
     calls = builder(env, monkeypatch)
-    env.library.apply('test', f'mod:{mod.id}')
+    env.library.apply("test", f"mod:{mod.id}")
     env.library.toggle(False, True)
     env.library.toggle(True, False)
-    if change == 'source':
-        mod.file.write_bytes(header_bundle(b'changed source'))
-    elif change == 'options':
-        env.settings.set('compression_method', 'lz4')
-    elif change == 'copy':
-        cached, = (env.root / 'built').glob('*.bundle')
-        cached.write_bytes(header_bundle(b'changed copy'))
-    elif change == 'version':
-        monkeypatch.setattr('bmpt.library.service._build_version', lambda: 'another version')
-    elif change == 'animation_check':
-        env.settings.set('check_animations', True)
-    elif change == 'viewer_path':
-        env.settings.set('spine_viewer_path', str(env.tmp / 'SpineViewerCLI.exe'))
+    if change == "source":
+        mod.file.write_bytes(header_bundle(b"changed source"))
+    elif change == "options":
+        env.settings.set("compression_method", "lz4")
+    elif change == "copy":
+        (cached,) = (env.root / "built").glob("*.bundle")
+        cached.write_bytes(header_bundle(b"changed copy"))
+    elif change == "version":
+        monkeypatch.setattr("bmpt.library.service._build_version", lambda: "another version")
+    elif change == "animation_check":
+        env.settings.set("check_animations", True)
+    elif change == "viewer_path":
+        env.settings.set("spine_viewer_path", str(env.tmp / "SpineViewerCLI.exe"))
     else:
         env.original.unlink()
-        env.original = game_bundle(env.game_dir, date='2026-02-01', payload=b'new official target')
-    env.library.apply('test', f'mod:{mod.id}')
+        env.original = game_bundle(env.game_dir, date="2026-02-01", payload=b"new official target")
+    env.library.apply("test", f"mod:{mod.id}")
     assert calls == [mod.id, mod.id]
-    assert not (env.root / 'built' / 'reuse').exists()
+    assert not (env.root / "built" / "reuse").exists()
 
 
 def test_fingerprints_compute_both_hashes_and_revalidate_changed_file(tmp_path):
-    path = tmp_path / 'payload.bundle'
-    path.write_bytes(header_bundle(b'A' * (2 * 1024 * 1024)))
+    path = tmp_path / "payload.bundle"
+    path.write_bytes(header_bundle(b"A" * (2 * 1024 * 1024)))
     hashes = Fingerprints()
     first = hashes.get(path)
     assert first.sha1 == hashlib.sha1(path.read_bytes()).hexdigest()
     assert first.crc == CRCUtils.compute_crc32(path)
     assert hashes.get(path) is first
-    path.write_bytes(header_bundle(b'B' * (2 * 1024 * 1024)))
+    path.write_bytes(header_bundle(b"B" * (2 * 1024 * 1024)))
     second = hashes.get(path)
     assert second.sha1 != first.sha1 and second.crc != first.crc
     assert second.crc == CRCUtils.compute_crc32(path)

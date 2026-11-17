@@ -74,7 +74,7 @@ class _Reader:
             return ""
         start = self.pos
         self.skip(length - 1)
-        return self.data[start:self.pos].decode("utf-8", errors="replace")
+        return self.data[start : self.pos].decode("utf-8", errors="replace")
 
     def name(self) -> str:
         value = self.string()

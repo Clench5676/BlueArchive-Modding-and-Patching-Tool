@@ -21,14 +21,20 @@ def unityfs(path, *, compression=0, at_end=False, engine="2022.3.55f1", tail=b"C
     info = b"\0" * 16 + struct.pack(">ii", 0, len(names))
     for name in sorted(names):
         info += struct.pack(">qqI", 0, 0, 0) + name.encode() + b"\0"
-    compressed = (CompressionHelper.compress_lzma(info) if compression == 1
-                  else CompressionHelper.compress_lz4(info) if compression == 2 else info)
+    compressed = (
+        CompressionHelper.compress_lzma(info)
+        if compression == 1
+        else CompressionHelper.compress_lz4(info)
+        if compression == 2
+        else info
+    )
     prefix = b"UnityFS\0" + struct.pack(">I", 7) + b"5.x.x\0" + engine.encode() + b"\0"
     header_size = (len(prefix) + 20 + 15) & ~15
     flags = compression | 0x40 | (0x80 if at_end else 0)
     payload = b"unused data block" * 100
-    header = prefix + struct.pack(">qIII", header_size + len(compressed) + len(payload),
-                                  len(compressed), len(info), flags)
+    header = prefix + struct.pack(
+        ">qIII", header_size + len(compressed) + len(payload), len(compressed), len(info), flags
+    )
     header += b"\0" * (header_size - len(header))
     path.write_bytes(header + (payload + compressed if at_end else compressed + payload) + tail)
     return names
@@ -68,6 +74,7 @@ def test_cab_scan_caches_and_invalidates_changed_bundle(tmp_path, monkeypatch):
     names = unityfs(bundle)
     from bmpt import config
     from ba_modding_toolkit import utils
+
     monkeypatch.setattr(utils, "EXE_DIR", tmp_path / "data")
     monkeypatch.setattr(config, "user_cache_dir", lambda: tmp_path / "cache")
     assert find_cab_bundles(names, [tmp_path]) == dict.fromkeys(names, bundle)
@@ -101,10 +108,8 @@ def test_reference_graph_resolves_external_script_once(monkeypatch, tmp_path):
     local = SimpleNamespace(name="CAB-local", externals=[SimpleNamespace(path="archive:/CAB-Remote")])
     remote = SimpleNamespace(name="CAB-remote", externals=[])
     pointer = {"m_FileID": 1, "m_PathID": 7}
-    source = SimpleNamespace(assets_file=local, path_id=2,
-                             read_typetree=lambda: {"m_Script": pointer})
-    target = SimpleNamespace(assets_file=remote, path_id=7,
-                             read_typetree=lambda: {"m_ClassName": "SyntheticScript"})
+    source = SimpleNamespace(assets_file=local, path_id=2, read_typetree=lambda: {"m_Script": pointer})
+    target = SimpleNamespace(assets_file=remote, path_id=7, read_typetree=lambda: {"m_ClassName": "SyntheticScript"})
     path = tmp_path / "remote.bundle"
     loads, scans = [], []
 
@@ -120,7 +125,9 @@ def test_reference_graph_resolves_external_script_once(monkeypatch, tmp_path):
     assert graph.deref(source, pointer) is target
     assert loads == [path] and scans == [True]
     assert list(iter_pptrs({"rows": [pointer, {"value": {"m_FileID": 0, "m_PathID": 2}}]})) == [
-        pointer, {"m_FileID": 0, "m_PathID": 2}]
+        pointer,
+        {"m_FileID": 0, "m_PathID": 2},
+    ]
 
 
 def test_new_commands_are_present_in_grouped_help():
@@ -137,9 +144,12 @@ def test_cli_install_keeps_backup_and_cancellation(tmp_path, monkeypatch, cancel
     game.mkdir()
     target = game / source.name
     target.write_bytes(b"original")
-    group = ModGroup("synthetic", "spinecharacters", "synthetic", [
-        ModFilePlan(source, parse_filename(source.name), InstallAction.DIRECT_REPLACE,
-                    existing_path=target)])
+    group = ModGroup(
+        "synthetic",
+        "spinecharacters",
+        "synthetic",
+        [ModFilePlan(source, parse_filename(source.name), InstallAction.DIRECT_REPLACE, existing_path=target)],
+    )
     monkeypatch.setattr(handlers, "plan_mod_install", lambda *args: [group])
     monkeypatch.setattr("builtins.input", lambda prompt: "q")
     argv = [str(source), "--resource-dir", str(game), "--output-dir", str(tmp_path / "out")]

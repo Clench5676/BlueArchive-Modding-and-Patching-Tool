@@ -32,14 +32,32 @@ def official_like(dialog_at=(0.0, 0.0)) -> Prefab:
     p.node(6, "BodyTouch", father=2, pos=(193.0, -600.0), rot=10.0)
     p.add(6, 601, "BoxCollider", {"m_Enabled": True, "m_Size": vec(1000.0, 1000.0), "m_Center": vec(0.0, -39.0)})
     p.mb(6, 603, BODY, SpineCharacter={"m_FileID": 0, "m_PathID": 303})
-    p.mb(3, 303, CHARACTER, SkeletonAnimation={"m_FileID": 0, "m_PathID": 301}, idleBaseRandomClipPool=[], idleClipPool=[])
+    p.mb(
+        3,
+        303,
+        CHARACTER,
+        SkeletonAnimation={"m_FileID": 0, "m_PathID": 301},
+        idleBaseRandomClipPool=[],
+        idleClipPool=[],
+    )
     p.node(8, "ChatDialog", father=1, pos=dialog_at)
     p.node(11, "Talk", father=8, pos=(98.0, 277.0))
     p.node(12, "Think", father=8, pos=(68.0, 277.0))
-    p.mb(8, 801, CHAT, DialogBoxes=[{"Type": 0, "GameObject": {"m_FileID": 0, "m_PathID": 11}},
-                                    {"Type": 1, "GameObject": {"m_FileID": 0, "m_PathID": 12}}])
-    p.mb(1, 1002, ASPECT, **aspect_component(scale=(2,), offsets=[(11, (0, 0, 0), (14.7, 41.55, 0)),
-                                                                  (12, (0, 0, 0), (10.2, 41.55, 0))]))
+    p.mb(
+        8,
+        801,
+        CHAT,
+        DialogBoxes=[
+            {"Type": 0, "GameObject": {"m_FileID": 0, "m_PathID": 11}},
+            {"Type": 1, "GameObject": {"m_FileID": 0, "m_PathID": 12}},
+        ],
+    )
+    p.mb(
+        1,
+        1002,
+        ASPECT,
+        **aspect_component(scale=(2,), offsets=[(11, (0, 0, 0), (14.7, 41.55, 0)), (12, (0, 0, 0), (10.2, 41.55, 0))]),
+    )
     return p
 
 
@@ -66,7 +84,9 @@ def assert_mapped(before: dict, after: dict, k: float, offset, anchors=("Talk", 
     assert old.keys() == new.keys()
     for name, layer in old.items():
         x, y = point(k, offset, layer["x"], layer["y"])
-        assert new[name]["x"] == pytest.approx(x, abs=0.02 * (1 + k)) and new[name]["y"] == pytest.approx(y, abs=0.02 * (1 + k))
+        assert new[name]["x"] == pytest.approx(x, abs=0.02 * (1 + k)) and new[name]["y"] == pytest.approx(
+            y, abs=0.02 * (1 + k)
+        )
         assert new[name]["scale"] == pytest.approx(layer["scale"] * k, rel=1e-4, abs=6e-6 * (1 + k))
         assert new[name]["z"] == pytest.approx(layer["z"] * k, abs=1e-3)
         rest = {key for key in layer if key not in ("x", "y", "scale", "z")}
@@ -78,22 +98,29 @@ def assert_mapped(before: dict, after: dict, k: float, offset, anchors=("Talk", 
             r, t = point(k, offset, a["rect"][2], a["rect"][3])
             assert b["rect"] == pytest.approx([l, bt, r, t], abs=0.1 * (1 + k))
             assert b["rot"] == pytest.approx(a["rot"], abs=0.02)
-            assert {f: v for f, v in b.items() if f != "rect" and f != "rot"} == {f: v for f, v in a.items() if f != "rect" and f != "rot"}
+            assert {f: v for f, v in b.items() if f != "rect" and f != "rot"} == {
+                f: v for f, v in a.items() if f != "rect" and f != "rot"
+            }
     for name in anchors:
         x, y = point(k, offset, *before["dialog"][name])
         # the game rounds k A t where the original rounded A t: at most half a unit each, k times the one
         assert after["dialog"][name] == pytest.approx([x, y], abs=0.6 + 0.5 * k)
     assert len(after["pins"]) == len(before["pins"])
     for a, b in zip(before["pins"], after["pins"]):
-        assert {f: v for f, v in b.items() if not isinstance(v, (int, float))} == {f: v for f, v in a.items() if not isinstance(v, (int, float))}
+        assert {f: v for f, v in b.items() if not isinstance(v, (int, float))} == {
+            f: v for f, v in a.items() if not isinstance(v, (int, float))
+        }
     systems = before.get("fx", {}).get("systems", [])
     assert len(after.get("fx", {}).get("systems", [])) == len(systems)
     for a, b in zip(systems, after["fx"]["systems"]):
         assert b["name"] == a["name"] and b["path"].replace(f"/{lobby_camera.NODE}/", "/") == a["path"]
         if a.get("anchor"):  # relative to the bone it follows; else in the root's space, like static
             assert b["rel"] == a["rel"]
-        for matrix_of in (lambda s: s.get("static"), lambda s: (s.get("anchor") or {}).get("go"),
-                          lambda s: None if s.get("anchor") else s.get("rel")):
+        for matrix_of in (
+            lambda s: s.get("static"),
+            lambda s: (s.get("anchor") or {}).get("go"),
+            lambda s: None if s.get("anchor") else s.get("rel"),
+        ):
             m, n = matrix_of(a), matrix_of(b)
             if m is None:
                 assert n is None
@@ -103,7 +130,9 @@ def assert_mapped(before: dict, after: dict, k: float, offset, anchors=("Talk", 
             assert n == pytest.approx(want, rel=1e-4, abs=0.02 * (1 + k))
 
 
-@pytest.mark.parametrize("k, offset", [(1.0, (0.0, 0.0)), (1.25, (0.0, -180.0)), (0.8, (40.0, 96.5)), (2.0, (0.0, 1200.0))])
+@pytest.mark.parametrize(
+    "k, offset", [(1.0, (0.0, 0.0)), (1.25, (0.0, -180.0)), (0.8, (40.0, 96.5)), (2.0, (0.0, 1200.0))]
+)
 def test_camera_is_a_similarity_of_the_lobby(k, offset):
     for dialog_at in ((0.0, 0.0), (10.0, -20.0)):
         before = official_like(dialog_at).read("LobbyTest", SKELETONS, core_clips())
@@ -113,15 +142,27 @@ def test_camera_is_a_similarity_of_the_lobby(k, offset):
 
 def test_camera_changes_only_the_component_and_its_targets():
     p = official_like()
-    trees = lobby_camera.camera_trees(kinds_of(p), lambda pid: p.objects[pid][1], SCRIPTS, "LobbyTest", 1.5, (3.0, -40.0))
+    trees = lobby_camera.camera_trees(
+        kinds_of(p), lambda pid: p.objects[pid][1], SCRIPTS, "LobbyTest", 1.5, (3.0, -40.0)
+    )
     assert set(trees) == {1002, 100002, 100011, 100012}
     spine, talk, aspect = trees[100002], trees[100011], trees[1002]
-    assert spine["m_LocalScale"] == {"x": 1.5, "y": 1.5, "z": 1.5} and spine["m_LocalPosition"] == {"x": 3.0, "y": -40.0, "z": 0.0}
-    assert talk["m_LocalPosition"] == {"x": 1.5 * 98 + 3, "y": 1.5 * 277 - 40, "z": 0.0} and talk["m_LocalScale"]["x"] == 1.0
+    assert spine["m_LocalScale"] == {"x": 1.5, "y": 1.5, "z": 1.5} and spine["m_LocalPosition"] == {
+        "x": 3.0,
+        "y": -40.0,
+        "z": 0.0,
+    }
+    assert (
+        talk["m_LocalPosition"] == {"x": 1.5 * 98 + 3, "y": 1.5 * 277 - 40, "z": 0.0}
+        and talk["m_LocalScale"]["x"] == 1.0
+    )
     assert aspect["offsetSettings"][0]["MostNarrowAdd"] == pytest.approx({"x": 14.7 * 1.5, "y": 41.55 * 1.5, "z": 0.0})
     assert (aspect["mostNarrowScale"], aspect["mostWideScale"]) == (1.15, 1.3)
     # the prefab's own trees are left as they are
-    assert p.objects[100002][1]["m_LocalScale"]["x"] == 1.0 and p.objects[1002][1]["offsetSettings"][0]["MostNarrowAdd"]["x"] == 14.7
+    assert (
+        p.objects[100002][1]["m_LocalScale"]["x"] == 1.0
+        and p.objects[1002][1]["offsetSettings"][0]["MostNarrowAdd"]["x"] == 14.7
+    )
 
 
 def refuse(p: Prefab, root="LobbyTest"):
@@ -133,8 +174,9 @@ def refuse(p: Prefab, root="LobbyTest"):
 def test_prefabs_the_camera_cannot_frame_are_refused():
     refuse(official_like(), root="LobbyOther")
     no_component = official_like()
-    no_component.objects[1][1]["m_Component"] = [c for c in no_component.objects[1][1]["m_Component"]
-                                                 if c["component"]["m_PathID"] != 1002]
+    no_component.objects[1][1]["m_Component"] = [
+        c for c in no_component.objects[1][1]["m_Component"] if c["component"]["m_PathID"] != 1002
+    ]
     refuse(no_component)
     for field in ("mostNarrowScale", "scaleTransforms", "offsetSettings"):
         missing = official_like()
@@ -152,7 +194,14 @@ def test_prefabs_the_camera_cannot_frame_are_refused():
     two = official_like()
     two.mb(1, 1003, ASPECT, **aspect_component(scale=(2,)))
     refuse(two)
-    for k, offset in ((0.0, (0, 0)), (math.inf, (0, 0)), (1.0, (0, math.nan)), (1.0, (0,)), (True, (0, 0)), (1.0, (0, 1e9))):
+    for k, offset in (
+        (0.0, (0, 0)),
+        (math.inf, (0, 0)),
+        (1.0, (0, math.nan)),
+        (1.0, (0,)),
+        (True, (0, 0)),
+        (1.0, (0, 1e9)),
+    ):
         with pytest.raises(ServiceError) as caught:
             lobby_camera.check_params(k, offset)
         assert caught.value.code == "bad_params"
@@ -168,18 +217,24 @@ def test_compose_frames_a_camera_on_a_camera():
 
 # --- the game's own prefabs ---
 
+
 @pytest.fixture(scope="module")
 def real_game(tmp_path_factory):
     if not GAME_DIR.is_dir():
         pytest.skip("No local game install")
     from bmpt.gameassets import AssetCache, GameAssets
     from ba_modding_toolkit.searching import get_search_dirs
-    return GameAssets(get_search_dirs(GAME_DIR), AssetCache(root=tmp_path_factory.mktemp("camera") / "cache", allowed=False))
+
+    return GameAssets(
+        get_search_dirs(GAME_DIR), AssetCache(root=tmp_path_factory.mktemp("camera") / "cache", allowed=False)
+    )
 
 
 @pytest.mark.skipif(not GAME_DIR.is_dir(), reason="No local game install")
-@pytest.mark.parametrize("core, k, offset", [("azusa_home", 1.3, (0.0, -150.0)), ("hina_home", 1.6, (0.0, 260.0)),
-                                             ("shiroko_home", 0.9, (0.0, 40.0))])
+@pytest.mark.parametrize(
+    "core, k, offset",
+    [("azusa_home", 1.3, (0.0, -150.0)), ("hina_home", 1.6, (0.0, 260.0)), ("shiroko_home", 0.9, (0.0, 40.0))],
+)
 def test_real_prefab_round_trip(real_game, tmp_path, core, k, offset):
     from ba_modding_toolkit.bundle import Bundle
     from ba_modding_toolkit.naming import parse_filename
@@ -203,7 +258,6 @@ def test_real_prefab_round_trip(real_game, tmp_path, core, k, offset):
     shutil.rmtree(out)
 
 
-
 def _without_node(intro: dict) -> dict:
     """An intro with the camera node and its curves taken out, the other nodes' indices and paths as before it."""
     nodes = intro.get("nodes", [])
@@ -218,8 +272,11 @@ def _without_node(intro: dict) -> dict:
         if isinstance(value, dict):
             node = value.get("on") in (None, "node")  # props index nodes, volumes, systems or sprites by "on"
             # what lies below the camera node is moved by it during the intro: only that move is new
-            return {k: (v if k == "i" and not node else fix(v, k)) for k, v in value.items()
-                    if not (k == "moves" and isinstance(v, dict) and v.get("nodes") == [cam])}
+            return {
+                k: (v if k == "i" and not node else fix(v, k))
+                for k, v in value.items()
+                if not (k == "moves" and isinstance(v, dict) and v.get("nodes") == [cam])
+            }
         if isinstance(value, list):
             return [fix(v, key) for v in value]
         if key in ("i", "node", "gate"):
@@ -235,11 +292,16 @@ def _without_node(intro: dict) -> dict:
 
 
 @pytest.mark.skipif(not GAME_DIR.is_dir(), reason="No local game install")
-@pytest.mark.parametrize("core, k, offset, held", [("ch0294_home", 1.3, (0.0, 0.0), True),
-                                                   ("azusa_home", 0.85, (0.0, 120.0), True),
-                                                   ("shiroko_home", 1.2, (0.0, -60.0), True),
-                                                   ("hina_home", 1.4, (0.0, 200.0), True),
-                                                   ("ch0247_home", 1.2, (0.0, 0.0), False)])
+@pytest.mark.parametrize(
+    "core, k, offset, held",
+    [
+        ("ch0294_home", 1.3, (0.0, 0.0), True),
+        ("azusa_home", 0.85, (0.0, 120.0), True),
+        ("shiroko_home", 1.2, (0.0, -60.0), True),
+        ("hina_home", 1.4, (0.0, 200.0), True),
+        ("ch0247_home", 1.2, (0.0, 0.0), False),
+    ],
+)
 def test_real_camera_keeps_the_official_intro(real_game, tmp_path, core, k, offset, held):
     """The camera node holds the official framing through the intro and the camera from its rest pose on; the
     intro is otherwise the official one. A lobby whose root Animator animates below its targets keeps the targets'
@@ -272,7 +334,9 @@ def test_real_camera_keeps_the_official_intro(real_game, tmp_path, core, k, offs
         assert intro.evaluate(curve, rest + 0.5) == pytest.approx(camera[slot], abs=1e-4)
     assert len(curves) == 6
 
+
 # --- the library: a camera is a Memorial Lobby choice of its student ---
+
 
 @pytest.fixture(scope="module")
 def lobby_sources(real_game):
@@ -308,9 +372,16 @@ def camera_env(tmp_path, monkeypatch, lobby_sources):
     game = GameAssets([folder], AssetCache(tmp_path / "cache", allowed=False))
     monkeypatch.setattr(safety, "check_game_not_running", lambda: None)
     library = ModLibrary(tmp_path / "library", FakeCatalog(FakeVariant("azusa", None, "Azusa_home")), game, settings)
-    return SimpleNamespace(library=library, game=game, folder=folder, prefab=folder / azusa.name,
-                           other=folder / shiroko.name, official=azusa.read_bytes(), other_bytes=shiroko.read_bytes(),
-                           art={folder / p.name: p.read_bytes() for p in art})
+    return SimpleNamespace(
+        library=library,
+        game=game,
+        folder=folder,
+        prefab=folder / azusa.name,
+        other=folder / shiroko.name,
+        official=azusa.read_bytes(),
+        other_bytes=shiroko.read_bytes(),
+        art={folder / p.name: p.read_bytes() for p in art},
+    )
 
 
 def save(e, source="official", k=1.25, offset=(0.0, -120.0)):
@@ -327,7 +398,13 @@ def test_camera_choice_applies_switches_and_restores(camera_env):
     pin = lib.current_pin()
     record = save(e)
     meta = record[lc.TAG]
-    assert (meta["variant"], meta["source"], meta["number"], meta["base"], meta["root"]) == ("azusa", "official", 1, "official", "LobbyAzusa")
+    assert (meta["variant"], meta["source"], meta["number"], meta["base"], meta["root"]) == (
+        "azusa",
+        "official",
+        1,
+        "official",
+        "LobbyAzusa",
+    )
     # the intro keeps the official framing: the prefab copies the timeline of the art's own bundle
     cab = lc.timeline_cab(e.prefab)
     assert meta["timeline"] in {path.name for path in e.art} and cab is not None
@@ -335,12 +412,21 @@ def test_camera_choice_applies_switches_and_restores(camera_env):
     assert meta["slot"] == core_of(e.prefab.name) != core_of(e.other.name)
     # listed as a lobby choice of Azusa; hidden from the generic sources
     entry = next(m for m in lib.mods() if m.id == record["id"])
-    assert (entry.kind, entry.target, entry.core, entry.camera["number"], entry.camera["source"]) == ("lobby", "azusa", "azusa_home", 1, "official")
+    assert (entry.kind, entry.target, entry.core, entry.camera["number"], entry.camera["source"]) == (
+        "lobby",
+        "azusa",
+        "azusa_home",
+        1,
+        "official",
+    )
     assert not lib.other_mods(pin)
     assert e.prefab.read_bytes() == e.official  # saving writes nothing in the game
     # the preview: the official art, the camera's layout
     assert lib.preview_bundles(record["id"]) == lib.official_bundles("azusa_home")
-    before, after = e.game.lobby_info("azusa_home"), e.game.lobby_info("azusa_home", prefab=lib.camera_prefab(record["id"])[1])
+    before, after = (
+        e.game.lobby_info("azusa_home"),
+        e.game.lobby_info("azusa_home", prefab=lib.camera_prefab(record["id"])[1]),
+    )
     assert_mapped(before, after, 1.25, (0.0, -120.0))
 
     source = f"mod:{record['id']}"
@@ -399,8 +485,15 @@ def test_camera_serves_the_effect_textures_of_the_lobby_it_frames(camera_env, tm
 
     monkeypatch.setattr(e.game, "lobby_fx_texture", texture)
     monkeypatch.setattr(e.game, "lobby_sound", sound)
-    services = Services(Settings(tmp_path / "webui-config.toml"), tmp_path / "data", state=UiState(tmp_path / "webui.json"),
-                        cache=object(), game=e.game, catalog=object(), library=e.library)
+    services = Services(
+        Settings(tmp_path / "webui-config.toml"),
+        tmp_path / "data",
+        state=UiState(tmp_path / "webui.json"),
+        cache=object(),
+        game=e.game,
+        catalog=object(),
+        library=e.library,
+    )
     try:
         # the camera's own route, which its lobby.json comes from, answers for the textures and sounds that lobby.json
         # names: those of the lobby it frames
@@ -425,9 +518,17 @@ def test_camera_still_is_framed_by_its_camera(camera_env, tmp_path):
     e = camera_env
     k, offset = 1.6, (40.0, -300.0)
     record = save(e, k=k, offset=offset)
-    services = Services(Settings(tmp_path / "webui-config.toml"), tmp_path / "data", state=UiState(tmp_path / "webui.json"),
-                        cache=object(), game=e.game, catalog=object(), library=e.library)
+    services = Services(
+        Settings(tmp_path / "webui-config.toml"),
+        tmp_path / "data",
+        state=UiState(tmp_path / "webui.json"),
+        cache=object(),
+        game=e.game,
+        catalog=object(),
+        library=e.library,
+    )
     try:
+
         def framing(route):
             return json.loads(services.asset(f"spine/{route}/framing.json", {}).body)
 

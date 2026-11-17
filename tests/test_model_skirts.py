@@ -64,7 +64,9 @@ def _setup(leg_forward=0.0, knee=None):
     strip = np.array([[x, y, 0.12] for y in heights for x in (-0.03, 0.0, 0.03)])
     joints = np.array([[0 if y > -0.15 else 1, 2, 2, 2] for y in strip[:, 1]])
     weights = np.tile([1.0, 0.0, 0.0, 0.0], (len(strip), 1))
-    edges = np.array([[i, i + 3] for i in range(len(strip) - 3)] + [[i, i + 1] for i in range(len(strip) - 1) if i % 3 != 2])
+    edges = np.array(
+        [[i, i + 3] for i in range(len(strip) - 3)] + [[i, i + 1] for i in range(len(strip) - 1) if i % 3 != 2]
+    )
     cloth = ms.Cloth(strip, joints, weights, [0], edges)
     leg = np.array([[x, y, z] for x in (-0.04, 0.0, 0.04) for y in np.linspace(-0.05, -0.4, 15) for z in (0.03, 0.08)])
     nodes = np.ones((len(leg), 1), int)
@@ -72,8 +74,11 @@ def _setup(leg_forward=0.0, knee=None):
     leg, nodes = np.concatenate([leg, kneecap]), np.concatenate([nodes, np.full((len(kneecap), 1), 2)])
     legs = ms.Legs(leg, nodes, np.ones((len(leg), 1)))
     solver = ms.Solver(chains, cloth, legs, t_rest, pelvis=0)
-    pose = [np.eye(4), trs((0, 0, leg_forward), (0, 0, 0, 1), (1, 1, 1)),
-            trs(knee if knee is not None else (0, 0, 0), (0, 0, 0, 1), (1, 1, 1))]
+    pose = [
+        np.eye(4),
+        trs((0, 0, leg_forward), (0, 0, 0, 1), (1, 1, 1)),
+        trs(knee if knee is not None else (0, 0, 0), (0, 0, 0, 1), (1, 1, 1)),
+    ]
     return solver, pose
 
 
@@ -90,8 +95,7 @@ def test_batched_joint_equals_scalar_reference_bit_for_bit(loop, with_edges):
     joints = np.column_stack([cloth.joints[:, 0], cloth.joints[:, 0] + 2, np.full((len(cloth.rest), 2), 4)])
     weights = np.tile([0.6, 0.3, 0.1, 0.0], (len(cloth.rest), 1))
     edges = cloth.edges if with_edges else np.empty((0, 2), int)
-    solver = ms.Solver(chains, ms.Cloth(cloth.rest, joints, weights, [0], edges), solver.legs,
-                       [np.eye(4)] * 3, 0)
+    solver = ms.Solver(chains, ms.Cloth(cloth.rest, joints, weights, [0], edges), solver.legs, [np.eye(4)] * 3, 0)
     reference = copy.deepcopy(solver)
     reference._joint = types.MethodType(_reference_joint, reference)
     _, free = _setup()
@@ -111,14 +115,18 @@ def test_solver_sequence_yields_and_propagates_cancellation(monkeypatch):
     solver, pose = _setup(leg_forward=0.1)
     solved = []
     original = solver.solve
+
     def measured(*args):
         result = original(*args)
         solved.append(result)
         return result
+
     monkeypatch.setattr(solver, "solve", measured)
+
     def cancel():
         if solved:
             raise RuntimeError("cancelled")
+
     with pytest.raises(RuntimeError, match="cancelled"):
         solver.sequence([0.0, 0.1], lambda _: pose, step=cancel)
     assert len(solved) == 1
@@ -129,16 +137,19 @@ def test_judged_sequence_reuse_writes_identical_clip_curves(monkeypatch):
     _, free = _setup()
     poses = [pushed, free, pushed, free]
     prepared = ([k / 30 for k in range(4)], lambda k: poses[k], set())
-    skeleton = types.SimpleNamespace(nodes=[types.SimpleNamespace(path=f"bone/{k}") for k in range(5)],
-                                     clip_frames=lambda tree: prepared)
+    skeleton = types.SimpleNamespace(
+        nodes=[types.SimpleNamespace(path=f"bone/{k}") for k in range(5)], clip_frames=lambda tree: prepared
+    )
     tree = _clip()
     skirt = ma.Skirt([0, 1], ["a", "b"], [-1, 0], [], 0, solver, 3)
     measured = ma.skirt_sequence(skeleton, solver, tree, prepared=prepared)
     old = copy.deepcopy(tree)
     assert ma.skirt_curves(skeleton, skirt, old) == 1
     skirt.solved[("clip", 1)] = measured
+
     def unexpected(*args, **kwargs):
         raise AssertionError("judged sequence was solved again")
+
     monkeypatch.setattr(ma, "skirt_sequence", unexpected)
     assert ma.skirt_curves(skeleton, skirt, tree, ("clip", 1)) == 1
     assert tree == old
@@ -148,13 +159,16 @@ def test_shared_curve_dependencies_write_the_same_solver_and_face_curves():
     solver, _ = _setup(leg_forward=0.1)
     skeleton = ma.Skeleton(None)
     for k in range(7):
-        skeleton.nodes.append(ma.Node(f"bone{k}", f"bone/{k}", 0 if k else None,
-                                      ((0, 0, 0), (0, 0, 0, 1), (1, 1, 1)), None, None, True))
+        skeleton.nodes.append(
+            ma.Node(f"bone{k}", f"bone/{k}", 0 if k else None, ((0, 0, 0), (0, 0, 0, 1), (1, 1, 1)), None, None, True)
+        )
     tree = _clip()
-    tree['m_ClipBindingConstant']['genericBindings'][0]['path'] = zlib.crc32(skeleton.nodes[1].path.encode())
+    tree["m_ClipBindingConstant"]["genericBindings"][0]["path"] = zlib.crc32(skeleton.nodes[1].path.encode())
     face = ma.FaceRetarget(solver.chains, 0, [1, 2], skeleton.world())
-    skirts = [ma.Skirt([0, 1], ["a", "b"], [-1, 0], [], 0, solver, 3),
-              ma.Skirt([0, 1], ["c", "d"], [-1, 0], [], 0, face, 5)]
+    skirts = [
+        ma.Skirt([0, 1], ["a", "b"], [-1, 0], [], 0, solver, 3),
+        ma.Skirt([0, 1], ["c", "d"], [-1, 0], [], 0, face, 5),
+    ]
     expected = copy.deepcopy(tree)
     for skirt in skirts:
         ma.skirt_curves(skeleton, skirt, expected)
@@ -168,13 +182,14 @@ def test_shared_curve_dependencies_write_the_same_solver_and_face_curves():
 def test_shared_spring_frames_pose_only_the_anchor():
     skeleton = ma.Skeleton(None)
     for k in range(8):
-        skeleton.nodes.append(ma.Node(f"bone{k}", f"bone/{k}", 0 if k else None,
-                                      ((0, 0, 0), (0, 0, 0, 1), (1, 1, 1)), None, None, True))
+        skeleton.nodes.append(
+            ma.Node(f"bone{k}", f"bone/{k}", 0 if k else None, ((0, 0, 0), (0, 0, 0, 1), (1, 1, 1)), None, None, True)
+        )
     spring = ms.Spring(_hanging_chain(), {0: math.radians(20)})
     skirt = ma.Skirt([0, 1], ["a", "b"], [-1, 0], [], 0, spring, 4)
     tree = _clip(3)
-    bindings = tree['m_ClipBindingConstant']['genericBindings']
-    bindings[0]['path'] = zlib.crc32(skeleton.nodes[1].path.encode())
+    bindings = tree["m_ClipBindingConstant"]["genericBindings"]
+    bindings[0]["path"] = zlib.crc32(skeleton.nodes[1].path.encode())
     prepared = ma.curve_frames(skeleton, [skirt], tree)
     assert prepared[1](0)[spring.chains.anchor] is not None
     assert all(prepared[1](0)[n] is None for n in range(8) if n != spring.chains.anchor)
@@ -234,9 +249,16 @@ def test_in_time_a_lifted_skirt_falls_back_over_a_few_frames():
 
 # --- clips ---------------------------------------------------------------------------------------------------------
 
+
 def _binding(path, attribute):
-    return {"path": zlib.crc32(path.encode()), "attribute": attribute, "script": {"m_FileID": 0, "m_PathID": 0},
-            "typeID": 4, "customType": 0, "isPPtrCurve": 0}
+    return {
+        "path": zlib.crc32(path.encode()),
+        "attribute": attribute,
+        "script": {"m_FileID": 0, "m_PathID": 0},
+        "typeID": 4,
+        "customType": 0,
+        "isPPtrCurve": 0,
+    }
 
 
 def _clip(dense_curves=0):
@@ -246,14 +268,26 @@ def _clip(dense_curves=0):
     samples = [float(f * 10 + c) for f in range(frames) for c in range(dense_curves)]
     curves = dense_curves + 3
     tree = {
-        "m_Name": "Test", "m_Legacy": False, "m_SampleRate": 30.0,
+        "m_Name": "Test",
+        "m_Legacy": False,
+        "m_SampleRate": 30.0,
         "m_MuscleClip": {
-            "m_StartTime": 0.0, "m_StopTime": 0.1, "m_LoopTime": False,
-            "m_Clip": {"data": {
-                "m_StreamedClip": {"data": [], "curveCount": 0},
-                "m_DenseClip": {"m_FrameCount": frames, "m_CurveCount": dense_curves, "m_SampleRate": 30.0,
-                                "m_BeginTime": 0.0, "m_SampleArray": samples},
-                "m_ConstantClip": {"data": [1.0, 2.0, 3.0]}}},
+            "m_StartTime": 0.0,
+            "m_StopTime": 0.1,
+            "m_LoopTime": False,
+            "m_Clip": {
+                "data": {
+                    "m_StreamedClip": {"data": [], "curveCount": 0},
+                    "m_DenseClip": {
+                        "m_FrameCount": frames,
+                        "m_CurveCount": dense_curves,
+                        "m_SampleRate": 30.0,
+                        "m_BeginTime": 0.0,
+                        "m_SampleArray": samples,
+                    },
+                    "m_ConstantClip": {"data": [1.0, 2.0, 3.0]},
+                }
+            },
             "m_IndexArray": [-1] * 200,
             "m_ValueArrayDelta": [{"m_Start": 0.0, "m_Stop": 0.0} for _ in range(curves)],
             "m_ValueArrayReferencePose": [],
@@ -351,15 +385,20 @@ def test_dense_curves_go_between_the_dense_and_the_constant_ones(dense_curves):
     samples = np.array([[0.0, 0.0, math.sin(a / 2), math.cos(a / 2)] for a in (0.0, 0.1, 0.2, 0.3)])
     template = tree["m_ClipBindingConstant"]["genericBindings"][0]
     shift = np.array([[0.0, 0.01 * f, 0.02] for f in range(4)])
-    ms.add_dense_curves(tree, [ms.rotation_binding(template, "bone_root/Skirt"), ms.position_binding(template, "bone_root/Skirt")],
-                        np.concatenate([samples, shift], axis=1))
+    ms.add_dense_curves(
+        tree,
+        [ms.rotation_binding(template, "bone_root/Skirt"), ms.position_binding(template, "bone_root/Skirt")],
+        np.concatenate([samples, shift], axis=1),
+    )
     muscle = tree["m_MuscleClip"]
     dense = muscle["m_Clip"]["data"]["m_DenseClip"]
     assert dense["m_CurveCount"] == dense_curves + 7 and len(dense["m_SampleArray"]) == 4 * (dense_curves + 7)
     assert tree["m_MuscleClipSize"] == ms.MUSCLE_FIXED + 4 * (4 * (dense_curves + 7) + 3) + 8 * (dense_curves + 10)
     assert muscle["m_ValueArrayDelta"][dense_curves]["m_Stop"] == pytest.approx(samples[-1, 0])
     assert muscle["m_ValueArrayDelta"][dense_curves + 3]["m_Start"] == pytest.approx(1.0, abs=1e-6)  # the new w
-    nodes = {zlib.crc32(p.encode()): k for k, p in enumerate(("bone_root/Skirt", "bone_root/Bip001", "bone_root/Euler"))}
+    nodes = {
+        zlib.crc32(p.encode()): k for k, p in enumerate(("bone_root/Skirt", "bone_root/Bip001", "bone_root/Euler"))
+    }
     decoded = decode_clip(tree)
     tracks = bind_tracks(tree["m_ClipBindingConstant"]["genericBindings"], decoded.curves, nodes)
     assert np.allclose(np.array(tracks[0][2]).T, samples, atol=1e-6)
@@ -382,15 +421,20 @@ def test_a_clip_of_another_layout_is_left_alone():
 
 # --- the read-back of an edited clip ----------------------------------------------------------------------
 
+
 def _edited(dense_curves):
     """A clip as Rule B edits it: (the snapshot before, the tree after, the number of added curves)."""
     tree = _clip(dense_curves)
     before = ma.clip_snapshot(tree)
     template = tree["m_ClipBindingConstant"]["genericBindings"][0]
-    samples = np.array([[0.0, 0.0, math.sin(a / 2), math.cos(a / 2), 0.0, 0.01 * f, 0.02]
-                        for f, a in enumerate((0.0, 0.1, 0.2, 0.3))])
-    ms.add_dense_curves(tree, [ms.rotation_binding(template, "bone_root/Skirt"),
-                               ms.position_binding(template, "bone_root/Skirt")], samples)
+    samples = np.array(
+        [[0.0, 0.0, math.sin(a / 2), math.cos(a / 2), 0.0, 0.01 * f, 0.02] for f, a in enumerate((0.0, 0.1, 0.2, 0.3))]
+    )
+    ms.add_dense_curves(
+        tree,
+        [ms.rotation_binding(template, "bone_root/Skirt"), ms.position_binding(template, "bone_root/Skirt")],
+        samples,
+    )
     return before, tree, 7
 
 
@@ -400,16 +444,29 @@ def test_a_clip_that_kept_every_curve_reads_back_as_edited(dense_curves):
     assert ma.clip_edit_error(before, tree, added) is None
 
 
-@pytest.mark.parametrize("change,named", [
-    (lambda t: t["m_MuscleClip"]["m_Clip"]["data"]["m_ConstantClip"]["data"].__setitem__(1, 2.5), "curve 4 changed"),
-    (lambda t: t["m_MuscleClip"]["m_Clip"]["data"]["m_DenseClip"]["m_SampleArray"].__setitem__(12, 99.0),
-     "curve 2 changed"),  # frame 1 of an old dense curve: ten curves a frame now
-    (lambda t: t["m_MuscleClip"]["m_Clip"]["data"]["m_ConstantClip"]["data"].pop(), "curves"),
-    (lambda t: t.__setitem__("m_MuscleClipSize", t["m_MuscleClipSize"] + 4), "muscle clip size"),
-    (lambda t: (t["m_MuscleClip"]["m_ValueArrayDelta"].pop(), t.__setitem__("m_MuscleClipSize", ms.muscle_size(t))),
-     "12 value deltas"),
-    (lambda t: t["m_ClipBindingConstant"]["genericBindings"].pop(), "bindings and curves differ"),
-])
+@pytest.mark.parametrize(
+    "change,named",
+    [
+        (
+            lambda t: t["m_MuscleClip"]["m_Clip"]["data"]["m_ConstantClip"]["data"].__setitem__(1, 2.5),
+            "curve 4 changed",
+        ),
+        (
+            lambda t: t["m_MuscleClip"]["m_Clip"]["data"]["m_DenseClip"]["m_SampleArray"].__setitem__(12, 99.0),
+            "curve 2 changed",
+        ),  # frame 1 of an old dense curve: ten curves a frame now
+        (lambda t: t["m_MuscleClip"]["m_Clip"]["data"]["m_ConstantClip"]["data"].pop(), "curves"),
+        (lambda t: t.__setitem__("m_MuscleClipSize", t["m_MuscleClipSize"] + 4), "muscle clip size"),
+        (
+            lambda t: (
+                t["m_MuscleClip"]["m_ValueArrayDelta"].pop(),
+                t.__setitem__("m_MuscleClipSize", ms.muscle_size(t)),
+            ),
+            "12 value deltas",
+        ),
+        (lambda t: t["m_ClipBindingConstant"]["genericBindings"].pop(), "bindings and curves differ"),
+    ],
+)
 def test_a_clip_that_lost_or_moved_a_curve_is_named(change, named):
     before, tree, added = _edited(3)
     change(tree)
@@ -432,7 +489,10 @@ def test_dense_values_compare_to_a_millionth_and_stored_values_exactly():
 
 # Scalar reference for the solver arithmetic before batching constant work.
 
-def _reference_joint(self, world: np.ndarray, base: np.ndarray, fixed: np.ndarray, grid: np.ndarray, frame: ms.Frame) -> None:
+
+def _reference_joint(
+    self, world: np.ndarray, base: np.ndarray, fixed: np.ndarray, grid: np.ndarray, frame: ms.Frame
+) -> None:
     """All chains at once: Gauss-Newton steps on the roots' turns (rotation vectors about their heads) and the
     heads' shifts that carry the cloth inside the legs out, hold the cloth already clear, and keep the cloth's edges
     from growing."""

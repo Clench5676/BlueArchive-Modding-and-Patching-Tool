@@ -41,6 +41,7 @@ def _no_tested_build():
     The tests of that confirmation give their own tested build. A patch of its own, which a test's
     ``monkeypatch.undo()`` keeps."""
     from bmpt.library import tested_build
+
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(tested_build, "for_server", lambda server: None)
         yield
@@ -51,11 +52,13 @@ def _no_game_detection():
     """Tests never look for the user's game install: settings without game folders find none, instead of
     scanning Wine prefixes, Steam libraries and the registry."""
     from ba_modding_toolkit import utils
+
     saved = dict(utils._ba_path_cache)
     utils._ba_path_cache.update({"auto": None, "global": None, "japan": None})
     yield
     utils._ba_path_cache.clear()
     utils._ba_path_cache.update(saved)
+
 
 SAMPLE_DIR = ASSETS_DIR / "sample"
 MOD_UPDATE_DIR = ASSETS_DIR / "mod_update"
@@ -65,6 +68,7 @@ RESS_REGRESS_DIR = ASSETS_DIR / "ress_regress"
 
 class SampleCase(NamedTuple):
     """sample 组案例：散装资源目录 + 配套 bundle 文件"""
+
     name: str
     assets_dir: Path
     bundle_paths: list[Path]
@@ -84,6 +88,7 @@ class SampleCase(NamedTuple):
 
 class UpdateCase(NamedTuple):
     """mod_update 组案例：旧 mod bundle + 新原版 bundle"""
+
     name: str
     old_paths: list[Path]
     new_paths: list[Path]
@@ -91,6 +96,7 @@ class UpdateCase(NamedTuple):
 
 class LegacyRenameCase(NamedTuple):
     """legacy_rename 组案例：磁盘旧命名资源目录 + 新 bundle 文件"""
+
     name: str
     assets_dir: Path
     bundle_paths: list[Path]
@@ -98,6 +104,7 @@ class LegacyRenameCase(NamedTuple):
 
 class RessRegressCase(NamedTuple):
     """ress_regress 组案例：mod 文件 + 对应原文件"""
+
     name: str
     mod_path: Path
     original_path: Path
@@ -263,11 +270,16 @@ def header_only_bundles(monkeypatch):
     Content inspection is covered separately with object and container name fixtures."""
     monkeypatch.setattr("bmpt.library.identity.content_cores", lambda path: set())
     from bmpt.library.integrity import Contents
+
     monkeypatch.setattr("bmpt.library.integrity.cab_names", lambda path: [])
-    monkeypatch.setattr("bmpt.library.integrity.inspect",
-                        lambda path, **kwargs: Contents(platforms={"StandaloneWindows64"}, files={"cab-test"}))
-    monkeypatch.setattr("bmpt.library.integrity.metadata",
-                        lambda path, **kwargs: Contents(platforms={"StandaloneWindows64"}, versions={"2021.3"}, files={"cab-test"}))
+    monkeypatch.setattr(
+        "bmpt.library.integrity.inspect",
+        lambda path, **kwargs: Contents(platforms={"StandaloneWindows64"}, files={"cab-test"}),
+    )
+    monkeypatch.setattr(
+        "bmpt.library.integrity.metadata",
+        lambda path, **kwargs: Contents(platforms={"StandaloneWindows64"}, versions={"2021.3"}, files={"cab-test"}),
+    )
 
 
 def require_render_support() -> None:
@@ -278,6 +290,7 @@ def require_render_support() -> None:
 
 class SpineAssetSet(NamedTuple):
     """自举后的 Spine 三件套副本（skel/atlas/png 同名同目录）"""
+
     dir: Path
     skel_path: Path
     atlas_path: Path
@@ -382,9 +395,7 @@ def bootstrap_spine_assets(
 
     major_minor = ".".join(target_version.split(".")[:2])
     if not current.startswith(major_minor):
-        if not SkelConverter.run(
-            skel_path, converter_path=converter_path, target_version=target_version, log=log
-        ):
+        if not SkelConverter.run(skel_path, converter_path=converter_path, target_version=target_version, log=log):
             return None
         # 3.x skel 只能配 spine3 atlas，降级必须配套 atlas_downgrade
         if major_minor == "3.8" and not atlas_downgrade(atlas_path, output_dir, log=log):

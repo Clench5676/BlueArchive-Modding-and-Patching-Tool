@@ -43,22 +43,39 @@ def atlas(data: bytes) -> dict:
     except (atlas_remap.RemapError, ValueError, UnicodeError):
         return {"layout": hashlib.sha1(data).hexdigest(), "regions": None}
     pages = sorted([page.name, list(page.size)] for page in parsed.pages.values())
-    regions = sorted([region.page, region.name, region.index, list(region.xy), list(region.size),
-                      list(region.original), list(region.offset), region.degrees]
-                     for region in parsed.regions.values())
+    regions = sorted(
+        [
+            region.page,
+            region.name,
+            region.index,
+            list(region.xy),
+            list(region.size),
+            list(region.original),
+            list(region.offset),
+            region.degrees,
+        ]
+        for region in parsed.regions.values()
+    )
     try:
         text = data.decode("utf-8")
     except UnicodeError:
         text = None
-    return {"layout": _digest([pages, regions]),
-            "regions": sorted({region.label for region in parsed.regions.values()}), "text": text}
+    return {
+        "layout": _digest([pages, regions]),
+        "regions": sorted({region.label for region in parsed.regions.values()}),
+        "text": text,
+    }
 
 
 def skeleton(data: bytes) -> dict:
     """A skeleton as the hash of its bytes, its version, a rig hash (bones with parents, slots with bones) and its
     animation names. One this build cannot walk keeps the hash and version alone."""
-    result: dict[str, Any] = {"sha1": hashlib.sha1(data).hexdigest(), "version": spine_names.version(data),
-                              "rig": None, "animations": None}
+    result: dict[str, Any] = {
+        "sha1": hashlib.sha1(data).hexdigest(),
+        "version": spine_names.version(data),
+        "rig": None,
+        "animations": None,
+    }
     try:
         names = spine_names.read(data)
     except ValueError:
@@ -70,10 +87,11 @@ def skeleton(data: bytes) -> dict:
 
 
 def _assets(contents: integrity.Contents) -> dict:
-    return {"atlases": {integrity.basename(name): atlas(data) for name, data in sorted(contents.atlases.items())},
-            "skeletons": {integrity.basename(name): skeleton(data)
-                          for name, data in sorted(contents.skeletons.items())},
-            "textures": {name: list(size) for name, size in sorted(contents.textures.items())}}
+    return {
+        "atlases": {integrity.basename(name): atlas(data) for name, data in sorted(contents.atlases.items())},
+        "skeletons": {integrity.basename(name): skeleton(data) for name, data in sorted(contents.skeletons.items())},
+        "textures": {name: list(size) for name, size in sorted(contents.textures.items())},
+    }
 
 
 def part(inspection: integrity.Inspection, path: Path, *, name: str, sha1: str | None = None) -> dict:
@@ -155,8 +173,11 @@ def drawn_on(painted: dict[str, dict], files: dict[str, bytes]) -> dict[str, byt
     textures were drawn on it (``changed_layouts`` against ``painted``, the entries that keep their ``skeleton``), as
     the recorded atlas text, with the skeleton of its stem as the recorded skeleton. Names as in ``files``; empty when
     nothing changed."""
-    known = {name: entry for name, entry in painted.items()
-             if isinstance(entry, dict) and isinstance(entry.get("skeleton"), str)}
+    known = {
+        name: entry
+        for name, entry in painted.items()
+        if isinstance(entry, dict) and isinstance(entry.get("skeleton"), str)
+    }
     atlases = {name: data for name, data in files.items() if name.lower().endswith(".atlas")}
     skeletons = {name: data for name, data in files.items() if name.lower().endswith(".skel")}
     changed = changed_layouts({"painted": known}, atlases)
@@ -178,8 +199,13 @@ def document(event: str, parts: list[dict], *, complete: bool, painted: dict | N
     """A fingerprint to store: ``event`` is what made it (import, update, remap, backfill); ``complete`` says the
     parts are every part the mod's core had then; ``painted`` (``painted``) is left out when nothing tells which
     layout the mod's textures follow."""
-    data = {"version": VERSION, "event": event, "recorded": datetime.now(timezone.utc).isoformat(),
-            "complete": complete, "parts": parts}
+    data = {
+        "version": VERSION,
+        "event": event,
+        "recorded": datetime.now(timezone.utc).isoformat(),
+        "complete": complete,
+        "parts": parts,
+    }
     if painted is not None:
         data["painted"] = painted
     return data
@@ -200,16 +226,24 @@ def read(directory: Path, files: dict[str, str]) -> dict | None:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError, RecursionError):
         return None
-    if (not isinstance(data, dict) or data.get("version") != VERSION or data.get("files") != files
-            or not isinstance(data.get("parts"), list)):
+    if (
+        not isinstance(data, dict)
+        or data.get("version") != VERSION
+        or data.get("files") != files
+        or not isinstance(data.get("parts"), list)
+    ):
         return None
     known = data.get("painted")
-    if known is not None and (not isinstance(known, dict)
-                              or any(not isinstance(entry, dict) for entry in known.values())):
+    if known is not None and (
+        not isinstance(known, dict) or any(not isinstance(entry, dict) for entry in known.values())
+    ):
         return None
     for item in data["parts"]:
-        if (not isinstance(item, dict) or not isinstance(item.get("name"), str)
-                or any(not isinstance(item.get(kind), dict) for kind in ("atlases", "skeletons", "textures"))):
+        if (
+            not isinstance(item, dict)
+            or not isinstance(item.get("name"), str)
+            or any(not isinstance(item.get(kind), dict) for kind in ("atlases", "skeletons", "textures"))
+        ):
             return None
     return data
 
@@ -229,8 +263,12 @@ def diff(before: dict, after: dict) -> dict:
     def unknown_or(old, new):
         return None if old is None or new is None else old != new
 
-    result: dict[str, Any] = {"structure": unknown_or(before.get("structure"), after.get("structure")),
-                              "atlases": {}, "skeletons": {}, "textures": {}}
+    result: dict[str, Any] = {
+        "structure": unknown_or(before.get("structure"), after.get("structure")),
+        "atlases": {},
+        "skeletons": {},
+        "textures": {},
+    }
     for kind in ("atlases", "skeletons", "textures"):
         old, new = before[kind], after[kind]
         for name in sorted(old.keys() | new.keys()):
@@ -238,18 +276,24 @@ def diff(before: dict, after: dict) -> dict:
                 result[kind][name] = {"present": "before" if name in old else "after"}
                 continue
             a, b = old[name], new[name]
-            if a == b or (kind == "atlases" and a["layout"] == b["layout"]
-                          and names(a, "regions") == names(b, "regions")):
+            if a == b or (
+                kind == "atlases" and a["layout"] == b["layout"] and names(a, "regions") == names(b, "regions")
+            ):
                 # the atlas text is kept for the remap, not compared: older fingerprints lack it
                 continue
             if kind == "atlases":
-                result[kind][name] = {"layout": a["layout"] != b["layout"],
-                                      "added": sorted(names(b, "regions") - names(a, "regions")),
-                                      "removed": sorted(names(a, "regions") - names(b, "regions"))}
+                result[kind][name] = {
+                    "layout": a["layout"] != b["layout"],
+                    "added": sorted(names(b, "regions") - names(a, "regions")),
+                    "removed": sorted(names(a, "regions") - names(b, "regions")),
+                }
             elif kind == "skeletons":
-                result[kind][name] = {"changed": a["sha1"] != b["sha1"], "rig": unknown_or(a["rig"], b["rig"]),
-                                      "added": sorted(names(b, "animations") - names(a, "animations")),
-                                      "removed": sorted(names(a, "animations") - names(b, "animations"))}
+                result[kind][name] = {
+                    "changed": a["sha1"] != b["sha1"],
+                    "rig": unknown_or(a["rig"], b["rig"]),
+                    "added": sorted(names(b, "animations") - names(a, "animations")),
+                    "removed": sorted(names(a, "animations") - names(b, "animations")),
+                }
             else:
                 result[kind][name] = {"before": a, "after": b}
     return result
@@ -260,7 +304,13 @@ def diff(before: dict, after: dict) -> dict:
 #: mod knows; the rig itself changed (atlas layout or regions, skeleton bones, slots or animations, texture sizes, an
 #: asset gone); no official part of the core left. ``unknown``: nothing tells (no fingerprint, unreadable parts).
 UNCHANGED, REBUILT, NEW_PARTS, RIG_CHANGED, GONE, UNKNOWN = (
-    "unchanged", "rebuilt", "new_parts", "rig_changed", "gone", "unknown")
+    "unchanged",
+    "rebuilt",
+    "new_parts",
+    "rig_changed",
+    "gone",
+    "unknown",
+)
 IMPACTS = (UNCHANGED, REBUILT, NEW_PARTS, RIG_CHANGED, GONE, UNKNOWN)
 
 
@@ -305,8 +355,9 @@ def changes(built: dict | None, now: dict | None) -> dict[str, Any]:
     result: dict[str, Any] = {
         "repacked": any("present" not in c and (c["layout"] or c["added"] or c["removed"]) for c in atlases),
         "animations": sum(len(c.get("added") or ()) for c in skeletons if "present" not in c),
-        "rig": any("present" not in c and (c["rig"] or c["removed"] or (c["changed"] and c["rig"] is None))
-                   for c in skeletons),
+        "rig": any(
+            "present" not in c and (c["rig"] or c["removed"] or (c["changed"] and c["rig"] is None)) for c in skeletons
+        ),
         "textures": any("present" not in c for c in textures),
         "removed": any(c.get("present") == "before" for c in every),
         "added": any(c.get("present") == "after" for c in every),
@@ -334,8 +385,11 @@ def impact(built: dict | None, now: dict | None) -> str:
     changes = diff(_merged(built["parts"]), _merged(now["parts"]))
     if _rig_changed(changes):
         return RIG_CHANGED
-    added = any(change.get("present") == "after" for kind in ("atlases", "skeletons", "textures")
-                for change in changes[kind].values())
+    added = any(
+        change.get("present") == "after"
+        for kind in ("atlases", "skeletons", "textures")
+        for change in changes[kind].values()
+    )
     if complete and (added or len(after) > len(before)):
         return NEW_PARTS
     return REBUILT

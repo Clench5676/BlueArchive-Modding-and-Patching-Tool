@@ -31,17 +31,17 @@ class TestAssetPacking:
         asset_folder.mkdir()
         output_dir = tmp_path / "output"
         output_dir.mkdir()
-        
+
         shutil.copy(sample_case.image_path, asset_folder / sample_case.image_path.name)
-        
+
         original_img = Image.open(sample_case.image_path).convert("RGBA")
         original_size = original_img.size
-        
+
         save_options = SaveOptions(
             perform_crc=False,
             compression="none",
         )
-        
+
         success, msg, _ = process_asset_packing(
             target_bundle_path=sample_case.bundle_paths,
             assets=[asset_folder],
@@ -55,7 +55,7 @@ class TestAssetPacking:
 
         packed_bundles = list(output_dir.glob("*.bundle"))
         assert len(packed_bundles) == len(sample_case.bundle_paths), "输出 bundle 数量应与输入数量匹配"
-        
+
         extract_dir = tmp_path / "extracted"
         extract_dir.mkdir()
 
@@ -75,18 +75,18 @@ class TestAssetPacking:
         asset_folder.mkdir()
         output_dir = tmp_path / "output"
         output_dir.mkdir()
-        
+
         shutil.copy(sample_case.skel_path, asset_folder / sample_case.skel_path.name)
         shutil.copy(sample_case.atlas_path, asset_folder / sample_case.atlas_path.name)
-        
+
         original_skel_content = sample_case.skel_path.read_bytes()
         original_atlas_content = sample_case.atlas_path.read_bytes()
-        
+
         save_options = SaveOptions(
             perform_crc=False,
             compression="none",
         )
-        
+
         success, msg, _ = process_asset_packing(
             target_bundle_path=sample_case.bundle_paths,
             assets=[asset_folder],
@@ -124,20 +124,20 @@ class TestAssetPacking:
         asset_folder.mkdir()
         output_dir = tmp_path / "output"
         output_dir.mkdir()
-        
+
         shutil.copy(sample_case.image_path, asset_folder / sample_case.image_path.name)
         shutil.copy(sample_case.skel_path, asset_folder / sample_case.skel_path.name)
         shutil.copy(sample_case.atlas_path, asset_folder / sample_case.atlas_path.name)
-        
+
         original_img = Image.open(sample_case.image_path).convert("RGBA")
         original_skel_content = sample_case.skel_path.read_bytes()
         original_atlas_content = sample_case.atlas_path.read_bytes()
-        
+
         save_options = SaveOptions(
             perform_crc=False,
             compression="none",
         )
-        
+
         success, msg, _ = process_asset_packing(
             target_bundle_path=sample_case.bundle_paths,
             assets=[asset_folder],
@@ -145,22 +145,22 @@ class TestAssetPacking:
             save_options=save_options,
             skip_unchanged=False,
         )
-        
+
         assert success is True, msg
-        
+
         packed_bundles = list(output_dir.glob("*.bundle"))
         assert len(packed_bundles) == len(sample_case.bundle_paths), "输出 bundle 数量应与输入数量匹配"
-        
+
         extract_dir = tmp_path / "extracted"
         extract_dir.mkdir()
-        
+
         extract_assets_from_bundle(packed_bundles, extract_dir, {"Texture2D", "TextAsset"})
 
         extracted_png = extract_dir / sample_case.image_path.name
         assert extracted_png.exists()
-        
+
         extracted_img = Image.open(extracted_png).convert("RGBA")
-        
+
         mse = compare_images_mse(original_img, extracted_img)
         assert mse < MSE_THRESHOLD, f"MSE={mse} >= {MSE_THRESHOLD}"
 
@@ -199,9 +199,7 @@ class TestAssetPacking:
 
         assert success is False
         # 流程在遇到第一个非法文件名时终止，错误消息应包含该文件名
-        assert any(
-            name in msg for name in ("unknown_name.bytes", "plain_dump.dat")
-        ), msg
+        assert any(name in msg for name in ("unknown_name.bytes", "plain_dump.dat")), msg
         assert not list(output_dir.glob("*.bundle")), "报错时不应产生任何输出"
 
 
@@ -226,9 +224,7 @@ class TestDumpAssetPacking:
         if not mesh_dumps:
             pytest.skip("该案例 bundle 的 Mesh 均含流引用，无法生成独立 dump")
 
-        dump_bytes = {
-            p.name.removesuffix(".mesh.dat"): p.read_bytes() for p in mesh_dumps
-        }
+        dump_bytes = {p.name.removesuffix(".mesh.dat"): p.read_bytes() for p in mesh_dumps}
 
         output_dir = tmp_path / "output"
         output_dir.mkdir()
@@ -255,8 +251,7 @@ class TestDumpAssetPacking:
 
 
 class TestLegacyRenameAssetPacking:
-    """测试旧版文件名修正 + Asset Packing 的完整流程
-    """
+    """测试旧版文件名修正 + Asset Packing 的完整流程"""
 
     def test_pack_assets_with_rename(
         self,
@@ -338,8 +333,9 @@ class TestLegacyRenameAssetPacking:
         for orig_png in original_extract_dir.glob("*.png"):
             packed_png = extract_dir / orig_png.name
             if packed_png.exists():
-                assert orig_png.read_bytes() == packed_png.read_bytes(), \
+                assert orig_png.read_bytes() == packed_png.read_bytes(), (
                     f"不启用 rename_fix 时 {orig_png.name} 不应被替换"
+                )
 
     def test_atlas_references_correct_after_pack(
         self,
@@ -369,10 +365,10 @@ class TestLegacyRenameAssetPacking:
         extract_assets_from_bundle([packed_bundles[0]], extract_dir, {"TextAsset"})
 
         for atlas_file in extract_dir.glob("*.atlas"):
-            content = atlas_file.read_text(encoding='utf-8')
+            content = atlas_file.read_text(encoding="utf-8")
             # 检测旧版格式：数字直接跟在非下划线字符后
-            old_refs = re.findall(r'\w+\d+\.png', content)
+            old_refs = re.findall(r"\w+\d+\.png", content)
             for ref in old_refs:
-                stem = ref.replace('.png', '')
-                if re.search(r'[^_]\d+$', stem):
+                stem = ref.replace(".png", "")
+                if re.search(r"[^_]\d+$", stem):
                     pytest.fail(f"Atlas 中仍包含旧版 PNG 引用: {ref}")

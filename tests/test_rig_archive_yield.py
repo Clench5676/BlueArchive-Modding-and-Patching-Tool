@@ -1,4 +1,5 @@
 """The startup rig archive steps aside for everything else that uses the library."""
+
 from __future__ import annotations
 
 import threading
@@ -194,8 +195,15 @@ def test_a_job_holding_the_library_lets_a_waiting_reader_in_between_two_steps():
     lock = service._LibraryLock()
     order = []
     with lock, lock:  # the job's own call and one of its steps
-        reader = threading.Thread(target=lambda: (lock.acquire(), order.append("reader"), time.sleep(0.05),
-                                                  order.append("reader done"), lock.release()))
+        reader = threading.Thread(
+            target=lambda: (
+                lock.acquire(),
+                order.append("reader"),
+                time.sleep(0.05),
+                order.append("reader done"),
+                lock.release(),
+            )
+        )
         reader.start()
         deadline = time.monotonic() + 2
         while not lock.waiting and time.monotonic() < deadline:
@@ -241,6 +249,7 @@ def test_the_lock_tells_when_a_reader_starts_and_stops_waiting_for_it():
     for reader in readers:
         reader.join()
     assert told == [True, False]
+
     def background():
         service._background.on = True
         try:

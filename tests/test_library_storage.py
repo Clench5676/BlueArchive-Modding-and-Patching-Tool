@@ -60,6 +60,7 @@ def test_clone_preserves_destination_permissions(tmp_path, monkeypatch):
 
     def clone(src, dst):
         import shutil
+
         shutil.copy2(src, dst)
         return True
 
@@ -143,8 +144,9 @@ def test_refs_adapter_flushes_then_clones_aligned_extents_and_copies_tail(tmp_pa
         assert code == 0x00098344 and calls[0] == "flush"
         assert extent.SourceFileOffset % 4096 == extent.TargetFileOffset % 4096 == extent.ByteCount % 4096 == 0
         calls.append((extent.SourceFileOffset, extent.ByteCount))
-        os.pwrite(output, os.pread(extent.FileHandle, extent.ByteCount, extent.SourceFileOffset),
-                  extent.TargetFileOffset)
+        os.pwrite(
+            output, os.pread(extent.FileHandle, extent.ByteCount, extent.SourceFileOffset), extent.TargetFileOffset
+        )
         return True
 
     def flush(fd):
@@ -161,6 +163,7 @@ def test_refs_adapter_flushes_then_clones_aligned_extents_and_copies_tail(tmp_pa
 
 
 # --- replaces tried again for a moment while another program holds the file (Windows), as profiles.json does ---
+
 
 def _clone_by_copy(monkeypatch):
     def clone(source, target):
@@ -205,8 +208,9 @@ def test_a_replace_held_for_a_moment_is_tried_again(tmp_path, monkeypatch, actio
 
 
 @pytest.mark.parametrize("action", ["json", "copy", "clone"])
-def test_a_replace_that_stays_held_still_fails_with_the_same_error_and_leaves_no_temporary(tmp_path, monkeypatch,
-                                                                                         action):
+def test_a_replace_that_stays_held_still_fails_with_the_same_error_and_leaves_no_temporary(
+    tmp_path, monkeypatch, action
+):
     run, _expected = _replace_actions(tmp_path, monkeypatch)[action]
     target = tmp_path / "state"
     target.write_bytes(b"old bytes")

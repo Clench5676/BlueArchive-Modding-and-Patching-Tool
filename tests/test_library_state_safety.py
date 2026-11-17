@@ -32,6 +32,7 @@ LOCALES = Path(__file__).resolve().parents[1] / "src" / "bmpt" / "locales"
 
 # --- helpers ---
 
+
 def state_file(world: World) -> Path:
     return world.root / "state.json"
 
@@ -92,6 +93,7 @@ class NoRead:
 
 # --- FUN-1: record by record ---
 
+
 def test_one_bad_record_costs_that_record_only_through_the_real_library(world):
     first, second = two_mods(world)
     applied_before = read_state(world)["applied"]
@@ -111,7 +113,11 @@ def test_one_bad_record_costs_that_record_only_through_the_real_library(world):
 
 
 BAD_RECORDS = [
-    {}, "text", 7, None, [],
+    {},
+    "text",
+    7,
+    None,
+    [],
     {"id": "x"},
     {"id": "A" * 32, "files": ["a.bundle"], "label": "L", "target": "t", "kind": "spr", "added": "x", "seen": True},
     {"id": "b" * 32, "files": [], "label": "L", "target": "t", "kind": "spr", "added": "x", "seen": True},
@@ -119,8 +125,16 @@ BAD_RECORDS = [
     {"id": "b" * 32, "files": ["a.bundle"], "label": 4, "target": "t", "kind": "spr", "added": "x", "seen": True},
     {"id": "b" * 32, "files": ["a.bundle"], "label": "L", "target": "t", "kind": "nope", "added": "x", "seen": True},
     {"id": "b" * 32, "files": ["a.bundle"], "label": "L", "target": "t", "kind": "spr", "added": "x", "seen": "yes"},
-    {"id": "b" * 32, "files": ["a.bundle"], "label": "L", "target": "t", "kind": "spr", "added": "x", "seen": True,
-     "assignment": ""},
+    {
+        "id": "b" * 32,
+        "files": ["a.bundle"],
+        "label": "L",
+        "target": "t",
+        "kind": "spr",
+        "added": "x",
+        "seen": True,
+        "assignment": "",
+    },
     {"id": "b" * 32, "files": "a.bundle", "label": "L", "target": "t", "kind": "spr", "added": "x", "seen": True},
 ]
 
@@ -166,6 +180,7 @@ def test_an_invalid_applied_entry_may_stay_dropped_and_the_rest_stays(world):
 
 
 # --- FUN-1: .prev and .bad ---
+
 
 def test_the_last_good_file_is_kept_as_prev_before_every_write(world):
     world.add(world.spr)
@@ -354,17 +369,25 @@ def test_the_same_failure_through_the_real_rpc_registry(rpc_env):
 
 # --- FUN-1: the places that list or move state files ---
 
+
 def test_a_library_move_takes_the_state_copies_along(rpc_env):
     env = rpc_env
     source = env.tmp / "lib"
     source.mkdir()
     env.s.state.set("library_dir", str(source))
-    names = ("state.json", "state.json.prev", "state.json.bad", "profiles.json", "profiles.json.prev",
-             "profiles.json.bad")
+    names = (
+        "state.json",
+        "state.json.prev",
+        "state.json.bad",
+        "profiles.json",
+        "profiles.json.prev",
+        "profiles.json.bad",
+    )
     assert set(names) <= set(LIBRARY_ITEMS)
     for name in names:
-        (source / name).write_text('{"version": 1, "mods": []}' if name.startswith("state") else
-                                   '{"version": 1, "folders": {}}')
+        (source / name).write_text(
+            '{"version": 1, "mods": []}' if name.startswith("state") else '{"version": 1, "folders": {}}'
+        )
     target = env.tmp / "moved"
     assert "error" not in rpc(env.app, "settings.set", key="libraryDir", value=str(target))
     for name in names:
@@ -415,6 +438,7 @@ def test_a_rollback_with_a_raw_held_record_in_the_file_still_retires_the_import(
 
 # --- the RPC fixtures ---
 
+
 class RosterCatalog(LibraryCatalog):
     """The library's fake catalog with the families the roster and the detail page list."""
 
@@ -457,10 +481,14 @@ def rpc_env(tmp_path, monkeypatch, header_only_bundles):
 
 # --- FUN-2: a missing file never deletes a record ---
 
+
 def chosen(world: World) -> dict:
     """The configured choices of every install: {(install, core): the choice}."""
-    return {(key, core): choice for key, folder in world.profiles()["folders"].items()
-            for core, choice in folder["configured"].items()}
+    return {
+        (key, core): choice
+        for key, folder in world.profiles()["folders"].items()
+        for core, choice in folder["configured"].items()
+    }
 
 
 def mod_dir(world: World, mod) -> Path:
@@ -541,8 +569,9 @@ def test_alias_assignment_import_source_configuration_and_applied_record_survive
     library.prune()
     assert chosen(world) == chosen_before  # configured choices intact (built keys may differ: an Off keeps them)
     assert read_state(world)["applied"].keys() == applied.keys()
-    assert {path: record["source"] for path, record in read_state(world)["applied"].items()} == \
-        {path: record["source"] for path, record in applied.items()}
+    assert {path: record["source"] for path, record in read_state(world)["applied"].items()} == {
+        path: record["source"] for path, record in applied.items()
+    }
     assert record_of(world, second.id) == raw
     unhide(world, second, parked)
     library = world.reload()
@@ -601,6 +630,7 @@ def test_a_removal_that_lost_its_folder_first_does_not_come_back_as_a_held_recor
     library = world.library
     library._records.pop(second.id)
     import shutil
+
     shutil.rmtree(mod_dir(world, second))  # the folder goes before the save: the disk copy holds the record
     library._save()
     assert [r["id"] for r in read_state(world)["mods"]] == [first.id]
@@ -624,9 +654,19 @@ def test_a_rolled_back_import_does_not_leave_a_held_record_behind(world):
     edit_state(world, lambda data: data["mods"].append(ghost))  # committed metadata, its folder never published
     journal = world.root / "import-transactions" / new_id / "journal.json"
     journal.parent.mkdir(parents=True)
-    journal.write_text(json.dumps({"version": 1, "id": new_id, "phase": "publishing", "record": ghost,
-                                   "hashes": {ghost["files"][0]: "0" * 40}, "repaired_from": "",
-                                   "old_repaired_id": None}))
+    journal.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "id": new_id,
+                "phase": "publishing",
+                "record": ghost,
+                "hashes": {ghost["files"][0]: "0" * 40},
+                "repaired_from": "",
+                "old_repaired_id": None,
+            }
+        )
+    )
     library = world.reload()
     assert [m.id for m in library.mods()] == [mod.id]
     assert not journal.exists()
@@ -718,7 +758,7 @@ def test_importing_the_same_files_while_a_record_is_held_leaves_it_alone(world):
     parked = hide(world, mod)
     library = world.reload()
     assert library._known() == {}  # the identity of a held record is not known: its files are not there
-    again, = library.add([make_mod(world.spr, world.tmp / "again")])
+    (again,) = library.add([make_mod(world.spr, world.tmp / "again")])
     assert again.id != mod.id and record_of(world, mod.id) == raw
     unhide(world, mod, parked)
     library = world.reload()
@@ -726,6 +766,7 @@ def test_importing_the_same_files_while_a_record_is_held_leaves_it_alone(world):
 
 
 # --- FUN-3: reads keep working while a journal is pending, writes stay protected ---
+
 
 class Crash(BaseException):
     """A process exit, bypassing the ordinary exception rollback."""
@@ -737,13 +778,14 @@ def journals_of(world: World, folder: str = "transactions") -> list[Path]:
 
 def crash_during(world: World, source: str, kind: str = "spr", core: str = "test") -> Path:
     """Apply a source and die right after its game files were written: the write journal stays pending."""
+
     def log(message):
         if message.startswith("Installed "):
             raise Crash()
 
     with pytest.raises(Crash):
         world.library.apply(core, source, log=log, kind=kind)
-    journal, = journals_of(world)
+    (journal,) = journals_of(world)
     assert json.loads(journal.read_text())["phase"] == "writing"
     return journal
 
@@ -758,6 +800,7 @@ def two_sources(world: World):
 
 def refuse_recovery(library: ModLibrary, code: str = "classic_open") -> None:
     """Make every recovery attempt fail with a real error, as an open classic window or a running game does."""
+
     def refuse(pin):
         raise ServiceError(code)
 
@@ -835,7 +878,8 @@ def test_a_restored_write_releases_the_original_it_kept_but_a_left_file_keeps_it
     original = world.original(world.spr)
     crash_during(world, f"mod:{mod.id}")  # the first write over an official file kept it in originals/
     assert original.read_bytes() == OFFICIAL and any(
-        item["kept_now"] for item in json.loads(journals_of(world)[0].read_text())["files"])
+        item["kept_now"] for item in json.loads(journals_of(world)[0].read_text())["files"]
+    )
     forget_configuration(world)
     world.reload()  # nothing changed outside: the file is back as it was, the copy is not needed
     assert world.spr.read_bytes() == OFFICIAL and not original.exists()
@@ -907,8 +951,15 @@ def test_a_restored_write_forgets_the_mods_it_kept(world):
 
 def build(world: World, write_check=None, data_id: str = "A") -> ModLibrary:
     """A library over the world's folders (a restart), with the caller's own write check."""
-    return ModLibrary(world.root, world.catalog, None, world.settings, scan_allowed=lambda: world.consent,
-                      data_id=data_id, write_check=write_check)
+    return ModLibrary(
+        world.root,
+        world.catalog,
+        None,
+        world.settings,
+        scan_allowed=lambda: world.consent,
+        data_id=data_id,
+        write_check=write_check,
+    )
 
 
 def refusing(code: str = "classic_open"):
@@ -928,14 +979,17 @@ def pending(world: World, code: str = "classic_open"):
 
 
 def snapshot_of(world: World) -> dict:
-    return {name: (world.root / name).read_bytes() for name in ("state.json", "profiles.json")
-            if (world.root / name).exists()}
+    return {
+        name: (world.root / name).read_bytes()
+        for name in ("state.json", "profiles.json")
+        if (world.root / name).exists()
+    }
 
 
 def test_reads_work_while_a_journal_cannot_roll_back(world):
     world.consent = True
     library, mods = pending(world)
-    journal, = journals_of(world)
+    (journal,) = journals_of(world)
     before = snapshot_of(world)
     assert [m.id for m in library.mods()] == [m.id for m in mods]
     assert library.favorites() == set() and library.state("test") and library.selection("test") is not None
@@ -954,7 +1008,7 @@ def test_every_write_is_refused_with_the_real_error_and_goes_through_once_recove
         edit["enabled"] = False
         (world.root / "profiles.json").write_text(json.dumps(edit))
         library = build(world, refusing())
-    journal, = journals_of(world)
+    (journal,) = journals_of(world)
     before = snapshot_of(world)
     expect_error("classic_open", lambda: WRITES[name](library, world, mods))
     assert journal.exists() and snapshot_of(world) == before  # refused before anything was written
@@ -1030,6 +1084,7 @@ def test_a_remembered_failure_is_cleared_when_the_journals_are_gone(world, monke
 
 # --- FUN-3: folder_changed ---
 
+
 def edit_journal(journal: Path, change) -> None:
     data = json.loads(journal.read_text())
     change(data)
@@ -1079,7 +1134,7 @@ def test_a_journal_of_an_install_that_is_not_known_waits_while_other_installs_ar
 
     with pytest.raises(Crash):
         world.library.apply("test", f"mod:{second.id}", pin=other, log=log)
-    journal, = journals_of(world)
+    (journal,) = journals_of(world)
     moved = world.tmp / "japan-moved"
     folder.rename(moved)  # the install's folder moved away: its pin is gone
     library = world.reload()
@@ -1129,6 +1184,7 @@ def pin_of(world: World, folder: Path):
 
 # --- FUN-3: an asset deletion's journal ---
 
+
 def crash_during_removal(world: World, mod, monkeypatch) -> Path:
     """Remove an applied mod and die while undoing the removal: the deletion journal stays pending."""
     from bmpt.library import asset_delete
@@ -1144,7 +1200,7 @@ def crash_during_removal(world: World, mod, monkeypatch) -> Path:
     with pytest.raises(Crash):
         world.library.remove(mod.id, confirm=True, reconcile=reconcile)
     monkeypatch.undo()
-    journal, = journals_of(world, "asset-deletions")
+    (journal,) = journals_of(world, "asset-deletions")
     assert json.loads(journal.read_text())["games"]
     return journal
 
@@ -1197,6 +1253,7 @@ def test_an_asset_deletion_of_an_unknown_install_stays_a_remembered_failure(worl
 
 
 # --- FUN-3: through the real RPC registry ---
+
 
 def crash_in_services(env, write_check=None) -> tuple:
     """Two mods of the test core, the first applied, a switch to the second dying after its game files: the library
@@ -1263,6 +1320,7 @@ def test_a_mod_update_is_refused_before_the_rebuild_while_a_recovery_has_failed(
 
 # --- review round: a blocked library settles nothing, a missing state reads its prev, reads never fail ---
 
+
 def blocked_state(world: World, how: str, monkeypatch=None):
     """Make the world's state.json unusable one way; the bytes to put back (and the undo of a patched read)."""
     good = state_file(world).read_bytes()
@@ -1293,8 +1351,10 @@ def test_a_blocked_library_never_settles_the_configuration_away(world, monkeypat
     assert library.judge_unfinished() == 0
     assert library.prune() == []
     assert (world.root / "profiles.json").read_bytes() == profiles  # byte for byte
-    expect_error(("library_io_error" if how == "io" else "library_state_unreadable"),
-                 lambda: library.dismiss("untracked", [{"install": world.key(), "core": "test_spr"}]))
+    expect_error(
+        ("library_io_error" if how == "io" else "library_state_unreadable"),
+        lambda: library.dismiss("untracked", [{"install": world.key(), "core": "test_spr"}]),
+    )
     assert (world.root / "profiles.json").read_bytes() == profiles
     if locked:
         locked.close()
@@ -1316,8 +1376,9 @@ def test_a_running_instance_whose_file_turns_newer_settles_nothing_either(world)
     world.entries()
     library.scan()
     assert library.judge_unfinished() == 0 and library.prune() == []
-    expect_error("library_state_unreadable", lambda: library.dismiss("untracked", [{"install": world.key(),
-                                                                                     "core": "test_spr"}]))
+    expect_error(
+        "library_state_unreadable", lambda: library.dismiss("untracked", [{"install": world.key(), "core": "test_spr"}])
+    )
     assert (world.root / "profiles.json").read_bytes() == profiles
 
 
@@ -1328,9 +1389,19 @@ def sweep(env) -> list[str]:
     path = library.root / "profiles.json"
     profiles = path.read_bytes()
     answered = []
-    reads = (("app.info", {}), ("settings.get", {}), ("roster.list", {}), ("family.get", {"key": "test"}),
-             ("mods.state", {}), ("mods.other", {}), ("mods.entries", {}), ("mods.sizes", {"kind": "built"}),
-             ("mods.sizes", {"kind": "originals"}), ("mods.scan", {}), ("mods.scan", {"dismissed": True}))
+    reads = (
+        ("app.info", {}),
+        ("settings.get", {}),
+        ("roster.list", {}),
+        ("family.get", {"key": "test"}),
+        ("mods.state", {}),
+        ("mods.other", {}),
+        ("mods.entries", {}),
+        ("mods.sizes", {"kind": "built"}),
+        ("mods.sizes", {"kind": "originals"}),
+        ("mods.scan", {}),
+        ("mods.scan", {"dismissed": True}),
+    )
     for method, params in reads:
         answer = rpc(env.app, method, **params)
         assert "error" not in answer, (method, answer)
@@ -1349,9 +1420,22 @@ def sweep(env) -> list[str]:
     return answered
 
 
-SWEPT = ["app.info", "settings.get", "roster.list", "family.get", "mods.state", "mods.other", "mods.entries",
-         "mods.sizes", "mods.sizes", "mods.scan", "mods.scan", "library.scan", "library.judge_unfinished",
-         "library.prune"]
+SWEPT = [
+    "app.info",
+    "settings.get",
+    "roster.list",
+    "family.get",
+    "mods.state",
+    "mods.other",
+    "mods.entries",
+    "mods.sizes",
+    "mods.sizes",
+    "mods.scan",
+    "mods.scan",
+    "library.scan",
+    "library.judge_unfinished",
+    "library.prune",
+]
 
 
 @pytest.mark.parametrize("how", ["newer", "broken"])
@@ -1382,7 +1466,8 @@ def test_every_read_of_the_rpc_registry_answers_and_changes_nothing_while_a_reco
     first, second = crash_in_services(env, write_check=refusing())
     assert sweep(env) == SWEPT
     assert env.s.library._recovery_error is not None and list(
-        (env.s.library.root / "transactions").glob("*/journal.json"))
+        (env.s.library.root / "transactions").glob("*/journal.json")
+    )
     config = json.loads((env.s.library.root / "profiles.json").read_text())
     # the choice the crashed switch had configured
     assert [c["source"] for f in config["folders"].values() for c in f["configured"].values()] == [f"mod:{second.id}"]

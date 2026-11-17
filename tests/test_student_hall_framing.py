@@ -1,4 +1,5 @@
 """The ordinary lobby portrait baseline is read from the game's authored transforms, never image bounds."""
+
 import os
 import shutil
 import subprocess

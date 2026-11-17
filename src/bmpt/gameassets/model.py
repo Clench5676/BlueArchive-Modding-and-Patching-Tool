@@ -41,28 +41,59 @@ logger = logging.getLogger(__name__)
 # The clips put in the GLB (by name suffix): the formation idle (weapon in hand) is the default loop.
 STORY_CLIPS = 12  # a story model's own cutscene clips exported at most
 STORY_ROOTS = {"bone_root", "bone_root/Bip001"}  # the nodes a cutscene places its character by
-DEFAULT_CLIPS = ("Formation_Idle", "Formation_Pickup", "Cafe_Idle", "Cafe_Reaction", "Cafe_Walk",
-                 "Victory_Start", "Victory_End", "Vital_Retreat", "Vital_Death")
+DEFAULT_CLIPS = (
+    "Formation_Idle",
+    "Formation_Pickup",
+    "Cafe_Idle",
+    "Cafe_Reaction",
+    "Cafe_Walk",
+    "Victory_Start",
+    "Victory_End",
+    "Vital_Retreat",
+    "Vital_Death",
+)
 # other names a slot's clip goes by: misspelt ones, and the first form's of a student with two battle forms
 # (CH0187, CH0368, Hoshino's swimsuit: Vital_Death01 and Vital_Death02)
-CLIP_ALIASES = {"Formation_Pickup": ("Fomation_Pickup", "Formation Pickup"), "Vital_Death": ("Vital_Death01",),
-                "Vital_Retreat": ("Vital_Retreat01",)}
+CLIP_ALIASES = {
+    "Formation_Pickup": ("Fomation_Pickup", "Formation Pickup"),
+    "Vital_Death": ("Vital_Death01",),
+    "Vital_Retreat": ("Vital_Retreat01",),
+}
 # idles used when a prefab has neither the formation nor the cafe idle (NPC and battle-only prefabs)
 FALLBACK_IDLES = ("Normal_Idle", "Stand_Idle", "Idle")
-PREFAB_KINDS = {"echelon": "Echelon_{}", "battle": "{}", "cafe": "Cafe_{}", "strategy": "Strategy_{}",
-                # field-mode players (event and story variants with no battle model), Animancer-driven
-                "field": "Field_Player_{}", "field_nonweapon": "Field_Player_{}_NonWeapon"}
+PREFAB_KINDS = {
+    "echelon": "Echelon_{}",
+    "battle": "{}",
+    "cafe": "Cafe_{}",
+    "strategy": "Strategy_{}",
+    # field-mode players (event and story variants with no battle model), Animancer-driven
+    "field": "Field_Player_{}",
+    "field_nonweapon": "Field_Player_{}_NonWeapon",
+}
 # field-mode NPCs, named by the character's id and a description (Field_NPC_NP0060_Justice_Student, one per weapon for
 # NP0143: _AR_Weapon, _SG_Weapon, _SR_Weapon), in the field character bundles beside the field players
 NPC_PREFAB = re.compile(r"field_npc_((?:ch|np)\d{4})(?:_\w+)?", re.IGNORECASE)
 # the viewer's shading model for a shader, by name prefix (variants such as -Inline, -Transparent or -NoOutline share
 # their base shader's lighting); the first match wins
 SHADER_KINDS = (
-    ("MX/C-General/Layer4", "body"), ("MX/C-Face", "face"), ("MX/C-Hair", "hair"), ("MX/C-EyesMouth", "eyemouth"),
-    ("MX/C-Eyebrow", "eyebrow"), ("MX/C-Halo", "halo"), ("MX/C-Weapon", "weapon"), ("ProjectMX/Weapon", "weapon"),
-    ("MX/C-Simple-Transparent", "transparent"), ("MX/C-Transparent", "transparent"), ("MX/C-Simple", "simple"),
-    ("MX/C-General", "general"), ("MX/E-Water", "water"), ("MX/Unlit", "unlit"), ("Unlit/", "unlit"),
-    ("DSFX/FX_SHADER_Matcap", "matcap"), ("FX/", "unlit"), ("DSFX/", "unlit"),
+    ("MX/C-General/Layer4", "body"),
+    ("MX/C-Face", "face"),
+    ("MX/C-Hair", "hair"),
+    ("MX/C-EyesMouth", "eyemouth"),
+    ("MX/C-Eyebrow", "eyebrow"),
+    ("MX/C-Halo", "halo"),
+    ("MX/C-Weapon", "weapon"),
+    ("ProjectMX/Weapon", "weapon"),
+    ("MX/C-Simple-Transparent", "transparent"),
+    ("MX/C-Transparent", "transparent"),
+    ("MX/C-Simple", "simple"),
+    ("MX/C-General", "general"),
+    ("MX/E-Water", "water"),
+    ("MX/Unlit", "unlit"),
+    ("Unlit/", "unlit"),
+    ("DSFX/FX_SHADER_Matcap", "matcap"),
+    ("FX/", "unlit"),
+    ("DSFX/", "unlit"),
 )
 
 
@@ -94,8 +125,11 @@ def ex_only_renderers(renderers: Iterable[tuple[int, str, list[tuple[str, int]]]
     out = {node for node, path, _ in renderers if node in with_face and CUT_IN.search(path)}
     if out == with_face:
         out = set()
-    faces = {node: (sum(count for kind, count in parts if kind == "face"), any(kind == "eyemouth" for kind, _ in parts))
-             for node, _, parts in renderers if node in with_face and node not in out}
+    faces = {
+        node: (sum(count for kind, count in parts if kind == "face"), any(kind == "eyemouth" for kind, _ in parts))
+        for node, _, parts in renderers
+        if node in with_face and node not in out
+    }
     largest = max((size for size, _ in faces.values()), default=0)
     main = {node: eyes for node, (size, eyes) in faces.items() if largest and size >= 0.5 * largest}
     if any(main.values()):
@@ -108,6 +142,7 @@ _INDICES = 34963
 
 
 # --- UnityPy 1.23 fixes -------------------------------------------------------------------------------------------
+
 
 def safe_unpack_floats(packed: Any, start: int = 0, count: int | None = None, shape: tuple | None = None) -> list:
     """``unpack_floats`` that accepts ``m_BitSize == 0``: every value then equals ``m_Start`` (UnityPy divides by
@@ -122,7 +157,9 @@ def safe_unpack_floats(packed: Any, start: int = 0, count: int | None = None, sh
 MeshHelper.unpack_floats = safe_unpack_floats
 
 
-def compressed_skin(weights: list[int], bones: list[int], vertex_count: int) -> tuple[list[list[float]], list[list[int]]]:
+def compressed_skin(
+    weights: list[int], bones: list[int], vertex_count: int
+) -> tuple[list[list[float]], list[list[int]]]:
     """Per-vertex weights and bone indices of a compressed mesh, summed as integers.
 
     Weights are 5-bit (a vertex's weights add up to 31). After three weights that fall short, the fourth is implied
@@ -151,8 +188,17 @@ def compressed_skin(weights: list[int], bones: list[int], vertex_count: int) -> 
 
 # VertexFormat (Unity 2019+): UNorm8, SNorm8, UNorm16, SNorm16
 _NORM = {2: 255.0, 3: 127.0, 4: 65535.0, 5: 32767.0}
-_CHANNEL_ATTRS = {0: "m_Vertices", 1: "m_Normals", 2: "m_Tangents", 3: "m_Colors", 4: "m_UV0", 5: "m_UV1",
-                  6: "m_UV2", 7: "m_UV3", 12: "m_BoneWeights"}
+_CHANNEL_ATTRS = {
+    0: "m_Vertices",
+    1: "m_Normals",
+    2: "m_Tangents",
+    3: "m_Colors",
+    4: "m_UV0",
+    5: "m_UV1",
+    6: "m_UV2",
+    7: "m_UV3",
+    12: "m_BoneWeights",
+}
 
 
 def fix_vertex_formats(mesh: Any, handler: Any) -> None:
@@ -223,11 +269,21 @@ def read_mesh(mesh: Any) -> MeshData:
     for sub, tris in zip(mesh.m_SubMeshes, handler.get_triangles()):
         base = getattr(sub, "baseVertex", 0) or 0
         triangles.append([(a + base, b + base, c + base) for a, b, c in tris])
-    return MeshData(handler.m_Vertices or [], handler.m_Normals, handler.m_UV0, handler.m_UV1, handler.m_Colors,
-                    handler.m_Tangents, joints, weights, triangles)
+    return MeshData(
+        handler.m_Vertices or [],
+        handler.m_Normals,
+        handler.m_UV0,
+        handler.m_UV1,
+        handler.m_Colors,
+        handler.m_Tangents,
+        joints,
+        weights,
+        triangles,
+    )
 
 
 # --- math (Unity -> glTF: mirror X) -------------------------------------------------------------------------------
+
 
 def mpos(v: Iterable[float]) -> tuple[float, float, float]:
     x, y, z = v
@@ -254,8 +310,12 @@ def quat_norm(q: Iterable[float]) -> tuple[float, ...]:
 def qmul(a: tuple, b: tuple) -> tuple[float, float, float, float]:
     ax, ay, az, aw = a
     bx, by, bz, bw = b
-    return (aw * bx + ax * bw + ay * bz - az * by, aw * by - ax * bz + ay * bw + az * bx,
-            aw * bz + ax * by - ay * bx + az * bw, aw * bw - ax * bx - ay * by - az * bz)
+    return (
+        aw * bx + ax * bw + ay * bz - az * by,
+        aw * by - ax * bz + ay * bw + az * bx,
+        aw * bz + ax * by - ay * bx + az * bw,
+        aw * bw - ax * bx - ay * by - az * bz,
+    )
 
 
 # Unity's rotation orders (math::RotationOrder), the axis applied first leading; an Euler binding of a clip carries
@@ -268,8 +328,11 @@ UNITY_ORDER = 4
 def euler_to_quat(e: Iterable[float], order: int = UNITY_ORDER) -> tuple[float, float, float, float]:
     """Unity Euler degrees in a rotation order; Unity's own (ZXY) applies Z, then X, then Y: q = qy * qx * qz."""
     x, y, z = (math.radians(a) / 2 for a in e)
-    axes = {"X": (math.sin(x), 0, 0, math.cos(x)), "Y": (0, math.sin(y), 0, math.cos(y)),
-            "Z": (0, 0, math.sin(z), math.cos(z))}
+    axes = {
+        "X": (math.sin(x), 0, 0, math.cos(x)),
+        "Y": (0, math.sin(y), 0, math.cos(y)),
+        "Z": (0, 0, math.sin(z), math.cos(z)),
+    }
     q: tuple = (0.0, 0.0, 0.0, 1.0)
     for axis in ROTATION_ORDERS.get(order, ROTATION_ORDERS[UNITY_ORDER]):
         q = qmul(axes[axis], q)
@@ -277,6 +340,7 @@ def euler_to_quat(e: Iterable[float], order: int = UNITY_ORDER) -> tuple[float, 
 
 
 # --- animation clips (generic mecanim clips: streamed + dense + constant curves) -----------------------------------
+
 
 def binding_dims(binding: Mapping[str, int]) -> int:
     """How many curves a generic binding takes: Transform (typeID 4) position, scale and Euler 3, rotation 4."""
@@ -320,7 +384,7 @@ def decode_clip(tt: Mapping[str, Any]) -> DecodedClip:
     streamed, dense, constant = clip["m_StreamedClip"], clip["m_DenseClip"], clip["m_ConstantClip"]
     curves: dict[int, list[float]] = {}
     keys: dict[int, list[tuple]] = {}
-    for time, frame in (read_streamed(streamed["data"]) if streamed["data"] else []):
+    for time, frame in read_streamed(streamed["data"]) if streamed["data"] else []:
         if -1e30 < time < 1e30:
             for curve, c0, c1, c2, c3 in frame:
                 keys.setdefault(curve, []).append((time, c0, c1, c2, c3))
@@ -350,8 +414,9 @@ def decode_clip(tt: Mapping[str, Any]) -> DecodedClip:
     return DecodedClip(stop - start, times, curves)
 
 
-def bind_tracks(bindings: list[Mapping[str, int]], curves: Mapping[int, list[float]],
-                nodes: Mapping[int, int]) -> dict[int, dict[int, list[list[float]]]]:
+def bind_tracks(
+    bindings: list[Mapping[str, int]], curves: Mapping[int, list[float]], nodes: Mapping[int, int]
+) -> dict[int, dict[int, list[list[float]]]]:
     """Transform curves by node and attribute (1 position, 2 rotation, 3 scale, 4 Euler), one component list each.
     ``nodes`` maps crc32 of a hierarchy path to its node; bindings to other paths or types only advance the index."""
     out: dict[int, dict[int, list[list[float]]]] = {}
@@ -368,8 +433,11 @@ def bind_tracks(bindings: list[Mapping[str, int]], curves: Mapping[int, list[flo
 
 def euler_orders(bindings: list[Mapping[str, int]], nodes: Mapping[int, int]) -> dict[int, int]:
     """The rotation order (:data:`ROTATION_ORDERS`) of each node a clip rotates with Euler curves."""
-    return {nodes[b["path"]]: b.get("customType", UNITY_ORDER) for b in bindings
-            if b["typeID"] == 4 and b["attribute"] == 4 and b["path"] in nodes}
+    return {
+        nodes[b["path"]]: b.get("customType", UNITY_ORDER)
+        for b in bindings
+        if b["typeID"] == 4 and b["attribute"] == 4 and b["path"] in nodes
+    }
 
 
 # switches a clip can animate: a renderer's m_Enabled (Renderer 25, MeshRenderer 23, SkinnedMeshRenderer 137) and a
@@ -378,15 +446,21 @@ TOGGLE_TYPES = {25: "renderer", 23: "renderer", 137: "renderer", 1: "active"}
 TOGGLE_ATTRIBUTES = {"renderer": zlib.crc32(b"m_Enabled"), "active": zlib.crc32(b"m_IsActive")}
 
 
-def bind_toggles(bindings: list[Mapping[str, int]], curves: Mapping[int, list[float]],
-                 nodes: Mapping[int, int]) -> list[tuple[int, str, list[float]]]:
+def bind_toggles(
+    bindings: list[Mapping[str, int]], curves: Mapping[int, list[float]], nodes: Mapping[int, int]
+) -> list[tuple[int, str, list[float]]]:
     """(node, "renderer" | "active", values) of the renderer and GameObject switches a clip animates, in the same
     curve index walk as :func:`bind_tracks`."""
     out, index = [], 0
     for binding in bindings:
         kind = TOGGLE_TYPES.get(binding["typeID"])
-        if kind and binding["attribute"] == TOGGLE_ATTRIBUTES[kind] and binding["path"] in nodes \
-                and curves.get(index) is not None and not binding.get("isPPtrCurve"):
+        if (
+            kind
+            and binding["attribute"] == TOGGLE_ATTRIBUTES[kind]
+            and binding["path"] in nodes
+            and curves.get(index) is not None
+            and not binding.get("isPPtrCurve")
+        ):
             out.append((nodes[binding["path"]], kind, curves[index]))
         index += binding_dims(binding)
     return out
@@ -403,8 +477,9 @@ def toggle_keys(values: list[float], times: list[float], start: float = 0.0) -> 
     return keys
 
 
-def track_values(attribute: int, parts: list[list[float]],
-                 order: int = UNITY_ORDER) -> tuple[str, list[tuple[float, ...]]]:
+def track_values(
+    attribute: int, parts: list[list[float]], order: int = UNITY_ORDER
+) -> tuple[str, list[tuple[float, ...]]]:
     """A glTF channel path and its values (mirrored; rotations normalised and kept continuous; Euler curves in their
     rotation order)."""
     length = max(len(p) for p in parts)
@@ -424,6 +499,7 @@ def pick_clips(names: list[str], wanted: Iterable[str] = DEFAULT_CLIPS, dev: str
     """(index, slot) of the clips to export: one clip per wanted name suffix, the prefab's own (``<dev>_<slot>``)
     before a shared one, a slot's own name before its :data:`CLIP_ALIASES`. When neither the formation nor the cafe
     idle is there, the first fallback idle comes along as slot 'Idle'."""
+
     def named(suffix: str) -> int | None:
         hits = [i for i, n in enumerate(names) if n.lower().endswith("_" + suffix.lower())]
         own = [i for i in hits if names[i].lower() == f"{dev}_{suffix}".lower()]
@@ -466,10 +542,20 @@ class GlbWriter:
 
     def __init__(self, generator: str = "BA Modding and Patching Tool"):
         self.json: dict[str, Any] = {
-            "asset": {"version": "2.0", "generator": generator}, "scene": 0, "scenes": [{"nodes": []}],
-            "nodes": [], "meshes": [], "materials": [], "textures": [], "images": [],
+            "asset": {"version": "2.0", "generator": generator},
+            "scene": 0,
+            "scenes": [{"nodes": []}],
+            "nodes": [],
+            "meshes": [],
+            "materials": [],
+            "textures": [],
+            "images": [],
             "samplers": [{"magFilter": 9729, "minFilter": 9987, "wrapS": 10497, "wrapT": 10497}],
-            "accessors": [], "bufferViews": [], "buffers": [], "skins": [], "animations": [],
+            "accessors": [],
+            "bufferViews": [],
+            "buffers": [],
+            "skins": [],
+            "animations": [],
         }
         self.bin = bytearray()
 
@@ -485,13 +571,18 @@ class GlbWriter:
         self.json["bufferViews"].append(view)
         return len(self.json["bufferViews"]) - 1
 
-    def accessor(self, values: list, kind: str, component: int = 5126, target: int | None = None,
-                 minmax: bool = False) -> int:
+    def accessor(
+        self, values: list, kind: str, component: int = 5126, target: int | None = None, minmax: bool = False
+    ) -> int:
         size = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4, "MAT4": 16}[kind]
         flat = [x for v in values for x in v] if size > 1 else list(values)
         fmt = {5126: "f", 5123: "H", 5125: "I", 5121: "B"}[component]
-        accessor = {"bufferView": self.view(struct.pack(f"<{len(flat)}{fmt}", *flat), target),
-                    "componentType": component, "count": len(values), "type": kind}
+        accessor = {
+            "bufferView": self.view(struct.pack(f"<{len(flat)}{fmt}", *flat), target),
+            "componentType": component,
+            "count": len(values),
+            "type": kind,
+        }
         if minmax and flat:
             columns = [flat[i::size] for i in range(size)]
             accessor["min"] = [min(c) for c in columns]
@@ -511,8 +602,11 @@ class GlbWriter:
         decode (glTF has no flag for that: it goes in the texture extras). ``sampler``: filters and wrapping, else the
         first sampler (trilinear, repeat)."""
         self.json["images"].append({"bufferView": self.view(png), "mimeType": "image/png", "name": name})
-        texture: dict[str, Any] = {"sampler": self.sampler(sampler) if sampler else 0,
-                                   "source": len(self.json["images"]) - 1, "name": name}
+        texture: dict[str, Any] = {
+            "sampler": self.sampler(sampler) if sampler else 0,
+            "source": len(self.json["images"]) - 1,
+            "name": name,
+        }
         if linear:
             texture["extras"] = {"linear": True}
         self.json["textures"].append(texture)
@@ -526,11 +620,17 @@ class GlbWriter:
         text = json.dumps(doc, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode("utf-8")
         text += b" " * (-len(text) % 4)
         total = 12 + 8 + len(text) + 8 + len(self.bin)
-        return (struct.pack("<4sII", b"glTF", 2, total) + struct.pack("<I4s", len(text), b"JSON") + text
-                + struct.pack("<I4s", len(self.bin), b"BIN\0") + bytes(self.bin))
+        return (
+            struct.pack("<4sII", b"glTF", 2, total)
+            + struct.pack("<I4s", len(text), b"JSON")
+            + text
+            + struct.pack("<I4s", len(self.bin), b"BIN\0")
+            + bytes(self.bin)
+        )
 
 
 # --- the object graph -----------------------------------------------------------------------------------------------
+
 
 def _key(obj: Any) -> tuple[str, int]:
     return obj.assets_file.name.lower(), obj.path_id
@@ -551,9 +651,15 @@ class BundleGraph:
     once for a wider CAB index when a CAB is not in ``index``. Override bundles (mods) take over the CABs they hold.
     """
 
-    def __init__(self, index: Mapping[str, Any], overrides: Iterable[Path] = (), *,
-                 fallback: Callable[[], Mapping[str, Any]] | None = None, opener: Callable = open_bundle,
-                 resolver: Callable[[set[str], Path | None], Mapping[str, str]] | None = None):
+    def __init__(
+        self,
+        index: Mapping[str, Any],
+        overrides: Iterable[Path] = (),
+        *,
+        fallback: Callable[[], Mapping[str, Any]] | None = None,
+        opener: Callable = open_bundle,
+        resolver: Callable[[set[str], Path | None], Mapping[str, str]] | None = None,
+    ):
         self.index = {cab: str(path) for cab, path in index.items()}
         for path in overrides:
             for cab in cab_names(Path(path)):
@@ -612,7 +718,12 @@ class BundleGraph:
         cab, pid = _external_cab(obj, pointer.get("m_FileID", 0)), pointer["m_PathID"]
         hit = self.objects.get((cab, pid))
         if hit is None:
-            if cab not in self.index and self.resolver is not None and cab.startswith("cab-") and cab not in self._unresolved:
+            if (
+                cab not in self.index
+                and self.resolver is not None
+                and cab.startswith("cab-")
+                and cab not in self._unresolved
+            ):
                 owner = self.locations.get(obj.assets_file.name.lower())
                 found = self.resolver({cab}, Path(owner) if owner else None)
                 self.index = {**found, **self.index}
@@ -643,6 +754,7 @@ class BundleGraph:
 
 
 # --- the exporter ---------------------------------------------------------------------------------------------------
+
 
 def _color(c: Mapping[str, float]) -> list[float]:
     return [round(c["r"], 5), round(c["g"], 5), round(c["b"], 5), round(c["a"], 5)]
@@ -716,13 +828,17 @@ def shader_state(form: Mapping[str, Any], floats: Mapping[str, float], custom_qu
     names a material property (``_Cull``, ``_SrcBlend`` ...: the material's float decides) or is fixed in the pass.
     Cull 0 off, 1 front, 2 back; blend factors as UnityEngine.Rendering.BlendMode (1 One, 0 Zero, 5 SrcAlpha,
     10 OneMinusSrcAlpha)."""
+
     def tags(entry: Mapping[str, Any]) -> dict[str, str]:
         return {k.lower(): v for k, v in (entry.get("m_Tags") or {}).get("tags", [])}
 
     passes = [p for sub in form["m_SubShaders"] for p in sub["m_Passes"]]
     mode = lambda p: tags(p["m_State"]).get("lightmode", "").lower()  # noqa: E731
-    forward = ([p for p in passes if mode(p) == "universalforward"]
-               or [p for p in passes if mode(p) not in _NOT_FORWARD] or passes)
+    forward = (
+        [p for p in passes if mode(p) == "universalforward"]
+        or [p for p in passes if mode(p) not in _NOT_FORWARD]
+        or passes
+    )
     state = forward[0]["m_State"]
     blend = state.get("rtBlend0") or state["rtBlend"][0]
 
@@ -735,8 +851,13 @@ def shader_state(form: Mapping[str, Any], floats: Mapping[str, float], custom_qu
         spec = tags(state).get("queue") or tags(form["m_SubShaders"][0]).get("queue") or "Geometry"
         base, _, offset = spec.partition("+")
         queue = _QUEUES.get(base.strip().lower(), 2000) + (int(offset) if offset.strip().isdigit() else 0)
-    return {"cull": int(value(state["culling"])), "zwrite": int(value(state["zWrite"])),
-            "src": int(value(blend["srcBlend"])), "dst": int(value(blend["destBlend"])), "queue": int(queue)}
+    return {
+        "cull": int(value(state["culling"])),
+        "zwrite": int(value(state["zWrite"])),
+        "src": int(value(blend["srcBlend"])),
+        "dst": int(value(blend["destBlend"])),
+        "queue": int(queue),
+    }
 
 
 # Vector properties of the character shaders, for a material whose shader cannot be read
@@ -749,7 +870,7 @@ def _prefabs(graph: BundleGraph, bundles: Iterable[Path]) -> dict[str, Any]:
     for path in bundles:
         graph.add(path)
         env = graph.envs.get(str(path))  # also when an earlier lookup loaded it
-        for name, pointer in (env.container.items() if env is not None else ()):
+        for name, pointer in env.container.items() if env is not None else ():
             lower = name.lower()
             if lower.endswith(".prefab") and "/character/" in lower:
                 found[lower.rsplit("/", 1)[-1][:-7]] = pointer
@@ -772,11 +893,15 @@ def _subtree_renderers(graph: BundleGraph, transform: Any) -> int:
         tree = graph.tree(tr)
         go = graph.deref(tr, tree.get("m_GameObject"))
         if go is not None:
-            count += sum(1 for c in graph.tree(go)["m_Component"]
-                         if (obj := graph.deref(go, c["component"])) is not None
-                         and obj.type.name in ("SkinnedMeshRenderer", "MeshRenderer"))
-        stack.extend(child for child in (graph.deref(tr, pointer) for pointer in tree.get("m_Children", []))
-                     if child is not None)
+            count += sum(
+                1
+                for c in graph.tree(go)["m_Component"]
+                if (obj := graph.deref(go, c["component"])) is not None
+                and obj.type.name in ("SkinnedMeshRenderer", "MeshRenderer")
+            )
+        stack.extend(
+            child for child in (graph.deref(tr, pointer) for pointer in tree.get("m_Children", [])) if child is not None
+        )
     return count
 
 
@@ -800,7 +925,7 @@ def asset_roots(graph: BundleGraph, bundles: Iterable[Path], dev: str | None = N
             continue
         graph.add(path)
         env = graph.envs.get(str(path))
-        for name, pointer in (env.container.items() if env is not None else ()):
+        for name, pointer in env.container.items() if env is not None else ():
             lower = name.lower()
             if not lower.endswith((".prefab", ".fbx")):
                 continue
@@ -849,11 +974,11 @@ class _Exporter:
         self.glb = GlbWriter()
         self.nodes = self.glb.json["nodes"]
         self.node_of: dict[tuple[str, int], int] = {}  # Transform -> node
-        self.path_of: dict[int, str] = {}              # node -> hierarchy path below the root
+        self.path_of: dict[int, str] = {}  # node -> hierarchy path below the root
         self.renderers: list[tuple[int, Any, Any]] = []  # (node, renderer, GameObject), shown ones only
         # renderers the prefab disables, by node: exported only when a clip enables them (alternative faces)
         self.disabled: dict[int, tuple[int, Any, Any]] = {}
-        self.shown: set[int] = set()                     # nodes outside inactive and effect subtrees
+        self.shown: set[int] = set()  # nodes outside inactive and effect subtrees
         self.follower = self.mouth = None
         # every GameObject as particles.build reads a prefab walk (lobby.read_prefab nodes), for the halo's particles
         self.fx_nodes: list[dict[str, Any]] = []
@@ -903,15 +1028,30 @@ class _Exporter:
         else:
             self.nodes[parent].setdefault("children", []).append(index)
         here = active and bool(go["m_IsActive"])
-        fx = [(obj.type.name, obj.path_id, g.tree(obj)) for obj in components
-              if obj.type.name in ("ParticleSystem", "ParticleSystemRenderer")]
+        fx = [
+            (obj.type.name, obj.path_id, g.tree(obj))
+            for obj in components
+            if obj.type.name in ("ParticleSystem", "ParticleSystemRenderer")
+        ]
         local3 = particles.trs(t)
         self.go_of_node[index] = go_obj.path_id
-        self.fx_nodes.append({
-            "go": go_obj.path_id, "parent": self.go_of_node.get(parent) if parent is not None else None,
-            "name": go["m_Name"], "path": path, "active": here, "own": bool(go["m_IsActive"]), "all": fx,
-            "first": {cls: c for cls, _, c in reversed(fx)}, "pids": {cls: pid for cls, pid, _ in reversed(fx)},
-            "t": t, "m3": local3, "local3": local3, "node": index})
+        self.fx_nodes.append(
+            {
+                "go": go_obj.path_id,
+                "parent": self.go_of_node.get(parent) if parent is not None else None,
+                "name": go["m_Name"],
+                "path": path,
+                "active": here,
+                "own": bool(go["m_IsActive"]),
+                "all": fx,
+                "first": {cls: c for cls, _, c in reversed(fx)},
+                "pids": {cls: pid for cls, pid, _ in reversed(fx)},
+                "t": t,
+                "m3": local3,
+                "local3": local3,
+                "node": index,
+            }
+        )
         effect = any(obj.type.name in ("ParticleSystem", "Camera", "Light") for obj in components)
         shown = shown and here and not effect
         if shown:
@@ -1003,8 +1143,11 @@ class _Exporter:
         for name, env in props["m_TexEnvs"]:
             tex = g.deref(obj, env["m_Texture"])
             if tex is not None and tex.type.name == "Texture2D":
-                textures[name] = {"index": self.texture(tex), "scale": [env["m_Scale"]["x"], env["m_Scale"]["y"]],
-                                  "offset": [env["m_Offset"]["x"], env["m_Offset"]["y"]]}
+                textures[name] = {
+                    "index": self.texture(tex),
+                    "scale": [env["m_Scale"]["x"], env["m_Scale"]["y"]],
+                    "offset": [env["m_Offset"]["x"], env["m_Offset"]["y"]],
+                }
         colors = {k: _color(v) for k, v in props["m_Colors"]}
         floats = {k: round(v, 5) for k, v in props["m_Floats"]}
         keywords = set(tree.get("m_ValidKeywords") or []) | set((tree.get("m_ShaderKeywords") or "").split())
@@ -1023,14 +1166,23 @@ class _Exporter:
             except (KeyError, TypeError, ValueError, IndexError):
                 state = None
         material: dict[str, Any] = {
-            "name": tree["m_Name"], "doubleSided": floats.get("_Cull", 2) == 0,
+            "name": tree["m_Name"],
+            "doubleSided": floats.get("_Cull", 2) == 0,
             "pbrMetallicRoughness": {"metallicFactor": 0, "roughnessFactor": 1},
             # colors: as the material stores them; vectors and hdr: the ones the game passes through unconverted
             # (Vector properties, HDR Color properties), every other color is converted from sRGB to linear first
-            "extras": {"shader": shader, "kind": shader_kind(shader), "colors": colors,
-                       "vectors": sorted(vectors & set(colors)), "hdr": sorted(hdr & set(colors)),
-                       "floats": floats, "textures": textures,
-                       "keywords": sorted(keywords), "outline": outline, "state": state},
+            "extras": {
+                "shader": shader,
+                "kind": shader_kind(shader),
+                "colors": colors,
+                "vectors": sorted(vectors & set(colors)),
+                "hdr": sorted(hdr & set(colors)),
+                "floats": floats,
+                "textures": textures,
+                "keywords": sorted(keywords),
+                "outline": outline,
+                "state": state,
+            },
         }
         if "_MainTex" in textures:
             material["pbrMetallicRoughness"]["baseColorTexture"] = {"index": textures["_MainTex"]["index"]}
@@ -1043,7 +1195,7 @@ class _Exporter:
     # meshes
     def meshes(self, renderers: Iterable[tuple[int, Any, Any]] | None = None) -> None:
         g, glb, root = self.g, self.glb, self.glb.json["scenes"][0]["nodes"][0]
-        for node_index, renderer, go_obj in (self.renderers if renderers is None else renderers):
+        for node_index, renderer, go_obj in self.renderers if renderers is None else renderers:
             tree = g.tree(renderer)
             if renderer.type.name == "SkinnedMeshRenderer":
                 mesh_obj = g.deref(renderer, tree["m_Mesh"])
@@ -1062,8 +1214,9 @@ class _Exporter:
                 if uv:
                     attrs[name] = glb.accessor([(u[0], 1 - u[1]) for u in uv], "VEC2", target=_ARRAY)
             if data.colors:
-                attrs["COLOR_0"] = glb.accessor([tuple(c[:4]) if len(c) >= 4 else (*c[:3], 1) for c in data.colors],
-                                                "VEC4", target=_ARRAY)
+                attrs["COLOR_0"] = glb.accessor(
+                    [tuple(c[:4]) if len(c) >= 4 else (*c[:3], 1) for c in data.colors], "VEC4", target=_ARRAY
+                )
             if data.tangents:
                 # OL_ meshes keep the smoothed outline normal in the tangent xyz: a custom attribute, not a tangent
                 attrs["_OUTLINE"] = glb.accessor([mpos(t[:3]) for t in data.tangents], "VEC3", target=_ARRAY)
@@ -1073,10 +1226,15 @@ class _Exporter:
                 attrs["WEIGHTS_0"] = glb.accessor(data.weights, "VEC4", target=_ARRAY)
             component = 5123 if len(data.vertices) < 65536 else 5125
             primitives = []
-            for i, tris in enumerate(data.triangles[:len(materials)]):
+            for i, tris in enumerate(data.triangles[: len(materials)]):
                 flat = [k for a, b, c in tris for k in (a, c, b)]  # mirrored: flip the winding
-                primitives.append({"attributes": attrs, "material": self.material(materials[i]),
-                                   "indices": glb.accessor(flat, "SCALAR", component=component, target=_INDICES)})
+                primitives.append(
+                    {
+                        "attributes": attrs,
+                        "material": self.material(materials[i]),
+                        "indices": glb.accessor(flat, "SCALAR", component=component, target=_INDICES),
+                    }
+                )
             glb.json["meshes"].append({"name": mesh.m_Name, "primitives": primitives})
             mesh_index = len(glb.json["meshes"]) - 1
             if not skinned:
@@ -1086,16 +1244,22 @@ class _Exporter:
             for bone in tree["m_Bones"]:
                 bone_obj = g.deref(renderer, bone)
                 joints.append(self.node_of.get(_key(bone_obj), root) if bone_obj is not None else root)
-            skin = {"joints": joints, "name": mesh.m_Name,
-                    "inverseBindMatrices": glb.accessor([mirror_matrix(e) for e in g.tree(mesh_obj)["m_BindPose"]], "MAT4")}
+            skin = {
+                "joints": joints,
+                "name": mesh.m_Name,
+                "inverseBindMatrices": glb.accessor([mirror_matrix(e) for e in g.tree(mesh_obj)["m_BindPose"]], "MAT4"),
+            }
             root_bone = g.deref(renderer, tree.get("m_RootBone"))
             if root_bone is not None and _key(root_bone) in self.node_of:
                 skin["skeleton"] = self.node_of[_key(root_bone)]
             glb.json["skins"].append(skin)
             # Unity skins with bone.localToWorld * bindpose and ignores the renderer's own transform; glTF uses the
             # mesh node's world matrix at bind time, so skinned meshes go on a new identity node under the root
-            mesh_node: dict[str, Any] = {"name": self.nodes[node_index]["name"] + "_mesh", "mesh": mesh_index,
-                                         "skin": len(glb.json["skins"]) - 1}
+            mesh_node: dict[str, Any] = {
+                "name": self.nodes[node_index]["name"] + "_mesh",
+                "mesh": mesh_index,
+                "skin": len(glb.json["skins"]) - 1,
+            }
             self.nodes.append(mesh_node)
             self.nodes[root].setdefault("children", []).append(len(self.nodes) - 1)
             self.nodes[node_index].setdefault("extras", {})["renderer"] = len(self.nodes) - 1
@@ -1109,19 +1273,24 @@ class _Exporter:
             lo, hi = tree["ClampMinOffset"], tree["ClampMaxOffset"]
             rot = tree["TargetRelativeRotation"]
             extras["haloFollower"] = {
-                "node": index, "target": self.node_of.get(_key(target)) if target is not None else None,
+                "node": index,
+                "target": self.node_of.get(_key(target)) if target is not None else None,
                 "relativePosition": list(mpos(_vec3(tree["TargetRelativePosition"]))),
                 "relativeRotation": list(mquat([rot[k] for k in "xyzw"])),
                 # mirroring X swaps the bounds
-                "clampMin": [-hi["x"], lo["y"], lo["z"]], "clampMax": [-lo["x"], hi["y"], hi["z"]],
-                "positionPower": tree["FollowPositionPower"], "rotationPower": tree["FollowRotationPower"],
+                "clampMin": [-hi["x"], lo["y"], lo["z"]],
+                "clampMax": [-lo["x"], hi["y"], hi["z"]],
+                "positionPower": tree["FollowPositionPower"],
+                "rotationPower": tree["FollowRotationPower"],
             }
         if self.halo_effects:
             extras["haloFx"] = self.halo_effects
         if self.mouth:
             _, tree = self.mouth
-            extras["mouth"] = {"materialIndex": tree.get("MouthMaterialIndex"),
-                               "defaultOffset": [tree["MouthDefaultUV"]["x"], tree["MouthDefaultUV"]["y"]]}
+            extras["mouth"] = {
+                "materialIndex": tree.get("MouthMaterialIndex"),
+                "defaultOffset": [tree["MouthDefaultUV"]["x"], tree["MouthDefaultUV"]["y"]],
+            }
         return extras
 
     def halo_fx(self, resolver: Callable[[Mapping[int, Any]], Callable[[str, int, dict], Any]]) -> None:
@@ -1154,10 +1323,19 @@ class _Exporter:
             except Exception:  # an unreadable texture: the systems that sample it are not drawn
                 logger.debug("Cannot read halo particle texture %s", tex_id, exc_info=True)
         # placed by their nodes, live: the lobby's places (anchor, rel, static, z) do not apply
-        systems = [{**{k: v for k, v in s.items() if k not in ("anchor", "rel", "static", "z", "_go")},
-                    "node": node_of_go[s["_go"]]} for s in found["systems"]]
-        self.halo_effects = {"systems": systems, "materials": found["materials"], "textures": textures,
-                             "meshes": found["meshes"]}
+        systems = [
+            {
+                **{k: v for k, v in s.items() if k not in ("anchor", "rel", "static", "z", "_go")},
+                "node": node_of_go[s["_go"]],
+            }
+            for s in found["systems"]
+        ]
+        self.halo_effects = {
+            "systems": systems,
+            "materials": found["materials"],
+            "textures": textures,
+            "meshes": found["meshes"],
+        }
 
     # clips
     def controller_clips(self, prefabs: Mapping[str, Any]) -> list[Any]:
@@ -1170,8 +1348,10 @@ class _Exporter:
                 return
             tree = g.tree(controller)
             if controller.type.name == "AnimatorOverrideController":
-                pointers.extend((controller, c["m_OverrideClip"] if c["m_OverrideClip"].get("m_PathID") else c["m_OriginalClip"])
-                                for c in tree["m_Clips"])
+                pointers.extend(
+                    (controller, c["m_OverrideClip"] if c["m_OverrideClip"].get("m_PathID") else c["m_OriginalClip"])
+                    for c in tree["m_Clips"]
+                )
             elif controller.type.name == "AnimatorController":
                 pointers.extend((controller, c) for c in tree.get("m_AnimationClips", []))
 
@@ -1228,8 +1408,10 @@ class _Exporter:
     def animation(self, clip: Any, slot: str) -> None:
         glb = self.glb
         by_hash = {zlib.crc32(path.encode("utf-8")): index for index, path in self.path_of.items()}
-        rest = {i: (n.get("translation", [0, 0, 0]), n.get("rotation", [0, 0, 0, 1]), n.get("scale", [1, 1, 1]))
-                for i, n in enumerate(self.nodes)}
+        rest = {
+            i: (n.get("translation", [0, 0, 0]), n.get("rotation", [0, 0, 0, 1]), n.get("scale", [1, 1, 1]))
+            for i, n in enumerate(self.nodes)
+        }
         tt = clip.read_typetree()
         decoded = decode_clip(tt)
         bindings = tt["m_ClipBindingConstant"]["genericBindings"]
@@ -1260,12 +1442,20 @@ class _Exporter:
                     source = times
                 output = glb.accessor(values, "VEC4" if path == "rotation" else "VEC3")
                 animation["samplers"].append({"input": source, "output": output, "interpolation": "LINEAR"})
-                animation["channels"].append({"sampler": len(animation["samplers"]) - 1,
-                                              "target": {"node": node, "path": path}})
-        events = [{"time": round(e["time"], 4), "function": e["functionName"], "int": e["intParameter"]}
-                  for e in tt.get("m_Events", []) if e["functionName"] == "SetMouthTile"]
-        animation["extras"] = {"slot": slot, "loop": bool(tt["m_MuscleClip"]["m_LoopTime"]),
-                               "duration": decoded.duration, "events": events}
+                animation["channels"].append(
+                    {"sampler": len(animation["samplers"]) - 1, "target": {"node": node, "path": path}}
+                )
+        events = [
+            {"time": round(e["time"], 4), "function": e["functionName"], "int": e["intParameter"]}
+            for e in tt.get("m_Events", [])
+            if e["functionName"] == "SetMouthTile"
+        ]
+        animation["extras"] = {
+            "slot": slot,
+            "loop": bool(tt["m_MuscleClip"]["m_LoopTime"]),
+            "duration": decoded.duration,
+            "events": events,
+        }
         toggles = self.toggles(tt, decoded, by_hash)
         if toggles:
             animation["extras"]["toggles"] = toggles
@@ -1330,7 +1520,7 @@ class _ClipExporter(_Exporter):
 
     def __init__(self, graph: BundleGraph, dev: str):
         super().__init__(graph, dev)
-        self.drawn: set[int] = set()    # GameObject nodes of the renderers the base GLB draws
+        self.drawn: set[int] = set()  # GameObject nodes of the renderers the base GLB draws
         self.brought: set[int] = set()  # GameObject nodes of the renderers this clip brings in
 
     def _renderer_node(self, node: int) -> int | None:
@@ -1355,9 +1545,16 @@ def _model_clips(exporter: _Exporter, graph: BundleGraph, bundles: list[Path], k
     return exporter.controller_clips(_prefabs(graph, bundles))
 
 
-def export_chibi(graph: BundleGraph, bundles: Iterable[Path], dev: str, *, prefab: str = "echelon",
-                 clips: Iterable[str] = DEFAULT_CLIPS, story: Iterable[Path] = (),
-                 fx: Callable[[Mapping[int, Any]], Callable[[str, int, dict], Any]] | None = None) -> bytes:
+def export_chibi(
+    graph: BundleGraph,
+    bundles: Iterable[Path],
+    dev: str,
+    *,
+    prefab: str = "echelon",
+    clips: Iterable[str] = DEFAULT_CLIPS,
+    story: Iterable[Path] = (),
+    fx: Callable[[Mapping[int, Any]], Callable[[str, int, dict], Any]] | None = None,
+) -> bytes:
     """Export one chibi to GLB bytes. ``bundles`` are the prefab bundles of ``dev``; the prefab is the Echelon
     (formation) one where there is one, else the battle, cafe or strategy one, else a field-mode player or NPC (an
     event or story variant with no battle model), played with the clips its FieldAnimancerController lists, else a
@@ -1384,8 +1581,9 @@ def export_chibi(graph: BundleGraph, bundles: Iterable[Path], dev: str, *, prefa
         for path in story:
             graph.add(path)
         prefix = f"{dev}_".lower()
-        exporter.story([clip for clip in exporter.bound_clips(graph, story)
-                        if (clip.peek_name() or "").lower().startswith(prefix)])
+        exporter.story(
+            [clip for clip in exporter.bound_clips(graph, story) if (clip.peek_name() or "").lower().startswith(prefix)]
+        )
     data = exporter.glb.finish()
     logger.debug("model %s (%s): %d bundles, %d KB", dev, name, len(graph.loaded), len(data) // 1024)
     return data

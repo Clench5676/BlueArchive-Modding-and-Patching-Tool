@@ -32,13 +32,13 @@ from .integrity import replacement_key
 from .judge import core_of, date_of, part_of
 
 #: How a file found its targets
-NAME = "name"                    # the exact name of a current part
-NAME_CRC = "name_without_crc"    # the name of a current part, but for the CRC
-CAB = "cab"                      # the CABs of a current part
-ASSET_PATH = "asset_path"        # the parts holding its asset paths, every date of the core
-ASSET_KEY = "asset_key"          # the parts sharing an asset name and type, every date of the core
-PART = "part"                    # its part (prefix and resource type or number) at the newest date: assets unreadable
-NOTHING = "none"                 # readable assets that no part holds, or no part at all
+NAME = "name"  # the exact name of a current part
+NAME_CRC = "name_without_crc"  # the name of a current part, but for the CRC
+CAB = "cab"  # the CABs of a current part
+ASSET_PATH = "asset_path"  # the parts holding its asset paths, every date of the core
+ASSET_KEY = "asset_key"  # the parts sharing an asset name and type, every date of the core
+PART = "part"  # its part (prefix and resource type or number) at the newest date: assets unreadable
+NOTHING = "none"  # readable assets that no part holds, or no part at all
 
 #: Methods by which a file replaces a part whole (the part's current release)
 WHOLE = frozenset({NAME, NAME_CRC, CAB})
@@ -60,6 +60,7 @@ class Readers:
     set for a file it cannot read; a target is read from its official copy where there is one.
     ``release(source, target)`` says whether a file that names a part without its CRC, or by its CABs, was built on
     that part as it is now; the names alone (no reader) take it as such."""
+
     cabs: Callable[[Path], Iterable[str]] = _nothing
     paths: Callable[[Path], set[str]] = _nothing
     keys: Callable[[Path], set] = _nothing
@@ -73,6 +74,7 @@ NAMES_ONLY = Readers()
 @dataclass
 class Match:
     """How one file found its targets."""
+
     method: str
     targets: list[Path]
 
@@ -80,16 +82,21 @@ class Match:
 @dataclass
 class Group:
     """The older files of one name prefix and core, and the parts they update."""
+
     names: list[str]
     sources: list[Path]
     method: str
     targets: list[Path] = field(default_factory=list)
 
 
-def current(files: Mapping[str, Path], targets: Sequence[Path],
-            cabs: Callable[[Path], Iterable[str]] = _nothing,
-            release: Callable[[Path, Path], bool] = _same_release, *,
-            older: Collection[Path] = ()) -> tuple[dict[Path, Path], dict[str, str]]:
+def current(
+    files: Mapping[str, Path],
+    targets: Sequence[Path],
+    cabs: Callable[[Path], Iterable[str]] = _nothing,
+    release: Callable[[Path, Path], bool] = _same_release,
+    *,
+    older: Collection[Path] = (),
+) -> tuple[dict[Path, Path], dict[str, str]]:
     """The files that are a part's current release, {target: source}, and the method each was found by. The files
     of ``older`` are known to be of an older release, whatever their names say (left to the asset stage).
 
@@ -166,14 +173,20 @@ class Resolution:
     """What a set of mod files replaces and updates among the parts of its core. The name and CAB stage runs at
     once; the asset stage reads only when asked for (``groups`` and everything built on it)."""
 
-    def __init__(self, files: Mapping[str, Path], targets: Sequence[Path], readers: Readers = NAMES_ONLY, *,
-                 whole: bool = True, older: Collection[Path] = ()):
+    def __init__(
+        self,
+        files: Mapping[str, Path],
+        targets: Sequence[Path],
+        readers: Readers = NAMES_ONLY,
+        *,
+        whole: bool = True,
+        older: Collection[Path] = (),
+    ):
         self.files = dict(files)
         self.targets = list(targets)
         self.readers = readers
         if whole:
-            self.current, self._methods = current(self.files, self.targets, readers.cabs, readers.release,
-                                                  older=older)
+            self.current, self._methods = current(self.files, self.targets, readers.cabs, readers.release, older=older)
         else:
             self.current, self._methods = {}, {}
         sources = set(self.current.values())
@@ -234,8 +247,9 @@ class Resolution:
             if group.method == PART:
                 result.update(group.targets)
             elif carried:
-                result.update(target for target in group.targets
-                              if (held := self.readers.paths(target)) and held <= carried)
+                result.update(
+                    target for target in group.targets if (held := self.readers.paths(target)) and held <= carried
+                )
         return result
 
     @property
@@ -248,33 +262,56 @@ class Resolution:
         """The files that neither a name, a CAB nor their asset paths place, and whose part (prefix and resource type
         or number) no target has: another server's files are accepted only where something places them."""
         placed = {name for name, match in self.matches().items() if match.method in WHOLE or match.method == ASSET_PATH}
-        return [name for name in self.files if name not in placed
-                and not any(part_of(target.name) == part_of(name) for target in self.targets)]
+        return [
+            name
+            for name in self.files
+            if name not in placed and not any(part_of(target.name) == part_of(name) for target in self.targets)
+        ]
 
     def sharing_keys(self, among: Sequence[Path] | None = None) -> list[Path]:
         """The parts (``among``, else every part the files write) sharing an asset name and type with the files."""
-        return sharing_keys(list(self.files.values()), self.updated if among is None else list(among),
-                            self.readers.keys)
+        return sharing_keys(
+            list(self.files.values()), self.updated if among is None else list(among), self.readers.keys
+        )
 
     def evidence(self) -> list[dict[str, Any]]:
         """Per file: how it matched, the official parts it found and their dates, for error reports. The asset stage
         is reported only when it has run."""
         rows = []
-        stages = self.matches() if self._groups is not None else {
-            name: Match(self._methods[name], [target]) for target, source in self.current.items()
-            for name, path in self.files.items() if path == source}
+        stages = (
+            self.matches()
+            if self._groups is not None
+            else {
+                name: Match(self._methods[name], [target])
+                for target, source in self.current.items()
+                for name, path in self.files.items()
+                if path == source
+            }
+        )
         for name in self.files:
             match = stages.get(name)
             if match is None:
                 rows.append({"file": name, "method": None, "targets": [], "dates": []})
                 continue
-            rows.append({"file": name, "method": match.method, "targets": sorted(target.name for target in match.targets),
-                         "dates": sorted({date_of(target.name) for target in match.targets})})
+            rows.append(
+                {
+                    "file": name,
+                    "method": match.method,
+                    "targets": sorted(target.name for target in match.targets),
+                    "dates": sorted({date_of(target.name) for target in match.targets}),
+                }
+            )
         return rows
 
 
-def resolve(files: Mapping[str, Path], targets: Sequence[Path], readers: Readers = NAMES_ONLY, *,
-            whole: bool = True, older: Collection[Path] = ()) -> Resolution:
+def resolve(
+    files: Mapping[str, Path],
+    targets: Sequence[Path],
+    readers: Readers = NAMES_ONLY,
+    *,
+    whole: bool = True,
+    older: Collection[Path] = (),
+) -> Resolution:
     """The resolution of a set of mod files among the parts of its core; ``whole=False`` treats every file as an
     older release (no name or CAB stage), ``older`` only the files it lists."""
     return Resolution(files, targets, readers, whole=whole, older=older)
@@ -285,8 +322,13 @@ def resolve(files: Mapping[str, Path], targets: Sequence[Path], readers: Readers
 COLLECTION = "uis-01_common-14_charactercollect-"
 
 
-def generic(files: Mapping[str, Path], available: Sequence[Path], readers: Readers, *,
-            container_keys: Callable[[Path, bool], set]) -> dict[str, Match]:
+def generic(
+    files: Mapping[str, Path],
+    available: Sequence[Path],
+    readers: Readers,
+    *,
+    container_keys: Callable[[Path, bool], set],
+) -> dict[str, Match]:
     """The official files each generic mod file replaces or updates: a collection batch's exact name; a current
     release (name, name without CRC, CAB); the files of its prefix holding its asset paths, over every date (an asset
     path lives in one bundle of a build: this tells apart the bundles of a group packed one asset per bundle, whose

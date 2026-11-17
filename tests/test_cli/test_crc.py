@@ -8,17 +8,17 @@ from ba_modding_toolkit.utils import compute_crc32
 if TYPE_CHECKING:
     from conftest import SampleCase
 
+
 # 案例数据缺失时 conftest 参数化为空参数集，测试自动跳过
 class TestCrcCommand:
-    def test_crc_check(
-        self,
-        sample_case: "SampleCase"
-    ):
+    def test_crc_check(self, sample_case: "SampleCase"):
         """测试 CRC 检查模式（单文件计算，不修改文件）"""
-        args = CrcTap().parse_args([
-            str(sample_case.bundle_paths[0]),
-            "--check",
-        ])
+        args = CrcTap().parse_args(
+            [
+                str(sample_case.bundle_paths[0]),
+                "--check",
+            ]
+        )
 
         handle_crc(args)
 
@@ -31,11 +31,13 @@ class TestCrcCommand:
         other_file = tmp_path / "other.bundle"
         other_file.write_bytes(sample_case.bundle_paths[0].read_bytes())
 
-        args = CrcTap().parse_args([
-            str(sample_case.bundle_paths[0]),
-            str(other_file),
-            "--check",
-        ])
+        args = CrcTap().parse_args(
+            [
+                str(sample_case.bundle_paths[0]),
+                str(other_file),
+                "--check",
+            ]
+        )
 
         handle_crc(args)
 
@@ -48,10 +50,13 @@ class TestCrcCommand:
         modified_file = tmp_path / "modified.bundle"
         modified_file.write_bytes(sample_case.bundle_paths[0].read_bytes())
 
-        args = CrcTap().parse_args([
-            str(modified_file),
-            "--target-crc", "0x00000000",
-        ])
+        args = CrcTap().parse_args(
+            [
+                str(modified_file),
+                "--target-crc",
+                "0x00000000",
+            ]
+        )
 
         handle_crc(args)
 
@@ -67,15 +72,17 @@ class TestCrcCommand:
         modified_file = tmp_path / "123456_assets_all_1234567890.bundle"
         modified_file.write_bytes(sample_case.bundle_paths[0].read_bytes())
 
-        args = CrcTap().parse_args([
-            str(modified_file),
-        ])
+        args = CrcTap().parse_args(
+            [
+                str(modified_file),
+            ]
+        )
 
         handle_crc(args)
 
         with open(modified_file, "rb") as f:
             assert compute_crc32(f.read()) == 1234567890
-        assert modified_file.with_suffix(modified_file.suffix + '.backup').is_file()
+        assert modified_file.with_suffix(modified_file.suffix + ".backup").is_file()
 
     def test_crc_fix_no_backup(
         self,
@@ -86,13 +93,15 @@ class TestCrcCommand:
         modified_file = tmp_path / "123456_assets_all_1234567890.bundle"
         modified_file.write_bytes(sample_case.bundle_paths[0].read_bytes())
 
-        args = CrcTap().parse_args([
-            str(modified_file),
-            "--no-backup",
-        ])
+        args = CrcTap().parse_args(
+            [
+                str(modified_file),
+                "--no-backup",
+            ]
+        )
 
         handle_crc(args)
 
         with open(modified_file, "rb") as f:
             assert compute_crc32(f.read()) == 1234567890
-        assert not modified_file.with_suffix(modified_file.suffix + '.backup').exists()
+        assert not modified_file.with_suffix(modified_file.suffix + ".backup").exists()

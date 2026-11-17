@@ -29,7 +29,7 @@ GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-
 
 def _doc(data: bytes) -> dict:
     assert data[:4] == b"glTF" and struct.unpack_from("<I", data, 8)[0] == len(data)
-    return json.loads(data[20:20 + struct.unpack_from("<I", data, 12)[0]])
+    return json.loads(data[20 : 20 + struct.unpack_from("<I", data, 12)[0]])
 
 
 def test_a_clips_toggles_name_the_renderers_gameobject_and_bring_what_the_model_leaves_out(monkeypatch):
@@ -50,14 +50,22 @@ def test_a_clips_toggles_name_the_renderers_gameobject_and_bring_what_the_model_
     nodes = {path: i for i, path in exporter.path_of.items()}
     by_hash = {zlib.crc32(path.encode()): i for path, i in nodes.items()}
     enabled, active = zlib.crc32(b"m_Enabled"), zlib.crc32(b"m_IsActive")
-    tt = {"m_MuscleClip": {"m_StartTime": 0.0}, "m_ClipBindingConstant": {"genericBindings": [
-        {"typeID": 25, "attribute": enabled, "path": zlib.crc32(b"Face")},     # off after 0.5 s
-        {"typeID": 25, "attribute": enabled, "path": zlib.crc32(b"Face02")},   # on after 0.5 s
-        {"typeID": 1, "attribute": active, "path": zlib.crc32(b"Props")},      # 1 all along: the rest state
-    ]}}
+    tt = {
+        "m_MuscleClip": {"m_StartTime": 0.0},
+        "m_ClipBindingConstant": {
+            "genericBindings": [
+                {"typeID": 25, "attribute": enabled, "path": zlib.crc32(b"Face")},  # off after 0.5 s
+                {"typeID": 25, "attribute": enabled, "path": zlib.crc32(b"Face02")},  # on after 0.5 s
+                {"typeID": 1, "attribute": active, "path": zlib.crc32(b"Props")},  # 1 all along: the rest state
+            ]
+        },
+    }
     decoded = model.DecodedClip(1.0, [0.0, 0.5, 1.0], {0: [1.0, 0.0, 0.0], 1: [0.0, 1.0, 1.0], 2: [1.0]})
     toggles = exporter.toggles(tt, decoded, by_hash)
-    assert toggles == [{"node": nodes["Face"], "keys": [[0.0, 1], [0.5, 0]]}, {"node": nodes["Face02"], "keys": [[0.0, 0], [0.5, 1]]}]
+    assert toggles == [
+        {"node": nodes["Face"], "keys": [[0.0, 1], [0.5, 0]]},
+        {"node": nodes["Face02"], "keys": [[0.0, 0], [0.5, 1]]},
+    ]
     assert brought == [nodes["Face02"]] and exporter.brought == {nodes["Face02"]}
     # no node of the hierarchy is hidden for it: the hierarchy stays the model's
     assert not any(n.get("extras", {}).get("hidden") for n in exporter.nodes)
@@ -67,7 +75,9 @@ def test_model_glb_exports_a_clip_from_the_models_files_and_caches_it_per_clip(t
     prefab = "character-ch0242-_mxload-2024-11-18_assets_all_1.bundle"
     game, resources = _game(tmp_path, prefab)
     calls = []
-    monkeypatch.setattr(model, "export_chibi", lambda graph, bundles, dev, **_: calls.append(("model", dev)) or b"glTF model")
+    monkeypatch.setattr(
+        model, "export_chibi", lambda graph, bundles, dev, **_: calls.append(("model", dev)) or b"glTF model"
+    )
 
     def export_clip(graph, bundles, dev, clip, **_):
         calls.append(("clip", dev, [p.name for p in bundles], clip))
@@ -76,10 +86,13 @@ def test_model_glb_exports_a_clip_from_the_models_files_and_caches_it_per_clip(t
     monkeypatch.setattr(model, "export_clip", export_clip)
     assert game.model_glb("ch0242") == b"glTF model"
     assert game.model_glb("ch0242", clip="CH0242_Exs") == b"glTF CH0242_Exs"
-    assert game.model_glb("ch0242", clip="CH0242_Exs") == b"glTF CH0242_Exs"   # cached
+    assert game.model_glb("ch0242", clip="CH0242_Exs") == b"glTF CH0242_Exs"  # cached
     assert game.model_glb("ch0242", clip="CH0242_Formation Pickup") == b"glTF CH0242_Formation Pickup"
-    assert calls == [("model", "ch0242"), ("clip", "ch0242", [prefab], "CH0242_Exs"),
-                     ("clip", "ch0242", [prefab], "CH0242_Formation Pickup")]
+    assert calls == [
+        ("model", "ch0242"),
+        ("clip", "ch0242", [prefab], "CH0242_Exs"),
+        ("clip", "ch0242", [prefab], "CH0242_Formation Pickup"),
+    ]
     os.utime(resources / prefab, ns=(1, 1))  # the model's files changed: the clip is read again
     assert game.model_glb("ch0242", clip="CH0242_Exs") == b"glTF CH0242_Exs" and len(calls) == 4
     # a name is only compared with the model's clip names: anything else is refused before a file is opened
@@ -94,7 +107,9 @@ def test_the_model_route_reads_a_clip_from_every_source_the_model_takes(tmp_path
     costume_parts = [tmp_path / "character-ch0242-_mxload-2026-01-01_assets_all_2.bundle"]
     calls = []
     game = RouteGame()
-    game.model_glb = lambda core, overrides=(), reads=None, clip=None: calls.append((core, list(overrides), reads, clip)) or b"glTF"
+    game.model_glb = lambda core, overrides=(), reads=None, clip=None: (
+        calls.append((core, list(overrides), reads, clip)) or b"glTF"
+    )
     library = SimpleNamespace(
         official_bundles=lambda core, **kwargs: official,
         preview_reads=lambda policy: "reads:" + policy,
@@ -102,8 +117,15 @@ def test_the_model_route_reads_a_clip_from_every_source_the_model_takes(tmp_path
         costume_preview=lambda target, other: costume_parts,
         costume_verdict=lambda target, other: None,
     )
-    s = Services(Settings(tmp_path / "config.toml"), tmp_path, state=UiState(tmp_path / "webui.json"),
-                 cache=object(), game=game, catalog=RouteCatalog(), library=library)
+    s = Services(
+        Settings(tmp_path / "config.toml"),
+        tmp_path,
+        state=UiState(tmp_path / "webui.json"),
+        cache=object(),
+        game=game,
+        catalog=RouteCatalog(),
+        library=library,
+    )
     try:
         assert s.asset("model/ch0242.glb", {"clip": "CH0242_Exs"}).body == b"glTF"
         assert calls[-1] == ("ch0242", [], None, "CH0242_Exs")
@@ -135,7 +157,15 @@ def test_real_clip_names_per_model(real_game):
     # Hifumi: the cover sets, the attack, the EX and the normal skill; the base controller's bare names are not hers
     hifumi = _doc(real_game.model_glb("hihumi_original"))["extras"]["clips"]
     own = OWN("hihumi_original", hifumi)
-    for suffix in ("Normal_Attack_Start", "Kneel_Attack_Start", "Stand_Idle", "Exs", "Public01", "Move_Jump", "Formation_Idle"):
+    for suffix in (
+        "Normal_Attack_Start",
+        "Kneel_Attack_Start",
+        "Stand_Idle",
+        "Exs",
+        "Public01",
+        "Move_Jump",
+        "Formation_Idle",
+    ):
         assert f"Hihumi_Original_{suffix}" in own
     assert len(own) >= 40 and len(hifumi) == len(set(hifumi))
     # Hoshino (Swimsuit): two battle forms, numbered on different words
@@ -198,8 +228,9 @@ def _library_with_build(monkeypatch, adapt, root):
     monkeypatch.setattr(library_service.ModLibrary, "_stage_copies", lambda self, originals, folder: {})
     monkeypatch.setattr(library_service.ModLibrary, "_costume_files", lambda self, other, pin: ("dev", [], []))
     monkeypatch.setattr(library_service.ModLibrary, "_cab_index", lambda self, pin: None)
-    monkeypatch.setattr(library_service.ModLibrary, "_core_map",
-                        lambda self, pin: type("M", (), {"slot": lambda s, c: c})())
+    monkeypatch.setattr(
+        library_service.ModLibrary, "_core_map", lambda self, pin: type("M", (), {"slot": lambda s, c: c})()
+    )
     return library
 
 
@@ -238,8 +269,9 @@ def test_a_clip_export_starts_at_once_while_a_long_costume_build_runs(tmp_path, 
 
     def build():
         try:
-            library._stage_costume("other", [target], tmp_path / "build", print, None,
-                                   step=lambda: preview_gate.step(None))
+            library._stage_costume(
+                "other", [target], tmp_path / "build", print, None, step=lambda: preview_gate.step(None)
+            )
         except Exception as error:  # the stub refuses at its end
             failure.append(error)
 
@@ -272,6 +304,13 @@ def test_arms_pushed_out_count_as_an_optimize_physics_gain(tmp_path, monkeypatch
 
     library = _library_with_build(monkeypatch, adapt, tmp_path)
     report = {}
-    library._stage_costume("other", [tmp_path / "character-hina_original-_mxload-2026-01-01_assets_all_1.bundle"],
-                           tmp_path / "build", print, None, report=report, physics=True)
+    library._stage_costume(
+        "other",
+        [tmp_path / "character-hina_original-_mxload-2026-01-01_assets_all_1.bundle"],
+        tmp_path / "build",
+        print,
+        None,
+        report=report,
+        physics=True,
+    )
     assert report["physics"] is gain

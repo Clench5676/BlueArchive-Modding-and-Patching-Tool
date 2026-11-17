@@ -21,10 +21,25 @@ official = pytest.mark.skipif(not GAME_DIR.is_dir(), reason="Set BAMT_TEST_GAME_
 
 # --- the rule ------------------------------------------------------------------------------------------------------
 
+
 def _item(**values):
     part = ma.Part(0, object(), object(), [], [], [], 0)
-    base = dict(part=part, top=1, bones=frozenset({1}), rows=np.arange(4), triangles=np.arange(2), native=0.2,
-                clips=20, full=20, some=20, size=0.2, follow="Bip001 Pelvis", f_mean=0.03, w_mean=0.2, reach=0.15)
+    base = dict(
+        part=part,
+        top=1,
+        bones=frozenset({1}),
+        rows=np.arange(4),
+        triangles=np.arange(2),
+        native=0.2,
+        clips=20,
+        full=20,
+        some=20,
+        size=0.2,
+        follow="Bip001 Pelvis",
+        f_mean=0.03,
+        w_mean=0.2,
+        reach=0.15,
+    )
     base.update(values)
     return mp.Item(**base)
 
@@ -33,19 +48,22 @@ def test_a_thing_the_body_carries_in_every_clip_is_worn():
     assert _item().worn()
 
 
-@pytest.mark.parametrize("values", [
-    {"gear": True},                               # a gun, an effect item or in their renderer
-    {"_active": False},                           # switched off in the prefab
-    {"full": 14},                                 # shown in fewer than three clips in four: the animation's
-    {"some": 0, "full": 0},                       # never shown
-    {"size": 0.04},                               # never drawn at a quarter of its modelled size
-    {"reach": 0.03},                              # parked inside the body
-    {"follow": "Bip001 L Hand"},                  # held in a hand
-    {"follow": "Bip001 R Forearm"},
-    {"follow": "Bip001 L UpperArm"},
-    {"follow": "Bip001 R Finger11"},
-    {"f_mean": 0.17},                             # moves against the bone it follows almost as much as in space
-])
+@pytest.mark.parametrize(
+    "values",
+    [
+        {"gear": True},  # a gun, an effect item or in their renderer
+        {"_active": False},  # switched off in the prefab
+        {"full": 14},  # shown in fewer than three clips in four: the animation's
+        {"some": 0, "full": 0},  # never shown
+        {"size": 0.04},  # never drawn at a quarter of its modelled size
+        {"reach": 0.03},  # parked inside the body
+        {"follow": "Bip001 L Hand"},  # held in a hand
+        {"follow": "Bip001 R Forearm"},
+        {"follow": "Bip001 L UpperArm"},
+        {"follow": "Bip001 R Finger11"},
+        {"f_mean": 0.17},  # moves against the bone it follows almost as much as in space
+    ],
+)
 def test_what_is_not_worn(values):
     assert not _item(**values).worn()
 
@@ -67,17 +85,27 @@ def _skeleton(*names_and_parents):
 
 
 def test_gear_is_the_aim_ik_weapon_an_effect_bone_or_a_weapon_node():
-    s = _skeleton(("root", None), ("Bip001", 0), ("Bip001 Pelvis", 1), ("gun", 2), ("bone_magazine", 3),
-                  ("bone_muzzle", 2), ("Bip001_Weapon02", 2), ("bone_case", 6), ("bone_bottle", 2))
+    s = _skeleton(
+        ("root", None),
+        ("Bip001", 0),
+        ("Bip001 Pelvis", 1),
+        ("gun", 2),
+        ("bone_magazine", 3),
+        ("bone_muzzle", 2),
+        ("Bip001_Weapon02", 2),
+        ("bone_case", 6),
+        ("bone_bottle", 2),
+    )
     item = lambda top, *bones: _item(top=top, bones=frozenset({top, *bones}))  # noqa: E731
     mounts, fx = [3], [5]
-    assert mp._is_gear(s, item(4), mounts, fx)            # below the aim IK's weapon
-    assert mp._is_gear(s, item(5), mounts, fx)            # holds an effect bone (a muzzle)
-    assert mp._is_gear(s, item(7), mounts, fx)            # on a Bip001_Weapon node
-    assert not mp._is_gear(s, item(8), mounts, fx)        # a bottle on the belt
+    assert mp._is_gear(s, item(4), mounts, fx)  # below the aim IK's weapon
+    assert mp._is_gear(s, item(5), mounts, fx)  # holds an effect bone (a muzzle)
+    assert mp._is_gear(s, item(7), mounts, fx)  # on a Bip001_Weapon node
+    assert not mp._is_gear(s, item(8), mounts, fx)  # a bottle on the belt
 
 
 # --- the measure, on a made-up model -------------------------------------------------------------------------------
+
 
 def _translate(x, y, z):
     m = np.eye(4)
@@ -93,13 +121,35 @@ class _Mesh(str):
 def _made_up_model(monkeypatch):
     """A body (pelvis, spine, head, left arm and hand) with three things in one renderer and a hat in another: a
     bottle on the belt, a bag held in the hand, a magazine the clips show in one clip of four; the hat on the head."""
-    names = [("root", None), ("Bip001", 0), ("Bip001 Pelvis", 1), ("Bip001 Spine", 2), ("Bip001 Head", 3),
-             ("Bip001 L UpperArm", 3), ("Bip001 L Forearm", 5), ("Bip001 L Hand", 6),
-             ("bone_bottle", 1), ("bone_bag", 1), ("bone_magazine", 1), ("bone_hat", 1),
-             ("props", 0), ("hat", 0)]
+    names = [
+        ("root", None),
+        ("Bip001", 0),
+        ("Bip001 Pelvis", 1),
+        ("Bip001 Spine", 2),
+        ("Bip001 Head", 3),
+        ("Bip001 L UpperArm", 3),
+        ("Bip001 L Forearm", 5),
+        ("Bip001 L Hand", 6),
+        ("bone_bottle", 1),
+        ("bone_bag", 1),
+        ("bone_magazine", 1),
+        ("bone_hat", 1),
+        ("props", 0),
+        ("hat", 0),
+    ]
     s = _skeleton(*names)
-    places = {2: (0, 1, 0), 3: (0, 1.2, 0), 4: (0, 1.5, 0), 5: (0.2, 1.4, 0), 6: (0.45, 1.4, 0), 7: (0.7, 1.4, 0),
-              8: (0.15, 0.9, 0), 9: (0.8, 1.3, 0), 10: (0.1, 1.0, 0.1), 11: (0, 1.7, 0)}
+    places = {
+        2: (0, 1, 0),
+        3: (0, 1.2, 0),
+        4: (0, 1.5, 0),
+        5: (0.2, 1.4, 0),
+        6: (0.45, 1.4, 0),
+        7: (0.7, 1.4, 0),
+        8: (0.15, 0.9, 0),
+        9: (0.8, 1.3, 0),
+        10: (0.1, 1.0, 0.1),
+        11: (0, 1.7, 0),
+    }
     rest = [np.eye(4) for _ in names]
     for n, p in places.items():
         rest[n] = _translate(*p)
@@ -135,15 +185,22 @@ def _made_up_model(monkeypatch):
     joints[:, 0] = np.repeat(np.arange(3), 8)
     skins["props"] = ma.Skin(vertices, joints, np.tile([1.0, 0, 0, 0], (24, 1)), np.zeros((0, 2), int), tris)
     bones["props"] = [8, 9, 10]
-    skins["hat"] = ma.Skin(box(places[11]), np.zeros((8, 4), int), np.tile([1.0, 0, 0, 0], (8, 1)),
-                           np.zeros((0, 2), int), np.array([[0, 1, 2], [3, 4, 5]]))
+    skins["hat"] = ma.Skin(
+        box(places[11]),
+        np.zeros((8, 4), int),
+        np.tile([1.0, 0, 0, 0], (8, 1)),
+        np.zeros((0, 2), int),
+        np.array([[0, 1, 2], [3, 4, 5]]),
+    )
     bones["hat"] = [11]
     monkeypatch.setattr(ma, "skin_of", lambda mesh: skins[mesh])
     # bindposes: each bone's inverse rest (the mesh in the root's space)
     monkeypatch.setattr(ma, "bindposes", lambda graph, mesh: np.array([np.linalg.inv(rest[b]) for b in bones[mesh]]))
     s.graph = SimpleNamespace(tree=lambda obj: {"m_Enabled": 1}, script=lambda b: None)
-    parts = [ma.Part(12, "r1", _Mesh("props"), [], ["general"], bones["props"], 18, role="prop"),
-             ma.Part(13, "r2", _Mesh("hat"), [], ["general"], bones["hat"], 6, role="prop")]
+    parts = [
+        ma.Part(12, "r1", _Mesh("props"), [], ["general"], bones["props"], 18, role="prop"),
+        ma.Part(13, "r2", _Mesh("hat"), [], ["general"], bones["hat"], 6, role="prop"),
+    ]
     return s, parts, clips, pose((0, 0, 0), 0, True)
 
 
@@ -155,7 +212,7 @@ def test_the_measure_finds_the_worn_things_of_a_model(monkeypatch):
     assert bottle.follow == "Bip001 Pelvis" and bottle.worn()
     assert hat.follow in ("Bip001 Head", "Bip001 Spine", "Bip001 Pelvis") and hat.worn()
     assert bag.follow in ("Bip001 L Hand", "Bip001 L Forearm", "Bip001 L UpperArm") and not bag.worn()  # held
-    assert magazine.full == 1 and magazine.clips == 4 and not magazine.worn()   # shown at times
+    assert magazine.full == 1 and magazine.clips == 4 and not magazine.worn()  # shown at times
     worn = mp.worn_items(s, parts, clips, idle)
     assert {s.nodes[i.top].name for i in worn.items} == {"bone_bottle", "bone_hat"}
     # the hat's renderer draws nothing else: cleared whole; the bottle's draws the bag too: a copy without it
@@ -176,14 +233,17 @@ def _with_bag(monkeypatch, s, parts, centre, half=0.15):
     skin_of, bindposes = ma.skin_of, ma.bindposes
     pelvis = np.linalg.inv(ma.Skeleton.world(s)[2])
     monkeypatch.setattr(ma, "skin_of", lambda mesh: bag if mesh == "bag" else skin_of(mesh))
-    monkeypatch.setattr(ma, "bindposes", lambda graph, mesh: np.array([pelvis]) if mesh == "bag" else bindposes(graph, mesh))
+    monkeypatch.setattr(
+        ma, "bindposes", lambda graph, mesh: np.array([pelvis]) if mesh == "bag" else bindposes(graph, mesh)
+    )
     return [ma.Part(1, "r0", _Mesh("bag"), [], ["character"], [2], 36, role="primary"), *parts]
 
 
 def test_a_ray_from_inside_a_closed_box_meets_it_everywhere():
     corners, tris = _closed_box(np.zeros(3), 0.1)
-    inside = mp.enclosed_points(np.array([[0.0, 0, 0], [0.05, -0.05, 0.02], [0.3, 0, 0], [0.0, 0.11, 0]]),
-                                corners[tris])
+    inside = mp.enclosed_points(
+        np.array([[0.0, 0, 0], [0.05, -0.05, 0.02], [0.3, 0, 0], [0.0, 0.11, 0]]), corners[tris]
+    )
     assert inside.tolist() == [True, True, False, False]
     open_box = corners[tris[2:]]  # one face left open
     assert not mp.enclosed_points(np.zeros((1, 3)), open_box).any()
@@ -198,7 +258,7 @@ def test_a_thing_the_costume_encloses_is_packed_goes_with_it_and_is_not_carried(
     bottle, hat, magazine = items["bone_bottle"], items["bone_hat"], items["bone_magazine"]
     assert bottle.enclosed == 1.0 and bottle.packed() and bottle.worn()
     assert hat.enclosed == 0.0 and not hat.packed()
-    assert not magazine.packed()   # beside the bag, not in it
+    assert not magazine.packed()  # beside the bag, not in it
     worn = mp.worn_items(s, parts, clips, idle)
     assert {s.nodes[i.top].name: i.carry for i in worn.items} == {"bone_bottle": False, "bone_hat": True}
     t = _skeleton(("root", None), ("Bip001", 0), ("Bip001 Pelvis", 1), ("Bip001 Head", 2))
@@ -216,7 +276,7 @@ def test_a_thing_shown_at_times_inside_the_costume_stays_with_the_slot(monkeypat
     items = {s.nodes[i.top].name: i for i in mp.measure(s, parts, clips, idle)}
     assert not items["bone_magazine"].packed() and items["bone_magazine"].enclosed is None
     s, parts, clips, idle = _made_up_model(monkeypatch)
-    parts = _with_bag(monkeypatch, s, parts, (0, 1.7, 0))   # a head around the hat
+    parts = _with_bag(monkeypatch, s, parts, (0, 1.7, 0))  # a head around the hat
     parts[-1].kinds = ["eyemouth"]
     items = {s.nodes[i.top].name: i for i in mp.measure(s, parts, clips, idle)}
     assert items["bone_hat"].worn() and not items["bone_hat"].packed()
@@ -237,8 +297,9 @@ def test_a_verdict_is_saved_and_restored(monkeypatch):
     assert "made_up" in store
     monkeypatch.setattr(mp, "measure", lambda *a: pytest.fail("measured again"))
     again = mp.worn_of(s, parts, clips, idle, "made_up", Store())
-    assert [(i.part.mesh, i.top, i.follow, i.ref, i.carry) for i in again.items] == \
-        [(i.part.mesh, i.top, i.follow, i.ref, i.carry) for i in first.items]
+    assert [(i.part.mesh, i.top, i.follow, i.ref, i.carry) for i in again.items] == [
+        (i.part.mesh, i.top, i.follow, i.ref, i.carry) for i in first.items
+    ]
     assert [i.rows.tolist() for i in again.items] == [i.rows.tolist() for i in first.items]
     # a verdict of another prefab is measured again
     store["made_up"]["prefab"] = "other"
@@ -257,9 +318,9 @@ def test_the_library_keeps_a_verdict_per_model_revision_and_rule(tmp_path, monke
     store.put("unknown", verdict)  # a model without a revision is not kept
     assert store.get("ch0186") == verdict and store.get("mari_original") is None and store.get("unknown") is None
     assert _WornVerdicts(path, {"ch0186": "r1"}).get("ch0186") == verdict
-    assert _WornVerdicts(path, {"ch0186": "r9"}).get("ch0186") is None   # another game revision
+    assert _WornVerdicts(path, {"ch0186": "r9"}).get("ch0186") is None  # another game revision
     monkeypatch.setattr(costume_rule, "COSTUME_RULE", costume_rule.COSTUME_RULE + 1)
-    assert _WornVerdicts(path, {"ch0186": "r1"}).get("ch0186") is None   # another rule
+    assert _WornVerdicts(path, {"ch0186": "r1"}).get("ch0186") is None  # another rule
     path.write_text("{not json")
     assert store.get("ch0186") is None
 
@@ -282,17 +343,23 @@ def test_builds_at_once_keep_each_others_worn_verdicts(tmp_path):
 
 # --- mesh edits ----------------------------------------------------------------------------------------------------
 
+
 def _plain_mesh(vertices, triangles, submeshes=None, wide=False):
     code, size = ("I", 4) if wide else ("H", 2)
     flat = [i for t in triangles for i in t]
     subs = submeshes or [(0, len(flat))]
-    return {"m_IndexFormat": int(wide), "m_IndexBuffer": list(struct.pack(f"<{len(flat)}{code}", *flat)),
-            "m_SubMeshes": [{"firstByte": first * size, "indexCount": count, "topology": 0} for first, count in subs],
-            "m_VertexData": {"m_VertexCount": len(vertices), "m_Channels": [
-                {"stream": 0, "offset": 0, "format": 0, "dimension": 3}],
-                "m_DataSize": struct.pack(f"<{3 * len(vertices)}f", *np.ravel(vertices))},
-            "m_CompressedMesh": {"m_Vertices": {"m_NumItems": 0}, "m_Triangles": {"m_NumItems": 0}},
-            "m_StreamData": {"size": 0}}
+    return {
+        "m_IndexFormat": int(wide),
+        "m_IndexBuffer": list(struct.pack(f"<{len(flat)}{code}", *flat)),
+        "m_SubMeshes": [{"firstByte": first * size, "indexCount": count, "topology": 0} for first, count in subs],
+        "m_VertexData": {
+            "m_VertexCount": len(vertices),
+            "m_Channels": [{"stream": 0, "offset": 0, "format": 0, "dimension": 3}],
+            "m_DataSize": struct.pack(f"<{3 * len(vertices)}f", *np.ravel(vertices)),
+        },
+        "m_CompressedMesh": {"m_Vertices": {"m_NumItems": 0}, "m_Triangles": {"m_NumItems": 0}},
+        "m_StreamData": {"size": 0},
+    }
 
 
 def _indices(tree):
@@ -311,9 +378,13 @@ def test_dropped_triangles_draw_nothing_and_keep_every_count(wide):
 
 def test_dropped_triangles_of_a_compressed_mesh():
     from bmpt.gameassets.model_hems import pack_bits, unpack_bits
+
     flat = [0, 1, 2, 3, 4, 5]
-    tree = {"m_IndexFormat": 0, "m_SubMeshes": [{"firstByte": 0, "indexCount": 6, "topology": 0}],
-            "m_CompressedMesh": {"m_Triangles": {"m_NumItems": 6, "m_BitSize": 3, "m_Data": list(pack_bits(flat, 3))}}}
+    tree = {
+        "m_IndexFormat": 0,
+        "m_SubMeshes": [{"firstByte": 0, "indexCount": 6, "topology": 0}],
+        "m_CompressedMesh": {"m_Triangles": {"m_NumItems": 6, "m_BitSize": 3, "m_Data": list(pack_bits(flat, 3))}},
+    }
     assert mp.drop_triangles(tree, np.array([0]))
     assert unpack_bits(tree["m_CompressedMesh"]["m_Triangles"]) == [0, 0, 0, 3, 4, 5]
 
@@ -350,29 +421,40 @@ def test_a_carried_thing_is_bound_rigid_where_the_source_holds_it(monkeypatch):
     t = _skeleton(("root", None), ("Bip001", 0), ("Bip001 Pelvis", 1))
     t_rest = [np.eye(4), np.eye(4), _translate(0, 0.8, 0) @ np.diag([1, 1, 1, 1.0])]
     s_rest = ma.Skeleton.world(s)
-    monkeypatch.setattr(ma.Skeleton, "world", lambda self, local=None: [m.copy() for m in (t_rest if self is t else s_rest)])
+    monkeypatch.setattr(
+        ma.Skeleton, "world", lambda self, local=None: [m.copy() for m in (t_rest if self is t else s_rest)]
+    )
     tree = _plain_mesh(ma.skin_of("props").vertices, ma.skin_of("props").triangles.tolist())
     out = mp.carried(t, s, worn, clips, idle, lambda mesh: copy.deepcopy(tree))
     assert len(out) == 1
     c = out[0]
     assert c.nodes == [2, 2, 2]
-    held = (np.linalg.inv(idle[2]) @ idle[8] @ np.linalg.inv(s_rest[8]) @ np.c_[
-        ma.skin_of("props").vertices[bottle.rows], np.ones(8)].T)
+    held = (
+        np.linalg.inv(idle[2])
+        @ idle[8]
+        @ np.linalg.inv(s_rest[8])
+        @ np.c_[ma.skin_of("props").vertices[bottle.rows], np.ones(8)].T
+    )
     at_rest = np.linalg.inv(t_rest[2]) @ np.c_[c.vertices[bottle.rows], np.ones(8)].T
     assert np.allclose(at_rest, held)
     assert np.allclose(c.bindposes[0], np.linalg.inv(t_rest[2]))
-    drawn = [tuple(_indices(c.tree)[k:k + 3]) for k in range(0, 18, 3)]
+    drawn = [tuple(_indices(c.tree)[k : k + 3]) for k in range(0, 18, 3)]
     assert drawn[:2] == [(0, 1, 2), (3, 4, 5)] and all(len(set(tri)) == 1 for tri in drawn[2:])
 
 
 # --- official files ------------------------------------------------------------------------------------------------
 
+
 def _index(files):
     from bmpt.gameassets.discovery import cab_names
+
     index = {}
     for path in files:
-        if re.search(r"characters|-_mx-npcs-|^character-|-_mx-shaders-|-_mx-program-animators-|^field-|animatorbase|"
-                     r"prolog|-_mx-effectsfreezed-", path.name):
+        if re.search(
+            r"characters|-_mx-npcs-|^character-|-_mx-shaders-|-_mx-program-animators-|^field-|animatorbase|"
+            r"prolog|-_mx-effectsfreezed-",
+            path.name,
+        ):
             for cab in cab_names(path):
                 index[cab] = path
     return index
@@ -399,8 +481,16 @@ def _switch(view, tmp_path, target, source):
     files, index = view
     slot = _slot(files, target)
     sources = [p for p in files if re.match(rf"character-{source}-_mxload", p.name)]
-    result = ma.adapt(index=index, resolver=None, target_files=slot, target_dev=target, source_files=sources,
-                      source_dev=source, open_writable=Bundle.load, halo=True)
+    result = ma.adapt(
+        index=index,
+        resolver=None,
+        target_files=slot,
+        target_dev=target,
+        source_files=sources,
+        source_dev=source,
+        open_writable=Bundle.load,
+        halo=True,
+    )
     out = tmp_path / f"{target}-{source}"
     out.mkdir()
     adapted = dict(index)
@@ -415,14 +505,18 @@ def _switch(view, tmp_path, target, source):
 
 def _own_skeletons(graph, written, dev):
     from bmpt.gameassets.model import _prefabs
+
     prefabs = _prefabs(graph, [p for p in written if p.name.startswith("character-")])
     return {name: ma.Skeleton.of(graph, pointer.deref()) for name, pointer in ma.own_prefabs(prefabs, dev).items()}
 
 
 def _drawn(graph, skeleton, name):
     """The renderers of a GameObject name in a prefab, with the mesh each draws (None for none)."""
-    return [(renderer, graph.deref(renderer, graph.tree(renderer)["m_Mesh"]))
-            for node, renderer in skeleton.renderers if skeleton.nodes[node].name == name]
+    return [
+        (renderer, graph.deref(renderer, graph.tree(renderer)["m_Mesh"]))
+        for node, renderer in skeleton.renderers
+        if skeleton.nodes[node].name == name
+    ]
 
 
 def _kept(slot, written):
@@ -435,17 +529,25 @@ def _kept(slot, written):
         after = {o.path_id: o for o in UnityPy.load(str(path)).objects}
         assert before.keys() <= after.keys()
         changed = {before[pid].type.name for pid in before if before[pid].get_raw_data() != after[pid].get_raw_data()}
-        assert changed <= {"SkinnedMeshRenderer", "MeshRenderer", "MeshFilter", "AssetBundle", "Transform",
-                           "MonoBehaviour", "AnimationClip"}, changed
+        assert changed <= {
+            "SkinnedMeshRenderer",
+            "MeshRenderer",
+            "MeshFilter",
+            "AssetBundle",
+            "Transform",
+            "MonoBehaviour",
+            "AnimationClip",
+        }, changed
 
 
 def _exported(graph, written, dev):
     from bmpt.gameassets.model import export_chibi
+
     data = export_chibi(graph, [p for p in written if p.name.startswith("character-")], dev)
-    doc = json.loads(data[20:20 + struct.unpack_from("<I", data, 12)[0]])
+    doc = json.loads(data[20 : 20 + struct.unpack_from("<I", data, 12)[0]])
     assert doc["animations"]
     # the renderers drawing a mesh: each a node "<GameObject>_mesh"
-    return {n["name"][:-len("_mesh")] for n in doc["nodes"] if "mesh" in n and n["name"].endswith("_mesh")}
+    return {n["name"][: -len("_mesh")] for n in doc["nodes"] if "mesh" in n and n["name"].endswith("_mesh")}
 
 
 @official
@@ -518,10 +620,13 @@ def test_official_a_carried_item_leaves_the_rest_of_its_renderer_behind(view, tm
 
 
 @official
-@pytest.mark.parametrize("target,source,dropped,carried,bone", [
-    ("ch0238", "mari_original", ["CH0238_Hat_Outline"], [], None),   # Chiaki <- Mari: her hat draws nothing
-    ("mari_original", "ch0238", [], ["CH0238_Hat_Outline"], "Bip001 Head"),  # Mari <- Chiaki: the hat comes along
-])
+@pytest.mark.parametrize(
+    "target,source,dropped,carried,bone",
+    [
+        ("ch0238", "mari_original", ["CH0238_Hat_Outline"], [], None),  # Chiaki <- Mari: her hat draws nothing
+        ("mari_original", "ch0238", [], ["CH0238_Hat_Outline"], "Bip001 Head"),  # Mari <- Chiaki: the hat comes along
+    ],
+)
 def test_official_a_hat_goes_with_its_costume(view, tmp_path, target, source, dropped, carried, bone):
     from bmpt.gameassets.model import _key
 
@@ -532,7 +637,8 @@ def test_official_a_hat_goes_with_its_costume(view, tmp_path, target, source, dr
             assert all(mesh is None for _, mesh in _drawn(graph, t, hat)), name
         for hat in carried:
             [(renderer, mesh)] = _drawn(graph, t, hat)
-            assert {t.nodes[t.by_transform[_key(graph.deref(renderer, b))]].name
-                    for b in graph.tree(renderer)["m_Bones"]} == {bone}
+            assert {
+                t.nodes[t.by_transform[_key(graph.deref(renderer, b))]].name for b in graph.tree(renderer)["m_Bones"]
+            } == {bone}
     names = _exported(graph, written, target)
     assert not names & set(dropped) and set(carried) <= names

@@ -31,8 +31,11 @@ def _standalone_classic_in_use() -> bool:
     """Older standalone classic windows have no classic.json; find the same app executable in the process table."""
     if sys.platform != "darwin":
         return False
-    names = {path.name for path in (Path(sys.argv[0]), Path(sys.executable))
-             if path.parent.name == "MacOS" and not path.name.lower().startswith("python")}
+    names = {
+        path.name
+        for path in (Path(sys.argv[0]), Path(sys.executable))
+        if path.parent.name == "MacOS" and not path.name.lower().startswith("python")
+    }
     if not names:
         return False
     try:
@@ -47,7 +50,8 @@ def _standalone_classic_in_use() -> bool:
             continue
         command = parts[1]
         if any(f"/Contents/MacOS/{name} " in command + " " for name in names) and any(
-                flag in command.split() for flag in ("--classic", "--tab", "--settings")):
+            flag in command.split() for flag in ("--classic", "--tab", "--settings")
+        ):
             return True
     return False
 
@@ -77,17 +81,18 @@ def _legacy_in_use(folder: Path) -> Iterator[bool]:
 
         found = read_classic_json(folder)
         proc = found[1] if found else None
-        yield bool(proc and SYSTEM_PROCESSES.alive(proc.pid)
-                   and SYSTEM_PROCESSES.created(proc.pid) == proc.created) or _standalone_classic_in_use()
+        yield (
+            bool(proc and SYSTEM_PROCESSES.alive(proc.pid) and SYSTEM_PROCESSES.created(proc.pid) == proc.created)
+            or _standalone_classic_in_use()
+        )
 
 
 def _rebase(value: Any, old: Path, new: Path) -> Any:
     """Rewrite complete absolute paths, including dictionary keys; never substrings or relative paths."""
     if isinstance(value, str):
         path = Path(os.path.normpath(value))
-        if path.is_absolute() and Path(os.path.normcase(str(path))).is_relative_to(
-                Path(os.path.normcase(str(old)))):
-            return str(new.joinpath(*path.parts[len(old.parts):]))
+        if path.is_absolute() and Path(os.path.normcase(str(path))).is_relative_to(Path(os.path.normcase(str(old)))):
+            return str(new.joinpath(*path.parts[len(old.parts) :]))
     elif isinstance(value, list):
         return [_rebase(item, old, new) for item in value]
     elif isinstance(value, dict):
@@ -154,10 +159,18 @@ def _rewrite_paths(old: Path, new: Path) -> bool:
                 if library == configured:
                     raise FileNotFoundError(f"Configured library is unavailable: {library}")
                 continue
-            with file_lock(library / "state.json.lock", timeout=_LOCK_TIMEOUT), \
-                    file_lock(library / "profiles.json.lock", timeout=_LOCK_TIMEOUT):
-                for name in ("state.json", "state.json.prev", "state.json.bad",
-                             "profiles.json", "profiles.json.prev", "profiles.json.bad"):
+            with (
+                file_lock(library / "state.json.lock", timeout=_LOCK_TIMEOUT),
+                file_lock(library / "profiles.json.lock", timeout=_LOCK_TIMEOUT),
+            ):
+                for name in (
+                    "state.json",
+                    "state.json.prev",
+                    "state.json.bad",
+                    "profiles.json",
+                    "profiles.json.prev",
+                    "profiles.json.bad",
+                ):
                     _rewrite_file(library / name, old, new)
         except (OSError, ValueError) as error:
             complete = False
@@ -201,12 +214,14 @@ def migrate_data_dir(parent: Path, override: Path | None = None) -> Path:
                             migrate_cache_dir(old / "cache", new / "cache")
                             old.rename(new)
                         except OSError as error:
-                            logger.warning("Could not rename %s to %s; using the old folder for this run: %s",
-                                           old, new, error)
+                            logger.warning(
+                                "Could not rename %s to %s; using the old folder for this run: %s", old, new, error
+                            )
                             return old
                 except OSError as error:
-                    logger.warning("Cannot check whether the old data folder is in use; using it for this run: %s",
-                                   error)
+                    logger.warning(
+                        "Cannot check whether the old data folder is in use; using it for this run: %s", error
+                    )
                     return old
             if (new / _PENDING).exists():
                 try:

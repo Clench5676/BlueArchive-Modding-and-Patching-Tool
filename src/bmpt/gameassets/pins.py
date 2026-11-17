@@ -24,8 +24,12 @@ def _r(value: float, digits: int = 4) -> float:
     return round(float(value), digits) + 0.0
 
 
-def pins(nodes: list[dict], skeleton_of_go: Callable[[int], str | None], data_scale: Callable[[str], float],
-         dragged: Iterable[tuple[str, str]]) -> list[dict]:
+def pins(
+    nodes: list[dict],
+    skeleton_of_go: Callable[[int], str | None],
+    data_scale: Callable[[str], float],
+    dragged: Iterable[tuple[str, str]],
+) -> list[dict]:
     """The Override SkeletonUtilityBones of a prefab walk (lobby.read_prefab nodes) that no drag moves (dragged:
     (skeleton, bone) of the SpineDragIK targets), on active GameObjects and enabled."""
     by_go = {n["go"]: n for n in nodes}

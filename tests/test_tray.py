@@ -23,10 +23,23 @@ EN = ui_strings("en-US")
 
 
 def snapshot(**fields):
-    base = {"installs": [{"id": "a", "key": "g", "server": "global", "label": "Global (A)"},
-                         {"id": "b", "key": "j", "server": "japan", "label": "Japan"}],
-            "enabled": True, "available": True, "reason": None, "reasonParams": {}, "scan": True, "explained": True,
-            "drift": 0, "untracked": 0, "busy": False, "progress": None, "tray": True}
+    base = {
+        "installs": [
+            {"id": "a", "key": "g", "server": "global", "label": "Global (A)"},
+            {"id": "b", "key": "j", "server": "japan", "label": "Japan"},
+        ],
+        "enabled": True,
+        "available": True,
+        "reason": None,
+        "reasonParams": {},
+        "scan": True,
+        "explained": True,
+        "drift": 0,
+        "untracked": 0,
+        "busy": False,
+        "progress": None,
+        "tray": True,
+    }
     return {**base, **fields}
 
 
@@ -35,6 +48,7 @@ def labels(items):
 
 
 # --- the menu ---
+
 
 def test_the_menu_has_one_enable_mods_item_checked_when_on():
     items = tray_menu(snapshot(), EN)
@@ -52,14 +66,17 @@ def test_the_menu_is_unchecked_when_off():
     assert toggle.enabled and not toggle.checked
 
 
-@pytest.mark.parametrize("reason, params, line", [
-    ("game_running", {}, "Close the game first"),
-    ("game_status_unavailable", {}, "Could not tell whether the game is running"),
-    ("steam_busy", {}, "Steam is updating or verifying the game"),
-    ("classic_open", {}, "Close the classic UI first"),
-    ("game_not_found", {}, "Game folder not found"),
-    ("profiles_unreadable", {"file": "profiles.json"}, "Unreadable mod settings: profiles.json"),
-])
+@pytest.mark.parametrize(
+    "reason, params, line",
+    [
+        ("game_running", {}, "Close the game first"),
+        ("game_status_unavailable", {}, "Could not tell whether the game is running"),
+        ("steam_busy", {}, "Steam is updating or verifying the game"),
+        ("classic_open", {}, "Close the classic UI first"),
+        ("game_not_found", {}, "Game folder not found"),
+        ("profiles_unreadable", {"file": "profiles.json"}, "Unreadable mod settings: profiles.json"),
+    ],
+)
 def test_an_unavailable_switch_is_greyed_with_its_reason(reason, params, line):
     items = tray_menu(snapshot(reason=reason, reasonParams=params, available=False), EN)
     assert items[0].action == "toggle" and not items[0].enabled
@@ -106,6 +123,7 @@ def test_the_tooltip_names_the_app_and_the_state():
 
 # --- clicks ---
 
+
 def test_the_first_toggle_opens_the_window_on_the_explanation():
     assert toggle_action(snapshot(explained=False)) == ("explain", {"enabled": False, "expect": True})
     assert toggle_action(snapshot(explained=False, enabled=False)) == ("explain", {"enabled": True, "expect": False})
@@ -133,6 +151,7 @@ def test_a_refusal_or_a_result_with_failed_entries_opens_the_window():
 
 
 # --- the controller, with fake services ---
+
 
 class FakeWatch:
     def __init__(self):
@@ -332,11 +351,19 @@ def test_a_click_runs_off_the_ui_thread(made):
 
 # --- the backends ---
 
+
 def test_the_tray_module_makes_no_backend_on_import():
-    code = ("import sys, bmpt.webui.tray as t; "
-            "print(sorted(m for m in ('AppKit', 'Foundation', 'clr', 'PyObjCTools') if m in sys.modules))")
-    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True,
-                         env={**os.environ, "PYTHONPATH": str(ROOT / "src")})
+    code = (
+        "import sys, bmpt.webui.tray as t; "
+        "print(sorted(m for m in ('AppKit', 'Foundation', 'clr', 'PyObjCTools') if m in sys.modules))"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        check=True,
+        env={**os.environ, "PYTHONPATH": str(ROOT / "src")},
+    )
     assert out.stdout.strip() == "[]"
 
 
@@ -344,8 +371,9 @@ def test_no_tray_on_other_systems():
     assert not Tray.supported("linux")
 
 
-@pytest.mark.skipif(sys.platform != "darwin" or importlib.util.find_spec("AppKit") is None,
-                    reason="AppKit draws the menu bar")
+@pytest.mark.skipif(
+    sys.platform != "darwin" or importlib.util.find_spec("AppKit") is None, reason="AppKit draws the menu bar"
+)
 def test_appkit_loads_the_pdf_as_a_vector_template_image():
     image = tray_module.menubar_image()
     assert image is not None and image.isTemplate()
@@ -354,6 +382,7 @@ def test_appkit_loads_the_pdf_as_a_vector_template_image():
 
 
 # --- the app window's wiring ---
+
 
 class Hook:
     def __iadd__(self, handler):
@@ -366,10 +395,32 @@ def run_window(monkeypatch, tmp_path, supported):
     from bmpt.webui import main
     from bmpt.webui.timing import Timings
 
-    window = SimpleNamespace(events=SimpleNamespace(**{name: Hook() for name in ("initialized", "loaded", "closing", "closed", "before_show", "shown", "maximized", "minimized", "restored")}))
+    window = SimpleNamespace(
+        events=SimpleNamespace(
+            **{
+                name: Hook()
+                for name in (
+                    "initialized",
+                    "loaded",
+                    "closing",
+                    "closed",
+                    "before_show",
+                    "shown",
+                    "maximized",
+                    "minimized",
+                    "restored",
+                )
+            }
+        )
+    )
     started, closed = {}, []
-    monkeypatch.setitem(sys.modules, "webview", SimpleNamespace(settings={}, create_window=lambda *a, **k: window,
-                                                                start=lambda **options: started.update(options)))
+    monkeypatch.setitem(
+        sys.modules,
+        "webview",
+        SimpleNamespace(
+            settings={}, create_window=lambda *a, **k: window, start=lambda **options: started.update(options)
+        ),
+    )
     monkeypatch.setattr(Tray, "supported", staticmethod(lambda platform=sys.platform: supported))
     monkeypatch.setattr(Tray, "close", lambda self: closed.append(self))
     services = FakeServices()

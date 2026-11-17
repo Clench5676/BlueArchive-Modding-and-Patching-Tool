@@ -59,7 +59,24 @@ def test_shipped_modules_import_only_runtime_dependencies():
                 if not distributions & allowed:
                     missing.setdefault(module, []).append(str(path.relative_to(ROOT)))
     # platform modules of optional back ends, imported only where they exist (pyobjc's, pythonnet's .NET namespaces)
-    missing = {m: files for m, files in missing.items() if m not in {"objc", "AppKit", "Foundation", "WebKit",
-                                                                    "Quartz", "UniformTypeIdentifiers", "win32api",
-                                                                    "win32con", "win32gui", "clr", "System", "winreg", "_winapi"}}
+    missing = {
+        m: files
+        for m, files in missing.items()
+        if m
+        not in {
+            "objc",
+            "AppKit",
+            "Foundation",
+            "WebKit",
+            "Quartz",
+            "UniformTypeIdentifiers",
+            "win32api",
+            "win32con",
+            "win32gui",
+            "clr",
+            "System",
+            "winreg",
+            "_winapi",
+        }
+    }
     assert not missing, missing

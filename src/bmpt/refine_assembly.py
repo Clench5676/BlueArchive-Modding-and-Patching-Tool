@@ -40,32 +40,52 @@ def _centroid(image: Image.Image, alpha: Image.Image) -> tuple[float, float] | N
     return (xsum / mass, ysum / mass) if mass else None
 
 
-def misalignment(official: Image.Image, generated: Image.Image, *, pma: bool = False,
-                 generated_pma: bool = False, pixel_scale: int = 1) -> dict:
+def misalignment(
+    official: Image.Image,
+    generated: Image.Image,
+    *,
+    pma: bool = False,
+    generated_pma: bool = False,
+    pixel_scale: int = 1,
+) -> dict:
     """Signed displacement of alpha-weighted internal luminance-edge centroids.
 
-This is a colour-sensitive line-position diagnostic, not a registration estimate or
-an acceptance score. Null means one image has no measurable internal edges. Both
-images use the official mask, before replacement; no geometry is corrected.
-"""
+    This is a colour-sensitive line-position diagnostic, not a registration estimate or
+    an acceptance score. Null means one image has no measurable internal edges. Both
+    images use the official mask, before replacement; no geometry is corrected.
+    """
     mask = official.getchannel("A")
     left = _centroid(remap._alpha(official, pma, False), mask)
     right = _centroid(remap._alpha(generated, generated_pma, False), mask)
-    dx, dy = ((right[0] - left[0]) / pixel_scale, (right[1] - left[1]) / pixel_scale) if left and right else (None, None)
-    return {"edge_centroid_dx_px": dx, "edge_centroid_dy_px": dy,
-            "edge_centroid_distance_px": math.hypot(dx, dy) if dx is not None else None}
+    dx, dy = (
+        ((right[0] - left[0]) / pixel_scale, (right[1] - left[1]) / pixel_scale) if left and right else (None, None)
+    )
+    return {
+        "edge_centroid_dx_px": dx,
+        "edge_centroid_dy_px": dy,
+        "edge_centroid_distance_px": math.hypot(dx, dy) if dx is not None else None,
+    }
 
 
-def assemble_page(atlas: remap.Atlas, page_name: str, official: Image.Image, generated: Image.Image, *,
-                  region: tuple[str, int] | None = None, box: tuple[int, int, int, int] | None = None,
-                  scale: int = 1, generated_pma: bool = False, page_pma: bool | None = None) -> Assembly:
+def assemble_page(
+    atlas: remap.Atlas,
+    page_name: str,
+    official: Image.Image,
+    generated: Image.Image,
+    *,
+    region: tuple[str, int] | None = None,
+    box: tuple[int, int, int, int] | None = None,
+    scale: int = 1,
+    generated_pma: bool = False,
+    page_pma: bool | None = None,
+) -> Assembly:
     """Replace RGB inside selected atlas rectangles, retaining every official alpha byte.
 
-At integer enlargement the baseline uses nearest-neighbour replication, so untouched
-pixels retain their exact RGBA values in each scale-by-scale block. Box edits are
-clipped to the union of atlas regions. Whole-page overlaps/aliases are pasted once.
-Atlas coordinates, trim offsets, original sizes and skeleton bytes never change.
-"""
+    At integer enlargement the baseline uses nearest-neighbour replication, so untouched
+    pixels retain their exact RGBA values in each scale-by-scale block. Box edits are
+    clipped to the union of atlas regions. Whole-page overlaps/aliases are pasted once.
+    Atlas coordinates, trim offsets, original sizes and skeleton bytes never change.
+    """
     if type(scale) is not int or scale < 1:
         raise ValueError("Page scale must be a positive integer")
     if region is not None and box is not None:
@@ -75,7 +95,8 @@ Atlas coordinates, trim offsets, original sizes and skeleton bytes never change.
     page = atlas.pages[page_name]
     official, generated = official.convert("RGBA"), generated.convert("RGBA")
     if not all(page.size) or remap.page_size_mismatch(
-            {atlas.file: _page_header(page)}, {remap.texture_key(page_name): official.size}):
+        {atlas.file: _page_header(page)}, {remap.texture_key(page_name): official.size}
+    ):
         raise ValueError("Official texture and declared page must have the same aspect ratio and a page size")
     pma = page.pma if page_pma is None else page_pma
     baseline = official.resize((official.width * scale, official.height * scale), Image.Resampling.NEAREST)
@@ -91,12 +112,22 @@ Atlas coordinates, trim offsets, original sizes and skeleton bytes never change.
         placement = remap._box(selected[0], page, baseline, atlas.file)
         rotation = selected[0].degrees
     elif box is not None:
-        if (len(box) != 4 or any(type(v) is not int for v in box) or
-                not (0 <= box[0] < box[2] <= page.size[0] and 0 <= box[1] < box[3] <= page.size[1])):
+        if (
+            len(box) != 4
+            or any(type(v) is not int for v in box)
+            or not (0 <= box[0] < box[2] <= page.size[0] and 0 <= box[1] < box[3] <= page.size[1])
+        ):
             raise ValueError("Page box must be integer left, top, right, bottom coordinates within the page")
         # _box supplies the same density mapping and rounding as atlas_remap.
-        rect = remap.Region("box", -1, page_name, box[:2], (box[2] - box[0], box[3] - box[1]),
-                            (box[2] - box[0], box[3] - box[1]), (0, 0))
+        rect = remap.Region(
+            "box",
+            -1,
+            page_name,
+            box[:2],
+            (box[2] - box[0], box[3] - box[1]),
+            (box[2] - box[0], box[3] - box[1]),
+            (0, 0),
+        )
         placement = remap._box(rect, page, baseline, atlas.file)
     else:
         placement = (0, 0, baseline.width, baseline.height)
@@ -105,8 +136,12 @@ Atlas coordinates, trim offsets, original sizes and skeleton bytes never change.
     affected = []
     for item in selected:
         bounds = remap._box(item, page, baseline, atlas.file)
-        clipped = (max(bounds[0], placement[0]), max(bounds[1], placement[1]),
-                   min(bounds[2], placement[2]), min(bounds[3], placement[3]))
+        clipped = (
+            max(bounds[0], placement[0]),
+            max(bounds[1], placement[1]),
+            min(bounds[2], placement[2]),
+            min(bounds[3], placement[3]),
+        )
         if clipped[0] < clipped[2] and clipped[1] < clipped[3]:
             draw.rectangle((clipped[0], clipped[1], clipped[2] - 1, clipped[3] - 1), fill=255)
             affected.append((item, clipped))
@@ -132,9 +167,20 @@ Atlas coordinates, trim offsets, original sizes and skeleton bytes never change.
     diagnostic.paste(colour, placement[:2])
     metrics = []
     for item, clipped in affected:
-        metrics.append({"region": item.label, "index": item.index, "box": list(clipped),
-                        **misalignment(baseline.crop(clipped), diagnostic.crop(clipped), pma=pma,
-                                       generated_pma=diagnostic_pma, pixel_scale=scale)})
+        metrics.append(
+            {
+                "region": item.label,
+                "index": item.index,
+                "box": list(clipped),
+                **misalignment(
+                    baseline.crop(clipped),
+                    diagnostic.crop(clipped),
+                    pma=pma,
+                    generated_pma=diagnostic_pma,
+                    pixel_scale=scale,
+                ),
+            }
+        )
     if not identity:
         colour = remap._alpha(colour, False, pma)
     candidate = baseline.copy()
@@ -142,13 +188,24 @@ Atlas coordinates, trim offsets, original sizes and skeleton bytes never change.
     output = Image.composite(candidate, baseline, mask)
     changed = sum(a != b for a, b in zip(output.getdata(), baseline.getdata()))
     difference = ImageChops.difference(output, baseline).convert("RGB")
-    changed_regions = [item.label for item in regions
-                       if difference.crop(remap._box(item, page, baseline, atlas.file)).getbbox()]
-    return Assembly(output, {"page": page_name, "page_size": list(output.size), "scale": scale,
-                             "pma": pma, "generated_pma": generated_pma,
-                             "mode": "region" if region is not None else "box" if box is not None else "page",
-                             "changed_pixels": changed, "regions": metrics, "regions_changed": changed_regions,
-                             "misalignment_units": "official texture pixels; edge centroid, not registration"})
+    changed_regions = [
+        item.label for item in regions if difference.crop(remap._box(item, page, baseline, atlas.file)).getbbox()
+    ]
+    return Assembly(
+        output,
+        {
+            "page": page_name,
+            "page_size": list(output.size),
+            "scale": scale,
+            "pma": pma,
+            "generated_pma": generated_pma,
+            "mode": "region" if region is not None else "box" if box is not None else "page",
+            "changed_pixels": changed,
+            "regions": metrics,
+            "regions_changed": changed_regions,
+            "misalignment_units": "official texture pixels; edge centroid, not registration",
+        },
+    )
 
 
 def _page_header(page: remap.Page) -> str:
@@ -159,20 +216,30 @@ def _object_bytes(bundle: Bundle) -> dict:
     return {(obj.assets_file.name, obj.path_id): obj.get_raw_data() for obj in bundle.env.objects}
 
 
-def assemble_mod(official_bundles: list[Path], generated: Path | Image.Image, output_dir: Path, *,
-                 atlas_name: str, page_name: str, region: tuple[str, int] | None = None,
-                 box: tuple[int, int, int, int] | None = None, scale: int = 1,
-                 generated_pma: bool = False, page_pma: bool | None = None,
-                 projected: Assembly | None = None, allow_generated_alpha: bool = False,
-                 edited_mesh_mask: Image.Image | None = None) -> dict:
+def assemble_mod(
+    official_bundles: list[Path],
+    generated: Path | Image.Image,
+    output_dir: Path,
+    *,
+    atlas_name: str,
+    page_name: str,
+    region: tuple[str, int] | None = None,
+    box: tuple[int, int, int, int] | None = None,
+    scale: int = 1,
+    generated_pma: bool = False,
+    page_pma: bool | None = None,
+    projected: Assembly | None = None,
+    allow_generated_alpha: bool = False,
+    edited_mesh_mask: Image.Image | None = None,
+) -> dict:
     """Build one released-form texture mod, with its official name, LZ4 and fixed CRC.
 
-Supply all official portrait parts, including atlas and skeleton. Only the bundle
-containing the selected page is emitted. Edited textures are stored as RGBA32 to
-avoid BC7/etc. re-encoding changes to untouched pixels and alpha. This uses the same
-lossless format policy as library.portrait_edit, then the existing named-PNG packer.
-The output directory must not already contain the target file.
-"""
+    Supply all official portrait parts, including atlas and skeleton. Only the bundle
+    containing the selected page is emitted. Edited textures are stored as RGBA32 to
+    avoid BC7/etc. re-encoding changes to untouched pixels and alpha. This uses the same
+    lossless format policy as library.portrait_edit, then the existing named-PNG packer.
+    The output directory must not already contain the target file.
+    """
     if type(scale) is not int or scale < 1:
         raise ValueError("Page scale must be a positive integer")
     if allow_generated_alpha and projected is None:
@@ -208,8 +275,17 @@ The output directory must not already contain the target file.
     else:
         image = generated
     if projected is None:
-        assembly = assemble_page(atlas, page_name, official, image, region=region, box=box,
-                                 scale=scale, generated_pma=generated_pma, page_pma=page_pma)
+        assembly = assemble_page(
+            atlas,
+            page_name,
+            official,
+            image,
+            region=region,
+            box=box,
+            scale=scale,
+            generated_pma=generated_pma,
+            page_pma=page_pma,
+        )
     else:
         # Composite projection already preserves colour/alpha. Validate the K4
         # invariants without another PMA conversion or resampling pass.
@@ -263,8 +339,7 @@ The output directory must not already contain the target file.
                 raise ValueError(f"Cannot stage lossless page: {message}")
         png = scratch / f"{name}.png"
         assembly.image.save(png)
-        ok, message, pairs = core.process_asset_packing([base], [png], output_dir, options,
-                                                       skip_unchanged=False)
+        ok, message, pairs = core.process_asset_packing([base], [png], output_dir, options, skip_unchanged=False)
         if not ok or len(pairs) != 1 or Path(pairs[0].output) != target:
             target.unlink(missing_ok=True)
             raise ValueError(f"Cannot pack assembled page: {message}")
@@ -276,8 +351,9 @@ The output directory must not already contain the target file.
         changed_key = (obj.assets_file.name, obj.path_id)
         if before.keys() != after.keys() or any(before[k] != after[k] for k in before if k != changed_key):
             raise ValueError("Assembly changed an unrelated official object")
-        result = next(item.read() for item in checked.env.objects
-                      if (item.assets_file.name, item.path_id) == changed_key)
+        result = next(
+            item.read() for item in checked.env.objects if (item.assets_file.name, item.path_id) == changed_key
+        )
         decoded = texture_image(result).convert("RGBA")
         if decoded.size != assembly.image.size or decoded.tobytes() != assembly.image.tobytes():
             raise ValueError("Packed texture pixels differ from assembled pixels")

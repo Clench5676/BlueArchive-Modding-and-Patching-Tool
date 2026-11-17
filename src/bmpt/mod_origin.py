@@ -14,8 +14,13 @@ from .library.integrity import Contents
 
 SERVERS = ("global", "japan")
 PLATFORMS = ("android", "ios", "windows")
-UNITY_PLATFORMS = {"Android": "android", "iOS": "ios", "iPhone": "ios",
-                   "StandaloneWindows": "windows", "StandaloneWindows64": "windows"}
+UNITY_PLATFORMS = {
+    "Android": "android",
+    "iOS": "ios",
+    "iPhone": "ios",
+    "StandaloneWindows": "windows",
+    "StandaloneWindows64": "windows",
+}
 UNKNOWN_PLATFORMS = {"UnknownPlatform", "NoTarget", "Unknown", "0", "-2"}
 
 
@@ -36,13 +41,19 @@ def server_hints(names: set[str]) -> set[str]:
 
 
 def names_of(contents: Contents) -> set[str]:
-    return (contents.names | contents.files | contents.references | contents.reference_paths | set(contents.skeletons)
-            | set(contents.atlases) | set(contents.textures))
+    return (
+        contents.names
+        | contents.files
+        | contents.references
+        | contents.reference_paths
+        | set(contents.skeletons)
+        | set(contents.atlases)
+        | set(contents.textures)
+    )
 
 
 def platform_hints(names: set[str]) -> set[str]:
-    return {part.lower() for name in names for part in name.replace("\\", "/").split("/")
-            if part.lower() in PLATFORMS}
+    return {part.lower() for name in names for part in name.replace("\\", "/").split("/") if part.lower() in PLATFORMS}
 
 
 def target_of(settings: Any, pin: Any, official: Contents | None = None) -> dict:
@@ -96,12 +107,16 @@ def source_of(names: set[str], selected: Contents, official: Contents, target: d
     return {**evidence, "detected": True}, None
 
 
-def candidates(names: set[str], selected: Contents, official: Contents | None = None,
-               target: dict | None = None) -> list[dict]:
+def candidates(
+    names: set[str], selected: Contents, official: Contents | None = None, target: dict | None = None
+) -> list[dict]:
     """Try only unknown dimensions, in Global/Japan and Android/iOS/PC order."""
     evidence, error = constraints(names, selected, official or Contents(), target or {})
     if error:
         return []
-    return [{"server": server, "platform": platform, "detected": True}
-            for server in SERVERS for platform in PLATFORMS
-            if evidence["server"] in (None, server) and evidence["platform"] in (None, platform)]
+    return [
+        {"server": server, "platform": platform, "detected": True}
+        for server in SERVERS
+        for platform in PLATFORMS
+        if evidence["server"] in (None, server) and evidence["platform"] in (None, platform)
+    ]

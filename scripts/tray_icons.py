@@ -130,7 +130,7 @@ def _colour(value: str) -> tuple[int, int, int]:
     if re.fullmatch(r"#[0-9a-f]{3}", value):
         return tuple(int(c * 2, 16) for c in value[1:])  # type: ignore[return-value]
     if re.fullmatch(r"#[0-9a-f]{6}", value):
-        return tuple(int(value[i:i + 2], 16) for i in (1, 3, 5))  # type: ignore[return-value]
+        return tuple(int(value[i : i + 2], 16) for i in (1, 3, 5))  # type: ignore[return-value]
     raise ValueError(f"unsupported fill {value!r}")
 
 
@@ -151,6 +151,7 @@ def read_svg(path: Path) -> Drawing:
 
 # --- rendering ---
 
+
 def _flatten(start: Point, segments: list[tuple]) -> list[Point]:
     points = [start]
     for seg in segments:
@@ -162,8 +163,12 @@ def _flatten(start: Point, segments: list[tuple]) -> list[Point]:
         for k in range(1, CURVE_STEPS + 1):
             t = k / CURVE_STEPS
             u = 1 - t
-            points.append((u ** 3 * p0[0] + 3 * u * u * t * c1[0] + 3 * u * t * t * c2[0] + t ** 3 * p3[0],
-                           u ** 3 * p0[1] + 3 * u * u * t * c1[1] + 3 * u * t * t * c2[1] + t ** 3 * p3[1]))
+            points.append(
+                (
+                    u**3 * p0[0] + 3 * u * u * t * c1[0] + 3 * u * t * t * c2[0] + t**3 * p3[0],
+                    u**3 * p0[1] + 3 * u * u * t * c1[1] + 3 * u * t * t * c2[1] + t**3 * p3[1],
+                )
+            )
     return points
 
 
@@ -193,6 +198,7 @@ def render(drawing: Drawing, width: int, height: int | None = None) -> Image.Ima
 
 
 # --- writing ---
+
 
 def _num(value: float) -> str:
     text = f"{value:.3f}".rstrip("0").rstrip(".")
@@ -247,7 +253,7 @@ def ico_bytes(frames: list[Image.Image]) -> bytes:
         r, g, b, a = frame.split()
         rows = Image.merge("RGBA", (b, g, r, a)).tobytes()
         stride = w * 4
-        pixels = b"".join(rows[y * stride:(y + 1) * stride] for y in range(h - 1, -1, -1))
+        pixels = b"".join(rows[y * stride : (y + 1) * stride] for y in range(h - 1, -1, -1))
         mask_stride = ((w + 31) // 32) * 4
         alpha = a.load()
         mask = bytearray()
@@ -332,8 +338,16 @@ LIGHT_TASKBAR, DARK_TASKBAR = (243, 243, 243), (32, 32, 32)  # Windows 11
 def _appkit_render(pdf: Path, points: int, scale: int) -> Image.Image | None:
     """The PDF drawn by AppKit into a bitmap, as the menu bar draws a template image (alpha only)."""
     try:
-        from AppKit import (NSBitmapImageFileTypePNG, NSBitmapImageRep, NSCalibratedRGBColorSpace,
-                            NSCompositingOperationSourceOver, NSGraphicsContext, NSImage, NSMakeRect, NSZeroRect)
+        from AppKit import (
+            NSBitmapImageFileTypePNG,
+            NSBitmapImageRep,
+            NSCalibratedRGBColorSpace,
+            NSCompositingOperationSourceOver,
+            NSGraphicsContext,
+            NSImage,
+            NSMakeRect,
+            NSZeroRect,
+        )
     except ImportError:
         return None
     image = NSImage.alloc().initWithContentsOfFile_(str(pdf))
@@ -342,13 +356,15 @@ def _appkit_render(pdf: Path, points: int, scale: int) -> Image.Image | None:
     image.setSize_((points, points))
     px = points * scale
     rep = NSBitmapImageRep.alloc().initWithBitmapDataPlanes_pixelsWide_pixelsHigh_bitsPerSample_samplesPerPixel_hasAlpha_isPlanar_colorSpaceName_bytesPerRow_bitsPerPixel_(  # noqa: E501
-        None, px, px, 8, 4, True, False, NSCalibratedRGBColorSpace, 0, 0)
+        None, px, px, 8, 4, True, False, NSCalibratedRGBColorSpace, 0, 0
+    )
     rep.setSize_((points, points))
     context = NSGraphicsContext.graphicsContextWithBitmapImageRep_(rep)
     NSGraphicsContext.saveGraphicsState()
     NSGraphicsContext.setCurrentContext_(context)
-    image.drawInRect_fromRect_operation_fraction_(NSMakeRect(0, 0, points, points), NSZeroRect,
-                                                  NSCompositingOperationSourceOver, 1.0)
+    image.drawInRect_fromRect_operation_fraction_(
+        NSMakeRect(0, 0, points, points), NSZeroRect, NSCompositingOperationSourceOver, 1.0
+    )
     context.flushGraphics()
     NSGraphicsContext.restoreGraphicsState()
     data = rep.representationUsingType_properties_(NSBitmapImageFileTypePNG, {})

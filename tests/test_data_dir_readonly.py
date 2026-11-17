@@ -14,13 +14,16 @@ from bmpt.webui.services import WRITE_DENIED, folder_writable
 from test_webui import app, call, rpc, services  # noqa: F401 - fixtures
 
 LOCALES = Path(services_module.__file__).resolve().parents[1] / "locales"
-posix_permissions = pytest.mark.skipif(os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0),
-                                       reason="needs a folder the permission bits can make read-only")
+posix_permissions = pytest.mark.skipif(
+    os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0),
+    reason="needs a folder the permission bits can make read-only",
+)
 
 
 @pytest.fixture
 def readonly(tmp_path):
     """The data folder made read-only after the services were built, and restored for the clean-up."""
+
     def lock():
         tmp_path.chmod(0o500)
 
@@ -29,6 +32,7 @@ def readonly(tmp_path):
 
 
 # --- the test of the folder ---
+
 
 def test_a_writable_folder_passes_and_keeps_nothing(tmp_path):
     assert folder_writable(tmp_path) is True
@@ -67,6 +71,7 @@ def test_the_probe_writes_and_removes_a_real_file(tmp_path, monkeypatch):
 
 # --- app.info ---
 
+
 def test_app_info_reports_the_result(app, services):
     assert services.data_dir_writable is True
     assert rpc(app, "app.info")["result"]["dataDirWritable"] is True
@@ -86,7 +91,9 @@ def test_the_services_test_the_folder_at_start(tmp_path):
     settings, state = Settings(data / "config.toml"), UiState(data / "webui.json")
     data.chmod(0o500)
     try:
-        locked = Services(settings, data, state=state, cache=object(), game=object(), catalog=object(), library=object())
+        locked = Services(
+            settings, data, state=state, cache=object(), game=object(), catalog=object(), library=object()
+        )
         locked.close()
     finally:
         data.chmod(0o700)
@@ -97,6 +104,7 @@ def test_the_services_test_the_folder_at_start(tmp_path):
 
 
 # --- failed writes ---
+
 
 @posix_permissions
 def test_writes_into_a_read_only_data_folder_answer_data_dir_readonly(app, services, readonly):
@@ -123,7 +131,11 @@ def test_a_job_that_cannot_write_fails_with_data_dir_readonly(services, readonly
     while services.jobs.get(key).pending and time.monotonic() < deadline:
         time.sleep(0.01)
     job = services.jobs.get(key)
-    assert job.state == "failed" and job.error == {"code": "data_dir_readonly", "ref": "E1005", "params": {"path": str(services.data_dir)}}
+    assert job.state == "failed" and job.error == {
+        "code": "data_dir_readonly",
+        "ref": "E1005",
+        "params": {"path": str(services.data_dir)},
+    }
 
 
 def test_a_failure_elsewhere_stays_internal(app, services, tmp_path):
@@ -136,6 +148,7 @@ def test_a_failure_elsewhere_stays_internal(app, services, tmp_path):
 
 
 # --- what stands for a read-only data folder ---
+
 
 def denied(path, code=errno.EACCES, **kwargs):
     return PermissionError(code, "denied", str(path), *([None, str(kwargs["other"])] if "other" in kwargs else []))
@@ -174,6 +187,7 @@ def test_a_busy_file_in_a_folder_that_takes_files_is_not_a_read_only_folder(serv
 
 
 # --- the notice's text ---
+
 
 @pytest.mark.parametrize("code", ["en-US", "ja-JP", "ko-KR", "th-TH", "zh-CN", "zh-TW"])
 def test_every_locale_has_the_message_with_the_path(code):

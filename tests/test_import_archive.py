@@ -39,17 +39,20 @@ def unpacked(env):
 
 def test_zip_bundles_import_like_files_and_nested_archives_stay_packed(env):
     source = make_mod(env.original, env.tmp / "made")
-    archive = write_zip(env.tmp / "drop" / "mod.zip", {
-        f"Mod folder/{source.name}": source.read_bytes(),
-        "Mod folder/readme.txt": b"notes",
-        "Mod folder/more.zip": nested_zip({"other/" + source.name: b"another mod"}),
-        f"__MACOSX/Mod folder/._{source.name}": b"resource fork",
-    })
+    archive = write_zip(
+        env.tmp / "drop" / "mod.zip",
+        {
+            f"Mod folder/{source.name}": source.read_bytes(),
+            "Mod folder/readme.txt": b"notes",
+            "Mod folder/more.zip": nested_zip({"other/" + source.name: b"another mod"}),
+            f"__MACOSX/Mod folder/._{source.name}": b"resource fork",
+        },
+    )
     result = analyze(env, [archive])
-    entry, = result["entries"]
+    (entry,) = result["entries"]
     assert result["skipped"] == 3
     assert (entry["variant"], entry["core"], entry["kind"], entry["state"]) == ("test", "test_spr", "spr", "ready")
-    folder, = unpacked(env)
+    (folder,) = unpacked(env)
     assert entry["paths"] == [str(folder / "Mod folder" / source.name)]
     # nothing of the nested archive was unpacked
     assert [path.name for path in folder.rglob("*") if path.is_file()] == [source.name]
@@ -59,9 +62,9 @@ def test_zip_bundles_import_like_files_and_nested_archives_stay_packed(env):
     assert unpacked(env) == [folder]
     # rechecking the rows reads the unpacked files themselves
     assert analyze(env, entry["paths"])["entries"][0]["id"] == entry["id"]
-    outcome, = run(env, result["entries"], enableAfterImport=False)
+    (outcome,) = run(env, result["entries"], enableAfterImport=False)
     assert outcome["outcome"] == "imported"
-    stored, = env.library.mods()
+    (stored,) = env.library.mods()
     assert stored.id == outcome["libraryId"]
 
 
@@ -80,8 +83,13 @@ def test_member_names_never_leave_the_unpacked_folder(env):
     archive = env.tmp / "drop" / "unsafe.zip"
     archive.parent.mkdir(parents=True)
     with zipfile.ZipFile(archive, "w") as stream:
-        for name in (f"../{source.name}", f"/abs/{source.name}", f"a/../../{source.name}", f"C:/x/{source.name}",
-                     f"ok/{source.name}"):
+        for name in (
+            f"../{source.name}",
+            f"/abs/{source.name}",
+            f"a/../../{source.name}",
+            f"C:/x/{source.name}",
+            f"ok/{source.name}",
+        ):
             info = zipfile.ZipInfo("placeholder")
             info.filename = name  # ZipInfo would clean the name; an archive from elsewhere need not
             stream.writestr(info, source.read_bytes())
@@ -89,9 +97,9 @@ def test_member_names_never_leave_the_unpacked_folder(env):
         stream.writestr(f"OK/{source.name}", b"other")
     before = {path for path in env.tmp.rglob("*")}
     result = analyze(env, [archive])
-    entry, = result["entries"]
+    (entry,) = result["entries"]
     assert result["skipped"] == 5
-    folder, = unpacked(env)
+    (folder,) = unpacked(env)
     assert entry["paths"] == [str(folder / "ok" / source.name)]
     created = {path for path in env.tmp.rglob("*")} - before
     assert [path for path in created if path.name == source.name] == [folder / "ok" / source.name]
@@ -105,10 +113,10 @@ def test_damaged_archive_fails_the_analysis_and_leaves_nothing(env, damage):
     if damage == "not a zip":
         archive.write_bytes(b"plain text")
     elif damage == "truncated":
-        archive.write_bytes(data[:len(data) // 2])
+        archive.write_bytes(data[: len(data) // 2])
     elif damage == "bad crc":
         central = data.rindex(b"PK\x01\x02")  # the CRC the reader checks is the central directory's
-        archive.write_bytes(data[:central + 16] + b"\0\0\0\0" + data[central + 20:])
+        archive.write_bytes(data[: central + 16] + b"\0\0\0\0" + data[central + 20 :])
     elif damage == "bad data":
         with zipfile.ZipFile(archive) as stream:
             info = stream.infolist()[0]
@@ -150,19 +158,28 @@ def test_archives_inside_a_chosen_folder_stay_packed(env):
 
 def test_an_exported_archive_imports_back(env):
     source = make_mod(env.original, env.tmp / "made")
-    mod, = env.library.add([source])
+    (mod,) = env.library.add([source])
     services = SimpleNamespace(settings=env.settings, library=env.library, state=SimpleNamespace(get=lambda *_: {}))
-    exported = export_service.export_zip(services, env.library, env.library.current_pin(), scope="library",
-                                         target=None, folder=env.tmp / "exports", server="global",
-                                         platform="windows", kind=None, log=lambda *_: None,
-                                         progress=lambda *_: None)
+    exported = export_service.export_zip(
+        services,
+        env.library,
+        env.library.current_pin(),
+        scope="library",
+        target=None,
+        folder=env.tmp / "exports",
+        server="global",
+        platform="windows",
+        kind=None,
+        log=lambda *_: None,
+        progress=lambda *_: None,
+    )
     env.library.remove(mod.id, confirm=True)
     assert not env.library.mods()
     result = analyze(env, [exported["archive"]])
-    entry, = result["entries"]
+    (entry,) = result["entries"]
     assert result["skipped"] == 1  # manifest.json
     assert (entry["core"], entry["kind"], entry["state"]) == ("test_spr", "spr", "ready")
-    outcome, = run(env, result["entries"], enableAfterImport=False)
+    (outcome,) = run(env, result["entries"], enableAfterImport=False)
     assert outcome["outcome"] == "imported"
 
 
@@ -188,6 +205,6 @@ def test_the_file_dialog_offers_zip_archives(env, monkeypatch):
     env.services.window = object()
     monkeypatch.setattr(native, "pick_files", lambda window, types, **_: seen.setdefault("types", types) and [])
     assert rpc(env, "import.pick", folder=False) == {"paths": []}
-    kinds, = seen["types"]
+    (kinds,) = seen["types"]
     description, patterns = parse_file_type(kinds)
     assert set(patterns.split(";")) == {"*.bundle", "*.bundle.backup", "*.zip"}

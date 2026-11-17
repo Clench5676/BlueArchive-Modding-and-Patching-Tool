@@ -21,7 +21,12 @@ from bmpt.errors import ServiceError
 from bmpt.gameassets import AssetCache, AssetNotFound, GameAssets
 from bmpt.gameassets import service, unity
 from bmpt.gameassets.discovery import (
-    bundle_paths, group_bundles, is_pointer_texture, is_prefab, is_texture, resource_version,
+    bundle_paths,
+    group_bundles,
+    is_pointer_texture,
+    is_prefab,
+    is_texture,
+    resource_version,
 )
 from bmpt.gameassets.layouts import export_layout, subtree
 from bmpt.gameassets.spine import atlas_pages, extract_spine
@@ -118,8 +123,9 @@ def _version_folder(root, name, age, entries=1):
 
 def test_a_new_version_keeps_the_three_most_recently_used_disk_folders(tmp_path):
     root = tmp_path / "cache"
-    oldest, older, recent = (_version_folder(root, name, age) for name, age in
-                             (("oldest", 300), ("older", 200), ("recent", 100)))
+    oldest, older, recent = (
+        _version_folder(root, name, age) for name, age in (("oldest", 300), ("older", 200), ("recent", 100))
+    )
     global_version = _version_folder(root, "global", 400)
     previews = root / "previews"
     previews.mkdir()
@@ -141,7 +147,8 @@ def test_a_new_version_keeps_the_three_most_recently_used_disk_folders(tmp_path)
     new = root / hashlib.sha1(b"new").hexdigest()
     assert (new / (hashlib.sha256(b"light").hexdigest() + ".cache")).read_bytes() == b"new ui"
     assert sorted(path.name for path in root.iterdir()) == sorted(
-        [new.name, global_version.name, recent.name, "previews", "f" * 40 + ".txt", "e" * 40])
+        [new.name, global_version.name, recent.name, "previews", "f" * 40 + ".txt", "e" * 40]
+    )
     assert not oldest.exists() and not older.exists()
     assert (previews / "entry.preview").read_bytes() == b"preview"
     assert (outside / "keep.cache").read_bytes() == b"outside" and link.is_symlink()
@@ -163,6 +170,7 @@ def test_only_a_new_versions_first_write_retires_folders(tmp_path):
 
 def test_an_old_cache_folder_that_cannot_be_removed_is_logged_and_skipped(tmp_path, monkeypatch, caplog):
     from bmpt.gameassets import cache as cache_module
+
     root = tmp_path / "cache"
     held, removable = (_version_folder(root, name, age) for name, age in (("held", 500), ("removable", 400)))
     kept = [_version_folder(root, name, age) for name, age in (("a", 200), ("b", 100))]
@@ -220,10 +228,14 @@ def test_bundle_discovery_grouping_and_family_filters(tmp_path):
     assert len(paths) == 4
     assert len(group_bundles(paths, "spinecharacters")["hoshino_spr"]) == 2
     assert len(group_bundles(paths, "spinelobbies")["hoshino_home"]) == 2
-    for prefix in ("uis-00_images-_mxload-", "uis-00_images-formation-_mxload-",
-                   "prologdepengroup-assets-_mx-addressableasset-uis-_mxprolog-",
-                   "prologgroup-assets-_mx-addressableasset-uis-00_images-imagefont-",
-                   "uis-01_common-09_popupimage-", "uis-01_common-13_campaignimage-"):
+    for prefix in (
+        "uis-00_images-_mxload-",
+        "uis-00_images-formation-_mxload-",
+        "prologdepengroup-assets-_mx-addressableasset-uis-_mxprolog-",
+        "prologgroup-assets-_mx-addressableasset-uis-00_images-imagefont-",
+        "uis-01_common-09_popupimage-",
+        "uis-01_common-13_campaignimage-",
+    ):
         assert is_texture(Path(prefix + "2024-11-18.bundle"))
     assert not is_texture(Path(names[0]))
     assert not is_texture(Path("uis-01_common-14_charactercollect-_mxload-2024-11-18.bundle"))
@@ -235,6 +247,7 @@ def test_bundle_discovery_grouping_and_family_filters(tmp_path):
 def test_lazy_construction_and_missing_game(tmp_path, monkeypatch):
     def forbidden(*args, **kwargs):
         pytest.fail("Construction must not build indexes or load bundles")
+
     monkeypatch.setattr(service, "bundle_paths", forbidden)
     monkeypatch.setattr(service, "resource_version", forbidden)
     monkeypatch.setattr(unity.Bundle, "load", forbidden)
@@ -254,9 +267,11 @@ def test_concurrent_index_computed_once(tmp_path, monkeypatch):
     def scan(paths):
         calls.append(1)
         time.sleep(0.02)
-        return {"sprites": {"Common": {"Back": {"x": 0, "y": 0, "width": 10, "height": 10}}},
-                "images": {"Common": {"bundle": paths[0].name, "cab": "CAB", "pid": 1, "name": "Common"}},
-                "names": {"CAB:2": "Common"}}
+        return {
+            "sprites": {"Common": {"Back": {"x": 0, "y": 0, "width": 10, "height": 10}}},
+            "images": {"Common": {"bundle": paths[0].name, "cab": "CAB", "pid": 1, "name": "Common"}},
+            "names": {"CAB:2": "Common"},
+        }
 
     monkeypatch.setattr(game, "_scan_atlases", scan)
 
@@ -316,30 +331,47 @@ class _Object:
         return self._data
 
 
-def _fake_prefab(nodes: dict[int, tuple[str, int]], behaviours: list[tuple[int, int, str, dict]],
-                 inactive: tuple[int, ...] = ()) -> SimpleNamespace:
+def _fake_prefab(
+    nodes: dict[int, tuple[str, int]], behaviours: list[tuple[int, int, str, dict]], inactive: tuple[int, ...] = ()
+) -> SimpleNamespace:
     """A prefab environment: nodes by GameObject path id as (name, parent's path id or 0), each with its Transform
     at path id + 1000; behaviours as (path id, node, script class, serialized fields)."""
     objects, transforms = [], {}
     for gid, (name, parent) in nodes.items():
-        objects.append(_Object("GameObject", gid, "CAB-ui", data=SimpleNamespace(
-            m_Name=name, m_IsActive=gid not in inactive)))
+        objects.append(
+            _Object("GameObject", gid, "CAB-ui", data=SimpleNamespace(m_Name=name, m_IsActive=gid not in inactive))
+        )
         transforms[gid] = SimpleNamespace(
-            m_GameObject=SimpleNamespace(path_id=gid), m_LocalRotation=SimpleNamespace(z=0.0, w=1.0),
-            m_LocalPosition=SimpleNamespace(x=0.0, y=0.0), m_LocalScale=SimpleNamespace(x=1.0, y=1.0),
-            m_Father=SimpleNamespace(path_id=parent and parent + 1000), m_Children=[])
+            m_GameObject=SimpleNamespace(path_id=gid),
+            m_LocalRotation=SimpleNamespace(z=0.0, w=1.0),
+            m_LocalPosition=SimpleNamespace(x=0.0, y=0.0),
+            m_LocalScale=SimpleNamespace(x=1.0, y=1.0),
+            m_Father=SimpleNamespace(path_id=parent and parent + 1000),
+            m_Children=[],
+        )
     for gid, (name, parent) in nodes.items():
         if parent:
             transforms[parent].m_Children.append(SimpleNamespace(read=lambda t=transforms[gid]: t))
         objects.append(_Object("Transform", gid + 1000, "CAB-ui", data=transforms[gid]))
     scripts = {}
     for pid, gid, cls, fields in behaviours:
-        objects.append(_Object("MonoBehaviour", pid, "CAB-ui", tree={
-            "m_GameObject": {"m_FileID": 0, "m_PathID": gid}, "m_Enabled": 1,
-            "m_Script": {"m_FileID": 0, "m_PathID": scripts.setdefault(cls, 2000 + len(scripts))},
-            "m_Name": "", **fields}))
-    objects += [_Object("MonoScript", pid, "CAB-ui", data=SimpleNamespace(m_ClassName=cls))
-                for cls, pid in scripts.items()]
+        objects.append(
+            _Object(
+                "MonoBehaviour",
+                pid,
+                "CAB-ui",
+                tree={
+                    "m_GameObject": {"m_FileID": 0, "m_PathID": gid},
+                    "m_Enabled": 1,
+                    "m_Script": {"m_FileID": 0, "m_PathID": scripts.setdefault(cls, 2000 + len(scripts))},
+                    "m_Name": "",
+                    **fields,
+                },
+            )
+        )
+    objects += [
+        _Object("MonoScript", pid, "CAB-ui", data=SimpleNamespace(m_ClassName=cls)) for cls, pid in scripts.items()
+    ]
     return SimpleNamespace(objects=objects)
 
 
@@ -359,35 +391,86 @@ def test_layout_exports_state_controller_nodes():
     """The game's buttons have no NGUI button colours: a locked or disabled button is a node of its own that a
     controller shows instead of the normal one (the lobby's bottom menu: Able, and Disable with the icon tinted
     #797979). The export names each controller field's node by its path below the controller's node."""
-    nodes = {1: ("Root", 0), 2: ("Craft", 1), 3: ("Label", 2), 4: ("Able", 2), 5: ("Disable", 2), 6: ("Icon", 5),
-             7: ("Lock", 5), 8: ("BlockEntry", 2), 9: ("Other", 1), 10: ("Entry", 1), 11: ("Locked", 10),
-             12: ("Cover", 11)}
+    nodes = {
+        1: ("Root", 0),
+        2: ("Craft", 1),
+        3: ("Label", 2),
+        4: ("Able", 2),
+        5: ("Disable", 2),
+        6: ("Icon", 5),
+        7: ("Lock", 5),
+        8: ("BlockEntry", 2),
+        9: ("Other", 1),
+        10: ("Entry", 1),
+        11: ("Locked", 10),
+        12: ("Cover", 11),
+    }
     grey = 121 / 255
     behaviours = [
-        (100, 2, "OpenConditionButtonController", {
-            "contentType": 7, "prohibitionType": 0, "Enable": _pointer(4), "Disable": _pointer(5),
-            "Prohibited": _pointer(8), "CallCheckInEnable": 0, "PrefsKeyPrefix": ""}),
-        (101, 6, "UISprite", {"mSpriteName": "Common_Icon_Craft", "mAtlas": _pointer(0), "mType": 0, "mFlip": 0,
-                              "mWidth": 120, "mHeight": 120, "mColor": {"r": grey, "g": grey, "b": grey, "a": 1.0}}),
+        (
+            100,
+            2,
+            "OpenConditionButtonController",
+            {
+                "contentType": 7,
+                "prohibitionType": 0,
+                "Enable": _pointer(4),
+                "Disable": _pointer(5),
+                "Prohibited": _pointer(8),
+                "CallCheckInEnable": 0,
+                "PrefsKeyPrefix": "",
+            },
+        ),
+        (
+            101,
+            6,
+            "UISprite",
+            {
+                "mSpriteName": "Common_Icon_Craft",
+                "mAtlas": _pointer(0),
+                "mType": 0,
+                "mFlip": 0,
+                "mWidth": 120,
+                "mHeight": 120,
+                "mColor": {"r": grey, "g": grey, "b": grey, "a": 1.0},
+            },
+        ),
         # a component pointer resolves to its node, also when the component is read after the controller; a node
         # outside the controller's, an external pointer and an unset one give None
-        (102, 10, "ButtonActivator", {"activeObject": _pointer(12), "inactiveObject": _pointer(9),
-                                      "button": _pointer(103), "contentsLockObject": _pointer(0)}),
+        (
+            102,
+            10,
+            "ButtonActivator",
+            {
+                "activeObject": _pointer(12),
+                "inactiveObject": _pointer(9),
+                "button": _pointer(103),
+                "contentsLockObject": _pointer(0),
+            },
+        ),
         (103, 10, "MXButton", {"PlaySound": 1, "onClick": [], "label": _pointer(0)}),
         (104, 1, "UIButtonEnableSwitch", {"enableButton": _pointer(1004), "disableButton": _pointer(5, fid=1)}),
     ]
     tree = export_layout(_fake_prefab(nodes, behaviours, inactive=(5, 8)), "Root", {})
     assert json.loads(json.dumps(tree)) == tree
     craft = subtree(tree, "Craft")
-    assert craft["widgets"] == [{"cls": "OpenConditionButtonController",
-                                 "states": {"Enable": "Able", "Disable": "Disable", "Prohibited": "BlockEntry"}}]
+    assert craft["widgets"] == [
+        {
+            "cls": "OpenConditionButtonController",
+            "states": {"Enable": "Able", "Disable": "Disable", "Prohibited": "BlockEntry"},
+        }
+    ]
     disabled = subtree(craft, craft["widgets"][0]["states"]["Disable"])
     assert not disabled["active"] and subtree(craft, "Able")["active"]
     icon = subtree(disabled, "Icon")["widgets"][0]
     assert (icon["sprite"], icon["color"]) == ("Common_Icon_Craft", "#797979/1.00")
     activator, button = subtree(tree, "Entry")["widgets"]
-    assert activator["states"] == {"activeObject": "Locked/Cover", "inactiveObject": None, "button": "",
-                                   "contentsLockObject": None}
+    assert activator["states"] == {
+        "activeObject": "Locked/Cover",
+        "inactiveObject": None,
+        "button": "",
+        "contentsLockObject": None,
+    }
     assert button == {"cls": "MXButton"}
     assert tree["widgets"][0]["states"] == {"enableButton": "Craft/Able", "disableButton": None}
     assert _without_states(tree)["widgets"] == [{"cls": "UIButtonEnableSwitch"}]
@@ -401,8 +484,16 @@ def test_layout_cache_key_carries_the_export_format(tmp_path, monkeypatch):
     stale = json.dumps({"name": "Root", "widgets": [{"cls": "OpenConditionButtonController"}]}).encode()
     game.cache.put(service._SCHEMA + "layout/Root", stale, version=version)
     game.cache.put(service._SCHEMA + "atlases", b"{}", version=version)
-    fresh = {"name": "Root", "active": True, "widgets": [{"cls": "OpenConditionButtonController", "states": {
-        "Enable": "Able", "Disable": "Disable", "Prohibited": None}}]}
+    fresh = {
+        "name": "Root",
+        "active": True,
+        "widgets": [
+            {
+                "cls": "OpenConditionButtonController",
+                "states": {"Enable": "Able", "Disable": "Disable", "Prohibited": None},
+            }
+        ],
+    }
     exports = []
 
     @contextmanager
@@ -457,13 +548,27 @@ def test_external_atlas_crop_orientation_and_decode_once(tmp_path, monkeypatch):
         (directory / "uis-atlas-first.bundle").touch()
         (directory / "uis-atlas-second.bundle").touch()
     first, second = original / "uis-atlas-first.bundle", original / "uis-atlas-second.bundle"
-    atlas = _Object("MonoBehaviour", 1, "CAB-atlas", externals=["archive:/CAB-texture"], tree={
-        "m_Name": "Test", "mSprites": [{"name": "top", "x": 1, "y": 0, "width": 1, "height": 1},
-                                          {"name": "bottom", "x": 1, "y": 1, "width": 1, "height": 1},
-                                          {"name": "left", "x": 0, "y": 0, "width": 1, "height": 1}],
-        "material": {"m_FileID": 1, "m_PathID": 2}})
-    material = _Object("Material", 2, "CAB-texture", tree={"m_SavedProperties": {
-        "m_TexEnvs": [("_MainTex", {"m_Texture": {"m_FileID": 0, "m_PathID": 3}})]}})
+    atlas = _Object(
+        "MonoBehaviour",
+        1,
+        "CAB-atlas",
+        externals=["archive:/CAB-texture"],
+        tree={
+            "m_Name": "Test",
+            "mSprites": [
+                {"name": "top", "x": 1, "y": 0, "width": 1, "height": 1},
+                {"name": "bottom", "x": 1, "y": 1, "width": 1, "height": 1},
+                {"name": "left", "x": 0, "y": 0, "width": 1, "height": 1},
+            ],
+            "material": {"m_FileID": 1, "m_PathID": 2},
+        },
+    )
+    material = _Object(
+        "Material",
+        2,
+        "CAB-texture",
+        tree={"m_SavedProperties": {"m_TexEnvs": [("_MainTex", {"m_Texture": {"m_FileID": 0, "m_PathID": 3}})]}},
+    )
     image = Image.new("RGBA", (2, 2), "blue")
     image.putpixel((1, 0), (255, 0, 0, 255))
     texture = _Object("Texture2D", 3, "CAB-texture", name="Test", data=fake_texture(image))
@@ -489,8 +594,10 @@ def test_external_atlas_crop_orientation_and_decode_once(tmp_path, monkeypatch):
     assert loads[-1] == relocated / second.name
 
 
-@pytest.fixture(params=["", "GameData/Windows", "BlueArchive_Data/StreamingAssets/PUB/Resource/Preload/Windows"],
-                ids=["flat", "resource", "install"])
+@pytest.fixture(
+    params=["", "GameData/Windows", "BlueArchive_Data/StreamingAssets/PUB/Resource/Preload/Windows"],
+    ids=["flat", "resource", "install"],
+)
 def atlas_source(tmp_path, monkeypatch, request):
     game_root = tmp_path / "game"
     directory = game_root / request.param
@@ -501,11 +608,23 @@ def atlas_source(tmp_path, monkeypatch, request):
     atlas_path, image_path = [directory / f"uis-atlas-{name}.bundle" for name in ("atlas", "image")]
     atlas_path.write_bytes(b"atlas")
     image_path.write_bytes(b"blue")
-    atlas = _Object("MonoBehaviour", 1, "CAB-atlas", externals=["CAB-image"], tree={
-        "m_Name": "Common", "mSprites": [{"name": "Back", "width": 1, "height": 1}],
-        "material": {"m_FileID": 1, "m_PathID": 2}})
-    material = _Object("Material", 2, "CAB-image", tree={"m_SavedProperties": {
-        "m_TexEnvs": [("_MainTex", {"m_Texture": {"m_PathID": 3}})]}})
+    atlas = _Object(
+        "MonoBehaviour",
+        1,
+        "CAB-atlas",
+        externals=["CAB-image"],
+        tree={
+            "m_Name": "Common",
+            "mSprites": [{"name": "Back", "width": 1, "height": 1}],
+            "material": {"m_FileID": 1, "m_PathID": 2},
+        },
+    )
+    material = _Object(
+        "Material",
+        2,
+        "CAB-image",
+        tree={"m_SavedProperties": {"m_TexEnvs": [("_MainTex", {"m_Texture": {"m_PathID": 3}})]}},
+    )
     loads = []
 
     @contextmanager
@@ -520,10 +639,13 @@ def atlas_source(tmp_path, monkeypatch, request):
 
     monkeypatch.setattr(service, "open_bundle", open_fake)
     root = tmp_path / "cache"
+
     def game():
         return GameAssets(get_search_dirs(game_root), AssetCache(root=root, allowed=True))
-    return SimpleNamespace(game=game, directory=directory, atlas=atlas_path, image=image_path, loads=loads, root=root,
-                           atlas_object=atlas)
+
+    return SimpleNamespace(
+        game=game, directory=directory, atlas=atlas_path, image=image_path, loads=loads, root=root, atlas_object=atlas
+    )
 
 
 def test_atlas_cache_recovers_from_missing_bundles_and_legacy_empty_index(atlas_source, caplog):
@@ -660,8 +782,13 @@ def test_atlas_inventory_addition_invalidates_a_complete_index(atlas_source, mon
     version = game.resource_version
     added = source.directory / "uis-atlas-extra.bundle"
     added.write_bytes(b"extra")
-    alias = _Object("MonoBehaviour", 1, "CAB-extra", externals=["CAB-atlas"], tree={
-        "m_Name": alias_name, "mSprites": [], "mReplacement": {"m_FileID": 1, "m_PathID": 1}})
+    alias = _Object(
+        "MonoBehaviour",
+        1,
+        "CAB-extra",
+        externals=["CAB-atlas"],
+        tree={"m_Name": alias_name, "mSprites": [], "mReplacement": {"m_FileID": 1, "m_PathID": 1}},
+    )
     original = service.open_bundle
 
     @contextmanager
@@ -683,8 +810,10 @@ def test_atlas_scan_failures_are_logged_and_not_cached(atlas_source, monkeypatch
     source = atlas_source
     game = source.game()
     scan = game._scan_atlases
+
     def fail(paths):
         raise failure
+
     monkeypatch.setattr(game, "_scan_atlases", fail)
     with pytest.raises(type(failure)):
         game.atlases()
@@ -698,10 +827,12 @@ def test_atlas_changes_during_scan_are_not_cached(atlas_source, monkeypatch):
     source = atlas_source
     game = source.game()
     scan = game._scan_atlases
+
     def change(paths):
         result = scan(paths)
         source.image.write_bytes(b"red ")
         return result
+
     monkeypatch.setattr(game, "_scan_atlases", change)
     with pytest.raises(AssetNotFound, match="changed during indexing"):
         game.atlases()
@@ -710,13 +841,20 @@ def test_atlas_changes_during_scan_are_not_cached(atlas_source, monkeypatch):
     assert game.atlases()["Common"]
 
 
-@pytest.mark.parametrize("data", [b"{}", b'{"sprites":{},"images":{},"names":{}}', b"broken JSON",
-                                  b'{"sprites":{"Common":{"Back":{}}},"images":{},"names":{"CAB:1":"Common"}}',
-                                  b'{"sprites":{"Common":{"Back":{}}},"images":{},"names":{"CAB:1":"Missing"}}'])
+@pytest.mark.parametrize(
+    "data",
+    [
+        b"{}",
+        b'{"sprites":{},"images":{},"names":{}}',
+        b"broken JSON",
+        b'{"sprites":{"Common":{"Back":{}}},"images":{},"names":{"CAB:1":"Common"}}',
+        b'{"sprites":{"Common":{"Back":{}}},"images":{},"names":{"CAB:1":"Missing"}}',
+    ],
+)
 def test_invalid_atlas_cache_entries_are_rebuilt(atlas_source, caplog, data):
     source = atlas_source
     expected = source.game().atlases()
-    cached, = source.root.rglob("*.cache")
+    (cached,) = source.root.rglob("*.cache")
     cached.write_bytes(data)
     source.loads.clear()
     assert source.game().atlases() == expected
@@ -737,8 +875,11 @@ def test_pointer_texture_families():
         assert is_pointer_texture(Path(name))
         # an index of their own: the UI texture index (and its listing) stays as it was
         assert not is_texture(Path(name))
-    for name in ("assets-_mx-characters-ch0305-_mxdependency-textures-2026-04-06_assets_all_4018753285.bundle",
-                 "uis-00_images-_mxload-2024-11-18.bundle", "assets-_mx-effectsfreezed-material-_mxdependency-1.bundle"):
+    for name in (
+        "assets-_mx-characters-ch0305-_mxdependency-textures-2026-04-06_assets_all_4018753285.bundle",
+        "uis-00_images-_mxload-2024-11-18.bundle",
+        "assets-_mx-effectsfreezed-material-_mxdependency-1.bundle",
+    ):
         assert not is_pointer_texture(Path(name))
 
 
@@ -748,12 +889,31 @@ def test_texture_route_falls_back_to_the_pointer_textures(tmp_path, monkeypatch)
         path.touch()
     pointer = Image.new("RGBA", (4, 4), (0, 128, 255, 255))
     envs = {
-        ui: SimpleNamespace(objects=[_Object("Texture2D", 1, "CAB-ui", name="UITex_BGBlueLight",
-                                             data=fake_texture(Image.new("RGBA", (2, 2), "white")))]),
-        cursor: SimpleNamespace(objects=[_Object("Texture2D", 1, "CAB-cursor", name="PCIcon_MousePoint",
-                                                 data=fake_texture(pointer))]),
-        fx: SimpleNamespace(objects=[_Object("Texture2D", 7, "CAB-fx", name="FX_TEX_Trail_03",
-                                             data=fake_texture(Image.new("RGBA", (8, 2), "red")))]),
+        ui: SimpleNamespace(
+            objects=[
+                _Object(
+                    "Texture2D",
+                    1,
+                    "CAB-ui",
+                    name="UITex_BGBlueLight",
+                    data=fake_texture(Image.new("RGBA", (2, 2), "white")),
+                )
+            ]
+        ),
+        cursor: SimpleNamespace(
+            objects=[_Object("Texture2D", 1, "CAB-cursor", name="PCIcon_MousePoint", data=fake_texture(pointer))]
+        ),
+        fx: SimpleNamespace(
+            objects=[
+                _Object(
+                    "Texture2D",
+                    7,
+                    "CAB-fx",
+                    name="FX_TEX_Trail_03",
+                    data=fake_texture(Image.new("RGBA", (8, 2), "red")),
+                )
+            ]
+        ),
     }
 
     @contextmanager
@@ -776,8 +936,13 @@ def test_texture_route_falls_back_to_the_pointer_textures(tmp_path, monkeypatch)
 
 def test_collection_art_names():
     # backgrounds named after a scenario background (CostumeExcel's CollectionBGTexturePath, e.g. Junko (New Year))
-    for name in ("BG_Abydos_Collection", "BG_NewYearFestival2", "BG_WaterFall", "BG_Hyakkiyako_Collection_kr",
-                 "Student_Portrait_CH0192_Collection"):
+    for name in (
+        "BG_Abydos_Collection",
+        "BG_NewYearFestival2",
+        "BG_WaterFall",
+        "BG_Hyakkiyako_Collection_kr",
+        "Student_Portrait_CH0192_Collection",
+    ):
         assert service.is_collection_art(name)
     for name in ("NPC_Portrait_Arona_Collection", "Student_Portrait_CH0192", "UITex_BGPoliLight_1"):
         assert not service.is_collection_art(name)
@@ -790,12 +955,19 @@ def test_collection_backgrounds_without_the_collection_suffix(tmp_path, monkeypa
         path.touch()
 
     def texture(pid, name, color):
-        return _Object("Texture2D", pid, "CAB-collect", name=name,
-                       data=fake_texture(Image.new("RGB", (4, 3), color)))
-    envs = {collect: SimpleNamespace(objects=[
-        texture(1, "BG_Abydos_Collection", "white"), texture(2, "BG_NewYearFestival2", "red"),
-        texture(3, "Student_Portrait_CH0192_Collection", "blue"), texture(4, "NPC_Portrait_Arona_Collection", "black"),
-    ]), scenario: SimpleNamespace(objects=[_Object("Texture2D", 1, "CAB-scenario", name="BG_ScenarioOnly")])}
+        return _Object("Texture2D", pid, "CAB-collect", name=name, data=fake_texture(Image.new("RGB", (4, 3), color)))
+
+    envs = {
+        collect: SimpleNamespace(
+            objects=[
+                texture(1, "BG_Abydos_Collection", "white"),
+                texture(2, "BG_NewYearFestival2", "red"),
+                texture(3, "Student_Portrait_CH0192_Collection", "blue"),
+                texture(4, "NPC_Portrait_Arona_Collection", "black"),
+            ]
+        ),
+        scenario: SimpleNamespace(objects=[_Object("Texture2D", 1, "CAB-scenario", name="BG_ScenarioOnly")]),
+    }
 
     @contextmanager
     def open_fake(path):
@@ -804,16 +976,20 @@ def test_collection_backgrounds_without_the_collection_suffix(tmp_path, monkeypa
     monkeypatch.setattr(service, "open_bundle", open_fake)
     cache = AssetCache(root=tmp_path / "cache", allowed=True)
     game = GameAssets([tmp_path], cache)
-    assert game.collection_names() == {"bg": ["BG_Abydos_Collection", "BG_NewYearFestival2"],
-                                       "portrait": ["Student_Portrait_CH0192_Collection"]}
+    assert game.collection_names() == {
+        "bg": ["BG_Abydos_Collection", "BG_NewYearFestival2"],
+        "portrait": ["Student_Portrait_CH0192_Collection"],
+    }
     data, mime = game.collection_bg("BG_NewYearFestival2")
     assert mime == "image/png"
     assert Image.open(BytesIO(data)).getpixel((0, 0))[:3] == (255, 0, 0)
     # the routes' prefix checks: only backgrounds as backgrounds, only portraits as portraits
-    for call in (lambda: game.collection_bg("Student_Portrait_CH0192_Collection"),
-                 lambda: game.collection_portrait("BG_NewYearFestival2"),
-                 lambda: game.collection_bg("BG_ScenarioOnly"),
-                 lambda: game.collection_portrait("NPC_Portrait_Arona_Collection")):
+    for call in (
+        lambda: game.collection_bg("Student_Portrait_CH0192_Collection"),
+        lambda: game.collection_portrait("BG_NewYearFestival2"),
+        lambda: game.collection_bg("BG_ScenarioOnly"),
+        lambda: game.collection_portrait("NPC_Portrait_Arona_Collection"),
+    ):
         with pytest.raises(AssetNotFound):
             call()
     # heavy art: neither the index nor the image reaches the disk, even with consent
@@ -835,105 +1011,129 @@ def test_lobby_prefab_hint():
     assert is_prefab(Path(service.PREFAB_HINTS["UILobby"]))
 
 
-@pytest.mark.parametrize('hint_state', ['valid', 'missing', 'renamed-root'])
+@pytest.mark.parametrize("hint_state", ["valid", "missing", "renamed-root"])
 def test_hall_slot_hint_avoids_scan_and_falls_back_after_game_updates(tmp_path, monkeypatch, hint_state):
-    root = 'UILobbyCharacterSelectPopup_Slot'
+    root = "UILobbyCharacterSelectPopup_Slot"
     hint = tmp_path / service.PREFAB_HINTS[root]
-    fallback = tmp_path / 'updated-prefabs.bundle'
+    fallback = tmp_path / "updated-prefabs.bundle"
     fallback.touch()
-    if hint_state != 'missing':
+    if hint_state != "missing":
         hint.touch()
-    game = GameAssets([tmp_path], AssetCache(root=tmp_path / 'cache'))
+    game = GameAssets([tmp_path], AssetCache(root=tmp_path / "cache"))
     opened, scans = [], []
 
     @contextmanager
     def open_fake(path):
         opened.append(path.name)
-        name = root if hint_state == 'valid' else 'AnotherRoot'
-        yield SimpleNamespace(container={f'assets/ui/{name}.prefab': None})
+        name = root if hint_state == "valid" else "AnotherRoot"
+        yield SimpleNamespace(container={f"assets/ui/{name}.prefab": None})
 
-    monkeypatch.setattr(service, 'open_bundle', open_fake)
-    monkeypatch.setattr(game, '_scan_prefabs', lambda: scans.append(True) or {root: fallback.name})
-    assert game._prefab_bundle(root) == (hint if hint_state == 'valid' else fallback)
-    assert len(scans) == (0 if hint_state == 'valid' else 1)
-    assert opened == ([] if hint_state == 'missing' else [hint.name])
+    monkeypatch.setattr(service, "open_bundle", open_fake)
+    monkeypatch.setattr(game, "_scan_prefabs", lambda: scans.append(True) or {root: fallback.name})
+    assert game._prefab_bundle(root) == (hint if hint_state == "valid" else fallback)
+    assert len(scans) == (0 if hint_state == "valid" else 1)
+    assert opened == ([] if hint_state == "missing" else [hint.name])
 
 
 def test_prefab_hints_carry_a_cab_and_a_crc():
     assert service.PREFAB_CABS.keys() == service.PREFAB_HINTS.keys()
     for name in service.PREFAB_HINTS.values():
         assert is_prefab(Path(name)) and service.less_crc(name) != name
-    assert service.less_crc('ui-_mxload-prefabs-2025-07-02_assets_all_1122735527.bundle') \
-        == 'ui-_mxload-prefabs-2025-07-02_assets_all.bundle'
-    assert service.less_crc('no-crc.bundle') == 'no-crc.bundle'
+    assert (
+        service.less_crc("ui-_mxload-prefabs-2025-07-02_assets_all_1122735527.bundle")
+        == "ui-_mxload-prefabs-2025-07-02_assets_all.bundle"
+    )
+    assert service.less_crc("no-crc.bundle") == "no-crc.bundle"
 
 
-@pytest.mark.parametrize('state', ['rebuilt', 'stale-and-rebuilt', 'cab-gone', 'unreadable'])
+@pytest.mark.parametrize("state", ["rebuilt", "stale-and-rebuilt", "cab-gone", "unreadable"])
 def test_prefab_hint_follows_a_rebuilt_bundle_by_cab(tmp_path, monkeypatch, state):
     """A game update rebuilds a prefab bundle under a new CRC: the hint finds it among the bundles of the same name
     less the CRC by its CAB (header reads), opening no other bundle and scanning nothing."""
-    root = 'UILobby'
+    root = "UILobby"
     hint = service.PREFAB_HINTS[root]
-    stem = hint.rsplit('_', 1)[0]
-    rebuilt, sibling, other = f'{stem}_11.bundle', f'{stem}_22.bundle', 'ui-_mxload-prefabs-2026-09-21_assets_all_33.bundle'
-    for name in (rebuilt, sibling, other, 'updated-prefabs.bundle'):
+    stem = hint.rsplit("_", 1)[0]
+    rebuilt, sibling, other = (
+        f"{stem}_11.bundle",
+        f"{stem}_22.bundle",
+        "ui-_mxload-prefabs-2026-09-21_assets_all_33.bundle",
+    )
+    for name in (rebuilt, sibling, other, "updated-prefabs.bundle"):
         (tmp_path / name).touch()
-    if state == 'stale-and-rebuilt':  # a leftover of the previous build, no longer holding the root
+    if state == "stale-and-rebuilt":  # a leftover of the previous build, no longer holding the root
         (tmp_path / hint).touch()
-    game = GameAssets([tmp_path], AssetCache(root=tmp_path / 'cache'))
+    game = GameAssets([tmp_path], AssetCache(root=tmp_path / "cache"))
     opened, scans = [], []
     # the other family's bundle holds the same CAB name: only the hinted family is searched
-    cabs = {rebuilt: [service.PREFAB_CABS[root]], sibling: ['cab-0'], other: [service.PREFAB_CABS[root]]}
-    if state == 'cab-gone':
-        cabs[rebuilt] = ['cab-1']
+    cabs = {rebuilt: [service.PREFAB_CABS[root]], sibling: ["cab-0"], other: [service.PREFAB_CABS[root]]}
+    if state == "cab-gone":
+        cabs[rebuilt] = ["cab-1"]
 
     def cab_fake(path):
-        if state == 'unreadable':
+        if state == "unreadable":
             raise ValueError(path)
         return cabs.get(path.name, [])
 
     @contextmanager
     def open_fake(path):
         opened.append(path.name)
-        yield SimpleNamespace(container={f'assets/ui/{root if path.name == rebuilt else "Old"}.prefab': None})
+        yield SimpleNamespace(container={f"assets/ui/{root if path.name == rebuilt else 'Old'}.prefab": None})
 
-    monkeypatch.setattr(service, 'open_bundle', open_fake)
-    monkeypatch.setattr(service, 'cab_names', cab_fake)
-    monkeypatch.setattr(game, '_scan_prefabs', lambda: scans.append(True) or {root: 'updated-prefabs.bundle'})
-    found = state in ('rebuilt', 'stale-and-rebuilt')
-    assert game._prefab_bundle(root).name == (rebuilt if found else 'updated-prefabs.bundle')
+    monkeypatch.setattr(service, "open_bundle", open_fake)
+    monkeypatch.setattr(service, "cab_names", cab_fake)
+    monkeypatch.setattr(game, "_scan_prefabs", lambda: scans.append(True) or {root: "updated-prefabs.bundle"})
+    found = state in ("rebuilt", "stale-and-rebuilt")
+    assert game._prefab_bundle(root).name == (rebuilt if found else "updated-prefabs.bundle")
     assert len(scans) == (0 if found else 1)
-    assert opened == ([hint] if state == 'stale-and-rebuilt' else []) + ([rebuilt] if found else [])
+    assert opened == ([hint] if state == "stale-and-rebuilt" else []) + ([rebuilt] if found else [])
 
 
 @real_install
-@pytest.mark.parametrize('root', ['UILobby', 'UICharacterDetail', 'UILoading', 'UICharacterCollectionPopulatorUnit'])
+@pytest.mark.parametrize("root", ["UILobby", "UICharacterDetail", "UILoading", "UICharacterCollectionPopulatorUnit"])
 def test_real_stale_hint_finds_the_rebuilt_bundle_without_a_scan(tmp_path, monkeypatch, root):
     current = service.PREFAB_HINTS[root]
-    monkeypatch.setitem(service.PREFAB_HINTS, root, current.rsplit('_', 1)[0] + '_1.bundle')
-    game = GameAssets(get_search_dirs(GAME_DIR), AssetCache(root=tmp_path / 'cache', allowed=True))
-    monkeypatch.setattr(game, '_scan_prefabs', lambda: pytest.fail(f'{root} must be found by its CAB'))
+    monkeypatch.setitem(service.PREFAB_HINTS, root, current.rsplit("_", 1)[0] + "_1.bundle")
+    game = GameAssets(get_search_dirs(GAME_DIR), AssetCache(root=tmp_path / "cache", allowed=True))
+    monkeypatch.setattr(game, "_scan_prefabs", lambda: pytest.fail(f"{root} must be found by its CAB"))
     assert game._prefab_bundle(root).name == current
 
 
 @real_install
-@pytest.mark.parametrize('root', [
-    'UILoading', 'UIRepeater', 'UICharacterDetail', 'UILobby', 'UICharacterCollection',
-    'UIPopup_Sort', 'UIPopup_GachaCharList', 'UIPopup_Option_PC', 'UIPopup_FilterSort',
-    'UIPopup_Formation_CharEdit', 'UILobbyCharacterSelectPopup_Slot', 'UICharacterCollectionPopulatorUnit',
-])
+@pytest.mark.parametrize(
+    "root",
+    [
+        "UILoading",
+        "UIRepeater",
+        "UICharacterDetail",
+        "UILobby",
+        "UICharacterCollection",
+        "UIPopup_Sort",
+        "UIPopup_GachaCharList",
+        "UIPopup_Option_PC",
+        "UIPopup_FilterSort",
+        "UIPopup_Formation_CharEdit",
+        "UILobbyCharacterSelectPopup_Slot",
+        "UICharacterCollectionPopulatorUnit",
+    ],
+)
 def test_real_cold_first_screen_layouts_do_not_scan_prefabs(tmp_path, monkeypatch, root):
-    game = GameAssets(get_search_dirs(GAME_DIR), AssetCache(root=tmp_path / 'cache', allowed=True))
-    monkeypatch.setattr(game, '_scan_prefabs', lambda: pytest.fail(f'{root} must use its verified hint'))
-    assert game.layout(root)['name'] == root
+    game = GameAssets(get_search_dirs(GAME_DIR), AssetCache(root=tmp_path / "cache", allowed=True))
+    monkeypatch.setattr(game, "_scan_prefabs", lambda: pytest.fail(f"{root} must use its verified hint"))
+    assert game.layout(root)["name"] == root
 
 
 def test_unknown_names_raise_asset_not_found(tmp_path):
     game = GameAssets([tmp_path], AssetCache(root=tmp_path / "cache"))
-    for call in (lambda: game.sprite_png("missing", "missing"), lambda: game.texture_png("missing"),
-                 lambda: game.layout("missing"), lambda: game.collection_bg("missing"),
-                 lambda: game.collection_portrait("missing"), lambda: game.spine_files("spr", "missing"),
-                 lambda: game.spine_cores("invalid"), lambda: game.spine_files_from([])):
+    for call in (
+        lambda: game.sprite_png("missing", "missing"),
+        lambda: game.texture_png("missing"),
+        lambda: game.layout("missing"),
+        lambda: game.collection_bg("missing"),
+        lambda: game.collection_portrait("missing"),
+        lambda: game.spine_files("spr", "missing"),
+        lambda: game.spine_cores("invalid"),
+        lambda: game.spine_files_from([]),
+    ):
         with pytest.raises(AssetNotFound):
             call()
 
@@ -1023,31 +1223,36 @@ def test_spine_change_during_extraction_is_never_cached(tmp_path, monkeypatch):
 @pytest.mark.parametrize("library_dir,game_dir", [("a-library", "z-game"), ("z-library", "a-game")])
 @pytest.mark.parametrize("texture_only", [False, True])
 def test_spine_mod_overrides_win_independent_of_paths_and_cache_order(
-        tmp_path, monkeypatch, library_dir, game_dir, texture_only):
+    tmp_path, monkeypatch, library_dir, game_dir, texture_only
+):
     official = tmp_path / game_dir / "preload.bundle"
     mod = tmp_path / library_dir / "mod.bundle"
     for path in (official, mod):
         path.parent.mkdir()
         path.touch()
     atlas = "Pages/Hero.PNG\nsize: 1,1\n"
+
     def objects(color, skeleton):
         return [
             _Object("TextAsset", 1, "CAB", data=SimpleNamespace(m_Name="hero.skel", m_Script=skeleton)),
             _Object("TextAsset", 2, "CAB", data=SimpleNamespace(m_Name="hero.atlas", m_Script=atlas)),
-            _Object("Texture2D", 3, "CAB", data=fake_texture(
-                Image.new("RGBA", (1, 1), color), m_Name="hero")),
+            _Object("Texture2D", 3, "CAB", data=fake_texture(Image.new("RGBA", (1, 1), color), m_Name="hero")),
         ]
+
     official_objects = objects("blue", "official")
-    official_objects.append(_Object("TextAsset", 4, "CAB", data=SimpleNamespace(
-        m_Name="extra.skel", m_Script="official extra")))
+    official_objects.append(
+        _Object("TextAsset", 4, "CAB", data=SimpleNamespace(m_Name="extra.skel", m_Script="official extra"))
+    )
     mod_objects = objects("red", "modded")
     if texture_only:
         mod_objects = mod_objects[-1:]
     loads = []
+
     @contextmanager
     def open_fake(path):
         loads.append(path)
         yield SimpleNamespace(objects=mod_objects if path == mod else official_objects)
+
     monkeypatch.setattr("bmpt.gameassets.spine.open_bundle", open_fake)
     cache = AssetCache(root=tmp_path / "cache", allowed=True)
     game = GameAssets([official.parent], cache)
@@ -1095,13 +1300,18 @@ def test_real_atlases_and_sprite_pixels(real_game):
 @real_install
 def test_real_pointer_and_touch_effect_textures(real_game):
     """The PC client's pointer (UIs/GLPC_Cursor) and FX_Touch's textures, as cursor.js asks for them."""
-    sizes = {"PCIcon_MousePoint": (64, 64), "FX_TEX_Grad_Ring3": (256, 128), "FX_TEX_Circle_01": (512, 512),
-             "FX_TEX_Triangle_02_1": (256, 128), "FX_TEX_Trail_03": (512, 512)}
+    sizes = {
+        "PCIcon_MousePoint": (64, 64),
+        "FX_TEX_Grad_Ring3": (256, 128),
+        "FX_TEX_Circle_01": (512, 512),
+        "FX_TEX_Triangle_02_1": (256, 128),
+        "FX_TEX_Trail_03": (512, 512),
+    }
     for name, size in sizes.items():
         image = Image.open(BytesIO(real_game.texture_png(name))).convert("RGBA")
         assert image.size == size, name
     pointer = Image.open(BytesIO(real_game.texture_png("PCIcon_MousePoint"))).convert("RGBA")
-    assert pointer.getpixel((1, 1))[3] > 0          # the arrow's tip is the top left corner (hotspot 0, 0)
+    assert pointer.getpixel((1, 1))[3] > 0  # the arrow's tip is the top left corner (hotspot 0, 0)
     assert pointer.getpixel((63, 63))[3] == 0
     assert "PCIcon_MousePoint" not in real_game.textures()
 
@@ -1118,13 +1328,16 @@ def test_real_textures(real_game):
 
 
 @real_install
-@pytest.mark.parametrize("root,subpath,filename", [
-    ("UICharacterDetail", "", "UICharacterDetail"),
-    ("UICharacterCollection", "", "UICharacterCollection"),
-    ("UICharacterCollectionPopulatorUnit", "", "UICharacterCollectionPopulatorUnit"),
-    ("UIPopup_Sort", "", "UIPopup_Sort"),
-    ("UIPopup_GachaCharList", "Center/Popup/Btn_Checkbox", "UIPopup_GachaCharList.Btn_Checkbox"),
-])
+@pytest.mark.parametrize(
+    "root,subpath,filename",
+    [
+        ("UICharacterDetail", "", "UICharacterDetail"),
+        ("UICharacterCollection", "", "UICharacterCollection"),
+        ("UICharacterCollectionPopulatorUnit", "", "UICharacterCollectionPopulatorUnit"),
+        ("UIPopup_Sort", "", "UIPopup_Sort"),
+        ("UIPopup_GachaCharList", "Center/Popup/Btn_Checkbox", "UIPopup_GachaCharList.Btn_Checkbox"),
+    ],
+)
 def test_real_layouts_match_prototype(real_game, root, subpath, filename):
     start = time.perf_counter()
     layout = real_game.layout(root, subpath)
@@ -1207,9 +1420,6 @@ def test_real_spine_files_and_pages_stay_in_memory(real_game, kind, core):
     assert set(real_game.cache.root.rglob("*.cache")) == before
 
 
-
-
-
 @real_install
 def test_real_detail_layout_places_the_portrait(real_game):
     # the detail screen frames portraits on this node (web/js/portrait-view.js): its origin and a uniform scale
@@ -1239,11 +1449,27 @@ def test_real_lobby_menu_disabled_look(real_game):
 
 
 def test_layout_exports_loading_label_effect_colour_and_distance():
-    tree = export_layout(_fake_prefab({1: ("Root", 0), 2: ("Tip", 1)}, [
-        (100, 2, "UILabel", {"mText": "Loading", "mFontSize": 46, "mEffectStyle": 2,
-                             "mEffectColor": {"r": 0.1, "g": 0.2, "b": 0.3, "a": 0.9},
-                             "mEffectDistance": {"x": 2, "y": -3}}),
-    ]), "Root", {})
+    tree = export_layout(
+        _fake_prefab(
+            {1: ("Root", 0), 2: ("Tip", 1)},
+            [
+                (
+                    100,
+                    2,
+                    "UILabel",
+                    {
+                        "mText": "Loading",
+                        "mFontSize": 46,
+                        "mEffectStyle": 2,
+                        "mEffectColor": {"r": 0.1, "g": 0.2, "b": 0.3, "a": 0.9},
+                        "mEffectDistance": {"x": 2, "y": -3},
+                    },
+                ),
+            ],
+        ),
+        "Root",
+        {},
+    )
     label = subtree(tree, "Tip")["widgets"][0]
     assert label["effect"] == 2
     assert label["effectColor"] == "#1a334c/0.90"
@@ -1255,11 +1481,28 @@ def test_a_tweener_exports_what_it_animates_and_how():
     from bmpt.gameassets.layouts import _widget
 
     obj = SimpleNamespace(assets_file=SimpleNamespace(name="fixture", externals=[]))
-    tree = {"m_Script": {"m_FileID": 0, "m_PathID": 7}, "method": 0, "style": 1, "delay": 0.0, "duration": 3.0,
-            "from": {"x": -0.0, "y": 0.0, "z": 180.0}, "to": {"x": -0.0, "y": 0.0, "z": -180.0}, "quaternionLerp": 0}
+    tree = {
+        "m_Script": {"m_FileID": 0, "m_PathID": 7},
+        "method": 0,
+        "style": 1,
+        "delay": 0.0,
+        "duration": 3.0,
+        "from": {"x": -0.0, "y": 0.0, "z": 180.0},
+        "to": {"x": -0.0, "y": 0.0, "z": -180.0},
+        "quaternionLerp": 0,
+    }
     widget = _widget(obj, tree, {}, {7: "TweenRotation"})
-    assert widget == {"cls": "TweenRotation", "tween": {"from": [-0.0, 0.0, 180.0], "to": [-0.0, 0.0, -180.0],
-                                                          "duration": 3.0, "delay": 0.0, "style": 1, "method": 0}}
+    assert widget == {
+        "cls": "TweenRotation",
+        "tween": {
+            "from": [-0.0, 0.0, 180.0],
+            "to": [-0.0, 0.0, -180.0],
+            "duration": 3.0,
+            "delay": 0.0,
+            "style": 1,
+            "method": 0,
+        },
+    }
     alpha = _widget(obj, {**tree, "from": 0.0, "to": 1.0}, {}, {7: "TweenAlpha"})
     assert alpha["tween"]["from"] == 0.0 and alpha["tween"]["to"] == 1.0
 
@@ -1268,10 +1511,19 @@ def test_prefab_pin_gradient_is_exported_without_changing_its_white_tint():
     from bmpt.gameassets.layouts import _widget
 
     obj = SimpleNamespace(assets_file=SimpleNamespace(name="fixture", externals=[]))
-    tree = {"m_Script": {}, "mAtlas": {}, "mSpriteName": "Common_Icon_Pin_Detail", "mType": 1,
-            "mFlip": 0, "mApplyGradient": 1, "mGradientTop": {"r": 1., "g": .5, "b": 0., "a": 1.},
-            "mGradientBottom": {"r": .8, "g": .3, "b": 0., "a": 1.},
-            "mColor": {"r": 1., "g": 1., "b": 1., "a": 1.}, "mWidth": 38, "mHeight": 38}
+    tree = {
+        "m_Script": {},
+        "mAtlas": {},
+        "mSpriteName": "Common_Icon_Pin_Detail",
+        "mType": 1,
+        "mFlip": 0,
+        "mApplyGradient": 1,
+        "mGradientTop": {"r": 1.0, "g": 0.5, "b": 0.0, "a": 1.0},
+        "mGradientBottom": {"r": 0.8, "g": 0.3, "b": 0.0, "a": 1.0},
+        "mColor": {"r": 1.0, "g": 1.0, "b": 1.0, "a": 1.0},
+        "mWidth": 38,
+        "mHeight": 38,
+    }
     widget = _widget(obj, tree, {}, {})
     assert widget["gradient"] == ["#ff8000/1.00", "#cc4c00/1.00"]
     assert widget["color"] == "#ffffff/1.00"

@@ -23,8 +23,11 @@ from bmpt.webui.timing import Timings
 def reports(tmp_path, monkeypatch):
     root = tmp_path / "data"
     root.mkdir()
-    s = SimpleNamespace(state=SimpleNamespace(consent=True, spine_consent=False), timings=Timings(),
-                        library_dir=lambda: root / "library")
+    s = SimpleNamespace(
+        state=SimpleNamespace(consent=True, spine_consent=False),
+        timings=Timings(),
+        library_dir=lambda: root / "library",
+    )
     r = Reports(root, services=s)
     s.reports = r
     monkeypatch.setattr(diagnostics.updater, "current_version", lambda: "0.3.0")
@@ -47,20 +50,46 @@ def test_report_content_redaction_clipboard_and_selection(reports, monkeypatch):
     desktop.mkdir()
     r.secrets.add("actual-session-secret")
     r.game = {"found": True, "server": "global", "platform": "Windows", "resourceVersion": "1234"}
-    r.services.timings.record("page.info", .25)
+    r.services.timings.record("page.info", 0.25)
     library = r.services.library_dir()
     library.mkdir()
-    (library / "state.json").write_text(json.dumps({"mods": [
-        {"kind": "spr", "label": "Private Mod", "files": ["private.bundle"]}, {"kind": "spr"}, {"kind": "lobby"}]}))
-    r.frontend_event({"message": "failure in private.skel", "stack": "private.bundle", "page": "#/roster", "phase": "fonts"},
-                     {"page": "#/roster", "phase": "fonts", "webgl": {"supported": True, "renderer": "GPU 123"},
-                      "screen": {"width": 1920, "height": 1080, "scale": 2}, "userAgent": "WebKit/620"})
-    r.job_finished(SimpleNamespace(state="failed", kind="apply", error={"code": "spine_version", "params": {
-        "file": str(Path.home() / "private.bundle"), "token": "actual-session-secret"}}))
+    (library / "state.json").write_text(
+        json.dumps(
+            {
+                "mods": [
+                    {"kind": "spr", "label": "Private Mod", "files": ["private.bundle"]},
+                    {"kind": "spr"},
+                    {"kind": "lobby"},
+                ]
+            }
+        )
+    )
+    r.frontend_event(
+        {"message": "failure in private.skel", "stack": "private.bundle", "page": "#/roster", "phase": "fonts"},
+        {
+            "page": "#/roster",
+            "phase": "fonts",
+            "webgl": {"supported": True, "renderer": "GPU 123"},
+            "screen": {"width": 1920, "height": 1080, "scale": 2},
+            "userAgent": "WebKit/620",
+        },
+    )
+    r.job_finished(
+        SimpleNamespace(
+            state="failed",
+            kind="apply",
+            error={
+                "code": "spine_version",
+                "params": {"file": str(Path.home() / "private.bundle"), "token": "actual-session-secret"},
+            },
+        )
+    )
     for name in diagnostics.LOG_NAMES:
-        (r.data_dir / name).write_text(f"PrivateUser {Path.home()}/settings token=hidden-secret actual-session-secret\n"
-                                     "C:\\Users\\OtherPerson\\mods\\test.bundle /Users/Someone/mods/private.skel\n"
-                                     "Timing page.info: 0.250 s\n")
+        (r.data_dir / name).write_text(
+            f"PrivateUser {Path.home()}/settings token=hidden-secret actual-session-secret\n"
+            "C:\\Users\\OtherPerson\\mods\\test.bundle /Users/Someone/mods/private.skel\n"
+            "Timing page.info: 0.250 s\n"
+        )
     copied, selected = [], []
     monkeypatch.setattr(native, "copy_text", copied.append)
     monkeypatch.setattr(diagnostics.system, "reveal", selected.append)
@@ -79,19 +108,30 @@ def test_report_content_redaction_clipboard_and_selection(reports, monkeypatch):
     assert data["libraryCounts"] == {"spr": 2, "lobby": 1, "model": 0, "other": 0}
     assert data["lastFailedJob"]["code"] == "spine_version"
     assert data["lastFailedJob"]["ref"] == "E3025"
-    assert data["timings"]["page.info"]["seconds"] == .25
+    assert data["timings"]["page.info"]["seconds"] == 0.25
     assert data["running"] == []  # nothing unfinished while the report was taken
     assert data["frontend"]["webgl"]["renderer"] == "GPU 123"
     joined = "\n".join(files.values())
-    for secret in ("PrivateUser", "OtherPerson", "Someone", "Private Mod", "private.bundle", "private.skel",
-                   "actual-session-secret", "hidden-secret", str(Path.home())):
+    for secret in (
+        "PrivateUser",
+        "OtherPerson",
+        "Someone",
+        "Private Mod",
+        "private.bundle",
+        "private.skel",
+        "actual-session-secret",
+        "hidden-secret",
+        str(Path.home()),
+    ):
         assert secret not in joined
     assert "~" in joined and "[asset].bundle" in joined and "Redacted" in joined
 
 
 def test_report_caps_logs_keeps_ends_and_never_overwrites(reports):
     for name in diagnostics.LOG_NAMES:
-        (reports.data_dir / name).write_bytes(b"start\npassword=" + b"x" * (diagnostics.LOG_CAP * 2) + b"\nlast event\n")
+        (reports.data_dir / name).write_bytes(
+            b"start\npassword=" + b"x" * (diagnostics.LOG_CAP * 2) + b"\nlast event\n"
+        )
     first = reports.generate()
     second = reports.generate()
     assert first["path"] != second["path"]
@@ -135,7 +175,9 @@ def test_backend_hooks_save_in_data_dir_and_next_report_includes_error(reports, 
             raise RuntimeError("token=super-secret private.bundle")
         except RuntimeError as error:
             sys.excepthook(type(error), error, error.__traceback__)
-            threading.excepthook(SimpleNamespace(exc_type=type(error), exc_value=error, exc_traceback=error.__traceback__))
+            threading.excepthook(
+                SimpleNamespace(exc_type=type(error), exc_value=error, exc_traceback=error.__traceback__)
+            )
         assert len(list(reports.data_dir.glob("BAMT-report-*.zip"))) == 1
         assert called == []
         data = json.loads(contents(reports.generate())["report.json"])
@@ -185,13 +227,28 @@ def test_report_includes_the_current_import_list_and_ui_language(reports, monkey
     (reports.data_dir / "config.toml").write_text('[AppSettings]\nlanguage = "zh-CN"\n')
     handler = open_run_log(reports.log_path, set())
     handler.close()
-    rows = [{"id": str(i), "kind": "model", "state": "blocked", "reason": "required_assets_unmatched",
-             "error": {"code": "required_assets_unmatched", "params": {"file": "/private/Owner Mod.bundle", "name": "Body"}},
-             "files": [{"path": "/private/Owner Mod.bundle"}], "selected": False,
-             "source": {"server": "global", "platform": "android"},
-             "target": {"server": "global", "platform": "windows"}} for i in range(60)]
-    context = {"language": "zh-CN", "page": "#/import" if popup else "#/settings",
-               "batchImport": {"phase": "idle", "revision": 7, "rows": rows}}
+    rows = [
+        {
+            "id": str(i),
+            "kind": "model",
+            "state": "blocked",
+            "reason": "required_assets_unmatched",
+            "error": {
+                "code": "required_assets_unmatched",
+                "params": {"file": "/private/Owner Mod.bundle", "name": "Body"},
+            },
+            "files": [{"path": "/private/Owner Mod.bundle"}],
+            "selected": False,
+            "source": {"server": "global", "platform": "android"},
+            "target": {"server": "global", "platform": "windows"},
+        }
+        for i in range(60)
+    ]
+    context = {
+        "language": "zh-CN",
+        "page": "#/import" if popup else "#/settings",
+        "batchImport": {"phase": "idle", "revision": 7, "rows": rows},
+    }
     params = {"context": context}
     if popup:
         params["event"] = {"code": "required_assets_unmatched"}
@@ -219,22 +276,33 @@ def test_report_includes_the_current_import_list_and_ui_language(reports, monkey
 
 
 def test_report_uses_backend_import_snapshot_when_frontend_is_unavailable(reports):
-    reports.services.batch_import = SimpleNamespace(diagnostic_snapshot=lambda: {
-        "revision": 2, "rows": [{"id": "model", "kind": "model", "state": "blocked", "reason": "mod_target_unknown"}]})
+    reports.services.batch_import = SimpleNamespace(
+        diagnostic_snapshot=lambda: {
+            "revision": 2,
+            "rows": [{"id": "model", "kind": "model", "state": "blocked", "reason": "mod_target_unknown"}],
+        }
+    )
     data = json.loads(contents(reports.generate())["report.json"])
     assert data["batchImport"]["rows"][0]["reason"] == "mod_target_unknown"
     assert data["batchImport"]["rows"][0]["ref"] == "E3012"
 
 
 def test_import_row_references_keep_row_ids_and_match_details():
-    row = diagnostics.import_row({
-        "id": "row-1", "state": "incomplete", "reason": None,
-        "attempts": [{"code": "source_unknown", "server": "global"}]}, set())
+    row = diagnostics.import_row(
+        {
+            "id": "row-1",
+            "state": "incomplete",
+            "reason": None,
+            "attempts": [{"code": "source_unknown", "server": "global"}],
+        },
+        set(),
+    )
     assert row["id"] == "row-1"
     assert row["code"] == "mod_parts_missing" and row["ref"] == "E3006"
     assert row["attempts"] == [{"code": "source_unknown", "ref": "E3023", "server": "global"}]
-    row = diagnostics.import_row({"id": "row-2", "reason": "unreadable",
-                                  "error": {"code": "bundle_invalid", "ref": "E3999"}}, set())
+    row = diagnostics.import_row(
+        {"id": "row-2", "reason": "unreadable", "error": {"code": "bundle_invalid", "ref": "E3999"}}, set()
+    )
     assert row["id"] == "row-2"
     assert row["code"] == "bundle_invalid" and row["ref"] == "E3999"
 
@@ -248,8 +316,16 @@ def test_frontend_and_trigger_references_preserve_supplied_backend_values(report
 
 
 def test_import_snapshot_bounds_large_lists_with_explicit_omission_count(reports):
-    rows = [{"id": str(i), "kind": "model", "state": "blocked", "reason": "conversion_failed",
-             "params": {"error": "details " * 1000}} for i in range(2000)]
+    rows = [
+        {
+            "id": str(i),
+            "kind": "model",
+            "state": "blocked",
+            "reason": "conversion_failed",
+            "params": {"error": "details " * 1000},
+        }
+        for i in range(2000)
+    ]
     reports.frontend_event(context={"batchImport": {"rows": rows}})
     result = reports.generate()
     files = contents(result)
@@ -292,10 +368,16 @@ class SimpleNamespaceContext:
         pass
 
 
-@pytest.mark.parametrize("versions,expected,supported", [({}, None, False),
-    ({(1, 160): "0.0.0.0"}, None, False), ({(2, 192): "104.0.1.1"}, "104.0.1.1", False),
-    ({(1, 160): "110.0.1.1", (2, 192): "120.0.2.1"}, "120.0.2.1", True),
-    ({(1, 160): "bad"}, None, False)])
+@pytest.mark.parametrize(
+    "versions,expected,supported",
+    [
+        ({}, None, False),
+        ({(1, 160): "0.0.0.0"}, None, False),
+        ({(2, 192): "104.0.1.1"}, "104.0.1.1", False),
+        ({(1, 160): "110.0.1.1", (2, 192): "120.0.2.1"}, "120.0.2.1", True),
+        ({(1, 160): "bad"}, None, False),
+    ],
+)
 def test_webview2_registry(versions, expected, supported):
     registry = Registry(versions)
     version = native.webview2_version(registry)
@@ -308,13 +390,16 @@ def test_missing_webview2_fails_before_window_creation(reports, monkeypatch):
     monkeypatch.setattr(native, "webview2_version", lambda: None)
     calls = []
     monkeypatch.setattr(native, "startup_failure", lambda r, error, **kw: calls.append((r, kw)))
-    monkeypatch.setitem(sys.modules, "webview", SimpleNamespace(create_window=lambda *a, **kw: pytest.fail("window created")))
+    monkeypatch.setitem(
+        sys.modules, "webview", SimpleNamespace(create_window=lambda *a, **kw: pytest.fail("window created"))
+    )
     main._run_window(SimpleNamespace(reports=reports), SimpleNamespace(url="unused"), False)
     assert calls == [(reports, {"runtime": True})]
 
 
 def test_native_fallback_generates_report_and_localized_message(reports, monkeypatch):
     from ba_modding_toolkit.i18n import i18n_manager
+
     old = i18n_manager.lang
     messages = []
     monkeypatch.setattr(native, "message_box", lambda *args: messages.append(args))
@@ -377,8 +462,14 @@ def test_restart_safe_refuses_writers_and_restarts_only_after_lock_release(monke
     monkeypatch.setattr(diagnostics.updater, "is_compiled", lambda: True)
     monkeypatch.setattr(main.devmode, "active", lambda: False)
     requested = []
-    r = SimpleNamespace(jobs=SimpleNamespace(busy=lambda: True, reserve_quit=lambda: None, cancel_quit=lambda: None), window=object(), quit_handle=None,
-                        restart_requested=False, quit=lambda *, restart=False: requested.append(restart), timings=Timings())
+    r = SimpleNamespace(
+        jobs=SimpleNamespace(busy=lambda: True, reserve_quit=lambda: None, cancel_quit=lambda: None),
+        window=object(),
+        quit_handle=None,
+        restart_requested=False,
+        quit=lambda *, restart=False: requested.append(restart),
+        timings=Timings(),
+    )
     rpc = build_api(r)
     error = rpc.call("app.restartSafe", {})["error"]
     assert error["code"] == "busy"
@@ -390,12 +481,15 @@ def test_restart_safe_refuses_writers_and_restarts_only_after_lock_release(monke
     order = []
     monkeypatch.setattr(main, "EXE_DIR", tmp_path)
     monkeypatch.setattr(main.devmode, "check_read", lambda _: None)
-    monkeypatch.setattr(main, "InstanceLock", lambda _: SimpleNamespace(acquire=lambda: True,
-                                                                       release=lambda: order.append("released")))
+    monkeypatch.setattr(
+        main, "InstanceLock", lambda _: SimpleNamespace(acquire=lambda: True, release=lambda: order.append("released"))
+    )
     monkeypatch.setattr(main, "_run", lambda args, instance: args.safe_mode)
     from bmpt.webui import system
+
     monkeypatch.setattr(system, "program_command", lambda: ["test-app"])
     import subprocess
+
     monkeypatch.setattr(subprocess, "Popen", lambda command: order.append(command))
     main.main(["--safe-mode", "--browser", "--mute"])
     assert order == ["released", ["test-app", "--safe-mode", "--browser", "--mute"]]
@@ -405,6 +499,7 @@ def test_unexpected_rpc_and_job_exceptions_create_reports(reports):
     from bmpt.webui.events import EventBus
     from bmpt.webui.jobs import JobRunner
     from bmpt.webui.rpc import RpcRegistry
+
     rpc = RpcRegistry(on_exception=reports.backend_exception)
 
     def fail(**kwargs):
@@ -430,11 +525,13 @@ def test_unexpected_rpc_and_job_exceptions_create_reports(reports):
 
 
 def test_quoted_mod_filenames_with_spaces_and_json_credentials_are_redacted():
-    text = diagnostics.private_text('Upload "Private Mod Name.bundle" and \'Another Mod.skel\' token=hidden', set())
+    text = diagnostics.private_text("Upload \"Private Mod Name.bundle\" and 'Another Mod.skel' token=hidden", set())
     assert "Private Mod Name" not in text and "Another Mod" not in text and "hidden" not in text
     assert ".bundle" in text and ".skel" in text
     assert diagnostics.clean({"Authorization": "Bearer abc", "params": {"api_key": "secret"}}, set()) == {
-        "Authorization": "[redacted]", "params": {"api_key": "[redacted]"}}
+        "Authorization": "[redacted]",
+        "params": {"api_key": "[redacted]"},
+    }
 
 
 def test_large_report_fields_and_log_bytes_are_bounded(reports):
@@ -462,8 +559,10 @@ def test_failed_wsgi_request_writes_automatic_report(reports):
 
     app = WebApp(RpcRegistry(), EventBus(), assets=fail, token="test", on_exception=reports.backend_exception)
     status = []
-    app({"REQUEST_METHOD": "GET", "PATH_INFO": "/asset/ui/atlases.json", "HTTP_X_BAMT_TOKEN": "test"},
-        lambda code, headers: status.append(code))
+    app(
+        {"REQUEST_METHOD": "GET", "PATH_INFO": "/asset/ui/atlases.json", "HTTP_X_BAMT_TOKEN": "test"},
+        lambda code, headers: status.append(code),
+    )
     assert status == ["500 Internal Server Error"]
     assert len(list(reports.data_dir.glob("BAMT-report-*.zip"))) == 1
 
@@ -479,6 +578,7 @@ def test_log_header_redacts_home(reports):
 def test_build_propagates_safe_mode_and_html_does_not_wait_for_game_cache(tmp_path, monkeypatch):
     from bmpt.config import Settings
     from bmpt.webui.services import Services
+
     s = Services(Settings(tmp_path / "config.toml"), tmp_path, safe_mode=True)
     monkeypatch.setattr(main, "Services", lambda **kwargs: s if kwargs["safe_mode"] else pytest.fail("normal mode"))
     monkeypatch.setattr(main, "Server", lambda app, port: SimpleNamespace(app=app, port=12345))
@@ -504,8 +604,14 @@ def test_automatic_retention_never_removes_user_reports(reports):
     assert len(list(reports.data_dir.glob("*-auto*.zip"))) == 3
 
 
-@pytest.mark.parametrize("value", ["Private Mod Name.bundle", "C:/Mods/Private Folder/Private Mod Name.bundle",
-                                  "/opt/Private Folder/Private Mod Name.bundle"])
+@pytest.mark.parametrize(
+    "value",
+    [
+        "Private Mod Name.bundle",
+        "C:/Mods/Private Folder/Private Mod Name.bundle",
+        "/opt/Private Folder/Private Mod Name.bundle",
+    ],
+)
 def test_review_asset_values_and_unquoted_log_paths_are_wholly_redacted(value):
     assert diagnostics.clean({"file": value}, set()) == {"file": "[asset].bundle"}
     text = diagnostics.private_text(f"Cannot open {value}\nTiming boot: 1 s", set())
@@ -515,15 +621,23 @@ def test_review_asset_values_and_unquoted_log_paths_are_wholly_redacted(value):
 def test_review_encoded_identities_are_scrubbed_everywhere(reports, monkeypatch):
     import socket
     from urllib.parse import quote
+
     home = Path("/Users/\u5c71\u7530")
     monkeypatch.setattr(Path, "home", lambda: home)
     monkeypatch.setattr(diagnostics.getpass, "getuser", lambda: home.name)
     monkeypatch.setattr(socket, "gethostname", lambda: "Private-Mac")
     monkeypatch.setattr(diagnostics.platform, "node", lambda: "Private-Mac")
     monkeypatch.setenv("COMPUTERNAME", "Private-PC")
-    forms = [str(home), json.dumps(str(home))[1:-1], quote(str(home)), quote(str(home), safe=""),
-             quote(quote(str(home), safe=""), safe=""), json.dumps(home.name)[1:-1],
-             "Private-Mac", "Private-PC"]
+    forms = [
+        str(home),
+        json.dumps(str(home))[1:-1],
+        quote(str(home)),
+        quote(str(home), safe=""),
+        quote(quote(str(home), safe=""), safe=""),
+        json.dumps(home.name)[1:-1],
+        "Private-Mac",
+        "Private-PC",
+    ]
     payload = "\n".join(forms)
     for name in diagnostics.LOG_NAMES:
         (reports.data_dir / name).write_text(payload)
@@ -535,7 +649,9 @@ def test_review_encoded_identities_are_scrubbed_everywhere(reports, monkeypatch)
 
 def test_review_short_secrets_keys_and_version_survive(reports, monkeypatch):
     reports.secrets.update({"a", "0", "0.3.0", "long-secret"})
-    value = diagnostics.clean({"phase": "data", "long-secret": "long-secret", "message": "long-secret long-secret-extra"}, reports.secrets)
+    value = diagnostics.clean(
+        {"phase": "data", "long-secret": "long-secret", "message": "long-secret long-secret-extra"}, reports.secrets
+    )
     assert value == {"phase": "data", "long-secret": "[redacted]", "message": "[redacted] long-secret-extra"}
     monkeypatch.setattr(diagnostics.updater, "current_version", lambda: "0.3.0-development")
     reports.secrets.add("0.3.0-development")
@@ -552,6 +668,7 @@ def test_review_unwritable_logging_keeps_hooks_reports_and_native_alert(reports,
     log = reports.data_dir / "webui.log"
     log.write_text("old log")
     import builtins
+
     original_mkdir, original_open, original_replace = Path.mkdir, builtins.open, Path.replace
 
     def mkdir(path, *args, **kwargs):
@@ -573,15 +690,21 @@ def test_review_unwritable_logging_keeps_hooks_reports_and_native_alert(reports,
     monkeypatch.setattr(builtins, "open", open_file)
     monkeypatch.setattr(Path, "replace", replace)
     previous_hook, original_log = sys.excepthook, main.open_run_log
+
     def open_log(*args, **kwargs):
         assert sys.excepthook is not previous_hook
         return original_log(*args, **kwargs)
+
     monkeypatch.setattr(main, "open_run_log", open_log)
     entered, messages = [], []
+
     def serve(args, instance, r, handler):
         entered.append(handler)
-        handler.emit(logging.makeLogRecord({"msg": "fallback log works", "levelno": logging.ERROR, "levelname": "ERROR"}))
+        handler.emit(
+            logging.makeLogRecord({"msg": "fallback log works", "levelno": logging.ERROR, "levelname": "ERROR"})
+        )
         raise RuntimeError("service startup failed")
+
     monkeypatch.setattr(main, "_serve", serve)
     monkeypatch.setattr(native, "message_box", lambda *args: messages.append(args))
     assert main._run(SimpleNamespace(safe_mode=False, token=None, serve=False), SimpleNamespace()) is False
@@ -602,12 +725,20 @@ def test_review_native_alert_survives_report_failure(reports, monkeypatch, runti
     assert ".zip" not in messages[0][1]
 
 
-@pytest.mark.parametrize("compiled,development,serve", [(False, False, False), (True, True, False), (True, False, True)])
+@pytest.mark.parametrize(
+    "compiled,development,serve", [(False, False, False), (True, True, False), (True, False, True)]
+)
 def test_review_restart_safe_refuses_unsupported_launches(monkeypatch, compiled, development, serve):
     monkeypatch.setattr(diagnostics.updater, "is_compiled", lambda: compiled)
     monkeypatch.setattr(main.devmode, "active", lambda: development)
-    s = SimpleNamespace(jobs=SimpleNamespace(busy=lambda: False), window=None if serve else object(),
-                        quit_handle=None, restart_requested=False, timings=Timings(), safe_mode=False)
+    s = SimpleNamespace(
+        jobs=SimpleNamespace(busy=lambda: False),
+        window=None if serve else object(),
+        quit_handle=None,
+        restart_requested=False,
+        timings=Timings(),
+        safe_mode=False,
+    )
     result = build_api(s).call("app.restartSafe", {})
     assert result["error"]["code"] == "safe_restart_unavailable"
     assert result["error"]["ref"] == "E1018"
@@ -617,12 +748,15 @@ def test_review_restart_safe_refuses_unsupported_launches(monkeypatch, compiled,
 
 def test_review_optional_failures_and_blocking_reads_yield_report(reports, monkeypatch):
     import time
+
     release = threading.Event()
     entered = []
+
     def blocked(*args):
         entered.append(True)
         release.wait(2)
         return {}
+
     monkeypatch.setattr(reports.services, "library_dir", lambda: (_ for _ in ()).throw(RuntimeError("bad settings")))
     monkeypatch.setattr(reports.services.timings, "snapshot", blocked)
     monkeypatch.setattr(native, "engine_info", blocked)
@@ -637,6 +771,7 @@ def test_review_optional_failures_and_blocking_reads_yield_report(reports, monke
 
 def test_review_consent_uses_cache_without_file_lock(reports, monkeypatch):
     from bmpt.webui.state import UiState
+
     state = UiState(reports.data_dir / "webui.json")
     state.set_consent(True)
     state.set("spine_consent", False)
@@ -653,8 +788,16 @@ def test_review_consent_uses_cache_without_file_lock(reports, monkeypatch):
 
 
 def test_review_popup_report_records_error_code_and_private_parameters(reports):
-    result = build_api(reports.services).call("app.report", {"event": {"kind": "popup", "code": "library_io_error",
-        "params": {"file": "Private Mod Name.bundle", "token": "secret-value", "operation": "read"}}})
+    result = build_api(reports.services).call(
+        "app.report",
+        {
+            "event": {
+                "kind": "popup",
+                "code": "library_io_error",
+                "params": {"file": "Private Mod Name.bundle", "token": "secret-value", "operation": "read"},
+            }
+        },
+    )
     assert "result" in result
     error = json.loads(contents(result["result"])["report.json"])["frontendErrors"][-1]
     assert error["code"] == "library_io_error"
@@ -666,6 +809,7 @@ def test_review_recovery_embeds_shared_plain_style(reports):
     from bmpt.webui.server import WebApp, WEB_DIR
     from bmpt.webui.events import EventBus
     from bmpt.webui.rpc import RpcRegistry
+
     body = b"".join(WebApp(RpcRegistry(), EventBus())._static("/", lambda *args: None)).decode()
     style = (WEB_DIR / "css" / "fallback.css").read_text()
     assert style in body
@@ -676,13 +820,16 @@ def test_review_recovery_embeds_shared_plain_style(reports):
 
 def test_review_collection_deadline_and_stuck_worker_count(reports, monkeypatch):
     import time
+
     release = threading.Event()
     calls = []
+
     def blocked():
         calls.append(True)
         release.wait(5)
-    monkeypatch.setattr(diagnostics, "READ_TIMEOUT", .05)
-    monkeypatch.setattr(diagnostics, "COLLECTION_TIMEOUT", .2)
+
+    monkeypatch.setattr(diagnostics, "READ_TIMEOUT", 0.05)
+    monkeypatch.setattr(diagnostics, "COLLECTION_TIMEOUT", 0.2)
     monkeypatch.setattr(native, "engine_info", blocked)
     monkeypatch.setattr(native, "report_folders", blocked)
     monkeypatch.setattr(reports.services.timings, "snapshot", blocked)
@@ -693,7 +840,7 @@ def test_review_collection_deadline_and_stuck_worker_count(reports, monkeypatch)
             started = time.monotonic()
             result = reports.generate()
             assert Path(result["path"]).is_file()
-            assert time.monotonic() - started < .5
+            assert time.monotonic() - started < 0.5
         assert len(calls) <= 5
     finally:
         release.set()
@@ -701,11 +848,14 @@ def test_review_collection_deadline_and_stuck_worker_count(reports, monkeypatch)
 
 def test_review_held_diagnostic_lock_does_not_block_report_rpc(reports):
     import time
+
     held, release = threading.Event(), threading.Event()
+
     def hold():
         with reports._lock:
             held.set()
             release.wait(5)
+
     worker = threading.Thread(target=hold, daemon=True)
     worker.start()
     assert held.wait(1)
@@ -721,20 +871,29 @@ def test_review_held_diagnostic_lock_does_not_block_report_rpc(reports):
 def test_review_popup_trigger_survives_a_full_error_rate_limit(reports):
     for i in range(10):
         reports.frontend_event({"message": str(i)})
-    result = build_api(reports.services).call("app.report", {"event": {
-        "kind": "popup", "code": "busy", "params": {"file": "Private Mod.bundle"}}})["result"]
+    result = build_api(reports.services).call(
+        "app.report", {"event": {"kind": "popup", "code": "busy", "params": {"file": "Private Mod.bundle"}}}
+    )["result"]
     data = json.loads(contents(result)["report.json"])
-    assert data["triggeringError"] == {"kind": "popup", "code": "busy", "ref": "E1002", "params": {"file": "[asset].bundle"}}
+    assert data["triggeringError"] == {
+        "kind": "popup",
+        "code": "busy",
+        "ref": "E1002",
+        "params": {"file": "[asset].bundle"},
+    }
     assert "busy" in data["summary"]
 
 
 def test_review_stderr_fallback_when_no_log_file_is_writable(reports, monkeypatch):
     import builtins
+
     previous = builtins.open
+
     def denied(path, mode="r", *args, **kwargs):
         if str(path).endswith(".log") and mode == "w":
             raise PermissionError("logs unavailable")
         return previous(path, mode, *args, **kwargs)
+
     monkeypatch.setattr(builtins, "open", denied)
     handler = open_run_log(reports.data_dir / "webui.log", set())
     try:
@@ -745,31 +904,41 @@ def test_review_stderr_fallback_when_no_log_file_is_writable(reports, monkeypatc
 
 
 def test_review_structured_filenames_keep_only_extensions():
-    assert diagnostics.clean({"file": "Private Settings.txt", "paths": ["Private Archive.tar.gz", "Private Folder"],
-                              "filename": "Private Mod.bundle.backup"}, set()) == {
-        "file": "[asset].txt", "paths": ["[asset].gz", "[asset]"], "filename": "[asset].bundle.backup"}
+    assert diagnostics.clean(
+        {
+            "file": "Private Settings.txt",
+            "paths": ["Private Archive.tar.gz", "Private Folder"],
+            "filename": "Private Mod.bundle.backup",
+        },
+        set(),
+    ) == {"file": "[asset].txt", "paths": ["[asset].gz", "[asset]"], "filename": "[asset].bundle.backup"}
 
 
 def test_batch_failure_is_redacted_in_session_log_before_report(reports):
     from bmpt.errors import ServiceError
     from bmpt.webui.batch_import import failure_detail
-    path = reports.data_dir / 'webui.log'
+
+    path = reports.data_dir / "webui.log"
     handler = logging.FileHandler(path)
-    logger = logging.getLogger('bmpt.webui.batch_import')
+    logger = logging.getLogger("bmpt.webui.batch_import")
     logger.addHandler(handler)
     events = []
-    error = ServiceError('required_asset_extract_failed', file='/Users/PrivateUser/Mods/Private Model.bundle',
-                         name='Body', error='PrivateUser could not read /Users/PrivateUser/Private Image.png')
+    error = ServiceError(
+        "required_asset_extract_failed",
+        file="/Users/PrivateUser/Mods/Private Model.bundle",
+        name="Body",
+        error="PrivateUser could not read /Users/PrivateUser/Private Image.png",
+    )
     try:
-        detail = failure_detail(error, ['/Users/PrivateUser/Mods/Private Model.bundle'], events.append)
+        detail = failure_detail(error, ["/Users/PrivateUser/Mods/Private Model.bundle"], events.append)
     finally:
         logger.removeHandler(handler)
         handler.close()
     assert detail == error.to_json()
     for text in [path.read_text(), *events]:
-        assert 'PrivateUser' not in text and '/Users/' not in text
-        assert 'Private Model' not in text and 'Private Image' not in text
-        assert '[asset].bundle' in text and 'required_asset_extract_failed' in text
+        assert "PrivateUser" not in text and "/Users/" not in text
+        assert "Private Model" not in text and "Private Image" not in text
+        assert "[asset].bundle" in text and "required_asset_extract_failed" in text
 
 
 def test_game_names_stay_and_log_heads_survive_asset_redaction():
@@ -781,18 +950,24 @@ def test_game_names_stay_and_log_heads_survive_asset_redaction():
     assert diagnostics.clean({"files": f"{official}, Private Mod.bundle"}, set()) == {"files": "[asset].bundle"}
     line = "2026-11-06 19:20:13,123 WARNING bmpt.gameassets.service: Private Voice.wav not found"
     assert diagnostics.private_text(line, set()) == (
-        "2026-11-06 19:20:13,123 WARNING bmpt.gameassets.service: [asset].wav not found")
-    text = diagnostics.private_text(f'Preview failed: {{"url": "/asset/model/ch0258.glb", "file": "{official}"}}', set())
+        "2026-11-06 19:20:13,123 WARNING bmpt.gameassets.service: [asset].wav not found"
+    )
+    text = diagnostics.private_text(
+        f'Preview failed: {{"url": "/asset/model/ch0258.glb", "file": "{official}"}}', set()
+    )
     assert "/asset/model/ch0258.glb" in text and official in text
 
 
-
-@pytest.mark.parametrize("official", [
-    "assets-_mx-characters-ch0258-_mxdependency-2024-11-18_004_assets_all_3218880749.bundle",
-    "db_02_beachstage_01_mxload-2024-11-18_scenes_all_2025532204.bundle",
-    "assets-_mx-scenes-raid-netzach's-_mxdependency-meshes-2026-04-06_assets_all_2240899571.bundle",
-    "6befbbb5c811cb1575f22145d4f0a954_unitybuiltinshaders_3925052273.bundle",
-    "db_02_beachstage_01_mxload-2024-11-18_scenes_all_2025532204.bundle.backup"])
+@pytest.mark.parametrize(
+    "official",
+    [
+        "assets-_mx-characters-ch0258-_mxdependency-2024-11-18_004_assets_all_3218880749.bundle",
+        "db_02_beachstage_01_mxload-2024-11-18_scenes_all_2025532204.bundle",
+        "assets-_mx-scenes-raid-netzach's-_mxdependency-meshes-2026-04-06_assets_all_2240899571.bundle",
+        "6befbbb5c811cb1575f22145d4f0a954_unitybuiltinshaders_3925052273.bundle",
+        "db_02_beachstage_01_mxload-2024-11-18_scenes_all_2025532204.bundle.backup",
+    ],
+)
 def test_every_form_of_official_bundle_name_stays(official):
     # Scene bundles, names with an apostrophe and Unity's built-in shaders are the game's own names too
     assert diagnostics.private_text(f"Refused {official} in D:/Games", set()) == f"Refused {official} in D:/Games"
@@ -801,8 +976,15 @@ def test_every_form_of_official_bundle_name_stays(official):
     assert diagnostics.clean({"files": f"{official}, {official}"}, set()) == {"files": f"{official}, {official}"}
 
 
-@pytest.mark.parametrize("private", ["Private Mod_scenes_all.bundle", "Private_Mod's_scenes_all_x.bundle",
-                                     "Private_unitybuiltinshaders_1.bundle", "'Private Mod.bundle'"])
+@pytest.mark.parametrize(
+    "private",
+    [
+        "Private Mod_scenes_all.bundle",
+        "Private_Mod's_scenes_all_x.bundle",
+        "Private_unitybuiltinshaders_1.bundle",
+        "'Private Mod.bundle'",
+    ],
+)
 def test_names_outside_the_games_forms_stay_redacted(private):
     assert "Private" not in diagnostics.private_text(f"Refused {private}", set())
     assert diagnostics.clean({"file": private.strip("'")}, set()) == {"file": "[asset].bundle"}
@@ -817,6 +999,7 @@ def test_game_name_search_stays_linear_on_long_names_with_apostrophes():
 
 # --- game files that differ from Steam's list ---
 
+
 def steam_install(tmp_path: Path, listed: dict[str, bytes], present: dict[str, bytes], name: str = "Steam") -> Path:
     """A synthetic Steam library holding the game: Steam's app manifest and depot manifest list ``listed`` (GameData
     names, or Preload ones given as ``Preload/<name>``), the resource folders hold ``present``."""
@@ -826,13 +1009,16 @@ def steam_install(tmp_path: Path, listed: dict[str, bytes], present: dict[str, b
     install = library / "steamapps" / "common" / "BlueArchive"
     for folder in ("GameData", "Preload"):
         (install / RESOURCE / folder / "Windows").mkdir(parents=True)
-    path = lambda n: install / RESOURCE / (f"Preload/Windows/{n[8:]}" if n.startswith("Preload/") else f"GameData/Windows/{n}")
+    path = lambda n: (
+        install / RESOURCE / (f"Preload/Windows/{n[8:]}" if n.startswith("Preload/") else f"GameData/Windows/{n}")
+    )
     for n, data in present.items():
         path(n).write_bytes(data)
     (library / "steamapps" / "appmanifest_3557620.acf").write_text(app_manifest())
     (library / "depotcache").mkdir()
-    (library / "depotcache" / "3557621_7791673520712697115.manifest").write_bytes(depot_manifest(
-        {path(n).relative_to(install).as_posix(): data for n, data in listed.items()}))
+    (library / "depotcache" / "3557621_7791673520712697115.manifest").write_bytes(
+        depot_manifest({path(n).relative_to(install).as_posix(): data for n, data in listed.items()})
+    )
     return install
 
 
@@ -844,29 +1030,50 @@ def steam_reports(reports):
     s.installs = []
     s.snapshot = SimpleNamespace(status=lambda: {"installs": s.installs})
     from bmpt import steam_records
+
     s.steam_files = steam_records.OfficialFiles()
     return reports
 
 
 def test_report_lists_the_game_files_that_differ_from_steams_list(steam_reports, tmp_path):
-    same, changed, missing = "one_assets_all_1.bundle", "two_assets_all_2.bundle", "three_mxload-2024_scenes_all_3.bundle"
-    install = steam_install(tmp_path, {same: b"same", changed: b"orig", missing: b"gone",
-                                       "Preload/pre_assets_all_4.bundle": b"pre"},
-                            {same: b"same", changed: b"modded", "Preload/pre_assets_all_4.bundle": b"pre",
-                             "old-2023_assets_all_9.bundle": b"old", "My Private Mod.bundle": b"mod",
-                             "notes.txt": b"x", f"{same}.backup": b"x"})
+    same, changed, missing = (
+        "one_assets_all_1.bundle",
+        "two_assets_all_2.bundle",
+        "three_mxload-2024_scenes_all_3.bundle",
+    )
+    install = steam_install(
+        tmp_path,
+        {same: b"same", changed: b"orig", missing: b"gone", "Preload/pre_assets_all_4.bundle": b"pre"},
+        {
+            same: b"same",
+            changed: b"modded",
+            "Preload/pre_assets_all_4.bundle": b"pre",
+            "old-2023_assets_all_9.bundle": b"old",
+            "My Private Mod.bundle": b"mod",
+            "notes.txt": b"x",
+            f"{same}.backup": b"x",
+        },
+    )
     other = tmp_path / "Other" / "BlueArchive"  # an install without Steam's list is left out
     other.mkdir(parents=True)
-    steam_reports.services.installs = [{"id": "a1b2c3d4e5f6", "server": "global", "folder": str(install)},
-                                       {"id": "0123456789ab", "server": "global", "folder": str(other)}]
+    steam_reports.services.installs = [
+        {"id": "a1b2c3d4e5f6", "server": "global", "folder": str(install)},
+        {"id": "0123456789ab", "server": "global", "folder": str(other)},
+    ]
     result = steam_reports.generate()
     data = json.loads(contents(result)["report.json"])
     assert data["consent"]["scan"] is True
-    assert data["gameFiles"] == [{
-        "install": "a1b2c3d4e5f6", "server": "global", "listed": 4, "present": 5,
-        "sizeChanged": {"count": 1, "names": [changed]},
-        "missing": {"count": 1, "names": [missing]},  # Steam's names stay, whatever their form
-        "notListed": {"count": 2, "names": ["old-2023_assets_all_9.bundle"]}}]  # other names are left out
+    assert data["gameFiles"] == [
+        {
+            "install": "a1b2c3d4e5f6",
+            "server": "global",
+            "listed": 4,
+            "present": 5,
+            "sizeChanged": {"count": 1, "names": [changed]},
+            "missing": {"count": 1, "names": [missing]},  # Steam's names stay, whatever their form
+            "notListed": {"count": 2, "names": ["old-2023_assets_all_9.bundle"]},
+        }
+    ]  # other names are left out
     text = "\n".join(contents(result).values())
     assert "Private" not in text and str(tmp_path) not in text and "BlueArchive" not in text
 
@@ -877,7 +1084,7 @@ def test_report_bounds_the_names_of_each_group_but_counts_them_all(steam_reports
     steam_reports.services.installs = [{"id": "a1b2c3d4e5f6", "server": "global", "folder": str(install)}]
     (game,) = steam_reports.snapshot()["gameFiles"]
     assert game["missing"]["count"] == 105 and game["present"] == 0
-    assert game["missing"]["names"] == sorted(listed)[:diagnostics.GAME_FILE_NAMES]
+    assert game["missing"]["names"] == sorted(listed)[: diagnostics.GAME_FILE_NAMES]
 
 
 def test_report_reads_no_game_files_without_the_check_game_files_consent(steam_reports, tmp_path, monkeypatch):

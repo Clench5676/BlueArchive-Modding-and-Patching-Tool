@@ -19,8 +19,15 @@ import pytest
 import bmpt
 from bmpt import engine
 from bmpt.engine import (
-    REPLACEABLE_ASSET_TYPES, Bundle, ContNameTypeKey, CRCUtils, SaveOptions, get_search_dirs, parse_filename,
-    parse_hex_bytes, spine_kind,
+    REPLACEABLE_ASSET_TYPES,
+    Bundle,
+    ContNameTypeKey,
+    CRCUtils,
+    SaveOptions,
+    get_search_dirs,
+    parse_filename,
+    parse_hex_bytes,
+    spine_kind,
 )
 
 GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-game")
@@ -30,6 +37,7 @@ ENGINE_FILE = APP_DIR / "engine.py"
 
 
 # --- the facade ---
+
 
 def test_every_export_is_the_engine_object_itself():
     assert set(engine.__all__) == {"ENGINE_PACKAGE", *engine._EXPORTS}
@@ -112,29 +120,66 @@ def test_app_modules_reach_the_engine_only_through_the_facade():
 
 NAMES = {
     # numbered part after the date
-    "assets-_mx-spinecharacters-ch0063_spr-_mxdependency-2024-11-18_002_assets_all_895560895.bundle":
-        ("spinecharacters", "ch0063_spr", "002", "2024-11-18", "895560895",
-         "assets-_mx-spinecharacters-ch0063_spr-_mxdependency-"),
-    "assets-_mx-spinelobbies-ch0063_home-_mxdependency-2024-11-18_001_assets_all_8501068.bundle":
-        ("spinelobbies", "ch0063_home", "001", "2024-11-18", "8501068",
-         "assets-_mx-spinelobbies-ch0063_home-_mxdependency-"),
-    "assets-_mx-characters-ch0063-_mxdependency-2025-07-25_000_assets_all_3434860653.bundle":
-        ("characters", "ch0063", "000", "2025-07-25", "3434860653", "assets-_mx-characters-ch0063-_mxdependency-"),
+    "assets-_mx-spinecharacters-ch0063_spr-_mxdependency-2024-11-18_002_assets_all_895560895.bundle": (
+        "spinecharacters",
+        "ch0063_spr",
+        "002",
+        "2024-11-18",
+        "895560895",
+        "assets-_mx-spinecharacters-ch0063_spr-_mxdependency-",
+    ),
+    "assets-_mx-spinelobbies-ch0063_home-_mxdependency-2024-11-18_001_assets_all_8501068.bundle": (
+        "spinelobbies",
+        "ch0063_home",
+        "001",
+        "2024-11-18",
+        "8501068",
+        "assets-_mx-spinelobbies-ch0063_home-_mxdependency-",
+    ),
+    "assets-_mx-characters-ch0063-_mxdependency-2025-07-25_000_assets_all_3434860653.bundle": (
+        "characters",
+        "ch0063",
+        "000",
+        "2025-07-25",
+        "3434860653",
+        "assets-_mx-characters-ch0063-_mxdependency-",
+    ),
     # resource type before the date: the prefix leaves it out, so both forms of a core share one prefix
-    "assets-_mx-characters-ch0305-_mxdependency-textures-2026-04-06_assets_all_4018753285.bundle":
-        ("characters", "ch0305", "textures", "2026-04-06", "4018753285",
-         "assets-_mx-characters-ch0305-_mxdependency-"),
+    "assets-_mx-characters-ch0305-_mxdependency-textures-2026-04-06_assets_all_4018753285.bundle": (
+        "characters",
+        "ch0305",
+        "textures",
+        "2026-04-06",
+        "4018753285",
+        "assets-_mx-characters-ch0305-_mxdependency-",
+    ),
     # preload group
-    "prologdepengroup-assets-_mx-3dobject-lope-_mxprolog-2024-11-18_assets_all_1299732014.bundle":
-        ("3dobject", "lope", None, "2024-11-18", "1299732014",
-         "prologdepengroup-assets-_mx-3dobject-lope-_mxprolog-"),
+    "prologdepengroup-assets-_mx-3dobject-lope-_mxprolog-2024-11-18_assets_all_1299732014.bundle": (
+        "3dobject",
+        "lope",
+        None,
+        "2024-11-18",
+        "1299732014",
+        "prologdepengroup-assets-_mx-3dobject-lope-_mxprolog-",
+    ),
     # a generic bundle (the library's "other" kind, keyed by prefix and resource type)
-    "uis-01_common-14_charactercollect-_mxload-2024-11-18_000_assets_all_159150400.bundle":
-        ("uis", "01_common-14_charactercollect", "000", "2024-11-18", "159150400",
-         "uis-01_common-14_charactercollect-_mxload-"),
+    "uis-01_common-14_charactercollect-_mxload-2024-11-18_000_assets_all_159150400.bundle": (
+        "uis",
+        "01_common-14_charactercollect",
+        "000",
+        "2024-11-18",
+        "159150400",
+        "uis-01_common-14_charactercollect-_mxload-",
+    ),
     # no date: no prefix, the CRC still read
-    "6befbbb5c811cb1575f22145d4f0a954_unitybuiltinshaders_3925052273.bundle":
-        (None, "6befbbb5c811cb1575f22145d4f0a954_unitybuiltinshaders_3925052273", None, "", "3925052273", ""),
+    "6befbbb5c811cb1575f22145d4f0a954_unitybuiltinshaders_3925052273.bundle": (
+        None,
+        "6befbbb5c811cb1575f22145d4f0a954_unitybuiltinshaders_3925052273",
+        None,
+        "",
+        "3925052273",
+        "",
+    ),
     # a loose asset of a mod
     "ch0063_spr.skel": (None, "ch0063_spr", None, "", "", ""),
 }
@@ -147,30 +192,36 @@ def test_parse_filename_splits_official_names(name):
 
 
 def test_a_new_date_or_crc_keeps_a_part_s_prefix_and_type():
-    old = parse_filename("assets-_mx-spinecharacters-ch0063_spr-_mxdependency-2024-11-18_002_assets_all_895560895.bundle")
+    old = parse_filename(
+        "assets-_mx-spinecharacters-ch0063_spr-_mxdependency-2024-11-18_002_assets_all_895560895.bundle"
+    )
     new = parse_filename("assets-_mx-spinecharacters-ch0063_spr-_mxdependency-2026-11-10_002_assets_all_1.bundle")
     assert (new.prefix, new.res_type, new.core) == (old.prefix, old.res_type, old.core)
     assert (new.date, new.crc) == ("2026-11-10", "1")
 
 
-@pytest.mark.parametrize("core, category, kind", [
-    ("ch0063_spr", "spinecharacters", "spr"),
-    ("ch0063_home", "spinelobbies", "lobby"),
-    ("bg_special_01", "spinebackground", "lobby"),
-    ("ch0063", "characters", None),
-    ("mxcommon", "spinecharacters", None),
-    ("ch0063_spr", None, "spr"),
-    ("ch0063_home_gl", None, "lobby"),
-    ("ch0063", None, None),
-])
+@pytest.mark.parametrize(
+    "core, category, kind",
+    [
+        ("ch0063_spr", "spinecharacters", "spr"),
+        ("ch0063_home", "spinelobbies", "lobby"),
+        ("bg_special_01", "spinebackground", "lobby"),
+        ("ch0063", "characters", None),
+        ("mxcommon", "spinecharacters", None),
+        ("ch0063_spr", None, "spr"),
+        ("ch0063_home_gl", None, "lobby"),
+        ("ch0063", None, None),
+    ],
+)
 def test_spine_kind_tells_portraits_from_lobbies(core, category, kind):
     assert spine_kind(core, category) == kind
 
 
 @needs_game
 def test_every_official_bundle_name_parses():
-    names = sorted(path.name for folder in get_search_dirs(GAME_DIR) if folder.is_dir()
-                   for path in folder.glob("*.bundle"))
+    names = sorted(
+        path.name for folder in get_search_dirs(GAME_DIR) if folder.is_dir() for path in folder.glob("*.bundle")
+    )
     assert len(names) > 1000
     types = importlib.import_module(f"{engine.ENGINE_PACKAGE}.naming")
     known = types.RESOURCE_TYPES_TEXT | types.RESOURCE_TYPES_NUM | {None}
@@ -187,6 +238,7 @@ def test_every_official_bundle_name_parses():
 
 # --- match keys ---
 
+
 def test_unknown_match_strategy_is_refused():
     with pytest.raises(ValueError):
         Bundle._get_key_func("by_guess")
@@ -197,11 +249,15 @@ def _official_samples() -> list[Path]:
     mesh."""
     folders = [folder for folder in get_search_dirs(GAME_DIR) if folder.is_dir()]
     samples = []
-    for pattern, kind in (("assets-_mx-spinecharacters-*_spr-*_003_*.bundle", "Texture2D"),
-                          ("assets-_mx-spinelobbies-*_home-*_002_*.bundle", "TextAsset"),
-                          ("assets-_mx-characters-*_004_*.bundle", "Mesh")):
-        candidates = sorted((path for folder in folders for path in folder.glob(pattern)),
-                            key=lambda path: (path.stat().st_size, path.name))
+    for pattern, kind in (
+        ("assets-_mx-spinecharacters-*_spr-*_003_*.bundle", "Texture2D"),
+        ("assets-_mx-spinelobbies-*_home-*_002_*.bundle", "TextAsset"),
+        ("assets-_mx-characters-*_004_*.bundle", "Mesh"),
+    ):
+        candidates = sorted(
+            (path for folder in folders for path in folder.glob(pattern)),
+            key=lambda path: (path.stat().st_size, path.name),
+        )
         for path in candidates[:50]:
             bundle = Bundle.load(path)
             if bundle and any(obj.type.name == kind for obj in bundle.env.objects):
@@ -236,6 +292,7 @@ def test_match_keys_name_an_asset_by_container_name_and_type(official_samples):
 
 # --- CRC fix ---
 
+
 @pytest.mark.parametrize("target", [0, 1, 0x7FFFFFFF, 0xFFFFFFFF, 3434860653])
 def test_crc_fix_appends_four_bytes_that_reach_the_target(target):
     data = bytes(range(256)) * 17
@@ -255,6 +312,7 @@ def test_official_bundles_carry_their_crc_in_their_name():
 
 
 # --- load and save ---
+
 
 @needs_game
 def test_load_save_round_trip_keeps_every_object_and_the_name_crc(official_samples, tmp_path):
@@ -281,16 +339,18 @@ def test_load_save_round_trip_keeps_every_object_and_the_name_crc(official_sampl
     assert pixels  # the portrait's texture came through, not only object headers
 
 
-
 # --- applying a texture ---
+
 
 @needs_game
 def test_a_small_texture_edit_is_applied_and_an_identical_texture_skipped(official_samples):
     """The engine applies any changed pixel: a tolerance would drop small mod edits (a recoloured eye, a decal)."""
     path = official_samples[0]
     bundle = Bundle.load(path)
-    texture = max((obj for obj in bundle.env.objects if obj.type.name == "Texture2D"),
-                  key=lambda obj: obj.read().m_Width * obj.read().m_Height)
+    texture = max(
+        (obj for obj in bundle.env.objects if obj.type.name == "Texture2D"),
+        key=lambda obj: obj.read().m_Width * obj.read().m_Height,
+    )
     image = texture.read().image.convert("RGBA")
     assert image.width * image.height >= 256 * 256
     unchanged = Bundle.load(path).apply_patch({texture.path_id: image.copy()}, "path_id")
@@ -308,6 +368,7 @@ def test_a_small_texture_edit_is_applied_and_an_identical_texture_skipped(offici
     assert budget == 0
     result = Bundle.load(path).apply_patch({texture.path_id: edited}, "path_id")
     assert result.matched_count == 1 and result.applied_count == 1 and result.skipped_count == 0
+
 
 def _stream(obj) -> bytes | None:
     """A texture's pixels, kept outside the object in the bundle's resource file."""

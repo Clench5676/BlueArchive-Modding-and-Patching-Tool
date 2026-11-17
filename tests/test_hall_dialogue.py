@@ -23,18 +23,30 @@ def test_voice_and_line_singleflight_and_memory_limits(monkeypatch):
     voices = PortraitVoices()
     entered, release = threading.Event(), threading.Event()
     calls = []
+
     def read(url):
         calls.append(url)
         entered.set()
         assert release.wait(5)
         if url.endswith("/123"):
-            return json.dumps({"voice": [{"description": "Hoshino_Lobby_1.ogg", "text_original": "Text",
-                "file": "https://static.kivo.wiki/voice.ogg"}]}).encode()
+            return json.dumps(
+                {
+                    "voice": [
+                        {
+                            "description": "Hoshino_Lobby_1.ogg",
+                            "text_original": "Text",
+                            "file": "https://static.kivo.wiki/voice.ogg",
+                        }
+                    ]
+                }
+            ).encode()
         return b"OggS untouched audio"
+
     monkeypatch.setattr(voices, "_get", read)
     with ThreadPoolExecutor(max_workers=8) as pool:
         futures = [pool.submit(voices.lines, "123") for _ in range(8)]
-        assert entered.wait(5); release.set()
+        assert entered.wait(5)
+        release.set()
         assert all(future.result()["hoshino_lobby_1"]["ja"] == "Text" for future in futures)
         futures = [pool.submit(voices.audio, "123", "hoshino_lobby_1") for _ in range(8)]
         assert all(future.result() == b"OggS untouched audio" for future in futures)
@@ -50,10 +62,12 @@ def test_voice_and_line_singleflight_and_memory_limits(monkeypatch):
 def test_failed_voice_is_not_requested_again_during_backoff(monkeypatch):
     cache = MemoryMemo(1024, 4)
     count = 0
+
     def fail():
         nonlocal count
         count += 1
         raise ServiceError("lines_unavailable")
+
     for _ in range(3):
         with pytest.raises(ServiceError, match="lines_unavailable"):
             cache.get("voice", fail)
@@ -62,16 +76,20 @@ def test_failed_voice_is_not_requested_again_during_backoff(monkeypatch):
 
 
 def test_global_ordinary_translation_reuses_memorial_table_download(monkeypatch):
-    table = {"DataList": [
-        row(10005, 1, 1, "Memorial", anim="Talk_01_M"),
-        row(10005, 1, 2, "Ordinary", "Traditional Chinese", category="UILobby", jp="Original", anim="02"),
-        {**row(10005, 2, 3, "Birthday", category="UILobby"), "DialogCondition": "Birthday"},
-    ]}
+    table = {
+        "DataList": [
+            row(10005, 1, 1, "Memorial", anim="Talk_01_M"),
+            row(10005, 1, 2, "Ordinary", "Traditional Chinese", category="UILobby", jp="Original", anim="02"),
+            {**row(10005, 2, 3, "Birthday", category="UILobby"), "DialogCondition": "Birthday"},
+        ]
+    }
     source = globallines.GlobalLines()
     calls = []
     monkeypatch.setattr(source, "_get", lambda *args: (calls.append(args), json.dumps(table).encode())[1])
     assert source.dialogues(10005)["Talk_01_M"][0]["en"] == "Memorial"
-    assert source.portrait_dialogues(10005) == {1: [{"en": "Ordinary", "zh-TW": "Traditional Chinese", "ja": "Original", "expression": "02"}]}
+    assert source.portrait_dialogues(10005) == {
+        1: [{"en": "Ordinary", "zh-TW": "Traditional Chinese", "ja": "Original", "expression": "02"}]
+    }
     assert len(calls) == 1
     authored = globallines.portrait_dialogues([row(10005, 1, 2, "First\nSecond", category="UILobby")])
     assert authored[10005][1][0]["en"] == "First\nSecond"
@@ -80,24 +98,33 @@ def test_global_ordinary_translation_reuses_memorial_table_download(monkeypatch)
 def test_local_audio_lookup_is_scoped_and_decodes_original_samples_in_memory(tmp_path, monkeypatch):
     source = tmp_path / "audio-voice.bundle"
     ignored = tmp_path / "unrelated-textures.bundle"
-    source.write_bytes(b"bundle fixture"); ignored.write_bytes(b"unrelated fixture")
+    source.write_bytes(b"bundle fixture")
+    ignored.write_bytes(b"unrelated fixture")
     reads = []
+
     class Audio:
         type = SimpleNamespace(name="AudioClip")
         path_id = 10
         assets_file = SimpleNamespace(name="cab-voice")
+
         def peek_name(self):
             return "Hoshino_Lobby_1"
+
         def read(self):
             return SimpleNamespace(samples={"clip.wav": b"RIFF original PCM"})
+
     @contextmanager
     def bundle(path):
         reads.append(path)
         assert path == source
         yield SimpleNamespace(objects=[Audio()])
+
     monkeypatch.setattr(student_hall, "open_bundle", bundle)
-    local = LocalPortraitVoices(SimpleNamespace(game=SimpleNamespace(_paths=lambda: [source, ignored],
-        _bundle_path=lambda name: tmp_path / name)))
+    local = LocalPortraitVoices(
+        SimpleNamespace(
+            game=SimpleNamespace(_paths=lambda: [source, ignored], _bundle_path=lambda name: tmp_path / name)
+        )
+    )
     assert list(local.index()) == ["hoshino_lobby_1"]
     assert local.audio("hoshino_lobby_1") == b"RIFF original PCM"
     assert local.audio("hoshino_lobby_1") == b"RIFF original PCM"
@@ -110,15 +137,31 @@ def dialogue_services(services, monkeypatch):
     variant.page_id, variant.schale_id = "123", 10005
     monkeypatch.setattr(services.library, "variant_metadata", lambda key: variant, raising=False)
     requests = []
+
     def fetch(self, url):
         requests.append(url)
         if url.endswith("/123"):
-            return json.dumps({"voice": [{"description": "Hoshino_Lobby_1.ogg", "text_original": "Original text",
-                "text": "Chinese text", "file": "https://static.kivo.wiki/ordinary.ogg"},
-                {"description": "Hoshino_MemorialLobby_1.ogg", "text_original": "Wrong scene"}]}).encode()
+            return json.dumps(
+                {
+                    "voice": [
+                        {
+                            "description": "Hoshino_Lobby_1.ogg",
+                            "text_original": "Original text",
+                            "text": "Chinese text",
+                            "file": "https://static.kivo.wiki/ordinary.ogg",
+                        },
+                        {"description": "Hoshino_MemorialLobby_1.ogg", "text_original": "Wrong scene"},
+                    ]
+                }
+            ).encode()
         return b"OggS remote voice"
+
     monkeypatch.setattr(PortraitVoices, "_get", fetch)
-    monkeypatch.setattr(services.global_lines, "portrait_dialogues", lambda character: {1: [{"en": "English text", "zh-TW": "TW text", "expression": "02"}]})
+    monkeypatch.setattr(
+        services.global_lines,
+        "portrait_dialogues",
+        lambda character: {1: [{"en": "English text", "zh-TW": "TW text", "expression": "02"}]},
+    )
     return requests
 
 
@@ -138,15 +181,19 @@ def test_hall_lines_localize_the_same_ordinary_clip_and_do_not_download_voice(ap
     assert len(dialogue_services) == 2
 
 
-def test_warm_line_metadata_uses_published_caches_without_false_pending_jobs(app, services, dialogue_services, monkeypatch):
+def test_warm_line_metadata_uses_published_caches_without_false_pending_jobs(
+    app, services, dialogue_services, monkeypatch
+):
     services.global_lines._table = {}
     services.global_lines._portraits = {10005: {1: [{"en": "Cached official text"}]}}
     first = rpc(app, "hall.lines", variant="hoshino", lang="en")["result"]
     assert first["lines"]["hoshino_lobby_1"]["en"] == "Cached official text"
     # Complete the same selected source's transport cache; no other student is prefetched.
     rpc(app, "hall.voice", variant="hoshino", clip="hoshino_lobby_1")
+
     def forbidden(*args, **kwargs):
         pytest.fail("Published line metadata should not schedule another background job")
+
     monkeypatch.setattr("bmpt.webui.api._background", forbidden)
     result = rpc(app, "hall.lines", variant="hoshino", lang="en")["result"]
     assert result["pending"] is False and result["lines"]["hoshino_lobby_1"]["voice"]
@@ -173,7 +220,10 @@ def test_missing_audio_keeps_official_text_and_refuses_unrelated_clip(app, servi
 
 def test_viewed_order_is_per_source_and_does_not_mutate_hall_or_game(app, services, dialogue_services, monkeypatch):
     services.catalog.v.lobby = "hoshino_home"
-    mods = [SimpleNamespace(id="one", target="hoshino", kind="lobby"), SimpleNamespace(id="two", target="hoshino", kind="lobby")]
+    mods = [
+        SimpleNamespace(id="one", target="hoshino", kind="lobby"),
+        SimpleNamespace(id="two", target="hoshino", kind="lobby"),
+    ]
     monkeypatch.setattr(services.library, "mods", lambda: mods)
     initial = services.state.get("student_hall")
     rpc(app, "hall.viewed", variant="hoshino", source="mod:one")
@@ -188,6 +238,7 @@ def test_last_memorial_cannot_be_removed_after_first_saved_entry(tmp_path):
     from uuid import uuid4
     from bmpt.webui.state import UiState
     from bmpt.webui.student_hall import empty_hall, save_hall
+
     state = UiState(tmp_path / "ui.json")
     initial = save_hall(state, empty_hall(), 0)
     initial["memorials"] = [{"id": str(uuid4()), "variant": "hoshino", "source": "official"}]
@@ -203,6 +254,7 @@ def test_last_memorial_cannot_be_removed_after_first_saved_entry(tmp_path):
 def test_exact_portrait_source_duplicates_are_rejected_but_other_resources_and_memorials_remain_valid(tmp_path):
     from uuid import uuid4
     from bmpt.webui.student_hall import empty_hall, validate_hall
+
     first = {"id": str(uuid4()), "variant": "hoshino", "source": "mod:one"}
     second = {**first, "id": str(uuid4())}
     value = {**empty_hall(), "portraits": [first, second]}
@@ -220,6 +272,7 @@ def test_exact_portrait_source_duplicates_are_rejected_but_other_resources_and_m
 def test_native_portrait_anchor_only_fills_missing_coordinates():
     from uuid import uuid4
     from bmpt.webui.student_hall import empty_hall, validate_hall, PORTRAIT_ORIGIN
+
     fresh = {"id": str(uuid4()), "variant": "hoshino", "source": "mod:one"}
     placed = {"id": str(uuid4()), "variant": "hoshino", "source": "mod:two", "x": 960, "y": 1120, "scale": 1.7}
     result = validate_hall({**empty_hall(), "portraits": [fresh, placed]})["portraits"]
@@ -230,6 +283,7 @@ def test_native_portrait_anchor_only_fills_missing_coordinates():
 def test_legacy_duplicate_read_keeps_first_uuid_and_cas_revision_without_disk_migration(app, services):
     from uuid import uuid4
     from bmpt.webui.student_hall import empty_hall
+
     first = {"id": str(uuid4()), "variant": "hoshino", "source": "mod:one", "x": 400, "y": 1120, "scale": 1}
     duplicate = {**first, "id": str(uuid4()), "x": 1200}
     other = {**first, "id": str(uuid4()), "source": "mod:two", "x": 800}
@@ -244,15 +298,19 @@ def test_legacy_duplicate_read_keeps_first_uuid_and_cas_revision_without_disk_mi
     assert services.state.get("student_hall") == saved
 
 
-def test_slow_kivo_does_not_gate_ready_official_text_and_finishes_in_the_existing_flight(app, services, dialogue_services, monkeypatch):
+def test_slow_kivo_does_not_gate_ready_official_text_and_finishes_in_the_existing_flight(
+    app, services, dialogue_services, monkeypatch
+):
     entered, release, finished = threading.Event(), threading.Event(), threading.Event()
     original = PortraitVoices.lines
+
     def delayed(self, page):
         entered.set()
         assert release.wait(5)
         value = original(self, page)
         finished.set()
         return value
+
     monkeypatch.setattr(PortraitVoices, "lines", delayed)
     with ThreadPoolExecutor(max_workers=1) as pool:
         pending = pool.submit(rpc, app, "hall.lines", variant="hoshino", lang="en")
@@ -281,23 +339,36 @@ def test_portrait_rows_preserve_timed_expression_changes_on_their_original_voice
     assert 200 not in groups
     lines = globallines.portrait_by_clip({str(key): value for key, value in groups.items()}, {"2": ["eimi_lobby_2"]})
     assert lines["eimi_lobby_2"]["en"] == "First Second"
-    assert lines["eimi_lobby_2"]["expressionCues"] == [{"time": 0, "expression": "04"}, {"time": 4.75, "expression": "05"}]
-    separate = {"3": [{"en": "One", "expression": "02", "voiceIds": [2788647851], "duration": 0},
-                       {"en": "Two", "expression": "10", "voiceIds": [3452918145], "duration": 0}]}
+    assert lines["eimi_lobby_2"]["expressionCues"] == [
+        {"time": 0, "expression": "04"},
+        {"time": 4.75, "expression": "05"},
+    ]
+    separate = {
+        "3": [
+            {"en": "One", "expression": "02", "voiceIds": [2788647851], "duration": 0},
+            {"en": "Two", "expression": "10", "voiceIds": [3452918145], "duration": 0},
+        ]
+    }
     result = globallines.portrait_by_clip(separate, {"3": ["hoshino_lobby_3_1", "hoshino_lobby_3_2"]})
     assert result["hoshino_lobby_3_1"]["expression"] == "02"
     assert result["hoshino_lobby_3_2"]["expression"] == "10"
 
 
 def test_portrait_rows_do_not_invent_cue_times_without_authored_duration():
-    values = {"1": [{"en": "One", "expression": "02", "voiceIds": [1], "duration": 0},
-                    {"en": "Two", "expression": "10", "voiceIds": [], "duration": 2}]}
+    values = {
+        "1": [
+            {"en": "One", "expression": "02", "voiceIds": [1], "duration": 0},
+            {"en": "Two", "expression": "10", "voiceIds": [], "duration": 2},
+        ]
+    }
     line = globallines.portrait_by_clip(values, {"1": ["student_lobby_1"]})["student_lobby_1"]
     assert line["en"] == "One Two"
     assert line["expressionCues"] == [{"time": 0, "expression": "02"}]
 
 
-def test_chinese_dialogue_retains_kivo_caption_and_receives_official_expression_metadata(app, services, dialogue_services):
+def test_chinese_dialogue_retains_kivo_caption_and_receives_official_expression_metadata(
+    app, services, dialogue_services
+):
     result = rpc(app, "hall.lines", variant="hoshino", lang="zh-CN")["result"]
     line = result["lines"]["hoshino_lobby_1"]
     assert line["zh-CN"] == "Chinese text"
@@ -305,8 +376,11 @@ def test_chinese_dialogue_retains_kivo_caption_and_receives_official_expression_
     assert result["animationPending"] is False
 
 
-def test_chinese_dialogue_marks_late_animation_metadata_without_blocking_ready_voice(app, services, dialogue_services, monkeypatch):
+def test_chinese_dialogue_marks_late_animation_metadata_without_blocking_ready_voice(
+    app, services, dialogue_services, monkeypatch
+):
     entered, release, completed = threading.Event(), threading.Event(), threading.Event()
+
     def delayed(character):
         entered.set()
         assert release.wait(5)
@@ -314,37 +388,46 @@ def test_chinese_dialogue_marks_late_animation_metadata_without_blocking_ready_v
         services.global_lines._table = {}
         completed.set()
         return services.global_lines._portraits[10005]
+
     monkeypatch.setattr(services.global_lines, "portrait_dialogues", delayed)
     first = rpc(app, "hall.lines", variant="hoshino", lang="zh-CN")["result"]
     assert entered.wait(1) and first["animationPending"] is True
     assert first["lines"]["hoshino_lobby_1"]["voice"] is True
     assert first["lines"]["hoshino_lobby_1"]["zh-CN"] == "Chinese text"
-    release.set(); assert completed.wait(1)
+    release.set()
+    assert completed.wait(1)
     second = rpc(app, "hall.lines", variant="hoshino", lang="zh-CN")["result"]
     assert second["animationPending"] is False
     assert second["lines"]["hoshino_lobby_1"]["expression"] == "02"
     assert second["lines"]["hoshino_lobby_1"]["zh-CN"] == "Chinese text"
 
 
-def test_missing_dialogue_catalog_mapping_is_normal_absence_but_unexpected_catalog_errors_remain_errors(app, services, monkeypatch):
+def test_missing_dialogue_catalog_mapping_is_normal_absence_but_unexpected_catalog_errors_remain_errors(
+    app, services, monkeypatch
+):
     def missing(_):
         raise ServiceError("catalog_variant_not_found")
+
     monkeypatch.setattr(services.library, "variant_metadata", missing, raising=False)
     response = rpc(app, "hall.lines", variant="unmapped", lang="zh-CN")
     assert "error" not in response and response["result"]["unavailable"] is True
+
     def broken(_):
         raise ServiceError("catalog_data_invalid")
+
     monkeypatch.setattr(services.library, "variant_metadata", broken)
     assert rpc(app, "hall.lines", variant="unmapped")["error"]["code"] == "catalog_data_invalid"
 
 
 def test_native_expression_motion_retains_authored_tracks_and_omits_random_idle_sync():
-    clips = {"04": {"track": 1, "loop": True, "intro": 0, "outro": 0, "mode": 1, "sync": ["Eye_Close_01", "Speak"]},
-             "Eye_Close_01": {"mode": 2},
-             "Speak": {"track": 3, "loop": True, "intro": .1, "outro": .2, "mode": 1, "sync": ["04"]}}
+    clips = {
+        "04": {"track": 1, "loop": True, "intro": 0, "outro": 0, "mode": 1, "sync": ["Eye_Close_01", "Speak"]},
+        "Eye_Close_01": {"mode": 2},
+        "Speak": {"track": 3, "loop": True, "intro": 0.1, "outro": 0.2, "mode": 1, "sync": ["04"]},
+    }
     motion = student_hall.expression_motion("04", clips)
     assert motion["track"] == 1 and motion["animation"] == "04"
-    assert motion["sync"] == [{"animation": "Speak", "track": 3, "loop": True, "mix": .1, "outro": .2, "sync": []}]
+    assert motion["sync"] == [{"animation": "Speak", "track": 3, "loop": True, "mix": 0.1, "outro": 0.2, "sync": []}]
     assert student_hall.expression_motion("missing", clips) is None
 
 
@@ -352,6 +435,7 @@ def test_verified_portrait_clips_supply_real_expression_tracks(tmp_path):
     import os
     from bmpt.gameassets import AssetCache, GameAssets
     from ba_modding_toolkit.searching import get_search_dirs
+
     game_dir = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-game")
     if not game_dir.is_dir():
         pytest.skip("No verified game view")
@@ -367,25 +451,36 @@ def test_verified_portrait_clips_supply_real_expression_tracks(tmp_path):
 
 
 def test_old_uncaptioned_recordings_do_not_duplicate_captioned_current_lines():
-    page = {"voice": [
-        {"description": "cbt_eimi_casual_lobby_1.ogg", "file": "https://static.kivo.wiki/old.ogg"},
-        {"description": "eimi_lobby_1.ogg", "text": "Translated current line", "text_original": "Original", "file": "https://static.kivo.wiki/current.ogg"},
-        {"description": "eimi_lobby_2.ogg", "file": "https://static.kivo.wiki/only.ogg"},
-    ]}
+    page = {
+        "voice": [
+            {"description": "cbt_eimi_casual_lobby_1.ogg", "file": "https://static.kivo.wiki/old.ogg"},
+            {
+                "description": "eimi_lobby_1.ogg",
+                "text": "Translated current line",
+                "text_original": "Original",
+                "file": "https://static.kivo.wiki/current.ogg",
+            },
+            {"description": "eimi_lobby_2.ogg", "file": "https://static.kivo.wiki/only.ogg"},
+        ]
+    }
     rows = student_hall.portrait_lines(page)
     assert set(rows) == {"eimi_lobby_1", "eimi_lobby_2"}
     assert rows["eimi_lobby_1"]["zh-CN"] == "Translated current line"
     assert rows["eimi_lobby_2"]["audio"].endswith("only.ogg")
 
 
-def test_ready_official_rows_do_not_finish_a_chinese_request_before_its_ready_translation(app, services, dialogue_services, monkeypatch):
+def test_ready_official_rows_do_not_finish_a_chinese_request_before_its_ready_translation(
+    app, services, dialogue_services, monkeypatch
+):
     entered, release = threading.Event(), threading.Event()
     original = PortraitVoices._get
+
     def delayed(self, url):
         if url.endswith("/123"):
             entered.set()
             assert release.wait(5)
         return original(self, url)
+
     monkeypatch.setattr(PortraitVoices, "_get", delayed)
     services.global_lines._table = {}
     services.global_lines._portraits = {10005: {1: [{"ja": "Original", "en": "English", "zh-TW": "Traditional"}]}}
@@ -404,8 +499,10 @@ def test_flat_voice_numbers_follow_voiced_rows_instead_of_dialogue_group_ids():
     groups = {
         1: [{"zh-TW": "First", "voiceIds": [4166716535]}],
         2: [{"zh-TW": "Second", "voiceIds": [1116629168]}],
-        3: [{"zh-TW": "Third", "voiceIds": [2788647851], "expression": "02"},
-            {"zh-TW": "Fourth", "voiceIds": [3452918145], "expression": "10"}],
+        3: [
+            {"zh-TW": "Third", "voiceIds": [2788647851], "expression": "02"},
+            {"zh-TW": "Fourth", "voiceIds": [3452918145], "expression": "10"},
+        ],
         4: [{"zh-TW": "Fifth", "voiceIds": [2171344866], "expression": "16"}],
     }
     rows = globallines.portrait_voice_lines(groups, [f"hoshino_lobby_{n}" for n in range(1, 6)])
@@ -422,4 +519,7 @@ def test_nested_clip_numbers_and_legacy_caption_rows_keep_their_existing_group_m
     rows = globallines.portrait_voice_lines(groups, ["hero_lobby_3_1", "hero_lobby_3_2"])
     assert rows["hero_lobby_3_1"]["zh-TW"] == "One"
     assert rows["hero_lobby_3_2"]["zh-TW"] == "Two"
-    assert globallines.portrait_voice_lines({"3": [{"zh-TW": "Legacy"}]}, ["hero_lobby_3"])["hero_lobby_3"]["zh-TW"] == "Legacy"
+    assert (
+        globallines.portrait_voice_lines({"3": [{"zh-TW": "Legacy"}]}, ["hero_lobby_3"])["hero_lobby_3"]["zh-TW"]
+        == "Legacy"
+    )

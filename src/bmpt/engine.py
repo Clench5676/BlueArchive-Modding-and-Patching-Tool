@@ -89,14 +89,39 @@ if TYPE_CHECKING:
     from ba_modding_toolkit.bundle import Bundle
     from ba_modding_toolkit.core.mod_update import _format_skel_conflicts as format_skel_conflicts
     from ba_modding_toolkit.gui.main import main as classic_main
-    from ba_modding_toolkit.i18n import (UI_LANGUAGES, fallback_language, i18n_manager, offered_languages,
-                                         register_locale_dir, t)
-    from ba_modding_toolkit.models import (REPLACEABLE_ASSET_TYPES, AnimCheckOptions, AnimDiffMap, AssetKey,
-                                           AssetType, ContNameTypeKey, FilePair, LogFunc, MatchStrategy, Obj, Patch,
-                                           ProgressCallback, ReplaceAssetType, SaveOptions, SkelConvertOptions,
-                                           SkelVersionConflict)
-    from ba_modding_toolkit.naming import (PRELOAD_PREFIX, CharacterInternalIDMap, ParsedFilename, parse_filename,
-                                           spine_kind)
+    from ba_modding_toolkit.i18n import (
+        UI_LANGUAGES,
+        fallback_language,
+        i18n_manager,
+        offered_languages,
+        register_locale_dir,
+        t,
+    )
+    from ba_modding_toolkit.models import (
+        REPLACEABLE_ASSET_TYPES,
+        AnimCheckOptions,
+        AnimDiffMap,
+        AssetKey,
+        AssetType,
+        ContNameTypeKey,
+        FilePair,
+        LogFunc,
+        MatchStrategy,
+        Obj,
+        Patch,
+        ProgressCallback,
+        ReplaceAssetType,
+        SaveOptions,
+        SkelConvertOptions,
+        SkelVersionConflict,
+    )
+    from ba_modding_toolkit.naming import (
+        PRELOAD_PREFIX,
+        CharacterInternalIDMap,
+        ParsedFilename,
+        parse_filename,
+        spine_kind,
+    )
     from ba_modding_toolkit.searching import SEARCH_DIR_SUFFIXES, get_search_dirs, is_game_install
     from ba_modding_toolkit.spine import get_skel_version, get_spine_backend
     from ba_modding_toolkit.utils import CRCUtils, EXE_DIR, get_BA_path, get_version_info, no_log, parse_hex_bytes

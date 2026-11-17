@@ -27,4 +27,7 @@ def test_mac_files_are_selected_and_plain_folders_opened(tmp_path, commands):
     (tmp_path / "a.png").write_bytes(b"")
     system.reveal(tmp_path / "a.png")
     system.reveal(tmp_path / "out.v2")
-    assert commands == [["open", "-R", str((tmp_path / "a.png").resolve())], ["open", str((tmp_path / "out.v2").resolve())]]
+    assert commands == [
+        ["open", "-R", str((tmp_path / "a.png").resolve())],
+        ["open", str((tmp_path / "out.v2").resolve())],
+    ]

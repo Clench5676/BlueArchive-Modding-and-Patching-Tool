@@ -51,8 +51,9 @@ def skipped(bundles: list[Path]) -> dict[Path, frozenset[str]]:
 def spine_revision(bundles: list[Path]) -> str:
     """A URL segment identifying one ordered composition of bundle versions (and the types it leaves out)."""
     skip = sorted([str(path), sorted(types)] for path, types in skipped(bundles).items())
-    return hashlib.sha256(json.dumps([spine_stamps(bundles), skip] if skip else spine_stamps(bundles))
-                          .encode()).hexdigest()
+    return hashlib.sha256(
+        json.dumps([spine_stamps(bundles), skip] if skip else spine_stamps(bundles)).encode()
+    ).hexdigest()
 
 
 def png_bytes(image: Image.Image, level: int | None = None) -> bytes:

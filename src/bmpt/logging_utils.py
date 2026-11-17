@@ -32,13 +32,18 @@ def _private_message(error: Exception) -> str:
     return _private_text(message)
 
 
-def log_failure(logger: logging.Logger, level: int, context: str, error: Exception,
-                *, code: str | None = None) -> None:
+def log_failure(logger: logging.Logger, level: int, context: str, error: Exception, *, code: str | None = None) -> None:
     """Log only sanitized strings; callers supply a path-free operation label."""
     code = code or getattr(error, "code", None)
     if code is None:
         code = getattr(error, "winerror", None) or getattr(error, "returncode", None)
     errno = getattr(error, "errno", None)
-    logger.log(level, "%s: %s (code=%s, errno=%s): %s", context, type(error).__name__,
-               _private_text(str(code)), errno if isinstance(errno, int) else None,
-               _private_message(error))
+    logger.log(
+        level,
+        "%s: %s (code=%s, errno=%s): %s",
+        context,
+        type(error).__name__,
+        _private_text(str(code)),
+        errno if isinstance(errno, int) else None,
+        _private_message(error),
+    )

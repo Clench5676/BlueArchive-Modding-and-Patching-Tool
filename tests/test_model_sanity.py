@@ -18,12 +18,17 @@ def _bounds(centre=(0.0, 1.0, 0.0), extent=(0.5, 1.0, 0.3)):
 def _written(**change):
     """A valid mesh of four vertices on three bones."""
     fields = dict(
-        name="body", vertices=np.array([[0, 0, 0], [0, 1, 0], [0, 2, 0], [0.5, 1, 0]], float),
+        name="body",
+        vertices=np.array([[0, 0, 0], [0, 1, 0], [0, 2, 0], [0.5, 1, 0]], float),
         linear=np.tile(np.eye(3), (4, 1, 1)),
         joints=np.array([[0, 1, 0, 0], [1, 2, 0, 0], [2, 2, 0, 0], [0, 0, 0, 0]]),
         weights=np.array([[0.5, 0.5, 0, 0], [0.25, 0.75, 0, 0], [1, 0, 0, 0], [0, 0, 0, 0]]),
-        bindposes=np.tile(np.eye(4), (3, 1, 1)), bones=["Bip001", "Bip001 Spine", "Bip001 Head"], submeshes=2,
-        source_totals=np.array([1.0, 1.0, 1.0, 0.0]), source_materials=[1, 1])
+        bindposes=np.tile(np.eye(4), (3, 1, 1)),
+        bones=["Bip001", "Bip001 Spine", "Bip001 Head"],
+        submeshes=2,
+        source_totals=np.array([1.0, 1.0, 1.0, 0.0]),
+        source_materials=[1, 1],
+    )
     fields.update(change)
     return ma.Written(**fields)
 
@@ -43,8 +48,9 @@ def _reason(meshes, renderers):
 
 def test_sanity_passes_a_valid_build():
     ma._sanity([_written()], [_rendered()])
-    ma._sanity([_written(), _written(name="hair", source_materials=[1])],
-               [_rendered(), _rendered(part=1, materials=[13])])
+    ma._sanity(
+        [_written(), _written(name="hair", source_materials=[1])], [_rendered(), _rendered(part=1, materials=[13])]
+    )
     ma._sanity([], [])
 
 
@@ -53,11 +59,14 @@ def test_sanity_accepts_a_mesh_without_materials_or_with_trailing_nulls():
     ma._sanity([_written()], [_rendered(materials=[0, 0])])
 
 
-@pytest.mark.parametrize("field,value", [
-    ("bindposes", np.where(np.eye(4) == 1, np.nan, 0.0)[None].repeat(3, axis=0)),
-    ("vertices", np.array([[0, 0, 0], [0, np.inf, 0], [0, 2, 0], [0.5, 1, 0]])),
-    ("linear", np.tile(np.full((3, 3), np.nan), (4, 1, 1))),
-])
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("bindposes", np.where(np.eye(4) == 1, np.nan, 0.0)[None].repeat(3, axis=0)),
+        ("vertices", np.array([[0, 0, 0], [0, np.inf, 0], [0, 2, 0], [0.5, 1, 0]])),
+        ("linear", np.tile(np.full((3, 3), np.nan), (4, 1, 1))),
+    ],
+)
 def test_sanity_refuses_numbers_that_are_not_finite(field, value):
     assert _reason([_written(**{field: value})], [_rendered()]) == "invalid data"
 
@@ -115,8 +124,10 @@ def test_sanity_refuses_more_materials_than_submeshes():
 
 def test_sanity_keeps_a_null_material_on_its_own_submesh():
     ma._sanity([_written(source_materials=[1, 0, 1], submeshes=3)], [_rendered(materials=[11, 0, 13])])
-    assert _reason([_written(source_materials=[1, 0, 1], submeshes=3)], [_rendered(materials=[11, 13])]) \
+    assert (
+        _reason([_written(source_materials=[1, 0, 1], submeshes=3)], [_rendered(materials=[11, 13])])
         == "materials inconsistent"
+    )
 
 
 def test_sanity_refuses_a_written_mesh_that_still_names_stream_data():
@@ -125,6 +136,7 @@ def test_sanity_refuses_a_written_mesh_that_still_names_stream_data():
 
 
 # --- streamed vertex data ---------------------------------------------------------------------------------
+
 
 class _FakeMesh:
     """A mesh object with a typetree, as ``_mesh_tree`` reads one."""
@@ -142,8 +154,11 @@ class _FakeMesh:
 
 
 def _mesh_tree_of(size, path="archive:/CAB-1234/CAB-1234.resS"):
-    return {"m_Name": "hair", "m_VertexData": {"m_VertexCount": 3, "m_DataSize": b""},
-            "m_StreamData": {"offset": 16, "size": size, "path": path}}
+    return {
+        "m_Name": "hair",
+        "m_VertexData": {"m_VertexCount": 3, "m_DataSize": b""},
+        "m_StreamData": {"offset": 16, "size": size, "path": path},
+    }
 
 
 def test_a_streamed_mesh_takes_its_vertex_data_along(monkeypatch):
@@ -184,14 +199,18 @@ def test_a_mesh_that_holds_its_data_is_read_as_it_is(monkeypatch):
     from UnityPy.helpers import ResourceReader
 
     monkeypatch.setattr(ResourceReader, "get_resource_data", lambda *args: pytest.fail("nothing to read"))
-    held = {"m_Name": "hair", "m_VertexData": {"m_VertexCount": 3, "m_DataSize": b"123456"},
-            "m_StreamData": {"offset": 0, "size": 0, "path": ""}}
+    held = {
+        "m_Name": "hair",
+        "m_VertexData": {"m_VertexCount": 3, "m_DataSize": b"123456"},
+        "m_StreamData": {"offset": 0, "size": 0, "path": ""},
+    }
     assert ma._mesh_tree(_FakeMesh(held)) == held
     without = {"m_Name": "hair", "m_VertexData": {"m_VertexCount": 3, "m_DataSize": b"123456"}}
     assert ma._mesh_tree(_FakeMesh(without)) == without
 
 
 # --- the named refusals ---------------------------------------------------------------------------------------------
+
 
 def _scaled(scale):
     matrix = np.eye(4)

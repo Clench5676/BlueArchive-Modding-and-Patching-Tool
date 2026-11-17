@@ -40,28 +40,29 @@ from typing import Any, Mapping, Sequence
 
 import numpy as np
 
-MARGIN = 0.015          # cloth keeps this far outside the legs (metres)
-STEP = 0.01             # height of a cell of the legs' reach along the body axis (metres)
-SECTORS = 64            # cells around the body axis
-LOW, HIGH = -1.6, 0.6   # heights the cells cover, from the pelvis (metres)
-ITERATIONS = 8          # Gauss-Newton steps per frame
-HOLD = 0.1              # weight of cloth already clear of the legs, against the cloth pushed out
-MIN_ANGLE = 1e-4        # a smaller step ends a frame's iterations (radians)
+MARGIN = 0.015  # cloth keeps this far outside the legs (metres)
+STEP = 0.01  # height of a cell of the legs' reach along the body axis (metres)
+SECTORS = 64  # cells around the body axis
+LOW, HIGH = -1.6, 0.6  # heights the cells cover, from the pelvis (metres)
+ITERATIONS = 8  # Gauss-Newton steps per frame
+HOLD = 0.1  # weight of cloth already clear of the legs, against the cloth pushed out
+MIN_ANGLE = 1e-4  # a smaller step ends a frame's iterations (radians)
 MAX_ANGLE = math.radians(100)  # a chain turns at most this far from where the pelvis carries it (the game's own
-                                # clips turn a front skirt up to 100 degrees when the knees come up)
-MAX_SHIFT = 0.06        # a chain's first bone moves at most this far from where the pelvis carries it (metres)
-SHIFT_COST = 1.0        # weight of a first bone's shift against a pushed vertex's place
-SMOOTH_SWEEPS = 6       # weight blending sweeps across the seams (the "smooth" variant)
-SOLVE_EVERY = 3         # clip frames between solved frames; the frames between are interpolated
-RELEASE = 0.3           # share of its turn a chain keeps after 0.1 s without a push (it falls back toward rest)
-LENGTH_WEIGHT = 10.0    # weight of an edge's length against a pushed vertex's place
-DAMPING = 1e-4          # keeps each update small where nothing pins a chain
+# clips turn a front skirt up to 100 degrees when the knees come up)
+MAX_SHIFT = 0.06  # a chain's first bone moves at most this far from where the pelvis carries it (metres)
+SHIFT_COST = 1.0  # weight of a first bone's shift against a pushed vertex's place
+SMOOTH_SWEEPS = 6  # weight blending sweeps across the seams (the "smooth" variant)
+SOLVE_EVERY = 3  # clip frames between solved frames; the frames between are interpolated
+RELEASE = 0.3  # share of its turn a chain keeps after 0.1 s without a push (it falls back toward rest)
+LENGTH_WEIGHT = 10.0  # weight of an edge's length against a pushed vertex's place
+DAMPING = 1e-4  # keeps each update small where nothing pins a chain
 
 UP, FRONT = np.array([0.0, 1.0, 0.0]), np.array([0.0, 0.0, 1.0])  # Unity's vertical and forward
 DOWN = -UP
 
 
 # --- rotations -----------------------------------------------------------------------------------------------------
+
 
 def rigid_fit(a: np.ndarray, b: np.ndarray, w: np.ndarray) -> np.ndarray:
     """The rigid transform (4x4) that best carries the points ``a`` onto ``b`` (weights ``w``)."""
@@ -92,9 +93,13 @@ def rotation_axis(r: np.ndarray) -> np.ndarray:
 def axis_angle(axis: np.ndarray, angle: float) -> np.ndarray:
     x, y, z = axis
     c, s, t = math.cos(angle), math.sin(angle), 1 - math.cos(angle)
-    return np.array([[t * x * x + c, t * x * y - s * z, t * x * z + s * y],
-                     [t * x * y + s * z, t * y * y + c, t * y * z - s * x],
-                     [t * x * z - s * y, t * y * z + s * x, t * z * z + c]])
+    return np.array(
+        [
+            [t * x * x + c, t * x * y - s * z, t * x * z + s * y],
+            [t * x * y + s * z, t * y * y + c, t * y * z - s * x],
+            [t * x * z - s * y, t * y * z + s * x, t * z * z + c],
+        ]
+    )
 
 
 def rotation_vector(r: np.ndarray) -> np.ndarray:
@@ -147,6 +152,7 @@ def resample(times: np.ndarray, quaternions: np.ndarray, at: np.ndarray) -> np.n
 
 
 # --- the legs' reach -----------------------------------------------------------------------------------------------
+
 
 @dataclass
 class Frame:
@@ -217,7 +223,7 @@ def skin(rest: np.ndarray, joints: np.ndarray, weights: np.ndarray, matrices: np
     homogeneous = np.c_[rest, np.ones(len(rest))]
     out = np.zeros((len(rest), 3))
     for k in range(joints.shape[1]):
-        out += weights[:, k:k + 1] * np.einsum("nij,nj->ni", matrices[joints[:, k]], homogeneous)[:, :3]
+        out += weights[:, k : k + 1] * np.einsum("nij,nj->ni", matrices[joints[:, k]], homogeneous)[:, :3]
     return out
 
 
@@ -231,6 +237,7 @@ class Legs:
 
 
 # --- chains --------------------------------------------------------------------------------------------------------
+
 
 @dataclass
 class Chains:
@@ -345,11 +352,16 @@ class Solver:
         self.pelvis_rest = np.linalg.inv(rest[pelvis][:3, :3])
         self.roots = chains.roots
         on_chain = cloth.joints < n
-        self.masks = {i: (np.isin(cloth.joints, chains.subtree[i]) & on_chain & (cloth.weights > 0)).astype(float)
-                      for i in self.roots}
+        self.masks = {
+            i: (np.isin(cloth.joints, chains.subtree[i]) & on_chain & (cloth.weights > 0)).astype(float)
+            for i in self.roots
+        }
         # each influence's share per root (vertices x influences x roots), the roots' total share, the edges' lengths
-        self.parts = np.stack([self.masks[r] * cloth.weights for r in self.roots], axis=2) if self.roots else np.zeros(
-            cloth.weights.shape + (0,))
+        self.parts = (
+            np.stack([self.masks[r] * cloth.weights for r in self.roots], axis=2)
+            if self.roots
+            else np.zeros(cloth.weights.shape + (0,))
+        )
         self.part_share = self.parts.sum(axis=1)
         self.homogeneous = np.c_[cloth.rest, np.ones(len(cloth.rest))]
         self.vertices = np.arange(len(cloth.rest))
@@ -377,8 +389,9 @@ class Solver:
         matrices = np.array([pose[f] for f in self.leg_nodes]) @ self.leg_inverse
         return skin(self.legs.rest, self.leg_columns, self.legs.weights, matrices)
 
-    def push(self, points: np.ndarray, rows: np.ndarray, grid: np.ndarray,
-             frame: Frame) -> tuple[np.ndarray, np.ndarray]:
+    def push(
+        self, points: np.ndarray, rows: np.ndarray, grid: np.ndarray, frame: Frame
+    ) -> tuple[np.ndarray, np.ndarray]:
         """Where each point must go to clear the legs (straight away from the body axis), and whether it must move."""
         legs_reach, distance, direction = reach(grid, frame, points)
         needed = legs_reach + self.allowance[rows]
@@ -416,8 +429,9 @@ class Solver:
             out[i] = m
         return out
 
-    def sequence(self, times: Sequence[float], pose: Any, loop: bool = False, *, step=lambda: None
-                 ) -> list[dict[int, np.ndarray]]:
+    def sequence(
+        self, times: Sequence[float], pose: Any, loop: bool = False, *, step=lambda: None
+    ) -> list[dict[int, np.ndarray]]:
         """The roots' turns for consecutive frames (``pose(k)``: the slot's world matrices at ``times[k]``), each
         starting from the frame before let back toward rest; a looping clip runs twice, the second time from the
         first's end."""
@@ -521,13 +535,13 @@ class Solver:
 
 # --- springs (Optimize Physics: hair, ribbons and loose cloth that the group choice left rigid) --------------------
 
-SPRING_DAMPING = 0.45          # damping ratio of a chain's swing
-SPRING_SPEED = 1.5             # a chain's natural frequency, times a pendulum's of its length
-SPRING_RATES = (4.0, 25.0)     # its bounds (radians per second)
-SPRING_SUBSTEP = 1 / 120       # seconds per integration step
-MIN_LENGTH = 0.01              # a chain shorter than this (metres, head to farthest bone) does not swing
-HANGING = math.radians(60)     # a chain whose tip lies within this of straight down at rest hangs (hair, ribbons)
-GRAVITY = 0.5                  # the share of its rest direction in the world a hanging chain keeps as the head turns
+SPRING_DAMPING = 0.45  # damping ratio of a chain's swing
+SPRING_SPEED = 1.5  # a chain's natural frequency, times a pendulum's of its length
+SPRING_RATES = (4.0, 25.0)  # its bounds (radians per second)
+SPRING_SUBSTEP = 1 / 120  # seconds per integration step
+MIN_LENGTH = 0.01  # a chain shorter than this (metres, head to farthest bone) does not swing
+HANGING = math.radians(60)  # a chain whose tip lies within this of straight down at rest hangs (hair, ribbons)
+GRAVITY = 0.5  # the share of its rest direction in the world a hanging chain keeps as the head turns
 
 
 class Spring:
@@ -537,9 +551,13 @@ class Spring:
     as it hangs at rest. A clip starts at rest; a looping one is run twice, the second time from the first's end, so
     that its end leads into its start."""
 
-    def __init__(self, chains: Chains, limits: Mapping[int, float],
-                 keys: Mapping[tuple[str, ...], tuple[np.ndarray, Mapping[int, np.ndarray]]] | None = None,
-                 own_rest: np.ndarray | None = None):
+    def __init__(
+        self,
+        chains: Chains,
+        limits: Mapping[int, float],
+        keys: Mapping[tuple[str, ...], tuple[np.ndarray, Mapping[int, np.ndarray]]] | None = None,
+        own_rest: np.ndarray | None = None,
+    ):
         """``keys``: the source's own keys of the chains' bones per clip name suffix (lower-case name tokens): the
         clip's frame times scaled to 0..1 and, per bone (an index into the chains), its local rotation quaternions
         there; ``own_rest``: each bone's local matrix at rest in the source's skeleton. A slot clip whose name ends in
@@ -557,8 +575,8 @@ class Spring:
             far = max(places, key=lambda v: float(np.linalg.norm(v)))
             tips.append(far)
             lengths.append(float(np.linalg.norm(chains.rest[r][:3, :3] @ far)))
-        self.tips = np.array(tips).reshape(-1, 3)        # in each root's own space
-        self.lengths = np.array(lengths)                 # world length, head to tip
+        self.tips = np.array(tips).reshape(-1, 3)  # in each root's own space
+        self.lengths = np.array(lengths)  # world length, head to tip
         # each chain's tip direction at rest in the prefab's space; those that point down hang under gravity
         rest_dirs = np.array([chains.rest[r][:3, :3] @ t for r, t in zip(self.roots, self.tips)]).reshape(-1, 3)
         norms = np.maximum(np.linalg.norm(rest_dirs, axis=1, keepdims=True), 1e-9)
@@ -590,8 +608,9 @@ class Spring:
                 out.append(self._turns(anchors[k], rests[k], x))
         return out
 
-    def _advance(self, x: np.ndarray, v: np.ndarray, before: tuple, after: tuple,
-                 dt: float) -> tuple[np.ndarray, np.ndarray]:
+    def _advance(
+        self, x: np.ndarray, v: np.ndarray, before: tuple, after: tuple, dt: float
+    ) -> tuple[np.ndarray, np.ndarray]:
         steps = max(1, int(math.ceil(dt / SPRING_SUBSTEP)))
         h = dt / steps
         w = self.rates[:, None]
@@ -634,8 +653,9 @@ class Spring:
         ``name`` from the source's own clip of the same name suffix, its time scaled onto the slot clip's; None when
         the source has none. Each bone turns from its rest as the source's turns from its own; its position stays."""
         tokens = [t for t in name.lower().split("_") if t]
-        match = next((self.keys[tuple(tokens[i:])] for i in range(1, len(tokens) - 1)
-                      if tuple(tokens[i:]) in self.keys), None)
+        match = next(
+            (self.keys[tuple(tokens[i:])] for i in range(1, len(tokens) - 1) if tuple(tokens[i:]) in self.keys), None
+        )
         if match is None or self.own_rest is None or not len(times):
             return None
         phases, rotations = match
@@ -650,9 +670,16 @@ class Spring:
             for k, quaternion_ in enumerate(q):
                 x, y, z, w = (float(v) for v in quaternion_ / max(float(np.linalg.norm(quaternion_)), 1e-12))
                 own = np.eye(4)
-                own[:3, :3] = np.array([[1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
-                                        [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
-                                        [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]]) @ scale
+                own[:3, :3] = (
+                    np.array(
+                        [
+                            [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+                            [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+                            [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+                        ]
+                    )
+                    @ scale
+                )
                 own[:3, 3] = rest[:3, 3]
                 local = self.chains.local[bone] @ back @ own
                 local[:3, :3] = local[:3, :3] @ np.linalg.inv(scale_of(local))
@@ -713,9 +740,17 @@ def muscle_size(tree: Mapping[str, Any]) -> int:
     sample and constant, 8 per value delta and 4 per reference pose value."""
     muscle = tree["m_MuscleClip"]
     clip = muscle["m_Clip"]["data"]
-    return (MUSCLE_FIXED + 4 * (len(clip["m_StreamedClip"]["data"]) + len(clip["m_DenseClip"]["m_SampleArray"])
-                                + len(clip["m_ConstantClip"]["data"]))
-            + 8 * len(muscle["m_ValueArrayDelta"]) + 4 * len(muscle["m_ValueArrayReferencePose"]))
+    return (
+        MUSCLE_FIXED
+        + 4
+        * (
+            len(clip["m_StreamedClip"]["data"])
+            + len(clip["m_DenseClip"]["m_SampleArray"])
+            + len(clip["m_ConstantClip"]["data"])
+        )
+        + 8 * len(muscle["m_ValueArrayDelta"])
+        + 4 * len(muscle["m_ValueArrayReferencePose"])
+    )
 
 
 def dense_grid(tree: Mapping[str, Any]) -> np.ndarray | None:

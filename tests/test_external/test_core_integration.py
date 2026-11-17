@@ -3,6 +3,7 @@
 外部工具缺失时自动跳过；update_case 与 sample_case 内 skel 版本未知，
 测试中动态探测并取不同的 preset 版本，保证转换路径必被触发。
 """
+
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -89,9 +90,7 @@ class TestExternalCoreIntegration:
             output_dir=output_dir,
             asset_types_to_replace={"Texture2D", "TextAsset"},
             save_options=_SAVE_OPTIONS,
-            spine_options=SkelConvertOptions(
-                enabled=True, converter_path=spine_converter_path, target_version=target
-            ),
+            spine_options=SkelConvertOptions(enabled=True, converter_path=spine_converter_path, target_version=target),
         )
 
         assert result.success is True, result.message
@@ -100,9 +99,7 @@ class TestExternalCoreIntegration:
         # 从输出 bundle 提取 skel 验证版本
         out_extract = tmp_path / "out_extract"
         out_extract.mkdir()
-        extract_assets_from_bundle(
-            [pair.output for pair in result.file_pairs], out_extract, {"TextAsset"}
-        )
+        extract_assets_from_bundle([pair.output for pair in result.file_pairs], out_extract, {"TextAsset"})
         assert list(out_extract.glob("*.skel")), "输出 bundle 中未找到 skel"
         for out_skel in out_extract.glob("*.skel"):
             version = get_skel_version(out_skel)
@@ -128,9 +125,7 @@ class TestExternalCoreIntegration:
             assets=[sample_case.assets_dir],
             output_dir=output_dir,
             save_options=_SAVE_OPTIONS,
-            spine_options=SkelConvertOptions(
-                enabled=True, converter_path=spine_converter_path, target_version=target
-            ),
+            spine_options=SkelConvertOptions(enabled=True, converter_path=spine_converter_path, target_version=target),
             skip_unchanged=False,
         )
 

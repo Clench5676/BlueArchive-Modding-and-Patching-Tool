@@ -21,13 +21,32 @@ OLD_SUFFIXES = {
 }
 
 
-def legacy_record(root, number, label="test_spr", *, core="test_spr", target="test", kind="spr",
-                  date="2026-01-01", parts=("002",), added="2026-10-01T08:00:00+00:00"):
+def legacy_record(
+    root,
+    number,
+    label="test_spr",
+    *,
+    core="test_spr",
+    target="test",
+    kind="spr",
+    date="2026-01-01",
+    parts=("002",),
+    added="2026-10-01T08:00:00+00:00",
+):
     mod_id = f"{number:032x}"
-    files = [game_bundle(root / "mods" / mod_id, core, part=part, date=date,
-                         payload=f"paint {number} {part}".encode()).name for part in parts]
-    return {"id": mod_id, "files": sorted(files), "label": label, "target": target,
-            "kind": kind, "added": added, "seen": False}
+    files = [
+        game_bundle(root / "mods" / mod_id, core, part=part, date=date, payload=f"paint {number} {part}".encode()).name
+        for part in parts
+    ]
+    return {
+        "id": mod_id,
+        "files": sorted(files),
+        "label": label,
+        "target": target,
+        "kind": kind,
+        "added": added,
+        "seen": False,
+    }
 
 
 def write_legacy_state(root, records, **extra):
@@ -42,8 +61,14 @@ def write_legacy_state(root, records, **extra):
 def test_legacy_pair_uses_current_repair_names_and_metadata_once(setup_library, monkeypatch, stored_language, language):
     env = setup_library
     original = legacy_record(env.root, 1)
-    repaired = legacy_record(env.root, 2, "test_spr" + OLD_SUFFIXES[stored_language],
-                             date="2026-10-01", parts=("002", "003"), added="2026-10-01T09:00:00+00:00")
+    repaired = legacy_record(
+        env.root,
+        2,
+        "test_spr" + OLD_SUFFIXES[stored_language],
+        date="2026-10-01",
+        parts=("002", "003"),
+        added="2026-10-01T09:00:00+00:00",
+    )
     applied = {str(env.original): {"source": f"mod:{repaired['id']}", "sha1": "kept"}}
     path = write_legacy_state(env.root, [original, repaired], applied=applied)
     before = {p: (p.read_bytes(), p.stat().st_mtime_ns) for p in env.tmp.rglob("*.bundle")}
@@ -75,7 +100,8 @@ def test_legacy_pair_uses_current_repair_names_and_metadata_once(setup_library, 
     assert path.read_bytes() == contents
     library.rename(original["id"], "Original alias")
     assert next(m for m in reload_library(env).mods() if m.id == fixed.id).label == translate(
-        "webui.remap.name", name="Original alias")
+        "webui.remap.name", name="Original alias"
+    )
     library.rename(original["id"], "")
     library.mark_seen(fixed.id)
     assert json.loads(path.read_text())["migrations"] == [LEGACY_REMAP]
@@ -91,7 +117,7 @@ def test_deleted_original_leaves_a_tagged_standalone_repair(setup_library, missi
             (env.root / "mods" / original["id"] / name).unlink()
     write_legacy_state(env.root, [repaired] if missing == "record" else [original, repaired])
     library = reload_library(env)
-    fixed, = library.mods()
+    (fixed,) = library.mods()
     assert fixed.repaired_from and fixed.repaired_from != fixed.id
     assert not fixed.repaired_id
     assert fixed.label == service.t("webui.remap.name", name="test_spr")
@@ -131,8 +157,13 @@ def test_migration_preserves_modern_metadata_and_ordinary_names(setup_library):
     modern = legacy_record(env.root, 2, "test_spr (remapped)")
     modern.update(repaired_from=original["id"], alias="Own alias")
     original["repaired_id"] = modern["id"]
-    records = [original, modern, legacy_record(env.root, 3, "test_spr (remapped) extra"),
-               legacy_record(env.root, 4, "test_spr"), legacy_record(env.root, 5, "test_spr (remapped)")]
+    records = [
+        original,
+        modern,
+        legacy_record(env.root, 3, "test_spr (remapped) extra"),
+        legacy_record(env.root, 4, "test_spr"),
+        legacy_record(env.root, 5, "test_spr (remapped)"),
+    ]
     records[-1]["user_added"] = True
     before = copy.deepcopy(records)
     path = write_legacy_state(env.root, records)

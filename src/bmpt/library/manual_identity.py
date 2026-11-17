@@ -30,8 +30,12 @@ def validate(files: dict[str, Path], kind: str | None = None) -> str:
             raise ServiceError("platform_unsupported", file=name)
         previous = combined.platforms - mod_origin.UNKNOWN_PLATFORMS
         if previous and known and previous != known:
-            raise ServiceError("mod_platform_mismatch", file=name,
-                               platform=", ".join(sorted(known)), expected=", ".join(sorted(previous)))
+            raise ServiceError(
+                "mod_platform_mismatch",
+                file=name,
+                platform=", ".join(sorted(known)),
+                expected=", ".join(sorted(previous)),
+            )
         combined.merge(contents)
         parsed = parse_filename(name)
         declared = kind_of(parsed.core, parsed.category)

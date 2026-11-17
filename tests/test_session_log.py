@@ -16,8 +16,12 @@ def test_log_rpc_returns_the_last_500_lines_in_order_and_redacts_secrets(tmp_pat
     secret = "session/value+with?punctuation"
     path = tmp_path / "webui.log"
     lines = [f"line {i}" for i in range(510)]
-    lines += [f"URL http://127.0.0.1/?t={quote(secret, safe='')}",
-              f"unexpected failure: {secret}", "Authorization: Bearer abcdef", "password='hidden value'"]
+    lines += [
+        f"URL http://127.0.0.1/?t={quote(secret, safe='')}",
+        f"unexpected failure: {secret}",
+        "Authorization: Bearer abcdef",
+        "password='hidden value'",
+    ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     services = SimpleNamespace(log_path=path, log_secrets={secret}, timings=Timings())
     result = build_api(services).call("app.log", {})["result"]
@@ -31,15 +35,18 @@ def test_log_rpc_returns_the_last_500_lines_in_order_and_redacts_secrets(tmp_pat
     assert "line 509\nURL" in text
 
 
-@pytest.mark.parametrize("line,secret", [
-    ('{"token": "json-secret"}', "json-secret"),
-    ("api_key=key-secret", "key-secret"),
-    ("BAMT_CLASSIC_TOKEN=classic-secret", "classic-secret"),
-    ("Cookie: bamt123=cookie-secret; Path=/", "cookie-secret"),
-    ("Authorization: Basic abcdef==", "abcdef"),
-    ("https://user:password@example.invalid", "password"),
-    ("http://localhost/?t=query-secret&next=/", "query-secret"),
-])
+@pytest.mark.parametrize(
+    "line,secret",
+    [
+        ('{"token": "json-secret"}', "json-secret"),
+        ("api_key=key-secret", "key-secret"),
+        ("BAMT_CLASSIC_TOKEN=classic-secret", "classic-secret"),
+        ("Cookie: bamt123=cookie-secret; Path=/", "cookie-secret"),
+        ("Authorization: Basic abcdef==", "abcdef"),
+        ("https://user:password@example.invalid", "password"),
+        ("http://localhost/?t=query-secret&next=/", "query-secret"),
+    ],
+)
 def test_redaction_covers_credentials_even_without_a_known_value(line, secret):
     assert secret not in redact(line, set())
 

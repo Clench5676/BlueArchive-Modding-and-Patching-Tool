@@ -23,15 +23,15 @@ def test_the_menu_bar_pdf_parses_as_one_18_pt_page():
     assert re.search(rb"/MediaBox \[0 0 18 18\]", data)
     assert data.count(b"/Type /Page ") == 1
     startxref = int(re.search(rb"startxref\s+(\d+)", data).group(1))
-    assert data[startxref:startxref + 4] == b"xref"
+    assert data[startxref : startxref + 4] == b"xref"
     entries = re.findall(rb"(\d{10}) 00000 n ", data[startxref:])
     assert entries
     for number, offset in enumerate(entries, 1):
-        assert data[int(offset):].startswith(f"{number} 0 obj".encode())
+        assert data[int(offset) :].startswith(f"{number} 0 obj".encode())
     length = int(re.search(rb"/Length (\d+)", data).group(1))
     stream = data.index(b"stream\n") + len(b"stream\n")
-    assert data[stream + length:].startswith(b"endstream")
-    assert b"f*" in data[stream:stream + length]  # filled even-odd: the band and the star
+    assert data[stream + length :].startswith(b"endstream")
+    assert b"f*" in data[stream : stream + length]  # filled even-odd: the band and the star
 
 
 def test_the_2x_png_is_a_36_px_black_template():

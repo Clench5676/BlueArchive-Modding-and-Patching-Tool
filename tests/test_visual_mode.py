@@ -51,8 +51,11 @@ def test_real_visual_mode_layout(tmp_path):
     for name in ("Bg_Pt_1", "Bg_Pt_2"):
         assert any(str(w.get("texture", "")).startswith("UITex_BGPoliLight") for w in subtree(bg, name)["widgets"])
     # the corners the buttons hang on are anchored to the screen's edges
-    for corner, buttons in (("LeftTop", ["Btn_Back"]), ("RightTop", ["Btn_HideUI", "Btn_ShowUI"]),
-                            ("RightBottom", ["Btn_RefreshPos", "Btn_RefreshPos_Disable"])):
+    for corner, buttons in (
+        ("LeftTop", ["Btn_Back"]),
+        ("RightTop", ["Btn_HideUI", "Btn_ShowUI"]),
+        ("RightBottom", ["Btn_RefreshPos", "Btn_RefreshPos_Disable"]),
+    ):
         node = subtree(pc, corner)
         anchors = next(w["anchors"] for w in node["widgets"] if w.get("anchors"))
         assert set(anchors) == {"leftAnchor", "rightAnchor", "bottomAnchor", "topAnchor"}
@@ -71,15 +74,25 @@ def test_real_fullscreen_control_geometry(tmp_path):
     assert (cycle["width"], cycle["height"]) == (80, 80)
     fixture_module = (TESTS.parent / "visual_prefabs.mjs").as_uri()
     result = subprocess.run(
-        [NODE, "--input-type=module", "-e",
-         f"import {{visualPrefab}} from {json.dumps(fixture_module)}; console.log(JSON.stringify(visualPrefab()));"],
-        capture_output=True, text=True, check=True, timeout=30,
+        [
+            NODE,
+            "--input-type=module",
+            "-e",
+            f"import {{visualPrefab}} from {json.dumps(fixture_module)}; console.log(JSON.stringify(visualPrefab()));",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=30,
     )
     fixture = subtree(json.loads(result.stdout), "Inventory_ListControl_PC")
     with open_bundle(game._prefab_bundle("UICharacterVisualMode")) as env:
         pc = subtree(export_layout(env, "UICharacterVisualMode", {}), "Inventory_ListControl_PC")
-        for corner, names in (("LeftTop", ("Btn_Back",)), ("RightTop", ("Btn_HideUI", "Btn_ShowUI")),
-                              ("RightBottom", ("Btn_RefreshPos", "Btn_RefreshPos_Disable"))):
+        for corner, names in (
+            ("LeftTop", ("Btn_Back",)),
+            ("RightTop", ("Btn_HideUI", "Btn_ShowUI")),
+            ("RightBottom", ("Btn_RefreshPos", "Btn_RefreshPos_Disable")),
+        ):
             actual_corner, expected_corner = subtree(pc, corner), subtree(fixture, corner)
             assert actual_corner["pos"] == expected_corner["pos"]
             actual_widget = next(w for w in actual_corner["widgets"] if w.get("anchors"))

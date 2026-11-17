@@ -119,14 +119,16 @@ class Photography:
 
     def delete(self, variant: str, key: str, confirm: bool = False) -> str:
         self._variant(variant)
-        if key == 'official':
-            raise ServiceError('asset_official')
+        if key == "official":
+            raise ServiceError("asset_official")
         s, library = self.services, self.services.library
+
         def run(log, progress):
             library.delete_photograph(variant, key, confirm=confirm, log=log)
-            s.events.publish('photography.changed', {'variant': variant})
+            s.events.publish("photography.changed", {"variant": variant})
             return self.list(variant)
-        return s.submit('photography.delete', run, writes='library', library=library)
+
+        return s.submit("photography.delete", run, writes="library", library=library)
 
     def apply(self, variant: str, key: str | None, *, png: str | None = None, restore_app: bool = False) -> str:
         self._variant(variant)
@@ -161,8 +163,14 @@ class Photography:
             if error.code != "photo_target_unavailable":
                 raise
             return self.services.jobs.submit("photography.restore", lambda log, progress: self.select(variant, None))
-        existing = next((entry["id"] for entry in self.services.photographs.list(variant)["photos"]
-                         if entry["variant"] == variant and entry.get("builtin")), None)
+        existing = next(
+            (
+                entry["id"]
+                for entry in self.services.photographs.list(variant)["photos"]
+                if entry["variant"] == variant and entry.get("builtin")
+            ),
+            None,
+        )
         return self.apply(variant, existing or ("generated" if png else None), png=png, restore_app=True)
 
     def export(self, variant: str, key: str | None, png: str | None = None) -> dict:
@@ -242,7 +250,7 @@ def register(rpc, services: Services) -> None:
     def delete(variant: str, id: str, confirm: bool = False):
         return services.photography.delete(variant, id, confirm=confirm)
 
-    @rpc.method('photography.removalInfo')
+    @rpc.method("photography.removalInfo")
     def removal_info(variant: str, id: str):
         return services.photography.removal_info(variant, id)
 

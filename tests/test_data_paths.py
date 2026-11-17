@@ -170,8 +170,12 @@ def test_override_never_inspects_default_folders(folders, tmp_path, monkeypatch)
     override = tmp_path / "isolated"
     monkeypatch.setenv("BAMT_DATA_DIR", str(override))
     monkeypatch.setattr(utils, "DATA_DIR_OVERRIDE", devmode.data_dir())
-    monkeypatch.setattr(utils_paths, "__compiled__", SimpleNamespace(containing_dir=str(tmp_path), macos_bundle_mode=True),
-                        raising=False)
+    monkeypatch.setattr(
+        utils_paths,
+        "__compiled__",
+        SimpleNamespace(containing_dir=str(tmp_path), macos_bundle_mode=True),
+        raising=False,
+    )
 
     def forbidden(*args, **kwargs):
         pytest.fail("default folders were inspected with an override")
@@ -200,18 +204,29 @@ def test_persisted_paths_rewritten_in_values_and_keys(folders, tmp_path, externa
         "Unknown": {"paths": [str(old), str(old) + "-other/output", "relative/BA-Modding-Toolkit"]},
     }
     (old / "config.toml").write_text(toml.dumps(settings))
-    state = {"prefs": {"library_dir": str(library), "cache_parent": str(old / "custom-cache"),
-                       "data_id": "a" * 32, "data_path": str(old)}, "aliases": {"x": ["keep"]}}
+    state = {
+        "prefs": {
+            "library_dir": str(library),
+            "cache_parent": str(old / "custom-cache"),
+            "data_id": "a" * 32,
+            "data_path": str(old),
+        },
+        "aliases": {"x": ["keep"]},
+    }
     (old / "webui.json").write_text(json.dumps(state))
-    profiles = {"version": 1, "folders": {str(old / "game"): {"configured": {}, "named_by": {"a" * 32: "date"}}},
-                "unfinished": [{"install": str(old / "game"), "core": "x", "why": "pending"}]}
+    profiles = {
+        "version": 1,
+        "folders": {str(old / "game"): {"configured": {}, "named_by": {"a" * 32: "date"}}},
+        "unfinished": [{"install": str(old / "game"), "core": "x", "why": "pending"}],
+    }
     for name in ("profiles.json", "profiles.json.prev", "profiles.json.bad"):
         (library / name).write_text(json.dumps(profiles))
     if external_library:
         (old / "library").mkdir()
         (old / "library/profiles.json").write_text(json.dumps(profiles))
-    (library / "state.json").write_text(json.dumps({"version": 1, "applied": {str(old / "game/a.bundle"): {}},
-                                                  "outside": str(outside)}))
+    (library / "state.json").write_text(
+        json.dumps({"version": 1, "applied": {str(old / "game/a.bundle"): {}}, "outside": str(outside)})
+    )
     (old / "classic.json").write_text(json.dumps({"exe": str(old / "tool"), "pid": -1}))
     info = b'{"pid": -1, "port": 9000, "raise_token": "keep"}'
     (old / "instance.json").write_bytes(info)
@@ -270,6 +285,7 @@ def test_the_previous_copy_and_the_bad_file_of_webui_json_move_with_the_data_fol
 def test_interrupted_rewrite_never_stops_the_start_and_is_retried(folders, monkeypatch):
     old, new = folders
     (old / "config.toml").write_text(toml.dumps({"AppSettings": {"output_dir": str(old / "output")}}))
+
     def denied(*args):
         raise PermissionError("busy")
 
@@ -395,8 +411,12 @@ def test_path_key_conflict_preserves_both_records(folders):
     old, new = folders
     library = old / "library"
     library.mkdir()
-    content = json.dumps({"version": 1, "applied": {str(old / "game/a.bundle"): {"source": "old"},
-                                                    str(new / "game/a.bundle"): {"source": "new"}}})
+    content = json.dumps(
+        {
+            "version": 1,
+            "applied": {str(old / "game/a.bundle"): {"source": "old"}, str(new / "game/a.bundle"): {"source": "new"}},
+        }
+    )
     (library / "state.json").write_text(content)
     assert migrate_data_dir(old.parent) == new
     assert (new / "library/state.json").read_text() == content
@@ -424,8 +444,11 @@ def test_live_classic_child_prevents_migration(folders):
     from bmpt.webui.classic import SYSTEM_PROCESSES
 
     old, new = folders
-    (old / "classic.json").write_text(json.dumps({"pid": os.getpid(), "exe": sys.executable, "hwnd": 0,
-                                                  "created": SYSTEM_PROCESSES.created(os.getpid())}))
+    (old / "classic.json").write_text(
+        json.dumps(
+            {"pid": os.getpid(), "exe": sys.executable, "hwnd": 0, "created": SYSTEM_PROCESSES.created(os.getpid())}
+        )
+    )
     assert migrate_data_dir(old.parent) == old
     assert old.exists() and not new.exists()
 
@@ -437,8 +460,9 @@ def test_older_standalone_classic_without_record_prevents_migration(folders, mon
     monkeypatch.setattr(sys, "argv", [executable])
     monkeypatch.setattr(sys, "executable", executable)
     process = f"987654 /Applications/Old Tool.app/Contents/MacOS/Tool --classic\n"
-    monkeypatch.setattr(data_paths.subprocess, "run", lambda *args, **kwargs:
-                        SimpleNamespace(returncode=0, stdout=process))
+    monkeypatch.setattr(
+        data_paths.subprocess, "run", lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout=process)
+    )
     assert migrate_data_dir(old.parent) == old
     assert old.exists() and not new.exists()
     process = "987654 /Applications/Other.app/Contents/MacOS/Other --classic\n"
@@ -452,8 +476,12 @@ def test_migration_precedes_addons_copy(folders, tmp_path, monkeypatch):
     bundled = tmp_path / "bundle/Addons"
     bundled.mkdir(parents=True)
     (bundled / "map.csv").write_text("bundled map")
-    monkeypatch.setattr(utils_paths, "__compiled__", SimpleNamespace(containing_dir=str(tmp_path), macos_bundle_mode=True),
-                        raising=False)
+    monkeypatch.setattr(
+        utils_paths,
+        "__compiled__",
+        SimpleNamespace(containing_dir=str(tmp_path), macos_bundle_mode=True),
+        raising=False,
+    )
     monkeypatch.setattr(Path, "home", lambda: tmp_path / "home")
     monkeypatch.setattr(sys, "executable", str(bundled.parent / "tool"))
     monkeypatch.setattr(utils_paths, "migrate_data_dir", lambda parent: migrate_data_dir(old.parent))
@@ -470,8 +498,11 @@ def test_default_cache_removes_only_old_cache(tmp_path, monkeypatch, system, bot
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "xdg"))
-    parent = {"win32": tmp_path / "local", "darwin": tmp_path / "Library/Application Support",
-              "linux": tmp_path / "xdg"}[system]
+    parent = {
+        "win32": tmp_path / "local",
+        "darwin": tmp_path / "Library/Application Support",
+        "linux": tmp_path / "xdg",
+    }[system]
     tail = Path() if system == "linux" else Path("cache")
     old, new = parent / OLD_APP_DIR_NAME / tail, parent / APP_DIR_NAME / tail
     old.mkdir(parents=True)

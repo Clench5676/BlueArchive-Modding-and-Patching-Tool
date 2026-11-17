@@ -51,15 +51,46 @@ def analyze(env, paths):
 
 def run(env, entries, **options):
     options = {**call(env, "import.options"), "output": None, **options}
-    return finish(env, call(env, "import.run", ids=[entry["id"] for entry in entries], options=options,
-                            revision=env.services.batch_import._revision))["results"]
+    return finish(
+        env,
+        call(
+            env,
+            "import.run",
+            ids=[entry["id"] for entry in entries],
+            options=options,
+            revision=env.services.batch_import._revision,
+        ),
+    )["results"]
+
 
 GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-game")
-FIXED = {"hoshino", "shiroko", "aru", "hina", "yuuka", "mika", "nagisa", "cherino", "airi", "ch0164", "hihumi",
-         "serika", "iori", "koharu"}
+FIXED = {
+    "hoshino",
+    "shiroko",
+    "aru",
+    "hina",
+    "yuuka",
+    "mika",
+    "nagisa",
+    "cherino",
+    "airi",
+    "ch0164",
+    "hihumi",
+    "serika",
+    "iori",
+    "koharu",
+}
 #: refusals that say the analysis found no official part for the files
-TARGET_CODES = {"no_matching_assets", "conversion_names", "no_target", "game_file_not_found", "mod_target_unknown",
-                "mod_target_ambiguous", "mod_target_mismatch", "source_unknown"}
+TARGET_CODES = {
+    "no_matching_assets",
+    "conversion_names",
+    "no_target",
+    "game_file_not_found",
+    "mod_target_unknown",
+    "mod_target_ambiguous",
+    "mod_target_mismatch",
+    "source_unknown",
+}
 IMPORTABLE = {"convert", "update", "ready"}
 IMPORTED = {"imported", "updated"}
 #: cores whose imports fail for a known reason outside the target rule, with that reason
@@ -86,13 +117,19 @@ STREAMED = {"Mesh": ("m_StreamData", "path"), "AudioClip": ("m_Resource", "m_Sou
 
 def types_of(path: Path) -> set[str]:
     import UnityPy
+
     return {obj.type.name for obj in UnityPy.load(str(path)).objects}
 
 
 def word_of(types: set[str]) -> str:
     """The resource-type word a mobile build names a part by."""
-    for kind, word in (("TextAsset", "textassets"), ("Texture2D", "textures"), ("Material", "materials"),
-                       ("MonoBehaviour", "monobehaviours"), ("AnimationClip", "animationclips")):
+    for kind, word in (
+        ("TextAsset", "textassets"),
+        ("Texture2D", "textures"),
+        ("Material", "materials"),
+        ("MonoBehaviour", "monobehaviours"),
+        ("AnimationClip", "animationclips"),
+    ):
         if kind in types:
             return word
     return "assets"
@@ -118,8 +155,11 @@ def replica(official: Path, folder: Path, build: str, types: set[str]) -> Path:
         name = official.name.replace(parsed.date, date, 1)  # the official name's own form, under another date
     path = folder / name
     bundle = UnityPy.load(str(official)).file
-    renames = {key: "CAB-" + hashlib.md5((key + build).encode()).hexdigest()
-               for key in bundle.files if key.startswith("CAB-") and not key.endswith(".resS")}
+    renames = {
+        key: "CAB-" + hashlib.md5((key + build).encode()).hexdigest()
+        for key in bundle.files
+        if key.startswith("CAB-") and not key.endswith(".resS")
+    }
     target = getattr(BuildTarget, spec["target"])
     edits: dict[str, list[int]] = {}
     files = {}
@@ -155,7 +195,7 @@ def replica(official: Path, folder: Path, build: str, types: set[str]) -> Path:
         stream = renames.get(key.removesuffix(".resS"), key.removesuffix(".resS")) + ".resS"
         data = bytearray(files[stream].bytes)
         for offset in offsets:
-            data[offset:offset + 16] = bytes(byte ^ 0x5A for byte in data[offset:offset + 16])
+            data[offset : offset + 16] = bytes(byte ^ 0x5A for byte in data[offset : offset + 16])
         changed = EndianBinaryReader(bytes(data))
         changed.flags = files[stream].flags
         files[stream] = changed
@@ -212,8 +252,13 @@ def roster(tmp_path_factory):
     cores = chosen_cores(probe, catalog, pin)
     official = {core: probe._spine_parts(core, pin) for core in cores}
     # the roster knows a student from the cores the install holds: clone the student's other core as well
-    companions = {other.lower() for core in cores if (variant := catalog.variant_for_asset_core(core))
-                  for other in (variant.spr, variant.lobby) if other}
+    companions = {
+        other.lower()
+        for core in cores
+        if (variant := catalog.variant_for_asset_core(core))
+        for other in (variant.spr, variant.lobby)
+        if other
+    }
     inspection = integrity.Inspection()
     every = [path for core in sorted(set(cores) | companions) for path in probe._spine_parts(core, pin)]
     references = set().union(*(inspection.inspect(path).references for path in every))
@@ -235,8 +280,16 @@ def roster(tmp_path_factory):
     parts = {core: [clones / path.name for path in paths] for core, paths in official.items()}
     types = {path: types_of(path) for paths in parts.values() for path in paths}
     try:
-        yield SimpleNamespace(services=services, rpc=build_api(services), library=library, cores=cores, parts=parts,
-                              types=types, tmp=tmp, pin=library.current_pin())
+        yield SimpleNamespace(
+            services=services,
+            rpc=build_api(services),
+            library=library,
+            cores=cores,
+            parts=parts,
+            types=types,
+            tmp=tmp,
+            pin=library.current_pin(),
+        )
     finally:
         services.close()
 
@@ -288,8 +341,10 @@ def check_rows(env, rows: list[dict], sets: dict[str, list[Path]], label: str, k
         names = lambda paths: sorted(path.name for path in paths)  # noqa: E731
         shown = {part for part in dropped - written if env.types[part] & SHOWN}
         if not dropped <= resolved or not written <= resolved or (kind == "complete" and dropped != resolved):
-            problems.append(f"{label}/{core}: resolved {names(resolved)}, preview drops {names(dropped)}, "
-                            f"import writes {names(written)}")
+            problems.append(
+                f"{label}/{core}: resolved {names(resolved)}, preview drops {names(dropped)}, "
+                f"import writes {names(written)}"
+            )
         elif shown or (kind == "typical" and dropped != written):
             problems.append(f"{label}/{core}: preview drops {names(dropped)}, import writes {names(written)}")
     for core in set(sets) - seen:

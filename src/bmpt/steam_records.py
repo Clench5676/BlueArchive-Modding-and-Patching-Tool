@@ -25,8 +25,10 @@ logger = logging.getLogger(__name__)
 #: The Global client's Windows content depot (the macOS install runs the Windows client under Wine)
 DEPOT_GLOBAL_WINDOWS = 3557621
 #: The folders below the install whose bundles the library judges
-BUNDLE_FOLDERS = ("BlueArchive_Data/StreamingAssets/PUB/Resource/GameData/Windows/",
-                  "BlueArchive_Data/StreamingAssets/PUB/Resource/Preload/Windows/")
+BUNDLE_FOLDERS = (
+    "BlueArchive_Data/StreamingAssets/PUB/Resource/GameData/Windows/",
+    "BlueArchive_Data/StreamingAssets/PUB/Resource/Preload/Windows/",
+)
 #: A depot manifest larger than this is not read (the Global build's is about 9 MB)
 MAX_MANIFEST = 256 * 1024 * 1024
 
@@ -107,6 +109,7 @@ def installed_manifest(appmanifest: str, depot: int = DEPOT_GLOBAL_WINDOWS) -> i
 
 # --- depot manifests (Steam's ContentManifest) ---
 
+
 def _varint(buf: bytes, pos: int) -> tuple[int, int]:
     value = shift = 0
     for _ in range(10):
@@ -130,12 +133,12 @@ def _fields(buf: bytes) -> Iterator[tuple[int, int, int | bytes]]:
         if wire == 0:
             value, pos = _varint(buf, pos)
         elif wire == 1:
-            value, pos = buf[pos:pos + 8], pos + 8
+            value, pos = buf[pos : pos + 8], pos + 8
         elif wire == 2:
             length, pos = _varint(buf, pos)
-            value, pos = buf[pos:pos + length], pos + length
+            value, pos = buf[pos : pos + length], pos + length
         elif wire == 5:
-            value, pos = buf[pos:pos + 4], pos + 4
+            value, pos = buf[pos : pos + 4], pos + 4
         else:
             raise ManifestError("unsupported protobuf wire type")
         if pos > len(buf):
@@ -155,7 +158,7 @@ def _sections(data: bytes) -> dict[int, bytes]:
         if magic not in (_MAGIC_PAYLOAD, _MAGIC_METADATA, _MAGIC_SIGNATURE) or pos + 8 > len(data):
             raise ManifestError("unknown or truncated depot manifest section")
         length = struct.unpack_from("<I", data, pos + 4)[0]
-        body = data[pos + 8:pos + 8 + length]
+        body = data[pos + 8 : pos + 8 + length]
         if len(body) != length:
             raise ManifestError("truncated depot manifest section")
         sections[magic] = body
@@ -205,6 +208,7 @@ def parse_depot_manifest(data: bytes) -> tuple[int, int, dict[str, OfficialFile]
 
 # --- where Steam keeps them ---
 
+
 def _steam_roots(library: Path) -> Iterator[Path]:
     """The Steam client folders that may hold the depot cache for a library: the library itself (the client's own
     library), the Windows client inside the same Wine prefix, the Windows client's registered folder, the native
@@ -219,6 +223,7 @@ def _steam_roots(library: Path) -> Iterator[Path]:
     if sys.platform == "win32":
         try:
             import winreg
+
             with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam") as key:
                 yield Path(winreg.QueryValueEx(key, "SteamPath")[0])
         except OSError:
@@ -293,8 +298,8 @@ class OfficialFiles:
         bundles: dict[str, OfficialFile] = {}
         for path, entry in files.items():
             for prefix in BUNDLE_FOLDERS:
-                if path.startswith(prefix) and "/" not in path[len(prefix):]:
-                    bundles[path[len(prefix):]] = entry
+                if path.startswith(prefix) and "/" not in path[len(prefix) :]:
+                    bundles[path[len(prefix) :]] = entry
         with self._lock:
             self._cache[manifest] = (signature, bundles)
         return bundles

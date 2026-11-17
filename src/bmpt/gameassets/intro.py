@@ -41,8 +41,16 @@ WRAP_HOLD, WRAP_LOOP, WRAP_NONE = 0, 1, 2
 _TRANSFORM_ATTR = {1: ("position", 3), 2: ("rotation", 4), 3: ("scale", 3), 4: ("euler", 3)}
 _MATERIAL = 22  # GenericBinding.customType of a renderer's material property
 # ClassIDType of the bound component
-TYPE_NAMES = {1: "GameObject", 4: "Transform", 23: "MeshRenderer", 114: "MonoBehaviour", 198: "ParticleSystem",
-              199: "ParticleSystemRenderer", 212: "SpriteRenderer", 224: "RectTransform"}
+TYPE_NAMES = {
+    1: "GameObject",
+    4: "Transform",
+    23: "MeshRenderer",
+    114: "MonoBehaviour",
+    198: "ParticleSystem",
+    199: "ParticleSystemRenderer",
+    212: "SpriteRenderer",
+    224: "RectTransform",
+}
 
 
 def _r(value: float, digits: int = 5) -> float:
@@ -55,6 +63,7 @@ def crc(text: str) -> int:
 
 
 # --- curves --------------------------------------------------------------------------------------------------------
+
 
 def streamed(data: Iterable[int], count: int) -> list[list[list[float]]]:
     """A StreamedClip's keys by curve: [time, a, b, c, d], the segment from time on being ((a x + b) x + c) x + d with x
@@ -141,10 +150,16 @@ def clip_curves(clip: Mapping[str, Any]) -> dict:
         attr = int(b.get("attribute", 0)) & 0xFFFFFFFF
         size = _TRANSFORM_ATTR.get(attr, (None, 1))[1] if tid == 4 else 1
         pptr = bool(b.get("isPPtrCurve"))
-        entry = {"path": int(b.get("path", 0)) & 0xFFFFFFFF, "type": tid, "attr": attr,
-                 "custom": int(b.get("customType", 0)), "script": b.get("script") or {}, "pptr": pptr}
+        entry = {
+            "path": int(b.get("path", 0)) & 0xFFFFFFFF,
+            "type": tid,
+            "attr": attr,
+            "custom": int(b.get("customType", 0)),
+            "script": b.get("script") or {},
+            "pptr": pptr,
+        }
         if not pptr:
-            entry["curves"] = curves[index:index + size]
+            entry["curves"] = curves[index : index + size]
         index += size
         out.append(entry)
     length = float(mc.get("m_StopTime", 0.0)) - float(mc.get("m_StartTime", 0.0))
@@ -152,6 +167,7 @@ def clip_curves(clip: Mapping[str, Any]) -> dict:
 
 
 # --- reading the timeline ------------------------------------------------------------------------------------------
+
 
 def _script(g: Any, obj: Any) -> str | None:
     try:
@@ -162,12 +178,19 @@ def _script(g: Any, obj: Any) -> str | None:
 
 
 def _timeline_clip(c: Mapping[str, Any]) -> dict:
-    return {"start": _r(c.get("m_Start", 0.0), 6), "dur": _r(c.get("m_Duration", 0.0), 6),
-            "clipIn": _r(c.get("m_ClipIn", 0.0), 6), "scale": _r(c.get("m_TimeScale", 1.0), 6),
-            "easeIn": _r(c.get("m_EaseInDuration", 0.0), 6), "easeOut": _r(c.get("m_EaseOutDuration", 0.0), 6),
-            "blendIn": _r(c.get("m_BlendInDuration", -1.0), 6), "blendOut": _r(c.get("m_BlendOutDuration", -1.0), 6),
-            "pre": int(c.get("m_PreExtrapolationMode", 0)), "post": int(c.get("m_PostExtrapolationMode", 0)),
-            "name": c.get("m_DisplayName") or ""}
+    return {
+        "start": _r(c.get("m_Start", 0.0), 6),
+        "dur": _r(c.get("m_Duration", 0.0), 6),
+        "clipIn": _r(c.get("m_ClipIn", 0.0), 6),
+        "scale": _r(c.get("m_TimeScale", 1.0), 6),
+        "easeIn": _r(c.get("m_EaseInDuration", 0.0), 6),
+        "easeOut": _r(c.get("m_EaseOutDuration", 0.0), 6),
+        "blendIn": _r(c.get("m_BlendInDuration", -1.0), 6),
+        "blendOut": _r(c.get("m_BlendOutDuration", -1.0), 6),
+        "pre": int(c.get("m_PreExtrapolationMode", 0)),
+        "post": int(c.get("m_PostExtrapolationMode", 0)),
+        "name": c.get("m_DisplayName") or "",
+    }
 
 
 def _file_name(obj: Any) -> str | None:
@@ -198,25 +221,44 @@ def read_timeline(g: Any, timeline: Any, sound: Callable[[Any, dict], dict | Non
                     name = rt.get("animationName") or rt.get("ClipName") or None
                 except Exception:
                     name = None
-            out.update(anim=name, loop=bool(tpl.get("loop")), customDuration=bool(tpl.get("customDuration")),
-                       useBlendDuration=bool(tpl.get("useBlendDuration", 1)), mix=_r(tpl.get("mixDuration", 0.1), 6),
-                       holdPrevious=bool(tpl.get("holdPrevious")), endWithClip=not tpl.get("dontEndWithClip"),
-                       endMix=_r(tpl.get("endMixOutDuration", 0.1), 6), alpha=_r(tpl.get("alpha", 1.0), 6),
-                       thresholds=[_r(tpl.get(k, 0.5), 4) for k in ("attachmentThreshold", "drawOrderThreshold",
-                                                                    "eventThreshold")])
+            out.update(
+                anim=name,
+                loop=bool(tpl.get("loop")),
+                customDuration=bool(tpl.get("customDuration")),
+                useBlendDuration=bool(tpl.get("useBlendDuration", 1)),
+                mix=_r(tpl.get("mixDuration", 0.1), 6),
+                holdPrevious=bool(tpl.get("holdPrevious")),
+                endWithClip=not tpl.get("dontEndWithClip"),
+                endMix=_r(tpl.get("endMixOutDuration", 0.1), 6),
+                alpha=_r(tpl.get("alpha", 1.0), 6),
+                thresholds=[
+                    _r(tpl.get(k, 0.5), 4) for k in ("attachmentThreshold", "drawOrderThreshold", "eventThreshold")
+                ],
+            )
         elif cls == "ControlPlayableAsset":
             src = at.get("sourceGameObject") or {}
-            out.update(exposed=str(src.get("exposedName", "")), default=(src.get("defaultValue") or {}).get("m_PathID", 0),
-                       prefab=bool((at.get("prefabGameObject") or {}).get("m_PathID")),
-                       particles=bool(at.get("updateParticle", 1)), seed=int(at.get("particleRandomSeed", 0)),
-                       directors=bool(at.get("updateDirector", 1)), timeControl=bool(at.get("updateITimeControl", 1)),
-                       hierarchy=bool(at.get("searchHierarchy", 0)), active=bool(at.get("active", 1)),
-                       post=int(at.get("postPlayback", 2)))
+            out.update(
+                exposed=str(src.get("exposedName", "")),
+                default=(src.get("defaultValue") or {}).get("m_PathID", 0),
+                prefab=bool((at.get("prefabGameObject") or {}).get("m_PathID")),
+                particles=bool(at.get("updateParticle", 1)),
+                seed=int(at.get("particleRandomSeed", 0)),
+                directors=bool(at.get("updateDirector", 1)),
+                timeControl=bool(at.get("updateITimeControl", 1)),
+                hierarchy=bool(at.get("searchHierarchy", 0)),
+                active=bool(at.get("active", 1)),
+                post=int(at.get("postPlayback", 2)),
+            )
         elif cls == "TimeLineAudioController":
             data = at.get("AudioData") or {}
-            out.update(sound=sound(a, data) if sound else None, voice=at.get("VoiceId") or "",
-                       manager=bool(at.get("PlaySoundManager")), loop=bool(data.get("Loop")),
-                       delay=_r(data.get("Delay", 0.0), 6), syncEnd=bool(at.get("SyncEndTimeByClipLength")))
+            out.update(
+                sound=sound(a, data) if sound else None,
+                voice=at.get("VoiceId") or "",
+                manager=bool(at.get("PlaySoundManager")),
+                loop=bool(data.get("Loop")),
+                delay=_r(data.get("Delay", 0.0), 6),
+                syncEnd=bool(at.get("SyncEndTimeByClipLength")),
+            )
         elif cls == "TimeLineUILobbyController":
             out["icons"] = bool(at.get("IsShowLobbyIcons"))
         elif cls == "TimeLineAudioMixerSnapshotsController":
@@ -232,9 +274,15 @@ def read_timeline(g: Any, timeline: Any, sound: Callable[[Any, dict], dict | Non
             return
         t = g.tree(tr)
         cls = _script(g, tr)
-        item: dict[str, Any] = {"pid": tr.path_id, "file": _file_name(tr), "class": cls,
-                                "name": t.get("m_Name") or "", "muted": bool(t.get("m_Muted")), "depth": depth,
-                                "clips": []}
+        item: dict[str, Any] = {
+            "pid": tr.path_id,
+            "file": _file_name(tr),
+            "class": cls,
+            "name": t.get("m_Name") or "",
+            "muted": bool(t.get("m_Muted")),
+            "depth": depth,
+            "clips": [],
+        }
         if "trackIndex" in t:
             item["trackIndex"] = int(t.get("trackIndex", 0))
         if "m_PostPlaybackState" in t:
@@ -258,12 +306,15 @@ def read_timeline(g: Any, timeline: Any, sound: Callable[[Any, dict], dict | Non
         track(pointer, 0)
     own = getattr(timeline, "assets_file", None)
     externals = getattr(own, "externals", None) or []
-    return {"name": tt.get("m_Name") or "",
-            # the timeline's file and its externals by file id, lower case: what the tracks' "file" and the director's
-            # binding keys name
-            "files": [_file_name(timeline), *(external.path.rsplit("/", 1)[-1].lower() for external in externals)],
-            "durationMode": int(tt.get("m_DurationMode", 0)),
-            "fixedDuration": _r(tt.get("m_FixedDuration", 0.0), 6), "tracks": tracks}
+    return {
+        "name": tt.get("m_Name") or "",
+        # the timeline's file and its externals by file id, lower case: what the tracks' "file" and the director's
+        # binding keys name
+        "files": [_file_name(timeline), *(external.path.rsplit("/", 1)[-1].lower() for external in externals)],
+        "durationMode": int(tt.get("m_DurationMode", 0)),
+        "fixedDuration": _r(tt.get("m_FixedDuration", 0.0), 6),
+        "tracks": tracks,
+    }
 
 
 def duration(raw: Mapping[str, Any]) -> float:
@@ -283,9 +334,13 @@ def duration(raw: Mapping[str, Any]) -> float:
 # --- placing it in the prefab ----------------------------------------------------------------------------------------
 
 # a ParticleSystem property the timeline animates (custom type 27) as the player overrides it: [what, component]
-_PS_PROPS = {"InitialModule.startColor.maxColor.r": ("startColor", 0), "InitialModule.startColor.maxColor.g": ("startColor", 1),
-             "InitialModule.startColor.maxColor.b": ("startColor", 2), "InitialModule.startColor.maxColor.a": ("startColor", 3),
-             "simulationSpeed": ("speed", 0)}
+_PS_PROPS = {
+    "InitialModule.startColor.maxColor.r": ("startColor", 0),
+    "InitialModule.startColor.maxColor.g": ("startColor", 1),
+    "InitialModule.startColor.maxColor.b": ("startColor", 2),
+    "InitialModule.startColor.maxColor.a": ("startColor", 3),
+    "simulationSpeed": ("speed", 0),
+}
 _COLOR = {"m_Color.r": 0, "m_Color.g": 1, "m_Color.b": 2, "m_Color.a": 3}
 # the colour properties a renderer's material binding can name (those of the lobbies' sprite, particle and quad shaders)
 MATERIAL_NAMES = ("_Color", "_TintColor", "_Color0", "_BaseColor", "_MainColor", "_EmissionColor")
@@ -323,7 +378,9 @@ class Plan:
     (build() turns them into the player's indices). raw: read_timeline; director: the PlayableDirector's typetree;
     nodes: lobby.read_prefab's walk (go, name, parent, own, all: [(class, path id, tree)])."""
 
-    def __init__(self, raw: Mapping[str, Any], director: Mapping[str, Any], nodes: list[dict], kinds: Mapping[int, str]):
+    def __init__(
+        self, raw: Mapping[str, Any], director: Mapping[str, Any], nodes: list[dict], kinds: Mapping[int, str]
+    ):
         self.raw, self.nodes = raw, nodes
         self.duration = duration(raw)
         self.wrap = {WRAP_HOLD: "hold", WRAP_LOOP: "loop"}.get(int(director.get("m_WrapMode", WRAP_NONE)), "none")
@@ -343,18 +400,24 @@ class Plan:
                 return files[fid] if 0 <= fid < len(files) else None
             return files[0] if fid == file_id and files else None
 
-        binds = {(key_file((b.get("key") or {}).get("m_FileID", 0)), (b.get("key") or {}).get("m_PathID")):
-                 (b.get("value") or {}).get("m_PathID", 0) for b in director.get("m_SceneBindings") or []}
-        exposed = {str(k): (v or {}).get("m_PathID", 0)
-                   for k, v in (director.get("m_ExposedReferences") or {}).get("m_References", [])}
-        self.spine: list[dict] = []        # {"sa": SkeletonAnimation path id, "track", "clips"}
-        self.props: list[dict] = []        # {"target": ("go" | "comp", path id), "kind", "attr", "k", "c"}
-        self.control: list[dict] = []      # {"go", "t", "d", "in", "particles"}
-        self.activation: list[dict] = []   # {"go", "clips": [[t, d]], "post"}
-        self.sounds: list[dict] = []       # {"t", "sound": event or None}
-        self.icons: list[list[Any]] = []   # [time, shown]
-        self.gates: set[int] = set()       # GameObjects whose own activity the intro sets
-        self.moved: set[int] = set()       # GameObjects whose transform it animates
+        binds = {
+            (key_file((b.get("key") or {}).get("m_FileID", 0)), (b.get("key") or {}).get("m_PathID")): (
+                b.get("value") or {}
+            ).get("m_PathID", 0)
+            for b in director.get("m_SceneBindings") or []
+        }
+        exposed = {
+            str(k): (v or {}).get("m_PathID", 0)
+            for k, v in (director.get("m_ExposedReferences") or {}).get("m_References", [])
+        }
+        self.spine: list[dict] = []  # {"sa": SkeletonAnimation path id, "track", "clips"}
+        self.props: list[dict] = []  # {"target": ("go" | "comp", path id), "kind", "attr", "k", "c"}
+        self.control: list[dict] = []  # {"go", "t", "d", "in", "particles"}
+        self.activation: list[dict] = []  # {"go", "clips": [[t, d]], "post"}
+        self.sounds: list[dict] = []  # {"t", "sound": event or None}
+        self.icons: list[list[Any]] = []  # [time, shown]
+        self.gates: set[int] = set()  # GameObjects whose own activity the intro sets
+        self.moved: set[int] = set()  # GameObjects whose transform it animates
         self.skipped: dict[str, int] = {}  # what it does that the player leaves out, counted
         for t in raw.get("tracks", []):
             if t.get("muted"):
@@ -379,14 +442,26 @@ class Plan:
                     if not a.get("active"):
                         self._skip("control without activation")
                         continue
-                    self.control.append({"go": go, "t": c["start"], "d": c["dur"], "in": c["clipIn"],
-                                         "particles": bool(a.get("particles"))})
+                    self.control.append(
+                        {
+                            "go": go,
+                            "t": c["start"],
+                            "d": c["dur"],
+                            "in": c["clipIn"],
+                            "particles": bool(a.get("particles")),
+                        }
+                    )
                     self.gates.add(go)
             elif cls == "ActivationTrack":
                 n = self.by_go.get(bound) or self.by_comp.get(bound)
                 if n is not None:
-                    self.activation.append({"go": n["go"], "clips": [[c["start"], c["dur"]] for c in t.get("clips", [])],
-                                            "post": t.get("post", 3)})
+                    self.activation.append(
+                        {
+                            "go": n["go"],
+                            "clips": [[c["start"], c["dur"]] for c in t.get("clips", [])],
+                            "post": t.get("post", 3),
+                        }
+                    )
                     self.gates.add(n["go"])
             elif cls == "PlayableTrack":
                 for c in t.get("clips", []):
@@ -406,8 +481,9 @@ class Plan:
 
     def touches(self, n: dict, pid: int) -> bool:
         """Whether the intro changes a component (pid, on node n): one of its properties, or the activity of its chain."""
-        return any(p["target"] == ("comp", pid) for p in self.props) or any(x["go"] in self.gates
-                                                                             for x in chain(n, self.by_go))
+        return any(p["target"] == ("comp", pid) for p in self.props) or any(
+            x["go"] in self.gates for x in chain(n, self.by_go)
+        )
 
     def _animate(self, root: dict, bindings: list[dict]) -> None:
         """A recorded clip's bindings below the Animator's GameObject (root), found by their path CRC."""
@@ -427,7 +503,9 @@ class Plan:
                 if attr != crc("m_IsActive") or not curves:
                     self._skip("GameObject property")
                     continue
-                self.props.append({"target": ("go", n["go"]), "kind": "active", "attr": "active", "k": 0, "c": curves[0]})
+                self.props.append(
+                    {"target": ("go", n["go"]), "kind": "active", "attr": "active", "k": 0, "c": curves[0]}
+                )
                 self.gates.add(n["go"])
             elif tid == 4:
                 name = _TRANSFORM_ATTR.get(attr, (None, 0))[0]
@@ -439,8 +517,14 @@ class Plan:
                 self.moved.add(n["go"])
             else:
                 kind = TYPE_NAMES.get(tid)
-                comp = next(((pid, t) for cls, pid, t in n["all"]
-                             if (("sharedProfile" in t) if kind == "MonoBehaviour" else cls == kind)), None)
+                comp = next(
+                    (
+                        (pid, t)
+                        for cls, pid, t in n["all"]
+                        if (("sharedProfile" in t) if kind == "MonoBehaviour" else cls == kind)
+                    ),
+                    None,
+                )
                 prop = self._property(kind, attr, b.get("custom", 0)) if comp and curves else None
                 if prop is None:
                     self._skip(f"{kind or tid} property")
@@ -462,8 +546,12 @@ class Plan:
             found = material_attribute(attr)
             if found is None or found[1] < 0:
                 return None
-            return {"kind": {"SpriteRenderer": "sprite", "ParticleSystemRenderer": "psr"}.get(kind, "mesh"),
-                    "attr": "material", "name": found[0], "k": found[1]}
+            return {
+                "kind": {"SpriteRenderer": "sprite", "ParticleSystemRenderer": "psr"}.get(kind, "mesh"),
+                "attr": "material",
+                "name": found[0],
+                "k": found[1],
+            }
         return None
 
 
@@ -478,7 +566,7 @@ def _identity() -> list[float]:
 def _mul(a: list[float], b: list[float]) -> list[float]:
     out = []
     for i in range(3):
-        row = a[i * 4:i * 4 + 4]
+        row = a[i * 4 : i * 4 + 4]
         for j in range(4):
             v = row[0] * b[j] + row[1] * b[4 + j] + row[2] * b[8 + j]
             out.append(v + (row[3] if j == 3 else 0.0))
@@ -516,8 +604,21 @@ def moves(n: dict, by_go: Mapping[int, dict], moved: Mapping[int, int], stop: in
 def _trs(t: Mapping[str, Any]) -> list[float]:
     """A transform's rest local position, rotation (quaternion) and scale, [px py pz qx qy qz qw sx sy sz]."""
     p, q, s = t["m_LocalPosition"], t["m_LocalRotation"], t["m_LocalScale"]
-    return [_r(v, 6) for v in (p.get("x", 0.0), p.get("y", 0.0), p.get("z", 0.0), q.get("x", 0.0), q.get("y", 0.0),
-                               q.get("z", 0.0), q.get("w", 1.0), s.get("x", 1.0), s.get("y", 1.0), s.get("z", 1.0))]
+    return [
+        _r(v, 6)
+        for v in (
+            p.get("x", 0.0),
+            p.get("y", 0.0),
+            p.get("z", 0.0),
+            q.get("x", 0.0),
+            q.get("y", 0.0),
+            q.get("z", 0.0),
+            q.get("w", 1.0),
+            s.get("x", 1.0),
+            s.get("y", 1.0),
+            s.get("z", 1.0),
+        )
+    ]
 
 
 def bone_go(n: dict, by_go: Mapping[int, dict]) -> int | None:
@@ -532,8 +633,16 @@ VOLUME_PARAMS = {
     "LiftGammaGain": ("lift", "gamma", "gain"),
     "PaniniProjection": ("distance", "cropToFit"),
     "ColorAdjustments": ("postExposure", "contrast", "colorFilter", "hueShift", "saturation"),
-    "DepthOfField": ("mode", "gaussianStart", "gaussianEnd", "gaussianMaxRadius", "highQualitySampling",
-                     "focusDistance", "aperture", "focalLength"),
+    "DepthOfField": (
+        "mode",
+        "gaussianStart",
+        "gaussianEnd",
+        "gaussianMaxRadius",
+        "highQualitySampling",
+        "focusDistance",
+        "aperture",
+        "focalLength",
+    ),
 }
 
 
@@ -552,16 +661,24 @@ def volume_components(components: Iterable[Mapping[str, Any]]) -> list[dict]:
             if isinstance(field, Mapping) and field.get("m_OverrideState") and "m_Value" in field:
                 raw = field["m_Value"]
                 if isinstance(raw, Mapping):
-                    params[key] = [_r(raw.get(k, 0.0), 6) for k in (("r", "g", "b", "a") if "r" in raw else ("x", "y", "z", "w"))]
+                    params[key] = [
+                        _r(raw.get(k, 0.0), 6) for k in (("r", "g", "b", "a") if "r" in raw else ("x", "y", "z", "w"))
+                    ]
                 else:
                     params[key] = _r(raw, 6)
         out.append({"name": name, "active": bool(comp.get("active", 1)), "params": params})
     return out
 
 
-def sprite(n: dict, renderer_pid: int, renderer: Mapping[str, Any], resolve: Callable[[str, int, dict], Any] | None,
-           by_go: Mapping[int, dict], skeleton_of_go: Callable[[int], str | None],
-           data_scale: Callable[[str], float]) -> tuple[dict, dict, dict] | None:
+def sprite(
+    n: dict,
+    renderer_pid: int,
+    renderer: Mapping[str, Any],
+    resolve: Callable[[str, int, dict], Any] | None,
+    by_go: Mapping[int, dict],
+    skeleton_of_go: Callable[[int], str | None],
+    data_scale: Callable[[str], float],
+) -> tuple[dict, dict, dict] | None:
     """A SpriteRenderer as a drawable of the effects player: its quad (the sprite's rect around its pivot, in the
     GameObject's units), UVs, colour, material (the renderer's, the sprite's texture as _MainTex, as the renderer's
     property block sets it) and place; and its material and texture for the fx tables. None without a sprite, a
@@ -570,8 +687,11 @@ def sprite(n: dict, renderer_pid: int, renderer: Mapping[str, Any], resolve: Cal
         return None
     mats = renderer.get("m_Materials") or []
     found_mat = resolve("material", renderer_pid, mats[0]) if mats and mats[0].get("m_PathID") else None
-    found_sprite = resolve("sprite", renderer_pid, renderer.get("m_Sprite") or {}) if (
-        renderer.get("m_Sprite") or {}).get("m_PathID") else None
+    found_sprite = (
+        resolve("sprite", renderer_pid, renderer.get("m_Sprite") or {})
+        if (renderer.get("m_Sprite") or {}).get("m_PathID")
+        else None
+    )
     if not found_mat or not found_sprite or not found_mat[1].get("program") or not found_sprite[1]:
         return None
     mat_id, mat = found_mat
@@ -584,13 +704,23 @@ def sprite(n: dict, renderer_pid: int, renderer: Mapping[str, Any], resolve: Cal
     x, y, rw, rh = sp["rect"]
     tw, th = max(1, tex.get("w") or 1), max(1, tex.get("h") or 1)
     c = renderer.get("m_Color") or {}
-    item = {"name": n["name"], "path": n["path"], "material": material_id, "queue": mat.get("queue", 3000),
-            "order": int(renderer.get("m_SortingOrder", 0)), "layer": int(renderer.get("m_SortingLayerID", 0)),
-            "z": _r(n["m3"][11], 6), "color": [_r(c.get(k, 1.0), 6) for k in "rgba"],
-            "quad": [_r(-px * w, 6), _r(-py * h, 6), _r((1 - px) * w, 6), _r((1 - py) * h, 6)],
-            "uv": [_r(x / tw, 6), _r(y / th, 6), _r((x + rw) / tw, 6), _r((y + rh) / th, 6)],
-            "flip": [1 if renderer.get("m_FlipX") else 0, 1 if renderer.get("m_FlipY") else 0],
-            "static": _rounded(n["m3"]), "anchor": None, "_node": n, "_renderer": renderer_pid}
+    item = {
+        "name": n["name"],
+        "path": n["path"],
+        "material": material_id,
+        "queue": mat.get("queue", 3000),
+        "order": int(renderer.get("m_SortingOrder", 0)),
+        "layer": int(renderer.get("m_SortingLayerID", 0)),
+        "z": _r(n["m3"][11], 6),
+        "color": [_r(c.get(k, 1.0), 6) for k in "rgba"],
+        "quad": [_r(-px * w, 6), _r(-py * h, 6), _r((1 - px) * w, 6), _r((1 - py) * h, 6)],
+        "uv": [_r(x / tw, 6), _r(y / th, 6), _r((x + rw) / tw, 6), _r((y + rh) / th, 6)],
+        "flip": [1 if renderer.get("m_FlipX") else 0, 1 if renderer.get("m_FlipY") else 0],
+        "static": _rounded(n["m3"]),
+        "anchor": None,
+        "_node": n,
+        "_renderer": renderer_pid,
+    }
     bone = bone_go(n, by_go)
     if bone is not None:
         utility = by_go[bone]["first"]["SkeletonUtilityBone"]
@@ -600,11 +730,18 @@ def sprite(n: dict, renderer_pid: int, renderer: Mapping[str, Any], resolve: Cal
         name = skeleton_of_go(skel["go"]) if skel else None
         if name and utility.get("mode", 0) == 0:
             rel = _identity()
-            for x in reversed(chain(n, by_go)[:[x["go"] for x in chain(n, by_go)].index(bone)]):
+            for x in reversed(chain(n, by_go)[: [x["go"] for x in chain(n, by_go)].index(bone)]):
                 rel = _mul(rel, x["local3"])
-            item.update(anchor={"skeleton": name, "bone": utility.get("boneName") or by_go[bone]["name"],
-                                "go": _rounded(skel["m3"]), "ds": _r(data_scale(name), 6)}, rel=_rounded(rel),
-                        _anchor_go=bone)
+            item.update(
+                anchor={
+                    "skeleton": name,
+                    "bone": utility.get("boneName") or by_go[bone]["name"],
+                    "go": _rounded(skel["m3"]),
+                    "ds": _r(data_scale(name), 6),
+                },
+                rel=_rounded(rel),
+                _anchor_go=bone,
+            )
     return item, {material_id: mat}, {tex["id"]: {k: v for k, v in tex.items() if k != "st"}}
 
 
@@ -615,11 +752,21 @@ def _custom_mix(c: Mapping[str, Any]) -> float | None:
     a = c["asset"]
     if not a.get("customDuration"):
         return None
-    return _r(max(c.get("blendIn", -1.0), c.get("easeIn", 0.0), 0.0) if a.get("useBlendDuration") else a.get("mix", 0.0), 6)
+    return _r(
+        max(c.get("blendIn", -1.0), c.get("easeIn", 0.0), 0.0) if a.get("useBlendDuration") else a.get("mix", 0.0), 6
+    )
 
 
-def build(plan: Plan, *, layers: list[dict], layer_nodes: Mapping[str, dict], skeleton_of_sa: Mapping[int, str],
-          volumes: list[dict], fx: dict, sprites: list[dict]) -> dict:
+def build(
+    plan: Plan,
+    *,
+    layers: list[dict],
+    layer_nodes: Mapping[str, dict],
+    skeleton_of_sa: Mapping[int, str],
+    volumes: list[dict],
+    fx: dict,
+    sprites: list[dict],
+) -> dict:
     """The intro as the player plays it (web/js/lobby-intro.js), and its marks on the lobby's other data:
     - nodes: [{"path", "own", "trs" (moved ones)}], the GameObjects it switches or moves;
     - spine: [{"skeleton", "track", "clips": [{"t", "d", "in", "speed", "anim", "loop", "mix", "endMix", "end",
@@ -663,7 +810,11 @@ def build(plan: Plan, *, layers: list[dict], layer_nodes: Mapping[str, dict], sk
             mark(layer, n)
     bound = {skeleton_of_sa.get(s["sa"]) for s in plan.spine}
     for layer in layers:
-        if not layer["active"] and (layer.get("gate") or layer["name"] in bound) and kept(layer_nodes[layer["name"]], plan.by_go, gates):
+        if (
+            not layer["active"]
+            and (layer.get("gate") or layer["name"] in bound)
+            and kept(layer_nodes[layer["name"]], plan.by_go, gates)
+        ):
             layer["intro"] = True
     system_index = {}
     for i, s in enumerate(fx.get("systems", [])):
@@ -682,7 +833,9 @@ def build(plan: Plan, *, layers: list[dict], layer_nodes: Mapping[str, dict], sk
 
     def base(material_id: str | None, name: str) -> list[float]:
         # an animated material colour's other components stay the material's own
-        return list((fx.get("materials", {}).get(material_id) or {}).get("colors", {}).get(name) or [1.0, 1.0, 1.0, 1.0])
+        return list(
+            (fx.get("materials", {}).get(material_id) or {}).get("colors", {}).get(name) or [1.0, 1.0, 1.0, 1.0]
+        )
 
     props, touches_volumes = [], False
     for p in plan.props:
@@ -717,22 +870,40 @@ def build(plan: Plan, *, layers: list[dict], layer_nodes: Mapping[str, dict], sk
             a = c.get("asset") or {}
             if a.get("class") != "SpineAnimationStateClip":
                 continue
-            clips.append({"t": c["start"], "d": c["dur"], "in": c["clipIn"], "speed": c["scale"], "anim": a.get("anim"),
-                          "loop": a.get("loop", False), "mix": _custom_mix(c), "endMix": a.get("endMix", 0.1),
-                          "end": a.get("endWithClip", True), "hold": a.get("holdPrevious", False),
-                          "alpha": a.get("alpha", 1.0)})
+            clips.append(
+                {
+                    "t": c["start"],
+                    "d": c["dur"],
+                    "in": c["clipIn"],
+                    "speed": c["scale"],
+                    "anim": a.get("anim"),
+                    "loop": a.get("loop", False),
+                    "mix": _custom_mix(c),
+                    "endMix": a.get("endMix", 0.1),
+                    "end": a.get("endWithClip", True),
+                    "hold": a.get("holdPrevious", False),
+                    "alpha": a.get("alpha", 1.0),
+                }
+            )
         spine.append({"skeleton": name, "track": s["track"], "clips": clips})
 
     out: dict[str, Any] = {
-        "duration": plan.duration, "wrap": plan.wrap, "nodes": nodes_out, "spine": spine, "props": props,
-        "control": [{"node": index[c["go"]], "t": c["t"], "d": c["d"], "in": c["in"], "particles": c["particles"]}
-                    for c in plan.control],
+        "duration": plan.duration,
+        "wrap": plan.wrap,
+        "nodes": nodes_out,
+        "spine": spine,
+        "props": props,
+        "control": [
+            {"node": index[c["go"]], "t": c["t"], "d": c["d"], "in": c["in"], "particles": c["particles"]}
+            for c in plan.control
+        ],
         "activation": [{"node": index[a["go"]], "clips": a["clips"], "post": a["post"]} for a in plan.activation],
         "sounds": [{"t": s["t"], "id": s["sound"]["id"]} for s in plan.sounds if s.get("sound")],
         "icons": sorted(plan.icons),
         # the sounds' events, which lobby.lobby_info adds to the lobby's sound events
-        "events": {s["sound"]["id"]: {k: v for k, v in s["sound"].items() if k != "id"} for s in plan.sounds
-                   if s.get("sound")},
+        "events": {
+            s["sound"]["id"]: {k: v for k, v in s["sound"].items() if k != "id"} for s in plan.sounds if s.get("sound")
+        },
     }
     # the idle's start on the character's track: when the intro has handed over (informative, for checks)
     idle = [c["t"] for s in spine for c in s["clips"] if (c["anim"] or "").lower().startswith("idle")]
@@ -740,9 +911,15 @@ def build(plan: Plan, *, layers: list[dict], layer_nodes: Mapping[str, dict], sk
     gated_volumes = False
     for v in volumes:
         n = v["_node"]
-        item = {"weight": _r(v["weight"], 6), "priority": _r(v["priority"], 6), "global": v["global"],
-                "enabled": v["enabled"], "active": bool(n["active"]), "layer": v["layer_ok"],
-                "components": volume_components(v.get("components") or [])}
+        item = {
+            "weight": _r(v["weight"], 6),
+            "priority": _r(v["priority"], 6),
+            "global": v["global"],
+            "enabled": v["enabled"],
+            "active": bool(n["active"]),
+            "layer": v["layer_ok"],
+            "components": volume_components(v.get("components") or []),
+        }
         mark(item, n)
         gated_volumes = gated_volumes or "gate" in item
         v["_out"] = item

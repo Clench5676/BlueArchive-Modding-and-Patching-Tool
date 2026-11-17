@@ -99,9 +99,15 @@ class UpdateInfo:
     notes: str = ""
 
     def to_json(self) -> dict:
-        return {"version": self.version, "current": self.current, "page": self.page, "prerelease": self.prerelease,
-                "asset": self.asset.to_json() if self.asset else None, "installable": self.installable,
-                "notes": self.notes}
+        return {
+            "version": self.version,
+            "current": self.current,
+            "page": self.page,
+            "prerelease": self.prerelease,
+            "asset": self.asset.to_json() if self.asset else None,
+            "installable": self.installable,
+            "notes": self.notes,
+        }
 
 
 def platform_suffix() -> str | None:
@@ -158,11 +164,16 @@ def latest(releases: list[dict], current: str, suffix: str | None) -> UpdateInfo
     if chosen is None:
         return None
     _, rel, version, asset, checksum = chosen
-    return UpdateInfo(version=version, current=current,
-                      page=f"https://github.com/{REPO}/releases/tag/{rel['tag_name']}",
-                      asset=asset, checksum=checksum, prerelease=bool(rel.get("prerelease")),
-                      notes=rel.get("body") if isinstance(rel.get("body"), str) else "",
-                      installable=bool(asset and checksum and is_compiled() and install_target() is not None))
+    return UpdateInfo(
+        version=version,
+        current=current,
+        page=f"https://github.com/{REPO}/releases/tag/{rel['tag_name']}",
+        asset=asset,
+        checksum=checksum,
+        prerelease=bool(rel.get("prerelease")),
+        notes=rel.get("body") if isinstance(rel.get("body"), str) else "",
+        installable=bool(asset and checksum and is_compiled() and install_target() is not None),
+    )
 
 
 def check(timeout: float = 10.0) -> UpdateInfo | None:
@@ -193,8 +204,9 @@ def md5_of(path: Path) -> str:
     return h.hexdigest()
 
 
-def download(info: UpdateInfo, dest: Path, progress: Callable[[int, int, str], None] | None = None,
-             timeout: float = 30.0) -> tuple[Path, str]:
+def download(
+    info: UpdateInfo, dest: Path, progress: Callable[[int, int, str], None] | None = None, timeout: float = 30.0
+) -> tuple[Path, str]:
     """Download and verify the build; return its path and the MD5 to retain for ``install``."""
     if not info.asset or not info.checksum:
         raise ServiceError("update_unavailable", version=info.version)
@@ -231,6 +243,7 @@ def download(info: UpdateInfo, dest: Path, progress: Callable[[int, int, str], N
 
 
 # --- installing: a script swaps the program in once this process has quit ---
+
 
 def install_target() -> Path | None:
     """The writable ``.app`` bundle or ``.exe`` an update can replace, or None (always in dev mode: a build under
@@ -291,8 +304,11 @@ open {q(str(app))}
 
 def windows_script(pids: list[int]) -> str:
     """An ASCII helper; paths arrive through Unicode environment variables, expanded only once."""
-    labels = "\n".join(f":wait{pid}\n" + f'tasklist /FI "PID eq {pid}" 2>nul | find "{pid}" >nul && (timeout /t 1 /nobreak >nul & goto wait{pid})'
-                        for pid in pids)
+    labels = "\n".join(
+        f":wait{pid}\n"
+        + f'tasklist /FI "PID eq {pid}" 2>nul | find "{pid}" >nul && (timeout /t 1 /nobreak >nul & goto wait{pid})'
+        for pid in pids
+    )
     return f"""@echo off
 setlocal DisableDelayedExpansion
 rem waits for the program (the onefile launcher and the program it started) to quit, then replaces it with the
@@ -351,8 +367,13 @@ def prepare_install(downloaded: Path, expected_md5: str) -> Callable[[], None]:
         os.chmod(name, 0o755)
 
         def launch() -> None:
-            subprocess.Popen(["/bin/sh", name], start_new_session=True, stdin=subprocess.DEVNULL,
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.Popen(
+                ["/bin/sh", name],
+                start_new_session=True,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
 
         return launch
     elif sys.platform == "win32":
@@ -363,10 +384,15 @@ def prepare_install(downloaded: Path, expected_md5: str) -> Callable[[], None]:
             pids = [pid] + ([int(parent)] if parent.isdigit() else [])
             f.write(windows_script(pids))
         env = os.environ.copy()
-        env.update(BAMT_UPDATE_SCRIPT=name, BAMT_UPDATE_NEW_EXE=str(downloaded.resolve()), BAMT_UPDATE_EXE=str(target),
-                   BAMT_UPDATE_DIR=str(target.parent), BAMT_UPDATE_MD5=expected_md5.lower(),
-                   BAMT_UPDATE_STAGE=str(target.with_name(f".{target.name}.update-{pid}.exe")),
-                   BAMT_UPDATE_BACKUP=str(target.with_name(f".{target.name}.update-{pid}.bak")))
+        env.update(
+            BAMT_UPDATE_SCRIPT=name,
+            BAMT_UPDATE_NEW_EXE=str(downloaded.resolve()),
+            BAMT_UPDATE_EXE=str(target),
+            BAMT_UPDATE_DIR=str(target.parent),
+            BAMT_UPDATE_MD5=expected_md5.lower(),
+            BAMT_UPDATE_STAGE=str(target.with_name(f".{target.name}.update-{pid}.exe")),
+            BAMT_UPDATE_BACKUP=str(target.with_name(f".{target.name}.update-{pid}.bak")),
+        )
         # cmd expands these variables once. Literal percent signs in their values are not expanded again.
         # Quoting the variable also protects the helper's own path when TEMP contains spaces or percent signs.
         cmd = env.get("COMSPEC", "cmd.exe")
@@ -390,7 +416,9 @@ def finalize_windows_update() -> None:
     if not name or target is None:
         return
     backup = Path(name).resolve()
-    if backup.parent != target.parent or not re.fullmatch(re.escape("." + target.name) + r"\.update-\d+\.bak", backup.name):
+    if backup.parent != target.parent or not re.fullmatch(
+        re.escape("." + target.name) + r"\.update-\d+\.bak", backup.name
+    ):
         return
     try:
         backup.unlink(missing_ok=True)

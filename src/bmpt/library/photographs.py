@@ -39,8 +39,11 @@ def decode_capture(value: str) -> tuple[bytes, int, int]:
     try:
         raw = base64.b64decode(value.split(",", 1)[1], validate=True)
         with Image.open(io.BytesIO(raw)) as image:
-            if image.format != "PNG" or image.mode not in ("RGB", "RGBA") or not (
-                    64 <= image.width <= MAX_DIMENSION and 64 <= image.height <= MAX_DIMENSION):
+            if (
+                image.format != "PNG"
+                or image.mode not in ("RGB", "RGBA")
+                or not (64 <= image.width <= MAX_DIMENSION and 64 <= image.height <= MAX_DIMENSION)
+            ):
                 raise ValueError("Invalid photograph dimensions")
             width, height = image.size
             image.verify()
@@ -77,18 +80,26 @@ class _Manifest(dict):
 
     def document(self) -> dict:
         """What the file holds after a write: the usable rows as they are now, the held rows as they were."""
+
         def merged(order: list, held: dict, rows: dict) -> dict:
             out = {key: rows[key] if key in rows else held[key] for key in order if key in rows or key in held}
             out.update((key, value) for key, value in rows.items() if key not in out)
             return out
-        return {**self, "photos": merged(self.order_photos, self.held_photos, self["photos"]),
-                "selected": merged(self.order_selected, self.held_selected, self["selected"])}
+
+        return {
+            **self,
+            "photos": merged(self.order_photos, self.held_photos, self["photos"]),
+            "selected": merged(self.order_selected, self.held_selected, self["selected"]),
+        }
 
     def named(self) -> set[str]:
         """The photo files the held rows name (their keys, their ids and the photos held selections point at)."""
         names = set(self.held_photos)
-        names.update(entry["id"] for entry in self.held_photos.values()
-                     if isinstance(entry, dict) and isinstance(entry.get("id"), str))
+        names.update(
+            entry["id"]
+            for entry in self.held_photos.values()
+            if isinstance(entry, dict) and isinstance(entry.get("id"), str)
+        )
         names.update(key for key in self.held_selected.values() if isinstance(key, str))
         return names
 
@@ -148,16 +159,25 @@ class Photographs:
                 return self._cached
             if self.index.is_symlink():
                 raise ValueError("Symlinked photograph manifest")
-            data = json.loads(self.index.read_text(encoding="utf-8")) if stamp else {
-                "version": 1, "photos": {}, "selected": {}, "next": 1}
+            data = (
+                json.loads(self.index.read_text(encoding="utf-8"))
+                if stamp
+                else {"version": 1, "photos": {}, "selected": {}, "next": 1}
+            )
             # The file as a whole: anything wrong here leaves it untouched and unusable, never repaired or replaced.
-            if (not isinstance(data, dict) or data.get("version") != 1 or
-                    not isinstance(data.get("photos"), dict) or not isinstance(data.get("selected"), dict) or
-                    type(data.get("next")) is not int or data["next"] < 1):
+            if (
+                not isinstance(data, dict)
+                or data.get("version") != 1
+                or not isinstance(data.get("photos"), dict)
+                or not isinstance(data.get("selected"), dict)
+                or type(data.get("next")) is not int
+                or data["next"] < 1
+            ):
                 raise ValueError("Invalid photograph manifest")
             counters = data.get("next_by_variant", {})
-            if not isinstance(counters, dict) or any(not isinstance(key, str) or type(value) is not int or value < 1
-                                                     for key, value in counters.items()):
+            if not isinstance(counters, dict) or any(
+                not isinstance(key, str) or type(value) is not int or value < 1 for key, value in counters.items()
+            ):
                 raise ValueError("Invalid photograph counters")
         except (OSError, ValueError, TypeError, RecursionError) as error:
             self._warn("manifest", str(error) if isinstance(error, ValueError) else type(error).__name__, "")
@@ -222,9 +242,16 @@ class Photographs:
     def list(self, variant: str) -> dict:
         with self._lock:
             data = self._read()
-            photos = [{**entry, "url": self.url(variant, key), "managed": True,
-                       "provenance": "generated" if entry.get("builtin") else "capture"} for key, entry in data["photos"].items()
-                      if self.family(entry["variant"]) == self.family(variant)]
+            photos = [
+                {
+                    **entry,
+                    "url": self.url(variant, key),
+                    "managed": True,
+                    "provenance": "generated" if entry.get("builtin") else "capture",
+                }
+                for key, entry in data["photos"].items()
+                if self.family(entry["variant"]) == self.family(variant)
+            ]
             return {"variant": variant, "photos": photos, "app": self._chosen(data, variant)}
 
     def app_url(self, variant: str) -> str | None:
@@ -235,12 +262,24 @@ class Photographs:
     def has_selection(self, variant: str) -> bool:
         with self._lock:
             data = self._read()
-            return variant in data["selected"] and (data["selected"][variant] is None or
-                                                    self._chosen(data, variant) is not None)
+            return variant in data["selected"] and (
+                data["selected"][variant] is None or self._chosen(data, variant) is not None
+            )
 
-    def save(self, variant: str, png: str, mode: str, expression: str = "", action: str = "", source: str = "", *, builtin: bool = False) -> dict:
-        if mode not in ("portrait", "lobby") or not all(isinstance(value, str) and len(value) <= 500
-                                                      for value in (variant, expression, action, source)):
+    def save(
+        self,
+        variant: str,
+        png: str,
+        mode: str,
+        expression: str = "",
+        action: str = "",
+        source: str = "",
+        *,
+        builtin: bool = False,
+    ) -> dict:
+        if mode not in ("portrait", "lobby") or not all(
+            isinstance(value, str) and len(value) <= 500 for value in (variant, expression, action, source)
+        ):
             raise ServiceError("photo_invalid")
         raw, width, height = decode_capture(png)
         key = uuid.uuid4().hex
@@ -251,17 +290,42 @@ class Photographs:
             data = copy.deepcopy(self._read())
             before = copy.deepcopy(data)
             counters = data.setdefault("next_by_variant", {})
-            number = max(counters.get(variant, 1), max((int(item.get("number", 0)) + 1
-                         for item in data["photos"].values() if item["variant"] == variant and not item.get("builtin")), default=1))
+            number = max(
+                counters.get(variant, 1),
+                max(
+                    (
+                        int(item.get("number", 0)) + 1
+                        for item in data["photos"].values()
+                        if item["variant"] == variant and not item.get("builtin")
+                    ),
+                    default=1,
+                ),
+            )
             if builtin:
-                existing = next((item["id"] for item in data["photos"].values()
-                                 if item["variant"] == variant and item.get("builtin")), None)
+                existing = next(
+                    (
+                        item["id"]
+                        for item in data["photos"].values()
+                        if item["variant"] == variant and item.get("builtin")
+                    ),
+                    None,
+                )
                 if existing:
                     self.image(variant, existing)
                     return {**self.list(variant), "saved": existing}
-            entry = {"id": key, "number": number if not builtin else 0, "variant": variant, "mode": mode,
-                     "expression": expression, "action": action, "source": source, "width": width, "height": height,
-                     "sha256": hashlib.sha256(raw).hexdigest(), "created": datetime.now(timezone.utc).isoformat()}
+            entry = {
+                "id": key,
+                "number": number if not builtin else 0,
+                "variant": variant,
+                "mode": mode,
+                "expression": expression,
+                "action": action,
+                "source": source,
+                "width": width,
+                "height": height,
+                "sha256": hashlib.sha256(raw).hexdigest(),
+                "created": datetime.now(timezone.utc).isoformat(),
+            }
             if builtin:
                 entry["builtin"] = "generated"
             path.parent.mkdir(exist_ok=True)
@@ -312,8 +376,11 @@ class Photographs:
             data = copy.deepcopy(self._read())
             self._entry(variant, key)
             # a kept row that names the file keeps it: a held record or selection, or a selection that is stale now
-            stale = {chosen for chosen_for, chosen in data["selected"].items()
-                     if chosen not in (None, "official") and self._chosen(data, chosen_for) is None}
+            stale = {
+                chosen
+                for chosen_for, chosen in data["selected"].items()
+                if chosen not in (None, "official") and self._chosen(data, chosen_for) is None
+            }
             if key in protected or key in data.named() or key in stale:
                 raise ServiceError("photo_in_use")
             before = copy.deepcopy(data)

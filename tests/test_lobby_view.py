@@ -26,22 +26,36 @@ class FakeGame:
 
 @pytest.fixture
 def services(tmp_path: Path):
-    s = Services(Settings(tmp_path / "config.toml"), tmp_path, state=UiState(tmp_path / "webui.json"),
-                 cache=object(), game=FakeGame(), catalog=object(), library=object())
+    s = Services(
+        Settings(tmp_path / "config.toml"),
+        tmp_path,
+        state=UiState(tmp_path / "webui.json"),
+        cache=object(),
+        game=FakeGame(),
+        catalog=object(),
+        library=object(),
+    )
     yield s
     s.close()
 
 
 @pytest.fixture
 def app(services):
-    return WebApp(build_api(services), services.events, assets=services.asset, token="tok",
-                  consent=lambda: services.state.consent)
+    return WebApp(
+        build_api(services), services.events, assets=services.asset, token="tok", consent=lambda: services.state.consent
+    )
 
 
 def rpc(app, method, **params):
     data = json.dumps({"method": method, "params": params}).encode()
-    environ = {"REQUEST_METHOD": "POST", "PATH_INFO": "/api/rpc", "QUERY_STRING": "", "CONTENT_LENGTH": str(len(data)),
-               "wsgi.input": io.BytesIO(data), "HTTP_X_BAMT_TOKEN": "tok"}
+    environ = {
+        "REQUEST_METHOD": "POST",
+        "PATH_INFO": "/api/rpc",
+        "QUERY_STRING": "",
+        "CONTENT_LENGTH": str(len(data)),
+        "wsgi.input": io.BytesIO(data),
+        "HTTP_X_BAMT_TOKEN": "tok",
+    }
     seen = {}
     body = b"".join(app(environ, lambda status, headers: seen.update(status=status)))
     assert seen["status"] == "200 OK"
@@ -160,10 +174,30 @@ const cases = [
 ];
 console.log(JSON.stringify(cases.map(([e, last]) => T.wheelKind(e, now, last))));
 """
-    out = subprocess.run(["node", "--input-type=module", "-e", script, (WEB / "js" / "lobby-touch.js").as_uri()],
-                         capture_output=True, text=True, timeout=60, check=True).stdout
-    assert json.loads(out) == ["mouse", "mouse", "mouse", "trackpad", "trackpad", "trackpad", "mouse", "trackpad",
-                               "mouse", "mouse", "mouse", "trackpad", "trackpad", "mouse", "trackpad"]
+    out = subprocess.run(
+        ["node", "--input-type=module", "-e", script, (WEB / "js" / "lobby-touch.js").as_uri()],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=True,
+    ).stdout
+    assert json.loads(out) == [
+        "mouse",
+        "mouse",
+        "mouse",
+        "trackpad",
+        "trackpad",
+        "trackpad",
+        "mouse",
+        "trackpad",
+        "mouse",
+        "mouse",
+        "mouse",
+        "trackpad",
+        "trackpad",
+        "mouse",
+        "trackpad",
+    ]
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node is not installed")
@@ -193,8 +227,19 @@ def test_idle_clips_and_sound_keys_in_node():
 def test_lobby_strings_in_both_languages():
     for lang in ("zh-CN", "en-US"):
         strings = ui_strings(lang)
-        for key in ("tab.l2d", "zoomOut.label", "zoomOut.game", "zoomOut.art", "zoomOut.unlocked", "zoomOut.custom",
-                    "zoomOut.limit", "zoomOut.factor", "post.label", "post.on", "post.off"):
+        for key in (
+            "tab.l2d",
+            "zoomOut.label",
+            "zoomOut.game",
+            "zoomOut.art",
+            "zoomOut.unlocked",
+            "zoomOut.custom",
+            "zoomOut.limit",
+            "zoomOut.factor",
+            "post.label",
+            "post.on",
+            "post.off",
+        ):
             assert strings.get(f"webui.settings.{key}"), (lang, key)
 
 
@@ -209,15 +254,17 @@ from bmpt.webui.student_hall import dialogue_layout
 GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-game")
 
 
-
 @pytest.fixture(scope="module")
 def game(tmp_path_factory):
-    return GameAssets(get_search_dirs(GAME_DIR), AssetCache(root=tmp_path_factory.mktemp("dialogue-cache"), allowed=False))
+    return GameAssets(
+        get_search_dirs(GAME_DIR), AssetCache(root=tmp_path_factory.mktemp("dialogue-cache"), allowed=False)
+    )
 
 
 @pytest.mark.skipif(not GAME_DIR.is_dir(), reason="Official development view required")
 def test_talk_template_is_the_prefab_box_at_the_origin(game):
     from bmpt.gameassets.layouts import export_layout, subtree
+
     path = game._bundle_path(game._lobby_prefabs()["lobbycommon"])
     with open_bundle(path) as env:
         original = subtree(export_layout(env, "LobbyCommon", {}), "DialogPanel/ChatDialog/Talk")
@@ -233,19 +280,31 @@ def test_dialogue_and_pat_boxes_share_prefab_root_coordinates(game):
     info = game.lobby_info("ch0100_home")
     path = game._bundle_path(game._lobby_prefabs()["lobbych0100"])
     with open_bundle(path) as env:
-        objects = {o.path_id: o.read_typetree() for o in env.objects if o.type.name in
-                   ("GameObject", "Transform", "RectTransform", "BoxCollider", "MonoBehaviour")}
+        objects = {
+            o.path_id: o.read_typetree()
+            for o in env.objects
+            if o.type.name in ("GameObject", "Transform", "RectTransform", "BoxCollider", "MonoBehaviour")
+        }
         kinds = {o.path_id: o.type.name for o in env.objects}
         scripts = {o.path_id: o.read().m_ClassName for o in env.objects if o.type.name == "MonoScript"}
-    transforms = {t["m_GameObject"]["m_PathID"]: t for pid, t in objects.items()
-                  if kinds[pid] in ("Transform", "RectTransform")}
-    root = next(t for t in transforms.values() if not t["m_Father"]["m_PathID"]
-                and objects[t["m_GameObject"]["m_PathID"]]["m_Name"].lower() == "lobbych0100")
+    transforms = {
+        t["m_GameObject"]["m_PathID"]: t for pid, t in objects.items() if kinds[pid] in ("Transform", "RectTransform")
+    }
+    root = next(
+        t
+        for t in transforms.values()
+        if not t["m_Father"]["m_PathID"] and objects[t["m_GameObject"]["m_PathID"]]["m_Name"].lower() == "lobbych0100"
+    )
     descendants = []
     import math
+
     # the game's UIManualScaleByAspect on the root at 16:9 (t = 5/13 towards 4:3), worked out here without lobby.py
-    aspect = next(t for pid, t in objects.items() if kinds[pid] == "MonoBehaviour"
-                  and scripts.get(t.get("m_Script", {}).get("m_PathID")) == "UIManualScaleByAspect")
+    aspect = next(
+        t
+        for pid, t in objects.items()
+        if kinds[pid] == "MonoBehaviour"
+        and scripts.get(t.get("m_Script", {}).get("m_PathID")) == "UIManualScaleByAspect"
+    )
     assert aspect["m_GameObject"]["m_PathID"] == root["m_GameObject"]["m_PathID"]
     factor = 1 + (aspect["mostNarrowScale"] - 1) * 5 / 13
     scaled = {p["m_PathID"] for p in aspect["scaleTransforms"]}
@@ -261,34 +320,52 @@ def test_dialogue_and_pat_boxes_share_prefab_root_coordinates(game):
         angle = 2 * math.atan2(q["z"], q["w"])
         c, s = math.cos(angle), math.sin(angle)
         a, b, d, e, x, y = parent
-        matrix = (a*c*scale["x"] + d*s*scale["x"], b*c*scale["x"] + e*s*scale["x"],
-                  -a*s*scale["y"] + d*c*scale["y"], -b*s*scale["y"] + e*c*scale["y"],
-                  a*pos["x"] + d*pos["y"] + x, b*pos["x"] + e*pos["y"] + y)
+        matrix = (
+            a * c * scale["x"] + d * s * scale["x"],
+            b * c * scale["x"] + e * s * scale["x"],
+            -a * s * scale["y"] + d * c * scale["y"],
+            -b * s * scale["y"] + e * c * scale["y"],
+            a * pos["x"] + d * pos["y"] + x,
+            b * pos["x"] + e * pos["y"] + y,
+        )
         descendants.append((t["m_GameObject"]["m_PathID"], matrix))
         for child in t.get("m_Children", []):
             branch = objects[child["m_PathID"]]
             if contains_target(branch):
                 walk(branch, matrix, child["m_PathID"])
-    chat = next(t for pid, t in objects.items() if kinds[pid] == "MonoBehaviour"
-                and scripts.get(t.get("m_Script", {}).get("m_PathID")) == "ChatDialog"
-                and t.get("DialogBoxes"))
+
+    chat = next(
+        t
+        for pid, t in objects.items()
+        if kinds[pid] == "MonoBehaviour"
+        and scripts.get(t.get("m_Script", {}).get("m_PathID")) == "ChatDialog"
+        and t.get("DialogBoxes")
+    )
     talk_go = chat["DialogBoxes"][0]["GameObject"]["m_PathID"]
-    pat = next(t for pid, t in objects.items() if kinds[pid] == "MonoBehaviour"
-               and scripts.get(t.get("m_Script", {}).get("m_PathID")) == "SpineDragIK"
-               and objects[t["m_GameObject"]["m_PathID"]]["m_Name"] == info["drags"][0]["name"])
+    pat = next(
+        t
+        for pid, t in objects.items()
+        if kinds[pid] == "MonoBehaviour"
+        and scripts.get(t.get("m_Script", {}).get("m_PathID")) == "SpineDragIK"
+        and objects[t["m_GameObject"]["m_PathID"]]["m_Name"] == info["drags"][0]["name"]
+    )
     pat_go = pat["m_GameObject"]["m_PathID"]
+
     def contains_target(t):
         return t["m_GameObject"]["m_PathID"] in (talk_go, pat_go) or any(
-            contains_target(objects[c["m_PathID"]]) for c in t.get("m_Children", []))
+            contains_target(objects[c["m_PathID"]]) for c in t.get("m_Children", [])
+        )
+
     walk(root, tid=next(pid for pid, t in objects.items() if t is root))
     positions = dict(descendants)
     assert [round(v) for v in positions[talk_go][4:]] == info["dialog"]["Talk"] == [-338, 532]
     a, b, c, d, x, y = positions[pat_go]
-    collider = next(t for pid, t in objects.items() if kinds[pid] == "BoxCollider"
-                    and t["m_GameObject"]["m_PathID"] == pat_go)
+    collider = next(
+        t for pid, t in objects.items() if kinds[pid] == "BoxCollider" and t["m_GameObject"]["m_PathID"] == pat_go
+    )
     centre, size = collider["m_Center"], collider["m_Size"]
-    x, y = x + a*centre["x"] + c*centre["y"], y + b*centre["x"] + d*centre["y"]
-    hw, hh = size["x"]*math.hypot(a, b)/2, size["y"]*math.hypot(c, d)/2
-    corners = [round(x-hw, 1), round(y-hh, 1), round(x+hw, 1), round(y+hh, 1)]
+    x, y = x + a * centre["x"] + c * centre["y"], y + b * centre["x"] + d * centre["y"]
+    hw, hh = size["x"] * math.hypot(a, b) / 2, size["y"] * math.hypot(c, d) / 2
+    corners = [round(x - hw, 1), round(y - hh, 1), round(x + hw, 1), round(y + hh, 1)]
     assert corners == info["drags"][0]["rect"] == [-1077.8, 196.7, -548.9, 566.9]
     assert info["drags"][0]["rot"] == round(math.degrees(math.atan2(b, a)), 2)

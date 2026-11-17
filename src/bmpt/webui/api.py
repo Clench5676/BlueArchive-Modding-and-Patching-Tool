@@ -51,6 +51,7 @@ def release_notes(version: str, folder: Path = RELEASE_NOTES_DIR) -> dict[str, s
     notes = path.read_text(encoding="utf-8") if path is not None and path.is_file() else ""
     return {"version": found.group(0) if found else version, "notes": notes}
 
+
 logger = logging.getLogger(__name__)
 trace_logger = logging.getLogger("bmpt.webui.trace")
 TRACE_BATCH, TRACE_LINE = 100, 600  # events per debug.trace call, characters per logged event
@@ -70,8 +71,11 @@ def clip_talks(talks: Any) -> dict[str, list[str]]:
     """The page's {talk animation: [clip ids]}, checked and normalised; {} when absent or malformed."""
     if not isinstance(talks, dict):
         return {}
-    return {str(anim): [clip_id(str(c)) for c in ids[:32]] for anim, ids in list(talks.items())[:64]
-            if isinstance(ids, list)}
+    return {
+        str(anim): [clip_id(str(c)) for c in ids[:32]]
+        for anim, ids in list(talks.items())[:64]
+        if isinstance(ids, list)
+    }
 
 
 def _background(fn: Any, *args: Any) -> Future:
@@ -97,16 +101,19 @@ def _url_portrait(name: str | None) -> str | None:
 
 
 # settings.set keys of the boolean preferences (webui/state.py FLAGS)
-FLAG_KEYS = {"tray": "tray", "classicPrompt": "classic_prompt",
-             "startupUpdate": "startup_update"}
+FLAG_KEYS = {"tray": "tray", "classicPrompt": "classic_prompt", "startupUpdate": "startup_update"}
 
 
 def build_api(s: Services) -> RpcRegistry:
-    rpc = RpcRegistry(on_exception=lambda *args: s.reports.backend_exception(*args) if hasattr(s, "reports") else None,
-                      translate=getattr(s, "translate_error", None))
+    rpc = RpcRegistry(
+        on_exception=lambda *args: s.reports.backend_exception(*args) if hasattr(s, "reports") else None,
+        translate=getattr(s, "translate_error", None),
+    )
     from .photography import register as register_photography
+
     register_photography(rpc, s)
     from .tours import register as register_tours
+
     register_tours(rpc, s)
 
     # --- app ---
@@ -118,8 +125,12 @@ def build_api(s: Services) -> RpcRegistry:
             s.reports.game["found"] = found
         version = resource_version() if found else None
         if hasattr(s, "reports") and not s.safe_mode:
-            s.reports.game = {"found": found, "resourceVersion": version, "server": s.settings.server_region(),
-                              "platform": "Android" if s.settings.is_adb_mode() else "Windows"}
+            s.reports.game = {
+                "found": found,
+                "resourceVersion": version,
+                "server": s.settings.server_region(),
+                "platform": "Android" if s.settings.is_adb_mode() else "Windows",
+            }
         return {
             "safeMode": getattr(s, "safe_mode", False),
             "version": get_version_info().get("version"),
@@ -149,14 +160,29 @@ def build_api(s: Services) -> RpcRegistry:
 
     @rpc.method("app.ready")
     def app_ready(timings: dict[str, Any] | None = None) -> None:
-        phases = {"boot", "info", "settings", "strings", "fonts", "ui-indexes", "mod-state", "first-screen",
-                  "fallback-loading", "sprite-loading"}
+        phases = {
+            "boot",
+            "info",
+            "settings",
+            "strings",
+            "fonts",
+            "ui-indexes",
+            "mod-state",
+            "first-screen",
+            "fallback-loading",
+            "sprite-loading",
+        }
         if timings is not None:
             if not isinstance(timings, dict):
                 raise ServiceError("bad_params", key="timings")
             for phase in phases:
                 value = timings.get(phase)
-                if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and 0 <= value <= 86400000:
+                if (
+                    isinstance(value, (int, float))
+                    and not isinstance(value, bool)
+                    and math.isfinite(value)
+                    and 0 <= value <= 86400000
+                ):
                     s.timings.record("page." + phase, value / 1000)
         s.ready()
         s.tours_ready = not getattr(s, "safe_mode", False)
@@ -167,7 +193,10 @@ def build_api(s: Services) -> RpcRegistry:
 
     @rpc.method("app.log")
     def app_log() -> dict[str, str]:
-        return {"path": str(s.log_path) if s.log_path else "", "text": tail(s.log_path, s.log_secrets) if s.log_path else ""}
+        return {
+            "path": str(s.log_path) if s.log_path else "",
+            "text": tail(s.log_path, s.log_secrets) if s.log_path else "",
+        }
 
     @rpc.method("app.report")
     def app_report(context: dict | None = None, event: dict | None = None) -> dict:
@@ -281,8 +310,16 @@ def build_api(s: Services) -> RpcRegistry:
 
     def downloaded_update(info: Any) -> Any:
         downloaded = getattr(s, "update_file", None)
-        return downloaded if (info is not None and downloaded is not None
-                              and downloaded[2] == info.version and downloaded[0].is_file()) else None
+        return (
+            downloaded
+            if (
+                info is not None
+                and downloaded is not None
+                and downloaded[2] == info.version
+                and downloaded[0].is_file()
+            )
+            else None
+        )
 
     @rpc.method("app.checkUpdate")
     def app_check_update() -> Any:
@@ -291,8 +328,11 @@ def build_api(s: Services) -> RpcRegistry:
         if info is None:
             return None
         downloaded = downloaded_update(info)
-        return {**info.to_json(), "downloaded": downloaded is not None,
-                "file": str(downloaded[0]) if downloaded else None}
+        return {
+            **info.to_json(),
+            "downloaded": downloaded is not None,
+            "file": str(downloaded[0]) if downloaded else None,
+        }
 
     @rpc.method("app.update")
     def app_update() -> str:
@@ -305,8 +345,11 @@ def build_api(s: Services) -> RpcRegistry:
             if downloaded is not None:
                 return {"file": str(downloaded[0])}
             dest = Path(tempfile.mkdtemp(prefix="bamt-update-"))
-            path, md5 = updater.download(info, dest, lambda current, total, name: progress(
-                current, total, t("webui.progress.download", name=name)))
+            path, md5 = updater.download(
+                info,
+                dest,
+                lambda current, total, name: progress(current, total, t("webui.progress.download", name=name)),
+            )
             s.update_file = (path, md5, info.version)  # what installUpdate may swap in, for this release only
             return {"file": str(path)}
 
@@ -321,7 +364,11 @@ def build_api(s: Services) -> RpcRegistry:
         info = getattr(s, "update_info", None)
         target = page if page is not None else info.page if info else ""
         prefix = f"https://github.com/{updater.REPO}/releases/tag/"
-        if not isinstance(target, str) or not target.startswith(prefix) or updater.parse_version(target[len(prefix):]) is None:
+        if (
+            not isinstance(target, str)
+            or not target.startswith(prefix)
+            or updater.parse_version(target[len(prefix) :]) is None
+        ):
             raise ServiceError("update_unavailable")
         webbrowser.open(target)
 
@@ -351,25 +398,32 @@ def build_api(s: Services) -> RpcRegistry:
             "languages": [{"code": c, "name": language_name(c)} for c in offered_languages()],
             "fileSource": st.get("file_source"),
             "gameDirs": {"global": st.get("game_resource_dir"), "japan": st.get("game_resource_dir_japan")},
-            "gameFound": s.game_found(), "libraryDir": str(s.library_dir()), "outputDir": st.get("output_dir"),
-            "voiceVolume": int(s.state.get("voice_volume", 80)), "voiceMuted": bool(s.state.get("voice_muted", False)),
+            "gameFound": s.game_found(),
+            "libraryDir": str(s.library_dir()),
+            "outputDir": st.get("output_dir"),
+            "voiceVolume": int(s.state.get("voice_volume", 80)),
+            "voiceMuted": bool(s.state.get("voice_muted", False)),
             # {mode, custom}; before the modes it was a boolean, lobby_zoom_out
-            "lobbyZoom": lobby_zoom(s.state.get("lobby_zoom"), s.state.get("lobby_zoom_custom"),
-                                    s.state.get("lobby_zoom_out")),
+            "lobbyZoom": lobby_zoom(
+                s.state.get("lobby_zoom"), s.state.get("lobby_zoom_custom"), s.state.get("lobby_zoom_out")
+            ),
             "lobbyPost": bool(s.state.get("lobby_post", True)),
             "lobbyIntro": bool(s.state.get("lobby_intro", True)),
             "roster": roster_view(s.state.get("roster")),
-            "consent": s.state.consent, "cacheDir": str(s.cache_dir()),
+            "consent": s.state.consent,
+            "cacheDir": str(s.cache_dir()),
             "spineConsent": s.state.spine_consent,
             "previewCache": s.state.preview_cache,
             "previewCacheGeneration": s.preview_cache.generation,
-            "version": version, "native": s.window is not None,
+            "version": version,
+            "native": s.window is not None,
             "prereleasePreviews": updater.prerelease_previews(version),
             "buttonSizeTags": updater.button_size_tags(version),
             "logPath": str(s.log_path),
             # the tray or menu bar icon, the hand-off prompt
             "tray": s.state.flag("tray"),
-            "classicPrompt": s.state.flag("classic_prompt"), "traySupported": s.tray_supported,
+            "classicPrompt": s.state.flag("classic_prompt"),
+            "traySupported": s.tray_supported,
             "startupUpdate": s.state.flag("startup_update"),
         }
 
@@ -390,7 +444,7 @@ def build_api(s: Services) -> RpcRegistry:
             # Validate before publishing the preference or invalidating a usable Hall.
             with s._lock:
                 if s.jobs.busy():
-                    raise ServiceError('busy')
+                    raise ServiceError("busy")
                 region = "japan" if value == "windows_japan" else "global"
                 path = st.game_dir(region)
                 if path is None or not devmode.allows_read(path) or not path.is_dir() or not is_game_install(path):
@@ -485,13 +539,22 @@ def build_api(s: Services) -> RpcRegistry:
         # A concurrent clear/toggle must not return a stale generation as usable data.
         if cache.generation != generation:
             data = None
-        return {"allowed": allowed and cache.allowed, "generation": cache.generation,
-                "data": base64.b64encode(data).decode("ascii") if data is not None else None}
+        return {
+            "allowed": allowed and cache.allowed,
+            "generation": cache.generation,
+            "data": base64.b64encode(data).decode("ascii") if data is not None else None,
+        }
 
     @rpc.method("preview.modelRevision")
     def preview_model_revision(variant: str, source: str = "live") -> dict[str, str]:
-        if (not isinstance(variant, str) or not variant or len(variant) > 256 or "/" in variant
-                or not isinstance(source, str) or len(source) > 512):
+        if (
+            not isinstance(variant, str)
+            or not variant
+            or len(variant) > 256
+            or "/" in variant
+            or not isinstance(source, str)
+            or len(source) > 512
+        ):
             raise ServiceError("bad_params", key="variant")
         generation = s.preview_cache.generation
         try:
@@ -516,8 +579,11 @@ def build_api(s: Services) -> RpcRegistry:
             except UnicodeError as error:
                 raise ServiceError("bad_params", key="paths") from error
             background = re.fullmatch(r"/asset/art/bg/BG_[a-zA-Z0-9_-]+\.png", path)
-            framing = re.fullmatch(r"/asset/spine/(?:spr|lobby|official-spr|official-lobby|mod|import)/"
-                                   r"[a-zA-Z0-9_][a-zA-Z0-9_@.:-]{0,511}/[a-f0-9]{64}/framing\.json", path)
+            framing = re.fullmatch(
+                r"/asset/spine/(?:spr|lobby|official-spr|official-lobby|mod|import)/"
+                r"[a-zA-Z0-9_][a-zA-Z0-9_@.:-]{0,511}/[a-f0-9]{64}/framing\.json",
+                path,
+            )
             if not (background or framing):
                 raise ServiceError("bad_params", key="paths")
             checked.append(path)
@@ -525,7 +591,7 @@ def build_api(s: Services) -> RpcRegistry:
         identities = []
         try:
             for path in sorted(set(checked)):
-                exported = s.asset(path[len("/asset/"):], {})
+                exported = s.asset(path[len("/asset/") :], {})
                 identities.append([path, hashlib.sha256(exported.body).hexdigest()])
         except KeyError as error:
             raise ServiceError("bad_params", key="paths") from error
@@ -598,15 +664,25 @@ def build_api(s: Services) -> RpcRegistry:
         return family.key
 
     def variant_aliases(families: list[Any] | None = None) -> dict[str, list[str]]:
-        targets = {f.key: target for f in (visible_families() if families is None else families)
-                   if (target := alias_target(f)) != f.key}
+        targets = {
+            f.key: target
+            for f in (visible_families() if families is None else families)
+            if (target := alias_target(f)) != f.key
+        }
         return s.state.aliases(targets)
 
     photo_failure: dict[str, str] = {}  # the error code of the last failed photograph lookup, logged once
 
-    def variant_json(v: Any, mods: dict[str, list], favorites: set[str], recent: list[str], seen: set[str] | None,
-                     modified: dict[str, str] | None = None, custom: dict[str, list[str]] | None = None,
-                     roster_state: dict[str, Any] | None = None) -> dict[str, Any]:
+    def variant_json(
+        v: Any,
+        mods: dict[str, list],
+        favorites: set[str],
+        recent: list[str],
+        seen: set[str] | None,
+        modified: dict[str, str] | None = None,
+        custom: dict[str, list[str]] | None = None,
+        roster_state: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         own = mods.get(v.key, [])
         photograph = None
         try:
@@ -628,26 +704,56 @@ def build_api(s: Services) -> RpcRegistry:
             **({"thumbnail": photograph} if photograph else {}),
             **stored_asset_fields(v, own),
             "custom": (custom or {}).get(v.key, []),
-            "key": v.key, "fileId": v.file_id, "family": v.family, "names": v.names, "playable": v.playable,
+            "key": v.key,
+            "fileId": v.file_id,
+            "family": v.family,
+            "names": v.names,
+            "playable": v.playable,
             "aliases": v.aliases,  # the search matches them, the page never shows them (the CN server's names)
             "recruitable": v.recruitable,  # on the selected server; playable is on some server
-            "order": v.order, "spr": v.spr, "lobby": v.lobby, "date": v.date, "model": v.model,
+            "order": v.order,
+            "spr": v.spr,
+            "lobby": v.lobby,
+            "date": v.date,
+            "model": v.model,
             # a model with no slot (an event or story variant with no model of its own: a field player or NPC):
             # previewed and offered as a costume
             "fieldModel": getattr(v, "field_model", None),
             "spineCategory": getattr(v, "spine_category", None),
-            "bg": _url_bg(v.bg), "portrait": _url_portrait(v.portrait),
-            "favorite": v.key in favorites, "mods": len({getattr(m, "repaired_from", "") or m.id for m in own}),
-            "modNames": list(dict.fromkeys(name for m in own for name in (
-                getattr(m, "alias", ""), getattr(m, "label", ""), getattr(m, "core", ""),
-                Path(getattr(m, "file", "")).name) if name)),
+            "bg": _url_bg(v.bg),
+            "portrait": _url_portrait(v.portrait),
+            "favorite": v.key in favorites,
+            "mods": len({getattr(m, "repaired_from", "") or m.id for m in own}),
+            "modNames": list(
+                dict.fromkeys(
+                    name
+                    for m in own
+                    for name in (
+                        getattr(m, "alias", ""),
+                        getattr(m, "label", ""),
+                        getattr(m, "core", ""),
+                        Path(getattr(m, "file", "")).name,
+                    )
+                    if name
+                )
+            ),
             "fresh": seen is not None and any(m.user_added and m.id not in seen for m in own),
-            "modCounts": {kind: len({getattr(m, "repaired_from", "") or m.id for m in own if m.kind == kind})
-                          for kind in ("spr", "lobby")},
-            **({"configured": roster_state["configured"][v.key],
-                "previewSources": roster_state["previews"].get(v.key, {})} if roster_state is not None else {
-                    "configured": configured_of(v.key), "previewSources": preview_sources_of(v.key),
-                    "selection": selection_of(v.key)}),
+            "modCounts": {
+                kind: len({getattr(m, "repaired_from", "") or m.id for m in own if m.kind == kind})
+                for kind in ("spr", "lobby")
+            },
+            **(
+                {
+                    "configured": roster_state["configured"][v.key],
+                    "previewSources": roster_state["previews"].get(v.key, {}),
+                }
+                if roster_state is not None
+                else {
+                    "configured": configured_of(v.key),
+                    "previewSources": preview_sources_of(v.key),
+                    "selection": selection_of(v.key),
+                }
+            ),
             # when the newest of its own mods was added (ISO), for the roster's "recently added" sort
             "added": max((m.added for m in own if getattr(m, "added", None)), default=None),
             "recent": recent.index(v.key) if v.key in recent else None,
@@ -674,14 +780,23 @@ def build_api(s: Services) -> RpcRegistry:
         previews = s.state.preview_snapshot(snapshot["install"]) if snapshot["install"] is not None else {}
         by_id = {mod.id: mod for mod in snapshot["mods"]}
         variants = {v.key: v for family in catalog_families for v in family.variants}
-        snapshot["previews"] = {key: valid_preview_sources(key, sources, by_id, variants) for key, sources in previews.items()}
+        snapshot["previews"] = {
+            key: valid_preview_sources(key, sources, by_id, variants) for key, sources in previews.items()
+        }
         seen = s.state.seen_mods()
         families = []
         for f in catalog_families:
-            families.append({"key": f.key, "base": f.names, "aliases": f.aliases,
-                             "school": f.school,
-                             "variants": [variant_json(v, mods, favorites, recent, seen, modified, custom, snapshot)
-                                          for v in f.variants]})
+            families.append(
+                {
+                    "key": f.key,
+                    "base": f.names,
+                    "aliases": f.aliases,
+                    "school": f.school,
+                    "variants": [
+                        variant_json(v, mods, favorites, recent, seen, modified, custom, snapshot) for v in f.variants
+                    ],
+                }
+            )
         return {"families": families}
 
     def model_files(core: str | None, state: dict) -> list[dict[str, Any]]:
@@ -705,8 +820,15 @@ def build_api(s: Services) -> RpcRegistry:
             trailing = trailing_bytes(path)
             if trailing is None:
                 continue
-            out.append({"file": str(path), "kind": "model", "date": parsed.date, "size": size,
-                        "crc": "fixed" if trailing else "ok"})
+            out.append(
+                {
+                    "file": str(path),
+                    "kind": "model",
+                    "date": parsed.date,
+                    "size": size,
+                    "crc": "fixed" if trailing else "ok",
+                }
+            )
         return sorted(out, key=lambda part: (part["date"] or "", part["file"]), reverse=True)
 
     def configured_of(key: str) -> dict[str, str | None]:
@@ -721,8 +843,9 @@ def build_api(s: Services) -> RpcRegistry:
         except ServiceError:
             return {}
 
-    def preview_source_valid(variant: str, kind: str, source: str, mods: dict | None = None,
-                             variants: dict | None = None) -> bool:
+    def preview_source_valid(
+        variant: str, kind: str, source: str, mods: dict | None = None, variants: dict | None = None
+    ) -> bool:
         v = variants.get(variant) if variants is not None else visible_variant(variant)
         if v is None:
             return False
@@ -730,7 +853,11 @@ def build_api(s: Services) -> RpcRegistry:
         if source == "official":
             return bool(core)
         if source.startswith("mod:"):
-            mod = mods.get(source[4:]) if mods is not None else next((m for m in s.library.mods() if m.id == source[4:]), None)
+            mod = (
+                mods.get(source[4:])
+                if mods is not None
+                else next((m for m in s.library.mods() if m.id == source[4:]), None)
+            )
             if mod is None or mod.kind != kind:
                 return False
             if mod.target == variant:
@@ -746,15 +873,23 @@ def build_api(s: Services) -> RpcRegistry:
             # another variant's costume on this variant's model slot: any other model, the student's own or, chosen
             # through the switch's search, another student's, whose check did not refuse it (costume_check)
             other = variants.get(source[8:]) if variants is not None else s.catalog.variant(source[8:])
-            if not (bool(core) and other is not None and other.key != v.key and bool(
-                    getattr(other, "model", None) or getattr(other, "field_model", None))):
+            if not (
+                bool(core)
+                and other is not None
+                and other.key != v.key
+                and bool(getattr(other, "model", None) or getattr(other, "field_model", None))
+            ):
                 return False
             verdict = getattr(s.library, "costume_verdict", lambda *args: None)(v.key, other.key)
             return verdict is None or bool(verdict["ok"]) or bool(verdict.get("preview"))
         else:
             return False
-        return other is not None and other.family == v.family and bool(getattr(other, kind, None)) and (
-            kind == "spr" or getattr(other, kind, None) == core)
+        return (
+            other is not None
+            and other.family == v.family
+            and bool(getattr(other, kind, None))
+            and (kind == "spr" or getattr(other, kind, None) == core)
+        )
 
     def preview_sources_of(key: str) -> dict:
         pin = getattr(s.library, "current_pin", lambda: None)()
@@ -774,8 +909,13 @@ def build_api(s: Services) -> RpcRegistry:
         return valid
 
     def costume_keys(variant: str, others: Any) -> list[str]:
-        if (not isinstance(variant, str) or not variant or not isinstance(others, list) or len(others) > 64
-                or not all(isinstance(o, str) and o and len(o) <= 256 for o in others)):
+        if (
+            not isinstance(variant, str)
+            or not variant
+            or not isinstance(others, list)
+            or len(others) > 64
+            or not all(isinstance(o, str) and o and len(o) <= 256 for o in others)
+        ):
             raise ServiceError("bad_params", key="others")
         return list(dict.fromkeys(others))
 
@@ -815,7 +955,9 @@ def build_api(s: Services) -> RpcRegistry:
         return out
 
     def verdict_kind(verdict: dict | None) -> str | None:
-        return None if verdict is None else "ok" if verdict["ok"] else "preview" if verdict.get("preview") else "refused"
+        return (
+            None if verdict is None else "ok" if verdict["ok"] else "preview" if verdict.get("preview") else "refused"
+        )
 
     @rpc.method("model.checkCostumes")
     def model_check_costumes(variant: str, others: list[str]) -> str:
@@ -833,8 +975,11 @@ def build_api(s: Services) -> RpcRegistry:
                 if progress:
                     progress(i, len(keys), "")
                 try:
-                    verdict = s.costume_check(variant, other, cancelled=cancelled) if preview_source_valid(
-                        variant, "model", f"variant:{other}") else None
+                    verdict = (
+                        s.costume_check(variant, other, cancelled=cancelled)
+                        if preview_source_valid(variant, "model", f"variant:{other}")
+                        else None
+                    )
                 except (ServiceError, KeyError):
                     verdict = None
                 out[other] = verdict_kind(verdict) or "refused"
@@ -848,7 +993,13 @@ def build_api(s: Services) -> RpcRegistry:
         "variant:<key>", another variant's costume. Its result is {"mod": id}, the copy kept in the library, or
         {"unneeded": true, "reason": "official" | "no_gain"}. ``name`` is the source as the screen shows it, the copy's
         name."""
-        if not isinstance(variant, str) or not variant or not isinstance(source, str) or not source or len(source) > 264:
+        if (
+            not isinstance(variant, str)
+            or not variant
+            or not isinstance(source, str)
+            or not source
+            or len(source) > 264
+        ):
             raise ServiceError("bad_params", key="source")
         if not isinstance(name, str) or len(name) > 200:
             raise ServiceError("bad_params", key="name")
@@ -875,8 +1026,10 @@ def build_api(s: Services) -> RpcRegistry:
         for v in f.variants:
             item = variant_json(v, mods, favorites, recent, seen, custom=custom)
             item["state"] = to_json(s.library.state(v.key))
-            item["modList"] = [{**to_json(m), "fresh": seen is not None and m.user_added and m.id not in seen}
-                               for m in mods.get(v.key, [])]
+            item["modList"] = [
+                {**to_json(m), "fresh": seen is not None and m.user_added and m.id not in seen}
+                for m in mods.get(v.key, [])
+            ]
             for mod in item["modList"]:
                 try:
                     if getattr(s.library, "preview_incomplete", lambda _: False)(mod["id"]):
@@ -887,20 +1040,32 @@ def build_api(s: Services) -> RpcRegistry:
             item["modelFiles"] = model_files(v.model, item["state"])
             variants.append(item)
         # Include the installation: two servers can have the same resource hash.
-        return {"key": f.key, "base": f.names, "aliases": f.aliases,
-                "school": f.school, "variants": variants,
-                "version": getattr(s.game, "cache_version", s.game.resource_version) if s.game_found() else None}
+        return {
+            "key": f.key,
+            "base": f.names,
+            "aliases": f.aliases,
+            "school": f.school,
+            "variants": variants,
+            "version": getattr(s.game, "cache_version", s.game.resource_version) if s.game_found() else None,
+        }
 
     @rpc.method("aliases.set")
     def aliases_set(aliases: list[str], variant: str | None = None, family: str | None = None) -> list[str]:
         """Keep the user's own aliases of a variant (the roster search matches them) and return them as kept: each
         cleaned (state.alias_text), empty and repeated ones dropped. ``alias_too_long`` or ``alias_too_many`` past the
         limits; nothing is kept then."""
-        if not isinstance(variant if variant is not None else family, str) or not isinstance(aliases, list) or not all(isinstance(a, str) for a in aliases):
+        if (
+            not isinstance(variant if variant is not None else family, str)
+            or not isinstance(aliases, list)
+            or not all(isinstance(a, str) for a in aliases)
+        ):
             raise ServiceError("bad_params", key="aliases")
         # The legacy family argument edits the original variant only.
-        key = visible_variant(variant).key if variant is not None else alias_target(
-            family_with_assignments(s.catalog, s.library.assigned_targets(), family))
+        key = (
+            visible_variant(variant).key
+            if variant is not None
+            else alias_target(family_with_assignments(s.catalog, s.library.assigned_targets(), family))
+        )
         names = [alias_text(a) for a in aliases]
         if any(len(name) > ALIAS_LENGTH for name in names):
             raise ServiceError("alias_too_long", max=ALIAS_LENGTH)
@@ -932,8 +1097,9 @@ def build_api(s: Services) -> RpcRegistry:
         threading.Thread(target=build, name="lobby-warm", daemon=True).start()
 
     @rpc.method("lobby.camera.save")
-    def lobby_camera_save(variant: str, lobby: str, view: dict, scale: float, offset: list,
-                          source: str = "official") -> str:
+    def lobby_camera_save(
+        variant: str, lobby: str, view: dict, scale: float, offset: list, source: str = "official"
+    ) -> str:
         """A job keeping the lobby's framing (``lobby.js cameraParams``) as a new Memorial Lobby choice of the variant
         (``library/lobby_camera.py``): its art the source the lobby showed ("official", ``mod:<id>`` of a lobby mod of
         the variant, or one of its cameras), its camera the prefab scaled by ``scale`` and moved by ``offset``. Its
@@ -944,8 +1110,11 @@ def build_api(s: Services) -> RpcRegistry:
         v = visible_variant(variant) if isinstance(variant, str) else None
         if v is None or not v.lobby or lobby != v.lobby:
             raise ServiceError("bad_params", key="lobby")
-        if not isinstance(source, str) or len(source) > 264 or not (
-                source == "official" or preview_source_valid(variant, "lobby", source)):
+        if (
+            not isinstance(source, str)
+            or len(source) > 264
+            or not (source == "official" or preview_source_valid(variant, "lobby", source))
+        ):
             raise ServiceError("source_unsupported", source=str(source)[:264])
         if not isinstance(view, dict) or not all(lobby_camera._number(view.get(key)) for key in ("x", "y", "w", "h")):
             raise ServiceError("bad_params", key="view")
@@ -966,8 +1135,14 @@ def build_api(s: Services) -> RpcRegistry:
             log(f"Lobby camera of {variant}: view {view}, scale {k:.4f}, offset {ox:.1f}, {oy:.1f}")
             record = library.save_camera(variant, source, k, [ox, oy], prefab, root, pin=pin, log=log)
             meta = record[lobby_camera.TAG]
-            return {"variant": variant, "lobby": v.lobby, "number": meta["number"], "scale": meta["scale"],
-                    "offset": meta["offset"], "mod": record["id"]}
+            return {
+                "variant": variant,
+                "lobby": v.lobby,
+                "number": meta["number"],
+                "scale": meta["scale"],
+                "offset": meta["offset"],
+                "mod": record["id"],
+            }
 
         return s.submit("lobby.camera.save", run, writes="library", library=library)
 
@@ -1012,7 +1187,11 @@ def build_api(s: Services) -> RpcRegistry:
 
     @rpc.method("ui.preview")
     def ui_preview(variant: str, kind: str, source: str) -> dict:
-        if not all(isinstance(value, str) for value in (variant, kind, source)) or kind not in ("spr", "lobby", "model"):
+        if not all(isinstance(value, str) for value in (variant, kind, source)) or kind not in (
+            "spr",
+            "lobby",
+            "model",
+        ):
             raise ServiceError("bad_params", key="source")
         if not preview_source_valid(variant, kind, source):
             raise ServiceError("bad_params", key="source")
@@ -1053,13 +1232,34 @@ def build_api(s: Services) -> RpcRegistry:
         return s.batch_import.options()
 
     @rpc.method("import.setOptions")
-    def import_set_options(strategy: str, types: list[str], skipUnchanged: bool, crc: str,
-                           compression: str, extraBytes: str, backup: bool, workers: int,
-                           output: str | None, enableAfterImport: bool, previewAfterImport: bool = False) -> dict[str, Any]:
-        return s.batch_import.set_options({"strategy": strategy, "types": types, "skipUnchanged": skipUnchanged,
-            "crc": crc, "compression": compression, "extraBytes": extraBytes, "backup": backup,
-            "workers": workers, "output": output, "enableAfterImport": enableAfterImport,
-            "previewAfterImport": previewAfterImport})
+    def import_set_options(
+        strategy: str,
+        types: list[str],
+        skipUnchanged: bool,
+        crc: str,
+        compression: str,
+        extraBytes: str,
+        backup: bool,
+        workers: int,
+        output: str | None,
+        enableAfterImport: bool,
+        previewAfterImport: bool = False,
+    ) -> dict[str, Any]:
+        return s.batch_import.set_options(
+            {
+                "strategy": strategy,
+                "types": types,
+                "skipUnchanged": skipUnchanged,
+                "crc": crc,
+                "compression": compression,
+                "extraBytes": extraBytes,
+                "backup": backup,
+                "workers": workers,
+                "output": output,
+                "enableAfterImport": enableAfterImport,
+                "previewAfterImport": previewAfterImport,
+            }
+        )
 
     # --- mods ---
 
@@ -1081,8 +1281,10 @@ def build_api(s: Services) -> RpcRegistry:
         library = s.library
         added = library.add_and_apply([Path(p) for p in paths])
         changed = [*added.applied, *added.configured, *added.installed]
-        s.events.publish("library.changed", {"cores": sorted({m.core for m in changed}),
-                                              "kinds": sorted({m.kind for m in changed}), "mods": True})
+        s.events.publish(
+            "library.changed",
+            {"cores": sorted({m.core for m in changed}), "kinds": sorted({m.kind for m in changed}), "mods": True},
+        )
         if added or added.installed:
             s.refresh_status(library)
             s.publish_state()
@@ -1110,28 +1312,38 @@ def build_api(s: Services) -> RpcRegistry:
     def mods_remove(id: str, confirm: bool = False) -> str:
         """Delete a library source as one writer job; game write refusals remain in its result and drift."""
         library = s.library
-        if id == 'official':
-            raise ServiceError('asset_official')
+        if id == "official":
+            raise ServiceError("asset_official")
+
         def fallback(variant, kind):
             try:
                 value = variants[variant]
                 if getattr(value, kind, None):
-                    return 'official'
+                    return "official"
             except (KeyError, ServiceError):
                 pass
-            return next(('mod:' + mod.id for mod in remaining
-                         if mod.id != id and mod.target == variant and mod.kind == kind), None)
+            return next(
+                ("mod:" + mod.id for mod in remaining if mod.id != id and mod.target == variant and mod.kind == kind),
+                None,
+            )
+
         remaining = []
         variants = {}
+
         def remove(log, progress):
             remaining[:] = library.mods()
             variants.update((v.key, v) for family in s.catalog.families() for v in family.variants)
-            result = library.remove(id, confirm=bool(confirm), log=log,
-                reconcile=lambda: s.state.reconcile_deleted_source('mod:' + id, fallback))
+            result = library.remove(
+                id,
+                confirm=bool(confirm),
+                log=log,
+                reconcile=lambda: s.state.reconcile_deleted_source("mod:" + id, fallback),
+            )
             if result.failed:
                 error = result.failed[0]
-                raise ServiceError(error['code'], **error.get('params', {}))
+                raise ServiceError(error["code"], **error.get("params", {}))
             return result
+
         return s.submit("mods.remove", remove, writes="library", library=library)
 
     @rpc.method("mods.rename")
@@ -1190,11 +1402,19 @@ def build_api(s: Services) -> RpcRegistry:
         return s.snapshot.entries() if s.scan_allowed() else []
 
     def entry_list(entries: Any) -> list[dict[str, Any]]:
-        if not isinstance(entries, list) or not all(isinstance(item, dict) and isinstance(item.get("install"), str)
-                                                    and isinstance(item.get("core"), str) for item in entries):
+        if not isinstance(entries, list) or not all(
+            isinstance(item, dict) and isinstance(item.get("install"), str) and isinstance(item.get("core"), str)
+            for item in entries
+        ):
             raise ServiceError("bad_params", key="entries")
-        return [{"install": item["install"], "core": item["core"], **({"state": item["state"]}
-                 if isinstance(item.get("state"), str) else {})} for item in entries]
+        return [
+            {
+                "install": item["install"],
+                "core": item["core"],
+                **({"state": item["state"]} if isinstance(item.get("state"), str) else {}),
+            }
+            for item in entries
+        ]
 
     @rpc.method("mods.adopt")
     def mods_adopt(entries: list[dict[str, Any]]) -> str:
@@ -1202,8 +1422,12 @@ def build_api(s: Services) -> RpcRegistry:
         listed = entry_list(entries)
         library = s.library
         pins = library.installs()
-        return s.submit("library.adopt", lambda log, progress: library.adopt(listed, pins, log=log, progress=progress),
-                        writes="library", library=library)
+        return s.submit(
+            "library.adopt",
+            lambda log, progress: library.adopt(listed, pins, log=log, progress=progress),
+            writes="library",
+            library=library,
+        )
 
     @rpc.method("mods.restoreDrift")
     def mods_restore_drift(entries: list[dict[str, Any]]) -> str:
@@ -1225,16 +1449,18 @@ def build_api(s: Services) -> RpcRegistry:
         current install, classified only when its resource version differs from the last one seen, or always with
         ``force`` (Settings' View) (``update_impact``). With ``ids``: those mods' impacts now, {mods: [{id,
         impact}]}."""
-        if ids is not None and (not isinstance(ids, list) or len(ids) > 4096
-                                or not all(isinstance(v, str) and v for v in ids)):
+        if ids is not None and (
+            not isinstance(ids, list) or len(ids) > 4096 or not all(isinstance(v, str) and v for v in ids)
+        ):
             raise ServiceError("bad_params", key="ids")
         if not isinstance(force, bool):
             raise ServiceError("bad_params", key="force")
         library = s.library
         pin = s._current_pin(library)
         if ids is None:
-            return s.submit("mods.impact", lambda log, progress: library.update_impact(pin, force=force,
-                                                                                      progress=progress))
+            return s.submit(
+                "mods.impact", lambda log, progress: library.update_impact(pin, force=force, progress=progress)
+            )
         return s.submit("mods.impact", lambda log, progress: {"mods": library.impacts(ids, pin)})
 
     @rpc.method("mods.impactLast")
@@ -1287,8 +1513,12 @@ def build_api(s: Services) -> RpcRegistry:
     @rpc.method("mods.clearBuilt")
     def mods_clear_built() -> str:
         library = s.library
-        return s.submit("library.clearBuilt", lambda log, progress: {"freed": library.clear_built()},
-                        writes="library", library=library)
+        return s.submit(
+            "library.clearBuilt",
+            lambda log, progress: {"freed": library.clear_built()},
+            writes="library",
+            library=library,
+        )
 
     @rpc.method("mods.forget")
     def mods_forget(install: str) -> str:
@@ -1298,8 +1528,9 @@ def build_api(s: Services) -> RpcRegistry:
         named = {item["key"] for item in library.status().get("installs", []) if item.get("named")}
         if not isinstance(install, str) or install in named:
             raise ServiceError("bad_params", install=install)
-        return s.submit("library.forget", lambda log, progress: library.forget(install), writes="library",
-                        library=library)
+        return s.submit(
+            "library.forget", lambda log, progress: library.forget(install), writes="library", library=library
+        )
 
     # --- Troubleshoot Mods (pre-release builds only): every choice to official, then back ---
 
@@ -1312,6 +1543,7 @@ def build_api(s: Services) -> RpcRegistry:
         """{active, count, since}: whether a configuration is saved to restore."""
         troubleshoot_gate()
         from ..library import troubleshoot
+
         return troubleshoot.status(s.library)
 
     @rpc.method("mods.applyOfficial")
@@ -1343,16 +1575,24 @@ def build_api(s: Services) -> RpcRegistry:
     def actions_update(mod: str) -> str:
         library = s.library
         pin = s._current_pin(library)
-        return s.submit("update", lambda log, progress: library.update(mod, log=log, progress=progress, pin=pin),
-                        writes="library", library=library)
+        return s.submit(
+            "update",
+            lambda log, progress: library.update(mod, log=log, progress=progress, pin=pin),
+            writes="library",
+            library=library,
+        )
 
     @rpc.method("actions.extract")
     def actions_extract(target: str) -> str:
         out_dir = s.settings.output_subdir("extract")
         library = s.library
         pin = library.current_pin()
-        return s.submit("extract", lambda log, progress: {
-            "folder": str(library.extract(target, out_dir, log=log, pin=pin, progress=progress))})
+        return s.submit(
+            "extract",
+            lambda log, progress: {
+                "folder": str(library.extract(target, out_dir, log=log, pin=pin, progress=progress))
+            },
+        )
 
     @rpc.method("actions.compare")
     def actions_compare(mod: str) -> Any:
@@ -1362,8 +1602,9 @@ def build_api(s: Services) -> RpcRegistry:
     def actions_remap(mod: str, geometry: Any = None) -> str:
         library = s.library
         pin = s._current_pin(library)
-        return s.submit("remap", lambda log, progress: library.remap(mod, log=log, progress=progress, pin=pin,
-                                                                     geometry=geometry))
+        return s.submit(
+            "remap", lambda log, progress: library.remap(mod, log=log, progress=progress, pin=pin, geometry=geometry)
+        )
 
     @rpc.method("actions.oldRig")
     def actions_old_rig(mod: str) -> str:
@@ -1404,8 +1645,9 @@ def build_api(s: Services) -> RpcRegistry:
         spine_licensed()
         library = s.library
         pin = s._current_pin(library)
-        return s.submit("remap", lambda log, progress: library.graft_check(token, geometry, log=log,
-                                                                           progress=progress, pin=pin))
+        return s.submit(
+            "remap", lambda log, progress: library.graft_check(token, geometry, log=log, progress=progress, pin=pin)
+        )
 
     @rpc.method("actions.discardGraft")
     def actions_discard_graft(token: str) -> None:
@@ -1444,8 +1686,10 @@ def build_api(s: Services) -> RpcRegistry:
         spine_licensed()
         library = s.library
         pin = s._current_pin(library)
-        return s.submit("remap", lambda log, progress: library.graft_convert_check(token, geometry, log=log,
-                                                                                   progress=progress, pin=pin))
+        return s.submit(
+            "remap",
+            lambda log, progress: library.graft_convert_check(token, geometry, log=log, progress=progress, pin=pin),
+        )
 
     @rpc.method("app.openConverterPage")
     def app_open_converter_page() -> None:
@@ -1468,12 +1712,12 @@ def build_api(s: Services) -> RpcRegistry:
     @rpc.method("actions.acceptRemap")
     def actions_accept_remap(preview: str) -> str:
         library = s.library
+
         def accept(log: Any, progress: Any) -> Any:
             progress({"current": 1, "total": 1, "step": "import.step.add"})
             return library.accept_remap(preview)
 
-        return s.submit("remap.accept", accept,
-                        writes="library", library=library)
+        return s.submit("remap.accept", accept, writes="library", library=library)
 
     @rpc.method("actions.discardRemap")
     def actions_discard_remap(preview: str) -> None:

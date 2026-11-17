@@ -45,11 +45,19 @@ def test_only_inventory_imports_cross_from_engine_to_app():
                 found[relative, node.lineno] = ast.unparse(node)
         if relative != "src/ba_modding_toolkit/i18n.py":
             allowed_lines = {line for file, line in expected if file == relative}
-            text = "".join("IMPORT\n" if number in allowed_lines else line
-                           for number, line in enumerate(source.splitlines(keepends=True), 1))
-            assert hashlib.sha256(text.encode()).hexdigest() == OWNERSHIP["engine_modules"][relative]["masked_import_lines_sha256"], relative
+            text = "".join(
+                "IMPORT\n" if number in allowed_lines else line
+                for number, line in enumerate(source.splitlines(keepends=True), 1)
+            )
+            assert (
+                hashlib.sha256(text.encode()).hexdigest()
+                == OWNERSHIP["engine_modules"][relative]["masked_import_lines_sha256"]
+            ), relative
             masked = ast.dump(MaskImports().visit(tree), include_attributes=False)
-            assert hashlib.sha256(masked.encode()).hexdigest() == OWNERSHIP["engine_modules"][relative]["non_import_ast_sha256"], relative
+            assert (
+                hashlib.sha256(masked.encode()).hexdigest()
+                == OWNERSHIP["engine_modules"][relative]["non_import_ast_sha256"]
+            ), relative
     assert found == expected
     assert "bmpt" not in (ENGINE / "i18n.py").read_text()
 
@@ -87,14 +95,24 @@ def test_app_package_initialization_is_empty():
 
 
 def python_check(code):
-    result = subprocess.run([sys.executable, "-c", code], env=os.environ.copy(), text=True,
-                            capture_output=True, timeout=60)
+    result = subprocess.run(
+        [sys.executable, "-c", code], env=os.environ.copy(), text=True, capture_output=True, timeout=60
+    )
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-@pytest.mark.parametrize("order", list(itertools.permutations([
-    "bmpt.webui.main", "ba_modding_toolkit.gui.main", "ba_modding_toolkit.cli.main",
-])))
+@pytest.mark.parametrize(
+    "order",
+    list(
+        itertools.permutations(
+            [
+                "bmpt.webui.main",
+                "ba_modding_toolkit.gui.main",
+                "ba_modding_toolkit.cli.main",
+            ]
+        )
+    ),
+)
 def test_entry_import_orders_have_no_cycles(order):
     python_check("import importlib\n" + "\n".join(f"importlib.import_module({module!r})" for module in order))
 
@@ -141,15 +159,28 @@ def test_package_data_and_builds_cover_every_shipped_resource():
     package_data = project["tool"]["setuptools"]["package-data"]
     for package in ("bmpt", "ba_modding_toolkit"):
         folder = ROOT / "src" / package
-        resources = {path for path in folder.rglob("*")
-                     if path.is_file() and path.suffix != ".py" and "__pycache__" not in path.parts}
-        included = {Path(match) for pattern in package_data[package]
-                    for match in glob.glob(str(folder / pattern)) if Path(match).is_file()}
+        resources = {
+            path
+            for path in folder.rglob("*")
+            if path.is_file() and path.suffix != ".py" and "__pycache__" not in path.parts
+        }
+        included = {
+            Path(match)
+            for pattern in package_data[package]
+            for match in glob.glob(str(folder / pattern))
+            if Path(match).is_file()
+        }
         assert resources <= included, sorted(str(path.relative_to(ROOT)) for path in resources - included)
     for filename in ("build_macos.sh", "build_windows.ps1"):
         source = (ROOT / "scripts" / filename).read_text()
-        for folder in ("bmpt/assets", "bmpt/locales", "bmpt/web", "bmpt/catalog/data",
-                       "ba_modding_toolkit/assets", "ba_modding_toolkit/locales"):
+        for folder in (
+            "bmpt/assets",
+            "bmpt/locales",
+            "bmpt/web",
+            "bmpt/catalog/data",
+            "ba_modding_toolkit/assets",
+            "ba_modding_toolkit/locales",
+        ):
             assert f"--include-data-dir={folder}={folder}" in source, (filename, folder)
         assert "--include-package-data=bmpt" in source
         assert "--include-package-data=ba_modding_toolkit" in source

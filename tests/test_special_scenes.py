@@ -22,10 +22,15 @@ def test_a_two_letter_name_never_claims_a_scene_by_prefix():
 
 def test_a_preview_stands_for_the_named_the_only_or_else_the_first_skeleton():
     files = {"ch0100_home.skel": b"", "ch0100_home.atlas": b"", "ch0100_home_bg.skel": b"", "ch0100_home_bg.atlas": b""}
-    assert [skeleton_file(files, "ch0100_home", s) for s in (".skel", ".atlas")] == ["ch0100_home.skel", "ch0100_home.atlas"]
+    assert [skeleton_file(files, "ch0100_home", s) for s in (".skel", ".atlas")] == [
+        "ch0100_home.skel",
+        "ch0100_home.atlas",
+    ]
     single = {"test_spr.skel": b"", "mod.atlas": b""}
     assert [skeleton_file(single, "other", s) for s in (".skel", ".atlas")] == ["test_spr.skel", "mod.atlas"]
     banners = {f"Ui_RaidBoss_{n}.{ext}": b"" for n in ("Goz", "Binah", "Hod") for ext in ("skel", "atlas")}
     assert [skeleton_file(banners, "ui_set", s) for s in (".skel", ".atlas")] == [
-        "Ui_RaidBoss_Binah.skel", "Ui_RaidBoss_Binah.atlas"]
+        "Ui_RaidBoss_Binah.skel",
+        "Ui_RaidBoss_Binah.atlas",
+    ]
     assert skeleton_file({}, "ui_set", ".skel") is None

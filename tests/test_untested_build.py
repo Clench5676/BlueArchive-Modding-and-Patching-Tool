@@ -20,9 +20,12 @@ from test_library import FakeVariant, game_bundle, make_mod, setup_library  # no
 
 # --- the data ---
 
+
 def test_the_data_round_trips_and_matches_names_whatever_their_case():
-    data = {"schema": tested_build.SCHEMA,
-            "servers": {"global": tested_build.encode("123", ["v1", "v1", "v0"], ["a_1.bundle", "b_2.bundle"])}}
+    data = {
+        "schema": tested_build.SCHEMA,
+        "servers": {"global": tested_build.encode("123", ["v1", "v1", "v0"], ["a_1.bundle", "b_2.bundle"])},
+    }
     found = tested_build.decode(json.loads(json.dumps(data)))["global"]
     assert found.build == "123" and found.versions == {"v1", "v0"} and len(found.keys) == 2
     assert found.has("a_1.bundle") and found.has("A_1.BUNDLE") and not found.has("a_2.bundle")
@@ -41,16 +44,22 @@ def test_the_shipped_data_is_the_build_the_tests_run_on():
     names = tested_build.bundle_names(dirs)
     assert resource_version(dirs) in tested.versions and {tested_build.name_key(n) for n in names} == tested.keys, (
         "The official game folder is another build than the one shipped as tested: once the suite passes on it, "
-        "run scripts/build_tested_build.py on it")
+        "run scripts/build_tested_build.py on it"
+    )
 
 
 # --- the library ---
 
+
 def as_tested(env, monkeypatch, server="global"):
     """The install as it is now is the tested build of ``server``."""
     pin = env.library.current_pin()
-    data = {"schema": tested_build.SCHEMA, "servers": {server: tested_build.encode(
-        "1", [env.library.resource_version(pin)], tested_build.bundle_names(pin.dirs))}}
+    data = {
+        "schema": tested_build.SCHEMA,
+        "servers": {
+            server: tested_build.encode("1", [env.library.resource_version(pin)], tested_build.bundle_names(pin.dirs))
+        },
+    }
     found = tested_build.decode(data)
     monkeypatch.setattr(tested_build, "for_server", lambda name: found.get(name))
     return found[server]
@@ -70,7 +79,7 @@ def key(env):
 
 def test_an_apply_onto_a_core_the_update_changed_waits_for_a_confirmation(setup_library, monkeypatch):
     env = setup_library
-    mod, = env.library.add([make_mod(env.original, env.tmp / "input")])
+    (mod,) = env.library.add([make_mod(env.original, env.tmp / "input")])
     as_tested(env, monkeypatch)
     official = env.original.read_bytes()
     game_bundle(env.game_dir, part="textures")  # the update adds a part to the core
@@ -92,7 +101,7 @@ def test_an_apply_onto_a_core_the_update_changed_waits_for_a_confirmation(setup_
 
 def test_a_tested_build_and_an_unchanged_core_need_no_confirmation(setup_library, monkeypatch):
     env = setup_library
-    mod, = env.library.add([make_mod(env.original, env.tmp / "input")])
+    (mod,) = env.library.add([make_mod(env.original, env.tmp / "input")])
     as_tested(env, monkeypatch)
     env.library.apply("test", f"mod:{mod.id}")  # the tested build itself
     env.library.restore("test")
@@ -104,7 +113,7 @@ def test_a_tested_build_and_an_unchanged_core_need_no_confirmation(setup_library
 
 def test_a_server_without_a_tested_build_is_never_untested(setup_library, monkeypatch):
     env = setup_library
-    mod, = env.library.add([make_mod(env.original, env.tmp / "input")])
+    (mod,) = env.library.add([make_mod(env.original, env.tmp / "input")])
     as_tested(env, monkeypatch, server="japan")
     game_bundle(env.game_dir, part="textures")
     assert env.library.untested_version(env.library.current_pin()) is None
@@ -114,7 +123,7 @@ def test_a_server_without_a_tested_build_is_never_untested(setup_library, monkey
 
 def test_mods_on_waits_for_a_confirmation_and_mods_off_never_does(setup_library, monkeypatch):
     env = setup_library
-    mod, = env.library.add([make_mod(env.original, env.tmp / "input")])
+    (mod,) = env.library.add([make_mod(env.original, env.tmp / "input")])
     env.library.apply("test", f"mod:{mod.id}")
     as_tested(env, monkeypatch)
     official = (env.root / "originals" / env.original.name).read_bytes()
@@ -136,7 +145,7 @@ def test_mods_on_waits_for_a_confirmation_and_mods_off_never_does(setup_library,
 
 def test_apply_mod_configuration_waits_for_a_confirmation(setup_library, monkeypatch):
     env = setup_library
-    mod, = env.library.add([make_mod(env.original, env.tmp / "input")])
+    (mod,) = env.library.add([make_mod(env.original, env.tmp / "input")])
     env.library.apply("test", f"mod:{mod.id}")
     as_tested(env, monkeypatch)
     game_bundle(env.game_dir, part="textures")
@@ -159,8 +168,17 @@ def test_the_write_itself_checks_last_and_a_rollback_is_never_asked(setup_librar
     assert env.original.read_bytes() == prepared.read_bytes()
 
 
-@pytest.mark.parametrize("confirm", [None, [], {"k": None}, {"k": {"version": "", "cores": []}},
-                                     {"k": {"version": "v", "cores": "a"}}, {"k": {"version": "v", "cores": [1]}}])
+@pytest.mark.parametrize(
+    "confirm",
+    [
+        None,
+        [],
+        {"k": None},
+        {"k": {"version": "", "cores": []}},
+        {"k": {"version": "v", "cores": "a"}},
+        {"k": {"version": "v", "cores": [1]}},
+    ],
+)
 def test_a_malformed_confirmation_is_refused(setup_library, confirm):
     with pytest.raises(ServiceError) as caught:
         setup_library.library.confirm_untested(confirm)

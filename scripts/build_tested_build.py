@@ -51,8 +51,11 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.write(text)
     else:
         out.write_text(text, encoding="utf-8")
-    print(f"{args.server}: build {found.build}, resource version {next(iter(found.versions))}, "
-          f"{len(found.keys)} bundle names -> {args.out}", file=sys.stderr)
+    print(
+        f"{args.server}: build {found.build}, resource version {next(iter(found.versions))}, "
+        f"{len(found.keys)} bundle names -> {args.out}",
+        file=sys.stderr,
+    )
     return 0
 
 

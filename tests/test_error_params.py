@@ -64,9 +64,11 @@ def raised(action):
 
 # --- library --------------------------------------------------------------------------------------------------
 
+
 def test_manual_identity_names_the_refused_file(tmp_path, monkeypatch):
-    error = raised(lambda: manual_identity.validate({"one.bundle": tmp_path / "one.bundle",
-                                                     "notes.txt": tmp_path / "notes.txt"}))
+    error = raised(
+        lambda: manual_identity.validate({"one.bundle": tmp_path / "one.bundle", "notes.txt": tmp_path / "notes.txt"})
+    )
     assert (error.code, error.params) == ("mod_unsupported", {"file": "notes.txt"})
     error = raised(lambda: manual_identity.validate({"../one.bundle": tmp_path / "one.bundle"}))
     assert error.params == {"file": "../one.bundle"}
@@ -119,13 +121,15 @@ def test_compare_names_the_bundle_it_cannot_read(setup_library, monkeypatch, fai
         return SimpleNamespace(env=SimpleNamespace(objects=objects if broken else []))
 
     monkeypatch.setattr(Bundle, "load", load)
-    monkeypatch.setattr("bmpt.library.service.AssetType", SimpleNamespace(
-        Texture2D=kind, TextAsset=kind, Mesh=kind, AnimationClip=kind))
+    monkeypatch.setattr(
+        "bmpt.library.service.AssetType", SimpleNamespace(Texture2D=kind, TextAsset=kind, Mesh=kind, AnimationClip=kind)
+    )
     error = raised(lambda: env.library._compare_paths("id", [mod], [official]))
     assert (error.code, error.params) == ("bundle_invalid", {"file": mod if failing == "mod" else official})
 
 
 # --- batch import ---------------------------------------------------------------------------------------------
+
 
 def test_an_unreadable_source_names_its_own_file(env):
     good = make_mod(env.original, env.tmp / "incoming")
@@ -145,7 +149,7 @@ def test_a_preflight_read_failure_names_the_entry_file(env, monkeypatch):
         raise ValueError("Not a readable UnityFS directory")
 
     monkeypatch.setattr(env.library, "inspect_import", fail)
-    entry, = analyze(env, [source])["entries"]
+    (entry,) = analyze(env, [source])["entries"]
     assert entry["reason"] == "unreadable"
     assert entry["error"]["code"] == "bundle_invalid"
     assert entry["error"]["params"] == {"file": str(source), "error": "Not a readable UnityFS directory"}
@@ -156,6 +160,7 @@ def test_conflicting_game_files_name_the_entry_file(env, monkeypatch, problem):
     source = game_bundle(env.tmp / "old", date="2025-01-01", payload=b"old mod")
     inspect = env.library.inspect_import
     if problem == "duplicate":
+
         def doubled(*args, **kwargs):
             report = inspect(*args, **kwargs)
             report["targets"] = [*report["targets"], *report["targets"]]
@@ -164,15 +169,15 @@ def test_conflicting_game_files_name_the_entry_file(env, monkeypatch, problem):
         monkeypatch.setattr(env.library, "inspect_import", doubled)
     else:
         monkeypatch.setattr(env.library, "official_bundles", lambda *args, **kwargs: [])
-    entry, = analyze(env, [source])["entries"]
+    (entry,) = analyze(env, [source])["entries"]
     assert entry["reason"] == "game_file_conflict"
     assert entry["error"] == {"code": "game_file_conflict", "ref": "E3005", "params": {"file": str(source)}}
 
 
 def test_a_mod_stored_under_another_target_names_the_entry_file(env):
     source = make_mod(env.original, env.tmp / "incoming")
-    entry, = analyze(env, [source])["entries"]
-    stored, = env.library.add([source])
+    (entry,) = analyze(env, [source])["entries"]
+    (stored,) = env.library.add([source])
     candidate = env.services.batch_import._latest[entry["id"]]
     candidate.error = "mod_target_ambiguous"
     candidate.entry["assignment"] = "another-target"
@@ -187,7 +192,7 @@ def test_assigning_a_blocked_entry_keeps_the_recorded_file(env, monkeypatch):
     source = make_mod(env.original, env.tmp / "incoming")
     other = game_bundle(env.tmp / "incoming", "other_spr", payload=b"x")
     other.write_bytes(b"broken")
-    broken, = [e for e in analyze(env, [source, other])["entries"] if e["paths"] == [str(other)]]
+    (broken,) = [e for e in analyze(env, [source, other])["entries"] if e["paths"] == [str(other)]]
     assert broken["reason"] == "unreadable"
     batch = env.services.batch_import
     candidate = batch._latest[broken["id"]]
@@ -202,37 +207,40 @@ def test_assigning_a_blocked_entry_keeps_the_recorded_file(env, monkeypatch):
 
 def test_a_write_failure_names_the_failing_file_else_the_entry_file(env, monkeypatch):
     source = make_mod(env.original, env.tmp / "incoming")
-    entry, = analyze(env, [source])["entries"]
+    (entry,) = analyze(env, [source])["entries"]
     failures = iter([OSError(28, "No space left on device", "/library/mods/x.bundle"), OSError("no name given")])
 
     def fail(*args, **kwargs):
         raise next(failures)
 
     monkeypatch.setattr(env.library, "add_files", fail)
-    first, = run(env, [entry], enableAfterImport=False)
+    (first,) = run(env, [entry], enableAfterImport=False)
     assert first["reason"] == "library_io_error"
-    assert first["params"] == {"file": "/library/mods/x.bundle", "error": "[Errno 28] No space left on device: "
-                                                                          "'/library/mods/x.bundle'"}
-    entry, = analyze(env, [source])["entries"]
-    second, = run(env, [entry], enableAfterImport=False)
+    assert first["params"] == {
+        "file": "/library/mods/x.bundle",
+        "error": "[Errno 28] No space left on device: '/library/mods/x.bundle'",
+    }
+    (entry,) = analyze(env, [source])["entries"]
+    (second,) = run(env, [entry], enableAfterImport=False)
     assert second["params"]["file"] == str(source)
 
 
 def test_an_import_that_stores_several_mods_names_the_entry_file(env, monkeypatch):
     source = make_mod(env.original, env.tmp / "incoming")
-    entry, = analyze(env, [source])["entries"]
+    (entry,) = analyze(env, [source])["entries"]
 
     class Added(list):
         duplicates = ()
 
     monkeypatch.setattr(env.library, "add_files", lambda *args, **kwargs: Added([object(), object()]))
-    result, = run(env, [entry], enableAfterImport=False)
+    (result,) = run(env, [entry], enableAfterImport=False)
     assert (result["outcome"], result["reason"]) == ("failed", "mod_unsupported")
     assert result["params"] == {"file": str(source)}
     assert result["error"]["params"] == {"file": str(source)}
 
 
 # --- export ---------------------------------------------------------------------------------------------------
+
 
 def test_export_names_the_colliding_member(setup_library, monkeypatch):
     env = setup_library
@@ -241,8 +249,19 @@ def test_export_names_the_colliding_member(setup_library, monkeypatch):
     paths = [env.tmp / name for name in names]
     monkeypatch.setattr(export_service, "_prepare", lambda *args, **kwargs: (paths, {}))
     monkeypatch.setattr(export_service, "_member_name", lambda path: path.name)
-    error = raised(lambda: export_service.export_zip(
-        SimpleNamespace(settings=env.settings), env.library, env.library.current_pin(), scope="library", target=None,
-        folder=env.tmp / "exports", server="global", platform="windows", kind=None,
-        log=lambda *_: None, progress=lambda *_: None))
+    error = raised(
+        lambda: export_service.export_zip(
+            SimpleNamespace(settings=env.settings),
+            env.library,
+            env.library.current_pin(),
+            scope="library",
+            target=None,
+            folder=env.tmp / "exports",
+            server="global",
+            platform="windows",
+            kind=None,
+            log=lambda *_: None,
+            progress=lambda *_: None,
+        )
+    )
     assert (error.code, error.params) == ("game_file_conflict", {"file": "Part-1.bundle"})

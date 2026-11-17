@@ -3,6 +3,7 @@
 Skipped without BAMT_TEST_GAME_DIR (set by the development test plugin) or Node.js. Only numbers and colour codes of prefab
 nodes are read: no image data. The call sites are pinned against the tokens by tests/js/ui_tokens.test.mjs.
 """
+
 import json
 import os
 import re
@@ -21,13 +22,17 @@ NODE = shutil.which("node")
 GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-game")
 TOKENS = Path(__file__).resolve().parents[1] / "src/bmpt/web/js/ui-tokens.js"
 
-pytestmark = pytest.mark.skipif(NODE is None or not GAME_DIR.is_dir(), reason="Node.js and an official development view are required")
+pytestmark = pytest.mark.skipif(
+    NODE is None or not GAME_DIR.is_dir(), reason="Node.js and an official development view are required"
+)
 
 
 @pytest.fixture(scope="module")
 def tokens():
     script = f"import * as T from {json.dumps(TOKENS.as_uri())}; console.log(JSON.stringify(T));"
-    run = subprocess.run([NODE, "--input-type=module", "-e", script], check=True, capture_output=True, text=True, timeout=30)
+    run = subprocess.run(
+        [NODE, "--input-type=module", "-e", script], check=True, capture_output=True, text=True, timeout=30
+    )
     return json.loads(run.stdout)
 
 
@@ -38,7 +43,7 @@ def bundle_of(root):
 def bundle_by_cab(name, cab):
     """A bundle the App has no hint for: by its file name, or after a game update rebuilt it under a new CRC by its
     CAB among the bundles of the same name less the CRC (a header read each)."""
-    stem = less_crc(name)[:-len(".bundle")]
+    stem = less_crc(name)[: -len(".bundle")]
     paths = list(GAME_DIR.rglob(name)) or [p for p in GAME_DIR.rglob(stem + "_*.bundle") if cab in cab_names(p)]
     return paths[0]
 
@@ -70,18 +75,26 @@ def test_toolbar_height_is_the_lobby_clone(tokens, record_property):
     assert sprite(subtree(lobby, f"{clone}/Bg"))["h_"] == tokens["CONTROL"]["toolbar"]["h"] == 104
     # Derived widget geometry only, kept in the test report for a before/after comparison.
     geometry = {}
-    for root, path in (("UILobby", f"{clone}/Label_SpineCount"), *(
-        ("UICharacterCollection", f"SeletControl/TopMenu/{name}/Btn_Normal")
-        for name in ("SearchBtn", "SortBtn", "OrderBtn")
-    ), *(
-        ("UICharacterCollection", f"SeletControl/TopMenu/{name}")
-        for name in ("SearchBtn", "SortBtn", "OrderBtn", "Menubar")
-    )):
+    for root, path in (
+        ("UILobby", f"{clone}/Label_SpineCount"),
+        *(
+            ("UICharacterCollection", f"SeletControl/TopMenu/{name}/Btn_Normal")
+            for name in ("SearchBtn", "SortBtn", "OrderBtn")
+        ),
+        *(
+            ("UICharacterCollection", f"SeletControl/TopMenu/{name}")
+            for name in ("SearchBtn", "SortBtn", "OrderBtn", "Menubar")
+        ),
+    ):
         node = subtree(roots[root], path)
-        geometry[path] = {"pos": node["pos"], "widgets": [
-            {key: w[key] for key in ("w_", "h_", "pivot", "fontSize") if key in w}
-            for w in node["widgets"] if "w_" in w
-        ]}
+        geometry[path] = {
+            "pos": node["pos"],
+            "widgets": [
+                {key: w[key] for key in ("w_", "h_", "pivot", "fontSize") if key in w}
+                for w in node["widgets"]
+                if "w_" in w
+            ],
+        }
     for name in ("SearchBtn", "SortBtn", "OrderBtn"):
         path = f"SeletControl/TopMenu/{name}/Btn_Normal"
         assert sprite(subtree(roots["UICharacterCollection"], path))["h_"] == 116
@@ -118,7 +131,11 @@ def test_small_button_is_the_option_popups_button_bg(tokens, layouts):
     body = sprite(button, "Common_Btn_BG")
     small = tokens["SMALL_BUTTON"]
     assert [body["w_"], body["h_"]] == [small["w"], small["h"]] == [402, 136]
-    assert label(subtree(option, "Center/Popup/List/Sound_Setting/ETCSetting/ButtonBg/Label_Locale"))["fontSize"] == small["fs"] == 48
+    assert (
+        label(subtree(option, "Center/Popup/List/Sound_Setting/ETCSetting/ButtonBg/Label_Locale"))["fontSize"]
+        == small["fs"]
+        == 48
+    )
     # buttons side by side stand 20 apart
     assert small["pitch"] - small["w"] == small["gap"] == 20
 
@@ -152,7 +169,10 @@ def test_stats_box_is_the_detail_screens_status_box(tokens, layouts):
     # the line is the fill plus 5 across and 5 down, centred to within a unit (Deco at -2.3, +3.0)
     assert [line_1["w_"] - fill_1["w_"], line_1["h_"] - fill_1["h_"]] == [box["lineOutset"]] * 2 == [5, 5]
     assert line["h_"] - fill["h_"] == box["lineOutset"]
-    assert abs(second_line["pos"][0] + box["lineOutset"] / 2) <= 0.5 and abs(second_line["pos"][1] - box["lineOutset"] / 2) <= 0.5
+    assert (
+        abs(second_line["pos"][0] + box["lineOutset"] / 2) <= 0.5
+        and abs(second_line["pos"][1] - box["lineOutset"] / 2) <= 0.5
+    )
     assert second_line["pos"] == bg_line["pos"]
     # the first fill's line is 10 wider: its right 5 more lie under the second fill, which is drawn above it
     assert line["w_"] - fill["w_"] == 2 * box["lineOutset"]
@@ -173,8 +193,10 @@ def test_backdrop_rests_at_the_tween_alpha(tokens, root):
                 data = obj.read_typetree()
             except (ValueError, TypeError):
                 continue
-            if names.get(data.get("m_GameObject", {}).get("m_PathID")) == "BlackBgClickArea" \
-                    and scripts.get(data.get("m_Script", {}).get("m_PathID")) == "TweenAlpha":
+            if (
+                names.get(data.get("m_GameObject", {}).get("m_PathID")) == "BlackBgClickArea"
+                and scripts.get(data.get("m_Script", {}).get("m_PathID")) == "TweenAlpha"
+            ):
                 tweens.append((data["from"], data["to"]))
     assert len(tweens) == 1
     colour, alpha = tokens["BACKDROP"].split("/")
@@ -224,6 +246,7 @@ def test_lobby_entry_is_uiani_lobby(tokens, tmp_path_factory):
     from bmpt.gameassets import AssetCache, GameAssets
     from bmpt.gameassets.model import BundleGraph
     from ba_modding_toolkit.searching import get_search_dirs
+
     game = GameAssets(get_search_dirs(GAME_DIR), AssetCache(root=tmp_path_factory.mktemp("lobby-entry"), allowed=False))
     with game._cab_discovery().batch(), BundleGraph({}, resolver=game._resolve_cabs) as graph:
         env = graph.add(game._prefab_bundle("UILobby"))
@@ -249,8 +272,12 @@ def test_lobby_entry_is_uiani_lobby(tokens, tmp_path_factory):
 # --- the design system's scales (ui-tokens.js SPACE, TYPE, CONTROL, POPUP_FRAME, PANEL, LIST_ROW; docs/design-system/) ---
 
 # exemplars the App does not load at run time (so not in PREFAB_HINTS): their bundles in the development view
-EXEMPLAR_BUNDLES = {"UIPopup_RaidEnterCheck": ("ui-_mxload-prefabs-2025-07-02_assets_all_847805749.bundle",
-                                               "cab-37025ca400586bb89016f910aa00592b")}
+EXEMPLAR_BUNDLES = {
+    "UIPopup_RaidEnterCheck": (
+        "ui-_mxload-prefabs-2025-07-02_assets_all_847805749.bundle",
+        "cab-37025ca400586bb89016f910aa00592b",
+    )
+}
 ROW = "Center/ScrollView/ScrollViewController/Grid/UIMailBoxContent/List_01"
 PX = [0, 0.5, 1]
 
@@ -316,7 +343,10 @@ def test_popup_frames_and_the_small_frames_anatomy(tokens, layouts, exemplars):
     assert P["maxH"] == tokens["POPUP"]["maxH"] == 1560
     assert P["footer"]["bottom"] + C["buttonL"]["h"] / 2 == 190
     frame = lambda tree, path: sprite(subtree(tree, path), "Common_Popup_Bg")
-    assert [frame(layouts["UIPopup_Option_PC"], "Center/Popup/Base/BG")[k] for k in ("w_", "h_")] == [P["L"]["w"], P["L"]["h"]]
+    assert [frame(layouts["UIPopup_Option_PC"], "Center/Popup/Base/BG")[k] for k in ("w_", "h_")] == [
+        P["L"]["w"],
+        P["L"]["h"],
+    ]
     gacha = exemplars["UIPopup_GachaCharList"]
     xl = next(w for w in [frame_w for frame_w in _all_sprites(gacha) if frame_w["sprite"] == "Common_Popup_Bg"])
     assert [xl["w_"], xl["h_"]] == [P["XL"]["w"], P["XL"]["h"]] == [2841, 1353]
@@ -332,7 +362,11 @@ def test_popup_frames_and_the_small_frames_anatomy(tokens, layouts, exemplars):
     assert round(f[1] - title[1]) == P["titleTop"] and label(title_node)["fontSize"] == 72
     close_node = subtree(check, "Center/Popup/Base/Btn_Close")
     close = edges(close_node, sprite(close_node, "Common_Icon_Close"), origin)
-    assert [round(f[2] - close[2]), round(f[1] - close[1]), round(close[2] - close[0])] == [P["close"]["right"], P["close"]["top"], 60]
+    assert [round(f[2] - close[2]), round(f[1] - close[1]), round(close[2] - close[0])] == [
+        P["close"]["right"],
+        P["close"]["top"],
+        60,
+    ]
     # the footer: two bodies (550 at a 1.001 scale: 551 across) 33 apart, 102 above the frame's bottom, the pair centred
     bodies = []
     for name in ("Btn_Ok", "Btn_Cancel"):
@@ -341,11 +375,17 @@ def test_popup_frames_and_the_small_frames_anatomy(tokens, layouts, exemplars):
         offset = _origin(check, f"Center/Popup/Btn_2/{name}")
         bodies.append(edges(body, sprite(body, "Common_Btn_BG"), offset))
     bodies.sort()
-    assert [round(bodies[0][2] - bodies[0][0]), round(bodies[0][1] - bodies[0][3])] == [C["buttonL"]["minW"], C["buttonL"]["h"]]
+    assert [round(bodies[0][2] - bodies[0][0]), round(bodies[0][1] - bodies[0][3])] == [
+        C["buttonL"]["minW"],
+        C["buttonL"]["h"],
+    ]
     assert round(bodies[1][0] - bodies[0][2]) == P["footer"]["gap"]
     assert round(bodies[0][3] - f[3]) == P["footer"]["bottom"]
     # the exemplar's pair stands 2 units right of the centre (84.7 and 80.7 from the sides)
-    assert abs((bodies[0][0] - f[0]) - (f[2] - bodies[1][2])) <= 4 and abs((bodies[0][0] - f[0] + f[2] - bodies[1][2]) / 2 - P["footer"]["side"]) <= 0.5
+    assert (
+        abs((bodies[0][0] - f[0]) - (f[2] - bodies[1][2])) <= 4
+        and abs((bodies[0][0] - f[0] + f[2] - bodies[1][2]) / 2 - P["footer"]["side"]) <= 0.5
+    )
 
 
 def test_a_settings_card_pads_its_title(tokens, layouts):
@@ -371,7 +411,8 @@ def _origin(tree, path):
     node = tree
     for part in path.split("/")[:-1]:
         node = next(c for c in node["children"] if c["name"] == part)
-        x += node["pos"][0]; y += node["pos"][1]
+        x += node["pos"][0]
+        y += node["pos"][1]
     leaf = next(c for c in node["children"] if c["name"] == path.split("/")[-1])
     return x + leaf["pos"][0], y + leaf["pos"][1]
 
@@ -379,7 +420,9 @@ def _origin(tree, path):
 def test_popup_minimum_is_the_title_band_over_the_xs_footer(tokens):
     # The game's smallest titled popup with a footer button, UIPopup_ClientVersion (1115 x 786), kept far more padding than
     # the App wants: the App's smallest frame is the title's band over the XS footer's clearance.
-    path = bundle_by_cab("ui-_mxload-prefabs-2025-07-02_assets_all_197929148.bundle", "cab-f132af15cc4169b45772a043d884cb2c")
+    path = bundle_by_cab(
+        "ui-_mxload-prefabs-2025-07-02_assets_all_197929148.bundle", "cab-f132af15cc4169b45772a043d884cb2c"
+    )
     with open_bundle(path) as env:
         tree = export_layout(env, "UIPopup_ClientVersion", {})
     bg = sprite(subtree(tree, "Center/Popup/Base/BG"), "Common_Popup_Bg")
@@ -387,6 +430,8 @@ def test_popup_minimum_is_the_title_band_over_the_xs_footer(tokens):
     footer, frame, control = tokens["POPUP_FOOTER"], tokens["POPUP_FRAME"], tokens["CONTROL"]
     assert footer["control"] == control["buttonXS"]
     # the prefab's 102 under its 176-high buttonL bodies, scaled to the XS body's 104
-    assert footer["bottom"] == round(frame["footer"]["bottom"] * control["buttonXS"]["h"] / control["buttonL"]["h"]) == 60
+    assert (
+        footer["bottom"] == round(frame["footer"]["bottom"] * control["buttonXS"]["h"] / control["buttonL"]["h"]) == 60
+    )
     assert footer["clearance"] == footer["bottom"] + control["buttonXS"]["h"] + footer["above"]
     assert frame["minH"] == frame["contentTop"] + footer["clearance"] < bg["h_"]

@@ -34,23 +34,36 @@ class RouteGame:
 
 def _get(app, path):
     seen = {}
-    environ = {"REQUEST_METHOD": "GET", "PATH_INFO": path, "QUERY_STRING": "", "HTTP_X_BAMT_TOKEN": "tok",
-               "CONTENT_LENGTH": "0", "wsgi.input": io.BytesIO(b"")}
+    environ = {
+        "REQUEST_METHOD": "GET",
+        "PATH_INFO": path,
+        "QUERY_STRING": "",
+        "HTTP_X_BAMT_TOKEN": "tok",
+        "CONTENT_LENGTH": "0",
+        "wsgi.input": io.BytesIO(b""),
+    }
     body = b"".join(app(environ, lambda status, headers: seen.update(status=status, headers=dict(headers))))
     return seen["status"], seen["headers"], body
 
 
 def test_model_route_is_never_cacheable(tmp_path):
     game = RouteGame()
-    s = Services(Settings(tmp_path / "config.toml"), tmp_path, state=UiState(tmp_path / "webui.json"),
-                 cache=object(), game=game, catalog=RouteCatalog(), library=object())
+    s = Services(
+        Settings(tmp_path / "config.toml"),
+        tmp_path,
+        state=UiState(tmp_path / "webui.json"),
+        cache=object(),
+        game=game,
+        catalog=RouteCatalog(),
+        library=object(),
+    )
     s.state.set_consent(True)
     app = WebApp(build_api(s), s.events, assets=s.asset, token="tok", consent=lambda: s.state.consent)
     try:
         status, headers, body = _get(app, "/asset/model/ch0242.glb")
         assert status == "200 OK" and body == b"glTF model" and game.asked == ["ch0242"]
         assert headers["Content-Type"] == "model/gltf-binary" and headers["Cache-Control"] == "no-store"
-        assert _get(app, "/asset/model/ch0252.glb")[0] == "404 Not Found"   # no model in this install
+        assert _get(app, "/asset/model/ch0252.glb")[0] == "404 Not Found"  # no model in this install
         assert _get(app, "/asset/model/missing.glb")[0] == "404 Not Found"
         assert _get(app, "/asset/model/ch0242.png")[0] == "404 Not Found"
     finally:
@@ -59,56 +72,74 @@ def test_model_route_is_never_cacheable(tmp_path):
 
 def test_model_route_uses_verified_official_or_own_mod_sources(tmp_path):
     # each source reads the files outside its own parts by the library's rule, never as the game folder holds them
-    official = [tmp_path / 'official.bundle']
-    mod_parts = [tmp_path / 'assets-_mx-characters-ch0242-_mxdependency-2026-01-01_004_assets_all_1.bundle']
+    official = [tmp_path / "official.bundle"]
+    mod_parts = [tmp_path / "assets-_mx-characters-ch0242-_mxdependency-2026-01-01_004_assets_all_1.bundle"]
     calls = []
     game = RouteGame()
-    game.model_glb = lambda core, overrides=(), reads=None: calls.append((core, list(overrides), reads)) or b'glTF'
+    game.model_glb = lambda core, overrides=(), reads=None: calls.append((core, list(overrides), reads)) or b"glTF"
     library = SimpleNamespace(
         official_bundles=lambda core, **kwargs: official,
         preview_bundles=lambda mod_id: mod_parts,
-        preview_reads=lambda policy: 'reads:' + policy,
-        mods=lambda: [SimpleNamespace(id='own', kind='model', target='ch0242'),
-                      SimpleNamespace(id='foreign', kind='model', target='ch0252'),
-                      SimpleNamespace(id='portrait', kind='spr', target='ch0242')],
+        preview_reads=lambda policy: "reads:" + policy,
+        mods=lambda: [
+            SimpleNamespace(id="own", kind="model", target="ch0242"),
+            SimpleNamespace(id="foreign", kind="model", target="ch0252"),
+            SimpleNamespace(id="portrait", kind="spr", target="ch0242"),
+        ],
         costume_preview=lambda target, other: costume(target, other),
         costume_verdict=lambda target, other: None,
     )
-    costume_parts = [tmp_path / 'character-ch0242-_mxload-2026-01-01_assets_all_2.bundle']
+    costume_parts = [tmp_path / "character-ch0242-_mxload-2026-01-01_assets_all_2.bundle"]
 
     def costume(target, other):  # another variant's costume on the slot; the library refuses the rest
-        if (target, other) != ('ch0242', 'ch0242_swimsuit'):
-            raise ServiceError('source_unsupported', source=f'variant:{other}')
+        if (target, other) != ("ch0242", "ch0242_swimsuit"):
+            raise ServiceError("source_unsupported", source=f"variant:{other}")
         return costume_parts
-    s = Services(Settings(tmp_path / 'config.toml'), tmp_path, state=UiState(tmp_path / 'webui.json'),
-                 cache=object(), game=game, catalog=RouteCatalog(), library=library)
+
+    s = Services(
+        Settings(tmp_path / "config.toml"),
+        tmp_path,
+        state=UiState(tmp_path / "webui.json"),
+        cache=object(),
+        game=game,
+        catalog=RouteCatalog(),
+        library=library,
+    )
     try:
-        assert s.asset('model/ch0242.glb', {'source': 'official'}).body == b'glTF'
-        assert calls[-1] == ('ch0242', official, 'reads:official')
-        assert s.asset('model/ch0242.glb', {'source': 'mod:own'}).body == b'glTF'
-        assert calls[-1] == ('ch0242', mod_parts, 'reads:configured')
-        assert s.asset('model/ch0242.glb', {'source': 'variant:ch0242_swimsuit'}).body == b'glTF'
-        assert calls[-1] == ('ch0242', costume_parts, 'reads:official')
+        assert s.asset("model/ch0242.glb", {"source": "official"}).body == b"glTF"
+        assert calls[-1] == ("ch0242", official, "reads:official")
+        assert s.asset("model/ch0242.glb", {"source": "mod:own"}).body == b"glTF"
+        assert calls[-1] == ("ch0242", mod_parts, "reads:configured")
+        assert s.asset("model/ch0242.glb", {"source": "variant:ch0242_swimsuit"}).body == b"glTF"
+        assert calls[-1] == ("ch0242", costume_parts, "reads:official")
         import pytest
-        for source in ['mod:foreign', 'mod:portrait', 'mod:missing', '../elsewhere']:
+
+        for source in ["mod:foreign", "mod:portrait", "mod:missing", "../elsewhere"]:
             with pytest.raises(KeyError):
-                s.asset('model/ch0242.glb', {'source': source})
-        with pytest.raises(ServiceError, match='source_unsupported'):
-            s.asset('model/ch0242.glb', {'source': 'variant:ch0252'})
+                s.asset("model/ch0242.glb", {"source": source})
+        with pytest.raises(ServiceError, match="source_unsupported"):
+            s.asset("model/ch0242.glb", {"source": "variant:ch0252"})
     finally:
         s.close()
 
 
 def test_indexed_npc_model_can_preview_without_a_student_entry(tmp_path):
     import pytest
+
     game = RouteGame()
     game.model_cores = lambda: {"en0002"}
     calls = []
     game.model_glb = lambda core, overrides=(), reads=None: calls.append((core, list(overrides), reads)) or b"glTF npc"
-    sources = [tmp_path / 'assets-_mx-npcs-en0002-_mxdependency-2026-01-01_004_assets_all_1.bundle']
-    s = Services(Settings(tmp_path / "config.toml"), tmp_path, state=UiState(tmp_path / "webui.json"),
-                 cache=object(), game=game, catalog=RouteCatalog(),
-                 library=SimpleNamespace(mods=lambda: [], preview_reads=lambda policy: 'reads:' + policy))
+    sources = [tmp_path / "assets-_mx-npcs-en0002-_mxdependency-2026-01-01_004_assets_all_1.bundle"]
+    s = Services(
+        Settings(tmp_path / "config.toml"),
+        tmp_path,
+        state=UiState(tmp_path / "webui.json"),
+        cache=object(),
+        game=game,
+        catalog=RouteCatalog(),
+        library=SimpleNamespace(mods=lambda: [], preview_reads=lambda policy: "reads:" + policy),
+    )
     s.batch_import = SimpleNamespace(preview=lambda key: ("en0002", sources))
     try:
         assert s.asset("model/en0002.glb", {}).body == b"glTF npc"
@@ -144,9 +175,14 @@ def test_prefab_overrides_keep_every_dated_prefab_bundle_of_a_slot():
 class CostumeCatalog:
     """Hina's family: her model, the Dress's, the Pajamas' field-mode model; Momoi elsewhere, and Midori without a
     model."""
-    variants = {"hina": ("hina_original", None, "hina"), "ch0230": ("ch0230", None, "hina"),
-                "np0009": (None, "np0009", "hina"), "momoi": ("momoi_original", None, "momoi"),
-                "midori": (None, None, "momoi")}
+
+    variants = {
+        "hina": ("hina_original", None, "hina"),
+        "ch0230": ("ch0230", None, "hina"),
+        "np0009": (None, "np0009", "hina"),
+        "momoi": ("momoi_original", None, "momoi"),
+        "midori": (None, None, "momoi"),
+    }
     portraits = {"hina": "hina_spr", "ch0230": "ch0230_spr", "momoi": "momoi_spr"}
 
     def variant(self, key):
@@ -182,22 +218,40 @@ def _costume_services(tmp_path, outcomes, export_error=None):
 
     game = RouteGame()
     game.model_glb = glb
-    library = SimpleNamespace(costume_verdict=lambda target, other: saved.get(other), costume_preview=preview,
-                              record_costume_verdict=record, preview_reads=lambda policy: policy, mods=lambda: [],
-                              assigned_targets=lambda: set())
-    s = Services(Settings(tmp_path / "config.toml"), tmp_path, state=UiState(tmp_path / "webui.json"),
-                 cache=object(), game=game, catalog=CostumeCatalog(), library=library)
+    library = SimpleNamespace(
+        costume_verdict=lambda target, other: saved.get(other),
+        costume_preview=preview,
+        record_costume_verdict=record,
+        preview_reads=lambda policy: policy,
+        mods=lambda: [],
+        assigned_targets=lambda: set(),
+    )
+    s = Services(
+        Settings(tmp_path / "config.toml"),
+        tmp_path,
+        state=UiState(tmp_path / "webui.json"),
+        cache=object(),
+        game=game,
+        catalog=CostumeCatalog(),
+        library=library,
+    )
     return s, saved, built, exported
 
 
 def test_costume_check_saves_what_holds_for_these_files_and_retries_a_refusal_of_the_moment(tmp_path):
     """A pair is judged by building and exporting it; the verdict is saved, except a refusal of the moment."""
-    outcomes = {"np0009": "parts", "ch0230": ServiceError("source_unsupported", source="stretch"),
-                "busy": ServiceError("original_unavailable"), "bug": ServiceError("library_operation_failed")}
+    outcomes = {
+        "np0009": "parts",
+        "ch0230": ServiceError("source_unsupported", source="stretch"),
+        "busy": ServiceError("original_unavailable"),
+        "bug": ServiceError("library_operation_failed"),
+    }
     s, saved, built, exported = _costume_services(tmp_path, outcomes)
     try:
         assert s.costume_check("hina", "np0009")["ok"] is True
-        assert exported == [("hina_original", [tmp_path / "character-hina_original-_mxload-2026-01-01_assets_all_2.bundle"])]
+        assert exported == [
+            ("hina_original", [tmp_path / "character-hina_original-_mxload-2026-01-01_assets_all_2.bundle"])
+        ]
         assert s.costume_check("hina", "np0009")["ok"] is True and built == ["np0009"]  # saved: not built again
         assert s.costume_check("hina", "ch0230") == {"ok": False, "reason": "stretch", "detail": {}}
         assert s.costume_check("hina", "busy") == {"ok": False, "reason": "original_unavailable", "transient": True}
@@ -207,7 +261,11 @@ def test_costume_check_saves_what_holds_for_these_files_and_retries_a_refusal_of
         s.close()
     s, saved, _, _ = _costume_services(tmp_path, {"np0009": "parts"}, export_error=RuntimeError("no mesh"))
     try:
-        assert s.costume_check("hina", "np0009") == {"ok": False, "reason": "export", "detail": {"error": "RuntimeError"}}
+        assert s.costume_check("hina", "np0009") == {
+            "ok": False,
+            "reason": "export",
+            "detail": {"error": "RuntimeError"},
+        }
     finally:
         s.close()
 
@@ -233,28 +291,47 @@ def test_a_costume_past_the_stretch_limit_is_shown_for_a_preview_only(tmp_path):
 
 
 def test_costume_rpcs_offer_only_pairs_checked_to_their_end(tmp_path):
-    outcomes = {"np0009": "parts", "momoi": "parts",
-                "ch0230": ServiceError("source_unsupported", source="shader outside the always-loaded bundles")}
+    outcomes = {
+        "np0009": "parts",
+        "momoi": "parts",
+        "ch0230": ServiceError("source_unsupported", source="shader outside the always-loaded bundles"),
+    }
     s, saved, built, _ = _costume_services(tmp_path, outcomes)
     api = build_api(s)
     try:
         # another student's model is a source too (the switch's search); a variant without one, itself not
         others = ["ch0230", "np0009", "momoi", "hina", "midori"]
         assert api.call("model.costumes", {"variant": "hina", "others": others})["result"] == {
-            "ch0230": None, "np0009": None, "momoi": None, "hina": "refused", "midori": "refused"}
-        job = api.call("model.checkCostumes", {"variant": "hina", "others": ["ch0230", "np0009", "momoi", "midori"]})["result"]
+            "ch0230": None,
+            "np0009": None,
+            "momoi": None,
+            "hina": "refused",
+            "midori": "refused",
+        }
+        job = api.call("model.checkCostumes", {"variant": "hina", "others": ["ch0230", "np0009", "momoi", "midori"]})[
+            "result"
+        ]
         assert s.jobs.wait(job, 10)
         assert s.jobs.get(job).result == {"ch0230": "refused", "np0009": "ok", "momoi": "ok", "midori": "refused"}
         assert api.call("model.costumes", {"variant": "hina", "others": others})["result"] == {
-            "ch0230": "refused", "np0009": "ok", "momoi": "ok", "hina": "refused", "midori": "refused"}
+            "ch0230": "refused",
+            "np0009": "ok",
+            "momoi": "ok",
+            "hina": "refused",
+            "midori": "refused",
+        }
         assert sorted(built) == ["ch0230", "momoi", "np0009"]
         # a refused pair is no preview source, and its preview is not built again
         import pytest
+
         with pytest.raises(KeyError):
             s.asset("model/hina.glb", {"source": "variant:ch0230"})
         assert sorted(built) == ["ch0230", "momoi", "np0009"]
-        for bad in ({"variant": "hina", "others": "np0009"}, {"variant": "hina", "others": ["x"] * 65},
-                    {"variant": "", "others": []}):
+        for bad in (
+            {"variant": "hina", "others": "np0009"},
+            {"variant": "hina", "others": ["x"] * 65},
+            {"variant": "", "others": []},
+        ):
             assert api.call("model.costumes", bad)["error"]["code"] == "bad_params"
     finally:
         s.close()
@@ -262,15 +339,20 @@ def test_costume_rpcs_offer_only_pairs_checked_to_their_end(tmp_path):
 
 def test_costume_cautions_name_what_offered_pairs_may_draw_differently_in_the_game(tmp_path):
     s, saved, _, _ = _costume_services(tmp_path, {})
-    saved.update(np0009={"ok": True, "cautions": ["ex_parts"]}, momoi={"ok": False, "preview": True,
-                 "cautions": ["carried_shader", "ex_parts"]}, ch0230={"ok": False, "reason": "static model",
-                 "cautions": ["ex_parts"]}, midori={"ok": True})
+    saved.update(
+        np0009={"ok": True, "cautions": ["ex_parts"]},
+        momoi={"ok": False, "preview": True, "cautions": ["carried_shader", "ex_parts"]},
+        ch0230={"ok": False, "reason": "static model", "cautions": ["ex_parts"]},
+        midori={"ok": True},
+    )
     api = build_api(s)
     try:
-        assert api.call("model.costumeCautions", {"variant": "hina", "others": ["np0009", "momoi", "ch0230", "midori",
-                                                                                "hina"]})["result"] == {
-            "np0009": ["ex_parts"], "momoi": ["carried_shader", "ex_parts"]}
-        assert api.call("model.costumeCautions", {"variant": "hina", "others": "np0009"})["error"]["code"] == "bad_params"
+        assert api.call(
+            "model.costumeCautions", {"variant": "hina", "others": ["np0009", "momoi", "ch0230", "midori", "hina"]}
+        )["result"] == {"np0009": ["ex_parts"], "momoi": ["carried_shader", "ex_parts"]}
+        assert (
+            api.call("model.costumeCautions", {"variant": "hina", "others": "np0009"})["error"]["code"] == "bad_params"
+        )
     finally:
         s.close()
 
@@ -290,16 +372,25 @@ def test_optimize_physics_runs_as_a_library_job_on_the_official_model_or_a_costu
     s.library.take_pruned_cores = lambda: set()
     api = build_api(s)
     try:
-        for source, result in (("official", {"unneeded": True, "reason": "official"}), ("variant:np0009", {"mod": "copy"})):
+        for source, result in (
+            ("official", {"unneeded": True, "reason": "official"}),
+            ("variant:np0009", {"mod": "copy"}),
+        ):
             job = api.call("model.optimize", {"variant": "hina", "source": source, "name": "Pajamas"})["result"]
             assert s.jobs.wait(job, 10) and s.jobs.get(job).result == result
         assert asked == [("hina", "official", "Pajamas", "pin"), ("hina", "variant:np0009", "Pajamas", "pin")]
-        for bad in ({"variant": "hina", "source": "", "name": ""}, {"variant": "hina", "source": "official", "name": "x" * 201},
-                    {"variant": "", "source": "official", "name": ""}):
+        for bad in (
+            {"variant": "hina", "source": "", "name": ""},
+            {"variant": "hina", "source": "official", "name": "x" * 201},
+            {"variant": "", "source": "official", "name": ""},
+        ):
             assert api.call("model.optimize", bad)["error"]["code"] == "bad_params"
         # a variant without a model, a mod: not a source of Optimize Physics; another student's model is
         for source in ("variant:midori", "mod:abc"):
-            assert api.call("model.optimize", {"variant": "hina", "source": source, "name": ""})["error"]["code"] == "source_unsupported"
+            assert (
+                api.call("model.optimize", {"variant": "hina", "source": source, "name": ""})["error"]["code"]
+                == "source_unsupported"
+            )
         assert len(asked) == 2
         job = api.call("model.optimize", {"variant": "hina", "source": "variant:momoi", "name": "Momoi"})["result"]
         assert s.jobs.wait(job, 10) and asked[-1] == ("hina", "variant:momoi", "Momoi", "pin")
@@ -330,12 +421,19 @@ def test_another_students_model_is_a_preview_source_and_past_the_stretch_limit_s
         sources = api.call("ui.preview", {"variant": "hina", "kind": "model", "source": "variant:momoi"})
         assert sources["result"]["model"] == "variant:momoi"
         # the portrait: the student's own variants only, as before
-        assert api.call("ui.preview", {"variant": "hina", "kind": "spr", "source": "variant:ch0230"})["result"]["spr"] == "variant:ch0230"
-        assert api.call("ui.preview", {"variant": "hina", "kind": "spr", "source": "variant:momoi"})["error"]["code"] == "bad_params"
+        assert (
+            api.call("ui.preview", {"variant": "hina", "kind": "spr", "source": "variant:ch0230"})["result"]["spr"]
+            == "variant:ch0230"
+        )
+        assert (
+            api.call("ui.preview", {"variant": "hina", "kind": "spr", "source": "variant:momoi"})["error"]["code"]
+            == "bad_params"
+        )
         # a refusal stays one for another student's model too
         saved["momoi"] = {"ok": False, "reason": "static model", "detail": {}}
         assert api.call("model.costumes", {"variant": "hina", "others": ["momoi"]})["result"] == {"momoi": "refused"}
         import pytest
+
         with pytest.raises(KeyError):
             s.asset("model/hina.glb", {"source": "variant:momoi"})
     finally:
@@ -361,8 +459,15 @@ def test_every_preview_asset_counts_as_foreground(tmp_path):
             seen.append(("bg", preview_gate._count))
             raise KeyError(name)
 
-    s = Services(Settings(tmp_path / "config.toml"), tmp_path, state=UiState(tmp_path / "webui.json"),
-                 cache=object(), game=Game(), catalog=RouteCatalog(), library=object())
+    s = Services(
+        Settings(tmp_path / "config.toml"),
+        tmp_path,
+        state=UiState(tmp_path / "webui.json"),
+        cache=object(),
+        game=Game(),
+        catalog=RouteCatalog(),
+        library=object(),
+    )
     try:
         s.asset("model/ch0242.glb", {})
         s.asset("art/portrait/ch0242.png", {})

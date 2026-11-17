@@ -29,7 +29,9 @@ def make_library(root: Path) -> None:
     for name in ("transactions", "import-transactions", "asset-deletions"):
         (root / name / "0123456789abcdef" / "").mkdir()
         (root / name / "0123456789abcdef" / "journal.json").write_text(json.dumps({"version": 1, "phase": "active"}))
-    (root / "photographs" / "index.json").write_text(json.dumps({"version": 1, "photos": {}, "selected": {}, "next": 1}))
+    (root / "photographs" / "index.json").write_text(
+        json.dumps({"version": 1, "photos": {}, "selected": {}, "next": 1})
+    )
     for name in FILES:
         (root / name).write_text(json.dumps({"version": 1, "name": name}))
     # modification times the library's records compare
@@ -86,6 +88,7 @@ def test_a_library_that_is_already_in_the_target_is_only_switched_to(services, l
 
 # --- a failed move ---
 
+
 def fail_on(monkeypatch, match, error=None):
     """Make the copy of the files that match fail, after the earlier ones were copied."""
     real = relocate_module._copy_file
@@ -100,7 +103,8 @@ def fail_on(monkeypatch, match, error=None):
 
 @pytest.mark.parametrize("existing_target", [False, True])
 def test_running_out_of_space_in_mods_removes_the_copies_and_the_retry_works(
-        services, library, tmp_path, monkeypatch, existing_target):
+    services, library, tmp_path, monkeypatch, existing_target
+):
     """The review's reproduction: the first move fails during `mods`, the retry used to find a partial target/mods."""
     before = tree(library)
     target = tmp_path / "volume" / "new-library"
@@ -213,8 +217,10 @@ def test_links_are_moved_as_links(services, library, tmp_path):
 
 # --- a failure clearing the source ---
 
+
 def test_a_source_item_that_cannot_be_removed_stays_whole_and_the_target_is_complete(
-        services, library, tmp_path, monkeypatch, caplog):
+    services, library, tmp_path, monkeypatch, caplog
+):
     """The library is complete at the target, which is in use; the old folder keeps the item it could not remove."""
     before = tree(library)
     real = relocate_module.replace
@@ -231,13 +237,15 @@ def test_a_source_item_that_cannot_be_removed_stays_whole_and_the_target_is_comp
         assert services.move_library(target) == target.resolve()
     assert tree(target) == before, "the library is complete at the target"
     assert services.library_dir() == target.resolve(), "and in use there"
-    assert tree(library) == {name: value for name, value in before.items() if name.split("/")[0] == "mods"}, \
+    assert tree(library) == {name: value for name, value in before.items() if name.split("/")[0] == "mods"}, (
         "the old folder keeps the item whole and nothing half-deleted"
+    )
     assert "still holds mods" in caplog.text
 
 
 def test_files_that_cannot_be_deleted_after_the_rename_leave_hidden_leftovers_only(
-        services, library, tmp_path, monkeypatch):
+    services, library, tmp_path, monkeypatch
+):
     before = tree(library)
     real = relocate_module.remove
 

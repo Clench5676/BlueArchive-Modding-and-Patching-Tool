@@ -15,8 +15,10 @@ from test_rebuild_failures import asset, bundle
 def test_obsolete_asset_is_skipped_and_reported(tmp_path, monkeypatch, obsolete_kind):
     source, target = tmp_path / "mod.bundle", tmp_path / "official.bundle"
     obsolete = asset("obsolete", obsolete_kind, "extract" if obsolete_kind == AssetType.Texture2D else None)
-    bundles = {source: bundle(source, [asset("note", AssetType.TextAsset), obsolete]),
-               target: bundle(target, [asset("note", AssetType.TextAsset, payload=b"official")])}
+    bundles = {
+        source: bundle(source, [asset("note", AssetType.TextAsset), obsolete]),
+        target: bundle(target, [asset("note", AssetType.TextAsset, payload=b"official")]),
+    }
     saved = []
     monkeypatch.setattr(Bundle, "load", lambda path, *args: bundles[path])
     monkeypatch.setattr(Bundle, "save", lambda *args: (saved.append(args) or True, "saved"))
@@ -34,18 +36,22 @@ def test_unreadable_texture_compares_raw_and_stream_bytes(tmp_path, monkeypatch,
     raw = b"archive:/CAB-stream/CAB-stream.resS"
     incoming.get_raw_data = lambda: raw + (b"changed" if difference == "raw" else b"")
     official.get_raw_data = lambda: raw
-    bundles = {source: bundle(source, [asset("note", AssetType.TextAsset), incoming]),
-               target: bundle(target, [asset("note", AssetType.TextAsset, payload=b"official"), official])}
+    bundles = {
+        source: bundle(source, [asset("note", AssetType.TextAsset), incoming]),
+        target: bundle(target, [asset("note", AssetType.TextAsset, payload=b"official"), official]),
+    }
     bundles[source].env.file.files["CAB-stream.resS"] = SimpleNamespace(
-        bytes=b"mod pixels" if difference == "stream" else b"stock pixels")
+        bytes=b"mod pixels" if difference == "stream" else b"stock pixels"
+    )
     bundles[target].env.file.files["CAB-stream.resS"] = SimpleNamespace(bytes=b"stock pixels")
     if difference == "missing_stream":
         bundles[source].env.file.files.clear()
     saved = []
     monkeypatch.setattr(Bundle, "load", lambda path, *args: bundles[path])
     monkeypatch.setattr(Bundle, "save", lambda *args: (saved.append(args) or True, "saved"))
-    result = rebuild([source], [target], tmp_path, {"Texture2D", "TextAsset"},
-                     SaveOptions(), match_strategy="name_type")
+    result = rebuild(
+        [source], [target], tmp_path, {"Texture2D", "TextAsset"}, SaveOptions(), match_strategy="name_type"
+    )
     assert result.success is (difference is None), result.message
     if difference is None:
         assert result.file_pairs and saved
@@ -57,8 +63,10 @@ def test_unreadable_texture_compares_raw_and_stream_bytes(tmp_path, monkeypatch,
 
 def test_missing_counterparts_still_require_a_nonempty_match(tmp_path, monkeypatch):
     source, target = tmp_path / "mod.bundle", tmp_path / "official.bundle"
-    bundles = {source: bundle(source, [asset("obsolete", AssetType.TextAsset)]),
-               target: bundle(target, [asset("new", AssetType.TextAsset)])}
+    bundles = {
+        source: bundle(source, [asset("obsolete", AssetType.TextAsset)]),
+        target: bundle(target, [asset("new", AssetType.TextAsset)]),
+    }
     saved = []
     monkeypatch.setattr(Bundle, "load", lambda path, *args: bundles[path])
     monkeypatch.setattr(Bundle, "save", lambda *args: (saved.append(args) or True, "saved"))
@@ -78,12 +86,14 @@ def test_stream_comparison_uses_only_the_assets_own_range(tmp_path, monkeypatch,
         obj.get_raw_data = lambda: b"archive:/CAB-stream/CAB-stream.resS"
     bundles = {source: bundle(source, [incoming]), target: bundle(target, [official])}
     bundles[source].env.file.files["CAB-stream.resS"] = SimpleNamespace(
-        bytes=b"XX" + (b"mod!!" if changed_range else b"stock") + b"unrelated change")
+        bytes=b"XX" + (b"mod!!" if changed_range else b"stock") + b"unrelated change"
+    )
     bundles[target].env.file.files["CAB-stream.resS"] = SimpleNamespace(bytes=b"YYstockother asset")
     monkeypatch.setattr(Bundle, "load", lambda path, *args: bundles[path])
     monkeypatch.setattr(Bundle, "save", lambda *args: (True, "saved"))
-    result = rebuild([source], [target], tmp_path, {"Texture2D"}, SaveOptions(),
-                     match_strategy="name_type", skip_unchanged=True)
+    result = rebuild(
+        [source], [target], tmp_path, {"Texture2D"}, SaveOptions(), match_strategy="name_type", skip_unchanged=True
+    )
     assert result.success is not changed_range
     if changed_range:
         assert result.error.code == "required_asset_extract_failed"
@@ -101,8 +111,15 @@ def test_identical_unreadable_asset_counts_as_a_match(tmp_path, monkeypatch, ski
     saved = []
     monkeypatch.setattr(Bundle, "load", lambda path, *args: bundles[path])
     monkeypatch.setattr(Bundle, "save", lambda *args: (saved.append(args) or True, "saved"))
-    result = rebuild([source], [target], tmp_path, {"Texture2D"}, SaveOptions(),
-                     match_strategy="name_type", skip_unchanged=skip_unchanged)
+    result = rebuild(
+        [source],
+        [target],
+        tmp_path,
+        {"Texture2D"},
+        SaveOptions(),
+        match_strategy="name_type",
+        skip_unchanged=skip_unchanged,
+    )
     assert result.success
     assert bool(result.file_pairs) is not skip_unchanged
     assert bool(saved) is not skip_unchanged
@@ -117,18 +134,31 @@ def test_unreadable_asset_must_match_every_counterpart(tmp_path, monkeypatch):
     saved = []
     monkeypatch.setattr(Bundle, "load", lambda path, *args: bundles[path])
     monkeypatch.setattr(Bundle, "save", lambda *args: (saved.append(args) or True, "saved"))
-    result = rebuild([source], [first, second], tmp_path, {"Texture2D"}, SaveOptions(),
-                     match_strategy="name_type")
+    result = rebuild([source], [first, second], tmp_path, {"Texture2D"}, SaveOptions(), match_strategy="name_type")
     assert not result.success and not result.file_pairs and not saved
     assert result.error.code == "required_asset_extract_failed"
 
 
 def test_the_result_names_matched_unchanged_untransferred_and_target_only_assets(tmp_path, monkeypatch):
     source, target = tmp_path / "mod.bundle", tmp_path / "official.bundle"
-    bundles = {source: bundle(source, [asset("note", AssetType.TextAsset), asset("same", AssetType.TextAsset),
-                                       asset("obsolete", AssetType.TextAsset)]),
-               target: bundle(target, [asset("note", AssetType.TextAsset, payload=b"official"),
-                                       asset("same", AssetType.TextAsset), asset("new", AssetType.TextAsset)])}
+    bundles = {
+        source: bundle(
+            source,
+            [
+                asset("note", AssetType.TextAsset),
+                asset("same", AssetType.TextAsset),
+                asset("obsolete", AssetType.TextAsset),
+            ],
+        ),
+        target: bundle(
+            target,
+            [
+                asset("note", AssetType.TextAsset, payload=b"official"),
+                asset("same", AssetType.TextAsset),
+                asset("new", AssetType.TextAsset),
+            ],
+        ),
+    }
     monkeypatch.setattr(Bundle, "load", lambda path, *args: bundles[path])
     monkeypatch.setattr(Bundle, "save", lambda *args: (True, "saved"))
     result = rebuild([source], [target], tmp_path, {"TextAsset"}, SaveOptions(), match_strategy="name_type")
@@ -141,12 +171,15 @@ def test_the_result_names_matched_unchanged_untransferred_and_target_only_assets
 
 def test_an_unchanged_mod_says_so_and_names_its_assets(tmp_path, monkeypatch):
     source, target = tmp_path / "mod.bundle", tmp_path / "official.bundle"
-    bundles = {source: bundle(source, [asset("same", AssetType.TextAsset)]),
-               target: bundle(target, [asset("same", AssetType.TextAsset)])}
+    bundles = {
+        source: bundle(source, [asset("same", AssetType.TextAsset)]),
+        target: bundle(target, [asset("same", AssetType.TextAsset)]),
+    }
     monkeypatch.setattr(Bundle, "load", lambda path, *args: bundles[path])
     monkeypatch.setattr(Bundle, "save", lambda *args: pytest.fail("nothing to save"))
-    result = rebuild([source], [target], tmp_path, {"TextAsset"}, SaveOptions(), match_strategy="name_type",
-                     skip_unchanged=True)
+    result = rebuild(
+        [source], [target], tmp_path, {"TextAsset"}, SaveOptions(), match_strategy="name_type", skip_unchanged=True
+    )
     assert result.success and result.all_unchanged and not result.file_pairs
     assert result.matched == result.unchanged == ["[TextAsset] same"]
     assert result.not_transferred == result.target_only == []

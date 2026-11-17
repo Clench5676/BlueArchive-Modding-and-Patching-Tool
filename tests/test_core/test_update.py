@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
 MSE_THRESHOLD = 20.0
 
+
 # 案例数据缺失时 conftest 参数化为空参数集，测试自动跳过
 class TestModUpdate:
     def test_mod_update_basic(
@@ -23,12 +24,12 @@ class TestModUpdate:
     ):
         output_dir = tmp_path / "output"
         output_dir.mkdir()
-        
+
         save_options = SaveOptions(
             perform_crc=False,
             compression="none",
         )
-        
+
         result = process_mod_update(
             source_paths=update_case.old_paths,
             target_paths=update_case.new_paths,
@@ -36,9 +37,9 @@ class TestModUpdate:
             asset_types_to_replace={"Texture2D", "TextAsset"},
             save_options=save_options,
         )
-        
+
         assert result.success is True, result.message
-        
+
         # 验证输出文件数量匹配
         output_files = list(output_dir.glob("*.bundle"))
         assert len(output_files) == len(update_case.new_paths)
@@ -52,18 +53,18 @@ class TestModUpdate:
         update_case: "UpdateCase",
         tmp_path: Path,
     ):
-        
+
         new_original_bundle = Bundle.load(update_case.new_paths[0])
         original_platform, original_version = new_original_bundle.platform_info
-        
+
         output_dir = tmp_path / "output"
         output_dir.mkdir()
-        
+
         save_options = SaveOptions(
             perform_crc=False,
             compression="none",
         )
-        
+
         result = process_mod_update(
             source_paths=update_case.old_paths,
             target_paths=update_case.new_paths,
@@ -71,9 +72,9 @@ class TestModUpdate:
             asset_types_to_replace={"Texture2D", "TextAsset"},
             save_options=save_options,
         )
-        
+
         assert result.success is True, result.message
-        
+
         output_files = list(output_dir.glob("*.bundle"))
         assert len(output_files) == len(update_case.new_paths)
 
@@ -94,15 +95,15 @@ class TestModUpdate:
         old_extract_dir.mkdir()
 
         extract_assets_from_bundle([update_case.old_paths[0]], old_extract_dir, {"Texture2D"})
-        
+
         output_dir = tmp_path / "output"
         output_dir.mkdir()
-        
+
         save_options = SaveOptions(
             perform_crc=True,
             compression="none",
         )
-        
+
         result = process_mod_update(
             source_paths=update_case.old_paths,
             target_paths=update_case.new_paths,
@@ -110,14 +111,14 @@ class TestModUpdate:
             asset_types_to_replace={"Texture2D"},
             save_options=save_options,
         )
-        
+
         assert result.success is True, result.message
-        
+
         # 提取更新后的资源进行对比
         updated_bundle = output_dir / update_case.new_paths[0].name
         new_extract_dir = tmp_path / "new_extracted"
         new_extract_dir.mkdir()
 
         extract_assets_from_bundle([updated_bundle], new_extract_dir, {"Texture2D", "TextAsset"})
-        
+
         compare_directory_assets(old_extract_dir, new_extract_dir, MSE_THRESHOLD)

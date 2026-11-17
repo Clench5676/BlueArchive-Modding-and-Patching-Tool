@@ -11,8 +11,10 @@ CLASSIC_LOCALES = Path(i18n.__file__).parent / "locales"
 
 
 def strings():
-    return {**json.loads((CLASSIC_LOCALES / "th-TH.json").read_text(encoding="utf-8")),
-             **json.loads((LOCALES / "th-TH.json").read_text(encoding="utf-8"))}
+    return {
+        **json.loads((CLASSIC_LOCALES / "th-TH.json").read_text(encoding="utf-8")),
+        **json.loads((LOCALES / "th-TH.json").read_text(encoding="utf-8")),
+    }
 
 
 def test_thai_is_offered_with_its_native_name():
@@ -29,6 +31,10 @@ def test_thai_uses_half_width_punctuation_without_han_or_kana():
         for value in node.values():
             yield from leaves(value) if isinstance(value, dict) else [value]
 
-    assert [text for text in leaves(strings()) if re.search(
-        "[\uff08\uff09\uff0c\u3001\u3002\u300c\u300d\u300e\u300f\u30fb\u00b7\u3040-\u30ff\u3400-\u9fff]", text
-    )] == []
+    assert [
+        text
+        for text in leaves(strings())
+        if re.search(
+            "[\uff08\uff09\uff0c\u3001\u3002\u300c\u300d\u300e\u300f\u30fb\u00b7\u3040-\u30ff\u3400-\u9fff]", text
+        )
+    ] == []

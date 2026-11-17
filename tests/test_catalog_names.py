@@ -13,8 +13,20 @@ import pytest
 
 from bmpt.catalog import DEFAULT_DATA
 from bmpt.catalog._names import (
-    BASE_SHORT, FILE_ID, LANGUAGES, NAMES, NAMING, PART_SEPARATORS, SEPARATORS, TWINS, apply_thai_names,
-    bracketed, csv_bases, remark, thai_fallback, usable,
+    BASE_SHORT,
+    FILE_ID,
+    LANGUAGES,
+    NAMES,
+    NAMING,
+    PART_SEPARATORS,
+    SEPARATORS,
+    TWINS,
+    apply_thai_names,
+    bracketed,
+    csv_bases,
+    remark,
+    thai_fallback,
+    usable,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures" / "catalog"
@@ -30,8 +42,17 @@ SOURCES = {"derived", "curated", "fallback", "official", "translated"}
 # "NPC era" remark sits on a second character map row the builder does not use); the
 # Japanese game names both forms of Shun (Swimsuit) alike.
 KNOWN_TWINS = {
-    lang: {frozenset(pair) for pair in (("np0009", "np0205"), ("np0129", "np0270"), ("np0130", "np0271"),
-                                        ("np0131", "np0272"), ("np0081", "ch0281"), ("np0082", "ch0282"))}
+    lang: {
+        frozenset(pair)
+        for pair in (
+            ("np0009", "np0205"),
+            ("np0129", "np0270"),
+            ("np0130", "np0271"),
+            ("np0131", "np0272"),
+            ("np0081", "ch0281"),
+            ("np0082", "ch0282"),
+        )
+    }
     for lang in LANGUAGES
 }
 KNOWN_TWINS["ja"].add(frozenset(("ch0355", "np0288")))
@@ -131,8 +152,12 @@ def test_generator_applies_the_name_table(generator, tmp_path: Path):
     entries = generator.build_catalog(write_cases(tmp_path / "map.csv"), FIXTURES)["variants"]
     for key, expected in CASES["expected"].items():
         entry = entries[key]
-        actual = {field: {lang: value for lang, value in entry[field].items() if lang != "th"}
-                  if isinstance(entry[field], dict) else entry[field] for field in expected}
+        actual = {
+            field: {lang: value for lang, value in entry[field].items() if lang != "th"}
+            if isinstance(entry[field], dict)
+            else entry[field]
+            for field in expected
+        }
         assert actual == expected, key
 
 
@@ -161,8 +186,7 @@ def test_thai_names_use_the_existing_official_source_or_english(shipped: dict):
             assert entry["fallbacks"]["th"] == "missing_thai_name", key
     assert official == len(source["students"]) == 172
     assert shipped["variants"]["hoshino"]["names"]["th"] == {"full": "โฮชิโนะ", "short": "ต้นฉบับ"}
-    assert shipped["variants"]["hoshino_swimsuit"]["names"]["th"] == {
-        "full": "โฮชิโนะ (ชุดว่ายน้ำ)", "short": "ชุดว่ายน้ำ"}
+    assert shipped["variants"]["hoshino_swimsuit"]["names"]["th"] == {"full": "โฮชิโนะ (ชุดว่ายน้ำ)", "short": "ชุดว่ายน้ำ"}
     for student in shipped["students"].values():
         assert re.search(r"[\u0e00-\u0e7f]", student["names"]["th"]) or student["names"]["th"] == student["names"]["en"]
 
@@ -171,8 +195,11 @@ def test_thai_fallback_uses_final_english_names_and_does_not_guess_story_names()
     students = {"1": {"base": "base", "names": {"en": "Changed Base"}}}
     entries = {
         "base": {"playable": True, "schale_id": 99999, "names": {"en": {"full": "Changed Base", "short": "Original"}}},
-        "story": {"playable": False, "schale_id": 10005,
-                  "names": {"en": {"full": "Changed Base (Story)", "short": "Story"}}},
+        "story": {
+            "playable": False,
+            "schale_id": 10005,
+            "names": {"en": {"full": "Changed Base (Story)", "short": "Story"}},
+        },
     }
     apply_thai_names(students, entries)
     assert students["1"]["names"]["th"] == "Changed Base"
@@ -226,23 +253,39 @@ def test_shipped_aliases_keep_the_cn_servers_names(shipped: dict):
         if kivo["skin_cn"] and kivo["skin_cn"] != kivo["skin"]:
             assert any(kivo["skin_cn"] in alias for alias in entry.get("aliases", [])), key
     # the names the user knew from before the switch: Airi, Aru, Arona, Momoi, Fuuka, Haruka, Kanna, Neru, Tsumugi
-    students = {"airi": "\u7231\u7406", "aru": "\u7231\u9732", "arona": "\u963f\u6d1b\u5a1c", "momoi": "\u6843",
-                "fuuka": "\u98ce\u9999", "haruka": "\u6625\u9999", "ch0170": "\u5eb7\u5a1c",
-                "neru": "\u59ae\u9732", "ch0252": "\u4337"}
+    students = {
+        "airi": "\u7231\u7406",
+        "aru": "\u7231\u9732",
+        "arona": "\u963f\u6d1b\u5a1c",
+        "momoi": "\u6843",
+        "fuuka": "\u98ce\u9999",
+        "haruka": "\u6625\u9999",
+        "ch0170": "\u5eb7\u5a1c",
+        "neru": "\u59ae\u9732",
+        "ch0252": "\u4337",
+    }
     for key, server in students.items():
         sid = str(shipped["variants"][key]["student_id"])
         assert server in shipped["students"][sid]["aliases"], key
         assert server in shipped["variants"][key]["aliases"], key
     # and the CN server's costume words: New Year, Armed, Bunny, Casual, Track
-    words = {"aru_newyear": "\u65b0\u5e74", "np0267": "\u6b66\u88c5", "ch0099": "\u90a6\u59ae",
-             "ch0082": "\u4fbf\u670d", "np0045": "\u4f53\u64cd\u670d", "utahaturret": "\u5c0f\u96f7"}
+    words = {
+        "aru_newyear": "\u65b0\u5e74",
+        "np0267": "\u6b66\u88c5",
+        "ch0099": "\u90a6\u59ae",
+        "ch0082": "\u4fbf\u670d",
+        "np0045": "\u4f53\u64cd\u670d",
+        "utahaturret": "\u5c0f\u96f7",
+    }
     for key, word in words.items():
         assert any(word in alias for alias in shipped["variants"][key]["aliases"]), key
 
 
 def test_shipped_aliases_are_sorted_and_never_the_shown_name(shipped: dict):
     records = [(sid, student["names"]["zh-CN"], student.get("aliases")) for sid, student in shipped["students"].items()]
-    records += [(key, entry["names"]["zh-CN"]["full"], entry.get("aliases")) for key, entry in shipped["variants"].items()]
+    records += [
+        (key, entry["names"]["zh-CN"]["full"], entry.get("aliases")) for key, entry in shipped["variants"].items()
+    ]
     with_aliases = [record for record in records if record[2] is not None]
     assert len(with_aliases) > 200
     for key, shown, aliases in with_aliases:
@@ -257,8 +300,13 @@ def test_cn_words_pair_kivos_words_with_the_servers():
     from bmpt.catalog._names import cn_words
 
     armed, battle, bunny, bunny_cn = "\u4e34\u6218", "\u6b66\u88c5", "\u5154\u5973\u90ce", "\u90a6\u59ae"
-    rows = [{"skin_kivo": armed, "skin_cn": battle}, {"skin_kivo": f"{bunny},{armed}", "skin_cn": f"{bunny_cn},{battle}"},
-            {"skin_kivo": bunny, "skin_cn": "x"}, {"skin_kivo": "a,b", "skin_cn": "c"}, {"skin_kivo": "", "skin_cn": "d"}]
+    rows = [
+        {"skin_kivo": armed, "skin_cn": battle},
+        {"skin_kivo": f"{bunny},{armed}", "skin_cn": f"{bunny_cn},{battle}"},
+        {"skin_kivo": bunny, "skin_cn": "x"},
+        {"skin_kivo": "a,b", "skin_cn": "c"},
+        {"skin_kivo": "", "skin_cn": "d"},
+    ]
     words = cn_words(rows)
     assert words[armed] == battle and words[bunny] in (bunny_cn, "x")
     assert "a" not in words and "" not in words
@@ -317,8 +365,11 @@ def test_shipped_variants_have_distinct_names(shipped: dict):
 def test_twin_words_come_from_the_glossary_and_yield_to_kivo():
     for file_id, twin in TWINS.items():
         assert twin.get("basis"), file_id
-        assert all(NAMING["glossary"][part].get(lang) for part in re.split(PART_SEPARATORS, twin["remark"])
-                   for lang in ("en", "ja", "zh-TW")), file_id
+        assert all(
+            NAMING["glossary"][part].get(lang)
+            for part in re.split(PART_SEPARATORS, twin["remark"])
+            for lang in ("en", "ja", "zh-TW")
+        ), file_id
     assert remark({"file_id": "NP0289"}) == TWINS["np0289"]["remark"]
     assert remark({"file_id": "NP0289", "spine_remark": "Kivo"}) == "Kivo"
 

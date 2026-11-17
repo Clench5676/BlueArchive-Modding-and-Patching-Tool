@@ -91,8 +91,12 @@ def _lacks_crc(library: ModLibrary, path: Path, name: str, sha1: str | None = No
 def _item(library: ModLibrary, pin: Pin | None, install: str, core: str) -> dict[str, str]:
     if pin is None:
         return {"install": install, "core": core, "variant": core, "kind": "spr"}
-    return {"install": install, "core": core, "variant": library._core_map(pin).key(core) or core,
-            "kind": library._kind(core, pin) or "spr"}
+    return {
+        "install": install,
+        "core": core,
+        "variant": library._core_map(pin).key(core) or core,
+        "kind": library._kind(core, pin) or "spr",
+    }
 
 
 def _built(library: ModLibrary, config: dict | None) -> list[tuple[str, str]]:
@@ -104,8 +108,7 @@ def _built(library: ModLibrary, config: dict | None) -> list[tuple[str, str]]:
             if not isinstance(source, str):
                 continue
             for name, part in (key.get("parts") or {}).items():
-                if isinstance(part, dict) and _lacks_crc(library, _kept(library, source, part), name,
-                                                         part.get("sha1")):
+                if isinstance(part, dict) and _lacks_crc(library, _kept(library, source, part), name, part.get("sha1")):
                     out.append((install, core))
                     break
     return out
@@ -117,8 +120,13 @@ def _game(library: ModLibrary, pins: list[Pin]) -> list[tuple[Pin, str, str]]:
     out: dict[tuple[str, str], tuple[Pin, str, str]] = {}
     for target, record in list(library._applied.items()):
         source = record.get("source")
-        if (record.get("crc") != "needs_fix" or says_official(record) or record.get("removed")
-                or not isinstance(source, str) or not source.startswith(LIBRARY_SOURCES)):
+        if (
+            record.get("crc") != "needs_fix"
+            or says_official(record)
+            or record.get("removed")
+            or not isinstance(source, str)
+            or not source.startswith(LIBRARY_SOURCES)
+        ):
             continue
         path = Path(target)
         pin = next((pin for pin in pins if any(path.is_relative_to(folder) for folder in pin.dirs)), None)
@@ -156,8 +164,7 @@ def findings(library: ModLibrary) -> dict[str, Any]:
     by_key = {pin.key: pin for pin in pins}
     entries: dict[tuple[str, str], dict[str, Any]] = {}
     for install, core in built:
-        entries[(install, core)] = {**_item(library, by_key.get(install), install, core), "built": True,
-                                    "game": False}
+        entries[(install, core)] = {**_item(library, by_key.get(install), install, core), "built": True, "game": False}
     for pin, core, _source in game:
         entry = entries.setdefault((pin.key, core), {**_item(library, pin, pin.key, core), "built": False})
         entry["game"] = True
@@ -188,8 +195,10 @@ def repair(library: ModLibrary, log: LogFunc = no_log, progress: ProgressCallbac
         except ServiceError as error:
             # nothing is asked: the game files are written at a later start
             logger.info("Game files without their part's CRC left for a later start: %s", error.code)
-            result.failed.extend({"entry": _item(library, pin, pin.key, core), "code": error.code,
-                                  "params": error.to_json()["params"]} for pin, core, _source in game)
+            result.failed.extend(
+                {"entry": _item(library, pin, pin.key, core), "code": error.code, "params": error.to_json()["params"]}
+                for pin, core, _source in game
+            )
             game = []
     cores, kinds = set(), set()
     for i, (pin, core, source) in enumerate(game, 1):

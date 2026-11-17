@@ -110,16 +110,29 @@ def test_the_library_reports_a_costume_builds_progress_through_the_job(monkeypat
     monkeypatch.setattr(service.ModLibrary, "_core_map", lambda self, pin: type("M", (), {"slot": lambda s, c: c})())
     target = tmp_path / "character-hina_original-_mxload-2026-01-01_assets_all_1.bundle"
     reported, steps = [], []
-    library._stage_costume("other", [target], tmp_path, print, None, step=lambda: steps.append(1),
-                           fraction=service._item_fraction(reported.append, 2, 5), physics=True)
+    library._stage_costume(
+        "other",
+        [target],
+        tmp_path,
+        print,
+        None,
+        step=lambda: steps.append(1),
+        fraction=service._item_fraction(reported.append, 2, 5),
+        physics=True,
+    )
     assert len(steps) == len(phases)
-    assert reported and all(set(p) == {"current", "total", "step", "fraction"} and (p["current"], p["total"]) == (2, 5)
-                            for p in reported)
+    assert reported and all(
+        set(p) == {"current", "total", "step", "fraction"} and (p["current"], p["total"]) == (2, 5) for p in reported
+    )
     fractions = [p["fraction"] for p in reported]
     assert fractions == sorted(fractions) and fractions[-1] < 0.9  # the rest of the item for the write after it
     steps = [p["step"] for p in reported]
-    assert list(dict.fromkeys(steps)) == ["import.step.readModel", "import.step.fitCostume", "import.step.buildModel",
-                                              "import.step.save"]
+    assert list(dict.fromkeys(steps)) == [
+        "import.step.readModel",
+        "import.step.fitCostume",
+        "import.step.buildModel",
+        "import.step.save",
+    ]
     # without a job's progress the build marks its phases all the same, and nothing is reported
     assert service._item_fraction(None) is None
     library._stage_costume("other", [target], tmp_path, print, None)
@@ -129,7 +142,9 @@ def test_the_library_reports_a_costume_builds_progress_through_the_job(monkeypat
 
 
 @official
-@pytest.mark.parametrize("target,source,physics", [("hina_original", "ch0288", False), ("hina_original", "ch0288", True)])
+@pytest.mark.parametrize(
+    "target,source,physics", [("hina_original", "ch0288", False), ("hina_original", "ch0288", True)]
+)
 def test_official_a_costume_build_passes_its_phases_in_order_with_growing_fractions(target, source, physics):
     from ba_modding_toolkit.bundle import Bundle
     from bmpt.gameassets import model_adapt as ma
@@ -138,8 +153,11 @@ def test_official_a_costume_build_passes_its_phases_in_order_with_growing_fracti
     files = list(GAME_DIR.rglob("*.bundle"))
     index = {}
     for path in files:
-        if re.search(r"characters|-_mx-npcs-|^character-|-_mx-shaders-|-_mx-program-animators-|^field-|animatorbase|"
-                     r"prolog|-_mx-effectsfreezed-", path.name):
+        if re.search(
+            r"characters|-_mx-npcs-|^character-|-_mx-shaders-|-_mx-program-animators-|^field-|animatorbase|"
+            r"prolog|-_mx-effectsfreezed-",
+            path.name,
+        ):
             for cab in cab_names(path):
                 index[cab] = path
     names = [name for name, _, _ in ma.COSTUME_PHASES]
@@ -158,8 +176,18 @@ def test_official_a_costume_build_passes_its_phases_in_order_with_growing_fracti
     meter = Recorder()
     slot = [p for p in files if re.match(rf"(character|assets-_mx-characters)-{re.escape(target)}-_mx", p.name)]
     sources = [p for p in files if re.match(rf"character-{source}-_mxload", p.name)]
-    ma.adapt(index=index, resolver=None, target_files=slot, target_dev=target, source_files=sources,
-             source_dev=source, open_writable=Bundle.load, physics=physics, halo=True, meter=meter)
+    ma.adapt(
+        index=index,
+        resolver=None,
+        target_files=slot,
+        target_dev=target,
+        source_files=sources,
+        source_dev=source,
+        open_writable=Bundle.load,
+        physics=physics,
+        halo=True,
+        meter=meter,
+    )
     # every phase marked is in the table, in the table's order
     assert meter.order and set(meter.order) <= set(names)
     assert [names.index(name) for name in meter.order] == sorted(names.index(name) for name in meter.order)

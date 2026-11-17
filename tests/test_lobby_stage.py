@@ -30,6 +30,7 @@ def real_game(tmp_path_factory):
         pytest.skip("No local game install")
     from bmpt.gameassets import AssetCache, GameAssets
     from ba_modding_toolkit.searching import get_search_dirs
+
     root = tmp_path_factory.mktemp("stage") / "cache"
     return GameAssets(get_search_dirs(GAME_DIR), AssetCache(root=root, allowed=True))
 
@@ -38,23 +39,53 @@ def real_game(tmp_path_factory):
 # atlas page) and its effects (name, sorting order, render queue, sorting fudge)
 LOBBIES = {
     "wakamo_home": (
-        [("Wakamo_home", 0, {"Wakamo_home": 3050, "Wakamo_home2": 2900}),
-         ("Wakamo_Scene_0", 0, {"Wakamo_Scene_0": 3050, "Wakamo_Scene_02": 3150, "Wakamo_Scene_03": 2900,
-                                "Wakamo_Scene_04": 2800})],
-        {("particle_back", 0, 3000, 0.0), ("particle_center", 0, 3000, 0.0), ("fire1", 0, 3000, -34.5),
-         ("fire2", 0, 3100, -34.5), ("particle_front", 0, 3000, 0.0), ("fire3", 0, 3100, -34.5)},
+        [
+            ("Wakamo_home", 0, {"Wakamo_home": 3050, "Wakamo_home2": 2900}),
+            (
+                "Wakamo_Scene_0",
+                0,
+                {"Wakamo_Scene_0": 3050, "Wakamo_Scene_02": 3150, "Wakamo_Scene_03": 2900, "Wakamo_Scene_04": 2800},
+            ),
+        ],
+        {
+            ("particle_back", 0, 3000, 0.0),
+            ("particle_center", 0, 3000, 0.0),
+            ("fire1", 0, 3000, -34.5),
+            ("fire2", 0, 3100, -34.5),
+            ("particle_front", 0, 3000, 0.0),
+            ("fire3", 0, 3100, -34.5),
+        },
     ),
     "ch0184_home": (
-        [("CH0184_home", 0, {"CH0184_home": 3050, "CH0184_home2": 2900, "CH0184_home3": 2850}),
-         ("CH0184_00", 0, {"CH0184_00": 3050, "CH0184_002": 2900})],
-        {("boke_3_F", 0, 3002, 0.0), ("boke_5_F_R", 1, 3002, 0.0), ("boke_6", 1, 3002, 0.0), ("B_boke_2", 0, 3002, 0.0),
-         ("B_boke_1", 0, 3002, 0.0), ("dust_2", 0, 2950, 0.0), ("dust_3", 0, 2950, 0.0)},
+        [
+            ("CH0184_home", 0, {"CH0184_home": 3050, "CH0184_home2": 2900, "CH0184_home3": 2850}),
+            ("CH0184_00", 0, {"CH0184_00": 3050, "CH0184_002": 2900}),
+        ],
+        {
+            ("boke_3_F", 0, 3002, 0.0),
+            ("boke_5_F_R", 1, 3002, 0.0),
+            ("boke_6", 1, 3002, 0.0),
+            ("B_boke_2", 0, 3002, 0.0),
+            ("B_boke_1", 0, 3002, 0.0),
+            ("dust_2", 0, 2950, 0.0),
+            ("dust_3", 0, 2950, 0.0),
+        },
     ),
     "shigure_home": (
-        [("Shigure_home", 0, {"Shigure_home": 2900, "Shigure_home2": 3050}),
-         ("Shigure_00", 0, {"Shigure_00": 2900}), ("Shigure_01", 0, {"Shigure_01": 2900})],
-        {("boke_3", 0, 3002, 0.0), ("boke_4", 0, 3002, 0.0), ("boke_5", 0, 3002, 0.0), ("boke_6", 0, 3002, 0.0),
-         ("Y_boke_9", 1, 3002, 0.0), ("F_boke_7", 1, 3002, 0.0), ("F_boke_8", 1, 3002, 0.0)},
+        [
+            ("Shigure_home", 0, {"Shigure_home": 2900, "Shigure_home2": 3050}),
+            ("Shigure_00", 0, {"Shigure_00": 2900}),
+            ("Shigure_01", 0, {"Shigure_01": 2900}),
+        ],
+        {
+            ("boke_3", 0, 3002, 0.0),
+            ("boke_4", 0, 3002, 0.0),
+            ("boke_5", 0, 3002, 0.0),
+            ("boke_6", 0, 3002, 0.0),
+            ("Y_boke_9", 1, 3002, 0.0),
+            ("F_boke_7", 1, 3002, 0.0),
+            ("F_boke_8", 1, 3002, 0.0),
+        },
     ),
 }
 

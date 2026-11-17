@@ -20,21 +20,33 @@ BONES = (("root", None), ("hat", "root"))
 
 
 def official_rig() -> bytes:
-    return skeleton(bones=BONES, slots=SLOTS, events=["voice"],
-                    skin={"body": [("b", region())], "face": [("a", region()), ("new", region(x=2))],
-                          "cap": [("c", region())]},
-                    animations=[("Idle_01", {"face": ["a"]}, []), ("Talk_01", {"face": ["new"]}, [], ["voice"]),
-                                ("Look_01", {}, [["face", "body", "cap"]]), ("Hat_01", {"cap": ["c"]}, [])])
+    return skeleton(
+        bones=BONES,
+        slots=SLOTS,
+        events=["voice"],
+        skin={"body": [("b", region())], "face": [("a", region()), ("new", region(x=2))], "cap": [("c", region())]},
+        animations=[
+            ("Idle_01", {"face": ["a"]}, []),
+            ("Talk_01", {"face": ["new"]}, [], ["voice"]),
+            ("Look_01", {}, [["face", "body", "cap"]]),
+            ("Hat_01", {"cap": ["c"]}, []),
+        ],
+    )
 
 
 def mod_rig() -> bytes:
     # the mod's own rig: no hat bone, its own body, the idle only
-    return skeleton(slots=SLOTS[:2], skin={"body": [("b", region(w=9))], "face": [("a", region())]},
-                    animations=[("Idle_01", {"face": ["a"]}, [])])
+    return skeleton(
+        slots=SLOTS[:2],
+        skin={"body": [("b", region(w=9))], "face": [("a", region())]},
+        animations=[("Idle_01", {"face": ["a"]}, [])],
+    )
 
 
-OFFICIAL_ATLAS = ("page.png\nsize:16,16\nfilter:Linear,Linear\nb\nbounds:0,0,4,4\na\nbounds:4,0,4,4\n"
-                  "new\nbounds:8,0,4,4\nc\nbounds:12,0,4,4\n")
+OFFICIAL_ATLAS = (
+    "page.png\nsize:16,16\nfilter:Linear,Linear\nb\nbounds:0,0,4,4\na\nbounds:4,0,4,4\n"
+    "new\nbounds:8,0,4,4\nc\nbounds:12,0,4,4\n"
+)
 MOD_ATLAS = "page.png\nsize:16,16\nfilter:Linear,Linear\nb\nbounds:0,0,8,8\na\nbounds:8,0,4,4\n"
 
 
@@ -47,12 +59,20 @@ def lobby(setup_library, monkeypatch):
     official.unlink()
     page = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
     page.paste((0, 200, 0, 255), (8, 0, 12, 4))  # the official new region
-    current = _official_name(write_bundle(official, {"test.atlas": OFFICIAL_ATLAS}, {"page": page}, official_rig().decode("utf-8", "surrogateescape")))
+    current = _official_name(
+        write_bundle(
+            official, {"test.atlas": OFFICIAL_ATLAS}, {"page": page}, official_rig().decode("utf-8", "surrogateescape")
+        )
+    )
     art = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
     art.paste((200, 0, 0, 255), (0, 0, 12, 8))
-    source = write_bundle(env.tmp / "upload" / current.name.replace("2026-01-01", "2025-01-01"),
-                          {"test.atlas": MOD_ATLAS}, {"page": art}, mod_rig().decode("utf-8", "surrogateescape"))
-    entry, = env.library.add([source])
+    source = write_bundle(
+        env.tmp / "upload" / current.name.replace("2026-01-01", "2025-01-01"),
+        {"test.atlas": MOD_ATLAS},
+        {"page": art},
+        mod_rig().decode("utf-8", "surrogateescape"),
+    )
+    (entry,) = env.library.add([source])
     env.entry, env.current = entry, current
     return env
 

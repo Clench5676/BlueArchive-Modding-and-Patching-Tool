@@ -7,6 +7,7 @@ from ba_modding_toolkit.cli.handlers import handle_extract
 if TYPE_CHECKING:
     from conftest import SampleCase, UpdateCase
 
+
 # 案例数据缺失时 conftest 参数化为空参数集，测试自动跳过
 class TestExtractCommand:
     def test_extract_basic(
@@ -18,10 +19,13 @@ class TestExtractCommand:
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
-        args = ExtractTap().parse_args([
-            str(sample_case.bundle_paths[0]),
-            "--output-dir", str(output_dir),
-        ])
+        args = ExtractTap().parse_args(
+            [
+                str(sample_case.bundle_paths[0]),
+                "--output-dir",
+                str(output_dir),
+            ]
+        )
 
         handle_extract(args)
 
@@ -37,11 +41,15 @@ class TestExtractCommand:
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
-        args = ExtractTap().parse_args([
-            str(sample_case.bundle_paths[0]),
-            "--output-dir", str(output_dir),
-            "--subdir", "test_extract",
-        ])
+        args = ExtractTap().parse_args(
+            [
+                str(sample_case.bundle_paths[0]),
+                "--output-dir",
+                str(output_dir),
+                "--subdir",
+                "test_extract",
+            ]
+        )
 
         handle_extract(args)
 
@@ -64,10 +72,13 @@ class TestExtractMultipleBundles:
 
         assert len(update_case.new_paths) > 0, "No bundle files found in update case"
 
-        args = ExtractTap().parse_args([
-            *[str(b) for b in update_case.new_paths],
-            "--output-dir", str(output_dir),
-        ])
+        args = ExtractTap().parse_args(
+            [
+                *[str(b) for b in update_case.new_paths],
+                "--output-dir",
+                str(output_dir),
+            ]
+        )
 
         handle_extract(args)
 

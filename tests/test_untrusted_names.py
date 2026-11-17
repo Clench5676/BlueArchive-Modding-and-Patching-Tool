@@ -15,8 +15,23 @@ from ba_modding_toolkit.spine import SkelConverter, atlas_downgrade, unpack_atla
 from ba_modding_toolkit.utils import is_safe_file_name, is_safe_relative_name, no_log
 from texture_helpers import fake_texture
 
-ESCAPES = ["../escaped", "..\\escaped", "sub/../../escaped", "/escaped", "\\escaped", "C:escaped", "C:\\escaped",
-           "..", ".", "", ".. ", "./..", "a/", "name\0.txt", "file.txt:stream"]
+ESCAPES = [
+    "../escaped",
+    "..\\escaped",
+    "sub/../../escaped",
+    "/escaped",
+    "\\escaped",
+    "C:escaped",
+    "C:\\escaped",
+    "..",
+    ".",
+    "",
+    ".. ",
+    "./..",
+    "a/",
+    "name\0.txt",
+    "file.txt:stream",
+]
 
 
 @pytest.mark.parametrize("name", ESCAPES)
@@ -54,10 +69,12 @@ def mesh(name: str):
 def extract(tmp_path: Path, monkeypatch, objects: list) -> tuple[Path, dict]:
     work = tmp_path / "deep" / "work"
     work.mkdir(parents=True)
-    monkeypatch.setattr(extraction.Bundle, "load",
-                        lambda path, log: SimpleNamespace(env=SimpleNamespace(objects=objects)))
-    return work, extraction.extract_assets_from_bundle([Path("mod.bundle")], work,
-                                                       extraction.EXTRACTABLE_ASSET_TYPES, no_log)
+    monkeypatch.setattr(
+        extraction.Bundle, "load", lambda path, log: SimpleNamespace(env=SimpleNamespace(objects=objects))
+    )
+    return work, extraction.extract_assets_from_bundle(
+        [Path("mod.bundle")], work, extraction.EXTRACTABLE_ASSET_TYPES, no_log
+    )
 
 
 @pytest.mark.parametrize("make", [text_asset, texture, mesh])
@@ -87,9 +104,11 @@ def write_atlas(folder: Path, page: str = "page.png", region: str = "part") -> P
     folder.mkdir(parents=True)
     Image.new("RGBA", (4, 4)).save(folder / "page.png")
     atlas = folder / "mod.atlas"
-    atlas.write_text(f"{page}\nsize: 4,4\nformat: RGBA8888\nfilter: Linear,Linear\nrepeat: none\n{region}\n"
-                     "  rotate: false\n  xy: 0, 0\n  size: 4, 4\n  orig: 4, 4\n  offset: 0, 0\n  index: -1\n",
-                     encoding="utf-8")
+    atlas.write_text(
+        f"{page}\nsize: 4,4\nformat: RGBA8888\nfilter: Linear,Linear\nrepeat: none\n{region}\n"
+        "  rotate: false\n  xy: 0, 0\n  size: 4, 4\n  orig: 4, 4\n  offset: 0, 0\n  index: -1\n",
+        encoding="utf-8",
+    )
     return atlas
 
 

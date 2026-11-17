@@ -38,19 +38,22 @@ class Release:
 
 
 #: the converter release the App fetches on Windows (GitHub release v3.8, 2026-07-19)
-RELEASE = Release("v3.8", "SpineSkeletonDataConverter.exe",
-                  "https://github.com/wang606/SpineSkeletonDataConverter/releases/download/v3.8/"
-                  "SpineSkeletonDataConverter.exe",
-                  "b2ca82e46f1f4ca463abf0ccfab32e3c01eb0dd89fc7289b6478f728ca8ed68a", 1587712)
+RELEASE = Release(
+    "v3.8",
+    "SpineSkeletonDataConverter.exe",
+    "https://github.com/wang606/SpineSkeletonDataConverter/releases/download/v3.8/SpineSkeletonDataConverter.exe",
+    "b2ca82e46f1f4ca463abf0ccfab32e3c01eb0dd89fc7289b6478f728ca8ed68a",
+    1587712,
+)
 LICENCE = "PolyForm Noncommercial 1.0.0"
 LICENCE_URL = "https://polyformproject.org/licenses/noncommercial/1.0.0/"
 HOME = "https://github.com/wang606/SpineSkeletonDataConverter"
 #: a macOS build the user compiled, in the tools folder
 MAC_NAME = "SpineSkeletonDataConverter"
 TOOLS = "tools"
-TIMEOUT = 60.0         # seconds one conversion may take
+TIMEOUT = 60.0  # seconds one conversion may take
 MAX_OUTPUT = 64 << 20  # bytes a conversion may write
-DRIFT = 0.05           # world units the mod's own poses may move through the rewrite (it rounds to two decimals)
+DRIFT = 0.05  # world units the mod's own poses may move through the rewrite (it rounds to two decimals)
 USER_AGENT = "bmpt-spine-converter"
 
 
@@ -86,7 +89,9 @@ def located(data_dir: Path, platform: str | None = None) -> Path | None:
     folder = tool_dir(data_dir)
     if kind == "windows":
         path = folder / f"{Path(RELEASE.name).stem}-{RELEASE.version}.exe"
-        return path if path.is_file() and path.stat().st_size == RELEASE.size and _sha256(path) == RELEASE.sha256 else None
+        return (
+            path if path.is_file() and path.stat().st_size == RELEASE.size and _sha256(path) == RELEASE.sha256 else None
+        )
     if kind == "macos":
         path = folder / MAC_NAME
         return path if path.is_file() and os.access(path, os.X_OK) else None
@@ -97,14 +102,27 @@ def status(data_dir: Path, platform: str | None = None) -> dict[str, Any]:
     """What the switch to the converter route shows: the platform, whether a converter is in place, whether the App
     can fetch one (Windows only), and what the consent names."""
     kind = platform_kind(platform)
-    return {"platform": kind, "installed": located(data_dir, platform) is not None, "downloadable": kind == "windows",
-            "version": RELEASE.version, "size": RELEASE.size, "licence": LICENCE, "licenceUrl": LICENCE_URL,
-            "home": HOME}
+    return {
+        "platform": kind,
+        "installed": located(data_dir, platform) is not None,
+        "downloadable": kind == "windows",
+        "version": RELEASE.version,
+        "size": RELEASE.size,
+        "licence": LICENCE,
+        "licenceUrl": LICENCE_URL,
+        "home": HOME,
+    }
 
 
-def download(data_dir: Path, *, consented: bool, platform: str | None = None,
-             opener: Callable[..., Any] = urllib.request.urlopen,
-             progress: Callable[[int, int], None] | None = None, timeout: float = 30.0) -> Path:
+def download(
+    data_dir: Path,
+    *,
+    consented: bool,
+    platform: str | None = None,
+    opener: Callable[..., Any] = urllib.request.urlopen,
+    progress: Callable[[int, int], None] | None = None,
+    timeout: float = 30.0,
+) -> Path:
     """Fetch the pinned release into the tools folder, after the user confirmed its licence (``consented``):
     the size and SHA-256 must be the pinned ones, else nothing stays. Windows only."""
     if not consented:
@@ -145,8 +163,15 @@ def download(data_dir: Path, *, consented: bool, platform: str | None = None,
 
 def _run(exe: Path, source: Path, target: Path) -> subprocess.CompletedProcess:
     """One conversion: the converter on a temporary copy, an argument list, no shell, a time limit."""
-    return subprocess.run([str(exe), str(source), str(target)], cwd=str(source.parent), capture_output=True,
-                          timeout=TIMEOUT, shell=False, stdin=subprocess.DEVNULL, check=False)
+    return subprocess.run(
+        [str(exe), str(source), str(target)],
+        cwd=str(source.parent),
+        capture_output=True,
+        timeout=TIMEOUT,
+        shell=False,
+        stdin=subprocess.DEVNULL,
+        check=False,
+    )
 
 
 def convert(exe: Path, data: bytes, source_suffix: str, target_suffix: str) -> bytes:
@@ -228,9 +253,14 @@ def _skin(document: Mapping[str, Any], name: str) -> dict | None:
 def _needs(animation: Mapping[str, Any]) -> dict[str, set[str]]:
     """The names an animation's timelines refer to: bones, slots, constraints by kind, events, skins (deforms) and
     per (skin, slot) the attachments its attachment keys show or its deforms change."""
-    need: dict[str, set] = {"bones": set(animation.get("bones") or {}), "slots": set(animation.get("slots") or {}),
-                            "events": {key.get("name") for key in animation.get("events") or [] if isinstance(key, dict)},
-                            "skins": set(), "shown": set(), "deformed": set()}
+    need: dict[str, set] = {
+        "bones": set(animation.get("bones") or {}),
+        "slots": set(animation.get("slots") or {}),
+        "events": {key.get("name") for key in animation.get("events") or [] if isinstance(key, dict)},
+        "skins": set(),
+        "shown": set(),
+        "deformed": set(),
+    }
     for kind in CONSTRAINTS:
         need[kind] = set(animation.get(kind) or {})
     for slot, timelines in (animation.get("slots") or {}).items():
@@ -292,7 +322,9 @@ def graft_json(mod: dict, official: dict) -> JsonGraft:
                 m_slots.insert(at, slot.get("name"))
                 result.slots.append(slot.get("name"))
         for event in need["events"]:
-            mod.setdefault("events", {}).setdefault(event, json.loads(json.dumps((official.get("events") or {})[event])))
+            mod.setdefault("events", {}).setdefault(
+                event, json.loads(json.dumps((official.get("events") or {})[event]))
+            )
         for kind in CONSTRAINTS:
             have = set(_names(mod.get(kind)))
             for c in official.get(kind) or []:
@@ -324,8 +356,14 @@ def _missing_reason(mod: Mapping[str, Any], official: Mapping[str, Any], need: M
     for skin, slot, attachment in need["deformed"]:
         mine = ((_skin(mod, skin) or {}).get("attachments") or {}).get(slot, {}).get(attachment)
         theirs = ((_skin(official, skin) or {}).get("attachments") or {}).get(slot, {}).get(attachment)
-        if mine is not None and theirs is not None and (
-                mine.get("type") != theirs.get("type") or len(mine.get("vertices") or []) != len(theirs.get("vertices") or [])):
+        if (
+            mine is not None
+            and theirs is not None
+            and (
+                mine.get("type") != theirs.get("type")
+                or len(mine.get("vertices") or []) != len(theirs.get("vertices") or [])
+            )
+        ):
             return f"deform of {slot}/{attachment}, redrawn by the mod"
     for slot, attachment in need["shown"]:
         theirs = ((_skin(official, "default") or {}).get("attachments") or {}).get(slot, {}).get(attachment)

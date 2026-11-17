@@ -1,4 +1,5 @@
 """Read-only proof of the import thumbnail clip against the actual item frame."""
+
 import io
 import json
 import os
@@ -28,17 +29,30 @@ def verified_frame(tmp_path_factory):
     return widget, meta, image
 
 
-@pytest.mark.parametrize("scale", [.34, .54, .68, .873, 1.25, 2, 4])
+@pytest.mark.parametrize("scale", [0.34, 0.54, 0.68, 0.873, 1.25, 2, 4])
 def test_verified_item_frame_contour_matches_rounded_thumbnail_within_one_pixel(verified_frame, scale):
     widget, meta, image = verified_frame
     module = Path(__file__).resolve().parents[1] / "src/bmpt/web/js/row-thumbnail.js"
-    script = '''import {frameOutline, innerFrame} from MODULE;
+    script = """import {frameOutline, innerFrame} from MODULE;
 let s=""; for await (const part of process.stdin) s += part;
 const {pixels,widget,meta,scale}=JSON.parse(s), outline=frameOutline(pixels);
-console.log(JSON.stringify({outline,window:innerFrame(widget,meta,outline,{scale})}));'''.replace("MODULE", json.dumps(module.as_uri()))
-    result = subprocess.run(["node", "--input-type=module", "-e", script], capture_output=True, text=True, check=True,
-                            input=json.dumps({"pixels": {"width": image.width, "height": image.height, "data": list(image.tobytes())},
-                                              "widget": widget, "meta": meta, "scale": scale}))
+console.log(JSON.stringify({outline,window:innerFrame(widget,meta,outline,{scale})}));""".replace(
+        "MODULE", json.dumps(module.as_uri())
+    )
+    result = subprocess.run(
+        ["node", "--input-type=module", "-e", script],
+        capture_output=True,
+        text=True,
+        check=True,
+        input=json.dumps(
+            {
+                "pixels": {"width": image.width, "height": image.height, "data": list(image.tobytes())},
+                "widget": widget,
+                "meta": meta,
+                "scale": scale,
+            }
+        ),
+    )
     proof = json.loads(result.stdout)
     assert proof["outline"]["insets"] == [14, 13, 13, 14]
     assert proof["window"]["radius"] == 0
@@ -79,30 +93,34 @@ console.log(JSON.stringify({outline,window:innerFrame(widget,meta,outline,{scale
         solid = [x for x in range(image.width) if alpha.getpixel((x, y)) >= 240]
         expected_left = max(left, max(x for x in solid if x < image.width // 2) + 1)
         expected_right = min(right, min(x for x in solid if x >= image.width // 2))
-        row = [x for x, py in points if py == y + .5]
+        row = [x for x, py in points if py == y + 0.5]
         assert min(row) == expected_left and max(row) == expected_right
+
     def mapped(value, source, cap_source, cap_pixels, extent):
         if value <= cap_source:
             return value / cap_source * cap_pixels
         if value >= source - cap_source:
             return extent - (source - value) / cap_source * cap_pixels
         return cap_pixels + (value - cap_source) / (source - 2 * cap_source) * (extent - 2 * cap_pixels)
-    measured = [(mapped(p[0], image.width, 68, side, canvas_w) - x0,
-                 mapped(p[1], image.height, 42, cap, canvas_h) - y0) for p in points]
+
+    measured = [
+        (mapped(p[0], image.width, 68, side, canvas_w) - x0, mapped(p[1], image.height, 42, cap, canvas_h) - y0)
+        for p in points
+    ]
     smooth = [(p[0] * (x1 - x0), p[1] * (y1 - y0)) for p in window["clipPolygon"]]
 
     def segment_distance(p, a, b):
         dx, dy = b[0] - a[0], b[1] - a[1]
         length = dx * dx + dy * dy
         u = max(0, min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / length)) if length else 0
-        return ((p[0] - a[0] - u * dx) ** 2 + (p[1] - a[1] - u * dy) ** 2) ** .5
+        return ((p[0] - a[0] - u * dx) ** 2 + (p[1] - a[1] - u * dy) ** 2) ** 0.5
 
     # Bidirectional contour distance after raster scaling and the result row's
     # enlargement. Dense curve samples retain the small measured corner shape.
     for contour, reference in [(measured, smooth), (smooth, measured)]:
         segments = list(zip(reference, reference[1:] + reference[:1]))
         for point in contour:
-            assert min(segment_distance(point, a, b) for a, b in segments) / 2 * .62 / .54 < 1
+            assert min(segment_distance(point, a, b) for a, b in segments) / 2 * 0.62 / 0.54 < 1
     for a, b in zip(smooth, smooth[1:] + smooth[:1]):
         if 1e-7 < a[0] < x1 - x0 - 1e-7 and 1e-7 < a[1] < y1 - y0 - 1e-7:
             assert abs(a[0] - b[0]) > 1e-9 and abs(a[1] - b[1]) > 1e-9, "No raster stairs in the corners"

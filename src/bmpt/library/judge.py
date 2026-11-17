@@ -48,7 +48,12 @@ def seconds(value: Any) -> float | None:
 
 def kind_of(core: str, category: str | None = None) -> str | None:
     """The kind of a character asset slot, using the bundle category for 3D models."""
-    if category and category.lower() in MODEL_CATEGORIES and spine_kind(core) is None and re.fullmatch(r"[a-z0-9][a-z0-9_]*", core.lower()):
+    if (
+        category
+        and category.lower() in MODEL_CATEGORIES
+        and spine_kind(core) is None
+        and re.fullmatch(r"[a-z0-9][a-z0-9_]*", core.lower())
+    ):
         if core.lower() != "mxcommon" and not core.lower().startswith("mxcommon_"):
             return "model"
     return spine_kind(core, category)
@@ -58,7 +63,8 @@ def kind_of_file(name: str) -> str | None:
     """Classify a bundle using its category as well as its core."""
     parsed = parse_filename(name)
     return kind_of(parsed.core, parsed.category) or (
-        "other" if name.endswith(".bundle") and parsed.prefix and parsed.crc else None)
+        "other" if name.endswith(".bundle") and parsed.prefix and parsed.crc else None
+    )
 
 
 # Groups packed one asset per bundle: their bundles' names differ only in the CRC, which a game update changes, so a
@@ -140,8 +146,8 @@ def install_root(folder: Path) -> Path:
     folder = Path(folder).resolve()
     for suffix in sorted(filter(None, SEARCH_DIR_SUFFIXES), key=len, reverse=True):
         parts = tuple(part.lower() for part in Path(suffix).parts)
-        if len(folder.parts) > len(parts) and tuple(part.lower() for part in folder.parts[-len(parts):]) == parts:
-            return Path(*folder.parts[:-len(parts)])
+        if len(folder.parts) > len(parts) and tuple(part.lower() for part in folder.parts[-len(parts) :]) == parts:
+            return Path(*folder.parts[: -len(parts)])
     return folder
 
 
@@ -197,10 +203,22 @@ def carried_of(parts: Iterable[tuple[str, bool]]) -> str:
     return next(iter(sources))
 
 
-def classify(enabled: bool, configured: str | None, carried: str, *, files: bool = True, damaged: bool = False,
-             configured_exists: bool = True, carried_exists: bool = True, drifted_present: bool = False,
-             drifted_gone: bool = False, marker: bool = False, written: float | None = None,
-             since: float | None = None, toggled: float | None = None) -> tuple[str, str | None]:
+def classify(
+    enabled: bool,
+    configured: str | None,
+    carried: str,
+    *,
+    files: bool = True,
+    damaged: bool = False,
+    configured_exists: bool = True,
+    carried_exists: bool = True,
+    drifted_present: bool = False,
+    drifted_gone: bool = False,
+    marker: bool = False,
+    written: float | None = None,
+    since: float | None = None,
+    toggled: float | None = None,
+) -> tuple[str, str | None]:
     """The state of an entry, first match wins, and the source a take-over configures (else None).
 
     ``carried`` is what the non-official parts carry ("official" when there are none, "unknown" when they carry

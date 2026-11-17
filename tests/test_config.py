@@ -47,8 +47,9 @@ def test_reload_if_changed_notifies(tmp_path: Path):
     seen = []
     s.on_change(lambda: seen.append(True))
     assert s.reload_if_changed() is False
-    p.write_text('[AppSettings]\nmax_workers = 2\n', encoding="utf-8")
+    p.write_text("[AppSettings]\nmax_workers = 2\n", encoding="utf-8")
     import os
+
     st = p.stat()
     os.utime(p, (st.st_atime, st.st_mtime + 5))
     assert s.reload_if_changed() is True
@@ -115,8 +116,11 @@ def test_explicit_directory_pair_never_runs_game_detection(tmp_path: Path, monke
 
     monkeypatch.setattr(config, "get_BA_path", detect)
     p = tmp_path / "config.toml"
-    p.write_text('[Directories]\nfile_source = "windows_global"\ngame_resource_dir = "/games/ba"\n'
-                 'game_resource_dir_japan = "/games/japan"\n', encoding="utf-8")
+    p.write_text(
+        '[Directories]\nfile_source = "windows_global"\ngame_resource_dir = "/games/ba"\n'
+        'game_resource_dir_japan = "/games/japan"\n',
+        encoding="utf-8",
+    )
     s = Settings(p)
     assert s.get("game_resource_dir") == "/games/ba"
     assert s.get("game_resource_dir_japan") == "/games/japan"
@@ -169,8 +173,9 @@ def test_legacy_directory_migration_is_lossless_and_idempotent(tmp_path, monkeyp
     install = tmp_path / "install"
     resources = install / "GameData" / "Windows"
     resources.mkdir(parents=True)
-    monkeypatch.setattr("bmpt.config.get_BA_path", lambda region:
-                        str(install) if identified in (region, "ambiguous") else None)
+    monkeypatch.setattr(
+        "bmpt.config.get_BA_path", lambda region: str(install) if identified in (region, "ambiguous") else None
+    )
     path = tmp_path / "config.toml"
     dirs = {"game_resource_dir": str(resources), "file_source": "windows_global", "future": "kept"}
     if japan_key:
@@ -198,15 +203,23 @@ def test_migration_keeps_two_explicit_folders_and_classic_uses_same_rule(tmp_pat
 
     legacy = tmp_path / "japan"
     legacy.mkdir()
-    monkeypatch.setattr("ba_modding_toolkit.gui.configs.get_BA_path", lambda region: str(legacy) if region == "japan" else None)
+    monkeypatch.setattr(
+        "ba_modding_toolkit.gui.configs.get_BA_path", lambda region: str(legacy) if region == "japan" else None
+    )
     path = tmp_path / "config.toml"
     path.write_text(toml.dumps({"Directories": {"game_resource_dir": str(legacy)}}))
+
     class Variable:
         def set(self, value):
             self.value = value
-    app = SimpleNamespace(_config_specs={key + "_var": ConfigMeta("Directories", "")
-                          for key in ("game_resource_dir", "game_resource_dir_japan")},
-                          game_resource_dir_var=Variable(), game_resource_dir_japan_var=Variable())
+
+    app = SimpleNamespace(
+        _config_specs={
+            key + "_var": ConfigMeta("Directories", "") for key in ("game_resource_dir", "game_resource_dir_japan")
+        },
+        game_resource_dir_var=Variable(),
+        game_resource_dir_japan_var=Variable(),
+    )
     assert ConfigManager(path).load_config(app)
     assert app.game_resource_dir_var.value == ""
     assert app.game_resource_dir_japan_var.value == str(legacy)
@@ -230,6 +243,7 @@ def test_selected_server_resolution_never_falls_back(tmp_path, source, region):
 
 # --- a bad config.toml (FUN-10) ---
 
+
 @pytest.fixture
 def detection(monkeypatch):
     """No game is detected, so every default is the same on every machine."""
@@ -239,7 +253,7 @@ def detection(monkeypatch):
 def _write_bad(path: Path, kind: str) -> bytes:
     content = {
         "non-utf8": b'[AppSettings]\nlanguage = "caf\xe9"\n',
-        "syntax": b'[AppSettings\nmax_workers = 2\n',
+        "syntax": b"[AppSettings\nmax_workers = 2\n",
         "half-written": b'[Directories]\nfile_source = "windows_gl',
     }[kind]
     path.write_bytes(content)
@@ -305,12 +319,15 @@ def test_a_save_goes_ahead_when_the_bad_copy_cannot_be_made(tmp_path, detection,
     assert not list(tmp_path.glob("*.tmp"))
 
 
-@pytest.mark.parametrize("text", [
-    'Directories = 3\n[SaveOptions]\ncompression_method = "lz4"\n',
-    '[Directories]\ngame_resource_dir = 2020-01-01\ngame_resource_dir_japan = [1, 2]\n[SaveOptions]\n'
-    'compression_method = "lz4"\n',
-    'AppSettings = "x"\nTools = []\n[SaveOptions]\ncompression_method = "lz4"\n',
-])
+@pytest.mark.parametrize(
+    "text",
+    [
+        'Directories = 3\n[SaveOptions]\ncompression_method = "lz4"\n',
+        "[Directories]\ngame_resource_dir = 2020-01-01\ngame_resource_dir_japan = [1, 2]\n[SaveOptions]\n"
+        'compression_method = "lz4"\n',
+        'AppSettings = "x"\nTools = []\n[SaveOptions]\ncompression_method = "lz4"\n',
+    ],
+)
 def test_a_group_or_value_of_the_wrong_type_reads_as_missing_and_the_rest_is_read(tmp_path, detection, text):
     path = tmp_path / "config.toml"
     path.write_text(text, encoding="utf-8")
@@ -349,8 +366,16 @@ def _poll_after_write(path: Path, content: bytes, settings: Settings) -> bool:
     return settings.reload_if_changed()
 
 
-@pytest.mark.parametrize("content", [b"", b"  \n", b"[AppSettings\nmax_workers = 9\n", b'[AppSettings]\nlanguage = "\xff"\n',
-                                     b'[Directories]\nfile_source = "windows_jap'])
+@pytest.mark.parametrize(
+    "content",
+    [
+        b"",
+        b"  \n",
+        b"[AppSettings\nmax_workers = 9\n",
+        b'[AppSettings]\nlanguage = "\xff"\n',
+        b'[Directories]\nfile_source = "windows_jap',
+    ],
+)
 def test_the_poll_never_applies_a_file_that_cannot_be_read_as_a_whole(tmp_path, detection, content, caplog):
     path = tmp_path / "config.toml"
     settings = Settings(path)
@@ -400,8 +425,17 @@ def test_the_poll_still_reloads_a_change_in_a_file_of_the_same_size(tmp_path, de
     assert settings.get("max_workers") == 3
 
 
-@pytest.mark.parametrize("source, needed", [("windows_global", True), ("windows_japan", True),
-                                            ("adb_global", False), ("adb_japan", False), ("", True), ("other", True)])
+@pytest.mark.parametrize(
+    "source, needed",
+    [
+        ("windows_global", True),
+        ("windows_japan", True),
+        ("adb_global", False),
+        ("adb_japan", False),
+        ("", True),
+        ("other", True),
+    ],
+)
 def test_auto_crc_follows_the_install_and_fails_closed(tmp_path: Path, monkeypatch, source, needed):
     from ba_modding_toolkit.bundle import Bundle
 

@@ -28,10 +28,15 @@ class FakeGame:
     def __init__(self):
         self.calls = []
         self.cores = {
-            "spr": {key + "_spr": [] for key in ("hoshino", "ch0010", "ch0020", "np0001",
-                                                  "np0999", "unknown_new")},
-            "lobby": {"hoshino_home": [], "hoshino_swimsuit_home": [], "ch0020_home_gl": [],
-                      "unknown_new_home": [], "missing_home": [], "hoshino_home_teen": []},
+            "spr": {key + "_spr": [] for key in ("hoshino", "ch0010", "ch0020", "np0001", "np0999", "unknown_new")},
+            "lobby": {
+                "hoshino_home": [],
+                "hoshino_swimsuit_home": [],
+                "ch0020_home_gl": [],
+                "unknown_new_home": [],
+                "missing_home": [],
+                "hoshino_home_teen": [],
+            },
         }
         self.cores["spr"]["hoshino_spr"] = [
             Path("assets-_mx-spinecharacters-hoshino_spr-2024-01-01_000_1.bundle"),
@@ -45,8 +50,10 @@ class FakeGame:
 
     def collection_names(self) -> dict[str, list[str]]:
         self.calls.append("collection")
-        return {"bg": ["BG_Abydos_Collection"],
-                "portrait": ["Student_Portrait_Hoshino_Collection", "Student_Portrait_CH0010_Collection"]}
+        return {
+            "bg": ["BG_Abydos_Collection"],
+            "portrait": ["Student_Portrait_Hoshino_Collection", "Student_Portrait_CH0010_Collection"],
+        }
 
 
 @pytest.fixture
@@ -142,36 +149,61 @@ def recruitable(catalog: Catalog, *keys: str) -> dict[str, bool]:
 def test_recruitable_follows_the_installed_portraits_then_the_servers_flags(game: FakeGame):
     keys = ("hoshino", "ch0010", "ch0020", "np0001", "np0999")
     on_global = Catalog(game, FIXTURES / "characters.csv", FIXTURES / "catalog.json", server="global")
-    assert recruitable(on_global, *keys) == {"hoshino": True, "ch0010": True, "ch0020": False,
-                                             "np0001": False, "np0999": False}
+    assert recruitable(on_global, *keys) == {
+        "hoshino": True,
+        "ch0010": True,
+        "ch0020": False,
+        "np0001": False,
+        "np0999": False,
+    }
     assert on_global.variant("ch0020").playable is True  # playable on Japan only
     on_japan = Catalog(game, FIXTURES / "characters.csv", FIXTURES / "catalog.json", server="japan")
-    assert recruitable(on_japan, *keys) == {"hoshino": True, "ch0010": True, "ch0020": True,
-                                            "np0001": False, "np0999": False}
+    assert recruitable(on_japan, *keys) == {
+        "hoshino": True,
+        "ch0010": True,
+        "ch0020": True,
+        "np0001": False,
+        "np0999": False,
+    }
 
 
 def test_installed_portrait_wins_over_a_stale_flag(game: FakeGame):
     # a game update releases the student on Global before the app ships new flags
-    with_portraits(game, ["Student_Portrait_Hoshino_Collection", "Student_Portrait_CH0010_Collection",
-                          "Student_Portrait_CH0020_Collection"])
+    with_portraits(
+        game,
+        [
+            "Student_Portrait_Hoshino_Collection",
+            "Student_Portrait_CH0010_Collection",
+            "Student_Portrait_CH0020_Collection",
+        ],
+    )
     assert Catalog(game, None, FIXTURES / "catalog.json").variant("ch0020").recruitable is True
 
 
 def test_released_flag_covers_a_missing_portrait(game: FakeGame):
     with_portraits(game, ["Student_Portrait_Hoshino_Collection"])
     assert recruitable(Catalog(game, None, FIXTURES / "catalog.json"), "ch0010", "ch0020") == {
-        "ch0010": True, "ch0020": False}
+        "ch0010": True,
+        "ch0020": False,
+    }
 
 
 def test_without_flags_the_install_decides_unless_it_has_no_collection_index(game: FakeGame, caplog):
     game.cores["spr"]["ch9000_spr"] = []
     with_portraits(game, ["Student_Portrait_CH0010_Collection"])
     assert recruitable(Catalog(game, None, FIXTURES / "catalog.json"), "hoshino", "ch9000") == {
-        "hoshino": True, "ch9000": False}
+        "hoshino": True,
+        "ch9000": False,
+    }
     with_portraits(game, [])
     catalog = Catalog(game, None, FIXTURES / "catalog.json")
     assert recruitable(catalog, "hoshino", "ch0010", "ch0020", "ch9000", "np0001") == {
-        "hoshino": True, "ch0010": True, "ch0020": False, "ch9000": True, "np0001": False}
+        "hoshino": True,
+        "ch0010": True,
+        "ch0020": False,
+        "ch9000": True,
+        "np0001": False,
+    }
     assert "No collection portraits" in caplog.text
 
 
@@ -226,11 +258,45 @@ def test_new_csv_rows_take_the_cn_servers_names_as_aliases(game: FakeGame, tmp_p
     """A character the shipped data lacks: zh-CN shows Kivo's wording, the CN server's is an alias."""
     momoi_kivo, momoi_cn = "\u624d\u7fbd \u6843\u4e95", "\u624d\u7fbd \u6843"  # Momoi
     armed_kivo, armed_cn = "\u4e34\u6218", "\u6b66\u88c5"  # the Armed costume word
-    fields = ["file_id", "student_id", "page_id", "spine_remark", "name_kivo", "name_cn", "name_tw", "name_en",
-              "name_jp", "skin_kivo", "skin_cn", "skin_tw", "skin_en", "skin_jp", "school_id", "school_name"]
-    rows = [["CH1100", "900", "", "", momoi_kivo, momoi_cn, "", "Saiba Momoi", "", "", "", "", "", "", "4", ""],
-            ["NP1101", "900", "", "", momoi_kivo, momoi_cn, "", "Saiba Momoi", "", armed_kivo, armed_cn,
-             "", "Armed", "", "4", ""]]
+    fields = [
+        "file_id",
+        "student_id",
+        "page_id",
+        "spine_remark",
+        "name_kivo",
+        "name_cn",
+        "name_tw",
+        "name_en",
+        "name_jp",
+        "skin_kivo",
+        "skin_cn",
+        "skin_tw",
+        "skin_en",
+        "skin_jp",
+        "school_id",
+        "school_name",
+    ]
+    rows = [
+        ["CH1100", "900", "", "", momoi_kivo, momoi_cn, "", "Saiba Momoi", "", "", "", "", "", "", "4", ""],
+        [
+            "NP1101",
+            "900",
+            "",
+            "",
+            momoi_kivo,
+            momoi_cn,
+            "",
+            "Saiba Momoi",
+            "",
+            armed_kivo,
+            armed_cn,
+            "",
+            "Armed",
+            "",
+            "4",
+            "",
+        ],
+    ]
     csv_path = tmp_path / "map.csv"
     csv_path.write_text("\n".join(",".join(row) for row in [fields, *rows]) + "\n", encoding="utf-8")
     game.cores["spr"].update({"ch1100_spr": [], "np1101_spr": []})
@@ -407,7 +473,9 @@ def test_all_43_curated_names_match_approved_snapshot(shipped: dict):
     assert shipped["rules"] == approved["rules"]
     for research_key, names in approved["variants"].items():
         key = approved["file_ids"][research_key]
-        assert {lang: value for lang, value in shipped["variants"][key]["names"].items() if lang != "th"} == names, research_key
+        assert {lang: value for lang, value in shipped["variants"][key]["names"].items() if lang != "th"} == names, (
+            research_key
+        )
 
 
 def test_numbered_playables_legacy_names_and_shared_forms(shipped: dict):
@@ -419,8 +487,9 @@ def test_numbered_playables_legacy_names_and_shared_forms(shipped: dict):
     assert entries["np0288"]["playable"] is True
     assert entries["np0288"]["portrait"] == "Student_Portrait_CH0355_01_Collection"
     assert entries["np0186"]["student_id"] == entries["hoshino"]["student_id"]
-    family_entries = sorted((entry for entry in entries.values() if entry["student_id"] == "42"),
-                            key=lambda entry: entry["order"])
+    family_entries = sorted(
+        (entry for entry in entries.values() if entry["student_id"] == "42"), key=lambda entry: entry["order"]
+    )
     assert [entry["file_id"].lower() for entry in family_entries[:3]] == ["hoshino", "hoshino_swimsuit", "ch0258"]
 
 
@@ -433,8 +502,13 @@ def generator():
 
 
 def test_generator_matches_orders_and_applies_curated_then_wiki(generator):
-    data = generator.build_catalog(FIXTURES / "characters.csv", FIXTURES, FIXTURES / "names.json",
-                                   FIXTURES / "wiki.json", FIXTURES / "variants.json")
+    data = generator.build_catalog(
+        FIXTURES / "characters.csv",
+        FIXTURES,
+        FIXTURES / "names.json",
+        FIXTURES / "wiki.json",
+        FIXTURES / "variants.json",
+    )
     entries = data["variants"]
     assert entries["ch0020"]["order"] < entries["ch0010"]["order"] < entries["np0001"]["order"]
     assert entries["np0001"]["names"]["en"] == {"full": "Hoshino (Robber)", "short": "Robber"}
@@ -447,16 +521,27 @@ def test_generator_matches_orders_and_applies_curated_then_wiki(generator):
 
 
 def test_generator_ships_the_per_server_release_flags(generator):
-    entries = generator.build_catalog(FIXTURES / "characters.csv", FIXTURES, FIXTURES / "names.json",
-                                      FIXTURES / "wiki.json", FIXTURES / "variants.json")["variants"]
+    entries = generator.build_catalog(
+        FIXTURES / "characters.csv",
+        FIXTURES,
+        FIXTURES / "names.json",
+        FIXTURES / "wiki.json",
+        FIXTURES / "variants.json",
+    )["variants"]
     assert entries["ch0020"]["released"] == {"japan": True, "global": False}
     assert entries["hoshino"]["released"] == entries["ch0010"]["released"] == {"japan": True, "global": True}
     assert "released" not in entries["np0001"]
 
 
 def test_generator_cli_is_deterministic_and_needs_no_install(tmp_path: Path):
-    command = [sys.executable, str(ROOT / "scripts" / "build_catalog_data.py"),
-               "--csv", str(FIXTURES / "characters.csv"), "--schaledb", str(FIXTURES)]
+    command = [
+        sys.executable,
+        str(ROOT / "scripts" / "build_catalog_data.py"),
+        "--csv",
+        str(FIXTURES / "characters.csv"),
+        "--schaledb",
+        str(FIXTURES),
+    ]
     paths = [tmp_path / "first.json", tmp_path / "second.json"]
     for path in paths:
         result = subprocess.run([*command, "--out", str(path)], capture_output=True, text=True, check=True)

@@ -32,8 +32,11 @@ def _objects(bundle: Bundle) -> dict:
 
 
 def _streams(bundle: Bundle) -> dict[str, str]:
-    return {name: hashlib.sha256(file.bytes).hexdigest() for name, file in bundle.env.file.files.items()
-            if not hasattr(file, "objects")}
+    return {
+        name: hashlib.sha256(file.bytes).hexdigest()
+        for name, file in bundle.env.file.files.items()
+        if not hasattr(file, "objects")
+    }
 
 
 def _texture(bundle: Bundle, name: str):
@@ -43,16 +46,26 @@ def _texture(bundle: Bundle, name: str):
     return found[0]
 
 
-def patch_portraits(base: Path, official: Path, output: Path, edits: dict[str, bytes | None],
-                    *, compression: str = "lz4", crc: bool = True) -> None:
+def patch_portraits(
+    base: Path,
+    official: Path,
+    output: Path,
+    edits: dict[str, bytes | None],
+    *,
+    compression: str = "lz4",
+    crc: bool = True,
+) -> None:
     """Compose a batch without changing unrelated objects, streams or texture geometry."""
     bundle, original = Bundle.load(base), Bundle.load(official)
     if bundle is None or original is None:
         raise ServiceError("bundle_invalid", file=base)
     targets = {name: _texture(bundle, name) for name in edits}
     changed = {(obj.assets_file.name, obj.path_id) for obj in targets.values()}
-    before = {entry: hashlib.sha256(obj.get_raw_data()).hexdigest()
-              for entry, obj in _objects(bundle).items() if entry not in changed}
+    before = {
+        entry: hashlib.sha256(obj.get_raw_data()).hexdigest()
+        for entry, obj in _objects(bundle).items()
+        if entry not in changed
+    }
     streams = _streams(bundle)
     expected = {}
     for name, png in edits.items():
@@ -62,8 +75,11 @@ def patch_portraits(base: Path, official: Path, output: Path, edits: dict[str, b
         if png is None:
             # Inline the exact official GPU-encoded bytes, including mipmaps.
             stream = source_data.m_StreamData
-            payload = bytes(get_resource_data(stream.path, source.assets_file, stream.offset, stream.size)
-                            if stream and stream.path else source_data.image_data)
+            payload = bytes(
+                get_resource_data(stream.path, source.assets_file, stream.offset, stream.size)
+                if stream and stream.path
+                else source_data.image_data
+            )
             if not payload:
                 raise ServiceError("photo_target_unavailable")
             source_data.image_data = payload
@@ -87,9 +103,14 @@ def patch_portraits(base: Path, official: Path, output: Path, edits: dict[str, b
     if checked is None:
         raise ServiceError("photo_apply_failed")
     after_objects = _objects(checked)
-    if (set(after_objects) != set(_objects(bundle)) or streams != _streams(checked) or
-            any(hashlib.sha256(after_objects[entry].get_raw_data()).hexdigest() != digest
-                for entry, digest in before.items())):
+    if (
+        set(after_objects) != set(_objects(bundle))
+        or streams != _streams(checked)
+        or any(
+            hashlib.sha256(after_objects[entry].get_raw_data()).hexdigest() != digest
+            for entry, digest in before.items()
+        )
+    ):
         raise ServiceError("photo_apply_failed")
     for name, (width, height, texture_format, encoded, pixels) in expected.items():
         result = _texture(checked, name).read()
@@ -102,8 +123,16 @@ def patch_portraits(base: Path, official: Path, output: Path, edits: dict[str, b
             raise ServiceError("photo_apply_failed")
 
 
-def patch_portrait(base: Path, official: Path, output: Path, name: str, png: bytes | None,
-                   *, compression: str = "lz4", crc: bool = True) -> None:
+def patch_portrait(
+    base: Path,
+    official: Path,
+    output: Path,
+    name: str,
+    png: bytes | None,
+    *,
+    compression: str = "lz4",
+    crc: bool = True,
+) -> None:
     patch_portraits(base, official, output, {name: png}, compression=compression, crc=crc)
 
 
@@ -111,7 +140,7 @@ def target_file(library: ModLibrary, descriptor: dict, pin: Pin) -> Path:
     core = core_of(descriptor["bundle"])
     paths = library._index(pin).get(core, [])
     exact = [path for path in paths if path.name == descriptor["bundle"]]
-    if (len(exact) != 1 or any(date_of(path.name) > date_of(descriptor["bundle"]) for path in paths)):
+    if len(exact) != 1 or any(date_of(path.name) > date_of(descriptor["bundle"]) for path in paths):
         raise ServiceError("photo_target_unavailable")
     return exact[0]
 
@@ -128,7 +157,8 @@ def _configuration(library: ModLibrary, descriptor: dict, pin: Pin) -> tuple[str
         source = entry.get("source", "")
         record = library._records.get(source[4:]) if source.startswith("mod:") else None
         if descriptor["name"] not in entry.get("photo_defaults", []) and (
-                descriptor["name"] in ((record or {}).get(TAG) or {}).get("choices", {})):
+            descriptor["name"] in ((record or {}).get(TAG) or {}).get("choices", {})
+        ):
             matches.append((slot, entry, record))
     return max(matches, key=lambda item: item[1].get("since", "")) if matches else (core, {}, None)
 
@@ -146,29 +176,51 @@ def choice(library: ModLibrary, descriptor: dict, pin: Pin) -> dict:
     meta = (record or {}).get(TAG) or {}
     item = (meta.get("choices") or {}).get(descriptor["name"])
     if isinstance(item, dict):
-        return {"id": item.get("photo"), "known": True, "enabled": enabled,
-                "pending": enabled and part.carried != source,
-                "error": entry.get("error") or ({"code": "photo_target_unavailable", "params": {}}
-                                                 if slot != core_of(target.name) else None)}
-    return {"id": None, "known": meta.get("base_official") is True, "enabled": enabled,
-            "pending": enabled and part.carried != source, "error": entry.get("error")}
+        return {
+            "id": item.get("photo"),
+            "known": True,
+            "enabled": enabled,
+            "pending": enabled and part.carried != source,
+            "error": entry.get("error")
+            or ({"code": "photo_target_unavailable", "params": {}} if slot != core_of(target.name) else None),
+        }
+    return {
+        "id": None,
+        "known": meta.get("base_official") is True,
+        "enabled": enabled,
+        "pending": enabled and part.carried != source,
+        "error": entry.get("error"),
+    }
 
 
 def _referenced_sources(library: ModLibrary) -> set:
     config = library.profiles.read() or {}
-    sources = {entry.get("source") for folder in config.get("folders", {}).values()
-               for entry in folder.get("configured", {}).values()}
-    sources.update(entry.get("source") for path, entry in library._applied.items() if Path(path).exists() and not entry.get('removed'))
+    sources = {
+        entry.get("source")
+        for folder in config.get("folders", {}).values()
+        for entry in folder.get("configured", {}).values()
+    }
+    sources.update(
+        entry.get("source")
+        for path, entry in library._applied.items()
+        if Path(path).exists() and not entry.get("removed")
+    )
     return sources
 
 
 def _uses(library: ModLibrary) -> list[tuple[Any, set[str]]]:
     """Every source a configured entry or an existing applied file names, with the photo choices it resets."""
     config = library.profiles.read() or {}
-    uses = [(entry.get('source'), set(entry.get('photo_defaults', [])))
-            for folder in config.get('folders', {}).values() for entry in folder.get('configured', {}).values()]
-    uses.extend((entry.get('source'), set()) for path, entry in library._applied.items()
-                if Path(path).exists() and not entry.get('removed'))
+    uses = [
+        (entry.get("source"), set(entry.get("photo_defaults", [])))
+        for folder in config.get("folders", {}).values()
+        for entry in folder.get("configured", {}).values()
+    ]
+    uses.extend(
+        (entry.get("source"), set())
+        for path, entry in library._applied.items()
+        if Path(path).exists() and not entry.get("removed")
+    )
     return uses
 
 
@@ -177,20 +229,23 @@ def _record(library: ModLibrary, mod_id: str) -> dict:
     their photos and the file may return."""
     record = library._records.get(mod_id)
     if record is None:
-        record = next((raw for raw in library._held if isinstance(raw, dict) and raw.get('id') == mod_id), None)
+        record = next((raw for raw in library._held if isinstance(raw, dict) and raw.get("id") == mod_id), None)
     return record or {}
 
 
 def _owned(library: ModLibrary, source: Any, defaults: set[str]) -> dict[str, dict]:
     """The photo choices of a ``mod:`` source's recipe, by texture name, minus those reset to the default."""
-    if not isinstance(source, str) or not source.startswith('mod:'):
+    if not isinstance(source, str) or not source.startswith("mod:"):
         return {}
     meta = _record(library, source[4:]).get(TAG)
-    choices = meta.get('choices') if isinstance(meta, dict) else None  # a held record is not validated
+    choices = meta.get("choices") if isinstance(meta, dict) else None  # a held record is not validated
     if not isinstance(choices, dict):
         return {}
-    return {name: item for name, item in choices.items()
-            if name not in defaults and isinstance(item, dict) and isinstance(item.get('photo'), str)}
+    return {
+        name: item
+        for name, item in choices.items()
+        if name not in defaults and isinstance(item, dict) and isinstance(item.get("photo"), str)
+    }
 
 
 def usage_targets(library: ModLibrary) -> dict[str, set[str]]:
@@ -198,17 +253,20 @@ def usage_targets(library: ModLibrary) -> dict[str, set[str]]:
     targets = {}
     for source, defaults in _uses(library):
         for item in _owned(library, source, defaults).values():
-            variants = targets.setdefault(item['photo'], set())
-            if isinstance(item.get('variant'), str):
-                variants.add(item['variant'])
+            variants = targets.setdefault(item["photo"], set())
+            if isinstance(item.get("variant"), str):
+                variants.add(item["variant"])
     return targets
 
 
 def _held_use(library: ModLibrary, key: str) -> bool:
     """Whether a held record (not in the library's records) owns the photo in a configured entry or an applied file."""
-    return any(key == item['photo'] for source, defaults in _uses(library)
-               if isinstance(source, str) and source[4:] not in library._records
-               for item in _owned(library, source, defaults).values())
+    return any(
+        key == item["photo"]
+        for source, defaults in _uses(library)
+        if isinstance(source, str) and source[4:] not in library._records
+        for item in _owned(library, source, defaults).values()
+    )
 
 
 def in_use(library: ModLibrary) -> set[str]:
@@ -219,54 +277,58 @@ def remove_photo(library: ModLibrary, key: str, log) -> None:
     """Reset every affected texture, retaining other choices in each shared Collection recipe."""
     if _held_use(library, key):
         # a held record's recipe cannot be rebuilt while its files are missing: the photo stays until they return
-        raise ServiceError('photo_in_use')
+        raise ServiceError("photo_in_use")
     config = library.profiles.read() or {}
     enabled = profiles.enabled(config)
     pins = {pin.key: pin for pin in library._all_pins()}
     # Applied-only recipes also own real texture choices. Reconcile a different desired recipe first.
     for path, applied in list(library._applied.items()):
-        source = applied.get('source', '')
-        record = library._records.get(source[4:], {}) if source.startswith('mod:') else {}
-        if applied.get('removed') or not any(value.get('photo') == key
-                for value in (record.get(TAG) or {}).get('choices', {}).values()):
+        source = applied.get("source", "")
+        record = library._records.get(source[4:], {}) if source.startswith("mod:") else {}
+        if applied.get("removed") or not any(
+            value.get("photo") == key for value in (record.get(TAG) or {}).get("choices", {}).values()
+        ):
             continue
         target = Path(path)
         if not target.exists():
             continue
         pin = next((pin for pin in pins.values() if target.parent in pin.dirs), None)
         if not enabled:
-            applied.update(source='removed', removed=True)
-            applied.pop('build', None)
+            applied.update(source="removed", removed=True)
+            applied.pop("build", None)
             continue
         if pin is None:
-            raise ServiceError('game_not_found')
+            raise ServiceError("game_not_found")
         core = core_of(target.name)
-        desired = config.get('folders', {}).get(pin.key, {}).get('configured', {}).get(core)
-        if desired and desired.get('source') != source:
-            library._switch(pin, core, desired['source'], log)
+        desired = config.get("folders", {}).get(pin.key, {}).get("configured", {}).get(core)
+        if desired and desired.get("source") != source:
+            library._switch(pin, core, desired["source"], log)
         elif not desired:
             library._configure(pin, core, {core: core}, source)
     tasks = []
-    for install, folder in (library.profiles.read() or {}).get('folders', {}).items():
-        for core, entry in folder.get('configured', {}).items():
-            source = entry.get('source', '')
-            record = library._records.get(source[4:], {}) if source.startswith('mod:') else {}
-            matches = [(name, value) for name, value in (record.get(TAG) or {}).get('choices', {}).items()
-                       if value.get('photo') == key and name not in entry.get('photo_defaults', [])]
+    for install, folder in (library.profiles.read() or {}).get("folders", {}).items():
+        for core, entry in folder.get("configured", {}).items():
+            source = entry.get("source", "")
+            record = library._records.get(source[4:], {}) if source.startswith("mod:") else {}
+            matches = [
+                (name, value)
+                for name, value in (record.get(TAG) or {}).get("choices", {}).items()
+                if value.get("photo") == key and name not in entry.get("photo_defaults", [])
+            ]
             if not matches:
                 continue
             pin = pins.get(install)
             if pin is None:
-                raise ServiceError('game_not_found')
+                raise ServiceError("game_not_found")
             paths = library._index(pin).get(core, [])
             if len(paths) != 1:
-                raise ServiceError('photo_target_unavailable')
-            tasks.extend((pin, {'bundle': paths[0].name, 'name': name}, value['variant']) for name, value in matches)
+                raise ServiceError("photo_target_unavailable")
+            tasks.extend((pin, {"bundle": paths[0].name, "name": name}, value["variant"]) for name, value in matches)
     for pin, descriptor, variant in tasks:
         apply(library, variant, None, None, descriptor, pin, log, None)
     library._save()
     if key in in_use(library):
-        raise ServiceError('photo_in_use')
+        raise ServiceError("photo_in_use")
 
 
 def _prune_composites(library: ModLibrary) -> None:
@@ -278,6 +340,7 @@ def _prune_composites(library: ModLibrary) -> None:
 def _drop_migrated_choices(library: ModLibrary, pin: Pin) -> None:
     """Retire a vanished batch only once all of its photo choices have newer live-batch choices."""
     live = set(library._index(pin))
+
     def update(data):
         folder = data.get("folders", {}).get(pin.key, {})
         configured = folder.get("configured", {})
@@ -294,17 +357,24 @@ def _drop_migrated_choices(library: ModLibrary, pin: Pin) -> None:
             meta = (library._records.get(source[4:], {}).get(TAG) or {}) if source.startswith("mod:") else {}
             if slot in live or not meta.get("base_official"):
                 continue
-            required = [name for name, value in meta.get("choices", {}).items()
-                        if value.get("photo") and name not in entry.get("photo_defaults", [])]
+            required = [
+                name
+                for name, value in meta.get("choices", {}).items()
+                if value.get("photo") and name not in entry.get("photo_defaults", [])
+            ]
             if all(name in covered and covered[name] >= entry.get("since", "") for name in required):
                 del configured[slot]
                 removed.add(slot)
                 for field in ("built", "updated"):
                     folder.get(field, {}).pop(slot, None)
         if removed:
-            data["unfinished"] = [item for item in data.get("unfinished", [])
-                                  if not (item.get("install") == pin.key and item.get("core") in removed)]
+            data["unfinished"] = [
+                item
+                for item in data.get("unfinished", [])
+                if not (item.get("install") == pin.key and item.get("core") in removed)
+            ]
         return bool(removed)
+
     library.profiles.update(update)
 
 
@@ -315,16 +385,26 @@ def _default_missing(library: ModLibrary, pin: Pin, slot: str, name: str) -> Non
             return False
         entry.setdefault("photo_defaults", []).append(name)
         return True
+
     library.profiles.update(update)
 
 
 def _result(result: ApplyResult, variant: str, core: str) -> PhotographApplyResult:
-    return PhotographApplyResult(variant, result.source, result.files, result.unchanged,
-                                 result.deferred, cores=[core])
+    return PhotographApplyResult(variant, result.source, result.files, result.unchanged, result.deferred, cores=[core])
 
 
-def apply(library: ModLibrary, variant: str, photo: str | None, png: bytes | None, descriptor: dict,
-          pin: Pin, log, progress, *, configure_only: bool = False) -> ApplyResult:
+def apply(
+    library: ModLibrary,
+    variant: str,
+    photo: str | None,
+    png: bytes | None,
+    descriptor: dict,
+    pin: Pin,
+    log,
+    progress,
+    *,
+    configure_only: bool = False,
+) -> ApplyResult:
     """Produce a managed generic Mod so journaled writes, version updates and the master switch remain shared."""
     target = target_file(library, descriptor, pin)
     core = core_of(target.name)
@@ -334,9 +414,14 @@ def apply(library: ModLibrary, variant: str, photo: str | None, png: bytes | Non
     slot, configured, record = _configuration(library, descriptor, pin)
     configured_source = configured.get("source", "official")
     meta = copy.deepcopy((record or {}).get(TAG) or {})
-    if photo is None and configured_source == "official" and (
-            library._hashes.get(target).sha1 == library._hashes.get(official).sha1):
-        return _result(library.apply(core, "official", kind="other", pin=pin, log=log, progress=progress), variant, core)
+    if (
+        photo is None
+        and configured_source == "official"
+        and (library._hashes.get(target).sha1 == library._hashes.get(official).sha1)
+    ):
+        return _result(
+            library.apply(core, "official", kind="other", pin=pin, log=log, progress=progress), variant, core
+        )
     if not configure_only and profiles.enabled(config):
         library._check_stopping(pin)  # refused for the moment: nothing built, the choice as it was
     with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
@@ -380,8 +465,7 @@ def apply(library: ModLibrary, variant: str, photo: str | None, png: bytes | Non
         output = directory / target.name
         patch_portraits(base, official, output, edits, compression="lz4", crc=library.settings.crc_needed(target))
         files = {target.name: output}
-        saved = library._store(files, "Student thumbnail", other_target(files), "other",
-                               metadata={TAG: meta})
+        saved = library._store(files, "Student thumbnail", other_target(files), "other", metadata={TAG: meta})
         source = f"mod:{saved['id']}"
         if configure_only or not profiles.enabled(config):
             library._defer(pin, saved["target"], {core: core}, source)
@@ -392,15 +476,27 @@ def apply(library: ModLibrary, variant: str, photo: str | None, png: bytes | Non
             change = _ChoiceChange(library, pin, saved["target"], source)
             try:
                 change.configure({core: core})
-                files = library._commit({target: library._paths(saved)[0]}, source, log, progress, pin,
-                                        prune=False, expected={target: before})
+                files = library._commit(
+                    {target: library._paths(saved)[0]},
+                    source,
+                    log,
+                    progress,
+                    pin,
+                    prune=False,
+                    expected={target: before},
+                )
                 library._selection_error(pin, [core], None)
                 library._clear_marker(pin, core)
                 result = PhotographApplyResult(variant, source, files, unchanged=not files, cores=[core])
             except Exception as error:
                 if not change.refused(error):
-                    library._selection_error(pin, [core], error.to_json() if isinstance(error, ServiceError) else {
-                        "code": "library_io_error", "params": {"file": str(target)}})
+                    library._selection_error(
+                        pin,
+                        [core],
+                        error.to_json()
+                        if isinstance(error, ServiceError)
+                        else {"code": "library_io_error", "params": {"file": str(target)}},
+                    )
                 raise
             finally:
                 change.close()
@@ -456,8 +552,17 @@ def refresh_missing(library: ModLibrary, pins: list[Pin], log) -> None:
                                 # An explicit shared-bundle Mod is not replaced by an old photo recipe.
                                 continue
                         png = library.photographs.image(value["variant"], value["photo"])
-                        apply(library, value["variant"], value["photo"], png, descriptor, pin,
-                              log, None, configure_only=True)
+                        apply(
+                            library,
+                            value["variant"],
+                            value["photo"],
+                            png,
+                            descriptor,
+                            pin,
+                            log,
+                            None,
+                            configure_only=True,
+                        )
                     except ServiceError as error:
                         library._selection_error(pin, [slot], error.to_json())
                         log(f"Photograph configuration retained for unavailable texture {name}")

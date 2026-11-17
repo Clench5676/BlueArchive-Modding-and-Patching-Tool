@@ -46,16 +46,8 @@ def assert_stream_refs_resolve(bundle_path: Path, watched_type: str = "Mesh") ->
     3. 数据级：对流式对象实际调用 ResourceReader.get_resource_data 验证可读。
     """
     env = UnityPy.load(str(bundle_path))
-    internal = {
-        name
-        for name, f in env.file.files.items()
-        if not hasattr(f, "objects")
-    }
-    sf_names = {
-        name
-        for name, f in env.file.files.items()
-        if hasattr(f, "objects")
-    }
+    internal = {name for name, f in env.file.files.items() if not hasattr(f, "objects")}
+    sf_names = {name for name, f in env.file.files.items() if hasattr(f, "objects")}
 
     dangling: list[str] = []
     streamed_checked = 0

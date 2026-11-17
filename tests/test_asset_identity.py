@@ -34,13 +34,16 @@ def update_targets(sources, targets, *, paths, keys):
 
 # The asset path decides, whatever the dates and part numbers
 
+
 def test_asset_paths_pick_the_part_that_holds_them_whatever_its_date_and_number():
     older = dependency("x", "2023-01-01", "004")
     same_number = dependency("x", "2024-11-18", "004")  # the same number holds another type now
     holder = dependency("x", "2025-07-25", "000")
-    paths = {older: {"assets/_mx/characters/x/model/x.fbx"},
-             same_number: {"assets/_mx/characters/x/effect/prefab/fx.prefab"},
-             holder: {"assets/_mx/characters/x/model/x.fbx"}}
+    paths = {
+        older: {"assets/_mx/characters/x/model/x.fbx"},
+        same_number: {"assets/_mx/characters/x/effect/prefab/fx.prefab"},
+        holder: {"assets/_mx/characters/x/model/x.fbx"},
+    }
     assert update_targets([older], [same_number, holder], paths=paths.get, keys=no_keys) == [holder]
 
 
@@ -71,6 +74,7 @@ def test_unity_builtin_resources_are_never_missing():
 
 
 # A game update rebuilds a changed group in place
+
 
 def spr(date: str, part: str, crc: int) -> str:
     return f"assets-_mx-spinecharacters-a_spr-_mxdependency-{date}_{part}_assets_all_{crc}.bundle"
@@ -104,11 +108,11 @@ def test_a_later_dated_file_of_the_part_is_still_a_successor_and_an_earlier_one_
 # On the official files
 
 CASES = [  # dependency parts of cores whose parts sit under several dates
-    "assets-_mx-characters-ch0100-_mxdependency-2024-11-18_004_",          # meshes; a 2025-07-25 group exists
-    "assets-_mx-characters-ch0100-_mxdependency-2024-11-18_006_",          # textures
-    "assets-_mx-characters-airi_original-_mxdependency-2024-11-18_003_",   # meshes; 2025-07-25 and 2025-11-07 groups
-    "assets-_mx-spinelobbies-ch0164_home-_mxdependency-2024-11-18_002_",   # skeleton and atlas; a 2025-07-10 group
-    "assets-_mx-spinelobbies-ch0164_home-_mxdependency-2024-11-18_003_",   # page texture
+    "assets-_mx-characters-ch0100-_mxdependency-2024-11-18_004_",  # meshes; a 2025-07-25 group exists
+    "assets-_mx-characters-ch0100-_mxdependency-2024-11-18_006_",  # textures
+    "assets-_mx-characters-airi_original-_mxdependency-2024-11-18_003_",  # meshes; 2025-07-25 and 2025-11-07 groups
+    "assets-_mx-spinelobbies-ch0164_home-_mxdependency-2024-11-18_002_",  # skeleton and atlas; a 2025-07-10 group
+    "assets-_mx-spinelobbies-ch0164_home-_mxdependency-2024-11-18_003_",  # page texture
 ]
 
 
@@ -137,7 +141,7 @@ def test_a_part_of_an_older_release_updates_the_official_file_holding_its_assets
     older = re.sub(r"-\d{4}-\d{2}-\d{2}_", "-2023-01-01_", source.name)
     targets = library._spine_parts(core_of(source.name), pin)
     assert len({re.search(r"\d{4}-\d{2}-\d{2}", path.name)[0] for path in targets}) > 1
-    group, = library._update_groups({older: source}, targets, pin)
+    (group,) = library._update_groups({older: source}, targets, pin)
     assert group.target_paths == [source]
     assert {file.action for file in group.files} == {"update"}
 
@@ -146,10 +150,18 @@ def test_a_part_of_an_older_release_updates_the_official_file_holding_its_assets
 def test_a_preview_of_an_older_part_drops_only_the_part_its_assets_cover(official):
     library, pin, directories = official
     prefix = "assets-_mx-characters-ch0100-_mxdependency-"
-    animations = next(path for folder in directories for path in sorted(folder.iterdir())
-                      if path.name.startswith(prefix + "2024-11-18_000_"))
-    material = next(path for folder in directories for path in sorted(folder.iterdir())
-                    if path.name.startswith(prefix + "2025-07-25_000_"))  # the same number, another asset type
+    animations = next(
+        path
+        for folder in directories
+        for path in sorted(folder.iterdir())
+        if path.name.startswith(prefix + "2024-11-18_000_")
+    )
+    material = next(
+        path
+        for folder in directories
+        for path in sorted(folder.iterdir())
+        if path.name.startswith(prefix + "2025-07-25_000_")
+    )  # the same number, another asset type
     targets = library._spine_parts("ch0100", pin)
     assert {animations, material} <= set(targets)
     older = re.sub(r"-\d{4}-\d{2}-\d{2}_", "-2023-01-01_", animations.name)

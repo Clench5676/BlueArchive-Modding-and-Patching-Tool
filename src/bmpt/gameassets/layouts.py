@@ -31,57 +31,97 @@ def _widget(obj: ObjectReader, tree: dict, names: dict[str, str], scripts: dict)
     cls = scripts.get(script.get("m_PathID")) if not script.get("m_FileID") else None
     widget = {"cls": cls}
     if "mSpriteName" in tree:
-        widget.update(cls=cls or "UISprite", sprite=tree["mSpriteName"],
-                      atlas=names.get(ref_key(*reference(obj, tree["mAtlas"]))),
-                      type=tree["mType"], flip=tree["mFlip"], incline=tree.get("inclineAngle"),
-                      fillDir=tree.get("mFillDirection"), fill=tree.get("mFillAmount"),
-                      fillCenter=tree.get("mFillCenter"))
+        widget.update(
+            cls=cls or "UISprite",
+            sprite=tree["mSpriteName"],
+            atlas=names.get(ref_key(*reference(obj, tree["mAtlas"]))),
+            type=tree["mType"],
+            flip=tree["mFlip"],
+            incline=tree.get("inclineAngle"),
+            fillDir=tree.get("mFillDirection"),
+            fill=tree.get("mFillAmount"),
+            fillCenter=tree.get("mFillCenter"),
+        )
         if tree.get("mApplyGradient"):
-            widget["gradient"] = ["#%02x%02x%02x/%.2f" % (
-                round(tree[key]["r"] * 255), round(tree[key]["g"] * 255),
-                round(tree[key]["b"] * 255), tree[key]["a"])
-                for key in ("mGradientTop", "mGradientBottom")]
+            widget["gradient"] = [
+                "#%02x%02x%02x/%.2f"
+                % (
+                    round(tree[key]["r"] * 255),
+                    round(tree[key]["g"] * 255),
+                    round(tree[key]["b"] * 255),
+                    tree[key]["a"],
+                )
+                for key in ("mGradientTop", "mGradientBottom")
+            ]
     if "mTexture" in tree and "mWidth" in tree:
         pointer = tree["mTexture"]
         cab, pid = reference(obj, pointer)
         fallback = ("self" if not pointer["m_FileID"] else cab, pid)
         widget.update(cls=cls or "UITexture", texture=names.get(ref_key(cab, pid), str(fallback)))
     if "mText" in tree:
-        widget.update(text=tree["mText"][:60], fontSize=tree.get("mFontSize"),
-                      overflow=tree.get("mOverflow"), align=tree.get("mAlignment"),
-                      spacingX=tree.get("mSpacingX"), effect=tree.get("mEffectStyle"))
+        widget.update(
+            text=tree["mText"][:60],
+            fontSize=tree.get("mFontSize"),
+            overflow=tree.get("mOverflow"),
+            align=tree.get("mAlignment"),
+            spacingX=tree.get("mSpacingX"),
+            effect=tree.get("mEffectStyle"),
+        )
         effect_color = tree.get("mEffectColor")
         if effect_color:
             widget["effectColor"] = "#%02x%02x%02x/%.2f" % (
-                round(effect_color["r"] * 255), round(effect_color["g"] * 255),
-                round(effect_color["b"] * 255), effect_color["a"])
+                round(effect_color["r"] * 255),
+                round(effect_color["g"] * 255),
+                round(effect_color["b"] * 255),
+                effect_color["a"],
+            )
         distance = tree.get("mEffectDistance")
         if distance:
             widget["effectDistance"] = [distance["x"], distance["y"]]
     if "mWidth" in tree:
         color = tree.get("mColor")
-        widget.update(w_=tree["mWidth"], h_=tree["mHeight"], pivot=tree.get("mPivot"),
-                      depth=tree.get("mDepth"), color=("#%02x%02x%02x/%.2f" % (
-                          round(color["r"] * 255), round(color["g"] * 255),
-                          round(color["b"] * 255), color["a"]) if color else None))
-        anchors = {key: [tree[key]["relative"], tree[key]["absolute"]]
-                   for key in ("leftAnchor", "rightAnchor", "bottomAnchor", "topAnchor")
-                   if tree.get(key, {}).get("target", {}).get("m_PathID")}
+        widget.update(
+            w_=tree["mWidth"],
+            h_=tree["mHeight"],
+            pivot=tree.get("mPivot"),
+            depth=tree.get("mDepth"),
+            color=(
+                "#%02x%02x%02x/%.2f"
+                % (round(color["r"] * 255), round(color["g"] * 255), round(color["b"] * 255), color["a"])
+                if color
+                else None
+            ),
+        )
+        anchors = {
+            key: [tree[key]["relative"], tree[key]["absolute"]]
+            for key in ("leftAnchor", "rightAnchor", "bottomAnchor", "topAnchor")
+            if tree.get(key, {}).get("target", {}).get("m_PathID")
+        }
         if anchors:
             widget["anchors"] = anchors
     if cls in ("UIGrid", "UITable") or "cellWidth" in tree:
-        widget.update({key: tree.get(key) for key in (
-            "cellWidth", "cellHeight", "maxPerLine", "arrangement", "columns", "padding")})
+        widget.update(
+            {
+                key: tree.get(key)
+                for key in ("cellWidth", "cellHeight", "maxPerLine", "arrangement", "columns", "padding")
+            }
+        )
     if cls and cls.startswith("Tween") and "duration" in tree:
         # an NGUI tweener: what it animates from and to (a number, a vector or a colour as a list), how long, after what
         # delay, its style (0 once, 1 loop, 2 ping-pong) and method (0 linear, 1 ease in, ...)
         def value(v: Any) -> Any:
             return [v[k] for k in ("x", "y", "z", "r", "g", "b", "a") if k in v] if isinstance(v, dict) else v
-        widget["tween"] = {"from": value(tree.get("from")), "to": value(tree.get("to")), "duration": tree.get("duration"),
-                           "delay": tree.get("delay"), "style": tree.get("style"), "method": tree.get("method")}
+
+        widget["tween"] = {
+            "from": value(tree.get("from")),
+            "to": value(tree.get("to")),
+            "duration": tree.get("duration"),
+            "delay": tree.get("delay"),
+            "style": tree.get("style"),
+            "method": tree.get("method"),
+        }
     if cls is None and "mSpriteName" not in tree and "mTexture" not in tree:
-        widget["keys"] = [key for key in tree if key not in (
-            "m_GameObject", "m_Enabled", "m_Script", "m_Name")][:8]
+        widget["keys"] = [key for key in tree if key not in ("m_GameObject", "m_Enabled", "m_Script", "m_Name")][:8]
     return widget
 
 
@@ -115,8 +155,11 @@ def export_layout(env: Environment, root: str, names: dict[str, str], *, effects
         components.setdefault(gid, []).append(widget)
         if widget["cls"] in STATE_FIELDS:
             controllers.append((gid, widget, tree))
-    parents = {gid: owners.get(transform.m_Father.path_id) for gid, transform in transforms.items()
-               if transform.m_Father.path_id}
+    parents = {
+        gid: owners.get(transform.m_Father.path_id)
+        for gid, transform in transforms.items()
+        if transform.m_Father.path_id
+    }
 
     def relative(base: int, pointer: dict) -> str | None:
         """The path from node `base` down to the node a pointer names, or None outside it or unset."""
@@ -136,10 +179,14 @@ def export_layout(env: Environment, root: str, names: dict[str, str], *, effects
         game_object, transform = gos[gid], transforms[gid]
         q = transform.m_LocalRotation
         rotation = math.degrees(2 * math.atan2(q.z, q.w)) if abs(q.w) > 1e-6 or abs(q.z) > 1e-6 else 0
-        result = {"name": game_object.m_Name, "active": bool(game_object.m_IsActive),
-                  "pos": [round(transform.m_LocalPosition.x, 1), round(transform.m_LocalPosition.y, 1)],
-                  "scale": [round(transform.m_LocalScale.x, 3), round(transform.m_LocalScale.y, 3)],
-                  "rotZ": round(rotation, 2), "widgets": components.get(gid, [])}
+        result = {
+            "name": game_object.m_Name,
+            "active": bool(game_object.m_IsActive),
+            "pos": [round(transform.m_LocalPosition.x, 1), round(transform.m_LocalPosition.y, 1)],
+            "scale": [round(transform.m_LocalScale.x, 3), round(transform.m_LocalScale.y, 3)],
+            "rotZ": round(rotation, 2),
+            "widgets": components.get(gid, []),
+        }
         if effects and gid in effects:
             result["frameEffect"] = effects[gid]
         children = [node(child.read().m_GameObject.path_id) for child in transform.m_Children]

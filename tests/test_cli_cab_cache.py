@@ -40,8 +40,11 @@ def test_cli_and_app_share_compatible_metadata(managed, tmp_path, first):
     game_dir = tmp_path / "game"
     game_dir.mkdir()
     target = bundle(game_dir, "target.bundle", "CAB-TARGET")
-    game = GameAssets([game_dir], AssetCache(root=data / "cache"),
-                      preview_cache=PreviewCache(data / "cache" / "previews", allowed=True))
+    game = GameAssets(
+        [game_dir],
+        AssetCache(root=data / "cache"),
+        preview_cache=PreviewCache(data / "cache" / "previews", allowed=True),
+    )
     cli = managed_cab_index([game_dir])
     app = game._cab_discovery()
     assert cli.key == app.key
@@ -75,6 +78,7 @@ def test_resource_versions_are_isolated_even_with_unchanged_bundles(managed, tmp
     assert new.key != old.key
     calls = []
     from bmpt.gameassets.discovery import cab_names
+
     new.reader = lambda path: calls.append(path) or cab_names(path)
     assert new.resolve({"cab-target"}) == {"cab-target": str(target)}
     assert calls == [target]
@@ -88,9 +92,14 @@ def test_legacy_and_explicit_json_paths_are_never_read_or_written(managed, tmp_p
     bundle(game, "inside.bundle", "CAB-INSIDE")
     legacy = data / "Addons" / "cab_cache.json"
     explicit = tmp_path / "selected.json"
-    payload = json.dumps({"version": 1, "entries": {
-        "CAB-OUTSIDE": {"path": str(outside), "size": outside.stat().st_size,
-                        "mtime": outside.stat().st_mtime}}}).encode()
+    payload = json.dumps(
+        {
+            "version": 1,
+            "entries": {
+                "CAB-OUTSIDE": {"path": str(outside), "size": outside.stat().st_size, "mtime": outside.stat().st_mtime}
+            },
+        }
+    ).encode()
     legacy.parent.mkdir()
     for path in (legacy, explicit):
         path.write_bytes(payload)
@@ -100,6 +109,7 @@ def test_legacy_and_explicit_json_paths_are_never_read_or_written(managed, tmp_p
         def read(path, *args, **kwargs):
             assert path not in (legacy, explicit), "Retired JSON must not be read"
             return reader(path, *args, **kwargs)
+
         return read
 
     monkeypatch.setattr(Path, "read_bytes", guarded(read_bytes))
@@ -134,8 +144,14 @@ def test_settings_clear_removes_cli_cache_and_invalidates_a_running_index(manage
     target = bundle(game, "target.bundle", "CAB-TARGET")
     cli = managed_cab_index([game], tmp_path / "selected.json" if custom_namespace else None)
     assert cli.resolve({"cab-target"})
-    services = Services(config.Settings(data / "config.toml"), data, state=state,
-                        game=FakeGame(), catalog=FakeCatalog(), library=FakeLibrary())
+    services = Services(
+        config.Settings(data / "config.toml"),
+        data,
+        state=state,
+        game=FakeGame(),
+        catalog=FakeCatalog(),
+        library=FakeLibrary(),
+    )
     try:
         assert cli.cache.root == services.preview_cache.root
         assert list(cli.cache.root.glob("*.preview"))
@@ -146,6 +162,7 @@ def test_settings_clear_removes_cli_cache_and_invalidates_a_running_index(manage
         assert not cli.cache.put(cli.key, b"stale", generation=generation)
         calls = []
         from bmpt.gameassets.discovery import cab_names
+
         cli.reader = lambda path: calls.append(path) or cab_names(path)
         assert cli.resolve({"cab-target"}) == {"cab-target": str(target)}
         assert calls == [target]
@@ -213,7 +230,7 @@ def test_closed_stdout_exits_cleanly_and_keeps_hits(managed, tmp_path):
     game = tmp_path / "game"
     game.mkdir()
     target = bundle(game, "target.bundle", "CAB-TARGET")
-    script = '''
+    script = """
 import importlib
 from pathlib import Path
 import sys
@@ -222,14 +239,20 @@ from ba_modding_toolkit.searching import find_cab_bundles
 cli = importlib.import_module("ba_modding_toolkit.cli.main")
 cli._run = lambda: find_cab_bundles({"CAB-TARGET"}, [Path(sys.argv[1])], log=CLILogger().log)
 cli.main()
-'''
-    environment = dict(os.environ, BAMT_DATA_DIR=str(data), BAMT_DEV_ROOTS=str(tmp_path),
-                       BAMT_DEV_WRITABLE=str(tmp_path))
+"""
+    environment = dict(
+        os.environ, BAMT_DATA_DIR=str(data), BAMT_DEV_ROOTS=str(tmp_path), BAMT_DEV_WRITABLE=str(tmp_path)
+    )
     read_fd, write_fd = os.pipe()
     os.close(read_fd)
     try:
-        result = subprocess.run([sys.executable, "-c", script, str(game)], stdout=write_fd,
-                                stderr=subprocess.PIPE, env=environment, timeout=30)
+        result = subprocess.run(
+            [sys.executable, "-c", script, str(game)],
+            stdout=write_fd,
+            stderr=subprocess.PIPE,
+            env=environment,
+            timeout=30,
+        )
     finally:
         os.close(write_fd)
     assert result.returncode == 0, result.stderr.decode()
@@ -266,8 +289,12 @@ def test_indirect_graph_fallback_persists_metadata_and_confines_paths(managed, t
     source_path = tmp_path / "source.bundle"
     bundles = {
         path: SimpleNamespace(path=path, env=SimpleNamespace(assets=[sf], objects=[obj]))
-        for path, sf, obj in [(source_path, local_sf, source), (direct_path, direct_sf, direct),
-                              (indirect_path, indirect_sf, indirect)]}
+        for path, sf, obj in [
+            (source_path, local_sf, source),
+            (direct_path, direct_sf, direct),
+            (indirect_path, indirect_sf, indirect),
+        ]
+    }
     monkeypatch.setattr(Bundle, "load", lambda path, log: bundles[path])
     graph = _make_graph([bundles[source_path]], [game], lambda message: None, None)
     assert graph.deref(source, {"m_FileID": 1, "m_PathID": 2}) is direct
@@ -277,4 +304,6 @@ def test_indirect_graph_fallback_persists_metadata_and_confines_paths(managed, t
     restarted = managed_cab_index([game])
     restarted.reader = no_header
     assert restarted.resolve({"cab-first", "cab-second"}) == {
-        "cab-first": str(direct_path), "cab-second": str(indirect_path)}
+        "cab-first": str(direct_path),
+        "cab-second": str(indirect_path),
+    }

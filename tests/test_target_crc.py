@@ -39,6 +39,7 @@ def resave(monkeypatch):
                 data = CRCUtils.apply_crc_fix(data, crc_of_name(output))
             output.write_bytes(data)
             return True, "saved"
+
         return SimpleNamespace(save=save)
 
     monkeypatch.setattr(Bundle, "load", load)
@@ -65,8 +66,7 @@ def test_direct_replacement_under_another_crc_is_saved_with_the_target_crc(tmp_p
     official = game_bundle(tmp_path / "game", payload=b"official, rebuilt")
     mod = make_mod(game_bundle(tmp_path / "old", payload=b"official"), tmp_path / "mod", fixed=True)
     assert matches_name(mod) and mod.name != official.name
-    file = PlannedFile(mod, parse_filename(mod.name), Action.DIRECT_REPLACE, existing_path=official,
-                       need_crc_fix=True)
+    file = PlannedFile(mod, parse_filename(mod.name), Action.DIRECT_REPLACE, existing_path=official, need_crc_fix=True)
     group = PlannedGroup("test", None, "test_spr", [file])
     assert not install_staged([group], tmp_path / "out", set(), SaveOptions(perform_crc=True))
     assert matches_name(official)
@@ -76,10 +76,10 @@ def test_direct_replacement_under_another_crc_is_saved_with_the_target_crc(tmp_p
 def test_direct_replacement_under_its_own_name_is_copied(tmp_path, resave):
     official = game_bundle(tmp_path / "game")
     mod = make_mod(official, tmp_path / "mod", fixed=True)
-    file = PlannedFile(mod, parse_filename(mod.name), Action.DIRECT_REPLACE, existing_path=official,
-                       need_crc_fix=True)
-    assert not install_staged([PlannedGroup("test", None, "test_spr", [file])], tmp_path / "out", set(),
-                              SaveOptions(perform_crc=True))
+    file = PlannedFile(mod, parse_filename(mod.name), Action.DIRECT_REPLACE, existing_path=official, need_crc_fix=True)
+    assert not install_staged(
+        [PlannedGroup("test", None, "test_spr", [file])], tmp_path / "out", set(), SaveOptions(perform_crc=True)
+    )
     assert official.read_bytes() == mod.read_bytes()
     assert resave == []
 
@@ -110,8 +110,10 @@ def bad_built_key(env):
     def change(data):
         folder = data["folders"].setdefault(pin.key, {})
         folder.setdefault("built", {})["test_spr"] = {
-            "source": f"mod:{env.mod.id}", "inputs": [],
-            "parts": {env.part.name: {"sha1": sha1, "mod_file": env.mod.file.name}}}
+            "source": f"mod:{env.mod.id}",
+            "inputs": [],
+            "parts": {env.part.name: {"sha1": sha1, "mod_file": env.mod.file.name}},
+        }
 
     env.library.profiles.update(change)
     return pin
@@ -133,7 +135,7 @@ def test_generic_mod_after_a_crc_only_game_update_writes_the_part_with_its_own_c
     env.settings.set("enable_crc_correction", "true")
     part = game_bundle(env.game_dir, "common", category="ui", part="textures", payload=b"official UI")
     library = ModLibrary(env.root, env.catalog, object(), env.settings, scan_allowed=lambda: True)
-    mod, = library.add_files("other", [make_mod(part, env.tmp / "upload", payload=b"mod UI", fixed=True)])
+    (mod,) = library.add_files("other", [make_mod(part, env.tmp / "upload", payload=b"mod UI", fixed=True)])
     part.unlink()
     part = game_bundle(env.game_dir, "common", category="ui", part="textures", payload=b"official UI, rebuilt")
     library = ModLibrary(env.root, env.catalog, object(), env.settings, scan_allowed=lambda: True)
@@ -149,8 +151,9 @@ def test_start_finds_a_bad_built_copy_and_the_repair_drops_it(updated):
     pin = bad_built_key(env)
     found = env.library.crc_repair_due()
     assert found["due"]
-    assert found["entries"] == [{"install": pin.key, "core": "test_spr", "variant": "test", "kind": "spr",
-                                 "built": True, "game": False}]
+    assert found["entries"] == [
+        {"install": pin.key, "core": "test_spr", "variant": "test", "kind": "spr", "built": True, "game": False}
+    ]
     result = env.library.repair_crc()
     assert [item["core"] for item in result.dropped] == ["test_spr"] and not result.rewritten and not result.failed
     assert "test_spr" not in env.library.profiles.read()["folders"][pin.key]["built"]
@@ -170,6 +173,7 @@ def test_start_check_runs_once_on_a_clean_library(updated, monkeypatch):
 
 def test_repair_writes_again_a_game_file_left_without_its_crc(updated, monkeypatch):
     from bmpt.library import install
+
     env = updated
     with monkeypatch.context() as old:  # the write of an older build
         old.setattr(install, "matches_target_crc", lambda source, target: Bundle.check_crc_match(source))
@@ -190,6 +194,7 @@ def test_repair_writes_again_a_game_file_left_without_its_crc(updated, monkeypat
 def test_repair_leaves_game_files_for_a_later_start_while_the_game_runs(updated, monkeypatch):
     from bmpt.errors import ServiceError
     from bmpt.library import install, safety
+
     env = updated
     with monkeypatch.context() as old:
         old.setattr(install, "matches_target_crc", lambda source, target: Bundle.check_crc_match(source))

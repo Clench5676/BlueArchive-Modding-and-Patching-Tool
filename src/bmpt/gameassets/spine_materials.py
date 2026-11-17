@@ -56,6 +56,7 @@ def blend_state(form: Mapping[str, Any] | None, floats: Mapping[str, float]) -> 
     """The colour and alpha blend factors (UnityEngine.Rendering.BlendMode) of a shader's first pass for a material:
     a factor names a material property (_SrcBlend ...) or is fixed in the pass ("<noninit>": Hina's multiply page
     keeps a stray float of that name, which the pass does not read)."""
+
     def value(entry: Mapping[str, Any], default: int) -> int:
         name = entry.get("name", "")
         if name and name != "<noninit>" and name in floats:
@@ -65,14 +66,19 @@ def blend_state(form: Mapping[str, Any] | None, floats: Mapping[str, float]) -> 
     try:
         state = form["m_SubShaders"][0]["m_Passes"][0]["m_State"]
         blend = state.get("rtBlend0") or state["rtBlend"][0]
-        return {"src": value(blend["srcBlend"], 1), "dst": value(blend["destBlend"], 10),
-                "srcA": value(blend["srcBlendAlpha"], 1), "dstA": value(blend["destBlendAlpha"], 10)}
+        return {
+            "src": value(blend["srcBlend"], 1),
+            "dst": value(blend["destBlend"], 10),
+            "srcA": value(blend["srcBlendAlpha"], 1),
+            "dstA": value(blend["destBlendAlpha"], 10),
+        }
     except (KeyError, TypeError, IndexError, ValueError):
         return {"src": 1, "dst": 10, "srcA": 1, "dstA": 10}
 
 
-def material(shader: str | None, form: Mapping[str, Any] | None, tree: Mapping[str, Any],
-             textures: Mapping[str, dict]) -> dict:
+def material(
+    shader: str | None, form: Mapping[str, Any] | None, tree: Mapping[str, Any], textures: Mapping[str, dict]
+) -> dict:
     """A page or replacement material: its program, blend, keywords that change the program (_STRAIGHT_ALPHA_INPUT:
     the shader premultiplies the texture), its Float and Color properties as stored (the shader's defaults filling what
     the material lacks; Colors are converted to linear light by the front end) and its textures but the page's own
@@ -96,13 +102,23 @@ def material(shader: str | None, form: Mapping[str, Any] | None, tree: Mapping[s
         if name == "_MainTex":
             continue
         tex[name] = {**textures[name]} if name in textures else {"default": default}
-    return {"program": program(shader), "shader": shader, **blend_state(form, floats),
-            "straight": 1 if "_STRAIGHT_ALPHA_INPUT" in keywords else 0,
-            "floats": floats, "colors": colors, "tex": tex}
+    return {
+        "program": program(shader),
+        "shader": shader,
+        **blend_state(form, floats),
+        "straight": 1 if "_STRAIGHT_ALPHA_INPUT" in keywords else 0,
+        "floats": floats,
+        "colors": colors,
+        "tex": tex,
+    }
 
 
-def skeleton(atlas_materials: Iterable[tuple[str | None, dict]], blend_modes: Mapping[str, Any],
-             replacement: Callable[[dict], tuple[str | None, dict] | None], scale: float = 0.01) -> dict:
+def skeleton(
+    atlas_materials: Iterable[tuple[str | None, dict]],
+    blend_modes: Mapping[str, Any],
+    replacement: Callable[[dict], tuple[str | None, dict] | None],
+    scale: float = 0.01,
+) -> dict:
     """The materials of one SkeletonDataAsset: atlas_materials are (page texture name, material) of its atlas assets'
     materials (material as above), blend_modes its blendModeMaterials typetree, replacement(pointer) a replacement
     material's (page texture name, material), or None for a null reference. {"pages": {page: material} (only the
@@ -122,21 +138,31 @@ def skeleton(atlas_materials: Iterable[tuple[str | None, dict]], blend_modes: Ma
                 continue
             out = {}
             for entry in entries:
-                found = replacement(entry.get("material") or {}) if (entry.get("material") or {}).get("m_PathID") else None
+                found = (
+                    replacement(entry.get("material") or {}) if (entry.get("material") or {}).get("m_PathID") else None
+                )
                 out[page_name(entry.get("pageName")) or ""] = found[1] if found else None
             blend[mode] = out
     return {"pages": pages, "blend": blend, "scale": round(float(scale), 6)}
 
 
-def layer(resolve: Callable[[str, int, dict], tuple[str, Any] | None] | None, sa_pid: int, sa: Mapping[str, Any]) -> dict:
+def layer(
+    resolve: Callable[[str, int, dict], tuple[str, Any] | None] | None, sa_pid: int, sa: Mapping[str, Any]
+) -> dict:
     """What a lobby layer (lobby.read_prefab) carries for skeleton-materials.js: {"materials": {"pages", "blend",
     "scale", "tintBlack"}} from the SkeletonAnimation's data asset (scale: Unity units per skeleton unit, which the
     noise programs' centres are in); empty pages and blend when it cannot be read."""
     pointer = sa.get("skeletonDataAsset") or {}
     found = resolve("skeleton", sa_pid, pointer) if resolve is not None and pointer.get("m_PathID") else None
     data = found[1] if found else {}
-    return {"materials": {"pages": dict(data.get("pages") or {}), "blend": dict(data.get("blend") or {}),
-                          "scale": data.get("scale", 0.01), "tintBlack": bool(sa.get("tintBlack"))}}
+    return {
+        "materials": {
+            "pages": dict(data.get("pages") or {}),
+            "blend": dict(data.get("blend") or {}),
+            "scale": data.get("scale", 0.01),
+            "tintBlack": bool(sa.get("tintBlack")),
+        }
+    }
 
 
 def textures(layers: Iterable[Mapping[str, Any]]) -> dict[str, dict]:
@@ -144,7 +170,7 @@ def textures(layers: Iterable[Mapping[str, Any]]) -> dict[str, dict]:
     particles' own)."""
     out = {}
     for l in layers:
-        mats = (l.get("materials") or {})
+        mats = l.get("materials") or {}
         found = list((mats.get("pages") or {}).values())
         for by_page in (mats.get("blend") or {}).values():
             found += [m for m in by_page.values() if m]

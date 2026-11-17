@@ -142,7 +142,7 @@ class Skeleton:
             return ""
         start = self.pos
         self._skip(length - 1)
-        return self.data[start:self.pos].decode("utf-8", errors="replace")
+        return self.data[start : self.pos].decode("utf-8", errors="replace")
 
     def _floats(self, count: int) -> tuple[float, ...]:
         start = self.pos
@@ -542,18 +542,27 @@ class Skeleton:
         self._check_refs()
 
     def _check_refs(self) -> None:
-        limits = {"str": len(self.strings) + 1, "bone": len(self.bones), "slot": len(self.slots),
-                  "skin": len(self.skins), "event": len(self.events), "ik": len(self.constraints["ik"]),
-                  "transform": len(self.constraints["transform"]), "path": len(self.constraints["path"]),
-                  "physics": len(self.constraints["physics"]), "physics1": len(self.constraints["physics"]) + 1}
+        limits = {
+            "str": len(self.strings) + 1,
+            "bone": len(self.bones),
+            "slot": len(self.slots),
+            "skin": len(self.skins),
+            "event": len(self.events),
+            "ik": len(self.constraints["ik"]),
+            "transform": len(self.constraints["transform"]),
+            "path": len(self.constraints["path"]),
+            "physics": len(self.constraints["physics"]),
+            "physics1": len(self.constraints["physics"]) + 1,
+        }
         for _start, _end, kind, value in self.refs:
             if not 0 <= value < limits[kind]:
                 raise ValueError(f"skeleton {kind} reference out of range")
 
     # --- writing
 
-    def emit(self, start: int, end: int, remap: Remap | None = None,
-             patches: Mapping[tuple[int, int], bytes] | None = None) -> bytes:
+    def emit(
+        self, start: int, end: int, remap: Remap | None = None, patches: Mapping[tuple[int, int], bytes] | None = None
+    ) -> bytes:
         """Bytes ``start``..``end`` with every reference in them mapped (``remap(kind, value)``) and every span of
         ``patches`` ({(a, b): bytes}, a == b to insert) inside them replaced."""
         marks = [(a, b, None, data) for (a, b), data in (patches or {}).items() if start <= a and b <= end]
@@ -591,6 +600,7 @@ class Skeleton:
 
 # --- draw order
 
+
 def draw_order(offsets: list[tuple[int, int]], count: int) -> list[int]:
     """A draw-order frame as the runtime decodes it: the slot index at each position."""
     order = [-1] * count
@@ -626,18 +636,22 @@ def draw_order_bytes(order: list[int]) -> bytes:
     listed = [(slot, shift) for slot, shift in moved if shift]
     if draw_order(listed, len(order)) != list(order):
         listed = moved
-    return varint_bytes(len(listed)) + b"".join(varint_bytes(slot) + signed_varint_bytes(shift)
-                                                for slot, shift in listed)
+    return varint_bytes(len(listed)) + b"".join(
+        varint_bytes(slot) + signed_varint_bytes(shift) for slot, shift in listed
+    )
 
 
 # --- records
+
 
 def strings_patch(skeleton: Skeleton, added: list[str]) -> dict[tuple[int, int], bytes]:
     """Patches that append ``added`` to the shared strings."""
     if not added:
         return {}
-    return {(skeleton.strings_count_at, skeleton.strings_at): varint_bytes(len(skeleton.strings) + len(added)),
-            (skeleton.strings_end, skeleton.strings_end): b"".join(string_bytes(text) for text in added)}
+    return {
+        (skeleton.strings_count_at, skeleton.strings_at): varint_bytes(len(skeleton.strings) + len(added)),
+        (skeleton.strings_end, skeleton.strings_end): b"".join(string_bytes(text) for text in added),
+    }
 
 
 def events_patch(skeleton: Skeleton, source: Skeleton, names: list[str]) -> dict[tuple[int, int], bytes]:
@@ -647,8 +661,10 @@ def events_patch(skeleton: Skeleton, source: Skeleton, names: list[str]) -> dict
         return {}
     added = b"".join(source.data[slice(*source.event_spans[source.events.index(name)])] for name in names)
     end = skeleton.event_spans[-1][1] if skeleton.event_spans else skeleton.events_at
-    return {(skeleton.events_count_at, skeleton.events_at): varint_bytes(len(skeleton.events) + len(names)),
-            (end, end): added}
+    return {
+        (skeleton.events_count_at, skeleton.events_at): varint_bytes(len(skeleton.events) + len(names)),
+        (end, end): added,
+    }
 
 
 def count_patch(at: int, end: int, count: int) -> dict[tuple[int, int], bytes]:
@@ -659,13 +675,21 @@ def _adapt(source: Skeleton, attachment: dict, raw: bytes, nonessential: bool) -
     if "tail" not in attachment or nonessential == source.nonessential:
         return raw
     if source.nonessential:
-        return raw[:len(raw) - (attachment["end"] - attachment["tail_at"])]
+        return raw[: len(raw) - (attachment["end"] - attachment["tail_at"])]
     return raw + attachment["tail"]
 
 
-def attachment_record(source: Skeleton, attachment: dict, remap: Remap, nonessential: bool, *,
-                      name: int | None = None, path: int | None = None,
-                      region: tuple[float, ...] | None = None, vertices: list[float] | None = None) -> bytes:
+def attachment_record(
+    source: Skeleton,
+    attachment: dict,
+    remap: Remap,
+    nonessential: bool,
+    *,
+    name: int | None = None,
+    path: int | None = None,
+    region: tuple[float, ...] | None = None,
+    vertices: list[float] | None = None,
+) -> bytes:
     """An attachment's record (after its key) for a file that does (``nonessential``) or does not hold nonessential
     data, references mapped by ``remap``. ``name``/``path``: shared-string references written in place of the
     attachment's own (the flags follow). ``region``: a region attachment's seven floats (rotation, x, y, scale x,
@@ -712,9 +736,18 @@ def attachment_record(source: Skeleton, attachment: dict, remap: Remap, nonessen
     return _adapt(source, attachment, raw, nonessential)
 
 
-def mesh_record(source: Skeleton, attachment: dict, remap: Remap, nonessential: bool, vertices: list[float],
-                uvs: list[float], triangles: list[int], hull: int, size: tuple[float, float],
-                path: int | None = None) -> bytes:
+def mesh_record(
+    source: Skeleton,
+    attachment: dict,
+    remap: Remap,
+    nonessential: bool,
+    vertices: list[float],
+    uvs: list[float],
+    triangles: list[int],
+    hull: int,
+    size: tuple[float, float],
+    path: int | None = None,
+) -> bytes:
     """A region attachment as an unweighted mesh record over the same pixels: its name, path, colour and sequence
     kept, ``vertices`` (bone space), ``uvs`` (over the region, v down) and ``triangles`` given, no edges."""
     if attachment["kind"] != REGION:

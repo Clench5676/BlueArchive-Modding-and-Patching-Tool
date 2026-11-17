@@ -78,7 +78,9 @@ def aspect_rule(component: dict, aspect: float = ASPECT_VIEW) -> tuple[float, di
 
 def aspect_targets(component: dict) -> list[int]:
     """The path ids of a UIManualScaleByAspect's scaleTransforms (same-file Transforms)."""
-    return [p["m_PathID"] for p in component.get("scaleTransforms") or [] if p.get("m_PathID") and not p.get("m_FileID")]
+    return [
+        p["m_PathID"] for p in component.get("scaleTransforms") or [] if p.get("m_PathID") and not p.get("m_FileID")
+    ]
 
 
 def prefab_candidates(core: str, skeletons: Iterable[str]) -> list[str]:
@@ -96,8 +98,9 @@ def _short(name: str | None) -> str | None:
     return name.split("-", 1)[1] if name and "-" in name else name
 
 
-def clip_entry(tree: dict, default_mix: float, names: dict[int, str],
-               sound: Callable[[dict], str | None] | None = None) -> dict:
+def clip_entry(
+    tree: dict, default_mix: float, names: dict[int, str], sound: Callable[[dict], str | None] | None = None
+) -> dict:
     """One clip asset: where and how its animation plays, the mixes resolved against the skeleton's default.
 
     As the game's SpineClip assets use them: mode is the PlayMode (0 the base track,
@@ -111,19 +114,31 @@ def clip_entry(tree: dict, default_mix: float, names: dict[int, str],
     mode = tree.get("PlayMode", 1)
     random = None
     if mode in (2, 3) or tree.get("RandomTimingIntroDelayMode"):
-        random = {"min": _r(tree.get("RandomDelayMin", 0)), "max": _r(tree.get("RandomDelayMax", 0)),
-                  "loops": [tree.get("AddRandomLoopMin", 0), tree.get("AddRandomLoopMax", 0)],
-                  "pre": tree.get("RandomTimingIntroDelayMode", 0), "preDelay": _r(tree.get("IntroDelayDuration", 0))}
+        random = {
+            "min": _r(tree.get("RandomDelayMin", 0)),
+            "max": _r(tree.get("RandomDelayMax", 0)),
+            "loops": [tree.get("AddRandomLoopMin", 0), tree.get("AddRandomLoopMax", 0)],
+            "pre": tree.get("RandomTimingIntroDelayMode", 0),
+            "preDelay": _r(tree.get("IntroDelayDuration", 0)),
+        }
     entry = {
-        "track": tree.get("Track", 0), "loop": bool(tree.get("Loop")), "mode": mode, "finish": tree.get("FinishMode", 0),
+        "track": tree.get("Track", 0),
+        "loop": bool(tree.get("Loop")),
+        "mode": mode,
+        "finish": tree.get("FinishMode", 0),
         "intro": _r(default_mix if tree.get("UseDefaultIntroMix") else tree.get("IntroMix", 0), 3),
         "outro": _r(default_mix if tree.get("UseDefaultOutroMix") else tree.get("OutroMix", 0), 3),
         "outroAt": None if tree.get("UseDefaultOutroMix") else _r(tree.get("OutroStartOffset", 0), 3),
         "next": _short(names.get(nxt)) if nxt else None,
-        "sync": [_short(names[p["m_PathID"]]) for p in tree.get("SyncPlayClipObjects", []) if p.get("m_PathID") in names],
-        "block": bool(tree.get("BlockInteractionOnPlay")), "random": random,
+        "sync": [
+            _short(names[p["m_PathID"]]) for p in tree.get("SyncPlayClipObjects", []) if p.get("m_PathID") in names
+        ],
+        "block": bool(tree.get("BlockInteractionOnPlay")),
+        "random": random,
     }
-    keys = [[_r(k.get("Time", 0), 3), sound(k.get("Event") or {})] for k in tree.get("SoundKeys") or []] if sound else []
+    keys = (
+        [[_r(k.get("Time", 0), 3), sound(k.get("Event") or {})] for k in tree.get("SoundKeys") or []] if sound else []
+    )
     if any(event for _, event in keys):
         entry["sounds"] = [k for k in keys if k[1]]
     return entry
@@ -141,21 +156,29 @@ def sound_event(tree: dict, clip_id: Callable[[dict], str | None]) -> dict | Non
     if not clips:
         return None
     pitch = float(data.get("Pitch", 1.0))
-    return {"name": tree.get("m_Name", ""), "volume": _r(data.get("Volume", 1.0), 3),
-            "pitch": _r(pitch, 3) if pitch > 0 else 1.0, "clips": clips}
+    return {
+        "name": tree.get("m_Name", ""),
+        "volume": _r(data.get("Volume", 1.0), 3),
+        "pitch": _r(pitch, 3) if pitch > 0 else 1.0,
+        "clips": clips,
+    }
 
 
 class Clips:
     """The clip assets and skeleton data assets of a lobby core, from its MonoBehaviour typetrees."""
 
-    def __init__(self, behaviours: Iterable[tuple[int, dict]], skeletons: Iterable[str] = (),
-                 sound: Callable[[int, dict], str | None] | None = None):
+    def __init__(
+        self,
+        behaviours: Iterable[tuple[int, dict]],
+        skeletons: Iterable[str] = (),
+        sound: Callable[[int, dict], str | None] | None = None,
+    ):
         # sound(clip asset path id, event pointer) gives a sound key event's id (clip_entry)
         named = {s.lower(): s for s in skeletons}
         raw, names = [], {}
-        self.mixes: dict[str, float] = {}      # skeleton -> SkeletonDataAsset.defaultMix
-        self.scales: dict[str, float] = {}     # skeleton -> SkeletonDataAsset.scale (Unity units per skeleton unit)
-        self.data: dict[int, str] = {}         # SkeletonDataAsset path id -> skeleton
+        self.mixes: dict[str, float] = {}  # skeleton -> SkeletonDataAsset.defaultMix
+        self.scales: dict[str, float] = {}  # skeleton -> SkeletonDataAsset.scale (Unity units per skeleton unit)
+        self.data: dict[int, str] = {}  # SkeletonDataAsset path id -> skeleton
         self.by_pid: dict[int, tuple[str, str]] = {}  # clip asset path id -> (skeleton, animation)
         for pid, tree in behaviours:
             name = tree.get("m_Name", "")
@@ -180,8 +203,9 @@ class Clips:
 
     def sound_events(self) -> list[str]:
         """The ids of the events the clips' sound keys play, sorted."""
-        return sorted({event for anims in self.clips.values() for c in anims.values()
-                       for _, event in c.get("sounds", [])})
+        return sorted(
+            {event for anims in self.clips.values() for c in anims.values() for _, event in c.get("sounds", [])}
+        )
 
     def anim(self, pointer: dict | None) -> str | None:
         """The animation a clip pointer plays (pointers into the core bundles match by path id)."""
@@ -198,8 +222,14 @@ def _local(t: dict) -> tuple[float, ...]:
 
 def _mul(m: tuple[float, ...], l: tuple[float, ...]) -> tuple[float, ...]:
     a, b, c, d, tx, ty = m
-    return (a * l[0] + c * l[1], b * l[0] + d * l[1], a * l[2] + c * l[3], b * l[2] + d * l[3],
-            a * l[4] + c * l[5] + tx, b * l[4] + d * l[5] + ty)
+    return (
+        a * l[0] + c * l[1],
+        b * l[0] + d * l[1],
+        a * l[2] + c * l[3],
+        b * l[2] + d * l[3],
+        a * l[4] + c * l[5] + tx,
+        b * l[4] + d * l[5] + ty,
+    )
 
 
 def _box(m: tuple[float, ...], box: dict) -> tuple[list[float], float]:
@@ -221,8 +251,14 @@ def _kind(go: str, bone: str | None) -> str:
     return re.sub(r"ik$", "", go.lower()) or "drag"  # PinchIK -> pinch, HandFollowIK -> handfollow, TouchIK -> touch
 
 
-def _pages(resolve: Callable[[str, int, dict], tuple[str, Any] | None] | None, sa_pid: int, sa: dict,
-           renderer_pid: int, renderer: dict, kind: str = "pages") -> dict[str, Any]:
+def _pages(
+    resolve: Callable[[str, int, dict], tuple[str, Any] | None] | None,
+    sa_pid: int,
+    sa: dict,
+    renderer_pid: int,
+    renderer: dict,
+    kind: str = "pages",
+) -> dict[str, Any]:
     """The render queue of each atlas page of a skeleton, {texture name: queue}. spine-unity gives each submesh the
     material of its page, and Unity sorts every submesh by its own material's queue: a skeleton whose pages sit in
     several queues (the background page at 2900, the character's at 3050) is drawn in as many steps, in queue order,
@@ -253,11 +289,20 @@ VOLUME_DEFAULTS: dict[str, dict[str, Any]] = {
     "ChromaticAberration": {"intensity": 0.0},
     "LiftGammaGain": {"lift": [1.0, 1.0, 1.0, 0.0], "gamma": [1.0, 1.0, 1.0, 0.0], "gain": [1.0, 1.0, 1.0, 0.0]},
     "PaniniProjection": {"distance": 0.0, "cropToFit": 1.0},
-    "ColorAdjustments": {"postExposure": 0.0, "contrast": 0.0, "colorFilter": [1.0, 1.0, 1.0, 1.0], "hueShift": 0.0,
-                         "saturation": 0.0},
+    "ColorAdjustments": {
+        "postExposure": 0.0,
+        "contrast": 0.0,
+        "colorFilter": [1.0, 1.0, 1.0, 1.0],
+        "hueShift": 0.0,
+        "saturation": 0.0,
+    },
 }
-_POST_KEYS = {"ChromaticAberration": "chromaticAberration", "LiftGammaGain": "liftGammaGain",
-              "PaniniProjection": "panini", "ColorAdjustments": "colorAdjustments"}
+_POST_KEYS = {
+    "ChromaticAberration": "chromaticAberration",
+    "LiftGammaGain": "liftGammaGain",
+    "PaniniProjection": "panini",
+    "ColorAdjustments": "colorAdjustments",
+}
 # The lobby is drawn by the PC client's main Camera (level1 Persistent/Camera, whose culling mask has the lobby's layer
 # 12), and URP blends only the volumes on the layers of that camera's volume mask (UniversalAdditionalCameraData
 # m_VolumeLayerMask 0x40020000). Every lobby keeps its volumes on 30, but for three (Yoshimi, Shimiko and CH0356;
@@ -296,8 +341,10 @@ def post_processing(volumes: Iterable[dict]) -> dict:
     {distance, cropToFit}, "liftGammaGain": {lift, gamma, gain}, "colorAdjustments": {postExposure, contrast,
     colorFilter, hueShift, saturation}}. volumes: {"weight", "priority", "global", "active", "layer" (optional),
     "components"} (the profile's component typetrees)."""
-    stack = {kind: {k: list(v) if isinstance(v, list) else v for k, v in params.items()}
-             for kind, params in VOLUME_DEFAULTS.items()}
+    stack = {
+        kind: {k: list(v) if isinstance(v, list) else v for k, v in params.items()}
+        for kind, params in VOLUME_DEFAULTS.items()
+    }
     ordered = sorted(enumerate(volumes), key=lambda iv: (iv[1].get("priority", 0.0), iv[0]))
     for _, vol in ordered:
         if not counts(vol):
@@ -314,10 +361,14 @@ def post_processing(volumes: Iterable[dict]) -> dict:
 
     def rounded(v: Any) -> Any:
         return [_r(x, 5) for x in v] if isinstance(v, list) else _r(v, 5)
+
     post: dict[str, Any] = {}
     for kind, params in stack.items():
-        if params == VOLUME_DEFAULTS[kind] or (kind == "PaniniProjection" and params["distance"] <= 0) or (
-                kind == "ChromaticAberration" and params["intensity"] <= 0):
+        if (
+            params == VOLUME_DEFAULTS[kind]
+            or (kind == "PaniniProjection" and params["distance"] <= 0)
+            or (kind == "ChromaticAberration" and params["intensity"] <= 0)
+        ):
             continue
         values = {k: rounded(v) for k, v in params.items()}
         if kind == "ColorAdjustments":
@@ -326,10 +377,16 @@ def post_processing(volumes: Iterable[dict]) -> dict:
     return post
 
 
-def read_prefab(kinds: dict[int, str], tree: Callable[[int], dict], scripts: dict[int, str], root: str,
-                skeletons: Iterable[str], clips: Clips,
-                profile: Callable[[int, dict], list[dict] | None] | None = None,
-                resolve: Callable[[str, int, dict], tuple[str, Any] | None] | None = None) -> dict | None:
+def read_prefab(
+    kinds: dict[int, str],
+    tree: Callable[[int], dict],
+    scripts: dict[int, str],
+    root: str,
+    skeletons: Iterable[str],
+    clips: Clips,
+    profile: Callable[[int, dict], list[dict] | None] | None = None,
+    resolve: Callable[[str, int, dict], tuple[str, Any] | None] | None = None,
+) -> dict | None:
     """The lobby's layout, touch boxes, post-processing, particle and mesh effects, the materials its skeletons are
     drawn with and the bones it pins, from one prefab bundle: kinds maps path ids to object types, tree reads a
     typetree, scripts maps MonoScript path ids to class names, profile(volume path id, sharedProfile pointer) gives a
@@ -338,8 +395,16 @@ def read_prefab(kinds: dict[int, str], tree: Callable[[int], dict], scripts: dic
     data) (particles.build, meshfx.build, spine_materials.layer). None when the root is missing or places none of the
     skeletons."""
     wanted = {s.lower(): s for s in skeletons}
-    top = next((pid for pid, kind in kinds.items() if kind in _TRANSFORMS and not tree(pid)["m_Father"]["m_PathID"]
-                and tree(tree(pid)["m_GameObject"]["m_PathID"])["m_Name"].lower() == root.lower()), None)
+    top = next(
+        (
+            pid
+            for pid, kind in kinds.items()
+            if kind in _TRANSFORMS
+            and not tree(pid)["m_Father"]["m_PathID"]
+            and tree(tree(pid)["m_GameObject"]["m_PathID"])["m_Name"].lower() == root.lower()
+        ),
+        None,
+    )
     if top is None:
         return None
 
@@ -351,8 +416,16 @@ def read_prefab(kinds: dict[int, str], tree: Callable[[int], dict], scripts: dic
             if kind == "MonoBehaviour":
                 t = tree(pid)
                 out.append((scripts.get(t.get("m_Script", {}).get("m_PathID"), "?"), pid, t))
-            elif kind in ("BoxCollider", "MeshRenderer", "MeshFilter", "Animator", "ParticleSystem",
-                          "ParticleSystemRenderer", "PlayableDirector", "SpriteRenderer"):
+            elif kind in (
+                "BoxCollider",
+                "MeshRenderer",
+                "MeshFilter",
+                "Animator",
+                "ParticleSystem",
+                "ParticleSystemRenderer",
+                "PlayableDirector",
+                "SpriteRenderer",
+            ):
                 out.append((kind, pid, tree(pid)))
         return out
 
@@ -373,8 +446,11 @@ def read_prefab(kinds: dict[int, str], tree: Callable[[int], dict], scripts: dic
         t = tree(tf)
         if tf in scaled or tf in moved:
             factor, pos = scaled.get(tf, 1.0), t["m_LocalPosition"]
-            t = {**t, "m_LocalScale": {k: v * factor for k, v in t["m_LocalScale"].items()},
-                 "m_LocalPosition": {**pos, **{k: pos.get(k, 0.0) + a for k, a in zip("xyz", moved.get(tf, (0, 0, 0)))}}}
+            t = {
+                **t,
+                "m_LocalScale": {k: v * factor for k, v in t["m_LocalScale"].items()},
+                "m_LocalPosition": {**pos, **{k: pos.get(k, 0.0) + a for k, a in zip("xyz", moved.get(tf, (0, 0, 0)))}},
+            }
         go = t["m_GameObject"]["m_PathID"]
         m = _mul(m, _local(t))
         local3 = particles.trs(t)
@@ -384,10 +460,23 @@ def read_prefab(kinds: dict[int, str], tree: Callable[[int], dict], scripts: dic
         comps = components(go)
         name = tree(go)["m_Name"]
         path = f"{path}/{name}" if path else name
-        nodes.append({"go": go, "name": name, "m": m, "active": active, "own": own, "all": comps,
-                      "first": {cls: c for cls, _, c in reversed(comps)},
-                      "pids": {cls: pid for cls, pid, _ in reversed(comps)},
-                      "parent": parent, "path": path, "t": t, "local3": local3, "m3": m3})
+        nodes.append(
+            {
+                "go": go,
+                "name": name,
+                "m": m,
+                "active": active,
+                "own": own,
+                "all": comps,
+                "first": {cls: c for cls, _, c in reversed(comps)},
+                "pids": {cls: pid for cls, pid, _ in reversed(comps)},
+                "parent": parent,
+                "path": path,
+                "t": t,
+                "local3": local3,
+                "m3": m3,
+            }
+        )
         for child in t.get("m_Children", []):
             if child["m_PathID"] in kinds:
                 walk(child["m_PathID"], m, m3, active, go, path)
@@ -411,17 +500,26 @@ def read_prefab(kinds: dict[int, str], tree: Callable[[int], dict], scripts: dic
             renderer = n["first"].get("MeshRenderer", {})
             pages = _pages(resolve, pid, sa, n["pids"].get("MeshRenderer", 0), renderer)
             shaders = _pages(resolve, pid, sa, n["pids"].get("MeshRenderer", 0), renderer, "shaders")
-            layers.append({
-                "name": name, "x": _r(n["m"][4]), "y": _r(n["m"][5]),
-                # NGUI units per skeleton unit: the GameObject's world scale times SkeletonDataAsset.scale
-                "scale": _r(math.hypot(n["m"][0], n["m"][1]) * clips.scales.get(name, _DATA_SCALE), 5),
-                "active": n["active"] and bool(sa.get("m_Enabled", 1)) and bool(renderer.get("m_Enabled", True)),
-                "sortingLayer": renderer.get("m_SortingLayer", 0), "order": renderer.get("m_SortingOrder", 0),
-                "queue": min(pages.values(), default=3000), "pages": pages,
-                "shaders": shaders, "z": particles.rounded(n["m3"])[11], "index": len(layers),
-                "skin": sa.get("initialSkinName") or None, "animation": sa.get("_animationName") or None,
-                **spine_materials.layer(resolve, pid, sa),
-            })
+            layers.append(
+                {
+                    "name": name,
+                    "x": _r(n["m"][4]),
+                    "y": _r(n["m"][5]),
+                    # NGUI units per skeleton unit: the GameObject's world scale times SkeletonDataAsset.scale
+                    "scale": _r(math.hypot(n["m"][0], n["m"][1]) * clips.scales.get(name, _DATA_SCALE), 5),
+                    "active": n["active"] and bool(sa.get("m_Enabled", 1)) and bool(renderer.get("m_Enabled", True)),
+                    "sortingLayer": renderer.get("m_SortingLayer", 0),
+                    "order": renderer.get("m_SortingOrder", 0),
+                    "queue": min(pages.values(), default=3000),
+                    "pages": pages,
+                    "shaders": shaders,
+                    "z": particles.rounded(n["m3"])[11],
+                    "index": len(layers),
+                    "skin": sa.get("initialSkinName") or None,
+                    "animation": sa.get("_animationName") or None,
+                    **spine_materials.layer(resolve, pid, sa),
+                }
+            )
     if not layers:
         return None
 
@@ -446,24 +544,36 @@ def read_prefab(kinds: dict[int, str], tree: Callable[[int], dict], scripts: dic
         box = n["first"]["BoxCollider"]
         widget = n["first"].get("UIWidget") or n["first"].get("UISprite") or {}
         rect, rot = _box(n["m"], box)
-        return {"rect": rect, "rot": rot, "depth": widget.get("mDepth", 0),
-                "enabled": n["active"] and bool(t.get("m_Enabled", 1)) and bool(box.get("m_Enabled", True))}
+        return {
+            "rect": rect,
+            "rot": rot,
+            "depth": widget.get("mDepth", 0),
+            "enabled": n["active"] and bool(t.get("m_Enabled", 1)) and bool(box.get("m_Enabled", True)),
+        }
 
     drags, touches, random_idle, idle, idles, dialog, container, volumes = [], [], {}, {}, {}, {}, None, []
     for n in nodes:
         for cls, pid, t in n["all"]:
             if is_volume(t):
-                vol = {"weight": float(t.get("weight", 0.0)), "priority": float(t.get("priority", 0.0)),
-                       "global": bool(t.get("m_IsGlobal")), "active": n["active"] and bool(t.get("m_Enabled", 1)),
-                       "layer": int(tree(n["go"]).get("m_Layer", 0))}
+                vol = {
+                    "weight": float(t.get("weight", 0.0)),
+                    "priority": float(t.get("priority", 0.0)),
+                    "global": bool(t.get("m_IsGlobal")),
+                    "active": n["active"] and bool(t.get("m_Enabled", 1)),
+                    "layer": int(tree(n["go"]).get("m_Layer", 0)),
+                }
                 # only the volumes that take part are followed into their profile (often in another bundle), and those
                 # the intro turns up or on (the flash, the depth of field)
                 if profile is not None and (counts(vol) or (plan is not None and plan.touches(n, pid))):
                     vol["components"] = profile(pid, t["sharedProfile"]) or []
                 volumes.append(vol)
                 # for the intro (intro.build): the volume's own switch and node
-                vol.update(_pid=pid, _node=n, enabled=bool(t.get("m_Enabled", 1)),
-                           layer_ok=vol["layer"] in CAMERA_VOLUME_LAYERS)
+                vol.update(
+                    _pid=pid,
+                    _node=n,
+                    enabled=bool(t.get("m_Enabled", 1)),
+                    layer_ok=vol["layer"] in CAMERA_VOLUME_LAYERS,
+                )
             elif cls == "SpineDragIK" and "BoxCollider" in n["first"]:
                 skel = skeleton_of(t.get("SpineController"))
                 if skel is None:
@@ -472,14 +582,26 @@ def read_prefab(kinds: dict[int, str], tree: Callable[[int], dict], scripts: dic
 
                 def v(key: str) -> list[float]:
                     return [_r(t.get(key, {}).get("x", 0) * per), _r(t.get(key, {}).get("y", 0) * per)]
+
                 bone = bone_of(t.get("Bone"))
-                drags.append({
-                    "kind": _kind(n["name"], bone), "name": n["name"], "skeleton": skel, "bone": bone, **box_of(n, t),
-                    "orig": v("OrigLocalPos"), "min": v("MinLocalPos"), "max": v("MaxLocalPos"),
-                    "offset": v("BoneCenterOffset"), "drag": _r(t.get("FollowDragSpeed01", 0.2), 3),
-                    "release": _r(t.get("FollowReleaseSpeed01", 0.1), 3), "delay": _r(t.get("TriggerDelay", 0.1), 3),
-                    "ing": clips.anim(t.get("IngClip")), "end": clips.anim(t.get("EndClip")),
-                })
+                drags.append(
+                    {
+                        "kind": _kind(n["name"], bone),
+                        "name": n["name"],
+                        "skeleton": skel,
+                        "bone": bone,
+                        **box_of(n, t),
+                        "orig": v("OrigLocalPos"),
+                        "min": v("MinLocalPos"),
+                        "max": v("MaxLocalPos"),
+                        "offset": v("BoneCenterOffset"),
+                        "drag": _r(t.get("FollowDragSpeed01", 0.2), 3),
+                        "release": _r(t.get("FollowReleaseSpeed01", 0.1), 3),
+                        "delay": _r(t.get("TriggerDelay", 0.1), 3),
+                        "ing": clips.anim(t.get("IngClip")),
+                        "end": clips.anim(t.get("EndClip")),
+                    }
+                )
             elif cls == "SpineCharacterBodyTouch" and "BoxCollider" in n["first"]:
                 skel = skeleton_of(t.get("SpineCharacter"))
                 if skel is not None:
@@ -504,8 +626,12 @@ def read_prefab(kinds: dict[int, str], tree: Callable[[int], dict], scripts: dic
             elif cls == "UILobbyContainer":
                 container = skeleton_of(t.get("SpineCharacter"))
     # the character: whose head is patted, else whose body is touched, else the container's
-    main = next((d["skeleton"] for d in drags if d["kind"] == "pat"), None) or next(
-        (d["skeleton"] for d in drags), None) or next((t["skeleton"] for t in touches), None) or container
+    main = (
+        next((d["skeleton"] for d in drags if d["kind"] == "pat"), None)
+        or next((d["skeleton"] for d in drags), None)
+        or next((t["skeleton"] for t in touches), None)
+        or container
+    )
     sa_go = {n["go"]: skeleton_of_sa.get(n["pids"].get("SkeletonAnimation", 0)) for n in nodes}
     scale_of = lambda skel: clips.scales.get(skel, _DATA_SCALE)  # noqa: E731
     fx = particles.build(nodes, lambda go: sa_go.get(go), scale_of, resolve, gates=plan.gates if plan else ())
@@ -516,12 +642,23 @@ def read_prefab(kinds: dict[int, str], tree: Callable[[int], dict], scripts: dic
     if meshes["renderers"]:
         fx.update(renderers=meshes["renderers"], clips=meshes["clips"])
     fx["textures"].update(spine_materials.textures(layers))  # the page shaders' own textures
-    out = {"prefab": tree(tree(top)["m_GameObject"]["m_PathID"])["m_Name"], "main": main, "layers": layers,
-           "drags": drags, "touches": touches, "randomIdle": random_idle, "idle": idle, "idles": idles,
-           "dialog": dialog, "post": post_processing(volumes), "fx": fx,
-           # the Override bones no enabled drag moves stay where the prefab put them (pins.py)
-           "pins": pins.pins(nodes, lambda go: sa_go.get(go), scale_of,
-                             [(d["skeleton"], d["bone"]) for d in drags if d["enabled"]])}
+    out = {
+        "prefab": tree(tree(top)["m_GameObject"]["m_PathID"])["m_Name"],
+        "main": main,
+        "layers": layers,
+        "drags": drags,
+        "touches": touches,
+        "randomIdle": random_idle,
+        "idle": idle,
+        "idles": idles,
+        "dialog": dialog,
+        "post": post_processing(volumes),
+        "fx": fx,
+        # the Override bones no enabled drag moves stay where the prefab put them (pins.py)
+        "pins": pins.pins(
+            nodes, lambda go: sa_go.get(go), scale_of, [(d["skeleton"], d["bone"]) for d in drags if d["enabled"]]
+        ),
+    }
     # the intro's flash and fade sprites are effects too; then the intro itself (intro.py)
     sprites = []
     for n in nodes:
@@ -533,8 +670,15 @@ def read_prefab(kinds: dict[int, str], tree: Callable[[int], dict], scripts: dic
                     fx["materials"].update(found[1])
                     fx["textures"].update(found[2])
     if plan is not None:
-        out["intro"] = intro.build(plan, layers=layers, layer_nodes=layer_nodes, skeleton_of_sa=skeleton_of_sa,
-                                   volumes=volumes, fx=fx, sprites=sprites)
+        out["intro"] = intro.build(
+            plan,
+            layers=layers,
+            layer_nodes=layer_nodes,
+            skeleton_of_sa=skeleton_of_sa,
+            volumes=volumes,
+            fx=fx,
+            sprites=sprites,
+        )
     for s in sprites:
         for key in ("_node", "_renderer", "_anchor_go"):
             s.pop(key, None)
@@ -545,8 +689,9 @@ def read_prefab(kinds: dict[int, str], tree: Callable[[int], dict], scripts: dic
     return out
 
 
-def _intro_plan(nodes: list[dict], kinds: dict[int, str],
-                resolve: Callable[[str, int, dict], tuple[str, Any] | None] | None) -> intro.Plan | None:
+def _intro_plan(
+    nodes: list[dict], kinds: dict[int, str], resolve: Callable[[str, int, dict], tuple[str, Any] | None] | None
+) -> intro.Plan | None:
     """The intro of a lobby prefab: its PlayableDirector's timeline (resolve "timeline") placed in the walk."""
     director = next(((pid, t) for n in nodes for cls, pid, t in n["all"] if cls == "PlayableDirector"), None)
     if director is None or resolve is None or not (director[1].get("m_PlayableAsset") or {}).get("m_PathID"):
@@ -560,13 +705,42 @@ def lobby_info(skeletons: Iterable[str], clips: Clips, prefab: dict | None, soun
     sits at the standard place; the front end then finds the touch boxes from the bones. sounds: the sound key
     events by id (sound_event)."""
     if prefab is None:
-        prefab = {"prefab": None, "main": None, "drags": [], "touches": [], "randomIdle": {}, "idle": {}, "idles": {},
-                  "dialog": {}, "post": {}, "pins": [],
-                  "layers": [{"name": s, **STANDARD, "active": True, "sortingLayer": 0, "order": 0, "queue": 3000,
-                              "pages": {}, "shaders": {}, "z": 0.0, "index": i, "skin": None, "animation": None}
-                             for i, s in enumerate(dict.fromkeys(skeletons))],
-                  "fx": {"systems": [], "materials": {}, "textures": {}, "meshes": {}, "toggles": []}}
+        prefab = {
+            "prefab": None,
+            "main": None,
+            "drags": [],
+            "touches": [],
+            "randomIdle": {},
+            "idle": {},
+            "idles": {},
+            "dialog": {},
+            "post": {},
+            "pins": [],
+            "layers": [
+                {
+                    "name": s,
+                    **STANDARD,
+                    "active": True,
+                    "sortingLayer": 0,
+                    "order": 0,
+                    "queue": 3000,
+                    "pages": {},
+                    "shaders": {},
+                    "z": 0.0,
+                    "index": i,
+                    "skin": None,
+                    "animation": None,
+                }
+                for i, s in enumerate(dict.fromkeys(skeletons))
+            ],
+            "fx": {"systems": [], "materials": {}, "textures": {}, "meshes": {}, "toggles": []},
+        }
     # the intro's sounds are sound events like the clips' (served the same way)
     events = (prefab.get("intro") or {}).pop("events", {})
-    return {"view": dict(GAME_VIEW), **prefab, "defaultMix": dict(clips.mixes), "clips": clips.clips,
-            "sounds": {**(sounds or {}), **events}}
+    return {
+        "view": dict(GAME_VIEW),
+        **prefab,
+        "defaultMix": dict(clips.mixes),
+        "clips": clips.clips,
+        "sounds": {**(sounds or {}), **events},
+    }

@@ -40,11 +40,7 @@ class TestCollectExternals:
     def test_lists_all_externals(self, ress_regress_case: "RessRegressCase") -> None:
         """Normalize external paths to file names across all SerializedFiles."""
         bundle = _load(ress_regress_case.original_path)
-        expected = [
-            ext.path.replace("\\", "/").rsplit("/", 1)[-1]
-            for sf in bundle.env.assets
-            for ext in sf.externals
-        ]
+        expected = [ext.path.replace("\\", "/").rsplit("/", 1)[-1] for sf in bundle.env.assets for ext in sf.externals]
         if not expected:
             pytest.skip("Bundle has no external references")
         result = _collect_externals(bundle)
@@ -81,8 +77,7 @@ class TestGraphResolution:
                 tree = graph.tree(obj)
             except Exception:
                 continue
-            refs.extend((obj, ptr) for ptr in iter_pptrs(tree)
-                        if ptr.get("m_PathID") and ptr["m_FileID"] != 0)
+            refs.extend((obj, ptr) for ptr in iter_pptrs(tree) if ptr.get("m_PathID") and ptr["m_FileID"] != 0)
         absent = [(obj, ptr) for obj, ptr in refs if reference(obj, ptr)[0].lower() not in self_cabs]
         if not absent:
             pytest.skip("Bundle has no non-null references to absent SerializedFiles")
@@ -93,15 +88,19 @@ class TestGraphResolution:
 
     def test_local_and_file_id_two_references_are_distinct(self, tmp_path, monkeypatch):
         """A deterministic fixture reproduces a dependency bundle with m_FileID=2."""
-        local = SimpleNamespace(name="CAB-local", externals=[
-            SimpleNamespace(path="archive:/CAB-first"), SimpleNamespace(path="archive:/CAB-second")])
+        local = SimpleNamespace(
+            name="CAB-local",
+            externals=[SimpleNamespace(path="archive:/CAB-first"), SimpleNamespace(path="archive:/CAB-second")],
+        )
         local_ptr = {"m_FileID": 0, "m_PathID": 2}
         external_ptr = {"m_FileID": 2, "m_PathID": 2}
-        source = SimpleNamespace(assets_file=local, path_id=1,
-                                 read_typetree=lambda: {"local": local_ptr, "external": external_ptr})
+        source = SimpleNamespace(
+            assets_file=local, path_id=1, read_typetree=lambda: {"local": local_ptr, "external": external_ptr}
+        )
         target = SimpleNamespace(assets_file=local, path_id=2)
-        bundle = SimpleNamespace(path=tmp_path / "dependency.bundle",
-                                 env=SimpleNamespace(assets=[local], objects=[source, target]))
+        bundle = SimpleNamespace(
+            path=tmp_path / "dependency.bundle", env=SimpleNamespace(assets=[local], objects=[source, target])
+        )
         monkeypatch.setattr(Bundle, "load", lambda path, log: bundle)
         graph = _make_graph([bundle], [], no_log, None)
         assert list(iter_pptrs(graph.tree(source))) == [local_ptr, external_ptr]
@@ -116,8 +115,9 @@ class TestGraphResolution:
         second = SimpleNamespace(name="CAB-second", externals=[])
         source = SimpleNamespace(assets_file=local, path_id=1)
         target = SimpleNamespace(assets_file=second, path_id=2)
-        bundle = SimpleNamespace(path=tmp_path / "multi.bundle",
-                                 env=SimpleNamespace(assets=[local, second], objects=[source, target]))
+        bundle = SimpleNamespace(
+            path=tmp_path / "multi.bundle", env=SimpleNamespace(assets=[local, second], objects=[source, target])
+        )
         monkeypatch.setattr(Bundle, "load", lambda path, log: bundle)
         graph = _make_graph([bundle], [], no_log, None)
         assert graph.deref(source, {"m_FileID": 1, "m_PathID": 2}) is target

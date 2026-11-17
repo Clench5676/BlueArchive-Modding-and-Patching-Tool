@@ -25,8 +25,15 @@ import toml
 
 from bmpt import devmode
 from bmpt.engine import (
-    EXE_DIR, AnimCheckOptions, CharacterInternalIDMap, SaveOptions, SkelConvertOptions, get_BA_path, get_spine_backend,
-    parse_hex_bytes, utils,
+    EXE_DIR,
+    AnimCheckOptions,
+    CharacterInternalIDMap,
+    SaveOptions,
+    SkelConvertOptions,
+    get_BA_path,
+    get_spine_backend,
+    parse_hex_bytes,
+    utils,
 )
 from .data_paths import APP_DIR_NAME, OLD_APP_DIR_NAME, default_cache_dir, migrate_cache_dir
 from .logging_utils import log_failure
@@ -72,7 +79,9 @@ FIELDS: dict[str, Field] = {
     "file_source": Field("Directories", _default_file_source, str),
     "game_resource_dir": Field("Directories", lambda: get_BA_path("global") or "", str),
     "game_resource_dir_japan": Field("Directories", lambda: get_BA_path("japan") or "", str),
-    "game_dir_android_global": Field("Directories", "/storage/emulated/0/Android/data/com.nexon.bluearchive/files/PUB/Resource/"),
+    "game_dir_android_global": Field(
+        "Directories", "/storage/emulated/0/Android/data/com.nexon.bluearchive/files/PUB/Resource/"
+    ),
     "game_dir_android_japan": Field("Directories", "/storage/emulated/0/Android/data/com.Yostar JP.BlueArchive/files/"),
     "mod_backup_path": Field("Directories", lambda: str(EXE_DIR / "output" / "backup"), str),
     # AppSettings
@@ -153,16 +162,25 @@ def migrate_game_directories(directories: dict, detect: Callable[[str], str | No
     if not isinstance(directories, dict):
         return directories
     legacy = directories.get("game_resource_dir")
-    if not isinstance(legacy, str) or not legacy or "\0" in legacy or directories.get("game_resource_dir_japan") \
-            or not devmode.allows_read(legacy):
+    if (
+        not isinstance(legacy, str)
+        or not legacy
+        or "\0" in legacy
+        or directories.get("game_resource_dir_japan")
+        or not devmode.allows_read(legacy)
+    ):
         return directories
     from .library.judge import install_root
 
     try:
         root = install_root(Path(legacy).expanduser())
-        matches = {region for region in ("global", "japan")
-                   if (folder := detect(region)) and devmode.allows_read(folder)
-                   and install_root(Path(folder).expanduser()) == root}
+        matches = {
+            region
+            for region in ("global", "japan")
+            if (folder := detect(region))
+            and devmode.allows_read(folder)
+            and install_root(Path(folder).expanduser()) == root
+        }
     except (OSError, RuntimeError, ValueError):
         return directories
     if matches != {"japan"}:
@@ -213,8 +231,14 @@ class Settings:
             data, error = self._read_file(reload=self._applied)
             if data is None:
                 if signature != self._failed:  # once per state of the file, not at every poll
-                    log_failure(logger, logging.WARNING, "Cannot read config.toml, keeping the settings in use"
-                                if self._applied else "Cannot read config.toml, using defaults", error)
+                    log_failure(
+                        logger,
+                        logging.WARNING,
+                        "Cannot read config.toml, keeping the settings in use"
+                        if self._applied
+                        else "Cannot read config.toml, using defaults",
+                        error,
+                    )
                 self._failed = signature
                 if self._applied:
                     return False
@@ -236,10 +260,18 @@ class Settings:
             data["Directories"] = migrate_game_directories(data.get("Directories", {}), detect)
             for key, f in FIELDS.items():
                 group = data.get(f.group, {})
-                if key in group and isinstance(group[key], (str, int, float, bool)):  # else (a date, a list) it reads as missing
+                if key in group and isinstance(
+                    group[key], (str, int, float, bool)
+                ):  # else (a date, a list) it reads as missing
                     values[key] = _coerce(key, group[key])
                 elif key == "file_source":
-                    values[key] = "windows_global" if detect("global") else "windows_japan" if detect("japan") else "windows_global"
+                    values[key] = (
+                        "windows_global"
+                        if detect("global")
+                        else "windows_japan"
+                        if detect("japan")
+                        else "windows_global"
+                    )
                 elif key in ("game_resource_dir", "game_resource_dir_japan"):
                     values[key] = detect("japan" if key.endswith("japan") else "global")
                 else:
@@ -356,13 +388,20 @@ class Settings:
     def asset_types(self) -> set[str]:
         if self.get("replace_all"):
             return {"ALL"}
-        names = {"replace_texture2d": "Texture2D", "replace_textasset": "TextAsset",
-                 "replace_mesh": "Mesh", "replace_animationclip": "AnimationClip"}
+        names = {
+            "replace_texture2d": "Texture2D",
+            "replace_textasset": "TextAsset",
+            "replace_mesh": "Mesh",
+            "replace_animationclip": "AnimationClip",
+        }
         return {v for k, v in names.items() if self.get(k)}
 
     def save_options(self, perform_crc: bool) -> SaveOptions:
-        return SaveOptions(perform_crc=perform_crc, extra_bytes=parse_hex_bytes(self.get("extra_bytes")),
-                           compression=self.get("compression_method"))
+        return SaveOptions(
+            perform_crc=perform_crc,
+            extra_bytes=parse_hex_bytes(self.get("extra_bytes")),
+            compression=self.get("compression_method"),
+        )
 
     def crc_needed(self, target: Path | None = None) -> bool:
         """Whether files written for the selected install get the CRC fix.
@@ -379,12 +418,16 @@ class Settings:
 
     def spine_options(self, upgrade: bool = True) -> SkelConvertOptions:
         if upgrade:
-            return SkelConvertOptions(enabled=self.get("enable_spine_conversion"),
-                                      converter_path=Path(self.get("spine_converter_path")),
-                                      target_version=self.get("target_spine_version"))
-        return SkelConvertOptions(enabled=self.get("enable_spine_downgrade"),
-                                  converter_path=Path(self.get("spine_converter_path")),
-                                  target_version=str(self.get("spine_downgrade_version")).strip())
+            return SkelConvertOptions(
+                enabled=self.get("enable_spine_conversion"),
+                converter_path=Path(self.get("spine_converter_path")),
+                target_version=self.get("target_spine_version"),
+            )
+        return SkelConvertOptions(
+            enabled=self.get("enable_spine_downgrade"),
+            converter_path=Path(self.get("spine_converter_path")),
+            target_version=str(self.get("spine_downgrade_version")).strip(),
+        )
 
     def anim_check_options(self) -> AnimCheckOptions:
         path = self._viewer_path()

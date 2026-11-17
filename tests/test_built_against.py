@@ -26,6 +26,7 @@ GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-
 
 # --- skeleton names ---
 
+
 def varint(value: int) -> bytes:
     out = bytearray()
     while True:
@@ -62,8 +63,18 @@ def binary_skeleton(animations: list[bytes], version: str = "4.2.33", first: int
     # default skin: one slot with one region attachment (no flags, six floats)
     skin = varint(1) + varint(0) + varint(1) + varint(1) + b"\x00" + floats(*[0] * 6)
     events = varint(1) + text("sound") + varint(0) + floats(0) + text(None) + text("clip.ogg") + floats(1, 0)
-    return (head + strings + bones + slots + constraints + skin + varint(0) + events
-            + varint(len(animations)) + b"".join(animations))
+    return (
+        head
+        + strings
+        + bones
+        + slots
+        + constraints
+        + skin
+        + varint(0)
+        + events
+        + varint(len(animations))
+        + b"".join(animations)
+    )
 
 
 def rotate_timeline() -> bytes:
@@ -78,8 +89,13 @@ def event_timeline() -> bytes:
 
 
 def test_binary_skeleton_names_are_read_to_the_last_byte():
-    data = binary_skeleton([animation("Idle_01", bones=rotate_timeline()),
-                            animation("00", events=event_timeline()), animation("Eye_Close_01")])
+    data = binary_skeleton(
+        [
+            animation("Idle_01", bones=rotate_timeline()),
+            animation("00", events=event_timeline()),
+            animation("Eye_Close_01"),
+        ]
+    )
     names = spine_names.read(data)
     assert names.version == "4.2.33"
     assert names.bones == [("root", ""), ("arm", "root")]
@@ -96,17 +112,26 @@ def test_a_binary_skeleton_whose_hash_starts_like_json_is_read_as_binary():
 @pytest.mark.parametrize("damage", ["cut", "longer", "version", "noise"])
 def test_a_skeleton_that_does_not_fit_the_layout_is_refused(damage):
     data = binary_skeleton([animation("Idle_01", bones=rotate_timeline())])
-    data = {"cut": data[:-3], "longer": data + b"\x00",
-            "version": binary_skeleton([animation("Idle_01")], version="3.8.99"),
-            "noise": bytes(range(256)) * 4}[damage]
+    data = {
+        "cut": data[:-3],
+        "longer": data + b"\x00",
+        "version": binary_skeleton([animation("Idle_01")], version="3.8.99"),
+        "noise": bytes(range(256)) * 4,
+    }[damage]
     with pytest.raises(ValueError):
         spine_names.read(data)
 
 
 def test_json_skeleton_names():
-    data = json.dumps({"skeleton": {"spine": "4.2.33"}, "bones": [{"name": "root"}, {"name": "arm", "parent": "root"}],
-                       "slots": [{"name": "skin", "bone": "arm"}], "skins": [{"name": "default"}],
-                       "animations": {"Idle_01": {}, "00": {}}}).encode()
+    data = json.dumps(
+        {
+            "skeleton": {"spine": "4.2.33"},
+            "bones": [{"name": "root"}, {"name": "arm", "parent": "root"}],
+            "slots": [{"name": "skin", "bone": "arm"}],
+            "skins": [{"name": "default"}],
+            "animations": {"Idle_01": {}, "00": {}},
+        }
+    ).encode()
     names = spine_names.read(data)
     assert (names.version, names.bones, names.slots) == ("4.2.33", [("root", ""), ("arm", "root")], [("skin", "arm")])
     assert (names.skins, names.animations) == (["default"], ["Idle_01", "00"])
@@ -121,8 +146,9 @@ def test_official_skeletons_are_read_to_their_last_byte():
     from bmpt.library import integrity
     from ba_modding_toolkit.searching import get_search_dirs
 
-    bundles = sorted(path for folder in get_search_dirs(GAME_DIR) if folder.is_dir()
-                     for path in folder.glob("*-spine*-*.bundle"))
+    bundles = sorted(
+        path for folder in get_search_dirs(GAME_DIR) if folder.is_dir() for path in folder.glob("*-spine*-*.bundle")
+    )
     assert bundles
     read = 0
     for path in bundles[::12]:
@@ -136,8 +162,13 @@ def test_official_skeletons_are_read_to_their_last_byte():
 # --- the fingerprint ---
 
 OLD = [("page.png", (16, 16), [("body", -1, (1, 1), (4, 4), (4, 4), (0, 0), 0)])]
-MOVED = [("page.png", (16, 16), [("body", -1, (8, 8), (4, 4), (4, 4), (0, 0), 0),
-                                 ("smile", -1, (1, 1), (4, 4), (4, 4), (0, 0), 0)])]
+MOVED = [
+    (
+        "page.png",
+        (16, 16),
+        [("body", -1, (8, 8), (4, 4), (4, 4), (0, 0), 0), ("smile", -1, (1, 1), (4, 4), (4, 4), (0, 0), 0)],
+    )
+]
 
 
 def test_atlas_fingerprint_follows_the_layout_not_the_bytes():
@@ -150,8 +181,13 @@ def test_atlas_fingerprint_follows_the_layout_not_the_bytes():
     assert moved["layout"] != old["layout"] and moved["regions"] == ["body", "smile"]
     unreadable = fingerprint.atlas(b"\xff\xfe")
     assert unreadable == {"layout": hashlib.sha1(b"\xff\xfe").hexdigest(), "regions": None}
-    assert fingerprint.diff({"structure": None, "atlases": {"a": {**old, "text": None}}, "skeletons": {}, "textures": {}},
-                            {"structure": None, "atlases": {"a": old}, "skeletons": {}, "textures": {}})["atlases"] == {}
+    assert (
+        fingerprint.diff(
+            {"structure": None, "atlases": {"a": {**old, "text": None}}, "skeletons": {}, "textures": {}},
+            {"structure": None, "atlases": {"a": old}, "skeletons": {}, "textures": {}},
+        )["atlases"]
+        == {}
+    )
 
 
 def test_skeleton_fingerprint_names_the_animations_and_hashes_the_rig():
@@ -166,10 +202,14 @@ def test_skeleton_fingerprint_names_the_animations_and_hashes_the_rig():
 
 
 def part_of(atlas=OLD, animations=("Idle_01",), size=(16, 16), structure="s1"):
-    return {"name": "part.bundle", "sha1": None, "structure": structure,
-            "atlases": {"test.atlas": fingerprint.atlas(atlas_text(atlas).encode())},
-            "skeletons": {"test.skel": fingerprint.skeleton(binary_skeleton([animation(a) for a in animations]))},
-            "textures": {"page": list(size)}}
+    return {
+        "name": "part.bundle",
+        "sha1": None,
+        "structure": structure,
+        "atlases": {"test.atlas": fingerprint.atlas(atlas_text(atlas).encode())},
+        "skeletons": {"test.skel": fingerprint.skeleton(binary_skeleton([animation(a) for a in animations]))},
+        "textures": {"page": list(size)},
+    }
 
 
 def test_diff_names_what_a_game_update_changed_under_a_mod():
@@ -179,10 +219,13 @@ def test_diff_names_what_a_game_update_changed_under_a_mod():
     after["atlases"]["extra.atlas"] = after["atlases"]["test.atlas"]
     assert fingerprint.diff(before, after) == {
         "structure": True,
-        "atlases": {"extra.atlas": {"present": "after"},
-                    "test.atlas": {"layout": True, "added": ["smile"], "removed": []}},
+        "atlases": {
+            "extra.atlas": {"present": "after"},
+            "test.atlas": {"layout": True, "added": ["smile"], "removed": []},
+        },
         "skeletons": {"test.skel": {"changed": True, "rig": False, "added": ["00"], "removed": []}},
-        "textures": {"page": {"before": [16, 16], "after": [32, 16]}}}
+        "textures": {"page": {"before": [16, 16], "after": [32, 16]}},
+    }
     assert fingerprint.diff({**before, "structure": None}, before)["structure"] is None
 
 
@@ -211,6 +254,7 @@ def test_a_stored_fingerprint_is_only_read_for_the_files_it_describes(tmp_path):
 
 # --- the library ---
 
+
 @pytest.fixture
 def spine(setup_library, monkeypatch):
     """Header-only bundles whose text assets are told by their payload: {bundle bytes: (atlas pages, animations)}."""
@@ -236,11 +280,11 @@ def sidecar(env, mod_id):
 
 def test_import_records_the_official_parts_beside_the_mod(spine):
     env = spine
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input")])
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input")])
     stored = json.loads(sidecar(env, entry.id).read_text())
     assert (stored["version"], stored["event"], stored["complete"]) == (1, "import", True)
     assert stored["files"] == {entry.file.name: hashlib.sha1(entry.file.read_bytes()).hexdigest()}
-    part, = stored["parts"]
+    (part,) = stored["parts"]
     assert part["name"] == env.original.name and part["mod"] == "same"
     assert part["sha1"] == hashlib.sha1(env.original.read_bytes()).hexdigest() and part["structure"]
     assert part["atlases"]["test.atlas"]["regions"] == ["body"]
@@ -257,14 +301,14 @@ def test_import_records_the_official_parts_beside_the_mod(spine):
 def test_a_mod_of_another_layout_is_recorded_as_differing(spine):
     env = spine
     env.assets[header_bundle(b"old mod!")] = (MOVED, ("Idle_01",))
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input", payload=b"old mod!")])
-    part, = env.library.built_against(entry.id)["parts"]
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input", payload=b"old mod!")])
+    (part,) = env.library.built_against(entry.id)["parts"]
     assert part["name"] == env.original.name and part["mod"] == "differs"
 
 
 def test_the_baseline_outlives_the_original_a_game_update_released(spine):
     env = spine
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input")])
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input")])
     env.library.apply("test", f"mod:{entry.id}")
     before = env.library.built_against(entry.id)
     # a game update repacks the atlas and adds an expression; the kept original of the release before goes
@@ -284,7 +328,7 @@ def test_the_baseline_outlives_the_original_a_game_update_released(spine):
 
 def test_a_mod_stored_without_a_fingerprint_gets_one_before_its_original_is_released(spine):
     env = spine
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input")])
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input")])
     env.library.apply("test", f"mod:{entry.id}")
     sidecar(env, entry.id).unlink()  # a mod of a build before the fingerprint
     old_name = env.original.name
@@ -295,16 +339,16 @@ def test_a_mod_stored_without_a_fingerprint_gets_one_before_its_original_is_rele
     assert library.prune() == [kept_copy(env, env.original)]
     stored = json.loads(sidecar(env, entry.id).read_text())
     assert (stored["event"], stored["complete"]) == ("backfill", False)
-    part, = stored["parts"]
+    (part,) = stored["parts"]
     assert part["name"] == old_name and part["mod"] == "same" and part["atlases"]["test.atlas"]["regions"] == ["body"]
     assert library.built_against(entry.id) == stored
 
 
 def test_a_fingerprint_is_made_up_only_from_a_file_that_shows_it(spine):
     env = spine
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input")])
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input")])
     env.assets[header_bundle(b"old mod!")] = (MOVED, ("Idle_01",))
-    other, = env.library.add([make_mod(env.original, env.tmp / "other", payload=b"old mod!")])
+    (other,) = env.library.add([make_mod(env.original, env.tmp / "other", payload=b"old mod!")])
     for mod in (entry, other):
         sidecar(env, mod.id).unlink()
     made = env.library.built_against(entry.id)  # the install's part carries what the mod carries
@@ -316,7 +360,7 @@ def test_a_fingerprint_is_made_up_only_from_a_file_that_shows_it(spine):
 def test_update_records_the_parts_it_rebuilt_the_mod_on(spine, monkeypatch):
     env = spine
     env.assets[header_bundle(b"old mod!")] = (MOVED, ("Idle_01",))
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input", payload=b"old mod!")])
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input", payload=b"old mod!")])
     assert env.library.built_against(entry.id)["parts"][0]["mod"] == "differs"
     env.assets[header_bundle(b"updated!")] = (OLD, ("Idle_01",))
 
@@ -344,7 +388,7 @@ def test_a_fingerprint_that_cannot_be_made_never_fails_the_import(spine, monkeyp
         raise RuntimeError("synthetic")
 
     monkeypatch.setattr(service.fingerprint, "part", broken)
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input")])
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input")])
     assert entry.file.is_file() and not sidecar(env, entry.id).exists()
     assert env.library.built_against(entry.id) is None
 
@@ -355,10 +399,13 @@ def test_remap_records_the_layout_it_rebuilt_the_mod_on(repair_review):
     # the upload carries a page of the layout before: it differs from the part as it is now
     assert imported["event"] == "import"
     assert {part["mod"] for part in imported["parts"]} == {"differs", "absent"}
-    result = env.library.accept_remap(env.library.remap(entry.id, geometry=rig_geometry(env.library, entry.id))["preview"])
+    result = env.library.accept_remap(
+        env.library.remap(entry.id, geometry=rig_geometry(env.library, entry.id))["preview"]
+    )
     stored = env.library.built_against(result.mod.id)
     assert stored["event"] == "remap" and stored["complete"] is True
     assert {part["mod"] for part in stored["parts"]} == {"same"}
     assert sorted(part["name"] for part in stored["parts"]) == sorted(
-        path.name for path in env.game_dir.glob("*.bundle"))
+        path.name for path in env.game_dir.glob("*.bundle")
+    )
     assert env.library.built_against(entry.id) == imported

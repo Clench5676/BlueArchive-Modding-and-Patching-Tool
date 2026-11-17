@@ -1,5 +1,6 @@
 """The last CRC check of a library write: bytes whose CRC is not the one in the target's name never reach an install
 that needs the CRC fix."""
+
 import pytest
 
 from ba_modding_toolkit.naming import parse_filename

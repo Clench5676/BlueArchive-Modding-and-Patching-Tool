@@ -22,18 +22,21 @@ def assert_private_logs(caplog, *private_values):
         assert all(value not in str(record.args) for value in private_values)
 
 
-@pytest.mark.parametrize("filename", [
-    "/Volumes/Private Client/library/state.json",
-    "/Volumes/Private Client/library/state.json.lock",
-    "/Volumes/Private Client/library/state.json.random.tmp",
-    "/Volumes/Private Client/library/",
-    "state.json",
-    "state.json.lock",
-    "Private Directory",
-    "/Volumes/Client's Library/state.json",
-    r"D:\Private Client\library\state.json.lock",
-    r"\\Private Server\Private Client\library\state.json",
-])
+@pytest.mark.parametrize(
+    "filename",
+    [
+        "/Volumes/Private Client/library/state.json",
+        "/Volumes/Private Client/library/state.json.lock",
+        "/Volumes/Private Client/library/state.json.random.tmp",
+        "/Volumes/Private Client/library/",
+        "state.json",
+        "state.json.lock",
+        "Private Directory",
+        "/Volumes/Client's Library/state.json",
+        r"D:\Private Client\library\state.json.lock",
+        r"\\Private Server\Private Client\library\state.json",
+    ],
+)
 def test_file_failure_redacts_every_path_and_keeps_errno(caplog, filename):
     error = PermissionError(errno.EACCES, "Permission denied", filename)
     with pytest.raises(ServiceError) as caught, service._errors("save"):
@@ -41,7 +44,7 @@ def test_file_failure_redacts_every_path_and_keeps_errno(caplog, filename):
     assert caught.value.code == "library_io_error"
     assert caught.value.params["file"] == filename
     assert caught.value.__cause__ is error
-    record, = caplog.records
+    (record,) = caplog.records
     assert record.getMessage() == (
         "Library file operation failed: PermissionError (code=library_io_error, errno=13): "
         "[Errno 13] Permission denied: [path]"
@@ -58,25 +61,28 @@ def test_failed_rename_redacts_source_and_destination(caplog):
     assert_private_logs(caplog, source, target, "Private Client", "Second Client", "state.json")
 
 
-@pytest.mark.parametrize("message", [
-    "Cannot save /Volumes/Private Client/library/state.json",
-    "Cannot save /Volumes/Private Client/library/state.json.lock",
-    "Cannot save /Volumes/Private Client/library/temporary-state",
-    "Cannot read /Volumes/Private Client/library/",
-    "Cannot read /Volumes/Private Client's Library",
-    "Cannot read Private Client/library/state.json",
-    r"Cannot lock D:\Private Client\library\state.json.lock",
-    r"Cannot read \\Private Server\Private Client\library",
-    "Cannot write state.json.lock",
-    "Cannot read 'Private Directory'",
-    "Cannot read %2FVolumes%2FPrivate%20Client%2Flibrary%2Fstate.json",
-    "Cannot read &#47;Volumes&#47;Private Client&#47;library",
-    "Cannot read /Volumes/Private Client/library/\nprivate temporary name",
-])
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Cannot save /Volumes/Private Client/library/state.json",
+        "Cannot save /Volumes/Private Client/library/state.json.lock",
+        "Cannot save /Volumes/Private Client/library/temporary-state",
+        "Cannot read /Volumes/Private Client/library/",
+        "Cannot read /Volumes/Private Client's Library",
+        "Cannot read Private Client/library/state.json",
+        r"Cannot lock D:\Private Client\library\state.json.lock",
+        r"Cannot read \\Private Server\Private Client\library",
+        "Cannot write state.json.lock",
+        "Cannot read 'Private Directory'",
+        "Cannot read %2FVolumes%2FPrivate%20Client%2Flibrary%2Fstate.json",
+        "Cannot read &#47;Volumes&#47;Private Client&#47;library",
+        "Cannot read /Volumes/Private Client/library/\nprivate temporary name",
+    ],
+)
 def test_unstructured_failure_messages_do_not_leak_paths(caplog, message):
     with pytest.raises(ServiceError, match="library_operation_failed"), service._errors("save"):
         raise RuntimeError(message)
-    record, = caplog.records
+    (record,) = caplog.records
     assert "RuntimeError (code=library_operation_failed, errno=None)" in record.getMessage()
     assert "[path]" in record.getMessage()
     assert_private_logs(caplog, "Private", "Client", "state.json", "temporary", "Volumes")
@@ -85,8 +91,10 @@ def test_unstructured_failure_messages_do_not_leak_paths(caplog, message):
 def test_failure_keeps_safe_message(caplog):
     with pytest.raises(ServiceError), service._errors("save"):
         raise ValueError("Invalid library schema")
-    assert caplog.records[0].getMessage().endswith(
-        "ValueError (code=library_operation_failed, errno=None): Invalid library schema"
+    assert (
+        caplog.records[0]
+        .getMessage()
+        .endswith("ValueError (code=library_operation_failed, errno=None): Invalid library schema")
     )
 
 
@@ -141,7 +149,7 @@ def test_recoverable_library_failures_also_redact_paths(setup_library, monkeypat
     else:
         monkeypatch.setattr(library, "_scan_allowed_input", fail)
         assert not library._scan_allowed()
-    record, = caplog.records
+    (record,) = caplog.records
     assert "PermissionError" in record.getMessage() and "errno=13" in record.getMessage()
     assert_private_logs(caplog, private, "Private Client", "state.json")
 
@@ -160,8 +168,9 @@ def test_profiles_fallback_failures_redact_paths(tmp_path, monkeypatch, caplog):
     with pytest.raises(ServiceError, match="profiles_unreadable"):
         config.read()
     assert len(caplog.records) == 2
-    assert all("PermissionError" in record.getMessage() and "errno=13" in record.getMessage()
-               for record in caplog.records)
+    assert all(
+        "PermissionError" in record.getMessage() and "errno=13" in record.getMessage() for record in caplog.records
+    )
     assert_private_logs(caplog, str(tmp_path), "Private Client", "profiles.json")
 
 
@@ -181,7 +190,7 @@ def test_staging_failure_redacts_directories_and_lock_files(tmp_path, monkeypatc
         monkeypatch.setattr(staging.shutil, "rmtree", fail)
     staging.cleanup(root)
     assert temporary.exists()
-    record, = caplog.records
+    (record,) = caplog.records
     assert "PermissionError" in record.getMessage() and "errno=13" in record.getMessage()
     assert_private_logs(caplog, str(tmp_path), "Private Client", "import-private", ".lock")
 

@@ -1,4 +1,5 @@
 """Student Hall entries and memory-only portrait dialogue, independent of game selection."""
+
 from __future__ import annotations
 
 import base64
@@ -27,11 +28,19 @@ logger = logging.getLogger(__name__)
 
 # LobbyCommon/TweenController/CharPos in the game's 2960-unit NGUI stage.
 PORTRAIT_ORIGIN = (960 - 112 * (1920 / 2960), 540 + 886 * (1920 / 2960))
-PORTRAIT_SCALE = (.25, 1.5, 1)
+PORTRAIT_SCALE = (0.25, 1.5, 1)
 
 
 def empty_hall() -> dict:
-    return {"revision": 0, "mode": "portraits", "background": "", "portraitScale": PORTRAIT_SCALE[2], "portraits": [], "memorials": [], "active": None}
+    return {
+        "revision": 0,
+        "mode": "portraits",
+        "background": "",
+        "portraitScale": PORTRAIT_SCALE[2],
+        "portraits": [],
+        "memorials": [],
+        "active": None,
+    }
 
 
 def normalize_hall(value: Any) -> dict:
@@ -63,12 +72,18 @@ def validate_hall(value: Any) -> dict:
     out = empty_hall()
     out["mode"] = value["mode"]
     bg = value.get("background", "")
-    if not isinstance(bg, str) or (bg and bg not in ("office-day", "office-night")
-                                   and not re.fullmatch(r"BG_[a-zA-Z0-9_-]+(?:\.png)?", bg)):
+    if not isinstance(bg, str) or (
+        bg and bg not in ("office-day", "office-night") and not re.fullmatch(r"BG_[a-zA-Z0-9_-]+(?:\.png)?", bg)
+    ):
         raise ServiceError("bad_params", key="background")
     out["background"] = bg
     scale = value.get("portraitScale", PORTRAIT_SCALE[2])
-    if isinstance(scale, bool) or not isinstance(scale, (int, float)) or not math.isfinite(scale) or not PORTRAIT_SCALE[0] <= scale <= PORTRAIT_SCALE[1]:
+    if (
+        isinstance(scale, bool)
+        or not isinstance(scale, (int, float))
+        or not math.isfinite(scale)
+        or not PORTRAIT_SCALE[0] <= scale <= PORTRAIT_SCALE[1]
+    ):
         raise ServiceError("bad_params", key="portraitScale")
     out["portraitScale"] = scale
     ids = set()
@@ -100,15 +115,25 @@ def validate_hall(value: Any) -> dict:
                 if not isinstance(mirror, bool):
                     raise ServiceError("bad_params", key="mirror")
                 item["mirror"] = mirror
-                for key, default, lo, hi in (("x", PORTRAIT_ORIGIN[0], 0, 1920),
-                                             ("y", PORTRAIT_ORIGIN[1], 200, 1800), ("scale", 1, .2, 2.5)):
+                for key, default, lo, hi in (
+                    ("x", PORTRAIT_ORIGIN[0], 0, 1920),
+                    ("y", PORTRAIT_ORIGIN[1], 200, 1800),
+                    ("scale", 1, 0.2, 2.5),
+                ):
                     n = entry.get(key, default)
-                    if isinstance(n, bool) or not isinstance(n, (int, float)) or not math.isfinite(n) or not lo <= n <= hi:
+                    if (
+                        isinstance(n, bool)
+                        or not isinstance(n, (int, float))
+                        or not math.isfinite(n)
+                        or not lo <= n <= hi
+                    ):
                         raise ServiceError("bad_params", key=key)
                     item[key] = n
             out[group].append(item)
     active = value.get("active")
-    out["active"] = active if any(e["id"] == active for e in out["memorials"]) else next((e["id"] for e in out["memorials"]), None)
+    out["active"] = (
+        active if any(e["id"] == active for e in out["memorials"]) else next((e["id"] for e in out["memorials"]), None)
+    )
     return out
 
 
@@ -117,6 +142,7 @@ def save_hall(state: Any, value: dict, revision: int) -> dict:
     clean = validate_hall(value)
     if isinstance(revision, bool) or not isinstance(revision, int) or revision < 0:
         raise ServiceError("bad_params", key="revision")
+
     def change(data: dict) -> None:
         prefs = data.setdefault("prefs", {})
         current = prefs.get("student_hall", empty_hall())
@@ -128,6 +154,7 @@ def save_hall(state: Any, value: dict, revision: int) -> dict:
             raise ServiceError("hall_last_memorial")
         clean["revision"] = revision + 1
         prefs["student_hall"] = clean
+
     state._update(change)
     return copy.deepcopy(clean)
 
@@ -151,14 +178,21 @@ def portrait_lines(page: dict) -> dict:
         audio = j.get("file") or ""
         if audio.startswith("//"):
             audio = "https:" + audio
-        out[cid] = {"zh-CN": _one_line(c.get("text") or j.get("text")), "ja": _one_line(j.get("text_original")), "audio": audio}
+        out[cid] = {
+            "zh-CN": _one_line(c.get("text") or j.get("text")),
+            "ja": _one_line(j.get("text_original")),
+            "audio": audio,
+        }
+
     # Old test recordings can coexist with the current clip on the same page. Do not add an untranslated
     # alternate to the rotation when that exact numbered line already has a captioned current recording.
     def suffix(clip: str) -> str:
         return clip.rsplit("_lobby_", 1)[1]
+
     captioned = {suffix(clip) for clip, row in out.items() if row.get("zh-CN") or row.get("ja")}
-    return {clip: row for clip, row in out.items()
-            if row.get("zh-CN") or row.get("ja") or suffix(clip) not in captioned}
+    return {
+        clip: row for clip, row in out.items() if row.get("zh-CN") or row.get("ja") or suffix(clip) not in captioned
+    }
 
 
 class PortraitVoices(Kivo):
@@ -169,12 +203,14 @@ class PortraitVoices(Kivo):
     def lines(self, page_id: str) -> dict:
         if not page_id or not str(page_id).isdigit():
             raise ServiceError("lines_unavailable")
+
         def read() -> dict:
             try:
                 data = json.loads(self._get(API.format(page=page_id)))
                 return portrait_lines(data.get("data", data))
             except Exception as exc:
                 raise ServiceError("lines_unavailable") from exc
+
         return self.memo.get(("lines", page_id), read)
 
     def audio(self, page_id: str, clip: str) -> bytes:
@@ -182,11 +218,13 @@ class PortraitVoices(Kivo):
         url = row.get("audio", "")
         if not url.startswith(f"https://{AUDIO_HOST}/"):
             raise ServiceError("lines_unavailable")
+
         def read() -> bytes:
             try:
                 return self._get(url)
             except Exception as exc:
                 raise ServiceError("lines_unavailable") from exc
+
         return self.memo.get(("audio", url), read)
 
 
@@ -236,7 +274,9 @@ class MemoryMemo:
             return value
         except Exception as error:
             with self._lock:
-                detail = error.to_json() if isinstance(error, ServiceError) else {"code": "lines_unavailable", "params": {}}
+                detail = (
+                    error.to_json() if isinstance(error, ServiceError) else {"code": "lines_unavailable", "params": {}}
+                )
                 self._failed[key] = (time.monotonic(), detail)
                 while len(self._failed) > self.count_limit:
                     self._failed.popitem(last=False)
@@ -264,6 +304,7 @@ class LocalPortraitVoices:
         paths = getattr(game, "_paths", lambda: [])()
         paths = [path for path in paths if any(word in path.name.lower() for word in ("audio", "voice", "sound"))]
         stamps = tuple(spine_stamps(paths)) if paths else ()
+
         def read() -> dict:
             result = {}
             for path in paths:
@@ -278,6 +319,7 @@ class LocalPortraitVoices:
                 except (OSError, ServiceError, ValueError):
                     continue
             return result
+
         key = ("index", id(game), stamps)
         value = self.memo.get(key, read)
         self._index_key = key
@@ -288,10 +330,19 @@ class LocalPortraitVoices:
         if record is None:
             raise AssetNotFound(clip)
         path = self.services.game._bundle_path(record["bundle"])
+
         def read() -> bytes:
             with open_bundle(path) as env:
-                obj = next((obj for obj in env.objects if obj.path_id == record["pid"]
-                            and obj.assets_file.name == record["cab"] and obj.type.name == "AudioClip"), None)
+                obj = next(
+                    (
+                        obj
+                        for obj in env.objects
+                        if obj.path_id == record["pid"]
+                        and obj.assets_file.name == record["cab"]
+                        and obj.type.name == "AudioClip"
+                    ),
+                    None,
+                )
                 if obj is None:
                     raise AssetNotFound(clip)
                 try:
@@ -302,6 +353,7 @@ class LocalPortraitVoices:
                 if not data:
                     raise AssetNotFound(clip)
                 return data
+
         return self.memo.get(("audio", clip, tuple(spine_stamps([path]))), read)
 
 
@@ -314,12 +366,14 @@ def dialogue_layout(game: Any) -> dict:
         if not name:
             raise AssetNotFound("LobbyCommon")
         path = game._bundle_path(name)
+
     def read() -> bytes:
         with open_bundle(path) as env:
             tree = export_layout(env, "LobbyCommon", game._atlas_index()["names"])
         talk = subtree(tree, "DialogPanel/ChatDialog/Talk")
         talk["pos"] = [0, 0]
         return json.dumps(talk).encode()
+
     return json.loads(game._cached("hall/dialogue-v1/" + json.dumps(spine_stamps([path])), read))
 
 
@@ -330,14 +384,19 @@ def portrait_motion_layout(game: Any, core: str | None) -> dict:
     paths = game.spine_cores("spr").get(core.lower(), [])
     if not paths:
         return {}
+
     def read() -> bytes:
         from ..gameassets.lobby import Clips
+
         behaviours = []
         for path in paths:
             with open_bundle(path) as env:
-                behaviours.extend((obj.path_id, obj.read_typetree()) for obj in env.objects if obj.type.name == "MonoBehaviour")
+                behaviours.extend(
+                    (obj.path_id, obj.read_typetree()) for obj in env.objects if obj.type.name == "MonoBehaviour"
+                )
         clips = Clips(behaviours, (core,)).clips
         return json.dumps(next((value for name, value in clips.items() if name.lower() == core.lower()), {})).encode()
+
     return json.loads(game._cached("hall/portrait-motion-v1/" + core + json.dumps(spine_stamps(paths)), read))
 
 
@@ -346,8 +405,16 @@ def expression_motion(name: str, clips: dict, seen: frozenset = frozenset()) -> 
     clip = clips.get(name)
     if not clip or name in seen or clip.get("mode") in (2, 3):
         return None
-    return {"animation": name, "track": clip["track"], "loop": clip["loop"], "mix": clip["intro"], "outro": clip["outro"],
-            "sync": [motion for child in clip.get("sync", []) if (motion := expression_motion(child, clips, seen | {name}))]}
+    return {
+        "animation": name,
+        "track": clip["track"],
+        "loop": clip["loop"],
+        "mix": clip["intro"],
+        "outro": clip["outro"],
+        "sync": [
+            motion for child in clip.get("sync", []) if (motion := expression_motion(child, clips, seen | {name}))
+        ],
+    }
 
 
 def register_api(rpc: Any, s: Any) -> None:
@@ -356,6 +423,7 @@ def register_api(rpc: Any, s: Any) -> None:
 
     def rows_for(v: Any, lang: str) -> tuple[dict, bool, bool]:
         from .api import _background
+
         started = time.monotonic()
         local_cached = local.cached_index()
         pending_local = _background(local.index) if local_cached is None else None
@@ -364,9 +432,11 @@ def register_api(rpc: Any, s: Any) -> None:
         incoming_cached = voices.memo.peek(("lines", page_id))
         pending_incoming = _background(voices.lines, page_id) if page_id and incoming_cached is None else None
         global_cached = s.global_lines.cached_portrait_dialogues(character) if character else None
-        pending_global = (_background(s.global_lines.portrait_dialogues, character)
-                          if character and global_cached is None else None)
+        pending_global = (
+            _background(s.global_lines.portrait_dialogues, character) if character and global_cached is None else None
+        )
         waiting = False
+
         def ready(future: Future | None, *, timeout: float = 0) -> dict:
             nonlocal waiting
             if future is None:
@@ -379,19 +449,26 @@ def register_api(rpc: Any, s: Any) -> None:
             except (ServiceError, OSError, KeyError, ValueError) as error:
                 logger.debug("Portrait dialogue source unavailable: %s", error)
                 return {}
+
         text_jobs = [future for future in (pending_incoming, pending_global) if future is not None]
         # Return the first available text source. A slow Kivo request must not block ready official captions.
         if text_jobs and incoming_cached is None and global_cached is None:
             wait(text_jobs, timeout=max(0, 3 - (time.monotonic() - started)), return_when=FIRST_COMPLETED)
         # An already available Global row is not proof that Kivo's Chinese caption is absent. Give the
         # requested source the same bounded preparation budget before publishing a fallback response.
-        incoming = incoming_cached if incoming_cached is not None else ready(pending_incoming,
-            timeout=max(0, 3 - (time.monotonic() - started)) if lang == "zh-CN" else 0)
+        incoming = (
+            incoming_cached
+            if incoming_cached is not None
+            else ready(pending_incoming, timeout=max(0, 3 - (time.monotonic() - started)) if lang == "zh-CN" else 0)
+        )
         animation_pending = global_cached is None and pending_global is not None and not pending_global.done()
         official = global_cached if global_cached is not None else ready(pending_global)
         installed = local_cached if local_cached is not None else ready(pending_local)
-        stems = {v.key.lower(), str(getattr(v, "file_id", "")).lower(),
-                 str(getattr(v, "spr", "") or "").lower().removesuffix("_spr")}
+        stems = {
+            v.key.lower(),
+            str(getattr(v, "file_id", "")).lower(),
+            str(getattr(v, "spr", "") or "").lower().removesuffix("_spr"),
+        }
         clips = set(incoming) | {clip for clip in installed if clip.rsplit("_lobby_", 1)[0] in stems}
         groups: dict[str, list[tuple[int, str]]] = {}
         for clip in clips:
@@ -401,8 +478,10 @@ def register_api(rpc: Any, s: Any) -> None:
         # Official text remains useful without a voice source; no generated key claims playable audio.
         for group in official:
             groups.setdefault(str(group), [(0, f"{v.key.lower()}_lobby_{group}")])
-        translated = globallines.portrait_voice_lines({str(key): value for key, value in official.items()},
-            [clip for items in groups.values() for _, clip in sorted(items)])
+        translated = globallines.portrait_voice_lines(
+            {str(key): value for key, value in official.items()},
+            [clip for items in groups.values() for _, clip in sorted(items)],
+        )
         result = globallines.merge(incoming, translated)
         for clip in clips - result.keys():
             result[clip] = {"voice": False}
@@ -410,7 +489,11 @@ def register_api(rpc: Any, s: Any) -> None:
             remote = incoming.get(clip, {}).get("audio", "").startswith(f"https://{AUDIO_HOST}/")
             value["voice"] = clip in installed or remote
             value["voiceSource"] = "local" if clip in installed else "kivo" if remote else None
-        motion = portrait_motion_layout(s.game, getattr(v, "spr", None)) if any(row.get("expression") for row in result.values()) else {}
+        motion = (
+            portrait_motion_layout(s.game, getattr(v, "spr", None))
+            if any(row.get("expression") for row in result.values())
+            else {}
+        )
         for row in result.values():
             for cue in row.get("expressionCues", []):
                 if authored := expression_motion(cue["expression"], motion):
@@ -422,16 +505,33 @@ def register_api(rpc: Any, s: Any) -> None:
         value = s.state.get("student_hall")
         if value is None:
             family = next((item for item in s.catalog.families() if item.key == "shiroko"), None)
-            variant = next((v for v in (family.variants if family else [])
-                            if v.key in ("shiroko", "shiroko_original") or v.file_id.lower() == "shiroko_original"), None)
+            variant = next(
+                (
+                    v
+                    for v in (family.variants if family else [])
+                    if v.key in ("shiroko", "shiroko_original") or v.file_id.lower() == "shiroko_original"
+                ),
+                None,
+            )
             if variant is not None and variant.spr and variant.lobby:
                 initial = empty_hall()
-                initial["portraits"] = [{"id": str(uuid4()), "variant": variant.key, "source": "official",
-                                         "x": PORTRAIT_ORIGIN[0], "y": PORTRAIT_ORIGIN[1], "scale": 1, "mirror": False}]
+                initial["portraits"] = [
+                    {
+                        "id": str(uuid4()),
+                        "variant": variant.key,
+                        "source": "official",
+                        "x": PORTRAIT_ORIGIN[0],
+                        "y": PORTRAIT_ORIGIN[1],
+                        "scale": 1,
+                        "mirror": False,
+                    }
+                ]
                 initial["memorials"] = [{"id": str(uuid4()), "variant": variant.key, "source": "official"}]
                 initial["active"] = initial["memorials"][0]["id"]
+
                 def initialize(data):
                     data.setdefault("prefs", {}).setdefault("student_hall", initial)
+
                 s.state._update(initialize)
                 value = s.state.get("student_hall")
         return normalize_hall(value)
@@ -461,27 +561,51 @@ def register_api(rpc: Any, s: Any) -> None:
             counts = kind_counts.setdefault(mod.target, {})
             counts[mod.kind] = counts.get(mod.kind, 0) + 1
         viewed = s.state.get("hall_viewed", [])
+
         def metadata(v: Any, source: str, mod: Any = None) -> dict:
             key = f"{v.key}:{source}"
             family = getattr(v, "family", v.key)
-            return {"family": family, "familyNames": family_names.get(family, {}), "school": schools.get(family),
-                    "familyAliases": family_aliases.get(family, []), "model": getattr(v, "model", None),
-                    "fileId": getattr(v, "file_id", v.key), "aliases": list(getattr(v, "aliases", [])),
-                    "custom": custom.get(v.key, []), "playable": getattr(v, "playable", False), "recruitable": getattr(v, "recruitable", False),
-                    "released": getattr(v, "recruitable", False), "localKinds": [kind for kind in ("spr", "lobby", "model") if getattr(v, kind, None)],
-                    "order": getattr(v, "order", 0), "date": getattr(v, "date", None), "favorite": v.key in favorites,
-                    "recent": recent.index(v.key) if v.key in recent else None,
-                    "viewed": viewed.index(key) if key in viewed else None,
-                    "added": getattr(mod, "added", None), "mods": mod_counts.get(v.key, 0), "modCounts": kind_counts.get(v.key, {}),
-                    "modId": mod.id if mod else None}
+            return {
+                "family": family,
+                "familyNames": family_names.get(family, {}),
+                "school": schools.get(family),
+                "familyAliases": family_aliases.get(family, []),
+                "model": getattr(v, "model", None),
+                "fileId": getattr(v, "file_id", v.key),
+                "aliases": list(getattr(v, "aliases", [])),
+                "custom": custom.get(v.key, []),
+                "playable": getattr(v, "playable", False),
+                "recruitable": getattr(v, "recruitable", False),
+                "released": getattr(v, "recruitable", False),
+                "localKinds": [kind for kind in ("spr", "lobby", "model") if getattr(v, kind, None)],
+                "order": getattr(v, "order", 0),
+                "date": getattr(v, "date", None),
+                "favorite": v.key in favorites,
+                "recent": recent.index(v.key) if v.key in recent else None,
+                "viewed": viewed.index(key) if key in viewed else None,
+                "added": getattr(mod, "added", None),
+                "mods": mod_counts.get(v.key, 0),
+                "modCounts": kind_counts.get(v.key, {}),
+                "modId": mod.id if mod else None,
+            }
+
         choices = []
         for v in variants.values():
             for kind in ("spr", "lobby"):
                 core = getattr(v, kind, None)
                 if core:
-                    choices.append({"variant": v.key, "source": "official", "kind": kind, "core": core,
-                                    "names": v.names, "label": "", "portrait": f"/asset/art/portrait/{v.portrait}.png" if v.portrait else None,
-                                    **metadata(v, "official")})
+                    choices.append(
+                        {
+                            "variant": v.key,
+                            "source": "official",
+                            "kind": kind,
+                            "core": core,
+                            "names": v.names,
+                            "label": "",
+                            "portrait": f"/asset/art/portrait/{v.portrait}.png" if v.portrait else None,
+                            **metadata(v, "official"),
+                        }
+                    )
         for mod in mods:
             # a lobby camera frames the game's lobby, not the hall's
             if mod.kind not in ("spr", "lobby") or getattr(mod, "camera", None):
@@ -492,14 +616,24 @@ def register_api(rpc: Any, s: Any) -> None:
                     v = s.library.variant_metadata(mod.target)
                 except ServiceError:
                     continue
-            choices.append({"variant": v.key, "source": "mod:" + mod.id, "kind": mod.kind,
-                            "core": getattr(v, mod.kind, None), "names": v.names,
-                            "label": mod.alias or mod.label, "portrait": f"/asset/art/portrait/{v.portrait}.png" if v.portrait else None,
-                            **metadata(v, "mod:" + mod.id, mod)})
+            choices.append(
+                {
+                    "variant": v.key,
+                    "source": "mod:" + mod.id,
+                    "kind": mod.kind,
+                    "core": getattr(v, mod.kind, None),
+                    "names": v.names,
+                    "label": mod.alias or mod.label,
+                    "portrait": f"/asset/art/portrait/{v.portrait}.png" if v.portrait else None,
+                    **metadata(v, "mod:" + mod.id, mod),
+                }
+            )
         backgrounds = s.game.collection_names()["bg"]
         office = getattr(s.game, "office_backgrounds", lambda: [])()
-        return {"choices": choices, "backgrounds": [*office,
-                *({"name": n, "url": "/asset/art/bg/" + n} for n in backgrounds)]}
+        return {
+            "choices": choices,
+            "backgrounds": [*office, *({"name": n, "url": "/asset/art/bg/" + n} for n in backgrounds)],
+        }
 
     @rpc.method("hall.update")
     def update(value: dict, revision: int) -> dict:
@@ -511,14 +645,17 @@ def register_api(rpc: Any, s: Any) -> None:
         if source == "official":
             valid = bool(v.lobby)
         else:
-            valid = isinstance(source, str) and any("mod:" + mod.id == source and mod.target == variant and mod.kind == "lobby"
-                                                  for mod in s.library.mods())
+            valid = isinstance(source, str) and any(
+                "mod:" + mod.id == source and mod.target == variant and mod.kind == "lobby" for mod in s.library.mods()
+            )
         if not valid:
             raise ServiceError("bad_params", key="source")
         key = f"{variant}:{source}"
+
         def change(data: dict) -> None:
             prefs = data.setdefault("prefs", {})
             prefs["hall_viewed"] = [key, *(item for item in prefs.get("hall_viewed", []) if item != key)][:500]
+
         s.state._update(change)
         return s.state.get("hall_viewed", [])
 
@@ -538,7 +675,12 @@ def register_api(rpc: Any, s: Any) -> None:
             logger.debug("Portrait dialogue has no catalog mapping: %s", variant)
             return {"lines": {}, "pending": False, "unavailable": True, "animationPending": False}
         rows, waiting, animation_pending = rows_for(v, lang)
-        return {"lines": rows, "pending": waiting, "unavailable": not rows and not waiting, "animationPending": animation_pending}
+        return {
+            "lines": rows,
+            "pending": waiting,
+            "unavailable": not rows and not waiting,
+            "animationPending": animation_pending,
+        }
 
     @rpc.method("hall.voice")
     def voice(variant: str, clip: str) -> dict:

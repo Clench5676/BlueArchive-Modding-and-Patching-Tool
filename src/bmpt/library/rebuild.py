@@ -13,9 +13,23 @@ from pathlib import Path
 from typing import Callable
 
 from bmpt.engine import (
-    REPLACEABLE_ASSET_TYPES, AnimCheckOptions, AnimDiffMap, AssetKey, Bundle, FilePair, LogFunc, MatchStrategy, Patch,
-    ReplaceAssetType, SaveOptions, SkelConvertOptions, SkelVersionConflict, collect_stream_companions,
-    format_skel_conflicts, no_log, t,
+    REPLACEABLE_ASSET_TYPES,
+    AnimCheckOptions,
+    AnimDiffMap,
+    AssetKey,
+    Bundle,
+    FilePair,
+    LogFunc,
+    MatchStrategy,
+    Patch,
+    ReplaceAssetType,
+    SaveOptions,
+    SkelConvertOptions,
+    SkelVersionConflict,
+    collect_stream_companions,
+    format_skel_conflicts,
+    no_log,
+    t,
 )
 from ..errors import ServiceError
 
@@ -68,14 +82,13 @@ class UpdateScope:
             payload = companions.get(name)
             if payload is None or offset < 0 or size < 0 or offset + size > len(payload):
                 raise ValueError(t("webui.error.required_asset_stream_missing"))
-            companions[name] = payload[offset:offset + size]
+            companions[name] = payload[offset : offset + size]
         return raw, companions
 
     def skip_unchanged(self, source: Bundle, obj, key: AssetKey) -> bool:
         try:
             content = self.serialized(source, obj)
-            if all(content == self.serialized(target, counterpart)
-                   for target, counterpart in self.counterparts[key]):
+            if all(content == self.serialized(target, counterpart) for target, counterpart in self.counterparts[key]):
                 self.unchanged.add(key)
                 return True
         except Exception:
@@ -95,6 +108,7 @@ class RebuildResult:
     none of the replaced types, or none the sources carry): the targets take nothing from the sources. The asset lists hold the keys as text, sorted: ``matched`` found their counterpart in a target (written
     or equal), ``unchanged`` equal their counterpart, ``not_transferred`` have none, ``target_only`` are the
     targets' assets of the replaced types that the sources lack. A prepared patch reports matches only."""
+
     success: bool
     message: str
     file_pairs: list[FilePair] = field(default_factory=list)
@@ -138,7 +152,7 @@ def rebuild(
     ``on_step`` hears ``extract``, ``replace``, ``save`` and ``crc``. A failure returns ``success=False`` with a
     message (and the ``ServiceError`` when one names it); nothing is saved unless every target passed."""
     try:
-        log(f'\n--- {t("log.section.extracting_patches")} ---')
+        log(f"\n--- {t('log.section.extracting_patches')} ---")
         if on_step:
             on_step("extract")
         patches: Patch = dict(prepared_patch or {})
@@ -155,8 +169,9 @@ def rebuild(
             src_bundle = Bundle.load(src, log)
             if not src_bundle:
                 return _failed(t("message.load_failed"), log)
-            patch, conflicts = src_bundle.extract_patch(asset_types_to_replace, match_strategy, spine_options,
-                                                        **({"scope": scope} if scope is not None else {}))
+            patch, conflicts = src_bundle.extract_patch(
+                asset_types_to_replace, match_strategy, spine_options, **({"scope": scope} if scope is not None else {})
+            )
             patches.update(patch)
             skel_conflicts.extend(conflicts)
 
@@ -179,7 +194,7 @@ def rebuild(
 
         log(f"  > {t('log.mod_update.pool_built', count=len(patches))}")
 
-        log(f'\n--- {t("log.section.applying_to_targets")} ---')
+        log(f"\n--- {t('log.section.applying_to_targets')} ---")
         file_pairs: list[FilePair] = []
         total_matched = len(unchanged_keys)
         anim_diffs: dict[str, set[str]] = {}
@@ -190,15 +205,23 @@ def rebuild(
         pending_saves = []
 
         for tgt, tgt_bundle in zip(target_paths, targets):
-            retained = {key for key in unchanged_keys
-                        if any(target is tgt_bundle for target, _ in scope.counterparts[key])}
+            retained = {
+                key for key in unchanged_keys if any(target is tgt_bundle for target, _ in scope.counterparts[key])
+            }
 
             if on_step:
                 on_step("replace")
             result = tgt_bundle.apply_patch(patches, match_strategy, anim_check)
             if prepared_patch is not None and result.matched_count != len(patches):
-                return _failed(t("webui.error.atlas_remap_target_mismatch", file=tgt.name,
-                                 matched=result.matched_count, expected=len(patches)), log)
+                return _failed(
+                    t(
+                        "webui.error.atlas_remap_target_mismatch",
+                        file=tgt.name,
+                        matched=result.matched_count,
+                        expected=len(patches),
+                    ),
+                    log,
+                )
             total_matched += result.matched_count
             matched_keys.update(result.matched_keys)
             skipped = set(result.skipped_keys or ())
@@ -223,8 +246,11 @@ def rebuild(
         # Validate every target before publishing any output for this Mod.
         for tgt, tgt_bundle, result in pending_saves:
             output_path = output_dir / tgt.name
-            save_ok, save_message = (tgt_bundle.save(output_path, save_options, on_step)
-                                     if on_step else tgt_bundle.save(output_path, save_options))
+            save_ok, save_message = (
+                tgt_bundle.save(output_path, save_options, on_step)
+                if on_step
+                else tgt_bundle.save(output_path, save_options)
+            )
             if save_ok:
                 file_pairs.append(FilePair(output_path, tgt))
                 log(f"  ✅ {t('log.mod_update.target_processed', name=tgt.name, applied=result.applied_count)}")
@@ -238,9 +264,12 @@ def rebuild(
         if failed_targets:
             return _failed(t("message.mod_update.no_targets_processed"), log, anim_diffs=final_anim_diffs)
 
-        report = {"matched": _names(matched_keys | unchanged_keys),
-                  "unchanged": _names((unchanged_keys | skipped_keys) - applied_keys),
-                  "not_transferred": not_transferred, "target_only": target_only}
+        report = {
+            "matched": _names(matched_keys | unchanged_keys),
+            "unchanged": _names((unchanged_keys | skipped_keys) - applied_keys),
+            "not_transferred": not_transferred,
+            "target_only": target_only,
+        }
         if not file_pairs:
             # Nothing matched at all, or every match was left as it is.
             if total_matched > 0 and skip_unchanged:

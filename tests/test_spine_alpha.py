@@ -11,8 +11,9 @@ from bmpt.gameassets.spine import extract_spine
 from texture_helpers import fake_texture
 
 
-@pytest.mark.parametrize("core", ["np0032_npc", "arona_workpage_daytime", "plana_workpage", "cafe",
-                                  "hero_spr", "hero_home"])
+@pytest.mark.parametrize(
+    "core", ["np0032_npc", "arona_workpage_daytime", "plana_workpage", "cafe", "hero_spr", "hero_home"]
+)
 @pytest.mark.parametrize("atlas_pma", [None, False, True])
 @pytest.mark.parametrize("material_pma", [False, True])
 def test_export_matches_020_at_transparent_edges(tmp_path, monkeypatch, core, atlas_pma, material_pma):
@@ -24,12 +25,17 @@ def test_export_matches_020_at_transparent_edges(tmp_path, monkeypatch, core, at
     cab = SimpleNamespace(name="CAB", externals=[])
 
     def obj(kind, pid, data=None, tree=None):
-        return SimpleNamespace(type=SimpleNamespace(name=kind), path_id=pid, assets_file=cab,
-                               read=lambda: data, read_typetree=lambda: tree)
+        return SimpleNamespace(
+            type=SimpleNamespace(name=kind), path_id=pid, assets_file=cab, read=lambda: data, read_typetree=lambda: tree
+        )
 
-    mat = {"m_ValidKeywords": [] if material_pma else ["_STRAIGHT_ALPHA_INPUT"], "m_SavedProperties": {
-        "m_Floats": [["_StraightAlphaInput", int(not material_pma)]],
-        "m_TexEnvs": [["_MainTex", {"m_Texture": {"m_FileID": 0, "m_PathID": 1}}]]}}
+    mat = {
+        "m_ValidKeywords": [] if material_pma else ["_STRAIGHT_ALPHA_INPUT"],
+        "m_SavedProperties": {
+            "m_Floats": [["_StraightAlphaInput", int(not material_pma)]],
+            "m_TexEnvs": [["_MainTex", {"m_Texture": {"m_FileID": 0, "m_PathID": 1}}]],
+        },
+    }
     parts = {
         "material.bundle": [obj("Material", 2, tree=mat)],
         "texture.bundle": [obj("Texture2D", 1, fake_texture(image, m_Name=core))],

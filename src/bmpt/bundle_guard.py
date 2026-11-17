@@ -36,7 +36,8 @@ def check_bundle(path: Path, file: str | None = None) -> Layout | None:
         layout = read_layout(Path(path), MAX_DIRECTORY_BYTES)
     except ValueError as refusal:
         raise ServiceError("bundle_invalid", file=name) from refusal
-    if layout is not None and (layout.size > MAX_BUNDLE_BYTES or layout.largest_block > MAX_BLOCK_BYTES
-                               or layout.total > MAX_TOTAL_BYTES):
+    if layout is not None and (
+        layout.size > MAX_BUNDLE_BYTES or layout.largest_block > MAX_BLOCK_BYTES or layout.total > MAX_TOTAL_BYTES
+    ):
         raise ServiceError("bundle_invalid", file=name)
     return layout

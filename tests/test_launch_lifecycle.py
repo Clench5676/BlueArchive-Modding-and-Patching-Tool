@@ -50,9 +50,21 @@ def make_desktop(monkeypatch, tmp_path, platform):
                 state.complete.set()
             return self
 
-    state = SimpleNamespace(block=None, entered=threading.Event(), resume=threading.Event(),
-                            complete=threading.Event(), workers=[], deferred=[],
-                            registered=[], callbacks=[], chrome_installed=[], black=[], created=[], run=lambda: None, platform=platform)
+    state = SimpleNamespace(
+        block=None,
+        entered=threading.Event(),
+        resume=threading.Event(),
+        complete=threading.Event(),
+        workers=[],
+        deferred=[],
+        registered=[],
+        callbacks=[],
+        chrome_installed=[],
+        black=[],
+        created=[],
+        run=lambda: None,
+        platform=platform,
+    )
 
     def evaluate(event):
         if threading.current_thread() not in state.workers:
@@ -62,20 +74,41 @@ def make_desktop(monkeypatch, tmp_path, platform):
             state.resume.wait()
         state.registered.append(event)
 
-    hooks = SimpleNamespace(**{name: Hook() for name in (
-        "before_show", "shown", "initialized", "loaded", "closing", "closed", "maximized", "minimized", "restored")})
+    hooks = SimpleNamespace(
+        **{
+            name: Hook()
+            for name in (
+                "before_show",
+                "shown",
+                "initialized",
+                "loaded",
+                "closing",
+                "closed",
+                "maximized",
+                "minimized",
+                "restored",
+            )
+        }
+    )
     dom_events = SimpleNamespace(**{name: DOMEvent(name) for name in DROP_EVENTS})
-    window = SimpleNamespace(events=hooks, native=None, dom=SimpleNamespace(document=SimpleNamespace(events=dom_events)))
+    window = SimpleNamespace(
+        events=hooks, native=None, dom=SimpleNamespace(document=SimpleNamespace(events=dom_events))
+    )
     if platform == "win32":
         window.native = SimpleNamespace(BeginInvoke=state.deferred.append)
     state.window = window
-    state.services = SimpleNamespace(data_dir=tmp_path, events=EventBus(), timings=Timings(),
-                                    on_closing=lambda: state.callbacks.append("closing") or False,
-                                    on_closed=lambda: state.callbacks.append("closed"))
+    state.services = SimpleNamespace(
+        data_dir=tmp_path,
+        events=EventBus(),
+        timings=Timings(),
+        on_closing=lambda: state.callbacks.append("closing") or False,
+        on_closed=lambda: state.callbacks.append("closed"),
+    )
 
     def commands(*args):
         def dispose():
             state.callbacks.append("commands disposed")
+
         dispose.refresh = lambda: None
         return dispose
 
@@ -90,13 +123,26 @@ def make_desktop(monkeypatch, tmp_path, platform):
     # Lifecycle tests fake the native adapter as well as pywebview; no AppKit/.NET
     # API is loaded. Windows installs before show, macOS after document attachment.
     from bmpt.webui import window_macos, window_windows
+
     class Host:
-        def __init__(self, window, owner): pass
-        def install(self): state.chrome_installed.append(threading.current_thread())
-        def dispatch(self, fn): state.deferred.append(fn)
-        def state(self): return dict(maximized=False, minimized=False, fullscreen=False)
-        def measure(self, layout): return None
-        def dispose(self): pass
+        def __init__(self, window, owner):
+            pass
+
+        def install(self):
+            state.chrome_installed.append(threading.current_thread())
+
+        def dispatch(self, fn):
+            state.deferred.append(fn)
+
+        def state(self):
+            return dict(maximized=False, minimized=False, fullscreen=False)
+
+        def measure(self, layout):
+            return None
+
+        def dispose(self):
+            pass
+
     monkeypatch.setattr(window_windows, "WindowsHost", Host)
     monkeypatch.setattr(window_macos, "CocoaHost", Host)
     monkeypatch.setattr(main.sys, "platform", platform)
@@ -104,11 +150,16 @@ def make_desktop(monkeypatch, tmp_path, platform):
     monkeypatch.setattr(native, "install_window_commands", commands)
     monkeypatch.setattr(native, "keep_web_view_black", lambda window: state.black.append(window))
     monkeypatch.setattr(Tray, "supported", staticmethod(lambda: False))
-    monkeypatch.setitem(sys.modules, "webview", SimpleNamespace(settings={}, create_window=lambda *a, **kw: state.created.append(kw) or window,
-                                                                start=start))
+    monkeypatch.setitem(
+        sys.modules,
+        "webview",
+        SimpleNamespace(settings={}, create_window=lambda *a, **kw: state.created.append(kw) or window, start=start),
+    )
     monkeypatch.setitem(sys.modules, "webview.dom", SimpleNamespace(DOMEventHandler=DOMEventHandler))
     monkeypatch.setitem(sys.modules, "System", SimpleNamespace(Action=lambda fn: fn))
-    monkeypatch.setitem(sys.modules, "PyObjCTools", SimpleNamespace(AppHelper=SimpleNamespace(callAfter=state.deferred.append)))
+    monkeypatch.setitem(
+        sys.modules, "PyObjCTools", SimpleNamespace(AppHelper=SimpleNamespace(callAfter=state.deferred.append))
+    )
     return state
 
 
@@ -148,6 +199,7 @@ def wait_loaded(desktop):
 def test_loop_return_with_pending_registration_does_not_hold_up_shutdown(desktop, caplog, blocked_event):
     desktop.block = blocked_event
     loaded = threading.Thread(target=desktop.window.events.loaded.fire, daemon=False)
+
     def leave_loop():
         loaded.start()
         assert desktop.entered.wait(3)
@@ -175,7 +227,7 @@ def test_loop_return_with_pending_registration_does_not_hold_up_shutdown(desktop
             for worker in desktop.workers:
                 worker.join(3)
         assert not loaded.is_alive() and not worker.is_alive()
-        assert desktop.registered == list(DROP_EVENTS[:DROP_EVENTS.index(blocked_event) + 1])
+        assert desktop.registered == list(DROP_EVENTS[: DROP_EVENTS.index(blocked_event) + 1])
         assert "Native lifecycle: loaded complete drops=abandoned" in caplog.text
 
 
@@ -197,9 +249,13 @@ def leave_loop():
 desktop.run = leave_loop
 scope['run_window'](desktop)
 """
-    result = subprocess.run([sys.executable, "-c", script, str(Path(__file__).resolve()), str(tmp_path),
-                             platform, blocked_event], capture_output=True, text=True, timeout=5,
-                            cwd=Path(__file__).resolve().parents[1])
+    result = subprocess.run(
+        [sys.executable, "-c", script, str(Path(__file__).resolve()), str(tmp_path), platform, blocked_event],
+        capture_output=True,
+        text=True,
+        timeout=5,
+        cwd=Path(__file__).resolve().parents[1],
+    )
     assert result.returncode == 0, result.stderr
 
 
@@ -234,16 +290,22 @@ def test_completed_load_preserves_drop_options_paths_and_close_results(desktop, 
         handlers = desktop.window.dom.document.events
         for name in DROP_EVENTS:
             assert getattr(handlers, name).handler.options == (True, True, 500 if name == "dragover" else 0)
-        handlers.drop.handler.callback({"dataTransfer": {"files": [
-            {"pywebviewFullPath": "/fake/private/dropped.bundle"}, {"name": "no-native-path"}]}})
+        handlers.drop.handler.callback(
+            {
+                "dataTransfer": {
+                    "files": [{"pywebviewFullPath": "/fake/private/dropped.bundle"}, {"name": "no-native-path"}]
+                }
+            }
+        )
         assert desktop.window.events.closing.fire() == [False]
         desktop.window.events.closed.fire()
 
     desktop.run = close
     with caplog.at_level(logging.INFO):
         run_window(desktop)
-        desktop.window.dom.document.events.drop.handler.callback({"dataTransfer": {"files": [
-            {"pywebviewFullPath": "/fake/private/late.bundle"}]}})
+        desktop.window.dom.document.events.drop.handler.callback(
+            {"dataTransfer": {"files": [{"pywebviewFullPath": "/fake/private/late.bundle"}]}}
+        )
     assert drops == [{"paths": ["/fake/private/dropped.bundle"]}]
     assert "/fake/private" not in caplog.text
     assert desktop.callbacks == ["closing", "closed"] + (["commands disposed"] if desktop.platform == "darwin" else [])
@@ -278,6 +340,7 @@ def test_late_loaded_work_is_skipped_after_stop(desktop, caplog, stop_route):
     desktop.run = close
     # Observe completion of a skipped daemon worker without waiting for any DOM event.
     skipped = threading.Event()
+
     class Capture(logging.Handler):
         def emit(self, record):
             if record.getMessage() == "Native lifecycle: loaded skipped stopped=True":
@@ -382,8 +445,13 @@ def test_loop_return_still_drains_writer_and_releases_instance(desktop, monkeypa
     s.start = lambda: s.jobs.submit("test.writer", write, writes="library")
     s.close = close_services
     desktop.run = leave_loop
-    server = SimpleNamespace(port=1, url="http://127.0.0.1:1/", app=SimpleNamespace(raise_token="fake"),
-                             start=lambda: None, stop=lambda: None)
+    server = SimpleNamespace(
+        port=1,
+        url="http://127.0.0.1:1/",
+        app=SimpleNamespace(raise_token="fake"),
+        start=lambda: None,
+        stop=lambda: None,
+    )
     monkeypatch.setattr(main, "EXE_DIR", s.data_dir)
     monkeypatch.setattr(main, "InstanceLock", lambda data_dir: instance)
     monkeypatch.setattr(main, "build", lambda *args, **kwargs: (s, server))

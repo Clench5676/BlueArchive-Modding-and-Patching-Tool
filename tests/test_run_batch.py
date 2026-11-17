@@ -8,10 +8,12 @@ from ba_modding_toolkit.utils import run_batch
 
 def make_worker(fail_on: set[int]):
     """构造按任务编号失败的工作函数"""
+
     def worker(n: int) -> str:
         if n in fail_on:
             raise ValueError(f"boom-{n}")
         return f"ok-{n}"
+
     return worker
 
 
@@ -51,10 +53,14 @@ class TestRunBatch:
         if max_workers == 1:
             assert progress[-1] == (5, 5, "5")
 
-    @pytest.mark.parametrize("max_workers,fail_on", [
-        (1, {3}),
-        (3, {2, 5}),
-    ], ids=["serial", "parallel"])
+    @pytest.mark.parametrize(
+        "max_workers,fail_on",
+        [
+            (1, {3}),
+            (3, {2, 5}),
+        ],
+        ids=["serial", "parallel"],
+    )
     def test_exception_does_not_abort_batch(self, max_workers: int, fail_on: set[int]):
         results, failures, progress = run_case(max_workers, fail_on)
         # 异常任务进入 failures，其余任务照常完成

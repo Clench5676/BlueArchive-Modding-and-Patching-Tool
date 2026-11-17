@@ -71,7 +71,7 @@ def test_preview_selection_is_deletable_but_unreconciled_game_use_is_protected(t
     with pytest.raises(ServiceError, match="photo_in_use"):
         gallery.delete("a", key, {key})
     gallery.delete("a", key)
-    assert gallery.selection('a') is None
+    assert gallery.selection("a") is None
     assert gallery.list("a")["photos"] == []
 
 
@@ -112,8 +112,9 @@ def test_generated_default_is_unique_per_variant_even_when_render_bytes_change(t
     first, second = Photographs(tmp_path), Photographs(tmp_path)
     captures = [capture()[0], capture(color=(90, 30, 10, 255))[0]]
     with ThreadPoolExecutor(max_workers=2) as pool:
-        results = list(pool.map(lambda args: args[0].save("a", args[1], "portrait", builtin=True),
-                                zip((first, second), captures)))
+        results = list(
+            pool.map(lambda args: args[0].save("a", args[1], "portrait", builtin=True), zip((first, second), captures))
+        )
     assert results[0]["saved"] == results[1]["saved"]
     assert len(first.list("a")["photos"]) == 1
     assert first.save("b", captures[0], "portrait", builtin=True)["saved"] != results[0]["saved"]
@@ -147,28 +148,29 @@ def test_family_gallery_has_independent_variant_counters_and_selections(tmp_path
     import base64
     import io
     from PIL import Image
+
     stream = io.BytesIO()
-    Image.new('RGBA', (202, 228), (40, 120, 180, 255)).save(stream, 'PNG')
-    png = 'data:image/png;base64,' + base64.b64encode(stream.getvalue()).decode()
-    store = Photographs(tmp_path, lambda key: key.split('_')[0])
-    a = store.save('student_base', png, 'portrait')['saved']
-    b = store.save('student_swimsuit', png, 'lobby')['saved']
-    entries = store.list('student_base')['photos']
-    assert {item['id'] for item in entries} == {a, b}
-    assert [item['number'] for item in entries] == [1, 1]
-    store.select('student_base', b)
-    assert store.list('student_base')['app'] == b
-    assert store.list('student_swimsuit')['app'] is None
-    assert store.list('another_base')['photos'] == []
-    builtin = store.save('student_base', png, 'portrait', builtin=True)['saved']
-    generated = next(item for item in store.list('student_base')['photos'] if item['id'] == builtin)
-    assert generated['provenance'] == 'generated' and generated['managed']
-    assert next(item for item in store.save('student_base', png, 'portrait')['photos'] if item['number'] == 2)
-    store.select('student_base', 'official')
-    assert store.selection('student_base') == 'official'
-    assert store.app_url('student_base') is None
-    reopened = Photographs(tmp_path, lambda key: key.split('_')[0])
-    assert reopened.image('student_base', b) == stream.getvalue()
+    Image.new("RGBA", (202, 228), (40, 120, 180, 255)).save(stream, "PNG")
+    png = "data:image/png;base64," + base64.b64encode(stream.getvalue()).decode()
+    store = Photographs(tmp_path, lambda key: key.split("_")[0])
+    a = store.save("student_base", png, "portrait")["saved"]
+    b = store.save("student_swimsuit", png, "lobby")["saved"]
+    entries = store.list("student_base")["photos"]
+    assert {item["id"] for item in entries} == {a, b}
+    assert [item["number"] for item in entries] == [1, 1]
+    store.select("student_base", b)
+    assert store.list("student_base")["app"] == b
+    assert store.list("student_swimsuit")["app"] is None
+    assert store.list("another_base")["photos"] == []
+    builtin = store.save("student_base", png, "portrait", builtin=True)["saved"]
+    generated = next(item for item in store.list("student_base")["photos"] if item["id"] == builtin)
+    assert generated["provenance"] == "generated" and generated["managed"]
+    assert next(item for item in store.save("student_base", png, "portrait")["photos"] if item["number"] == 2)
+    store.select("student_base", "official")
+    assert store.selection("student_base") == "official"
+    assert store.app_url("student_base") is None
+    reopened = Photographs(tmp_path, lambda key: key.split("_")[0])
+    assert reopened.image("student_base", b) == stream.getvalue()
 
 
 def test_manifest_flush_failure_restores_references_before_removing_image(tmp_path, monkeypatch):
@@ -176,11 +178,13 @@ def test_manifest_flush_failure_restores_references_before_removing_image(tmp_pa
     first = gallery.save("a", capture()[0], "portrait")["saved"]
     real = photographs.atomic_json
     calls = []
+
     def fail_after_replace(path, data):
         real(path, data)
         calls.append(path)
         if len(calls) == 1:
             raise OSError("Manifest directory flush failed")
+
     monkeypatch.setattr(photographs, "atomic_json", fail_after_replace)
     with pytest.raises(OSError):
         gallery.save("a", capture()[0], "portrait")
@@ -194,11 +198,13 @@ def test_failed_save_rollback_retains_valid_published_bytes_without_success(tmp_
     gallery = Photographs(tmp_path)
     real = photographs.atomic_json
     calls = []
+
     def fail(path, data):
         calls.append(path)
         if len(calls) == 1:
             real(path, data)
         raise OSError("Flush or rollback failed")
+
     monkeypatch.setattr(photographs, "atomic_json", fail)
     with pytest.raises(OSError):
         gallery.save("a", capture()[0], "portrait")

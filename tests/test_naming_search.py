@@ -7,11 +7,12 @@ from ba_modding_toolkit.searching import search_prefix, search_core
 if TYPE_CHECKING:
     from conftest import SampleCase, UpdateCase
 
+
 class TestParseFilename:
     def test_parse_filename_jp(self):
         filename = "assets-_mx-spinecharacters-ch0808_spr-mxdependency-textures-2077-08-08_12345678.bundle"
         parsed_filename = parse_filename(filename)
-        
+
         assert parsed_filename.category == "spinecharacters"
         assert parsed_filename.core == "ch0808_spr"
         assert parsed_filename.res_type == "textures"
@@ -22,7 +23,7 @@ class TestParseFilename:
     def test_parse_filename_global(self):
         filename = "assets-_mx-spinecharacters-ch8080_spr-_mxdependency-2088-07-07_002_assets_all_7355608.bundle"
         parsed = parse_filename(filename)
-        
+
         assert parsed.category == "spinecharacters"
         assert parsed.core == "ch8080_spr"
         assert parsed.res_type == "002"
@@ -33,7 +34,7 @@ class TestParseFilename:
     def test_parse_filename_legacy(self):
         filename = "assets-_mx-spinecharacters-ch0088_spr-_mxdependency-1970-01-01_assets_all_072107210721.bundle"
         parsed = parse_filename(filename)
-        
+
         assert parsed.category == "spinecharacters"
         assert parsed.core == "ch0088_spr"
         assert parsed.res_type is None
@@ -44,7 +45,7 @@ class TestParseFilename:
     def test_parse_filename_lobby(self):
         filename = "assets-_mx-spinelobbies-ch0808_home-_mxdependency-2020-07-07_003_assets_all_888888888.bundle"
         parsed = parse_filename(filename)
-        
+
         assert parsed.category == "spinelobbies"
         assert parsed.core == "ch0808_home"
         assert parsed.res_type == "003"
@@ -55,7 +56,7 @@ class TestParseFilename:
     def test_parse_filename_model(self):
         filename = "assets-_mx-characters-ch3333-_mxdependency-meshes-2000-10-10_assets_all_45673210.bundle"
         parsed = parse_filename(filename)
-        
+
         assert parsed.category == "characters"
         assert parsed.core == "ch3333"
         assert parsed.res_type == "meshes"
@@ -66,7 +67,7 @@ class TestParseFilename:
     def test_parse_filename_with_mxload(self):
         filename = "uis-09_common-99_minigame-cardgame-_mxload-2088-07-07_assets_all_87654321.bundle"
         parsed = parse_filename(filename)
-        
+
         assert "cardgame" in parsed.core
         assert parsed.res_type is None
         assert parsed.date == "2088-07-07"
@@ -120,7 +121,7 @@ class TestTypedDumpName:
     def test_parse_filename_no_type(self):
         filename = "assets-_mx-category-corename-2024-01-01_11111111.bundle"
         parsed = parse_filename(filename)
-        
+
         assert parsed.category == "category"
         assert parsed.core == "corename"
         assert parsed.res_type is None
@@ -129,26 +130,31 @@ class TestTypedDumpName:
         assert parsed.prefix.startswith("assets-_mx-category-corename")
 
     def test_preload_filename_model(self):
-        filename = "prologdepengroup-assets-_mx-characters-oooo_original-_mxprolog-2000-10-10_assets_all_111122223333.bundle"
+        filename = (
+            "prologdepengroup-assets-_mx-characters-oooo_original-_mxprolog-2000-10-10_assets_all_111122223333.bundle"
+        )
         parsed = parse_filename(filename)
-        
+
         assert parsed.category == "characters"
         assert parsed.core == "oooo_original"
         assert parsed.res_type is None
         assert parsed.date == "2000-10-10"
         assert parsed.crc == "111122223333"
         assert parsed.prefix.startswith("prologdepengroup-assets-_mx-characters-oooo_original")
-    
+
     def test_preload_filename_spinechar(self):
-        filename = "prologdepengroup-assets-_mx-spinecharacters-uouououo_spr-_mxprolog-2222-11-11_assets_all_7355608.bundle"
+        filename = (
+            "prologdepengroup-assets-_mx-spinecharacters-uouououo_spr-_mxprolog-2222-11-11_assets_all_7355608.bundle"
+        )
         parsed = parse_filename(filename)
-        
+
         assert parsed.category == "spinecharacters"
         assert parsed.core == "uouououo_spr"
         assert parsed.res_type is None
         assert parsed.date == "2222-11-11"
         assert parsed.crc == "7355608"
         assert parsed.prefix.startswith("prologdepengroup-assets-_mx-spinecharacters-uouououo_spr")
+
 
 class TestGetCategoryPrefix:
     """测试根据 core 后缀返回搜索前缀"""
@@ -187,12 +193,16 @@ class TestSearchPrefix:
 
         target1 = search_dir / "assets-_mx-spinelobbies-ch0721_home-mxdependency-2025-07-10_003_assets_all_12345.bundle"
         target2 = search_dir / "assets-_mx-spinelobbies-ch0721_home-mxdependency-2025-07-11_002_assets_all_67890.bundle"
-        other1 = search_dir / "assets-_mx-spinecharacters-ch0808_spr-mxdependency-2025-07-10_002_assets_all_11111.bundle"
+        other1 = (
+            search_dir / "assets-_mx-spinecharacters-ch0808_spr-mxdependency-2025-07-10_002_assets_all_11111.bundle"
+        )
 
         for f in [target1, target2, other1]:
             f.write_bytes(b"test data")
 
-        source = tmp_path / "assets-_mx-spinelobbies-ch0721_home-mxdependency-2024-01-01_textassets_assets_all_99999.bundle"
+        source = (
+            tmp_path / "assets-_mx-spinelobbies-ch0721_home-mxdependency-2024-01-01_textassets_assets_all_99999.bundle"
+        )
         source.write_bytes(b"old bundle data")
 
         candidates, err = search_prefix(source, [search_dir])
@@ -207,7 +217,9 @@ class TestSearchPrefix:
         search_dir = tmp_path / "Windows"
         search_dir.mkdir()
 
-        source = tmp_path / "assets-_mx-spinelobbies-ch0721_home-mxdependency-2024-01-01_textassets_assets_all_99999.bundle"
+        source = (
+            tmp_path / "assets-_mx-spinelobbies-ch0721_home-mxdependency-2024-01-01_textassets_assets_all_99999.bundle"
+        )
         source.write_bytes(b"old bundle data")
 
         candidates, err = search_prefix(source, [search_dir])
@@ -285,7 +297,9 @@ class TestSearchCore:
         search_dir = tmp_path / "Windows"
         search_dir.mkdir()
 
-        target = search_dir / "assets-_mx-spinecharacters-ch0808_spr-mxdependency-2025-07-10_002_assets_all_12345.bundle"
+        target = (
+            search_dir / "assets-_mx-spinecharacters-ch0808_spr-mxdependency-2025-07-10_002_assets_all_12345.bundle"
+        )
         target.write_bytes(b"test data")
 
         source = tmp_path / "ch0808_spr.png"
@@ -301,7 +315,9 @@ class TestSearchCore:
         search_dir = tmp_path / "Windows"
         search_dir.mkdir()
 
-        bundle_file = search_dir / "assets-_mx-spinelobbies-ch1437_home-mxdependency-2025-07-10_002_assets_all_12345.bundle"
+        bundle_file = (
+            search_dir / "assets-_mx-spinelobbies-ch1437_home-mxdependency-2025-07-10_002_assets_all_12345.bundle"
+        )
         txt_file = search_dir / "assets-_mx-spinelobbies-ch1437_home-mxdependency-2025-07-10_002_assets_all_12345.txt"
         meta_file = search_dir / "assets-_mx-spinelobbies-ch1437_home-mxdependency-2025-07-10_002_assets_all_12345.meta"
 
@@ -459,8 +475,12 @@ class TestParseAndSearchRoundtrip:
         search_dir.mkdir()
 
         # 创建多个版本的同 core bundle
-        bundle_v1 = search_dir / "assets-_mx-spinelobbies-np8888_home-mxdependency-2025-01-01_001_assets_all_11111.bundle"
-        bundle_v2 = search_dir / "assets-_mx-spinelobbies-np8888_home-mxdependency-2025-07-10_002_assets_all_22222.bundle"
+        bundle_v1 = (
+            search_dir / "assets-_mx-spinelobbies-np8888_home-mxdependency-2025-01-01_001_assets_all_11111.bundle"
+        )
+        bundle_v2 = (
+            search_dir / "assets-_mx-spinelobbies-np8888_home-mxdependency-2025-07-10_002_assets_all_22222.bundle"
+        )
         bundle_v3 = search_dir / "assets-_mx-spinelobbies-np8888_home-mxload-2025-07-11_003_assets_all_33333.bundle"
 
         for f in [bundle_v1, bundle_v2, bundle_v3]:
