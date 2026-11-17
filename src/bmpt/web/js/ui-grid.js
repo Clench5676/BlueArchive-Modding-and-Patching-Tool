@@ -21,7 +21,8 @@ import { GRID } from "./ui-tokens.js";
  * @typedef {object} LayoutItem
  * @property {number} [w] The width.
  * @property {number} [h] The height.
- * @property {number} [grow] In a row, the item's share of the width left over; its height is the row's unless it has one.
+ * @property {number} [grow] In a row, the item's share of the width left over; its height is the row's unless it has
+ *     one.
  * @property {number[]} [ink] [top, bottom] of the item's ink from its top, for a text.
  * @property {number} [mid] The item's visual centre from its top, where it gives one.
  */

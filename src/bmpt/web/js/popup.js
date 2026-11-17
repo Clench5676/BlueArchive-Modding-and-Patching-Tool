@@ -280,7 +280,8 @@ addEventListener("keydown", trapKey);
  * @typedef {object} PopupEntry
  * @property {HTMLElement} host The element the popup is drawn into.
  * @property {HTMLElement|null} el The popup's own layer, when the host holds several popups.
- * @property {((how: string) => void)|null} close Closes the popup; null for a popup that must be answered with one of its buttons.
+ * @property {((how: string) => void)|null} close Closes the popup; null for a popup that must be answered with one of
+ *     its buttons.
  * @property {HTMLElement|null} before What had the focus when the popup opened, to give it back.
  */
 
@@ -532,10 +533,11 @@ const CAPTION_L = {
   lines: 2,
   h: BUTTON_TEXT_H,
 };
-// The footer's sizes: "XS", the app's small button (CONTROL.buttonXS), every popup's footer (// "弹窗的按钮弄成 XS", every popup of the App); "L", the buttonL control with display captions (UIPopup_RaidEnterCheck's footer); "M", one size smaller
-// (the buttonM control, its caption 60 down to TYPE.body's floor); "S", two sizes smaller (the Settings value
-// row's small button, SMALL_BUTTON, 402 x 136, its caption 48 down to TYPE.body's floor). A popup's footer is
-// "XS" unless its call site names another size.
+// The footer's sizes: "XS", the app's small button (CONTROL.buttonXS), every popup's footer (// "弹窗的按钮弄成 XS", every
+// popup of the App); "L", the buttonL control with display captions (UIPopup_RaidEnterCheck's footer); "M", one size
+// smaller (the buttonM control, its caption 60 down to TYPE.body's floor); "S", two sizes smaller (the Settings value
+// row's small button, SMALL_BUTTON, 402 x 136, its caption 48 down to TYPE.body's floor). A popup's footer is "XS"
+// unless its call site names another size.
 const FOOTER_S = Object.freeze({ ...CONTROL.buttonS, minW: SMALL_BUTTON.w });
 export const FOOTER = Object.freeze({
   L: Object.freeze({ control: CONTROL.buttonL, caption: CAPTION_L }),
@@ -2036,7 +2038,8 @@ export function detailsTree(
  * @property {boolean} [recruit] The card is recruitable: shows the recruit icon.
  * @property {string} [kind] "mod" for an added mod.
  * @property {boolean} [inUse] The card is the one in use.
- * @property {string} [inUseText] A saved source's caption in the detail chip, independent of whether its files are in use.
+ * @property {string} [inUseText] A saved source's caption in the detail chip, independent of whether its files are in
+ *     use.
  * @property {boolean} [fav] The card is a favourite: shows the pin.
  * @property {boolean} [isNew] Shows the new dot.
  * @property {number} [size] The size in bytes, for the footer's total of the ticked cards.
@@ -2056,13 +2059,37 @@ export function detailsTree(
 /**
  * The student list's tools over the cards of a list popup.
  * @typedef {object} ListTools
- * @property {(string|{text: string})[]} [segs] The segment filter's captions: a string key, or {text} for a caption the caller wrote.
+ * @property {(string|{text: string})[]} [segs] The segment filter's captions: a string key, or {text} for a caption
+ *     the caller wrote.
  * @property {number|string} [seg] The chosen segment.
  * @property {(seg: number|string) => void} [onSeg] A segment was chosen.
  * @property {string} [sortKey] The sort shown.
- * @property {(query: string) => ListItem[]} [more] Cards added after the matching ones (Switch 3D Model's other students' models), asked on every drawing with the search's words, which may be empty; ordered and turned like the others.
- * @property {(keys: string[]) => void} [onView] The keys of the cards in view, after every drawing and scroll (the same signal that brings their thumbnails in).
- * @property {{label: string, checked: boolean, onChange: (checked: boolean) => void}} [toggle] An icon toggle (TOGGLE_ICON) before search, its label the hover hint; a click flips toggle.checked and draws again.
+ * @property {(query: string) => ListItem[]} [more] Cards added after the matching ones (Switch 3D Model's other
+ *     students' models), asked on every drawing with the search's words, which may be empty; ordered and turned like
+ *     the others.
+ * @property {(keys: string[]) => void} [onView] The keys of the cards in view, after every drawing and scroll (the
+ *     same signal that brings their thumbnails in).
+ * @property {{label: string, checked: boolean, onChange: (checked: boolean) => void}} [toggle] An icon toggle
+ *     (TOGGLE_ICON) before search, its label the hover hint; a click flips toggle.checked and draws again.
+ */
+
+/**
+ * A button under a list popup's cards.
+ * @typedef {{label: string, fn: () => void, primary?: boolean, greyed?: boolean, action?: string}} ListButton
+ */
+
+/**
+ * A checkbox below a list popup's details panel.
+ * @typedef {{label: string, checked: boolean, onChange?: (checked: boolean) => void}} ListCheck
+ */
+
+/**
+ * The details panel a list popup shows for one card.
+ * @typedef {object} ListDetails
+ * @property {string} title The panel's title.
+ * @property {Array<Array<string|null>>} fields The rows: [caption, value, colour].
+ * @property {Array<Array<unknown>>} actions The buttons: [caption, fn, disabled, semantic, hint, loading].
+ * @property {boolean} [truncate] Each value on one line, a "..." button showing a cut one whole.
  */
 
 /**
@@ -2072,27 +2099,43 @@ export function detailsTree(
  * @property {string} [hostId] The host's id, when host is not given.
  * @property {string} title The title.
  * @property {ListItem[]} items The cards.
- * @property {string|string[]|Set<string>|null} [selected] The chosen key; with multi, the ticked keys (selectable(items) ticks all).
+ * @property {string|string[]|Set<string>|null} [selected] The chosen key; with multi, the ticked keys
+ *     (selectable(items) ticks all).
  * @property {boolean} [multi] Several cards are ticked.
  * @property {string|null} [focus] With multi, the card whose details show (by default the first ticked one).
- * @property {(key: string, scroll: number) => void} onSelect A card was clicked (the caller ticks it, toggled(), or chooses it, and draws the popup again).
- * @property {{label: string, fn: () => void, primary?: boolean, greyed?: boolean, action?: string}[]|null} [buttons] The buttons under the list; or okText and onOk for the one confirm button.
+ * @property {(key: string, scroll: number) => void} onSelect A card was clicked (the caller ticks it, toggled(), or
+ *     chooses it, and draws the popup again).
+ * @property {ListButton[]|null} [buttons] The buttons under the list; or okText and onOk for the one confirm button.
  * @property {string} [okText] The confirm button's label.
  * @property {() => void} [onOk] The confirm button's handler.
  * @property {string} [cancelText] A bright blue Cancel before the primary button (the switch popups).
  * @property {string} [okSemantic] The confirm button's semantic, "confirm" by default.
- * @property {((how: string) => void)|null} [onClose] The close button, the backdrop and Escape; null for a popup without them (it must be answered).
- * @property {ListTools|null} [tools] The student list's tools over the cards; without them, hint (left) and footer (right) show in their place.
+ * @property {((how: string) => void)|null} [onClose] The close button, the backdrop and Escape; null for a popup
+ *     without them (it must be answered).
+ * @property {ListTools|null} [tools] The student list's tools over the cards; without them, hint (left) and footer
+ *     (right) show in their place.
  * @property {string} [hint] The line over the paper's left.
- * @property {string} [footer] The line over the paper's right (the ticked cards, their size); the footer buttons are LIST_FOOTER's size.
- * @property {{label: string, checked: boolean, onChange?: (checked: boolean) => void}|null} [check] A checkbox below the details; a click flips check.checked, so the same object is passed to every drawing.
- * @property {(it: ListItem) => {title: string, fields: Array<Array<string|null>>, actions: Array<Array<unknown>>, truncate?: boolean}} details The panel on the left: fields as [caption, value, colour], actions as [caption, fn, disabled, semantic, hint, loading]; a loading action (disabled while its check runs) shows the loading ring in its caption's place; truncate: each value on one line, a "..." button showing a cut one whole.
+ * @property {string} [footer] The line over the paper's right (the ticked cards, their size); the footer buttons are
+ *     LIST_FOOTER's size.
+ * @property {ListCheck|null} [check] A checkbox below the details; a click flips check.checked, so the same object is
+ *     passed to every drawing.
+ * @property {(it: ListItem) => ListDetails} details The panel on the left for a card: fields as [caption, value, colour],
+ *     actions as [caption, fn, disabled, semantic, hint, loading]; a loading action (disabled while its check runs)
+ *     shows the loading ring in its caption's place; truncate: each value on one line, a "..." button showing a cut
+ *     one whole.
  * @property {number} [keepScroll] The list's offset on its scrolling axis (horizontal for portraits).
- * @property {{keys: string[], onTick: (key: string, scroll: number) => void}|null} [tick] Cards ticked apart from being shown: a click on a card shows it in the details (onSelect, selected), a click on its corner's tick box ticks or unticks it (onTick).
- * @property {string|null} [empty] What an empty list says, in the middle of its paper (hall.noCandidates by default). A list with no card to show puts it there; with tools, while the chosen card (selected) is not among the cards shown, the primary button is the game's disabled one and answers nothing.
+ * @property {{keys: string[], onTick: (key: string, scroll: number) => void}|null} [tick] Cards ticked apart from
+ *     being shown: a click on a card shows it in the details (onSelect, selected), a click on its corner's tick box
+ *     ticks or unticks it (onTick).
+ * @property {string|null} [empty] What an empty list says, in the middle of its paper (hall.noCandidates by default).
+ *     A list with no card to show puts it there; with tools, while the chosen card (selected) is not among the cards
+ *     shown, the primary button is the game's disabled one and answers nothing.
  * @property {string} [layoutKind] The kind of cards the list lays out ("spr", "lobby", "model", ...).
- * @property {(it: ListItem) => string} [detailKind] The kind whose details panel a card shows when it differs from layoutKind's ("spr": the portrait panel, an upright picture beside the stacked fields), for lists of several kinds.
- * @property {boolean} [alignStart] The generic grid's cards start at the paper's left edge, as the kinds' grids place them.
+ * @property {(it: ListItem) => string} [detailKind] The kind whose details panel a card shows when it differs from
+ *     layoutKind's ("spr": the portrait panel, an upright picture beside the stacked fields), for lists of several
+ *     kinds.
+ * @property {boolean} [alignStart] The generic grid's cards start at the paper's left edge, as the kinds' grids place
+ *     them.
  * @property {boolean} [slimBand] Without tools and hint, the band over the paper is only as high as the footer's count.
  */
 

@@ -1,7 +1,7 @@
-// Scrolling areas fade out at an edge while there is more to scroll that way (every area that
-// scrolls, "如果上下还有内容，应有虚化"): a mask, opaque inside, transparent at the edge over FADE px, on the axis the area
-// scrolls along; an edge with nothing past it stays sharp. One listener (scroll, captured) and one observer (new areas, a
-// change of content) keep every area that matches SCROLLERS current.
+// Scrolling areas fade out at an edge while there is more to scroll that way (every area that scrolls,
+// "如果上下还有内容，应有虚化"): a mask, opaque inside, transparent at the edge over FADE px, on the axis the area scrolls along;
+// an edge with nothing past it stays sharp. One listener (scroll, captured) and one observer (new areas, a change of
+// content) keep every area that matches SCROLLERS current.
 export const SCROLLERS =
   ".popup-cards, .settings-rows, .import-list, .import-dialog-content, .plain-message-lines, .log-text, .repair-notes, .expr-clip.expanded";
 // the fade's depth in CSS px: SPACE.l (28 units) at the stage's scale, rounded

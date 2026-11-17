@@ -24,7 +24,8 @@ export const barPadding = (centre, height = BAR_HEIGHT) => Math.max(0, height - 
 /**
  * The vertical extent of several rectangles together.
  * @param {{top: number, bottom: number}[]} rects
- * @returns {{top: number, bottom: number}|null} The union of the rectangles' vertical extents; null when none has any height.
+ * @returns {{top: number, bottom: number}|null} The union of the rectangles' vertical extents; null when none has any
+ *     height.
  */
 export function extent(rects) {
   const list = rects.filter((r) => r && r.bottom > r.top);

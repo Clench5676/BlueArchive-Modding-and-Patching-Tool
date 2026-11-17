@@ -16,17 +16,25 @@ const BOLD_WIDTH = 1.06;
  * A row of the stats box.
  * @typedef {object} StatsRow
  * @property {string} [caption] The left column's text, one line; rows without one start the value at the box's padding.
- * @property {string|{text: string, fs: number, lines: number}} value The text, wrapped by wrapPath() into up to three lines from 38 down to 26 and never cut; or an already fitted {text, fs, lines} (a caller that fits several rows together).
+ * @property {string|{text: string, fs: number, lines: number}} value The text, wrapped by wrapPath() into up to three
+ *     lines from 38 down to 26 and never cut; or an already fitted {text, fs, lines} (a caller that fits several rows
+ *     together).
  * @property {string} [colour] The value's colour as "#rrggbb/a" (black).
  * @property {string} [ariaLabel] The value label's accessible text.
  * @property {number} [cut] Lines kept when the fit needs more: the rest becomes an ellipsis (0, the default: never).
- * @property {number} [reserve] Width left free at the value's right (an icon, a button); the value's room is narrower by it.
+ * @property {number} [reserve] Width left free at the value's right (an icon, a button); the value's room is narrower
+ *     by it.
  * @property {string} [secondary] A smaller one-line text under the value, cut with an ellipsis.
  * @property {number} [minH] The row's height at least (STATS_BOX.rowMin).
- * @property {number} [more] The width a button at the value's end takes (its gap included) when the value is longer than one line: the value is then cut to the one line it has at its full size and the button's width is left free (a details panel that does not scroll); a value that fits keeps the whole row.
+ * @property {number} [more] The width a button at the value's end takes (its gap included) when the value is longer
+ *     than one line: the value is then cut to the one line it has at its full size and the button's width is left free
+ *     (a details panel that does not scroll); a value that fits keeps the whole row.
  * @property {boolean} [bold] The value drawn bold (a caption standing as its own row).
  * @property {boolean} [joined] No divider under the row (a caption row and the value under it read as one).
- * @property {(geometry: object) => object[]} [slot] Gives nodes a caller adds in the row; geometry is {i, x, y, valueY, right, room, text, h, cut}: the row's index, the value's left edge, the row's centre, the value's centre, the inner right edge, the value's room, the fitted value, the row's height and whether `more` cut the value.
+ * @property {(geometry: object) => object[]} [slot] Gives nodes a caller adds in the row; geometry is {i, x, y,
+ *     valueY, right, room, text, h, cut}: the row's index, the value's left edge, the row's centre, the value's
+ *     centre, the inner right edge, the value's room, the fitted value, the row's height and whether `more` cut the
+ *     value.
  */
 
 /**

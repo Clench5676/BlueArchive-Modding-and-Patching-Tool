@@ -279,9 +279,9 @@ export const FULLSCREEN_BUTTON = Object.freeze({ w: 171, h: 126 });
 // edges: 2840 across, so a column is 200 and its pitch 240.
 export const GRID = Object.freeze({ columns: 12, gutter: 40, pageMargin: 60, stageW: 2960, stageH: 1665 });
 
-// Popup text, one size under the game's ("弹窗的标题和正文字号也应该小一号"): the title TYPE.title
-// in place of TYPE.display (72), a message's paragraphs 48 down to 40 in place of 52 down to 44, and a popup's option cards
-// (settings-rows.js) a step under the Settings page's: card titles 44 (50), options 42 (48), a path 40 (44).
+// Popup text, one size under the game's ("弹窗的标题和正文字号也应该小一号"): the title TYPE.title in place of TYPE.display (72), a
+// message's paragraphs 48 down to 40 in place of 52 down to 44, and a popup's option cards (settings-rows.js) a step
+// under the Settings page's: card titles 44 (50), options 42 (48), a path 40 (44).
 export const POPUP_TYPE = Object.freeze({
   title: Object.freeze({ fs: 62, min: 48 }),
   text: Object.freeze({ fs: 48, min: 40 }),
