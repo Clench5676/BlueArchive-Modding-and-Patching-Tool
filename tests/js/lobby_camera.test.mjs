@@ -1,11 +1,11 @@
-// Tests for the memorial lobby's camera framing: the views it allows (web/js/lobby.js framingView: centred
+// Tests for the memorial lobby's camera framing: the views it allows (web/js/lobby/lobby.js framingView: centred
 // across, no cell past the art that some pose leaves bare), what the shutter keeps (cameraParams) and where the intro
-// has its skeletons at a time (web/js/lobby-intro.js sampler). Run with Node's test runner.
+// has its skeletons at a time (web/js/lobby/lobby-intro.js sampler). Run with Node's test runner.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-const Lobby = await import("../../src/bmpt/web/js/lobby.js");
-const Intro = await import("../../src/bmpt/web/js/lobby-intro.js");
+const Lobby = await import("../../src/bmpt/web/js/lobby/lobby.js");
+const Intro = await import("../../src/bmpt/web/js/lobby/lobby-intro.js");
 
 const G = { x: -1480, y: -832.5, w: 2960, h: 1665 };
 const C = Lobby.FRAMING_CELL;
@@ -80,7 +80,7 @@ test("the shutter keeps the lobby scaled about the screen centre and moved so th
 });
 
 test("a camera's still shows the art the framed view showed, as its lobby does", async () => {
-  const { lobbyStillViewport } = await import("../../src/bmpt/web/js/lobby-still.js");
+  const { lobbyStillViewport } = await import("../../src/bmpt/web/js/lobby/lobby-still.js");
   // the official prefab's main layer, and a view framed on it: zoomed in and moved up and to the left
   const official = { name: "hero", x: 0, y: -1017.5, scale: 1.05769 };
   const w = 1600,

@@ -16,8 +16,8 @@ const THREE = await import("three");
 const { blendOf, createModelFx, fragment3d, rows, vertex3d, viewOf } = await import(
   "../../src/bmpt/web/js/model-fx.js"
 );
-const { PROGRAMS } = await import("../../src/bmpt/web/js/particles-gl.js");
-const { IDENTITY, WORLD } = await import("../../src/bmpt/web/js/particles.js");
+const { PROGRAMS } = await import("../../src/bmpt/web/js/lobby/particles-gl.js");
+const { IDENTITY, WORLD } = await import("../../src/bmpt/web/js/lobby/particles.js");
 
 const near = (a, b, eps = 1e-5, what = "") => assert.ok(Math.abs(a - b) <= eps, `${what} ${a} != ${b}`);
 

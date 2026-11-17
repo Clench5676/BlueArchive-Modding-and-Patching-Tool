@@ -1,10 +1,10 @@
-// Tests for web/js/particles.js (the lobby particle simulation and its geometry) and web/js/particles-gl.js (drawing
-// into a player's context and freeing it again, against a recording stand-in for WebGL2). Run by
+// Tests for web/js/lobby/particles.js (the lobby particle simulation and its geometry) and web/js/lobby/particles-gl.js
+// (drawing into a player's context and freeing it again, against a recording stand-in for WebGL2). Run by
 // tests/test_particles_player.py with Node's test runner.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-const P = await import("../../src/bmpt/web/js/particles.js");
+const P = await import("../../src/bmpt/web/js/lobby/particles.js");
 const { Effects, value, colorAt, shapePoint, geometry, vertexColor, drawOrder, STRIDE, WORLD, IDENTITY } = P;
 // where a system draws among stacked skeletons, each drawing its own parts (particles-gl.js layers by default): after
 // the last part of any layer that sorts before it ({layer, part}), else before the first layer's first (part -1)
@@ -1357,7 +1357,7 @@ globalThis.spine = {
 };
 globalThis.performance ??= { now: () => Date.now() };
 const Linear = await import("../../src/bmpt/web/js/core/linear.js");
-const GL = await import("../../src/bmpt/web/js/particles-gl.js");
+const GL = await import("../../src/bmpt/web/js/lobby/particles-gl.js");
 
 function player(gl, layer) {
   const page = Object.assign(new Texture(), { texture: {}, useMipMaps: false });

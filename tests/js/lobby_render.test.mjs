@@ -1,6 +1,6 @@
-// Tests for the lobby's mesh renderers (web/js/mesh-fx.js and their drawing in particles-gl.js), the skeletons' game
-// materials (web/js/spine/skeleton-materials.js) and pinned bones (web/js/spine/skeleton-pins.js), against recording
-// stand-ins for WebGL2 and spine-player. Run by tests/test_lobby_render.py with Node's test runner.
+// Tests for the lobby's mesh renderers (web/js/lobby/mesh-fx.js and their drawing in particles-gl.js), the skeletons'
+// game materials (web/js/spine/skeleton-materials.js) and pinned bones (web/js/spine/skeleton-pins.js), against
+// recording stand-ins for WebGL2 and spine-player. Run by tests/test_lobby_render.py with Node's test runner.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFileSync } from "node:fs";
@@ -231,9 +231,9 @@ test("empty ungraded targets are detected even when the final pass adds an opaqu
     Linear.detach(p);
   }
 });
-const Mesh = await import("../../src/bmpt/web/js/mesh-fx.js");
-const GL = await import("../../src/bmpt/web/js/particles-gl.js");
-const { STRIDE, IDENTITY } = await import("../../src/bmpt/web/js/particles.js");
+const Mesh = await import("../../src/bmpt/web/js/lobby/mesh-fx.js");
+const GL = await import("../../src/bmpt/web/js/lobby/particles-gl.js");
+const { STRIDE, IDENTITY } = await import("../../src/bmpt/web/js/lobby/particles.js");
 
 // --- mesh-fx.js -----------------------------------------------------------------------------------------------------
 
@@ -566,7 +566,7 @@ test("Multiply and Screen slots without replacement materials draw as Normal", (
 });
 
 test("only Aoi's NPC keeps its declared glow blends through the real lobby material setup", () => {
-  const source = readFileSync(new URL("../../src/bmpt/web/js/lobby.js", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby.js", import.meta.url), "utf8");
   const code = source.slice(source.indexOf("function lightUp("), source.indexOf("// --- fallback only"));
   for (const core of [
     "np0032_npc",
@@ -652,7 +652,7 @@ test("only Aoi's NPC keeps its declared glow blends through the real lobby mater
 });
 
 test("a library-only Mod without an official core still attaches and renders its lobby materials", () => {
-  const source = readFileSync(new URL("../../src/bmpt/web/js/lobby.js", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby.js", import.meta.url), "utf8");
   const code = source.slice(source.indexOf("function lightUp("), source.indexOf("// --- fallback only"));
   const gl = fakeGL(),
     layer = { name: "custom_home", materials: { pages: {}, blend: {}, tintBlack: false } };

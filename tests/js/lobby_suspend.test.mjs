@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import vm from "node:vm";
-import * as Sync from "../../src/bmpt/web/js/lobby-sync.js";
+import * as Sync from "../../src/bmpt/web/js/lobby/lobby-sync.js";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { latestLoad } from "../../src/bmpt/web/js/spine/spine-load.js";
-import * as Intro from "../../src/bmpt/web/js/lobby-intro.js";
+import * as Intro from "../../src/bmpt/web/js/lobby/lobby-intro.js";
 import { withTimeout } from "../../src/bmpt/web/js/core/async.js";
 
-const source = (await readFile(new URL("../../src/bmpt/web/js/lobby.js", import.meta.url), "utf8"))
+const source = (await readFile(new URL("../../src/bmpt/web/js/lobby/lobby.js", import.meta.url), "utf8"))
   .replace(/^import [^;]*;$/gm, "")
   .replace(/^export /gm, "");
 const deferred = () => {

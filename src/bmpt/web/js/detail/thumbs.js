@@ -1,7 +1,7 @@
 // Thumbnails rendered in the page from the portrait skeletons: faces for the expression cards, busts for the switch
 // card and the roster, cards for the popups. One hidden Spine player at a time (one WebGL context); results are
 // in-memory blob URLs, with validated lossless PNGs retained by the backend preview cache when enabled.
-import { artBounds, settle } from "../lobby-health.js";
+import { artBounds, settle } from "../lobby/lobby-health.js";
 import { specialFramingOf, specialView } from "./special-view.js";
 import { withTimeout } from "../core/async.js";
 import { loadPlayer as spinePlayer } from "../spine/spine-load.js";
@@ -9,7 +9,7 @@ import { ensureSpine, spineAllowed } from "../spine/spine-runtime.js";
 
 import { spineAssetBase, forgetSpineAssets } from "../core/api.js";
 import { lobbyIdle } from "../spine/rest-pose.js";
-import { lobbyStillViewport } from "../lobby-still.js";
+import { lobbyStillViewport } from "../lobby/lobby-still.js";
 import { previewError } from "./preview-error.js";
 import { captureRetries } from "../core/capture-retries.js";
 import { previewCache } from "./preview-cache.js";

@@ -1,7 +1,8 @@
 // Two bounded lobby module instances: one retained current scene and one hidden replacement.
 const modules = [null, null];
 const moduleAt = (index) =>
-  (modules[index] ||= index === 0 ? import("./lobby.js?student-hall-a") : import("./lobby.js?student-hall-b"));
+  (modules[index] ||=
+    index === 0 ? import("./lobby/lobby.js?student-hall-a") : import("./lobby/lobby.js?student-hall-b"));
 /**
  * Make the Hall's pool of memorial lobbies: one retained current scene and one hidden replacement.
  * @param {object} options

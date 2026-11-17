@@ -10,7 +10,7 @@ import * as NGUI from "../ui/ngui.js";
 import { anyOpen as popupOpen } from "../ui/popup.js";
 import { bindCorner } from "../window/corner-layout.js";
 import { ensureSpine } from "../spine/spine-runtime.js";
-import { wheelKind, wheelStep } from "../lobby-touch.js";
+import { wheelKind, wheelStep } from "../lobby/lobby-touch.js";
 import { S, clone, hitButton } from "../core/util.js";
 import { FULLSCREEN_BUTTON } from "../ui/ui-tokens.js";
 import {

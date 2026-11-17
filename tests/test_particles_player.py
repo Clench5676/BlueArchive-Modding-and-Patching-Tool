@@ -1,5 +1,6 @@
-"""The lobby particle player (web/js/particles.js: simulation and geometry; web/js/particles-gl.js: drawing and freeing
-its GL objects) is front-end code: its tests run with Node's test runner, skipped where Node is not installed."""
+"""The lobby particle player (web/js/lobby/particles.js: simulation and geometry; web/js/lobby/particles-gl.js: drawing
+and freeing its GL objects) is front-end code: its tests run with Node's test runner, skipped where Node is not
+installed."""
 
 import shutil
 import subprocess

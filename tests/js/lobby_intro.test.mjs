@@ -1,12 +1,12 @@
-// Tests for web/js/lobby-intro.js (the memorial lobby's intro timeline), the particle player's hooks it uses
+// Tests for web/js/lobby/lobby-intro.js (the memorial lobby's intro timeline), the particle player's hooks it uses
 // (particles.js Effects.restart / stop, overrides, spriteGeometry) and lobby-dof.js's blur spacing. Run by
 // tests/test_intro.py with Node's test runner.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-const I = await import("../../src/bmpt/web/js/lobby-intro.js");
-const P = await import("../../src/bmpt/web/js/particles.js");
-const Dof = await import("../../src/bmpt/web/js/lobby-dof.js");
+const I = await import("../../src/bmpt/web/js/lobby/lobby-intro.js");
+const P = await import("../../src/bmpt/web/js/lobby/particles.js");
+const Dof = await import("../../src/bmpt/web/js/lobby/lobby-dof.js");
 
 const near = (a, b, eps = 1e-6, what = "") => assert.ok(Math.abs(a - b) <= eps, `${what} ${a} != ${b}`);
 

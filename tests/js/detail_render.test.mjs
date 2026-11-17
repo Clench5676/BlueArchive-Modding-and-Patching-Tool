@@ -1419,7 +1419,7 @@ test("NGUI logs missing atlas metadata and keeps placeholder geometry for contro
 });
 
 test("a lobby player setup exception settles its layer instead of hanging Lobby.show", async () => {
-  const Lobby = await import("../../src/bmpt/web/js/lobby.js");
+  const Lobby = await import("../../src/bmpt/web/js/lobby/lobby.js");
   try {
     errors.length = 0;
     lobbyMode = "ready";

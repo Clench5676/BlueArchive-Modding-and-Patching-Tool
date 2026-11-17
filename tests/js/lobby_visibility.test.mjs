@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { overlaps, worldBounds } from "../../src/bmpt/web/js/lobby-health.js";
+import { overlaps, worldBounds } from "../../src/bmpt/web/js/lobby/lobby-health.js";
 
-const source = readFileSync(new URL("../../src/bmpt/web/js/lobby.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby.js", import.meta.url), "utf8");
 const code = source
   .slice(source.indexOf("export function reveal("), source.indexOf("export function setIntro("))
   .replace("export function", "function");

@@ -5,19 +5,19 @@
 // moved (lobby.js cameraParams), saved as a new Memorial Lobby choice of the student (lobby.camera.save, a job;
 // docs/webui/lobby-and-photography.md), its art the source the lobby shows; its still flies into the album at
 // the bottom left, which opens the student's Switch Memorial Lobby (detail.js) over the framing.
-import { rpc, waitJob } from "./core/api.js";
-import { T } from "./core/i18n.js";
-import * as NGUI from "./ui/ngui.js";
+import { rpc, waitJob } from "../core/api.js";
+import { T } from "../core/i18n.js";
+import * as NGUI from "../ui/ngui.js";
 import * as Lobby from "./lobby.js";
-import { S, hitButton } from "./core/util.js";
-import { visualButton as whiteButton, galleryBox } from "./photography/controller.js";
-import { cameraFeedback } from "./photography/feedback.js";
-import * as Loading from "./app/loading.js";
-import { modJob } from "./core/job-progress.js";
-import { prepareBack } from "./detail/visual-mode.js";
-import { anchoredCentre } from "./detail/visual-view.js";
-import { buttonCenter } from "./student-hall-icons.js";
-import { FULLSCREEN_BUTTON, SPACE } from "./ui/ui-tokens.js";
+import { S, hitButton } from "../core/util.js";
+import { visualButton as whiteButton, galleryBox } from "../photography/controller.js";
+import { cameraFeedback } from "../photography/feedback.js";
+import * as Loading from "../app/loading.js";
+import { modJob } from "../core/job-progress.js";
+import { prepareBack } from "../detail/visual-mode.js";
+import { anchoredCentre } from "../detail/visual-view.js";
+import { buttonCenter } from "../student-hall-icons.js";
+import { FULLSCREEN_BUTTON, SPACE } from "../ui/ui-tokens.js";
 
 const STAGE = { w: 1920, h: 1080 };
 // how long the flight waits for the saved choice's still before it takes the view on screen instead

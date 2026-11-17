@@ -1,6 +1,6 @@
 """The memorial lobby's intro timeline (gameassets/intro.py): built AnimationClips decoded, the timeline read through a
-graph, placed in a synthetic prefab by lobby.read_prefab; its player (web/js/lobby-intro.js) in Node; and a read-only
-check against an official game folder."""
+graph, placed in a synthetic prefab by lobby.read_prefab; its player (web/js/lobby/lobby-intro.js) in Node; and a
+read-only check against an official game folder."""
 
 from __future__ import annotations
 

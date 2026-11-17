@@ -1,4 +1,4 @@
-import { lobbyCaptureView, lobbyMaximumWidth } from "./photography/camera.js";
+import { lobbyCaptureView, lobbyMaximumWidth } from "../photography/camera.js";
 // Memorial lobby for the detail screen's second tab, framed and played like the game. The lobby's UILobbyElement prefab
 // (lobby.json, read by the server) places every skeleton in NGUI units around the screen centre; at 16:9 the game shows
 // the 2960 x 1665 units G around it. Fullscreen shows exactly G; the left view puts the head-pat point (Touch_Point)
@@ -7,27 +7,27 @@ import { lobbyCaptureView, lobbyMaximumWidth } from "./photography/camera.js";
 // game's own tracks and mixes, their voices and one subtitle line per voice cue (lines and voices come from Kivo,
 // setLines). The touch interaction and the wheel zoom are in lobby-touch.js, the drawing in lobby-stage.js, the intro in
 // lobby-intro.js.
-import { specialFramingOf, specialView } from "./detail/special-view.js";
-import { latestLoad, loadPlayer } from "./spine/spine-load.js";
-import { ensureSpine } from "./spine/spine-runtime.js";
-import { forgetSpineAssets, spineBase, spineAssetBase } from "./core/api.js";
-import { lobbyIdle } from "./spine/rest-pose.js";
+import { specialFramingOf, specialView } from "../detail/special-view.js";
+import { latestLoad, loadPlayer } from "../spine/spine-load.js";
+import { ensureSpine } from "../spine/spine-runtime.js";
+import { forgetSpineAssets, spineBase, spineAssetBase } from "../core/api.js";
+import { lobbyIdle } from "../spine/rest-pose.js";
 // every wait of the lobby is a preview's: counted in the foreground, without the time a read waits for the library
-import { withPreviewTimeout as withTimeout } from "./core/async.js";
-import { atStep, previewError } from "./detail/preview-error.js";
-import { T, language } from "./core/i18n.js";
-const dialogueModule = () => import("./student-hall-dialogue.js");
+import { withPreviewTimeout as withTimeout } from "../core/async.js";
+import { atStep, previewError } from "../detail/preview-error.js";
+import { T, language } from "../core/i18n.js";
+const dialogueModule = () => import("../student-hall-dialogue.js");
 import { artBounds, containingView, overlaps, resumeRest, settle, validRect, worldBounds } from "./lobby-health.js";
-import * as Linear from "./core/linear.js";
-import * as Materials from "./spine/skeleton-materials.js";
+import * as Linear from "../core/linear.js";
+import * as Materials from "../spine/skeleton-materials.js";
 import * as Particles from "./particles-gl.js";
-import * as SlotColours from "./spine/slot-colours.js";
+import * as SlotColours from "../spine/slot-colours.js";
 import * as Stage from "./lobby-stage.js";
-import * as Pins from "./spine/skeleton-pins.js";
+import * as Pins from "../spine/skeleton-pins.js";
 import * as Touch from "./lobby-touch.js";
 import * as Sync from "./lobby-sync.js";
 import * as Intro from "./lobby-intro.js";
-import { freezeWhileLoading, onScreen, previewLifecycle } from "./detail/preview-lifecycle.js";
+import { freezeWhileLoading, onScreen, previewLifecycle } from "../detail/preview-lifecycle.js";
 
 const STAGE = { w: 1920, h: 1080 };
 const GAME = { x: -1480, y: -832.5, w: 2960, h: 1665 }; // lobby.json "view": the game's 16:9 view in NGUI units

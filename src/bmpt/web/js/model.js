@@ -11,7 +11,7 @@ import { straightTextureLoader } from "./core/png-decode.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { chibiMaterial, disposeDefaults, outlineMaterial, setOutlineScale } from "./chibi-materials.js";
 import { createModelFx } from "./model-fx.js";
-import { wheelKind, wheelStep } from "./lobby-touch.js";
+import { wheelKind, wheelStep } from "./lobby/lobby-touch.js";
 import { modelUrl } from "./mods/switch-sources.js";
 import { freezeWhileLoading, onScreen } from "./detail/preview-lifecycle.js";
 

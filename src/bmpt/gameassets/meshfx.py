@@ -1,4 +1,4 @@
-"""Describe lobby prefab MeshRenderers and their looping Animators for web/js/mesh-fx.js.
+"""Describe lobby prefab MeshRenderers and their looping Animators for web/js/lobby/mesh-fx.js.
 
 Besides its skeletons and particle systems a lobby prefab can carry meshes drawn with effect shaders: lens dirt and
 light quads (FX/FX_SHADER_Lobby_Order, One One; DSFX/FX_SHADER_Additive_0) in Akane's, Eimi's, Karin's, Shiroko's,

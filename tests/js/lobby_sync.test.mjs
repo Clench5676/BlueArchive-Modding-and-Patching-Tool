@@ -1,11 +1,11 @@
-// Tests for the memorial lobby's random-timing clips and sound keys (web/js/lobby-sync.js) and the clips a skeleton's
-// idle starts (web/js/lobby.js idleClips), against a stand-in for spine's AnimationState. Run by
+// Tests for the memorial lobby's random-timing clips and sound keys (web/js/lobby/lobby-sync.js) and the clips a
+// skeleton's idle starts (web/js/lobby/lobby.js idleClips), against a stand-in for spine's AnimationState. Run by
 // tests/test_lobby_view.py with Node's test runner.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-const Sync = await import("../../src/bmpt/web/js/lobby-sync.js");
-const Lobby = await import("../../src/bmpt/web/js/lobby.js");
+const Sync = await import("../../src/bmpt/web/js/lobby/lobby-sync.js");
+const Lobby = await import("../../src/bmpt/web/js/lobby/lobby.js");
 
 // an AnimationState that records what is set and queued; entries carry a listener like spine-ts's
 class State {

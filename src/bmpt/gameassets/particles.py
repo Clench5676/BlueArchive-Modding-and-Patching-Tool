@@ -2,8 +2,8 @@
 
 Almost every lobby prefab carries particle systems: bokeh and dust over the scene, stars, petals, Michiru's sparkler.
 This module turns their typetrees (ParticleSystem, ParticleSystemRenderer, the material, its shader and textures)
-into compact JSON that web/js/particles.js simulates and draws. It works on plain typetrees, so it runs without game
-files; the service resolves the materials, textures and meshes, which live in other bundles.
+into compact JSON that web/js/lobby/particles.js simulates and draws. It works on plain typetrees, so it runs without
+game files; the service resolves the materials, textures and meshes, which live in other bundles.
 
 Values keep Unity's units and conventions: lengths in the system's own space (scaled as its scaling mode says),
 angles in radians as serialized, colours as stored (sRGB, converted by the front end), curve keys as
@@ -22,7 +22,7 @@ import math
 from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
-# DSFX shaders the player ports (web/js/particles.js PROGRAMS), by the shader name the material points at
+# DSFX shaders the player ports (web/js/lobby/particles.js PROGRAMS), by the shader name the material points at
 PROGRAMS = {
     "DSFX/FX_SHADER_Additive_0": "additive",
     "DSFX/FX_SHADER_AlphaBlend_0": "alphaBlend",

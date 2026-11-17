@@ -3,8 +3,8 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import vm from "node:vm";
 import { isSpecial, specialFraming, specialFramingOf, specialView } from "../../src/bmpt/web/js/detail/special-view.js";
-import { artBounds, settle, validRect, worldBounds } from "../../src/bmpt/web/js/lobby-health.js";
-import { layersOf } from "../../src/bmpt/web/js/lobby.js";
+import { artBounds, settle, validRect, worldBounds } from "../../src/bmpt/web/js/lobby/lobby-health.js";
+import { layersOf } from "../../src/bmpt/web/js/lobby/lobby.js";
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 const context = vm.createContext({
@@ -90,7 +90,7 @@ test("scene framing fills every supported view aspect from its own bounds", () =
 });
 
 test("detail and thumbnails frame real posed vertices, ignoring stale export bounds", () => {
-  const lobby = read("../../src/bmpt/web/js/lobby.js");
+  const lobby = read("../../src/bmpt/web/js/lobby/lobby.js");
   const code = lobby.slice(lobby.indexOf("function measureSpecial("), lobby.indexOf("export function frame("));
   const thumbs = read("../../src/bmpt/web/js/detail/thumbs.js");
   const thumbnail = new Function(
@@ -137,7 +137,7 @@ test("art taller than wide is framed as a whole character, whatever the slot's n
 });
 
 test("the detail view keeps scene framing for a tall set of several skeletons", () => {
-  const lobby = read("../../src/bmpt/web/js/lobby.js");
+  const lobby = read("../../src/bmpt/web/js/lobby/lobby.js");
   const code = lobby.slice(lobby.indexOf("function measureSpecial("), lobby.indexOf("export function frame("));
   const tall = { x0: -970, y0: -1000, x1: 975, y1: 1151 },
     art = () => tall,
@@ -163,7 +163,7 @@ test("the detail view keeps scene framing for a tall set of several skeletons", 
 });
 
 test("the detail view and its thumbnail frame a tall scene-named NPC alike", () => {
-  const lobby = read("../../src/bmpt/web/js/lobby.js");
+  const lobby = read("../../src/bmpt/web/js/lobby/lobby.js");
   const code = lobby.slice(lobby.indexOf("function measureSpecial("), lobby.indexOf("export function frame("));
   const thumbs = read("../../src/bmpt/web/js/detail/thumbs.js");
   const tall = { x0: -418, y0: -873, x1: 667, y1: 1341 };

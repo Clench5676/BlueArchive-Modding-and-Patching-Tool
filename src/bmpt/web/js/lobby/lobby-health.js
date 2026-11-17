@@ -1,5 +1,5 @@
 // Measure the art that can actually draw, rather than the export header's bounds or a prefab's scale.
-import { lobbyIdles } from "./spine/rest-pose.js";
+import { lobbyIdles } from "../spine/rest-pose.js";
 
 // Runtime helpers run only after their preview entry awaits ensureSpine().
 

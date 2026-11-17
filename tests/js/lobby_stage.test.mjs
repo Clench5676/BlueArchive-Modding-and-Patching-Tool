@@ -1,6 +1,6 @@
-// Tests for web/js/lobby-stage.js (every skeleton and effect of a memorial lobby drawn in the game's order in the
-// bottom player's context), with web/js/particles-gl.js placing the effects, against stand-ins for spine-player, its
-// canvas and WebGL2. Run by tests/test_lobby_stage.py with Node's test runner.
+// Tests for web/js/lobby/lobby-stage.js (every skeleton and effect of a memorial lobby drawn in the game's order in the
+// bottom player's context), with web/js/lobby/particles-gl.js placing the effects, against stand-ins for spine-player,
+// its canvas and WebGL2. Run by tests/test_lobby_stage.py with Node's test runner.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -67,10 +67,10 @@ globalThis.spine = {
 };
 globalThis.performance ??= { now: () => Date.now() };
 
-const Stage = await import("../../src/bmpt/web/js/lobby-stage.js");
-const GL = await import("../../src/bmpt/web/js/particles-gl.js");
+const Stage = await import("../../src/bmpt/web/js/lobby/lobby-stage.js");
+const GL = await import("../../src/bmpt/web/js/lobby/particles-gl.js");
 const Linear = await import("../../src/bmpt/web/js/core/linear.js");
-const P = await import("../../src/bmpt/web/js/particles.js");
+const P = await import("../../src/bmpt/web/js/lobby/particles.js");
 
 // The layers and effects of three lobbies as lobby.json gives them (the queues of their atlas pages and of their
 // effects' materials, the effects' sorting fudge and depth): two skeletons each, the second the intro's scene parked

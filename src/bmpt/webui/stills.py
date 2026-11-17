@@ -26,8 +26,8 @@ RENDERERS: dict[str, tuple[str, ...]] = {
         "js/chibi-materials.js",
         # the halo's particle effects (model-fx.js) with the lobby simulation and programs they run on
         "js/model-fx.js",
-        "js/particles.js",
-        "js/particles-gl.js",
+        "js/lobby/particles.js",
+        "js/lobby/particles-gl.js",
         "js/app/touch-fx.js",
         "vendor/three-0.160.0/build/three.module.min.js",
         "vendor/three-0.160.0/examples/jsm/loaders/GLTFLoader.js",
@@ -36,8 +36,8 @@ RENDERERS: dict[str, tuple[str, ...]] = {
     # portrait, lobby and collection stills drawn with the Spine player (thumbs.js)
     "spine": (
         "js/detail/thumbs.js",
-        "js/lobby-still.js",
-        "js/lobby-health.js",
+        "js/lobby/lobby-still.js",
+        "js/lobby/lobby-health.js",
         "js/spine/rest-pose.js",
         "js/detail/special-view.js",
         "js/spine/spine-load.js",
@@ -53,7 +53,7 @@ NOT_PIXELS = frozenset(
         "js/core/async.js",
         "js/core/capture-priority.js",
         "js/core/capture-retries.js",
-        "js/lobby-touch.js",
+        "js/lobby/lobby-touch.js",
         "js/ui/ngui.js",
         "js/detail/preview-cache.js",
         "js/detail/preview-error.js",
@@ -62,7 +62,7 @@ NOT_PIXELS = frozenset(
         "vendor/three-0.160.0/examples/jsm/controls/OrbitControls.js",
         # particles-gl.js's lobby drawing only (create()): the 3D model view uses its shader sources alone
         "js/core/linear.js",
-        "js/mesh-fx.js",
+        "js/lobby/mesh-fx.js",
     }
 )
 

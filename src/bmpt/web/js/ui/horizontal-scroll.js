@@ -1,4 +1,4 @@
-import { wheelStep } from "../lobby-touch.js";
+import { wheelStep } from "../lobby/lobby-touch.js";
 
 /**
  * Horizontal UIScrollView input for the popup's list paper: wheel, drag and keys scroll the area. Native

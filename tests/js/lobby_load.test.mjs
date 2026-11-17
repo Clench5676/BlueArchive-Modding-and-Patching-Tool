@@ -5,9 +5,9 @@ import { test } from "node:test";
 import { latestLoad, loadPlayer } from "../../src/bmpt/web/js/spine/spine-load.js";
 import { withTimeout } from "../../src/bmpt/web/js/core/async.js";
 import { atStep } from "../../src/bmpt/web/js/detail/preview-error.js";
-import { validRect } from "../../src/bmpt/web/js/lobby-health.js";
+import { validRect } from "../../src/bmpt/web/js/lobby/lobby-health.js";
 
-const source = readFileSync(new URL("../../src/bmpt/web/js/lobby.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby.js", import.meta.url), "utf8");
 const loading = source
   .slice(source.indexOf("const lobbyLoads ="), source.indexOf("export const setTrace"))
   .replaceAll("export function", "function")

@@ -1,7 +1,7 @@
-"""A memorial lobby drawn in the game's order (web/js/lobby-stage.js): every skeleton's atlas pages and the particle
-effects of a lobby sorted by render queue in one context. The front-end tests run with Node's test runner, skipped
-where Node is not installed; a read-only check against an official game folder confirms the layers and effects those
-tests take from three lobbies whose two skeletons interleave."""
+"""A memorial lobby drawn in the game's order (web/js/lobby/lobby-stage.js): every skeleton's atlas pages and the
+particle effects of a lobby sorted by render queue in one context. The front-end tests run with Node's test runner,
+skipped where Node is not installed; a read-only check against an official game folder confirms the layers and effects
+those tests take from three lobbies whose two skeletons interleave."""
 
 from __future__ import annotations
 

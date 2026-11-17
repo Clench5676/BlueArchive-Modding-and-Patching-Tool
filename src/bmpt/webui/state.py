@@ -767,8 +767,9 @@ def _holds_id(folder: Path, data_id: str) -> bool:
     return False
 
 
-# The memorial lobby's fullscreen zoom-out limit (web/js/lobby.js zoomBounds): the game's view, the art every clip keeps
-# painted (Full Art), the box of the scene's art over its poses (Unlocked), or a custom number of game views across.
+# The memorial lobby's fullscreen zoom-out limit (web/js/lobby/lobby.js zoomBounds): the game's view, the art every clip
+# keeps painted (Full Art), the box of the scene's art over its poses (Unlocked), or a custom number of game views
+# across.
 LOBBY_ZOOM_MODES = ("game", "art", "unlocked", "custom")
 LOBBY_ZOOM_CUSTOM = (1.0, 4.0)  # the custom limit's range; lobby.js never zooms out further (ZOOM_OUT_MAX)
 LOBBY_ZOOM_CUSTOM_DEFAULT = 2.0

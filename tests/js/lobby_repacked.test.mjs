@@ -11,9 +11,9 @@ import {
   settle,
   validRect,
   worldBounds,
-} from "../../src/bmpt/web/js/lobby-health.js";
+} from "../../src/bmpt/web/js/lobby/lobby-health.js";
 import { lobbyIdle } from "../../src/bmpt/web/js/spine/rest-pose.js";
-import * as Lobby from "../../src/bmpt/web/js/lobby.js";
+import * as Lobby from "../../src/bmpt/web/js/lobby/lobby.js";
 import * as Pins from "../../src/bmpt/web/js/spine/skeleton-pins.js";
 
 const context = vm.createContext({
@@ -124,7 +124,7 @@ test("repacked bounds and prefab scale frame posed vertices, independent of the 
 });
 
 test("the full lobby measurement frames renamed idle art beyond the official camera and clamps a stale touch bone", () => {
-  const source = readFileSync(new URL("../../src/bmpt/web/js/lobby.js", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby.js", import.meta.url), "utf8");
   const code = source
     .slice(source.indexOf("const CELL ="), source.indexOf("export function frame("))
     .replaceAll("export function", "function")
@@ -171,7 +171,7 @@ test("the full lobby measurement frames renamed idle art beyond the official cam
 });
 
 test("revisited revision geometry matches cold painting exactly and cannot be mutated by callers", () => {
-  const source = readFileSync(new URL("../../src/bmpt/web/js/lobby.js", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby.js", import.meta.url), "utf8");
   const code = source
     .slice(source.indexOf("const CELL ="), source.indexOf("// --- the zoom-out limit"))
     .replaceAll("export function", "function");
@@ -204,7 +204,7 @@ test("revisited revision geometry matches cold painting exactly and cannot be mu
 });
 
 test("geometry identity covers revisions, transforms, skins, rest poses, pins, framing and camera", () => {
-  const source = readFileSync(new URL("../../src/bmpt/web/js/lobby.js", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby.js", import.meta.url), "utf8");
   const helpers = source.slice(source.indexOf("function rectCache("), source.indexOf("// the grid: three game views"));
   const h = new Function(`let current;
     ${helpers}
@@ -261,7 +261,7 @@ test("geometry identity covers revisions, transforms, skins, rest poses, pins, f
 });
 
 test("geometry caches bound memory, evict least recently used entries and clone typed masks", () => {
-  const source = readFileSync(new URL("../../src/bmpt/web/js/lobby.js", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby.js", import.meta.url), "utf8");
   const rectCache =
     new Function(`${source.slice(source.indexOf("function rectCache("), source.indexOf("const paintedRects ="))}
     return rectCache;`)();

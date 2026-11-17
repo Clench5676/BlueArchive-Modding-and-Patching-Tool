@@ -1,5 +1,5 @@
 import * as Photo from "../photography/controller.js";
-import * as Camera from "../lobby-camera.js";
+import * as Camera from "../lobby/lobby-camera.js";
 import { notify } from "../ui/popup.js";
 import { modJob, progressName } from "../core/job-progress.js";
 // Detail screen, built from the game's own prefab (UICharacterDetail) by ngui.js: the prefab supplies every frame,
@@ -28,7 +28,7 @@ import * as Compatibility from "../mods/mod-compatibility.js";
 import * as ActionList from "../ui/action-list.js";
 import { actionLabel, actionsOf, groupLabel, menuOf } from "./clip-names.js";
 import { cardText, fitCards } from "../ui/action-list-layout.js";
-import * as Lobby from "../lobby.js";
+import * as Lobby from "../lobby/lobby.js";
 import * as Visual from "./visual-mode.js";
 import { QUEUEABLE, current as modsState, entryLabel, listSep, refused } from "../mods/mod-switch.js";
 import * as Prompts from "../app/prompts.js";

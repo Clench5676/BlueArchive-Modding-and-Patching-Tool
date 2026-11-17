@@ -2,7 +2,7 @@
 // render queue, so a skeleton whose pages sit in several queues (lobby.json layer "pages") draws one part per
 // queue, lowest first, each part the slots on its pages in draw order, and what sorts between two queues
 // (particle effects, particles-gl.js) draws in between.
-import { queuesOf } from "../particles.js";
+import { queuesOf } from "../lobby/particles.js";
 
 // an attachment's atlas page by the name the prefab gives it (the page's file name without its extension), or null
 // for an attachment without one (clipping, bounding boxes, points)

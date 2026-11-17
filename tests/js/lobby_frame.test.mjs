@@ -1,10 +1,10 @@
-// Tests for the memorial lobby's zoom-out limit (web/js/lobby.js): the poses it checks (every clip the lobby plays,
-// over the idle) and the painted rect shrunk until none of them uncovers its edge. Run by tests/test_lobby_view.py with
-// Node's test runner.
+// Tests for the memorial lobby's zoom-out limit (web/js/lobby/lobby.js): the poses it checks (every clip the lobby
+// plays, over the idle) and the painted rect shrunk until none of them uncovers its edge. Run by
+// tests/test_lobby_view.py with Node's test runner.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-const Lobby = await import("../../src/bmpt/web/js/lobby.js");
+const Lobby = await import("../../src/bmpt/web/js/lobby/lobby.js");
 const Linear = await import("../../src/bmpt/web/js/core/linear.js");
 
 test("a configured lobby reads every art layer from the library preview and keeps the game's layout", async () => {
