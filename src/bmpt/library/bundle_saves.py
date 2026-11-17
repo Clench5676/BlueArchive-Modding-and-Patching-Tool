@@ -7,12 +7,13 @@ cannot be split without changing its bytes, so the largest one bounds the phase;
 
 Concurrency: the saves keep their caller's class and locks (a costume build: class 1 for a preview's own build, class
 2 for the costume check, both without the library lock; class 2 under it for an apply the user watches) and take no
-lock of their own. A save is one step, as before (the largest about 7 s, all of it compression); ``step`` runs
+lock of their own. A save is one step (the largest about 7 s, all of it compression); ``step`` runs
 before each one starts, so a waiting foreground preview stops new saves and gets at least half the cores.
 
 ``fast``: LZMA with the fast mode and a hash-chain match finder (``fast_lzma``) instead of UnityPy's normal mode;
-the stream keeps UnityPy's header (lc 3, lp 0, pb 2, an 8 MiB dictionary), so the game reads it as before, and is
-about three times faster for some 3 % more bytes."""
+the stream keeps UnityPy's header (lc 3, lp 0, pb 2, an 8 MiB dictionary), so the game can read it, and is
+about three times faster for some 3 % more bytes.
+"""
 
 from __future__ import annotations
 
@@ -63,8 +64,7 @@ def _fast_lzma(original: Callable[..., bytes]) -> Callable[..., bytes]:
 
 
 def install_fast_lzma() -> None:
-    """Route UnityPy's LZMA compression through ``_fast_lzma``: unchanged unless the calling thread is inside
-    ``fast_lzma``. Idempotent."""
+    """Install the LZMA wrapper once, enabling fast compression only inside fast_lzma."""
     from UnityPy.helpers import CompressionHelper as helper
 
     with _install:
@@ -78,19 +78,28 @@ def install_fast_lzma() -> None:
 
 
 class fast_lzma:
-    """Within it, LZMA saves on this thread use the fast mode (``install_fast_lzma`` must have run)."""
+    """Enable fast LZMA saves on this thread after install_fast_lzma has run."""
 
     def __enter__(self) -> None:
+        """Enable fast mode while remembering the thread's enclosing mode."""
         self.before = getattr(_fast, "on", False)
         _fast.on = True
 
     def __exit__(self, *_: Any) -> None:
+        """Restore the thread's enclosing compression mode."""
         _fast.on = self.before
 
 
 def save_workers(count: int, cpus: int | None = None) -> int:
-    """Threads for ``count`` bundles: at most ``MAX_WORKERS``, and at most half the cores, so a foreground preview
-    keeps at least one core (a single-core machine saves in turn)."""
+    """Limit saves to MAX_WORKERS and half the cores, reserving CPU for foreground previews.
+
+    Args:
+        count: Number of bundles awaiting saves.
+        cpus: Available logical CPU count; None queries the system.
+
+    Returns:
+        At least one worker, even on a single-core machine or when the CPU count is unknown.
+    """
     cpus = os.cpu_count() if cpus is None else cpus
     return max(1, min(count, MAX_WORKERS, (cpus or 1) // 2))
 
@@ -111,15 +120,26 @@ def save_bundles(
     workers: int | None = None,
     fast: bool = False,
 ) -> None:
-    """Save each ``(target, bundle, output, options)`` with ``bundle.save(output, options)``; ``fast``: LZMA in
-    the fast mode (module docstring).
+    """Save bundles concurrently, largest first, with callbacks on the calling thread.
 
     ``step`` is called before each save starts, on the calling thread (a job's yield to the foreground, or its
     cancellation by raising); ``progress(done, count)`` after each save ends, on the calling thread too. At most
     ``workers`` saves (``save_workers``) run at a time, the largest bundles first. A save that fails raises
     ``mod_apply_failed`` naming its ``target``; once one failed, or ``step`` raised, no other save starts and the
     ones under way end before the error is raised (their files are in the build's own directory, which the caller
-    removes)."""
+    removes).
+
+    Args:
+        jobs: (target, bundle, output, options) tuples; target names failures and output
+            receives bundle.save's bytes with the supplied save options.
+        step: Runs before each save starts; may yield to foreground work or cancel by raising.
+        progress: Receives (completed saves, total saves), initially and after each completion.
+        workers: Maximum concurrent saves; None uses save_workers, and values below one use one.
+        fast: Whether worker threads use the faster LZMA settings described above.
+
+    Raises:
+        ServiceError: A bundle cannot be saved (mod_apply_failed), naming its target.
+    """
     order = sorted(range(len(jobs)), key=lambda i: -_payload(jobs[i][1]))
     count = len(jobs)
     progress(0, count)

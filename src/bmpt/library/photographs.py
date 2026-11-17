@@ -33,7 +33,18 @@ MAX_DIMENSION = 4096
 
 
 def decode_capture(value: str) -> tuple[bytes, int, int]:
-    """Validate a bounded PNG without changing its original encoded bytes."""
+    """Validate a bounded PNG without changing its original encoded bytes.
+
+    Args:
+        value: PNG base64 data URL, limited to MAX_ENCODED characters, RGB/RGBA mode,
+            and dimensions from 64 through MAX_DIMENSION pixels on each side.
+
+    Returns:
+        Original PNG bytes, width, and height in pixels.
+
+    Raises:
+        ServiceError: The encoding, dimensions, mode, or PNG payload is invalid (photo_invalid).
+    """
     if not isinstance(value, str) or len(value) > MAX_ENCODED or not value.startswith("data:image/png;base64,"):
         raise ServiceError("photo_invalid")
     try:
@@ -55,6 +66,12 @@ def decode_capture(value: str) -> tuple[bytes, int, int]:
 
 
 def student_family(catalog, key: str) -> str:
+    """Resolve a variant's student family, including manually assigned variants.
+
+    Args:
+        catalog: Character catalog providing standard and assignment-variant lookups.
+        key: Variant key whose costumes share photographs with the same student.
+    """
     try:
         return catalog.variant(key).family
     except (KeyError, ServiceError):
@@ -105,11 +122,19 @@ class _Manifest(dict):
 
 
 class Photographs:
-    """One shared library manifest; IDs, digests and per-character ownership are validated on every read. A record
-    or a selection that cannot be used costs that entry only (it is logged once, left out of every use and written
-    back unchanged); a manifest that cannot be read as a whole makes every read and write refuse and is never touched."""
+    """Manage a shared photograph manifest with validated IDs, digests, and student ownership.
+
+    An unusable record or selection is logged once, excluded from use, and written
+    back unchanged. An unreadable manifest blocks all reads and writes and remains untouched.
+    """
 
     def __init__(self, library_root: Path, family_of=None):
+        """Locate persistent photo storage and prepare manifest caching and locking.
+
+        Args:
+            library_root: Library folder containing the photographs directory.
+            family_of: Resolves a variant key to its student family; None treats each variant as its own family.
+        """
         self.family_of = family_of or (lambda variant: variant)
         self.root = Path(library_root) / "photographs"
         devmode.check_write(self.root)
@@ -125,17 +150,19 @@ class Photographs:
             logger.warning("Photograph manifest: %s cannot be used (%s): %.80s", kind, reason, name)
 
     def family(self, variant: str) -> str:
+        """Resolve a variant's student family, falling back to its own key when unknown."""
         try:
             return self.family_of(variant) or variant
         except (KeyError, ServiceError):
             return variant
 
     def selection(self, variant: str):
+        """Return a variant's photo ID, official choice, or None for its default or stale selection."""
         with self._lock:
             return self._chosen(self._read(), variant)
 
     def _chosen(self, data: _Manifest, variant: str):
-        """The variant's selection, None when it has none or it is stale: the photo's family is no longer the
+        """The variant's selection, None when it has none or it is stale: the photo's family differs from the
         variant's (the catalog changed), which reads as the default thumbnail and leaves the row as it is."""
         key = data["selected"].get(variant)
         if key in (None, "official"):
@@ -237,9 +264,16 @@ class Photographs:
 
     @staticmethod
     def url(variant: str, key: str) -> str:
+        """Build a photograph asset URL scoped to a variant.
+
+        Args:
+            variant: Variant key escaped into the asset route for family validation.
+            key: Photograph ID identifying the PNG within the library.
+        """
         return f"/asset/photography/{quote(variant, safe='')}/{key}.png"
 
     def list(self, variant: str) -> dict:
+        """List a variant's family photographs with URLs, provenance, and its app selection."""
         with self._lock:
             data = self._read()
             photos = [
@@ -255,11 +289,13 @@ class Photographs:
             return {"variant": variant, "photos": photos, "app": self._chosen(data, variant)}
 
     def app_url(self, variant: str) -> str | None:
+        """Return a variant's selected photograph URL, or None for official, default, or stale choices."""
         with self._lock:
             key = self._chosen(self._read(), variant)
             return self.url(variant, key) if key and key != "official" else None
 
     def has_selection(self, variant: str) -> bool:
+        """Check whether a variant has an explicit usable photo, official, or default selection."""
         with self._lock:
             data = self._read()
             return variant in data["selected"] and (
@@ -277,6 +313,23 @@ class Photographs:
         *,
         builtin: bool = False,
     ) -> dict:
+        """Store a lossless capture and its provenance without selecting it automatically.
+
+        Args:
+            variant: Variant key owning the capture and its per-variant sequence number.
+            png: PNG base64 data URL accepted by decode_capture.
+            mode: Capture scene, portrait or lobby.
+            expression: Captured expression label, empty if unavailable; at most 500 characters.
+            action: Captured animation label, empty if unavailable; at most 500 characters.
+            source: Captured source label, empty if unavailable; at most 500 characters.
+            builtin: Whether this is a generated default; reuses an existing verified default for the variant.
+
+        Returns:
+            The family photo listing with saved set to the stored or reused photo ID.
+
+        Raises:
+            ServiceError: The capture or manifest is invalid, or a reused default image is missing.
+        """
         if mode not in ("portrait", "lobby") or not all(
             isinstance(value, str) and len(value) <= 500 for value in (variant, expression, action, source)
         ):
@@ -357,6 +410,16 @@ class Photographs:
         return {**self.list(variant), "saved": key}
 
     def select(self, variant: str, key: str | None) -> dict:
+        """Persist a variant's app-thumbnail choice after verifying any selected photo.
+
+        Args:
+            variant: Variant key whose thumbnail selection changes.
+            key: Photo ID belonging to the same student family, official for game art,
+                or None for the default thumbnail.
+
+        Returns:
+            The family photo listing with the updated selection.
+        """
         self.root.mkdir(parents=True, exist_ok=True)
         with self._lock, file_lock(self.root / "index.lock"):
             self._cached = None
@@ -368,6 +431,19 @@ class Photographs:
         return self.list(variant)
 
     def delete(self, variant: str, key: str, protected: set[str] = frozenset()) -> dict:
+        """Delete a photograph and clear usable selections, preserving protected references.
+
+        Args:
+            variant: Variant key authorizing access to the photo's student family.
+            key: Photo ID to remove; official cannot be deleted.
+            protected: Photo IDs referenced by managed library assets and therefore retained.
+
+        Returns:
+            The remaining family photo listing.
+
+        Raises:
+            ServiceError: The photo is official, missing, invalid, or named by a protected or held reference.
+        """
         if key == "official":
             raise ServiceError("asset_official")
         self.root.mkdir(parents=True, exist_ok=True)
@@ -406,6 +482,15 @@ class Photographs:
         return self.list(variant)
 
     def image(self, variant: str, key: str) -> bytes:
+        """Read a photograph only after checking its student family and SHA-256 digest.
+
+        Args:
+            variant: Variant key authorizing access to the photo's student family.
+            key: Photo ID naming the image and its manifest record.
+
+        Raises:
+            ServiceError: The photo is missing, belongs to another family, or fails integrity validation.
+        """
         with self._lock:
             entry = self._entry(variant, key)
             try:

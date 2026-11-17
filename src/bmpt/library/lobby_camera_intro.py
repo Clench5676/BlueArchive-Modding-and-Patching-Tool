@@ -28,10 +28,12 @@ _POSITION, _SCALE = 1, 3
 
 
 def ptr(pid: int, file_id: int = 0) -> dict:
+    """Build a Unity object pointer from its path ID and zero-local or one-based external file ID."""
     return {"m_FileID": file_id, "m_PathID": pid}
 
 
 def crc(path: str) -> int:
+    """Hash an Animator-relative transform path as Unity's unsigned CRC32 binding key."""
     return zlib.crc32(path.encode("utf-8")) & 0xFFFFFFFF
 
 
@@ -39,6 +41,11 @@ class Timeline:
     """The timeline bundle's objects: typetrees read once, MonoScript class names, the TimelineAsset."""
 
     def __init__(self, objects: dict[int, Any]):
+        """Cache timeline typetrees and local MonoScript class names.
+
+        Args:
+            objects: Object readers from the timeline's serialized file, indexed by path ID.
+        """
         self.objects = objects
         self._trees: dict[int, dict] = {}
         self.scripts = {
@@ -46,11 +53,13 @@ class Timeline:
         }
 
     def tree(self, pid: int) -> dict:
+        """Read and cache the typetree of a timeline object's path ID."""
         if pid not in self._trees:
             self._trees[pid] = self.objects[pid].read_typetree()
         return self._trees[pid]
 
     def cls(self, pid: int) -> str | None:
+        """Return a local MonoBehaviour's script class by path ID, or None when unavailable."""
         obj = self.objects.get(pid)
         if obj is None or obj.type.name != "MonoBehaviour":
             return None
@@ -58,8 +67,14 @@ class Timeline:
         return self.scripts.get(script.get("m_PathID")) if not script.get("m_FileID") else None
 
     def rest(self, timeline: int) -> tuple[float, float] | None:
-        """When the rest pose starts in the intro and the mix the Spine track blends into it: the earliest Idle_01 clip
-        of a Spine track that does not start the intro. None for a timeline without one."""
+        """Find the earliest noninitial Idle_01 clip's start and nonnegative blend duration in seconds.
+
+        Args:
+            timeline: TimelineAsset path ID whose local Spine tracks are searched.
+
+        Returns:
+            Start and mix duration, or None when the intro has no transition to a rest pose.
+        """
         found = None
         for pointer in self.tree(timeline).get("m_Tracks") or []:
             pid = pointer.get("m_PathID")
@@ -80,8 +95,16 @@ class Timeline:
 def camera_clip(
     template: dict, path: str, start: tuple[float, ...], end: tuple[float, ...], at: float, blend: float
 ) -> dict:
-    """A recorded clip of the camera node (``path`` below the Animator): position and scale, ``start`` until ``at``,
-    then ``end``, reached linearly over ``blend`` seconds; held after. ``template``: a recorded clip of the same file."""
+    """Create a camera clip that holds the intro framing, blends to the camera, then holds it.
+
+    Args:
+        template: Recorded AnimationClip typetree from the same serialized file.
+        path: Camera node's transform path relative to the Animator.
+        start: Initial x/y/z position followed by x/y/z scale.
+        end: Final position and scale in the same order.
+        at: Rest-pose start time in seconds, when the transition begins.
+        blend: Linear transition duration in seconds; zero switches immediately.
+    """
     frames = [(-FLT_MAX, [(i, 0.0, 0.0, 0.0, v) for i, v in enumerate(start)])]
     if blend > 0.0:
         frames.append((at, [(i, 0.0, 0.0, (b - a) / blend, a) for i, (a, b) in enumerate(zip(start, end))]))
@@ -126,10 +149,20 @@ def camera_clip(
 
 
 class Writer:
-    """Adds objects to the prefab's file that are made after the timeline file's (same build): their types, script
-    types and the external files their pointers name."""
+    """Copy timeline object types, script types, and external references into a same-build prefab file."""
 
     def __init__(self, sf: Any, source: Any, timeline_index: int, fresh: Callable[[], int]):
+        """Prepare a prefab writer after checking serialized-format compatibility.
+
+        Args:
+            sf: Destination prefab serialized file receiving the copied objects.
+            source: Timeline serialized file supplying compatible object and script types.
+            timeline_index: One-based external-file ID of source in the prefab's file table.
+            fresh: Allocates unused nonzero path IDs in the destination.
+
+        Raises:
+            ValueError: The serialized files differ in build format or use a header version below 16.
+        """
         self.sf, self.source, self.index, self.fresh = sf, source, timeline_index, fresh
         self.trees: dict[int, dict] = {}  # the new objects' typetrees by path id
         if (
@@ -141,7 +174,11 @@ class Writer:
             raise ValueError("timeline of another build")
 
     def file_id(self, file_id: int) -> int:
-        """A timeline file's pointer file id in the prefab's file: its own objects are the external timeline file."""
+        """Map a timeline pointer's file ID into the prefab, adding external entries as needed.
+
+        Args:
+            file_id: Zero for a timeline-local object, otherwise its one-based external-file ID.
+        """
         if file_id == 0:
             return self.index
         path = self.source.externals[file_id - 1].path
@@ -152,7 +189,7 @@ class Writer:
         return len(self.sf.externals)
 
     def remap(self, value: Any) -> Any:
-        """A typetree of the timeline file with its pointers as the prefab's file names them."""
+        """Copy a timeline typetree value with nonnull pointer file IDs remapped to the prefab."""
         if isinstance(value, dict):
             if value.keys() == {"m_FileID", "m_PathID"}:
                 return value if not value["m_PathID"] else ptr(value["m_PathID"], self.file_id(value["m_FileID"]))
@@ -185,7 +222,12 @@ class Writer:
         return len(self.sf.types) - 1
 
     def add(self, source_obj: Any, tree: dict) -> int:
-        """A new object of ``source_obj``'s type with ``tree`` (pointers already the prefab's)."""
+        """Add an object of a timeline type to the prefab and return its new path ID.
+
+        Args:
+            source_obj: Timeline object reader supplying the serialized and script type.
+            tree: New object's typetree, with pointers already mapped into the prefab's file table.
+        """
         index = self._type_index(source_obj)
         template = next(iter(self.sf.objects.values()))
         new = object.__new__(type(template))
@@ -214,9 +256,19 @@ def add_intro_track(
     node_path: str,
     camera: tuple[tuple[float, ...], tuple[float, ...]],
 ) -> tuple[int, int, list[int]] | None:
-    """The prefab's own copy of the intro's TimelineAsset with the camera track: (timeline, track, added path ids), or
-    None when the intro has no rest pose to switch at or no recorded track to copy from (the intro is then framed by
-    the camera too)."""
+    """Copy an intro TimelineAsset into the prefab with an added camera animation track.
+
+    Args:
+        writer: Prefab writer supplying compatible types, remapped pointers, and fresh path IDs.
+        timeline: Source timeline's cached objects and script classes.
+        timeline_id: Source TimelineAsset path ID whose tracks are retained.
+        node_path: Camera transform path relative to the root Animator.
+        camera: Initial and final position/scale tuples, each ordered x/y/z position then x/y/z scale.
+
+    Returns:
+        New timeline ID, track ID, and all added path IDs; None without a rest transition
+        or recorded clip template, leaving the camera framing active during the intro too.
+    """
     rest = timeline.rest(timeline_id)
     track_template = next(
         (

@@ -2,7 +2,8 @@
 
 The library plans which mod file goes to which part (``ModLibrary._plan``), stages copies of those parts, builds the
 mod into the copies here, and writes the game itself only through its journaled commit. Upstream's
-``core.mod_install`` stays as upstream ships it, for the classic UI and the CLI."""
+``core.mod_install`` stays as upstream ships it, for the classic UI and the CLI.
+"""
 
 from __future__ import annotations
 
@@ -61,7 +62,13 @@ class PlannedGroup:
 
 
 def backup_file(dst: Path, create_backup: bool, log: LogFunc = no_log) -> None:
-    """Keep the classic adjacent backup, also used before a library transaction writes."""
+    """Keep the classic adjacent backup before a library transaction writes.
+
+    Args:
+        dst: Existing game file copied to the adjacent .backup path.
+        create_backup: Whether to make the copy; False leaves the filesystem untouched.
+        log: Receives user-facing operation messages.
+    """
     if create_backup:
         backup_path = dst.with_suffix(dst.suffix + ".backup")
         devmode.check_write(backup_path)
@@ -71,7 +78,6 @@ def backup_file(dst: Path, create_backup: bool, log: LogFunc = no_log) -> None:
 
 def _replace(source: Path, target: Path, log: LogFunc) -> bool:
     try:
-        # dev mode: game files are written only inside BAMT_DEV_WRITABLE (or the library's staging folders)
         devmode.check_write(target)
         log(t("log.file.overwritten", path=target))
         shutil.copy2(source, target)
@@ -82,9 +88,16 @@ def _replace(source: Path, target: Path, log: LogFunc) -> bool:
 
 
 def matches_target_crc(source: Path, target: Path) -> bool:
-    """Whether a file's bytes already have the CRC in the target's name. The library also writes a mod file whole
+    """Check whether a file's bytes have the CRC encoded in the target's name.
+
+    The library also writes a mod file whole
     over a part whose name differs from the mod file's (its CRC changed in a game update, or it matched by CAB), so
-    the mod file's own name proves nothing about the part's."""
+    the mod file's own name proves nothing about the part's.
+
+    Args:
+        source: File whose complete contents are hashed with CRC32.
+        target: Bundle filename supplying the required decimal CRC.
+    """
     crc = parse_filename(target.name).crc
     return bool(crc) and crc.isdigit() and CRCUtils.compute_crc32(source) == int(crc)
 
@@ -141,8 +154,7 @@ def _build_group(
             log=log,
         )
         if result.no_match:
-            # The files hold nothing these parts take (e.g. a part of materials only that a game update rebuilt):
-            # the parts stay the official copies they were staged as.
+            # A target taking no mod assets must retain its staged official bytes.
             for target in group.target_paths:
                 log(f"  ⏭️ {t('log.mod_update.target_unchanged', name=target.name, count=0)}")
         elif not result.success:
@@ -167,9 +179,22 @@ def install_staged(
     log: LogFunc = no_log,
     progress: ProgressCallback | None = None,
 ) -> list[tuple[str, str]]:
-    """Build every group into the staged parts it names, in place, one group after another; the update builds go
-    through ``output_dir``. ``progress`` hears (group number, groups, core) before each group. Returns the failures
-    as (core, reason); a group that raises is one."""
+    """Build groups sequentially into their staged target parts in place.
+
+    Args:
+        groups: Install plans referring to staged copies, never live game targets.
+        output_dir: Scratch directory for update builds before copying them over staged parts.
+        asset_types: Asset classes eligible for replacement during an update build.
+        save_options: Bundle compression and CRC settings for saved output.
+        spine_options: Skeleton conversion settings, or None for the rebuild defaults.
+        anim_check: Animation safety checks, or None to disable them.
+        log: Receives user-facing operation messages.
+        progress: Receives (one-based group number, group count, core) before each group;
+            None disables reporting.
+
+    Returns:
+        Failures as (core, reason), including groups that raise during the build.
+    """
     output_dir.mkdir(parents=True, exist_ok=True)
     failures: list[tuple[str, str]] = []
     for i, group in enumerate(groups, 1):

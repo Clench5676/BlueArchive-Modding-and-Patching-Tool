@@ -1,4 +1,4 @@
-"""Troubleshoot Mods, a pre-release Settings entry: every choice back to official, one at a time again.
+"""Troubleshoot Mods by restoring official choices so mods can be tried one at a time.
 
 The Enable Mods switch's Off writes official files and keeps the configuration, and while mods are off a choice is
 only configured, so mods cannot be tried one by one with it. Apply Official to All runs the same Off (it adopts the
@@ -40,8 +40,10 @@ MAX_LISTED = 200
 
 @dataclasses.dataclass(frozen=True)
 class TroubleshootResult(ToggleResult):
-    """The toggle's result, entry by entry (the switch's result popup reads it as it is), with the check of the
-    files against Steam's list (None when none ran) and whether the job was cancelled before its end."""
+    """Extend the toggle popup's result with a Steam check and cancellation status.
+
+    check is None when no verification ran.
+    """
 
     check: dict | None = None
     cancelled: bool = False
@@ -54,7 +56,7 @@ def _result(toggle: ToggleResult, check_: dict | None, cancelled: bool = False) 
 
 
 def snapshot(config: dict | None) -> dict | None:
-    """The saved configuration, None when not troubleshooting."""
+    """Return a profile document's saved troubleshooting snapshot, or None when absent."""
     value = (config or {}).get(TAG)
     if not isinstance(value, dict) or not isinstance(value.get("folders"), dict):
         return None
@@ -62,7 +64,7 @@ def snapshot(config: dict | None) -> dict | None:
 
 
 def status(library: ModLibrary) -> dict[str, Any]:
-    """{active, count (saved choices), since} for Settings."""
+    """Report active, saved-choice count, and snapshot time for a library's Settings page."""
     saved = snapshot(library.profiles.read())
     if saved is None:
         return {"active": False, "count": 0, "since": None}
@@ -77,9 +79,22 @@ def apply_official(
     progress: Callable | None = None,
     cancel: Callable[[], bool] | None = None,
 ) -> TroubleshootResult:
-    """Apply Official to All: the Off over ``pins``, the snapshot (an earlier one is kept: pressed again while
-    troubleshooting, the configuration from before stays the one to restore), the configuration of ``pins`` cleared
-    and mods on. A cancelled or stopped Off leaves the intent Off and takes no snapshot."""
+    """Restore official files, snapshot choices, clear them, and enable individual mod trials.
+
+    An existing snapshot is kept when the action is repeated. A cancelled or stopped
+    Off leaves the intent Off and takes no snapshot.
+
+    Args:
+        library: Library supplying the toggle, configuration, and Steam verification data.
+        pins: Game installs and servers the operation is fixed to.
+        log: Receives user-facing operation messages.
+        progress: Receives toggle progress and (completed, total, message) verification updates;
+            None disables reporting.
+        cancel: Returns True to stop at an entry boundary; None runs to completion.
+
+    Returns:
+        Toggle outcomes, cancellation status, and any final Steam check.
+    """
     current = profiles_mod.enabled(library.profiles.read())
     result = library.toggle(False, current, pins, log=log, progress=progress, cancel=cancel)
     if cancel and cancel():
@@ -117,10 +132,26 @@ def restore(
     progress: Callable | None = None,
     cancel: Callable[[], bool] | None = None,
 ) -> TroubleshootResult:
-    """Restore Configuration: the snapshot's configuration back in the installs it names (a core configured meanwhile
+    """Restore snapshotted choices and switch to the intent recorded with them.
+
+    Put the snapshot's configuration back in the installs it names (a core configured meanwhile
     and absent from it goes back to official), then the toggle to the intent it was taken with. The snapshot is
-    dropped once the toggle ran; a refusal (``untested_build``, the game running) keeps it for the same call again.
-    ``state_changed`` when there is none."""
+    dropped once the toggle ran; a refusal (``untested_build``, the game running) keeps it for retry.
+
+    Args:
+        library: Library holding the troubleshooting snapshot and protected game writer.
+        pins: Game installs and servers the operation is fixed to.
+        log: Receives user-facing operation messages.
+        progress: Receives toggle progress and (completed, total, message) verification updates;
+            None disables reporting.
+        cancel: Signals interruption between restored entries or verified files; None allows the full restoration.
+
+    Returns:
+        Toggle outcomes with cancellation status and a Steam check when restoring the Off intent.
+
+    Raises:
+        ServiceError: No snapshot exists (state_changed), or a protected write or toggle is refused.
+    """
     config = library.profiles.read()
     saved = snapshot(config)
     if saved is None:
@@ -161,10 +192,21 @@ def restore(
 def check(
     library: ModLibrary, pins: list[Pin], progress: Callable | None = None, cancel: Callable[[], bool] | None = None
 ) -> dict[str, Any]:
-    """Every bundle Steam's file list names in each of ``pins`` against its size and SHA-1: {verified, checked,
-    changed: [names], missing: [names], unverified: [install keys]} (each list cut at ``MAX_LISTED``; ``changedCount``
-    and ``missingCount`` exact). An install without a readable list, or without the consent to read Steam's records,
-    is unverified."""
+    """Verify listed install bundles against Steam's file sizes and SHA-1 digests.
+
+    Report verified status, the scheduled bundle count, changed and missing names,
+    and unverified install keys. The changed and missing lists are capped at MAX_LISTED
+    while their counts remain exact. Cancellation leaves those comparisons partial;
+    checked still names the scheduled total. An unreadable list or absent scan
+    consent leaves the install unverified.
+
+    Args:
+        library: Library providing scan consent, Steam records, listings, and cached hashes.
+        pins: Game installs and servers the operation is fixed to.
+        progress: Receives (processed bundles, total bundles, message) every 64 files and at the end;
+            None disables reporting.
+        cancel: Returns True to stop before the next bundle; None checks all listed bundles.
+    """
     changed: list[str] = []
     missing: list[str] = []
     unverified: list[str] = []

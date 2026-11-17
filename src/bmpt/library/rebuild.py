@@ -3,7 +3,8 @@
 Built on the engine's primitives (``Bundle.load``, ``extract_patch``, ``apply_patch``, ``save``); upstream's
 ``process_mod_update`` stays as upstream ships it, for the classic UI and the CLI. On top of upstream's flow this
 one keeps assets whose counterparts are unchanged (``UpdateScope``), validates every target before it saves any,
-fails the whole mod on a load, match or save failure, and reports what moved over and what did not."""
+fails the whole mod on a load, match or save failure, and reports what moved over and what did not.
+"""
 
 from __future__ import annotations
 
@@ -35,10 +36,16 @@ from ..errors import ServiceError
 
 
 class UpdateScope:
-    """Counterparts in the new release, shared by preflight and execution (the ``scope`` of
-    ``Bundle.extract_patch``)."""
+    """Track new-release counterparts for preflight and execution through Bundle.extract_patch."""
 
     def __init__(self, targets: list[Bundle], strategy: MatchStrategy, asset_types: set[str]):
+        """Index replaceable target assets by the selected matching strategy.
+
+        Args:
+            targets: Loaded official bundles receiving the transferred assets.
+            strategy: Engine key strategy used for both source and target assets.
+            asset_types: Eligible Unity class names, or ALL for every replaceable class.
+        """
         key_of = Bundle._get_key_func(strategy)
         self.counterparts: dict[AssetKey, list[tuple[Bundle, object]]] = {}
         self.not_transferred: set[AssetKey] = set()
@@ -52,6 +59,7 @@ class UpdateScope:
                         self.counterparts.setdefault(key, []).append((target, obj))
 
     def includes(self, key: AssetKey) -> bool:
+        """Record a source key as seen and report whether a target counterpart exists."""
         if key is not None:
             self.seen.add(key)
         if key in self.counterparts:
@@ -61,6 +69,15 @@ class UpdateScope:
 
     @staticmethod
     def serialized(bundle: Bundle, obj) -> tuple[bytes, dict[str, bytes]]:
+        """Read serialized object bytes and the external stream ranges used by that object.
+
+        Args:
+            bundle: Loaded bundle containing the object and its stream companions.
+            obj: Unity object reader whose raw bytes and stream metadata are compared.
+
+        Raises:
+            ValueError: A required stream is missing or its requested byte range is invalid.
+        """
         raw = obj.get_raw_data()
         companions = collect_stream_companions(raw, bundle.env.file)
         if companions is None:
@@ -86,6 +103,16 @@ class UpdateScope:
         return raw, companions
 
     def skip_unchanged(self, source: Bundle, obj, key: AssetKey) -> bool:
+        """Mark an asset unchanged only when its bytes equal every target counterpart.
+
+        Args:
+            source: Loaded source bundle supplying the object's stream payloads.
+            obj: Source object reader to compare without conversion.
+            key: Existing counterpart key whose objects must all match.
+
+        Returns:
+            Whether equality was proven; unreadable data leaves extraction to report its failure.
+        """
         try:
             content = self.serialized(source, obj)
             if all(content == self.serialized(target, counterpart) for target, counterpart in self.counterparts[key]):
@@ -97,17 +124,21 @@ class UpdateScope:
 
     @property
     def target_only(self) -> set[AssetKey]:
-        """Target assets of the replaced types that no source asset matched."""
+        """Return target keys of replaced types that no source asset matched."""
         return set(self.counterparts) - self.seen
 
 
 @dataclass
 class RebuildResult:
-    """``rebuild``'s outcome. ``all_unchanged``: every matched asset already equals the target's, nothing was
+    """Describe rebuild success, output files, and asset-transfer results.
+
+    ``all_unchanged``: every matched asset already equals the target's, nothing was
     written. ``no_match``: a failure because no source asset has a counterpart in the targets (a target that holds
-    none of the replaced types, or none the sources carry): the targets take nothing from the sources. The asset lists hold the keys as text, sorted: ``matched`` found their counterpart in a target (written
+    none of the replaced types, or none the sources carry): the targets take nothing from the sources. The asset
+    lists hold the keys as text, sorted: ``matched`` found their counterpart in a target (written
     or equal), ``unchanged`` equal their counterpart, ``not_transferred`` have none, ``target_only`` are the
-    targets' assets of the replaced types that the sources lack. A prepared patch reports matches only."""
+    targets' assets of the replaced types that the sources lack. A prepared patch reports matches only.
+    """
 
     success: bool
     message: str
@@ -147,10 +178,29 @@ def rebuild(
     prepared_patch: Patch | None = None,
     on_step: Callable[[str], None] | None = None,
 ) -> RebuildResult:
-    """Move the sources' assets into the targets and save the changed targets in ``output_dir`` under their own
-    names (N to N). ``prepared_patch`` replaces the extraction: every target must then take all of it.
-    ``on_step`` hears ``extract``, ``replace``, ``save`` and ``crc``. A failure returns ``success=False`` with a
-    message (and the ``ServiceError`` when one names it); nothing is saved unless every target passed."""
+    """Transfer source assets into current target parts and save changed parts under their names.
+
+    Every target is validated before any output is saved.
+
+    Args:
+        source_paths: Mod bundles supplying assets for extraction.
+        target_paths: Current-release bundles whose structure and untouched assets are retained.
+        output_dir: Existing directory receiving changed target bundles under their original names.
+        asset_types_to_replace: Unity asset classes eligible for transfer.
+        save_options: Compression and CRC settings for saved bundles.
+        spine_options: Skeleton conversion settings, or None for engine defaults.
+        skip_unchanged: Whether targets with only equal or skipped assets need no output file.
+        match_strategy: Engine key strategy pairing source assets with target counterparts.
+        anim_check: Animation comparisons passed to each target's patch application; None skips them.
+        log: Receives user-facing operation messages.
+        prepared_patch: Extracted patch entries to seed the transfer; use empty source_paths
+            to bypass extraction. None builds a scoped patch from sources. With a supplied
+            patch, each target must accept every resulting entry.
+        on_step: Receives extract, replace, save, and crc phase names; None disables reporting.
+
+    Returns:
+        Output pairs and transfer details, or success=False with a message and any named ServiceError.
+    """
     try:
         log(f"\n--- {t('log.section.extracting_patches')} ---")
         if on_step:
@@ -176,7 +226,6 @@ def rebuild(
             skel_conflicts.extend(conflicts)
 
         if skel_conflicts:
-            # A skel version the target version cannot take stops the whole mod before any target.
             msg = format_skel_conflicts(skel_conflicts)
             log(f"❌ {msg}")
             return RebuildResult(False, msg)
@@ -243,7 +292,7 @@ def rebuild(
         missing = required_keys - matched_keys
         if missing:
             raise ServiceError("required_assets_unmatched", names=", ".join(_names(missing)))
-        # Validate every target before publishing any output for this Mod.
+        # Validate every target first to avoid publishing an incomplete mod.
         for tgt, tgt_bundle, result in pending_saves:
             output_path = output_dir / tgt.name
             save_ok, save_message = (
@@ -271,7 +320,6 @@ def rebuild(
             "target_only": target_only,
         }
         if not file_pairs:
-            # Nothing matched at all, or every match was left as it is.
             if total_matched > 0 and skip_unchanged:
                 return RebuildResult(True, "", anim_diffs=final_anim_diffs, all_unchanged=True, **report)
             return _failed(t("message.mod_update.no_targets_processed"), log, anim_diffs=final_anim_diffs)

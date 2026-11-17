@@ -37,6 +37,11 @@ class OriginalChecks:
     """The verdicts of the kept originals, read and written under a lock of their own (thread-safe)."""
 
     def __init__(self, root: Path) -> None:
+        """Locate the verification record file without creating it.
+
+        Args:
+            root: Library folder containing originals.json and the kept originals.
+        """
         self.path = root / FILE
         self._lock = threading.Lock()
         self._cache: tuple[tuple[int, int] | None, dict[str, dict]] | None = None
@@ -69,19 +74,34 @@ class OriginalChecks:
         return records
 
     def record(self, name: str) -> dict | None:
+        """Return a bundle filename's recorded verdict and fingerprint, or None if absent."""
         with self._lock:
             return self._read().get(name)
 
     def of_bytes(self, name: str, fingerprint: Fingerprint) -> Verdict | None:
-        """The verdict recorded for these very bytes (write strength: by SHA-1)."""
+        """Find the recorded verdict for exact bytes using write-strength verification.
+
+        Args:
+            name: Bundle filename indexing the verification record.
+            fingerprint: Current SHA-1 and size to match against the record.
+
+        Returns:
+            The verdict, or None if the record is absent or names different bytes.
+        """
         record = self.record(name)
         if record is None or record["sha1"] != fingerprint.sha1 or record["size"] != fingerprint.size:
             return None
         return record["by"]
 
     def of_file(self, original: Path) -> Verdict | None:
-        """The verdict recorded for a kept original as it is on disk now, judged by its size and modification time
-        (the screens; never the content). None when there is none or the file changed since."""
+        """Read a kept original's verdict by size and mtime without hashing its content.
+
+        Args:
+            original: Kept bundle whose filename indexes the record shown on library screens.
+
+        Returns:
+            The verdict, or None if the file or matching record is unavailable.
+        """
         record = self.record(original.name)
         if record is None:
             return None
@@ -94,8 +114,14 @@ class OriginalChecks:
         return record["by"]
 
     def save(self, original: Path, by: Verdict, fingerprint: Fingerprint, keep: set[str] | None = None) -> None:
-        """Record a verdict of a kept original's bytes. ``keep``: the names still kept; the records of the others
-        go. Never raises: an unsaved verdict is judged again next time."""
+        """Record a kept original's verdict, tolerating filesystem failures for later rechecking.
+
+        Args:
+            original: Kept bundle whose filename and mtime are recorded.
+            by: Verification result: steam, crc, or failed.
+            fingerprint: Verified bytes' SHA-1 and size.
+            keep: Filenames whose records remain; None skips pruning. The saved record is always kept.
+        """
         try:
             mtime = original.stat().st_mtime_ns
         except OSError:

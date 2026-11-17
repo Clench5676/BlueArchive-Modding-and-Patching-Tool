@@ -1,6 +1,6 @@
 """``ba-mod.json``: the small metadata file a mod package carries next to its files.
 
-The format is a proposal under discussion with other mod tools, written here as far as it is settled: one file per mod,
+The proposed format describes one file per mod,
 ``format_version`` ``major.minor``, the tool that wrote it, the mod's ``kind`` and ``core``, the ``target`` it was built
 for (server, platform and the release marks the install shows), every file with its SHA-256 and ``role`` (``mod``:
 changed by the author; ``official``: an unchanged official file carried along; ``generated``: made by a tool), and for
@@ -104,7 +104,7 @@ _FAMILIES = {
 
 
 def family_kind(name: str) -> str:
-    """The kind of a bundle by its family word, ``other`` for a family the table does not list."""
+    """Classify a bundle filename's family word, returning other for an unlisted family."""
     words = name.lower().removeprefix("assets-_mx-").split("-")
     family = words[0]
     if family == "spinecharacters":
@@ -117,8 +117,14 @@ def family_kind(name: str) -> str:
 
 
 def kind_of(library_kind: str, names: Iterable[str]) -> str:
-    """The format's kind of a library mod: its kind (``spr``, ``lobby``, ``model``, ``other``) and its file names.
-    A library ``lobby`` is a memorial lobby or, for a ``spinebackground`` core, a Spine scene."""
+    """Translate a library kind to the package format's more specific kind.
+
+    A library lobby is a memorial lobby or, for a spinebackground core, a Spine scene.
+
+    Args:
+        library_kind: Library classification: spr, lobby, model, or other.
+        names: Bundle filenames used to distinguish scenes and generic asset families.
+    """
     names = list(names)
     if library_kind == "spr":
         return "portrait"
@@ -155,11 +161,17 @@ def _catalog(resource_dirs: Iterable[Path]) -> Path | None:
 
 
 def release_of(resource_dirs: Iterable[Path], server: str, platform: str) -> dict:
-    """The release marks an install shows (``target.release``), only the ones it can read in their exact form.
+    """Read an install's release marks for target.release in their exact form.
 
     Global: ``bundle_revision`` (``Catalog/BundleRevision``, a positive integer that grows with every release) and
     ``catalog_hash`` (``Catalog/<Platform>/catalog_<Platform>.hash``, 32 hex digits, one per release and platform).
-    The marks of Japan and China are not read yet."""
+    Japan and China return no marks.
+
+    Args:
+        resource_dirs: Install resource folders used to locate a neighboring or ancestor Catalog folder.
+        server: Game server; only global has readable release marks here.
+        platform: Package platform selecting Windows, Android, or iOS catalog hashes.
+    """
     result: dict[str, Any] = {}
     if server != "global":
         return result
@@ -178,12 +190,13 @@ def release_of(resource_dirs: Iterable[Path], server: str, platform: str) -> dic
 
 
 def sha256(path: Path) -> str:
+    """Return the hexadecimal SHA-256 digest of a file's complete contents."""
     with path.open("rb") as stream:
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
 def skeleton_name(name: str) -> str:
-    """A skeleton by its asset name without the file extension: ``akari_spr.skel`` -> ``akari_spr``."""
+    """Strip path and skeleton extensions from an asset name, such as akari_spr.skel."""
     base = name.replace("\\", "/").rsplit("/", 1)[-1]
     for suffix in (".bytes", ".skel", ".json"):
         base = base.removesuffix(suffix)
@@ -201,7 +214,18 @@ def document(
     files: list[dict],
     skeletons: list[dict],
 ) -> dict:
-    """A manifest in the format's field order; empty optional parts are left out (never empty strings or nulls)."""
+    """Build a manifest in field order, omitting empty optional parts.
+
+    Args:
+        created_by: Producer metadata, such as tool and version; empty values are omitted.
+        kind: Package kind from KINDS; an unrecognized value becomes other.
+        core: Lower-case character or scene core; None or invalid text omits the field.
+        server: Target game server recorded in the package.
+        platform: Target platform recorded in the package.
+        release: Readable target release marks; empty omits the release field.
+        files: Package entries containing relative path, SHA-256, and mod/official/generated role.
+        skeletons: Per-skeleton atlas, skeleton, and texture authorship; empty omits the field.
+    """
     data: dict[str, Any] = {
         "format_version": FORMAT_VERSION,
         "created_by": {key: value for key, value in created_by.items() if value},
@@ -220,6 +244,7 @@ def document(
 
 
 def dumps(data: Mapping[str, Any]) -> str:
+    """Serialize a manifest as indented Unicode JSON with a final newline."""
     return json.dumps(data, ensure_ascii=False, indent=2) + "\n"
 
 
@@ -262,9 +287,15 @@ def _release(server: str, value: Any) -> dict:
 
 
 def parse(data: bytes) -> dict | None:
-    """A manifest's content as this reader takes it, None when it is no manifest this reader can use: not JSON, a
-    ``format_version`` of another major, or a required field missing or malformed. Unknown fields are dropped, unknown
-    values of closed lists count as missing. The files are not checked here (``read``)."""
+    """Parse supported manifest fields without checking the listed files.
+
+    Return None for invalid JSON, another major format_version, or missing or
+    malformed required fields. Drop unknown fields and treat unknown closed-list
+    values as missing. Use read to verify the listed files.
+
+    Args:
+        data: UTF-8 JSON bytes, optionally with a BOM; inputs larger than MAX_BYTES are rejected.
+    """
     if len(data) > MAX_BYTES:
         return None
     try:
@@ -327,8 +358,14 @@ def parse(data: bytes) -> dict | None:
 
 
 def read(folder: Path) -> dict | None:
-    """The manifest beside a mod's files in ``folder``, None when there is none or it is not to be trusted: it cannot
-    be parsed (``parse``), or a file it lists is missing from the folder or has another SHA-256. Never raises."""
+    """Read a package manifest only when its listed files and SHA-256 digests all match.
+
+    Args:
+        folder: Package root containing ba-mod.json and its safely relative file paths.
+
+    Returns:
+        A trusted manifest, or None when absent, malformed, unreadable, or inconsistent with its files.
+    """
     path = folder / FILE_NAME
     try:
         if not path.is_file():
@@ -353,7 +390,13 @@ def read(folder: Path) -> dict | None:
 
 
 def covers(manifest: Mapping[str, Any] | None, folder: Path, paths: Iterable[Path]) -> bool:
-    """Whether a trusted manifest in ``folder`` lists every one of ``paths`` (the files of one import row)."""
+    """Check whether a trusted manifest covers every file of an import row.
+
+    Args:
+        manifest: Validated package document, or None when no trusted manifest exists.
+        folder: Package root against which file paths are resolved.
+        paths: Imported files that must all appear in the manifest's case-insensitive path set.
+    """
     if not manifest:
         return False
     listed = {item["path"].casefold() for item in manifest["files"]}

@@ -36,8 +36,11 @@ def _digest(value: Any) -> str:
 
 
 def atlas(data: bytes) -> dict:
-    """An atlas as a layout hash (pages with their sizes, regions with their places), its region names and its
-    text. An atlas that cannot be read keeps the hash of its bytes alone."""
+    """Fingerprint atlas page sizes, region placement, region names, and source text.
+
+    Args:
+        data: Atlas text bytes; unreadable atlases retain only a byte hash and unknown regions.
+    """
     try:
         parsed = atlas_remap.parse_atlas(data)
     except (atlas_remap.RemapError, ValueError, UnicodeError):
@@ -68,8 +71,11 @@ def atlas(data: bytes) -> dict:
 
 
 def skeleton(data: bytes) -> dict:
-    """A skeleton as the hash of its bytes, its version, a rig hash (bones with parents, slots with bones) and its
-    animation names. One this build cannot walk keeps the hash and version alone."""
+    """Fingerprint skeleton bytes, version, bone/slot relationships, and animation names.
+
+    Args:
+        data: Spine skeleton bytes; an unreadable rig retains only its byte hash and version.
+    """
     result: dict[str, Any] = {
         "sha1": hashlib.sha1(data).hexdigest(),
         "version": spine_names.version(data),
@@ -95,7 +101,14 @@ def _assets(contents: integrity.Contents) -> dict:
 
 
 def part(inspection: integrity.Inspection, path: Path, *, name: str, sha1: str | None = None) -> dict:
-    """The fingerprint of one official part, read from ``path`` and recorded under the part's file ``name``."""
+    """Fingerprint an official part's structure and assets without decoding images.
+
+    Args:
+        inspection: Analysis snapshot providing consistent metadata and header reads.
+        path: Official bundle bytes, which may be a kept copy rather than the live target.
+        name: Live part filename to record independently of the copy's location.
+        sha1: Known whole-file digest to retain, or None when not supplied.
+    """
     contents = inspection.inspect(path, allow_unknown=True)
     try:
         files, layout, externals = inspection.structure(path)
@@ -106,7 +119,12 @@ def part(inspection: integrity.Inspection, path: Path, *, name: str, sha1: str |
 
 
 def carried(inspection: integrity.Inspection, paths: list[Path]) -> dict:
-    """The atlases, skeletons and texture sizes a mod's own files carry, for ``standing``."""
+    """Merge the atlases, skeletons, and texture sizes a mod carries for standing comparisons.
+
+    Args:
+        inspection: Analysis snapshot providing consistent bundle reads.
+        paths: Mod bundles whose carried assets are fingerprinted together.
+    """
     merged = integrity.Contents()
     for path in paths:
         merged.merge(inspection.inspect(path, allow_unknown=True))
@@ -114,9 +132,15 @@ def carried(inspection: integrity.Inspection, paths: list[Path]) -> dict:
 
 
 def standing(official: dict, mod: dict) -> str:
-    """How a mod's own files stand to an official part: ``same`` when every atlas, skeleton and texture of the part
-    the mod carries is the part's (layout, bytes, size), ``differs`` when one is not, ``absent`` when it carries
-    none of them."""
+    """Compare a mod's carried assets with one official part.
+
+    Args:
+        official: Part fingerprint defining the atlas layouts, skeleton bytes, and texture sizes.
+        mod: Merged carried fingerprint of the mod's own files.
+
+    Returns:
+        same when all shared assets match, differs when any differ, or absent when none are shared.
+    """
     found = False
     for kind, key in (("atlases", "layout"), ("skeletons", "sha1"), ("textures", None)):
         for name, value in official[kind].items():
@@ -130,11 +154,17 @@ def standing(official: dict, mod: dict) -> str:
 
 
 def painted(parts: list[dict], mod: dict, skeletons: dict[str, bytes] | None = None) -> dict:
-    """The official atlases a mod's textures are drawn on without the mod carrying them (``carried``): per atlas
-    name its entry in ``parts``, with the official skeleton that draws it (``skeleton``: base64 of its bytes, from
-    ``skeletons``: the parts' own, by name; left out when there is none). For a mod known to be made for these parts;
-    a later repack of such an atlas leaves the mod's texture on the old layout, which this keeps with the rig that
-    drew it, the source of the world-space rebake (``bmpt.rebake``)."""
+    """Keep official atlas layouts and rigs needed by a texture-only mod's painted pages.
+
+    Retain each atlas entry by name, with its paired official skeleton encoded as
+    base64 when available. A later repack leaves the mod's textures on their original
+    layout; the retained layout and rig provide the source for bmpt.rebake.
+
+    Args:
+        parts: Official part fingerprints the mod is known to have been made for.
+        mod: Carried fingerprint identifying textures present and atlases absent from the mod.
+        skeletons: Official skeleton bytes by asset name; None omits paired skeleton payloads.
+    """
     result = {}
     for item in parts:
         for name, entry in item["atlases"].items():
@@ -155,9 +185,15 @@ def painted(parts: list[dict], mod: dict, skeletons: dict[str, bytes] | None = N
 
 
 def changed_layouts(data: dict | None, atlases: dict[str, bytes]) -> dict[str, dict]:
-    """Of the official ``atlases`` as they are now, the ones repacked since a mod's textures were drawn on them
-    (``painted`` in its fingerprint): per atlas name the entry of the layout the textures follow (``text``, and
-    ``skeleton`` where it was recorded)."""
+    """Find official atlases repacked relative to a mod's recorded painted layouts.
+
+    Args:
+        data: Mod fingerprint containing painted entries, or None when no baseline is known.
+        atlases: Current official atlas bytes indexed by asset name.
+
+    Returns:
+        Changed atlas names mapped to their recorded layout entries, including text and any skeleton.
+    """
     known = (data or {}).get("painted") or {}
     result = {}
     for name, current in atlases.items():
@@ -168,11 +204,16 @@ def changed_layouts(data: dict | None, atlases: dict[str, bytes]) -> dict[str, d
 
 
 def drawn_on(painted: dict[str, dict], files: dict[str, bytes]) -> dict[str, bytes]:
-    """The rig a texture-only mod is drawn on in its previews, so that it shows as it was made: of a preview's Spine
-    ``files`` (name to bytes: the official parts with the mod's over them), every atlas repacked since the mod's
-    textures were drawn on it (``changed_layouts`` against ``painted``, the entries that keep their ``skeleton``), as
-    the recorded atlas text, with the skeleton of its stem as the recorded skeleton. Names as in ``files``; empty when
-    nothing changed."""
+    """Restore recorded atlas/rig pairs so a texture-only mod's preview shows its intended layout.
+
+    Args:
+        painted: Recorded painted-layout entries that include their base64 skeletons.
+        files: Preview Spine bytes by asset name, with mod assets over official assets.
+
+    Returns:
+        Replacement atlas text and paired skeleton bytes under names from files;
+        empty when no usable recorded pair differs from the preview's layout.
+    """
     known = {
         name: entry
         for name, entry in painted.items()
@@ -196,9 +237,14 @@ def drawn_on(painted: dict[str, dict], files: dict[str, bytes]) -> dict[str, byt
 
 
 def document(event: str, parts: list[dict], *, complete: bool, painted: dict | None = None) -> dict:
-    """A fingerprint to store: ``event`` is what made it (import, update, remap, backfill); ``complete`` says the
-    parts are every part the mod's core had then; ``painted`` (``painted``) is left out when nothing tells which
-    layout the mod's textures follow."""
+    """Build a timestamped fingerprint document for storage beside a mod.
+
+    Args:
+        event: Operation establishing the baseline, such as import, update, remap, or backfill.
+        parts: Fingerprints of the official parts the mod was built against.
+        complete: Whether parts includes every official part of the core at recording time.
+        painted: Known layouts followed by the mod's textures; None omits uncertain painted provenance.
+    """
     data = {
         "version": VERSION,
         "event": event,
@@ -212,13 +258,26 @@ def document(event: str, parts: list[dict], *, complete: bool, painted: dict | N
 
 
 def write(directory: Path, data: dict, files: dict[str, str]) -> None:
-    """Store a fingerprint beside the mod files it describes (``files``: name to SHA-1)."""
+    """Store a fingerprint bound to the exact mod files it describes.
+
+    Args:
+        directory: Mod folder receiving built-against.json beside its bundles.
+        data: Fingerprint document containing the official baseline and any painted layouts.
+        files: Mod bundle filenames mapped to their SHA-1 digests.
+    """
     atomic_json(directory / FILE_NAME, {**data, "files": dict(sorted(files.items()))})
 
 
 def read(directory: Path, files: dict[str, str]) -> dict | None:
-    """The stored fingerprint of the mod files ``files`` (name to SHA-1). None when there is none, it describes
-    other files (the mod was rebuilt since) or it is not one this build reads."""
+    """Read a supported fingerprint only when it describes the exact mod files supplied.
+
+    Args:
+        directory: Mod folder containing built-against.json.
+        files: Current mod bundle filenames mapped to SHA-1 digests for exact comparison.
+
+    Returns:
+        The fingerprint, or None if missing, unreadable, malformed, unsupported, or bound to different bytes.
+    """
     path = directory / FILE_NAME
     try:
         if path.is_symlink() or path.stat().st_size > MAX_BYTES:
@@ -249,13 +308,20 @@ def read(directory: Path, files: dict[str, str]) -> dict | None:
 
 
 def diff(before: dict, after: dict) -> dict:
-    """What changed between two fingerprints of one part (``part``), as plain data: ``structure`` (None when either
-    is unknown), and per atlas, skeleton and texture name what differs. Unchanged assets are left out; an empty
+    """Compare two part fingerprints as plain data, omitting unchanged assets.
+
+    The result contains ``structure`` (None when either is unknown), and differences
+    by atlas, skeleton, and texture name. Unchanged assets are left out; an empty
     result but for ``structure: False`` means the part is the one the mod was built against.
 
     An atlas: ``layout`` changed, regions ``added`` and ``removed``. A skeleton: ``changed`` bytes, ``rig`` changed
     (None when either is unknown), animations ``added`` and ``removed``. A texture: its sizes ``before`` and
-    ``after``. An asset only one side has is reported with ``present`` naming that side."""
+    ``after``. An asset only one side has is reported with ``present`` naming that side.
+
+    Args:
+        before: Recorded part fingerprint serving as the mod's baseline.
+        after: Current official part fingerprint to compare with the baseline.
+    """
 
     def names(value: dict, key: str) -> set[str]:
         return set(value.get(key) or ())
@@ -279,7 +345,7 @@ def diff(before: dict, after: dict) -> dict:
             if a == b or (
                 kind == "atlases" and a["layout"] == b["layout"] and names(a, "regions") == names(b, "regions")
             ):
-                # the atlas text is kept for the remap, not compared: older fingerprints lack it
+                # Atlas text supports remapping; layout and region hashes determine equality.
                 continue
             if kind == "atlases":
                 result[kind][name] = {
@@ -338,11 +404,18 @@ def _rig_changed(changes: dict) -> bool:
 
 
 def changes(built: dict | None, now: dict | None) -> dict[str, Any]:
-    """What a game update changed in the official parts a mod was built against, as the impact summary names it: an
-    atlas ``repacked`` (other places or regions), ``animations`` added (count), the ``rig`` itself (bones, slots,
+    """Summarize changes to the official assets underlying a mod.
+
+    The summary names an atlas ``repacked`` (other places or regions), ``animations`` added (count),
+    the ``rig`` itself (bones, slots,
     animations removed, or a skeleton that cannot be read), ``textures`` of another size, assets ``removed`` and
     ``added``. Only what is true is kept; ``{"gone": True}`` when the core has no official part left, ``{}`` when
-    nothing tells."""
+    nothing tells.
+
+    Args:
+        built: Recorded baseline fingerprint; None or no recorded parts provides no evidence.
+        now: Current official fingerprint, or None when the core has no official parts left.
+    """
     if not built or not built.get("parts"):
         return {}
     if now is None:
@@ -366,11 +439,19 @@ def changes(built: dict | None, now: dict | None) -> dict[str, Any]:
 
 
 def impact(built: dict | None, now: dict | None) -> str:
-    """What a game update did under a mod (``IMPACTS``): the fingerprint it was built against (``built``) held
-    against the one its core's official parts give now (``now``: None when the core has no official part left, which
-    is ``gone``). Parts are matched by the assets they hold, so a part renamed by the update compares with the one
+    """Classify a game update's impact on a mod using IMPACTS.
+
+    Parts are matched by the assets they hold, so a part renamed by the update compares with the one
     it replaced. A fingerprint that does not know every part of the core then (``complete`` False) tells no new
-    parts."""
+    parts.
+
+    Args:
+        built: Baseline fingerprint of the mod's official parts; incomplete baselines cannot prove new parts.
+        now: Installed core's official fingerprint; None classifies the core as gone.
+
+    Returns:
+        The impact category, including unknown when either baseline lacks usable parts.
+    """
     if not built or not built.get("parts"):
         return UNKNOWN
     if now is None:

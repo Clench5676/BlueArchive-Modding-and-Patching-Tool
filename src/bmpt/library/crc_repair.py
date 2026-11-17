@@ -1,11 +1,9 @@
-"""Built copies and game files an older build left without the CRC of their part's name.
+"""Repair managed built copies and game files whose bytes lack their target filename's CRC.
 
-Before 0.7.0, a mod file written whole over a part whose name carries another CRC (a game update rebuilt the part in
-place, changing only the CRC in its name) was copied without the CRC fix. The game file then had a CRC that is not
-its name's, and the Off that followed kept those very bytes as the entry's built copy, which the next On wrote back.
-The program no longer writes such bytes and builds such a copy again rather than reuse it (``_kept_crc_fits``); this
-module finds what an older build left, once per library, and the start repairs it without asking (the web UI's
-services, after the first screen):
+A whole-file mod replacement can target a name carrying another CRC, so its bytes need the target's CRC fix.
+An Off can retain those bytes as a built copy for the next On. The reuse check (``_kept_crc_fits``) rejects a
+mismatching copy; this module finds persisted mismatches once per library and repairs them at startup through
+the web UI services, after the first screen:
 
 - a built copy (``profiles.json`` built) with a part whose kept bytes lack its part's CRC: dropped, so the next On
   builds the entry again;
@@ -41,8 +39,10 @@ CHECK = "target_crc"
 
 @dataclass
 class CrcRepairResult(JsonResult):
-    """What the repair did, entry by entry ({install, core, variant, kind}): ``dropped`` built copies, game files
-    ``rewritten``, ``failed`` ({entry, code, params}). ``cores``/``kinds``: what the game shows changed for."""
+    """Report dropped built copies, rewritten game entries, and failures with code and params.
+
+    Entries identify install, core, variant, and kind; cores/kinds identify changed game displays.
+    """
 
     dropped: list[dict] = field(default_factory=list)
     rewritten: list[dict] = field(default_factory=list)
@@ -52,7 +52,7 @@ class CrcRepairResult(JsonResult):
 
 
 def checked(config: dict | None) -> bool:
-    """Whether the library was already found free of such files."""
+    """Check a profile document's completed target-CRC marker, treating None as unchecked."""
     marks = (config or {}).get("checked")
     return isinstance(marks, dict) and isinstance(marks.get(CHECK), str)
 
@@ -137,7 +137,7 @@ def _game(library: ModLibrary, pins: list[Pin]) -> list[tuple[Pin, str, str]]:
         except OSError:
             continue
         if (stat.st_size, stat.st_mtime_ns) != (record.get("size"), record.get("mtime")):
-            continue  # changed since: no longer the library's bytes
+            continue  # Outside changes must not be rewritten as the recorded source.
         if not _lacks_crc(library, path, path.name, record.get("sha1")):
             continue
         core = library._core_map(pin).slot(core_of(path.name))
@@ -146,8 +146,16 @@ def _game(library: ModLibrary, pins: list[Pin]) -> list[tuple[Pin, str, str]]:
 
 
 def findings(library: ModLibrary) -> dict[str, Any]:
-    """{due, entries: [{install, core, variant, kind, built, game}]}. A library found free of such files
-    is recorded as checked at once, and later starts read nothing but the configuration."""
+    """Find managed files needing a target-CRC repair, recording a clean library as checked.
+
+    A completed marker makes later startup checks read only the configuration.
+
+    Args:
+        library: Library whose built-copy records and unchanged managed game writes are inspected.
+
+    Returns:
+        due and entries identifying install, core, variant, kind, and affected built/game copies.
+    """
     config = library.profiles.read()
     if checked(config):
         return {"due": False, "entries": []}
@@ -173,9 +181,16 @@ def findings(library: ModLibrary) -> dict[str, Any]:
 
 
 def repair(library: ModLibrary, log: LogFunc = no_log, progress: ProgressCallback | None = None) -> CrcRepairResult:
-    """Drop every built copy found (the next On builds the entry again) and write each game entry found again from
-    the source it carries, built anew. Never raises for an entry: one that cannot be written now (the game running,
-    a write refused) is in ``failed`` and found again at the next start. Recorded as checked once nothing is left."""
+    """Drop invalid built copies and rebuild managed game entries from their carried sources.
+
+    Dropped copies are rebuilt on the next On. Entry refusals are reported in failed
+    and retried at startup; the check is marked complete once none remain.
+
+    Args:
+        library: Library supplying source records, build storage, and the protected game writer.
+        log: Receives user-facing operation messages.
+        progress: Receives (completed entry, game-entry count, message); None disables reporting.
+    """
     result = CrcRepairResult()
     pins = library.installs()
     config = library.profiles.read()

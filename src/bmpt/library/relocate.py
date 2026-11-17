@@ -109,15 +109,23 @@ def _first_missing(folder: Path) -> Path | None:
 
 
 class Relocation:
-    """The items of a source folder now also published in a target folder."""
+    """Track source items also published in a target folder until the caller switches."""
 
     def __init__(self, source: Path, target: Path, published: list[str], created: Path | None) -> None:
+        """Record a published copy for either undo or source cleanup.
+
+        Args:
+            source: Complete library folder retained until finish.
+            target: Folder containing the verified published copies.
+            published: Item names in publication order, with library state files last.
+            created: Outermost target ancestor created by the move, or None if none were created.
+        """
         self.source, self.target = source, target
         self.published = published
         self.created = created  # the outermost target folder the move made, removed again by undo
 
     def undo(self) -> None:
-        """Take the published copies back (the source was not touched), and the folders the move made."""
+        """Remove published copies and empty created folders, leaving the intact source in use."""
         for name in reversed(self.published):
             try:
                 remove(self.target / name)
@@ -127,8 +135,11 @@ class Relocation:
         _remove_made(self.created, self.target)
 
     def finish(self) -> list[str]:
-        """Remove the items from the source, the markers of a library first. Returns the names that are still in the
-        source whole: nothing of the target depends on them, and the target is complete either way."""
+        """Remove source items after switching to the complete target, taking library markers first.
+
+        Returns:
+            Names left whole in the source when removal fails; the complete target needs none of them.
+        """
         token = uuid.uuid4().hex[:12]
         left, aside = [], []
         for name in reversed(self.published):
@@ -163,9 +174,20 @@ def _remove_made(created: Path | None, target: Path) -> None:
 
 
 def relocate(source: Path, target: Path, items: Sequence[str]) -> Relocation:
-    """Copy the items that exist in ``source`` into ``target`` and publish them there. OSError (the cause) after
-    everything copied has been removed again; the source is never changed. Items are published in the given order,
-    so list a library's folders before its state files."""
+    """Verify and publish copies of library items while keeping the source complete.
+
+    Args:
+        source: Library folder retained unchanged until the caller switches and finishes the move.
+        target: Destination folder receiving staged and then published copies.
+        items: Relative item names in publication order; list library folders before state files.
+            Items absent from the source are skipped.
+
+    Returns:
+        A relocation the caller can finish after switching or undo if switching fails.
+
+    Raises:
+        OSError: Copying, verification, or publication fails; copied items are cleaned up first.
+    """
     source, target = Path(source), Path(target)
     present = [name for name in items if (source / name).exists()]
     for name in present:

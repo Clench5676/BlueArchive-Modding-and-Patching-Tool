@@ -6,8 +6,8 @@
 - Every destination must be inside the resource folders and lockable. A refusal is named by its cause
   (``write_refusal``): in use, denied, App Management on macOS, disk full, missing, or another failure.
 
-The JP server's launcher, which may update or repair files on its own, is not matched: its process name is not
-known yet.
+The JP server's launcher, which may update or repair files on its own, is not matched because its process
+name is unknown.
 
 None of these read game files: the process list and Steam's manifests are not game files.
 """
@@ -64,26 +64,25 @@ STEAM_BUSY_FLAGS = {
 STEAM_BUSY_MASK = sum(STEAM_BUSY_FLAGS)  # distinct bits
 
 
-# --- game processes ---
-
-
 def is_game_name(path: str) -> bool:
-    """Whether an executable path or name (``ps -o comm``, a Toolhelp exe name) is the game's."""
+    """Recognize the game in an executable path or name from ps comm or Toolhelp."""
     return path.strip().replace("\\", "/").rsplit("/", 1)[-1].casefold() in GAME_NAMES
 
 
 def is_game_command(line: str) -> bool:
-    """Whether a command line (``ps -o args``) runs the game's Windows executable, as under Wine or CrossOver."""
+    """Recognize the game's Windows executable in a command line, including Wine or CrossOver."""
     return _WINE_GAME.search(line) is not None
 
 
 def game_processes() -> list[str]:
-    """The game's running processes as the system lists them: empty while the game is not running.
+    """List the game's running processes, excluding this process and its parent.
 
     Windows: exe names from a Toolhelp snapshot, ``tasklist`` as the fallback. Elsewhere: executable paths
     (``ps -o comm``), then, with none of the game's, command lines (``ps -o args``) for Wine and CrossOver.
     This process and its parent are never listed, whatever their command lines hold.
-    Raises ``ServiceError("game_status_unavailable")`` when the process list cannot be read.
+
+    Raises:
+        ServiceError: The process list cannot be read (game_status_unavailable).
     """
     own = {os.getpid(), os.getppid()}
     try:
@@ -195,12 +194,15 @@ def _toolhelp_processes() -> list[tuple[int | None, str]]:
     return rows
 
 
-# --- Steam ---
-
-
 def steam_state_flags(game_folder: Path | str) -> int | None:
-    """``StateFlags`` of the app manifest of the Steam library holding a game folder; ``None`` outside a Steam
-    library or when the manifest cannot be read."""
+    """Read the Steam app manifest's StateFlags for an install.
+
+    Args:
+        game_folder: Install root or resource folder used to locate the Steam library manifest.
+
+    Returns:
+        StateFlags, or None outside a Steam library or when the manifest cannot be read or parsed.
+    """
     manifest = game_paths.steam_app_manifest(Path(game_folder))
     if manifest is None:
         return None
@@ -219,7 +221,11 @@ def steam_state_flags(game_folder: Path | str) -> int | None:
 def check_steam_idle(game_folder: Path | str) -> None:
     """Refuse replacement while Steam updates, verifies or otherwise changes the install's files.
 
-    The game folder may be the install root or a resource folder below it. No manifest means no check.
+    Args:
+        game_folder: Install root or resource folder below it; no readable manifest means no check.
+
+    Raises:
+        ServiceError: Steam is changing the install (steam_busy).
     """
     flags = steam_state_flags(game_folder)
     if flags is not None and flags & STEAM_BUSY_MASK:
@@ -228,11 +234,19 @@ def check_steam_idle(game_folder: Path | str) -> None:
         raise error
 
 
-# --- destinations ---
-
-
 def check_resource_path(path: Path, resource_dirs: list[Path]) -> Path:
-    """Resolve a game destination and reject symlinks that escape resource folders."""
+    """Resolve a game destination and reject symlinks that escape resource folders.
+
+    Args:
+        path: Game destination to resolve before a write or recovery.
+        resource_dirs: Permitted resource roots, resolved before containment comparison.
+
+    Returns:
+        The resolved destination path.
+
+    Raises:
+        ServiceError: The destination escapes every resource root (game_file_outside_resources).
+    """
     resolved = path.resolve()
     if not any(resolved.is_relative_to(directory.resolve()) for directory in resource_dirs):
         raise ServiceError("game_file_outside_resources", file=path)
@@ -245,9 +259,15 @@ def _sandboxed(paths: list[Path]) -> bool:
 
 
 def check_game_for(paths: list[Path]) -> None:
-    """game_running for writes to ``paths`` (files or the resource folders holding them), as ``writable_game_files``
-    checks it: skipped when every path lies in a dev sandbox. In dev mode a path outside the writable folders is
-    left to the write-time check, which refuses it by the file's name."""
+    """Refuse game-running writes unless development-mode paths bypass the process check.
+
+    Args:
+        paths: Game files or resource folders to write. Writable sandbox paths skip the
+            process check; disallowed paths are left for the named write-time refusal.
+
+    Raises:
+        ServiceError: The game is running or its status is unavailable.
+    """
     if not all(devmode.allows_write(path) for path in paths):
         return
     if not _sandboxed(paths):
@@ -263,6 +283,19 @@ def writable_game_files(
     With ``game_folder`` (the install the files belong to), Steam busy with that install refuses too.
     In dev mode (devmode) every destination must lie inside ``BAMT_DEV_WRITABLE``, and the game process and Steam
     checks are skipped there: a sandbox is never the folder the game runs from.
+
+    Args:
+        paths: Destination files to preflight and lock, deduplicated for locking.
+        resource_dirs: Permitted resource roots containing every resolved destination.
+        game_folder: Install whose Steam activity must be checked; None skips that check.
+        allow_missing: Whether an absent destination in a writable parent is acceptable during recovery.
+
+    Yields:
+        Control while POSIX advisory locks remain held; Windows uses a write probe instead.
+
+    Raises:
+        ServiceError: Game or Steam activity, development restrictions, path escape,
+            or a destination write refusal prevents replacement.
     """
     for path in paths:
         devmode.check_write(path)
@@ -316,8 +349,6 @@ def _probe_when_free(path: Path) -> None:
             time.sleep(0.1)
 
 
-# --- why a write was refused ---
-
 # Windows system error codes (OSError.winerror); Python maps several of them to EACCES, so they are read first
 _WIN_IN_USE = {32, 33}  # ERROR_SHARING_VIOLATION, ERROR_LOCK_VIOLATION
 _WIN_ACCESS_DENIED = 5
@@ -335,10 +366,14 @@ def _in_app_bundle(path: str | os.PathLike[str] | None) -> bool:
 
 
 def write_refusal(error: OSError, path: str | os.PathLike[str] | None = None) -> str:
-    """The error name for a game file the system refused to write, by the cause behind ``error``.
+    """Map a failed game-file write to its user-facing error code.
 
     ``path`` is the destination; the error's own file name is used without one. The game process check has passed by
     then, so only a sharing or lock conflict is a file in use (game_file_locked).
+
+    Args:
+        error: Filesystem failure whose Windows code or errno identifies the refusal.
+        path: Destination used to detect macOS app-bundle restrictions; None uses error.filename.
     """
     path = path if path is not None else error.filename
     winerror = getattr(error, "winerror", None)

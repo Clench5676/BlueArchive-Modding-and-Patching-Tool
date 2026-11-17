@@ -24,7 +24,17 @@ MODEL_PREFAB = re.compile(r"^(?:echelon|cafe|strategy)_([a-z0-9_]+)(?:\.prefab)?
 
 
 def content_cores(path: Path) -> set[str]:
-    """Read names only, without decoding textures, meshes or skeleton payloads."""
+    """Identify character cores from asset names without decoding textures, meshes, or skeletons.
+
+    Args:
+        path: Uploaded bundle whose containers and object names establish its character identity.
+
+    Returns:
+        Lower-case Spine cores and model cores prefixed with model:.
+
+    Raises:
+        ServiceError: The bundle cannot be loaded (bundle_invalid).
+    """
     bundle = Bundle.load(path)
     if bundle is None:
         raise ServiceError("bundle_invalid", file=path)
@@ -133,8 +143,20 @@ def content_cores(path: Path) -> set[str]:
 
 
 def identify(path: Path, name: str, catalog, *, filename_only: bool = False) -> tuple[str, str, str]:
-    """Return the stored filename, target and kind. Character content wins over a renamed filename;
-    verified current slots can use their filename without inspecting asset names."""
+    """Resolve a stored filename, target, and kind, preferring character content over renames.
+
+    Args:
+        path: Uploaded bundle to inspect for character identity.
+        name: Proposed bundle filename to normalize to the detected core and category.
+        catalog: Character catalog resolving Spine and model cores to variants.
+        filename_only: Whether a verified current slot permits trusting the filename without asset inspection.
+
+    Returns:
+        Normalized filename, variant or generic-set target, and library kind.
+
+    Raises:
+        ServiceError: The bundle is invalid, its character is unknown, or several targets are detected.
+    """
     parsed = parse_filename(name)
     resolve = getattr(catalog, "variant_for_asset_core", catalog.variant_for_core)
     resolve_model = getattr(catalog, "variant_for_model_core", catalog.variant_for_core)

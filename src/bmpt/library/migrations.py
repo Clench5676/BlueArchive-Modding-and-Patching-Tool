@@ -7,7 +7,7 @@ import copy
 from .judge import core_of, kind_of_file, seconds
 
 LEGACY_REMAP = "legacy_remapped_v020"
-# Frozen suffixes from 0.2.0's webui.remap.name, independent of the current UI language.
+# Legacy generated labels must be recognized independently of the current UI language.
 _REMAP_SUFFIXES = (
     " (remapped)",
     "\uff08\u5df2\u91cd\u6392\uff09",
@@ -17,12 +17,18 @@ _REMAP_SUFFIXES = (
 
 
 def legacy_remapped(records: dict[str, dict]) -> dict[str, dict]:
-    """Recognize 0.2.0's generated labels and link only an unambiguous source.
+    """Recognize legacy generated labels and link only an unambiguous source.
 
-    That release stored no source ID. Its output uses current official bundle names,
+    Records without a source ID use current official bundle names for their output,
     so dates, CRCs, part counts and bytes can all differ from the source. The stored
     label, target, kind and bundle core are the remaining provenance. An unknown
     source gets a distinct dangling repair reference, keeping its own count and tag.
+
+    Args:
+        records: Mod records indexed by ID, including legacy generated copies.
+
+    Returns:
+        A deep copy with repair provenance linked and generated label suffixes removed.
     """
     records = copy.deepcopy(records)
     groups: dict[tuple, list[dict]] = {}
@@ -56,7 +62,7 @@ def legacy_remapped(records: dict[str, dict]) -> dict[str, dict]:
         repairs[mod_id] = (name, sources[0]["id"] if len(sources) == 1 else f"legacy-remap:{mod_id}")
 
     for mod_id, (name, source_id) in repairs.items():
-        # 0.2.0 also allowed remapping a remapped copy; all copies share the first source's count.
+        # Chained repairs share the first source's count.
         seen = {mod_id}
         while source_id in repairs and source_id not in seen:
             seen.add(source_id)

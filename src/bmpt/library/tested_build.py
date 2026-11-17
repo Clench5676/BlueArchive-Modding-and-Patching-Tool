@@ -11,7 +11,7 @@ every official bundle name of the newest of them (``catalog/data/tested_build.js
 On an install of another resource version the build is untested: reads work as always, and a write of anything but the
 official files onto a core the update changed (a core with a bundle whose name the tested build does not have: a part
 rebuilt under a new CRC, or a new one) needs the user's confirmation. A bundle name carries its content's CRC, so the
-names alone tell a changed core, without reading a file. A server without data (Japan today) is never untested.
+names alone tell a changed core, without reading a file. A server without data is never untested.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ KEY_BYTES = 6  # 48 bits: an unlisted name matching a listed one by chance stays
 
 
 def name_key(name: str) -> bytes:
-    """The short key of a bundle name the data lists."""
+    """Hash a case-insensitive bundle name to its short key in the tested-build data."""
     return hashlib.sha1(name.lower().encode("utf-8")).digest()[:KEY_BYTES]
 
 
@@ -45,12 +45,16 @@ class Tested:
     keys: frozenset[bytes]
 
     def has(self, name: str) -> bool:
-        """Whether the tested build has a bundle of this name."""
+        """Return whether the tested build contains this case-insensitive bundle name."""
         return name_key(name) in self.keys
 
 
 def bundle_names(dirs: Iterable[Path]) -> list[str]:
-    """The bundle names of an install's resource folders, sorted, each once."""
+    """List unique bundle names in sorted order without following file symlinks.
+
+    Args:
+        dirs: Resource folders to scan directly, without descending into subdirectories.
+    """
     names: set[str] = set()
     for directory in dirs:
         with os.scandir(directory) as entries:
@@ -63,7 +67,16 @@ def bundle_names(dirs: Iterable[Path]) -> list[str]:
 
 
 def encode(build: str, versions: Iterable[str], names: Iterable[str]) -> dict:
-    """One server's entry of the data file."""
+    """Encode one server's tested build for the bundled data file.
+
+    Args:
+        build: Steam build ID recorded alongside the resource versions.
+        versions: Tested resource versions, deduplicated in encounter order.
+        names: Official bundle names to hash into a sorted, base64-encoded key set.
+
+    Returns:
+        The server entry containing build, versions, and compact name keys.
+    """
     keys = sorted({name_key(name) for name in names})
     return {
         "build": str(build),
@@ -73,7 +86,14 @@ def encode(build: str, versions: Iterable[str], names: Iterable[str]) -> dict:
 
 
 def decode(data: dict) -> dict[str, Tested]:
-    """The tested builds of a data file's content, by server; {} for another schema."""
+    """Decode tested-build entries indexed by game server.
+
+    Args:
+        data: Parsed data-file document containing the schema and server entries.
+
+    Returns:
+        Tested builds by server, or an empty mapping for an unsupported schema.
+    """
     if not isinstance(data, dict) or data.get("schema") != SCHEMA:
         return {}
     out = {}
@@ -93,5 +113,5 @@ def _load(path: Path) -> dict[str, Tested]:
 
 
 def for_server(server: str) -> Tested | None:
-    """The tested build of a server, None when the App ships none for it."""
+    """Return a server's bundled tested build, or None when none can be loaded."""
     return _load(FILE).get(server)

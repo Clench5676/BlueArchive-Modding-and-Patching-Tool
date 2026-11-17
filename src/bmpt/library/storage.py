@@ -24,7 +24,11 @@ logger = logging.getLogger(__name__)
 
 
 def sync_directory(path: Path) -> None:
-    """Persist a rename on filesystems that support flushing directory handles."""
+    """Persist a rename on filesystems that support flushing directory handles.
+
+    Args:
+        path: Directory containing the renamed entry; Windows needs no directory flush.
+    """
     if os.name == "nt":
         return
     fd = os.open(path, os.O_RDONLY)
@@ -51,7 +55,12 @@ def _make_parents(path: Path) -> None:
 
 
 def atomic_json(path: Path, data: dict[str, Any]) -> None:
-    """Replace a JSON file only after the complete new contents are flushed."""
+    """Replace a JSON file only after the complete new contents are flushed.
+
+    Args:
+        path: Destination file, whose parent directories are created if needed.
+        data: JSON document to serialize with ASCII escapes and two-space indentation.
+    """
     _make_parents(path)
     fd, name = tempfile.mkstemp(prefix=".state-", dir=path.parent)
     temporary = Path(name)
@@ -68,7 +77,12 @@ def atomic_json(path: Path, data: dict[str, Any]) -> None:
 
 
 def atomic_copy(source: Path, target: Path) -> None:
-    """Copy bytes and atomically replace a destination on its own filesystem."""
+    """Copy bytes and atomically replace a destination on its own filesystem.
+
+    Args:
+        source: File whose bytes are copied and flushed before publication.
+        target: Destination file; an existing file's permission bits are preserved.
+    """
     _make_parents(target)
     fd, name = tempfile.mkstemp(prefix=".library-", dir=target.parent)
     temporary = Path(name)
@@ -167,7 +181,15 @@ def _refs_clone(source: Path, target: Path) -> None:
 
 
 def atomic_clone(source: Path, target: Path) -> bool:
-    """Publish a flushed native clone, never silently substitute a full byte copy."""
+    """Publish a flushed native clone without falling back to a full byte copy.
+
+    Args:
+        source: File to clone with the filesystem's copy-on-write facility.
+        target: Published clone location, retaining destination permission bits when replacing a file.
+
+    Returns:
+        Whether cloning succeeded; False leaves the destination unpublished.
+    """
     _make_parents(target)
     temporary = target.parent / f".library-{uuid.uuid4().hex}"
     try:
@@ -188,7 +210,15 @@ def atomic_clone(source: Path, target: Path) -> bool:
 
 
 def verify_file(path: Path, sha1: str) -> None:
-    """Verify the actual destination bytes before deleting any source."""
+    """Verify the actual destination bytes before deleting any source.
+
+    Args:
+        path: File to read in full for verification.
+        sha1: Expected hexadecimal SHA-1 digest.
+
+    Raises:
+        OSError: The file cannot be read or its digest differs.
+    """
     with path.open("rb") as stream:
         actual = hashlib.file_digest(stream, "sha1").hexdigest()
     if actual != sha1:
@@ -196,12 +226,23 @@ def verify_file(path: Path, sha1: str) -> None:
 
 
 def verified_move(source: Path, target: Path, sha1: str) -> None:
-    """Rename, or copy across volumes and delete only after verification; callers journal first."""
+    """Move a journaled file, verifying a cross-volume copy before deleting its source.
+
+    Callers must write their recovery journal before starting the move.
+
+    Args:
+        source: File to flush and move, deleting it once a cross-volume copy is verified.
+        target: Destination file, verified again after directory entries are flushed.
+        sha1: Expected hexadecimal SHA-1 digest of the destination bytes.
+
+    Raises:
+        OSError: Transfer, flushing, or digest verification fails.
+    """
     _make_parents(target)
     with source.open("r+b" if os.name == "nt" else "rb") as stream:
         os.fsync(stream.fileno())
     try:
-        # Like every other replacement: wait a moment for another program (a virus scanner) to let go of the file
+        # Retry transient file locks from programs such as virus scanners.
         replace_file(source, target)
     except OSError as error:
         if error.errno != errno.EXDEV:
@@ -225,15 +266,26 @@ class Fingerprint:
 
 
 class Fingerprints:
-    """Cache hashes by resolved path, nanosecond mtime and file size. The lock guards the dictionary only, never the
-    hashing: two threads may hash one file once each, and the later result wins."""
+    """Cache hashes by resolved path, nanosecond file times, and size.
+
+    The lock guards only the dictionary: two threads may hash one file once each,
+    and the later result wins.
+    """
 
     def __init__(self) -> None:
+        """Create an empty, thread-safe fingerprint cache."""
         self._values: dict[Path, tuple[tuple[int, int, int], Fingerprint]] = {}
         self._lock = threading.Lock()
 
     def get(self, path: Path) -> Fingerprint:
-        """Read a header and hashes once for each observed file version."""
+        """Read a header and hashes once for each observed file version.
+
+        Args:
+            path: Bundle whose resolved path, file times, and size identify the cache entry.
+
+        Returns:
+            The file's SHA-1, CRC, trailing-byte count, and byte size.
+        """
         path = path.resolve()
         stat = path.stat()
         signature = (stat.st_mtime_ns, stat.st_size, stat.st_ctime_ns)
@@ -256,13 +308,27 @@ TAIL = 8  # the last bytes read to tell a file with trailing bytes (a CRC-fixed 
 
 
 def trailing_bytes(path: Path) -> int | None:
-    """The bytes after the bundle's declared size, from its header alone (never the whole file); None when the
-    header cannot be read or the file is shorter than its header says."""
+    """Count bytes beyond a bundle's declared size using only its header.
+
+    Args:
+        path: Bundle to check for a CRC-fixing suffix.
+
+    Returns:
+        The trailing-byte count, or None for an unreadable header or a truncated file.
+    """
     return Bundle.get_trailing_bytes(path)
 
 
 def read_tail(path: Path, count: int = TAIL) -> str | None:
-    """A file's last ``count`` bytes in hex; None when it cannot be read or is shorter."""
+    """Read a file's suffix as hexadecimal for comparison with a recorded mod.
+
+    Args:
+        path: File whose trailing bytes identify the installed copy.
+        count: Number of bytes to read from the end.
+
+    Returns:
+        The hexadecimal suffix, or None if the file is unreadable or too short.
+    """
     try:
         with path.open("rb") as stream:
             stream.seek(0, os.SEEK_END)
