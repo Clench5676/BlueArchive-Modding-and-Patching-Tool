@@ -795,7 +795,7 @@ test("shared message sizes and scrolling preserve complete paths with and withou
 });
 
 test("compatibility details scroll the complete list and return to the same Remap and Cancel actions", async () => {
-  const Compatibility = await import("../../src/bmpt/web/js/mod-compatibility.js");
+  const Compatibility = await import("../../src/bmpt/web/js/mods/mod-compatibility.js");
   const names = Array.from({ length: 80 }, (_, i) => `Intro_Shoulder_L/Intro_Shoulder_L_${i}`);
   const input = (paths) => ({
     atlases: {},
@@ -850,7 +850,7 @@ test("compatibility details scroll the complete list and return to the same Rema
 // The compatibility result: plain lines, "Changes:" as list items with their Details button as high as
 // the line, the game's dotted rule, then "Auto update:" (or the author hints), and footer buttons one size smaller.
 test("the compatibility result's list, rule, inline Details and smaller footer fit in every locale", async () => {
-  const Compatibility = await import("../../src/bmpt/web/js/mod-compatibility.js");
+  const Compatibility = await import("../../src/bmpt/web/js/mods/mod-compatibility.js");
   const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
   const { glyphsOf } = await import("../../src/bmpt/web/js/core/util.js");
   const { CONTROL, POPUP_FRAME, SMALL_BUTTON, XS_BUTTON, STATS_BOX, TYPE } = await import(
@@ -1962,7 +1962,7 @@ export async function load(url, ctx, next) {
 }`)}`,
 );
 const Detail = await import(DETAIL);
-const Mods = await import("../../src/bmpt/web/js/mod-switch.js");
+const Mods = await import("../../src/bmpt/web/js/mods/mod-switch.js");
 const Thumbs = await import(THUMBS);
 const switchHost = host("popup");
 const previewFamily = () => ({
@@ -2369,7 +2369,7 @@ test("a long folder in the file-details summary does not resize the current valu
 
 test("repair review displays both pages and warnings; Accept alone stores the repaired mod", async () => {
   setStrings("en-US", Object.fromEntries(strings(english)));
-  const Compatibility = await import("../../src/bmpt/web/js/mod-compatibility.js");
+  const Compatibility = await import("../../src/bmpt/web/js/mods/mod-compatibility.js");
   globalThis.getComputedStyle = () => ({ opacity: "1" });
   globalThis.requestAnimationFrame = (fn) => setTimeout(fn, 0);
   const built = {
@@ -2483,7 +2483,7 @@ test("Go To from the update summary opens the switch on its mod once the student
 });
 
 test("repair comparison uses separate in-memory players and disposes both on close", async () => {
-  const Compare = await import("../../src/bmpt/web/js/mod-compare.js");
+  const Compare = await import("../../src/bmpt/web/js/mods/mod-compare.js");
   const previous = globalThis.spine,
     created = [];
   globalThis.spine = {
@@ -2881,7 +2881,7 @@ test("switch geometry: per-kind columns, aspects, card bounds, labels and portra
       setStrings(lang, Object.fromEntries(strings(ui)));
       for (const kind of ["spr", "lobby", "model"]) {
         // the columns the list's paper holds (the L class)
-        const { columns } = (await import("../../src/bmpt/web/js/switch-layout.js")).switchGrid(
+        const { columns } = (await import("../../src/bmpt/web/js/mods/switch-layout.js")).switchGrid(
           kind,
           Popup.listCardBox(Popup.listLayout(false, kind)).w,
         );
@@ -2992,7 +2992,7 @@ test("switch geometry: per-kind columns, aspects, card bounds, labels and portra
 });
 
 test("portrait spacing fits four tall cards at the standard width and selects horizontal scrolling", async () => {
-  const { switchGrid } = await import("../../src/bmpt/web/js/switch-layout.js");
+  const { switchGrid } = await import("../../src/bmpt/web/js/mods/switch-layout.js");
   for (const width of [1300, 1818, 2200]) {
     const { card, columns, pitch, overhang } = switchGrid("spr", width);
     assert.ok(Math.abs(card.h / card.w - 2.2) < 1e-9);
@@ -3022,7 +3022,7 @@ test("portrait spacing fits four tall cards at the standard width and selects ho
 // envelope.
 test("every kind left-aligns outer corners, with compact portrait gaps and balanced vertical grids, wherever the chosen card is", async () => {
   const { rect } = await import("../../src/bmpt/web/js/ui/ngui.js");
-  const { switchGrid } = await import("../../src/bmpt/web/js/switch-layout.js");
+  const { switchGrid } = await import("../../src/bmpt/web/js/mods/switch-layout.js");
   const outer = (el) => {
     const [x, y, w, h] = rect(el),
       angle = Number(/skewX\(([-\d.]+)deg\)/.exec(el.style.transform)?.[1] || 0);
@@ -4397,7 +4397,7 @@ test("automatic tours wait for consents, update dialogs and jobs without checkin
 });
 
 test("source frame replacement preserves card envelopes, list placement and hit targets", async () => {
-  const { cardInkBounds, switchGrid, placeSwitchCards } = await import("../../src/bmpt/web/js/switch-layout.js");
+  const { cardInkBounds, switchGrid, placeSwitchCards } = await import("../../src/bmpt/web/js/mods/switch-layout.js");
   await Popup.selectionReady();
   for (const kind of ["spr", "lobby", "model", null]) {
     const grid = switchGrid(kind),
@@ -4447,7 +4447,7 @@ test("source frame replacement preserves card envelopes, list placement and hit 
 
 test("source cards use the state badge and fitted locale caption in every picker", async () => {
   const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
-  const { switchGrid } = await import("../../src/bmpt/web/js/switch-layout.js");
+  const { switchGrid } = await import("../../src/bmpt/web/js/mods/switch-layout.js");
   await Popup.selectionReady();
   const treeWalk = (n) => [n, ...(n.children || []).flatMap(treeWalk)];
   try {
@@ -5417,7 +5417,7 @@ test("Settings is on the popup stack: Escape and the backdrop close it, and a po
 // Mod Alias and the repair preview are layers of their own in #dialog, like the message popups
 const layers = () => dialog.children.filter((el) => el.className === "popup-layer");
 test("Mod Alias is a layer of its own: a failed save's message draws above it, and Escape closes the visible layer", async () => {
-  const ModAlias = await import("../../src/bmpt/web/js/mod-alias.js");
+  const ModAlias = await import("../../src/bmpt/web/js/mods/mod-alias.js");
   handlers.set("mods.rename", () => ({ error: { code: "library_io_error", params: { file: "x.bundle" } } }));
   try {
     const saved = [];
@@ -5461,7 +5461,7 @@ test("Mod Alias is a layer of its own: a failed save's message draws above it, a
 });
 
 test("closing Mod Alias leaves the other layers of the host, and a saved name closes only its own layer", async () => {
-  const ModAlias = await import("../../src/bmpt/web/js/mod-alias.js");
+  const ModAlias = await import("../../src/bmpt/web/js/mods/mod-alias.js");
   handlers.set("mods.rename", () => ({ result: { id: "m1", label: "Name" } }));
   try {
     const saved = [];
@@ -5504,7 +5504,7 @@ test("closing Mod Alias leaves the other layers of the host, and a saved name cl
 });
 
 test("the repair preview is a layer of its own: a message over it, Escape on the visible layer, and a close that leaves the others", async () => {
-  const Compare = await import("../../src/bmpt/web/js/mod-compare.js");
+  const Compare = await import("../../src/bmpt/web/js/mods/mod-compare.js");
   const review = { lines: ["moved 1"], accept: english.remap.accept, discard: english.remap.discard };
   const pending = Compare.show({ assets: [], pages: [], drawings: {} }, "Painted", "dialog", review);
   await drawn(dialog, "cancel");
@@ -6996,7 +6996,7 @@ test("the startup Spine notice wraps inside UIPopup_Sort at message sizes in eve
 
 // Every preview entry stays quiet while the startup acknowledgement is pending.
 test("preview, comparison and compatibility modules contain no licence notice or confirmation button", () => {
-  for (const name of ["lobby", "detail/detail", "student-hall", "mod-compare", "mod-compatibility"]) {
+  for (const name of ["lobby", "detail/detail", "student-hall", "mods/mod-compare", "mods/mod-compatibility"]) {
     const source = readFileSync(new URL(`../../src/bmpt/web/js/${name}.js`, import.meta.url), "utf8");
     assert.doesNotMatch(
       source,

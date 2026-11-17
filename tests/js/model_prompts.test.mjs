@@ -44,7 +44,7 @@ test("generic entries retain their kind without requesting a Spine preview", () 
 
 test("configuration apply results report kept current files and incomplete mods once", async () => {
   const { driftSummary } = await import("../../src/bmpt/web/js/app/prompts.js");
-  const { resultSummary } = await import("../../src/bmpt/web/js/mod-switch.js");
+  const { resultSummary } = await import("../../src/bmpt/web/js/mods/mod-switch.js");
   const done = Array.from({ length: 2 }, () => ({ core: "test_spr", kept_current: true, incomplete: true }));
   for (const summary of [driftSummary({ done }), resultSummary({ enabled: true, done })]) {
     assert.equal(summary.lines.filter((line) => line === "Current game files added to the library").length, 1);

@@ -1,4 +1,4 @@
-// Tests for web/js/mod-switch.js (the Enable Mods switch: its view from mods.state, a click, the first toggle's
+// Tests for web/js/mods/mod-switch.js (the Enable Mods switch: its view from mods.state, a click, the first toggle's
 // explanation, the "?" help, the result, the classic modal, the start prompts), with the en-US strings, on a small
 // stand-in DOM. Run by tests/test_mod_switch.py with Node's test runner: node --test tests/js/mod_switch.test.mjs
 import assert from "node:assert/strict";
@@ -446,7 +446,7 @@ const I18n = await import("../../src/bmpt/web/js/core/i18n.js");
 I18n.setStrings("en-US", strings);
 const S = (key) => strings[`webui.${key}`];
 
-const MS = await import("../../src/bmpt/web/js/mod-switch.js");
+const MS = await import("../../src/bmpt/web/js/mods/mod-switch.js");
 const Loading = await import("../../src/bmpt/web/js/app/loading.js");
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -1722,7 +1722,7 @@ test("an overwritten entry's message: Add First until its mod is in the library,
 
 test("the tray's first toggle explains once, and the explanation's button submits the tray's toggle", async () => {
   // a page that has not explained anything yet (the explanation is once per place it shows)
-  const Fresh = await import("../../src/bmpt/web/js/mod-switch.js?tray");
+  const Fresh = await import("../../src/bmpt/web/js/mods/mod-switch.js?tray");
   answers["mods.state"] = base({ explained: false, enabled: true });
   answers["mods.toggle"] = "job-tray-1";
   jobs["job-tray-1"] = {
@@ -1739,7 +1739,7 @@ test("the tray's first toggle explains once, and the explanation's button submit
   await tick();
   assert.equal(dialog.hidden, true, "plain confirmations stay silent");
   // closed any other way: shown, and nothing toggled
-  const Other = await import("../../src/bmpt/web/js/mod-switch.js?tray-cancel");
+  const Other = await import("../../src/bmpt/web/js/mods/mod-switch.js?tray-cancel");
   const explained = called("mods.explained").length;
   const cancelled = Other.trayOpen({ view: "explain", enabled: false, expect: true });
   await drawn(dialog, "cancel");
@@ -2903,7 +2903,7 @@ test("the drift prompt asks the impacts of the mods its entries are configured w
       assert.ok(NGUI.glyphWidth(bf.text, bf.fs) <= 250 - 70, `${lang}: inside the card`);
       // with the tick box in the corner (the update list): whole, and short of the box on every kind's card
       const Pop = await import("../../src/bmpt/web/js/ui/popup.js");
-      const { switchGrid } = await import("../../src/bmpt/web/js/switch-layout.js");
+      const { switchGrid } = await import("../../src/bmpt/web/js/mods/switch-layout.js");
       const { TAN10 } = await import("../../src/bmpt/web/js/core/util.js");
       for (const kind of [null, "spr", "lobby", "model"]) {
         const card = switchGrid(kind, Pop.listCardBox(Pop.listLayout(false, kind)).w).card;

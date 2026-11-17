@@ -396,8 +396,8 @@ for (const locale of LOCALES)
 // apart, at scale 0.34) and the row under the list ---
 for (const locale of LOCALES)
   test(`the import list's tools and the row under the list share one size and fit their bodies in ${locale}`, async () => {
-    const page = await source("batch-import.js"),
-      layout = await source("import-layout.js");
+    const page = await source("mods/batch-import.js"),
+      layout = await source("mods/import-layout.js");
     assert.match(
       page,
       /\["files", "addFiles", 174\], \["folder", "addFolder", 190\], \["all", "all", 126\], \["none", "none", 140\]/,
@@ -513,7 +513,7 @@ const { POPUP_FRAME } = await import("../../src/bmpt/web/js/ui/ui-tokens.js");
 for (const locale of LOCALES)
   test(`the three repair choices share one size and fit their small button bodies in ${locale}`, async () => {
     const popup = await source("ui/popup.js"),
-      compatibility = await source("mod-compatibility.js");
+      compatibility = await source("mods/mod-compatibility.js");
     assert.match(
       popup,
       /return n < 3 \? 1 : Math\.min\(1, \(w - 2 \* POPUP_FRAME\.footer\.side - POPUP_FRAME\.footer\.gap \* \(n - 1\)\) \/ n \/ control\.minW\);/,

@@ -1,7 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { segmentTree, segmentOrigin, segmentDensity, SEGMENT_SCALE } from "../../src/bmpt/web/js/mod-switch-skin.js";
+import {
+  segmentTree,
+  segmentOrigin,
+  segmentDensity,
+  SEGMENT_SCALE,
+} from "../../src/bmpt/web/js/mods/mod-switch-skin.js";
 import { sliceAxis } from "../../src/bmpt/web/js/ui/sprite-slices.js";
 for (const dpi of [1, 1.25, 1.5, 1.75, 2, 3])
   for (const scale of [0.5, 0.75, 1, 1.25, 1.5, 2])
@@ -38,7 +43,7 @@ test("both states use NGUI single-image paint, with no separately composited CSS
   assert.ok(!segment.includes("mask-box-image"));
   assert.ok(!segment.includes("border-image"));
   assert.ok(!segment.includes("::before"));
-  const source = await readFile(new URL("../../src/bmpt/web/js/mod-switch.js", import.meta.url), "utf8");
+  const source = await readFile(new URL("../../src/bmpt/web/js/mods/mod-switch.js", import.meta.url), "utf8");
   assert.match(source, /NGUI.render\(segmentTree/);
   assert.match(source, /revision ?!== ?skinRevision/);
 });

@@ -146,7 +146,7 @@ afterEach(closeAll);
 
 test("the registry loads once across importers and exposes name lookups and levels", async () => {
   const codes = await import("../../src/bmpt/web/js/app/error-codes.js");
-  await import("../../src/bmpt/web/js/import-details.js");
+  await import("../../src/bmpt/web/js/mods/import-details.js");
   assert.equal(registryReads, 1);
   assert.equal(codes.codeOf("mod_parts_missing"), "E3006");
   assert.equal(codes.codeOf("not_registered"), undefined);
@@ -375,7 +375,7 @@ test("a failed registry fetch leaves popups working without display references",
 
 test("the classic modal is not a failure and passes no error", () => {
   const web = (file) => readFileSync(new URL(`../../src/bmpt/web/js/${file}`, import.meta.url), "utf8");
-  const modal = web("mod-switch.js"),
+  const modal = web("mods/mod-switch.js"),
     start = modal.indexOf("export async function classicModal(");
   const classic = modal.slice(start, modal.indexOf("\n}\n", start));
   assert.match(classic, /title: T\("classic\.opened"\)/);

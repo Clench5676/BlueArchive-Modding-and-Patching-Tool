@@ -2,7 +2,7 @@
 import { notify } from "./ui/popup.js";
 import * as Loading from "./app/loading.js";
 import { modJob } from "./core/job-progress.js";
-import * as ModSwitch from "./mod-switch.js";
+import * as ModSwitch from "./mods/mod-switch.js";
 import * as Popup from "./ui/popup.js";
 import { rpc, waitJob } from "./core/api.js";
 import { T } from "./core/i18n.js";

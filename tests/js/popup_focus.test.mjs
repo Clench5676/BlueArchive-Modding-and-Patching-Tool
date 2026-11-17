@@ -421,7 +421,7 @@ test("popup.js keeps one trap: the Hall modal and the import dialogs no longer c
   const { readFileSync } = await import("node:fs");
   const web = (file) => readFileSync(new URL(`../../src/bmpt/web/js/${file}`, import.meta.url), "utf8");
   assert.doesNotMatch(web("student-hall-ui.js"), /event\.key !== "Tab"/);
-  assert.doesNotMatch(web("batch-import.js"), /event\.key !== "Tab"/);
+  assert.doesNotMatch(web("mods/batch-import.js"), /event\.key !== "Tab"/);
   assert.match(web("ui/popup.js"), /addEventListener\("keydown", trapKey\)/);
 });
 

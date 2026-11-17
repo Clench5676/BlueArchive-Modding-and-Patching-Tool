@@ -191,7 +191,7 @@ test("the call sites take the status colours from the tokens, the style sheet re
   const uses = {
     "js/app/update.js": ["COLOUR.success", "COLOUR.error"],
     "js/detail/detail.js": ["COLOUR.success", "COLOUR.warning", "COLOUR.greyed"],
-    "js/mod-compare.js": ["COLOUR.warning", "COLOUR.success", "COLOUR.error"],
+    "js/mods/mod-compare.js": ["COLOUR.warning", "COLOUR.success", "COLOUR.error"],
     "js/app/prompts.js": ["COLOUR.greyed"],
     "js/ui/popup.js": ["COLOUR.inUse", "COLOUR.inUseInk"],
     "js/app/consent.js": ["COLOUR.neverBar", "COLOUR.note"],

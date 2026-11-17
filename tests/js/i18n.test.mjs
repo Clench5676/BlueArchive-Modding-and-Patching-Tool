@@ -223,8 +223,8 @@ test("the other copies of that expression use the shared errorText too", async (
   for (const name of [
     "detail/detail.js",
     "app/nav.js",
-    "mod-alias.js",
-    "mod-export.js",
+    "mods/mod-alias.js",
+    "mods/mod-export.js",
     "student-hall.js",
     "app/main.js",
   ]) {

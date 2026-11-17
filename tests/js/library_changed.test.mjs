@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { hasAsset } from "../../src/bmpt/web/js/switch-sources.js";
+import { hasAsset } from "../../src/bmpt/web/js/mods/switch-sources.js";
 import { visit } from "../../src/bmpt/web/js/roster/roster-order.js";
 
 // Run the event coalescing and refresh with a detail page already on screen.

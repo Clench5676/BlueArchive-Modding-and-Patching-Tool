@@ -10,7 +10,7 @@ import {
   placeSwitchCards,
   portraitPanel,
   splitPortraitPanel,
-} from "../../src/bmpt/web/js/switch-layout.js";
+} from "../../src/bmpt/web/js/mods/switch-layout.js";
 
 const near = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b}`);
 // a card's tree as popup.js builds it, reduced to what the layout reads: the body (card.w x card.h) and the name

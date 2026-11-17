@@ -8,7 +8,7 @@
 // (tests/js/prompts.test.mjs).
 import { notify } from "../ui/popup.js";
 import * as Loading from "./loading.js";
-import * as ModSwitch from "../mod-switch.js";
+import * as ModSwitch from "../mods/mod-switch.js";
 import * as Popup from "../ui/popup.js";
 import { COLOUR } from "../ui/ui-tokens.js";
 import { on, rpc, spineBase, waitJob } from "../core/api.js";

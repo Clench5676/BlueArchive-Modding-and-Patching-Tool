@@ -184,7 +184,7 @@ def test_official_split_model_dependency_mod_on_clones(tmp_path, batch, complete
         if shutil.which("node"):
             script = (
                 'import {readFileSync} from "node:fs"; '
-                'import {candidates} from "./src/bmpt/web/js/switch-sources.js"; '
+                'import {candidates} from "./src/bmpt/web/js/mods/switch-sources.js"; '
                 'const f=JSON.parse(readFileSync(0,"utf8")); const v=f.variants.find(v=>v.key==="ch0258"); '
                 'if(!candidates(f,v,"model").some(c=>c.id===' + json.dumps(mod.id) + ")) process.exit(1);"
             )

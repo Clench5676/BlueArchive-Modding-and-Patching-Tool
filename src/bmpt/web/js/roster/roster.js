@@ -17,14 +17,14 @@ import {
   toolbarLayout,
   toolbarTree,
 } from "./roster-widgets.js";
-import { countNodes, countText, iconsOf } from "../mod-counts.js";
+import { countNodes, countText, iconsOf } from "../mods/mod-counts.js";
 import { rpc, spineBase } from "../core/api.js";
 import { L, T, language } from "../core/i18n.js";
 import { scrollbar } from "../ui/scrollbar.js";
 import { wheelScroller } from "../ui/horizontal-scroll.js";
 import { prioritise, thumbnailScope } from "../detail/thumbs.js";
 import { spineAllowed } from "../spine-runtime.js";
-import { configuredKey, hasAsset, previewBase, primaryKind } from "../switch-sources.js";
+import { configuredKey, hasAsset, previewBase, primaryKind } from "../mods/switch-sources.js";
 import { $, RECRUIT, S, advanceOf, clone, glyphsOf } from "../core/util.js";
 import { DEFAULT_VIEW, arrange, normalizeView, order as orderOf } from "./roster-order.js";
 

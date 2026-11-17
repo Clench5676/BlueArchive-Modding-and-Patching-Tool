@@ -58,7 +58,7 @@ NOT_PIXELS = frozenset(
         "js/detail/preview-cache.js",
         "js/detail/preview-error.js",
         "js/detail/preview-lifecycle.js",
-        "js/switch-sources.js",
+        "js/mods/switch-sources.js",
         "vendor/three-0.160.0/examples/jsm/controls/OrbitControls.js",
         # particles-gl.js's lobby drawing only (create()): the 3D model view uses its shader sources alone
         "js/core/linear.js",

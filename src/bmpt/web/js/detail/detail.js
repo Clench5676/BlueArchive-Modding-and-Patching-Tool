@@ -22,15 +22,15 @@ import { withPreviewTimeout, withTimeout, nextFrame } from "../core/async.js";
 import { previewError } from "./preview-error.js";
 import { attachHint } from "../ui/hover-hint.js";
 import * as Loading from "../app/loading.js";
-import * as ModAlias from "../mod-alias.js";
-import * as ModExport from "../mod-export.js";
-import * as Compatibility from "../mod-compatibility.js";
+import * as ModAlias from "../mods/mod-alias.js";
+import * as ModExport from "../mods/mod-export.js";
+import * as Compatibility from "../mods/mod-compatibility.js";
 import * as ActionList from "../ui/action-list.js";
 import { actionLabel, actionsOf, groupLabel, menuOf } from "./clip-names.js";
 import { cardText, fitCards } from "../ui/action-list-layout.js";
 import * as Lobby from "../lobby.js";
 import * as Visual from "./visual-mode.js";
-import { QUEUEABLE, current as modsState, entryLabel, listSep, refused } from "../mod-switch.js";
+import { QUEUEABLE, current as modsState, entryLabel, listSep, refused } from "../mods/mod-switch.js";
 import * as Prompts from "../app/prompts.js";
 import { anyOpen as popupOpen } from "../ui/popup.js";
 import { rpc, spineBase, spinePrefix, loadSpineAssets, waitJob } from "../core/api.js";
@@ -39,7 +39,7 @@ import { forget, idleAnimation, prioritise, thumbnailScope } from "./thumbs.js";
 import { modelThumbnail, modelStillVersion } from "../model-still.js";
 import { lazyThumbnail } from "../ui/lazy-thumbnail.js";
 import { portraitViewport } from "./portrait-view.js";
-import { colourSwitchCard } from "../switch-card.js";
+import { colourSwitchCard } from "../mods/switch-card.js";
 import { clearUnseen, hasUnseen as hasFresh, shownUnseen, switchUnseen } from "./unseen-assets.js";
 import { crossName, customAliases as aliasesOf, modName, modOriginalName, studentName } from "../core/names.js";
 import { setTitle } from "../app/nav.js";
@@ -92,7 +92,7 @@ import {
   previewKey,
   sourceOf,
   switchKindOf,
-} from "../switch-sources.js";
+} from "../mods/switch-sources.js";
 import { pickerItems } from "../roster/roster-widgets.js";
 import {
   $,

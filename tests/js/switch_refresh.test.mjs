@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import vm from "node:vm";
-import { coreOf, previewChanged } from "../../src/bmpt/web/js/switch-sources.js";
+import { coreOf, previewChanged } from "../../src/bmpt/web/js/mods/switch-sources.js";
 
 // Exercise the actual detail-screen apply callback without loading its renderers.
 const source = readFileSync(new URL("../../src/bmpt/web/js/detail/detail.js", import.meta.url), "utf8");

@@ -4,7 +4,7 @@
 // game files against Steam's file list. The pure parts are tested in Node (tests/js/troubleshoot.test.mjs).
 import * as Loading from "./loading.js";
 import * as Popup from "../ui/popup.js";
-import * as ModSwitch from "../mod-switch.js";
+import * as ModSwitch from "../mods/mod-switch.js";
 import { rpc, waitJob } from "../core/api.js";
 import { T } from "../core/i18n.js";
 

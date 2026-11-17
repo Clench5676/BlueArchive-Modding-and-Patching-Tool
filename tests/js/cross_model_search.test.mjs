@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { statementEnd } from "./helpers/source-text.mjs";
 import { test } from "node:test";
 import vm from "node:vm";
-import * as Sources from "../../src/bmpt/web/js/switch-sources.js";
+import * as Sources from "../../src/bmpt/web/js/mods/switch-sources.js";
 import { LOCALES, installFitPage } from "./helpers/fit_canvas.mjs";
 
 installFitPage();

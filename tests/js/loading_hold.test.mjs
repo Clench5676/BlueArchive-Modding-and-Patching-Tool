@@ -396,7 +396,7 @@ for (const entry of ["Enable Mods"])
           assert.equal(ev.stopped, blocked, `${entry}: ${type}`);
         }
     };
-    const source = readFileSync(new URL("../../src/bmpt/web/js/mod-switch.js", import.meta.url), "utf8");
+    const source = readFileSync(new URL("../../src/bmpt/web/js/mods/mod-switch.js", import.meta.url), "utf8");
     const run = source.slice(source.indexOf("async function run(params)"), source.indexOf("// a toggle job followed"));
     const env = {
       Loading,

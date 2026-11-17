@@ -7,7 +7,7 @@
 // (check). Closing it records the version as seen (mods.impactSeen); Settings can reopen the list from the last check
 // (view, mods.impactLast) or run the check again. Before the question, outdated costume builds are rebuilt (refresh) and
 // entries whose last write failed are retried once per App build.
-import * as Compatibility from "../mod-compatibility.js";
+import * as Compatibility from "../mods/mod-compatibility.js";
 import * as Loading from "./loading.js";
 import { modJob } from "../core/job-progress.js";
 import * as Popup from "../ui/popup.js";
@@ -15,8 +15,8 @@ import { notify } from "../ui/popup.js";
 import { on, rpc, spineBase, waitJob } from "../core/api.js";
 import { thumb } from "../detail/thumbs.js";
 import { T, errorText } from "../core/i18n.js";
-import * as ModSwitch from "../mod-switch.js";
-import { entryLabel } from "../mod-switch.js";
+import * as ModSwitch from "../mods/mod-switch.js";
+import { entryLabel } from "../mods/mod-switch.js";
 import { COLOUR, SPACE, TYPE } from "../ui/ui-tokens.js";
 
 // a held entry's line (the switch help's Details): Go To closes the message with "go:<mod id>", Update and Apply with

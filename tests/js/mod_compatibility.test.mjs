@@ -23,7 +23,7 @@ vm.runInContext(
   context,
 );
 globalThis.spine = context.spine;
-const source = readFileSync(new URL("../../src/bmpt/web/js/mod-compatibility.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../src/bmpt/web/js/mods/mod-compatibility.js", import.meta.url), "utf8");
 const fixture = JSON.parse(
   readFileSync(new URL("../assets/integrity/mismatched_skeleton.json", import.meta.url), "utf8"),
 );

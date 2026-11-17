@@ -6,14 +6,14 @@
 // files, and the size and cleanup of the mod cache. Whether the classic UI asks before it opens is a General
 // row, under More Settings.
 import { notify } from "./ui/popup.js";
-import * as ModSwitch from "./mod-switch.js";
+import * as ModSwitch from "./mods/mod-switch.js";
 import * as NGUI from "./ui/ngui.js";
 import * as Popup from "./ui/popup.js";
 import * as Prompts from "./app/prompts.js";
 import * as Impact from "./app/update-impact.js";
 import * as Consent from "./app/consent.js";
 import * as OtherMods from "./settings-other.js";
-import * as ModExport from "./mod-export.js";
+import * as ModExport from "./mods/mod-export.js";
 import * as Tours from "./app/tours.js";
 import * as Troubleshoot from "./app/troubleshoot.js";
 import * as Update from "./app/update.js";

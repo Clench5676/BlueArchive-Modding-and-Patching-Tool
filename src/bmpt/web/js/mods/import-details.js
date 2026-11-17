@@ -1,7 +1,7 @@
 // The details a refused Import Mod row opens from its status badge: the row's reason, then what the check read of each
 // file (build target, Unity version, from the entry's `bundles`) and, for missing files, the dependencies nothing held
 // (`missing.cabs`) and the files of the same slot in its folders (`missing.found`).
-import { withCode } from "./app/error-codes.js";
+import { withCode } from "../app/error-codes.js";
 
 /**
  * An error text with the file it names left out (the details list each file), when the name opens or ends the

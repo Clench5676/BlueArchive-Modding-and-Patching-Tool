@@ -5,7 +5,7 @@ import { test } from "node:test";
 import { readFileSync } from "node:fs";
 const registry = JSON.parse(readFileSync(new URL("../../src/bmpt/web/error-codes.json", import.meta.url), "utf8"));
 globalThis.fetch = async () => ({ ok: true, json: async () => registry });
-const { hasDetails, detailLines } = await import("../../src/bmpt/web/js/import-details.js");
+const { hasDetails, detailLines } = await import("../../src/bmpt/web/js/mods/import-details.js");
 
 const T = (key, params = {}) => `${key}${Object.keys(params).length ? JSON.stringify(params) : ""}`;
 const bundle = (file, platforms, unity) => ({ file, platforms, unity, cabs: ["cab-" + "1".repeat(32)], references: 0 });
@@ -58,7 +58,7 @@ test("Details references the underlying error, then the row reason, preserving t
 });
 
 test("an error text loses the file name the details list, where it opens or ends the text", async () => {
-  const { withoutFile } = await import("../../src/bmpt/web/js/import-details.js");
+  const { withoutFile } = await import("../../src/bmpt/web/js/mods/import-details.js");
   const tables = {
     a: "{file}，构建平台 {platform}，需要 {expected}",
     b: "Not a valid bundle: {file}",

@@ -1,24 +1,24 @@
 import { importStatus } from "./switch-sources.js";
 import { current as modsState } from "./mod-switch.js";
-import { overwrittenLines } from "./app/repairs.js";
+import { overwrittenLines } from "../app/repairs.js";
 // Unified import behaviour over runtime Items, Mailbox and FilterSort prefab widgets (import-layout.js).
-import { progressName } from "./core/job-progress.js";
+import { progressName } from "../core/job-progress.js";
 import { importGroups } from "./import-groups.js";
-import * as NGUI from "./ui/ngui.js";
-import * as Popup from "./ui/popup.js";
-import * as Loading from "./app/loading.js";
-import { rpc, spineBase, spinePrefix, waitJob } from "./core/api.js";
-import { L, T, language } from "./core/i18n.js";
-import { withCode } from "./app/error-codes.js";
-import { customAliases, studentName } from "./core/names.js";
-import { specialFraming } from "./detail/special-view.js";
-import { spineAllowed } from "./spine-runtime.js";
-import { thumbnailScope, forget } from "./detail/thumbs.js";
-import { modelThumbnail } from "./model-still.js";
-import { S } from "./core/util.js";
-import { XS_BUTTON, SPACE, CONTROL, POPUP_FRAME, POPUP_TYPE } from "./ui/ui-tokens.js";
-import { row as layoutRow, stack as layoutStack, container } from "./ui/ui-grid.js";
-import { ROW_W as OPTION_WIDTH, rowBase, radioRow } from "./settings-rows.js";
+import * as NGUI from "../ui/ngui.js";
+import * as Popup from "../ui/popup.js";
+import * as Loading from "../app/loading.js";
+import { rpc, spineBase, spinePrefix, waitJob } from "../core/api.js";
+import { L, T, language } from "../core/i18n.js";
+import { withCode } from "../app/error-codes.js";
+import { customAliases, studentName } from "../core/names.js";
+import { specialFraming } from "../detail/special-view.js";
+import { spineAllowed } from "../spine-runtime.js";
+import { thumbnailScope, forget } from "../detail/thumbs.js";
+import { modelThumbnail } from "../model-still.js";
+import { S } from "../core/util.js";
+import { XS_BUTTON, SPACE, CONTROL, POPUP_FRAME, POPUP_TYPE } from "../ui/ui-tokens.js";
+import { row as layoutRow, stack as layoutStack, container } from "../ui/ui-grid.js";
+import { ROW_W as OPTION_WIDTH, rowBase, radioRow } from "../settings-rows.js";
 import {
   BUTTON_BODY_H,
   loadImportLayouts,
@@ -53,8 +53,8 @@ import {
   noteRoom,
   sourceFolder,
 } from "./import-state.js";
-import { characterPicker } from "./roster/character-picker.js";
-import { scrollbar as gameScrollbar, scrollbarTrack } from "./ui/scrollbar.js";
+import { characterPicker } from "../roster/character-picker.js";
+import { scrollbar as gameScrollbar, scrollbarTrack } from "../ui/scrollbar.js";
 
 // The list's top in the panel: 12 under Items' grey Inbox (its top edge is at 98). The search field, open, takes
 // its place and pushes the rows down by SEARCH_ROOM.

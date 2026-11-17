@@ -1,12 +1,12 @@
-import * as NGUI from "./ui/ngui.js";
-import { T } from "./core/i18n.js";
-import { $, S } from "./core/util.js";
-import { closed as popupClosed, closable, hit as hitNode, popupFrame, ready, scrollArea } from "./ui/popup.js";
-import { compareFrame } from "./ui/popup-frames.js";
-import { COLOUR } from "./ui/ui-tokens.js";
-import { loadPlayer } from "./spine-load.js";
-import { ensureSpine } from "./spine-runtime.js";
-import * as PanZoom from "./ui/pan-zoom.js";
+import * as NGUI from "../ui/ngui.js";
+import { T } from "../core/i18n.js";
+import { $, S } from "../core/util.js";
+import { closed as popupClosed, closable, hit as hitNode, popupFrame, ready, scrollArea } from "../ui/popup.js";
+import { compareFrame } from "../ui/popup-frames.js";
+import { COLOUR } from "../ui/ui-tokens.js";
+import { loadPlayer } from "../spine-load.js";
+import { ensureSpine } from "../spine-runtime.js";
+import * as PanZoom from "../ui/pan-zoom.js";
 
 const { node, label, find } = NGUI;
 

@@ -2,7 +2,7 @@
 // memorial lobby ("lobby"), and the 3D model: pure functions of the family that family.get returns, tested in
 // Node (tests/js/switch_sources.test.mjs). Switching saves the chosen source and installs it while enabled; the
 // library keeps what it replaces (docs/webui/library.md, library).
-import { spineBase } from "./core/api.js";
+import { spineBase } from "../core/api.js";
 
 /**
  * The kind of source an asset tab switches; every asset tab uses the same source selection and apply flow.

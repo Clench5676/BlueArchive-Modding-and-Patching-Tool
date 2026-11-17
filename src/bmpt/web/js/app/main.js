@@ -3,11 +3,11 @@
 // screen (a variant chip, the arrows) is covered too, through its first complete frame.
 import { notify } from "../ui/popup.js";
 import * as Consent from "./consent.js";
-import * as BatchImport from "../batch-import.js";
+import * as BatchImport from "../mods/batch-import.js";
 import * as Cursor from "./cursor.js";
 import * as Detail from "../detail/detail.js";
 import * as Loading from "./loading.js";
-import * as ModSwitch from "../mod-switch.js";
+import * as ModSwitch from "../mods/mod-switch.js";
 import * as NGUI from "../ui/ngui.js";
 import * as Popup from "../ui/popup.js";
 import * as Prompts from "./prompts.js";
@@ -21,7 +21,7 @@ import { on, rpc, spinePrefix } from "../core/api.js";
 import { setLibraryWaiting } from "../detail/preview-lifecycle.js";
 import { L, T, errorText, setStrings, languageRefresh } from "../core/i18n.js";
 import { neighbour, visit } from "../roster/roster-order.js";
-import { hasAsset, primaryKind } from "../switch-sources.js";
+import { hasAsset, primaryKind } from "../mods/switch-sources.js";
 import { renderNav, setTitle, setTopActions } from "./nav.js";
 import { confirmQuit, quitKey } from "./quit.js";
 import { forget } from "../detail/thumbs.js";

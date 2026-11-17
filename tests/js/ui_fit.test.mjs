@@ -10,7 +10,7 @@ import { makeImportLayouts } from "./import_prefabs.mjs";
 
 const page = installFitPage();
 const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
-const { importArtwork } = await import("../../src/bmpt/web/js/import-layout.js");
+const { importArtwork } = await import("../../src/bmpt/web/js/mods/import-layout.js");
 const { S } = await import("../../src/bmpt/web/js/core/util.js");
 
 const { find, fontSizeFor, glyphWidth, LINE_PITCH } = NGUI;

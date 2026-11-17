@@ -141,7 +141,7 @@ test("an expression cancels blinking immediately, stale blinks cannot replace it
 });
 
 test("merging uses variants rather than families and leaves unidentified and generic Mods separate", async () => {
-  const { importGroups } = await import("../../src/bmpt/web/js/import-groups.js");
+  const { importGroups } = await import("../../src/bmpt/web/js/mods/import-groups.js");
   const entries = [
     { id: "p1", kind: "spr", variant: "base" },
     { id: "l1", kind: "lobby", variant: "base" },

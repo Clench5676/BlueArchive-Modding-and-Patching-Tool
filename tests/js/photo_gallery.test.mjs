@@ -202,7 +202,7 @@ test("Apply is greyed while the game already shows the chosen photo", async () =
 });
 
 test("the gallery's cards and picture are 3D Model's squares, each photo filling its inclined window", async () => {
-  const { switchGrid, MIN_COLUMNS } = await import("../../src/bmpt/web/js/switch-layout.js");
+  const { switchGrid, MIN_COLUMNS } = await import("../../src/bmpt/web/js/mods/switch-layout.js");
   for (const width of [1200, 1500, 1818]) assert.deepEqual(switchGrid("photo", width), switchGrid("model", width));
   assert.equal(MIN_COLUMNS.photo, MIN_COLUMNS.model);
   const popup = readFileSync(new URL("../../src/bmpt/web/js/ui/popup.js", import.meta.url), "utf8");

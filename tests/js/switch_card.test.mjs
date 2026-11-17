@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { cardColours, colourSwitchCard, edgeColours } from "../../src/bmpt/web/js/switch-card.js";
+import { cardColours, colourSwitchCard, edgeColours } from "../../src/bmpt/web/js/mods/switch-card.js";
 
 const imageData = (pixels) => ({
   width: pixels[0].length,

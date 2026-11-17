@@ -1,11 +1,11 @@
 // Batch Import's artwork is cloned from runtime game layouts. Only container dimensions and data slots adapt
 // to the approved two-column screen; sprite slicing, inclines, decoration, colours and typography stay in NGUI.
 import { countNodes } from "./mod-counts.js";
-import { resizeButton } from "./ui/button-layout.js";
-import { clone } from "./core/util.js";
-import { frameOutline, innerFrame } from "./ui/row-thumbnail.js";
-import { SPACE, TYPE, LINE, CONTROL, LIST_ROW, XS_BUTTON } from "./ui/ui-tokens.js";
-import { row as layoutRow, stack as layoutStack, textItem, controlWidth, toNode } from "./ui/ui-grid.js";
+import { resizeButton } from "../ui/button-layout.js";
+import { clone } from "../core/util.js";
+import { frameOutline, innerFrame } from "../ui/row-thumbnail.js";
+import { SPACE, TYPE, LINE, CONTROL, LIST_ROW, XS_BUTTON } from "../ui/ui-tokens.js";
+import { row as layoutRow, stack as layoutStack, textItem, controlWidth, toNode } from "../ui/ui-grid.js";
 
 const INVENTORY = "Inventory_ListControl";
 const LIST = `${INVENTORY}/RightCanvas/ListBG`;
@@ -30,7 +30,7 @@ export const PAPER_CENTRE = (S) => [636, 352 + 60 * S];
 // The height of every action button here: Mailbox's Btn_Receive and ReceiveAll/Btn.
 export const BUTTON_BODY_H = 162;
 export const NAME_ROOM = 1160; // the Batch Import name plate's room for a name (units)
-export { EMPTY_GAP, emptyBlock } from "./ui/empty-block.js";
+export { EMPTY_GAP, emptyBlock } from "../ui/empty-block.js";
 
 // The columns of a row's text, in units from the card's centre line. The App's own (a dense two-column list; the
 // prefab's text column is wider), except titleRight, which is the prefab's: where Label_System and the divider
@@ -946,4 +946,4 @@ export function badgeRect(tree) {
     : null;
 }
 
-export { clipButtonPatterns } from "./ui/button-layout.js";
+export { clipButtonPatterns } from "../ui/button-layout.js";

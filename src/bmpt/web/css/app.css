@@ -342,7 +342,7 @@ textarea {
   height: 32px;
 }
 
-/* the Enable Mods switch after Back (js/mod-switch.js): two of the roster filter's segments (UICharacterCollection
+/* the Enable Mods switch after Back (js/mods/mod-switch.js): two of the roster filter's segments (UICharacterCollection
    FilterBtn: Common_Filter_Tab_Type1 and its flipped twin, 9-sliced and inclined 10 degrees like NGUI draws them, at
    40/104 of their size), ON pressed in the Support segment's blue and OFF in the All segment's navy; its label; the
    square "?" (Btn_Information: Common_Btn_Information in #2c4564 over a white square) */

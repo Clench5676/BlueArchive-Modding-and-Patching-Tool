@@ -35,8 +35,8 @@ if (proof)
 Object.defineProperty(globalThis, "navigator", { value: { platform: "Mac" }, configurable: true });
 globalThis.addEventListener = () => {};
 const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
-const { importArtwork, loadImportLayouts, ROW_SCALE } = await import("../../src/bmpt/web/js/import-layout.js");
-const { STATES } = await import("../../src/bmpt/web/js/import-state.js");
+const { importArtwork, loadImportLayouts, ROW_SCALE } = await import("../../src/bmpt/web/js/mods/import-layout.js");
+const { STATES } = await import("../../src/bmpt/web/js/mods/import-state.js");
 
 const { find, fontSizeFor, inkBand, inkReference, LINE_PITCH } = NGUI;
 const prefabs = makeImportLayouts();
@@ -124,9 +124,9 @@ test("the correction is the distance between the ink's centre and the background
 {
   const Popup = await import("../../src/bmpt/web/js/ui/popup.js");
   const { controlRect, badgeRect, ROW_WIDTH, ROW_TEXT_SIZE, BUTTON_BODY_H, clipButtonPatterns } = await import(
-    "../../src/bmpt/web/js/import-layout.js"
+    "../../src/bmpt/web/js/mods/import-layout.js"
   );
-  const { CHOOSE, noteRoom, NOTE_LEFT } = await import("../../src/bmpt/web/js/import-state.js");
+  const { CHOOSE, noteRoom, NOTE_LEFT } = await import("../../src/bmpt/web/js/mods/import-state.js");
   const { XS_BUTTON, CONTROL, SPACE, TYPE, LINE } = await import("../../src/bmpt/web/js/ui/ui-tokens.js");
   const { S } = await import("../../src/bmpt/web/js/core/util.js");
   const { setStrings } = await import("../../src/bmpt/web/js/core/i18n.js");

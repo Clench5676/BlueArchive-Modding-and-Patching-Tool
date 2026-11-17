@@ -763,8 +763,8 @@ test("disabled actions use the game's grey button body without changing its dono
 });
 const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
 const Loading = await import("../../src/bmpt/web/js/app/loading.js");
-const ModSwitch = await import("../../src/bmpt/web/js/mod-switch.js");
-const ModAlias = await import("../../src/bmpt/web/js/mod-alias.js");
+const ModSwitch = await import("../../src/bmpt/web/js/mods/mod-switch.js");
+const ModAlias = await import("../../src/bmpt/web/js/mods/mod-alias.js");
 const Popup = await import("../../src/bmpt/web/js/ui/popup.js");
 let invalidations = 0;
 const context = {

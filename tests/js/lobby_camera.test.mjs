@@ -169,7 +169,7 @@ test("the intro sampler places a moved skeleton by its timeline and plays its cl
 
 // --- a saved camera is a Memorial Lobby choice of the student ---
 const { modName } = await import("../../src/bmpt/web/js/core/names.js");
-const Sources = await import("../../src/bmpt/web/js/switch-sources.js");
+const Sources = await import("../../src/bmpt/web/js/mods/switch-sources.js");
 const words = { "lobby.original": "Original", "lobby.cameraName": "Camera {n}" };
 const translate = (key, params = {}) => (words[key] || key).replace(/\{(\w+)\}/g, (_, k) => params[k]);
 

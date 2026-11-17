@@ -9,7 +9,7 @@
 import * as NGUI from "./ngui.js";
 import { attachHint } from "./hover-hint.js";
 import { installScrollFades } from "./scroll-fade.js";
-import { switchGrid, placeSwitchCards } from "../switch-layout.js";
+import { switchGrid, placeSwitchCards } from "../mods/switch-layout.js";
 import { scrollbar, scrollbarTrack } from "./scrollbar.js";
 import { horizontalScroll } from "./horizontal-scroll.js";
 import * as Buttons from "./game-buttons.js";
