@@ -233,7 +233,8 @@ test("empty ungraded targets are detected even when the final pass adds an opaqu
 });
 const Mesh = await import("../../src/bmpt/web/js/lobby/mesh-fx.js");
 const GL = await import("../../src/bmpt/web/js/lobby/particles-gl.js");
-const { STRIDE, IDENTITY } = await import("../../src/bmpt/web/js/lobby/particles.js");
+const { IDENTITY } = await import("../../src/bmpt/web/js/lobby/particles.js");
+const { STRIDE } = await import("../../src/bmpt/web/js/lobby/particles-geometry.js");
 
 // --- mesh-fx.js -----------------------------------------------------------------------------------------------------
 

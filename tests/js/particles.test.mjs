@@ -1,11 +1,13 @@
-// Tests for web/js/lobby/particles.js (the lobby particle simulation and its geometry) and web/js/lobby/particles-gl.js
-// (drawing into a player's context and freeing it again, against a recording stand-in for WebGL2). Run by
-// tests/test_particles_player.py with Node's test runner.
+// Tests for web/js/lobby/particles.js and particles-geometry.js (the lobby particle simulation and its geometry) and
+// web/js/lobby/particles-gl.js (drawing into a player's context and freeing it again, against a recording stand-in
+// for WebGL2). Run by tests/test_particles_player.py with Node's test runner.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
 const P = await import("../../src/bmpt/web/js/lobby/particles.js");
-const { Effects, value, colorAt, shapePoint, geometry, vertexColor, drawOrder, STRIDE, WORLD, IDENTITY } = P;
+const G = await import("../../src/bmpt/web/js/lobby/particles-geometry.js");
+const { Effects, value, colorAt, shapePoint, drawOrder, WORLD, IDENTITY } = P;
+const { geometry, vertexColor, STRIDE } = G;
 // where a system draws among stacked skeletons, each drawing its own parts (particles-gl.js layers by default): after
 // the last part of any layer that sorts before it ({layer, part}), else before the first layer's first (part -1)
 function slotOf(def, layers) {
@@ -770,7 +772,7 @@ test("geometry: billboard size, the view's max size, stretch and meshes; vertex 
 });
 
 test("geometry3d: the lobby's quads for a camera looking along +z, facing any other camera, with depth kept", () => {
-  const { geometry3d, STRIDE3 } = P;
+  const { geometry3d, STRIDE3 } = G;
   const one = { bursts: [{ t: 0, n: 1, cycles: 1, interval: 0.01, p: 1 }] };
   const placed = [100, 0, 0, 10, 0, 100, 0, 20, 0, 0, 100, 30];
   const front = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1], eye: [0, 0, -1e4], k: 1665 / 1e4 };
@@ -851,7 +853,7 @@ test("a mesh renderer's meshes: one per particle, uniformly at random or by thei
     const fx = effects([sys({ emission: many, renderer: { mode: 4, mesh: "tri", ...renderer } })]);
     fx.update(0.016);
     const s = fx.systems[0],
-      picks = s.particles.map((pt) => P.meshIndex(s.def.renderer, pt.seed));
+      picks = s.particles.map((pt) => G.meshIndex(s.def.renderer, pt.seed));
     // the geometry draws each particle's own mesh
     const g = geometry(fx, s, { meshes });
     assert.equal(
@@ -869,12 +871,12 @@ test("a mesh renderer's meshes: one per particle, uniformly at random or by thei
   // a particle keeps its mesh from frame to frame; four meshes are all drawn
   const four = { meshes: ["a", "b", "c", "d"] },
     seeds = Array.from({ length: 4000 }, (_, k) => k * 7919);
-  const share = [0, 1, 2, 3].map((m) => seeds.filter((sd) => P.meshIndex(four, sd) === m).length / seeds.length);
+  const share = [0, 1, 2, 3].map((m) => seeds.filter((sd) => G.meshIndex(four, sd) === m).length / seeds.length);
   assert.ok(
     share.every((x) => x > 0.2 && x < 0.3),
     `shares ${share}`,
   );
-  assert.equal(P.meshIndex(four, 12345), P.meshIndex(four, 12345));
+  assert.equal(G.meshIndex(four, 12345), G.meshIndex(four, 12345));
   // a listed mesh that is missing draws nothing
   const fx = effects([sys({ emission: many, renderer: { mode: 4, mesh: "tri", meshes: ["tri", "gone"] } })]);
   fx.update(0.016);
@@ -1245,7 +1247,7 @@ test("trails: points every min vertex distance, living their share of the partic
   // seen from the camera along z the ribbon has no length: turn the system so it runs along x
   s.def.static = [0, 0, 1, 0, 0, 1, 0, 0, -1, 0, 0, 0];
   fx.place();
-  const g = P.trailGeometry(fx, s, { linear: false });
+  const g = G.trailGeometry(fx, s, { linear: false });
   // two triangles a segment, from the particle through its points (one it has just left at its place counts once)
   const head = pt.trail[pt.trail.length - 1].p,
     fresh = Math.hypot(...head.map((v, i) => v - pt.pos[i])) < 1e-9;
@@ -1263,7 +1265,7 @@ test("trails: points every min vertex distance, living their share of the partic
   near(at(last, 2), 1, 1e-9);
   near(at(last, 17), 0, 1e-9);
   // without the module, or without particles, nothing
-  assert.equal(P.trailGeometry(fx, effects([sys()]).systems[0]).count, 0);
+  assert.equal(G.trailGeometry(fx, effects([sys()]).systems[0]).count, 0);
 });
 
 test("a particle that stays put until its trail's points have all gone starts the trail again where it is", () => {
@@ -1296,7 +1298,7 @@ test("a particle that stays put until its trail's points have all gone starts th
   // standing still for longer than the trail's 0.4 s: its first point goes, a new one is left where it stands
   run(fx, 1, 0.05);
   assert.ok(pt.trail.length <= 1 && pt.trail.every((v) => v.p.every((c, i) => Math.abs(c - pt.pos[i]) < 1e-9)));
-  assert.equal(P.trailGeometry(fx, s, { linear: false }).count, 0, "no ribbon without a length");
+  assert.equal(G.trailGeometry(fx, s, { linear: false }).count, 0, "no ribbon without a length");
   // moving again (10 units a second): a point every unit from there
   pt.vel = [0, 0, 10];
   run(fx, 0.3, 0.05);

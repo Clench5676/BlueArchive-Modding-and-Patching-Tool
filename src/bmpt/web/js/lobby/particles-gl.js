@@ -7,16 +7,8 @@
 // WebGL2) nothing is drawn.
 import * as Linear from "../core/linear.js";
 import { Meshes } from "./mesh-fx.js";
-import {
-  Effects,
-  STRIDE,
-  drawOrder,
-  geometry,
-  lastBefore,
-  queuesOf,
-  spriteGeometry,
-  trailGeometry,
-} from "./particles.js";
+import { Effects, drawOrder, lastBefore, queuesOf } from "./particles.js";
+import { STRIDE, geometry, spriteGeometry, trailGeometry } from "./particles-geometry.js";
 import { toLinear } from "../app/touch-fx.js";
 
 const VS_HEAD = `#version 300 es

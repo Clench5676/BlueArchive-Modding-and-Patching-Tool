@@ -7,7 +7,8 @@
 // written. The model view draws in sRGB, not in linear light like the lobbies: each program's colour is encoded
 // at its end, so glows blend in sRGB (a little brighter where they overlap).
 import * as THREE from "three";
-import { Effects, IDENTITY, STRIDE3, WORLD, geometry3d } from "../lobby/particles.js";
+import { Effects, IDENTITY, WORLD } from "../lobby/particles.js";
+import { STRIDE3, geometry3d } from "../lobby/particles-geometry.js";
 import { PROGRAMS, fragmentSource, vertexSource } from "../lobby/particles-gl.js";
 import { toLinear } from "../app/touch-fx.js";
 

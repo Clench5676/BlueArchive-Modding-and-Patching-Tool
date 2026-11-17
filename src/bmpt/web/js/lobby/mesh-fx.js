@@ -5,7 +5,8 @@
 // leave it this frame), plays the Animator clips that loop them (fx.clips: scale, position, Euler angles,
 // material colours) and builds their triangles. Pure data, no DOM and no GL. Triangles the material culls are
 // dropped the way Unity culls them, and a mesh's vertex colours reach the shader as stored.
-import { IDENTITY, STRIDE, mul, vertexColor } from "./particles.js";
+import { IDENTITY, mul } from "./particles.js";
+import { STRIDE, vertexColor } from "./particles-geometry.js";
 import { toLinear } from "../app/touch-fx.js";
 
 // Unity's built-in Quad (unity default resources): a unit square facing the camera, UV (0, 0) at the bottom left
