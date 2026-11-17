@@ -8,7 +8,7 @@ import math
 import re
 import zlib
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Iterable, Mapping, Sequence
+from typing import Any, Callable, Iterable, Mapping, Sequence
 
 import numpy as np
 
@@ -16,13 +16,8 @@ from ...core.progress_meter import QUIET, Meter
 from .. import model_hems as hm
 from .. import model_skirts as ms
 from ..costume_cache import decode_clip
-from ..model import (
-    _key,
-)
+from ..model import _key
 from ..model_glb import bind_tracks, euler_orders, euler_to_quat, UNITY_ORDER
-
-if TYPE_CHECKING:
-    pass
 from .costume import Costume, Fit, Flat, OwnMesh, Plan, flatten
 from .skeleton import Node, Skeleton, _inverse, refuse, stretch_limit, trs
 

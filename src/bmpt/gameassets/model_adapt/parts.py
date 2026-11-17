@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Iterable, Mapping
+from typing import Any, Iterable, Mapping
 
 import numpy as np
 
@@ -14,9 +14,6 @@ from ..model import (
     shader_kind,
 )
 from ..model_glb import read_mesh
-
-if TYPE_CHECKING:
-    pass
 from .skeleton import BIPED_CORE, CHARACTER_KINDS, PROBE_CLIPS, PROBE_SCAN, Skeleton, refuse
 
 

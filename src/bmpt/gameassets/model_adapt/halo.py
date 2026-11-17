@@ -5,7 +5,7 @@ from __future__ import annotations
 import copy
 import logging
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Iterable
+from typing import Any, Callable, Iterable
 
 import numpy as np
 
@@ -14,9 +14,6 @@ from ..model import (
     _external_cab,
     _key,
 )
-
-if TYPE_CHECKING:
-    pass
 from .parts import _shader_kind
 from .skeleton import HEAD, Skeleton, refuse
 from .writing import _Writer

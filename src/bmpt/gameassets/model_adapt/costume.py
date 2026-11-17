@@ -8,15 +8,12 @@ import math
 import re
 import zlib
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Iterable, Mapping
+from typing import Any, Iterable, Mapping
 
 import numpy as np
 
 from ..costume_cache import decode_clip
 from ..model_glb import bind_tracks
-
-if TYPE_CHECKING:
-    pass
 from .parts import Part, Skin, bindposes, deform, stretch
 from .skeleton import (
     BIPED_CHAIN,

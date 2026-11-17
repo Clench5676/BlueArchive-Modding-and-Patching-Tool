@@ -9,7 +9,7 @@ import re
 import zlib
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Iterable, Mapping
+from typing import Any, Callable, Iterable, Mapping
 
 import numpy as np
 
@@ -20,9 +20,6 @@ from ..model import (
     _key,
 )
 from ..model_glb import bind_tracks, euler_orders, euler_to_quat, UNITY_ORDER
-
-if TYPE_CHECKING:
-    pass
 
 
 logger = logging.getLogger(__package__)

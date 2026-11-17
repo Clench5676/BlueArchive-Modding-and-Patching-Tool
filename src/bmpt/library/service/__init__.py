@@ -5,7 +5,6 @@ re-exports the names other modules and the tests read from it.
 """
 
 from bmpt.engine import t
-
 from ...core.filelock import file_lock
 from ..install import install_staged
 from ..rebuild import rebuild

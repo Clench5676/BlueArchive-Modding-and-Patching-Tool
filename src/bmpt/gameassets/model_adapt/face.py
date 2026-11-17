@@ -4,15 +4,12 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Mapping
+from typing import Any, Mapping
 
 import numpy as np
 
 from .. import model_skirts as ms
 from ..costume_cache import decode_clip
-
-if TYPE_CHECKING:
-    pass
 from .costume import Costume, Fit, Plan, face_bone, flatten
 from .skeleton import HEAD, _inverse, trs
 from .skirts import FACE_OFFSET, FaceRetarget, Skirt

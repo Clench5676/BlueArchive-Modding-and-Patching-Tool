@@ -7,7 +7,7 @@ import dataclasses
 import random
 import zlib
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Iterable, Mapping
+from typing import Any, Iterable, Mapping
 
 import numpy as np
 
@@ -15,9 +15,6 @@ from ..model import (
     BundleGraph,
     _key,
 )
-
-if TYPE_CHECKING:
-    pass
 from .parts import Part
 from .skeleton import BINDPOSE_LIMIT, VERTEX_LIMIT, WEIGHT_TOLERANCE, Skeleton, refuse
 

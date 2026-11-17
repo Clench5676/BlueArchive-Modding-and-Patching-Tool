@@ -29,9 +29,6 @@ from ..model import (
     _prefabs,
     model_root,
 )
-
-if TYPE_CHECKING:
-    from ..model_props import WornStore
 from .costume import Costume, Plan, plan
 from .face import clip_edit_error, clip_snapshot, face_retarget, saved_tree
 from .halo import _IN, _MATERIAL, _MESH, _ROOT, DRAWN, HaloChange, _halo_change, _mesh_tree, _pointers
@@ -53,6 +50,9 @@ from .writing import (
     mouth_of,
     retiled_mouths,
 )
+
+if TYPE_CHECKING:
+    from ..model_props import WornStore
 
 
 logger = logging.getLogger(__package__)
