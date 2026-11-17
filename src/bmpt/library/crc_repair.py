@@ -115,8 +115,11 @@ def _built(library: ModLibrary, config: dict | None) -> list[tuple[str, str]]:
 
 
 def _game(library: ModLibrary, pins: list[Pin]) -> list[tuple[Pin, str, str]]:
-    """(install, core, the source it carries) of each game file the library wrote that still holds the bytes it
-    wrote, recorded without its name's CRC."""
+    """List the game files the library wrote that still hold the bytes it wrote, recorded without their name's CRC.
+
+    Returns:
+        One ``(install, core, the source it carries)`` tuple per such file.
+    """
     out: dict[tuple[str, str], tuple[Pin, str, str]] = {}
     for target, record in list(library._applied.items()):
         source = record.get("source")

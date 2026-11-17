@@ -34,7 +34,7 @@ CHUNK = 1024 * 1024
 
 
 def _unreadonly(function: Callable, path: str, error: BaseException) -> None:
-    """rmtree's error handler: clear a read-only mark (copied from the source on Windows) and try once more."""
+    """Rmtree's error handler: clear a read-only mark (copied from the source on Windows) and try once more."""
     os.chmod(path, stat.S_IWRITE)
     function(path)
 
@@ -74,8 +74,14 @@ def _copy(source: Path, target: Path) -> None:
 
 
 def _differences(source: Path, target: Path) -> str | None:
-    """What differs between a source item and its copy (a name, never a path), None when the copy is the same: the
-    same names, kinds and sizes, link targets, and the same bytes in files of up to COMPARE_BYTES."""
+    """Compare a source item with its copy.
+
+    The copy is the same when it has the same names, kinds and sizes, link targets, and the same bytes in files of up
+    to COMPARE_BYTES.
+
+    Returns:
+        What differs (a name, never a path), or None when the copy is the same.
+    """
     if source.is_symlink() or target.is_symlink():
         same = source.is_symlink() and target.is_symlink() and os.readlink(source) == os.readlink(target)
         return None if same else source.name

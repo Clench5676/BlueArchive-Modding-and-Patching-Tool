@@ -267,8 +267,11 @@ def _uses(library: ModLibrary) -> list[tuple[Any, set[str]]]:
 
 
 def _record(library: ModLibrary, mod_id: str) -> dict:
-    """A recipe's record by id. A record state.json holds while its files are missing counts too: its choices still own
-    their photos and the file may return."""
+    """Look up a recipe's record by id.
+
+    A record state.json holds while its files are missing counts too: its choices still own their photos and the
+    file may return.
+    """
     record = library._records.get(mod_id)
     if record is None:
         record = next((raw for raw in library._held if isinstance(raw, dict) and raw.get("id") == mod_id), None)

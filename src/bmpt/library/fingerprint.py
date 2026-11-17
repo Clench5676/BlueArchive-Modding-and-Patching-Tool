@@ -389,9 +389,12 @@ def _merged(parts: list[dict], kinds: tuple[str, ...] = ("atlases", "skeletons",
 
 
 def _rig_changed(changes: dict) -> bool:
-    """Whether a ``diff`` of a core's assets names a change of its rig: an asset gone, an atlas repacked or with
-    other regions, a skeleton with other bones, slots or animations (or other bytes where its rig cannot be read),
-    a texture of another size. A new asset alone is a new part, not a change of the rig."""
+    """Tell whether a ``diff`` of a core's assets names a change of its rig.
+
+    A rig changes when an asset is gone, an atlas is repacked or has other regions, a skeleton has other bones, slots
+    or animations (or other bytes where its rig cannot be read), or a texture has another size. A new asset alone is
+    a new part, not a change of the rig.
+    """
     for name, change in changes["atlases"].items():
         if change.get("present") == "before" or change.get("layout") or change.get("added") or change.get("removed"):
             return True

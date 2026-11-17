@@ -184,8 +184,10 @@ def camera_edit(
         return pointer["m_PathID"]
 
     def parents(pid: int) -> tuple[float, float]:
-        """The translation of a target's parents up to the root (the root's own Transform is the frame), or a refusal
-        when one of them scales or turns."""
+        """Sum the translation of a target's parents up to the root.
+
+        The root's own Transform is the frame, so it is not counted. A parent that scales or turns is a refusal.
+        """
         x = y = 0.0
         seen = set()
         father = tree(pid)["m_Father"]["m_PathID"]
@@ -518,8 +520,12 @@ def _intro(
     offset: tuple[float, float],
     added: list[int],
 ) -> bool:
-    """Give the prefab its own intro timeline with the camera track (``lobby_camera_intro``); False, and nothing
-    added, when the timeline file does not hold the director's timeline or it has no rest pose to switch at."""
+    """Give the prefab its own intro timeline with the camera track (``lobby_camera_intro``).
+
+    Returns:
+        False, with nothing added, when the timeline file does not hold the director's timeline or the timeline has
+        no rest pose to switch at; True otherwise.
+    """
     director = copy.deepcopy(edit.trees.get(edit.director) or tree(edit.director))
     asset = director.get("m_PlayableAsset") or {}
     file_id = asset.get("m_FileID", 0)

@@ -39,8 +39,11 @@ def is_archive(path: Path) -> bool:
 
 
 def _members(archive: zipfile.ZipFile, file: Path) -> tuple[list[tuple[zipfile.ZipInfo, tuple[str, ...]]], int]:
-    """The bundle and package manifest members to unpack with their path parts, and the number of other members left
-    out."""
+    """Pick the bundle and package manifest members of an archive to unpack.
+
+    Returns:
+        The members to unpack with their path parts, and the number of other members left out.
+    """
     taken, keys, skipped = [], set(), 0
     for info in archive.infolist():
         if info.is_dir():

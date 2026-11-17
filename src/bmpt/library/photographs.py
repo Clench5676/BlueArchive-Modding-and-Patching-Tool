@@ -79,9 +79,12 @@ def student_family(catalog, key: str) -> str:
 
 
 class _Manifest(dict):
-    """The usable part of the manifest: ``photos`` and ``selected`` hold only the rows this code can use. The rows it
-    cannot (``held_photos``, ``held_selected``, raw JSON) stay out of every use and come back unchanged in every write,
-    at their place (``order_photos``, ``order_selected``)."""
+    """The usable part of the manifest.
+
+    ``photos`` and ``selected`` hold only the rows this code can use. The rows it cannot (``held_photos``,
+    ``held_selected``, raw JSON) stay out of every use and come back unchanged in every write, at their place
+    (``order_photos``, ``order_selected``).
+    """
 
     held_photos: dict
     held_selected: dict
@@ -162,8 +165,13 @@ class Photographs:
             return self._chosen(self._read(), variant)
 
     def _chosen(self, data: _Manifest, variant: str):
-        """The variant's selection, None when it has none or it is stale: the photo's family differs from the
-        variant's (the catalog changed), which reads as the default thumbnail and leaves the row as it is."""
+        """Read the variant's selection.
+
+        Returns:
+            The selection, or None when the variant has none or it is stale: the photo's family differs from the
+            variant's (the catalog changed). A stale selection reads as the default thumbnail and leaves the row as
+            it is.
+        """
         key = data["selected"].get(variant)
         if key in (None, "official"):
             return key
