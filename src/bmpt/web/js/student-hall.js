@@ -1,6 +1,6 @@
 // Student Hall: UILobby controls, independent drafts, and modal resource editors built from native game prefabs.
 import * as NGUI from "./ngui.js";
-import { bindCorner } from "./corner-layout.js";
+import { bindCorner } from "./window/corner-layout.js";
 import * as Loading from "./app/loading.js";
 import * as Popup from "./popup.js";
 import * as UI from "./student-hall-ui.js";

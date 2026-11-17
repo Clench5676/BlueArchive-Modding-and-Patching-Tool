@@ -655,7 +655,7 @@ test("a full cover hides the native toolbar with the screen; an indicator leaves
 });
 
 test("the toolbar row the lock reaches is the one the window chrome builds, and the cover hides it", () => {
-  const chrome = readFileSync(new URL("../../src/bmpt/web/js/window-chrome.js", import.meta.url), "utf8");
+  const chrome = readFileSync(new URL("../../src/bmpt/web/js/window/window-chrome.js", import.meta.url), "utf8");
   const loading = readFileSync(new URL("../../src/bmpt/web/js/app/loading.js", import.meta.url), "utf8");
   const css = readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
   assert.match(chrome, /wrapper\.className = ["']window-header["'][\s\S]*unlockHeader = lockOutside\(wrapper\)/);

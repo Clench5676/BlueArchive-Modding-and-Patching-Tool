@@ -6,7 +6,7 @@
 // for action-list.js, detail.js and the tests.
 import * as NGUI from "./ngui.js";
 import { BOX_INSET } from "./hover-hint.js";
-import { BAR_HEIGHT } from "./top-bar-layout.js";
+import { BAR_HEIGHT } from "./window/top-bar-layout.js";
 import { POPUP_TYPE } from "./ui-tokens.js";
 import { S, TAN10 } from "./util.js";
 

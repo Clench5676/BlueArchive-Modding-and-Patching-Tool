@@ -3505,8 +3505,8 @@ for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
       );
     }
     assert.deepEqual(layout, before, "The source prefab is unchanged");
-    const { CORNER_MARGIN, reflowCorners } = await import("../../src/bmpt/web/js/corner-layout.js");
-    const { headerGeometry } = await import("../../src/bmpt/web/js/window-layout.js");
+    const { CORNER_MARGIN, reflowCorners } = await import("../../src/bmpt/web/js/window/corner-layout.js");
+    const { headerGeometry } = await import("../../src/bmpt/web/js/window/window-layout.js");
     const oldRect = hosts.stage.getBoundingClientRect;
     const old = Object.fromEntries(
       ["innerWidth", "innerHeight", "bamtWindowChrome", "bamtHeaderGeometry"].map((k) => [k, globalThis[k]]),

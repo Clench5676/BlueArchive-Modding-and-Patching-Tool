@@ -30,9 +30,9 @@ import { $, fitStage } from "../util.js";
 import { studentName } from "../names.js";
 import { previewCache } from "../preview-cache.js";
 import { ROOT_ROUTE, routeHistory } from "./route-history.js";
-import { setupWindowChrome } from "../window-chrome.js";
-import { chromeMotion } from "../chrome-motion.js";
-import { installCloseGuard } from "../window-close.js";
+import { setupWindowChrome } from "../window/window-chrome.js";
+import { chromeMotion } from "../window/chrome-motion.js";
+import { installCloseGuard } from "../window/window-close.js";
 import { installVerticalWheel } from "../horizontal-scroll.js";
 
 installCloseGuard({

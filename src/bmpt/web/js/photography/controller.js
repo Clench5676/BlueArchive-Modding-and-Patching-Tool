@@ -17,7 +17,7 @@ import { switchGrid } from "../switch-layout.js";
 import { alignIcon, buttonCenter } from "../student-hall-icons.js";
 import { anchoredCentre } from "../visual-view.js";
 import { wheelKind, wheelStep } from "../lobby-touch.js";
-import { bindCorner, bindEdge } from "../corner-layout.js";
+import { bindCorner, bindEdge } from "../window/corner-layout.js";
 import { prepareBack } from "../visual-mode.js";
 export { FRAME };
 /**

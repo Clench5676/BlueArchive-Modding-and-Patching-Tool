@@ -8,7 +8,7 @@ import { portraitMinimum } from "./photography/camera.js";
 // at the pointer; a trackpad pinches and swipes; two fingers pinch.
 import * as NGUI from "./ngui.js";
 import { anyOpen as popupOpen } from "./popup.js";
-import { bindCorner } from "./corner-layout.js";
+import { bindCorner } from "./window/corner-layout.js";
 import { ensureSpine } from "./spine-runtime.js";
 import { wheelKind, wheelStep } from "./lobby-touch.js";
 import { S, clone, hitButton } from "./util.js";

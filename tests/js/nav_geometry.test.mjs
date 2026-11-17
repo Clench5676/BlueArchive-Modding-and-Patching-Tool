@@ -242,7 +242,7 @@ test("Hall reflows Settings into Home and restores sibling geometry across repea
   }
 });
 test("native-control clearance is preserved at fractional window scales", async () => {
-  const { topActionLayout, nativeRightClearance } = await import("../../src/bmpt/web/js/top-action-layout.js");
+  const { topActionLayout, nativeRightClearance } = await import("../../src/bmpt/web/js/window/top-action-layout.js");
   const boxes = { home: [44, 7, 62 * S, 59 * S], option: [158, 7, 60 * S, 62 * S], line: [120, 12, 4 * S, 49 * S] };
   for (const scale of [0.5, 0.75, 1, 1.25, 1.5, 2]) {
     const stage = { left: 0, top: 0, right: 1920 * scale, width: 1920 * scale },

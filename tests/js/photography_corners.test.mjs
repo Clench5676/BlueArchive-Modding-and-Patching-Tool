@@ -3,8 +3,8 @@ import { readFileSync } from "node:fs";
 import { statementOf } from "./helpers/source-text.mjs";
 import vm from "node:vm";
 import { test } from "node:test";
-import { bindCorner, CORNER_MARGIN } from "../../src/bmpt/web/js/corner-layout.js";
-import { headerGeometry } from "../../src/bmpt/web/js/window-layout.js";
+import { bindCorner, CORNER_MARGIN } from "../../src/bmpt/web/js/window/corner-layout.js";
+import { headerGeometry } from "../../src/bmpt/web/js/window/window-layout.js";
 import { anchoredCentre } from "../../src/bmpt/web/js/visual-view.js";
 import {
   FRAME,

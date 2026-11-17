@@ -1,7 +1,7 @@
 // Shared constants and small helpers for the screens.
 import * as NGUI from "./ngui.js";
-import { stageCoverBleed } from "./window-layout.js";
-import { reflowCorners } from "./corner-layout.js";
+import { stageCoverBleed } from "./window/window-layout.js";
+import { reflowCorners } from "./window/corner-layout.js";
 
 export const S = 1920 / 2960; // stage px per NGUI unit (the game fits 2960 units to the width)
 export const TAN10 = Math.tan((10 * Math.PI) / 180); // the game's 10 degree incline

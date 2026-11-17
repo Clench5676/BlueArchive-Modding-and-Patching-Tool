@@ -35,7 +35,7 @@ globalThis.Image = class {
 };
 globalThis.requestAnimationFrame = (fn) => queueMicrotask(fn);
 const { barImage, barDensity, BAR_CUTS, BAR_BORDER_SCALES, paintTopBar, createTopBarPainter } = await import(
-  "../../src/bmpt/web/js/top-bar-background.js"
+  "../../src/bmpt/web/js/window/top-bar-background.js"
 );
 for (const scale of [0.5, 0.625, 0.75, 5 / 6, 1, 1.25, 1.5, 1.75, 2])
   for (const dpi of [1, 1.25, 1.5, 2, 3])

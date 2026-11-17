@@ -24,7 +24,7 @@ globalThis.document = {
 };
 globalThis.getComputedStyle = () => ({ getPropertyValue: () => "" });
 const NGUI = await import("../../src/bmpt/web/js/ngui.js");
-const Layout = await import("../../src/bmpt/web/js/top-bar-layout.js");
+const Layout = await import("../../src/bmpt/web/js/window/top-bar-layout.js");
 const S = 1920 / 2960;
 const LOCALES = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"];
 const near = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b}`);
@@ -157,7 +157,7 @@ test("the bar still measures its fill and aligns the remaining caption by script
   near(Layout.barPadding(Layout.barCentre()), 4.88, 0.01);
   const nav = await readFile(new URL("../../src/bmpt/web/js/app/nav.js", import.meta.url), "utf8");
   assert.match(nav, /watchTopBar\(\)/);
-  const bar = await readFile(new URL("../../src/bmpt/web/js/top-bar.js", import.meta.url), "utf8");
+  const bar = await readFile(new URL("../../src/bmpt/web/js/window/top-bar.js", import.meta.url), "utf8");
   assert.match(bar, /querySelectorAll\("\.ms-label"\)/);
   assert.match(
     bar,

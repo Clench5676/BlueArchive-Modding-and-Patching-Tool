@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { flat } from "./helpers/source-text.mjs";
 import { test } from "node:test";
 import { readFileSync } from "node:fs";
-import { isImmersive, dragRegions, headerGeometry } from "../../src/bmpt/web/js/window-layout.js";
+import { isImmersive, dragRegions, headerGeometry } from "../../src/bmpt/web/js/window/window-layout.js";
 const source = (file) => readFileSync(new URL(`../../src/bmpt/${file}`, import.meta.url), "utf8");
 const scenes = [
   ["portrait fullscreen", ["fullscreen"], []],
@@ -26,7 +26,7 @@ test("camera preparation is immersive even before the shared detail fullscreen f
   );
   assert.match(flat(source("web/js/student-hall-fullscreen.js")), /stage\.classList\.add\("hall-fullscreen"\)/);
   assert.match(
-    flat(source("web/js/window-chrome.js")),
+    flat(source("web/js/window/window-chrome.js")),
     /observe\(document\.documentElement, \{ attributes: true, attributeFilter: \[["']class["']\]/,
   );
   const css = flat(source("web/css/app.css"));

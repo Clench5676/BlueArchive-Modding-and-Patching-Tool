@@ -6,14 +6,14 @@ import { test } from "node:test";
 import { readFileSync } from "node:fs";
 import { LOBBY_ENTRY } from "../../src/bmpt/web/js/ui-tokens.js";
 
-const source = readFileSync(new URL("../../src/bmpt/web/js/chrome-motion.js", import.meta.url), "utf8")
+const source = readFileSync(new URL("../../src/bmpt/web/js/window/chrome-motion.js", import.meta.url), "utf8")
   .replace('import { reflowCorners } from "./corner-layout.js";', "const reflowCorners = () => {};")
   .replace(
-    'import { rpc } from "./api.js";',
+    'import { rpc } from "../api.js";',
     "const rpc = (...call) => { globalThis.motionRpc.push(call); return Promise.resolve(); };",
   )
   .replace(
-    'import { LOBBY_ENTRY } from "./ui-tokens.js";',
+    'import { LOBBY_ENTRY } from "../ui-tokens.js";',
     `import { LOBBY_ENTRY } from "${new URL("../../src/bmpt/web/js/ui-tokens.js", import.meta.url).href}";`,
   );
 globalThis.motionRpc = [];

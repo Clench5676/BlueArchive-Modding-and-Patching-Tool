@@ -115,7 +115,7 @@ source =
   `import { CONTROL, XS_BUTTON, SPACE } from "${new URL("../../src/bmpt/web/js/ui-tokens.js", import.meta.url).href}";\nimport { row } from "${new URL("../../src/bmpt/web/js/ui-grid.js", import.meta.url).href}";\n` +
   source;
 source =
-  `import { portraitReplacements } from "${new URL("../../src/bmpt/web/js/student-hall-model.js", import.meta.url).href}";\nimport { portraitRect, portraitToolbarLayout, PORTRAIT_SIZE } from "${new URL("../../src/bmpt/web/js/student-hall-framing.js", import.meta.url).href}";\nimport { bindCorner } from "${new URL("../../src/bmpt/web/js/corner-layout.js", import.meta.url).href}";\n` +
+  `import { portraitReplacements } from "${new URL("../../src/bmpt/web/js/student-hall-model.js", import.meta.url).href}";\nimport { portraitRect, portraitToolbarLayout, PORTRAIT_SIZE } from "${new URL("../../src/bmpt/web/js/student-hall-framing.js", import.meta.url).href}";\nimport { bindCorner } from "${new URL("../../src/bmpt/web/js/window/corner-layout.js", import.meta.url).href}";\n` +
   source;
 source = `const {S,clone,NGUI,alignIcon,text,T,Popup,document,UI}=globalThis.hallControlsHarness;\n${source}\nexport {lobbyControl,controls,renderChrome,renderPortraitActions};
 export function setPortraits(value){portraits=value;}
@@ -260,8 +260,8 @@ test("top-right icons keep the75percent baseline with the photo-only8percent opt
 });
 
 test("Hall's real action row measures its top margin below the bar at minimum, default and large sizes", async () => {
-  const { CORNER_MARGIN } = await import("../../src/bmpt/web/js/corner-layout.js");
-  const { headerGeometry } = await import("../../src/bmpt/web/js/window-layout.js");
+  const { CORNER_MARGIN } = await import("../../src/bmpt/web/js/window/corner-layout.js");
+  const { headerGeometry } = await import("../../src/bmpt/web/js/window/window-layout.js");
   for (const mode of ["portraits", "memorial"])
     for (const platform of [null, "darwin", "win32"]) {
       for (const [width, height] of [
