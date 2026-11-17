@@ -288,7 +288,8 @@ def test_the_summary_answers_from_its_last_check_while_nothing_changed(spine, mo
     monkeypatch.setattr(library, "_impact_of", lambda *args: calls.append(args) or ("unchanged", {}))
     assert library.update_impact(force=True)["mods"] == first["mods"] and not calls, "the same answer, nothing judged"
     # a new baseline (an update, a repair) is a change: judged again
-    import os, time
+    import os
+    import time
 
     baseline = env.root / "mods" / entry.id / fingerprint.FILE_NAME
     later = time.time() + 5
@@ -315,7 +316,8 @@ def test_the_last_check_is_kept_and_read_without_checking(spine, monkeypatch):
     assert last["update"] is False and last["checked"] == summary["version"]
     assert last["mods"] == summary["mods"]
     # a new baseline (an update, a repair) ends the kept impact of that mod
-    import os, time
+    import os
+    import time
 
     baseline = env.root / "mods" / entry.id / fingerprint.FILE_NAME
     later = time.time() + 5

@@ -370,7 +370,6 @@ def test_popup_frames_and_the_small_frames_anatomy(tokens, layouts, exemplars):
     # the footer: two bodies (550 at a 1.001 scale: 551 across) 33 apart, 102 above the frame's bottom, the pair centred
     bodies = []
     for name in ("Btn_Ok", "Btn_Cancel"):
-        button = subtree(check, f"Center/Popup/Btn_2/{name}")
         body = subtree(check, f"Center/Popup/Btn_2/{name}/BG (1)")
         offset = _origin(check, f"Center/Popup/Btn_2/{name}")
         bodies.append(edges(body, sprite(body, "Common_Btn_BG"), offset))

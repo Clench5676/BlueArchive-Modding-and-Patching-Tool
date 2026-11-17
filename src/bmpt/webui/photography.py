@@ -17,7 +17,6 @@ from ..library.photographs import decode_capture
 from ..library.storage import sync_directory
 from .system import reveal
 from ..library.judge import core_of
-from ..library.models import ApplyResult
 from .server import AssetResponse
 
 if TYPE_CHECKING:

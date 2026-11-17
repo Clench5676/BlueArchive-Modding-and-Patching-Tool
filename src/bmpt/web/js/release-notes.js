@@ -64,20 +64,23 @@ export function pick(list, lang) {
 export function inline(text) {
   // escaped characters are set aside first, so an escaped mark never opens or closes an emphasis
   const kept = [];
-  return String(text)
-    .replace(/\\([\\`*_{}[\]()#+\-.!>~|])/g, (_, c) => `\u0000${kept.push(c) - 1}\u0000`)
-    .replace(/<!--.*?-->/g, "")
-    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
-    .replace(/<(https?:\/\/[^>\s]+)>/g, "$1")
-    .replace(/<\/?[A-Za-z][^>]*>/g, "")
-    .replace(/`([^`]+)`/g, "$1")
-    .replace(/(\*\*|__)(?=\S)(.+?)(?<=\S)\1/g, "$2")
-    .replace(/~~(?=\S)(.+?)(?<=\S)~~/g, "$1")
-    .replace(/(^|[^\w*])\*(?=\S)(.+?)(?<=\S)\*(?!\w)/g, "$1$2")
-    .replace(/(^|[^\w])_(?=\S)(.+?)(?<=\S)_(?!\w)/g, "$1$2")
-    .replace(/\u0000(\d+)\u0000/g, (_, i) => kept[Number(i)])
-    .trim();
+  return (
+    String(text)
+      .replace(/\\([\\`*_{}[\]()#+\-.!>~|])/g, (_, c) => `\u0000${kept.push(c) - 1}\u0000`)
+      .replace(/<!--.*?-->/g, "")
+      .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+      .replace(/<(https?:\/\/[^>\s]+)>/g, "$1")
+      .replace(/<\/?[A-Za-z][^>]*>/g, "")
+      .replace(/`([^`]+)`/g, "$1")
+      .replace(/(\*\*|__)(?=\S)(.+?)(?<=\S)\1/g, "$2")
+      .replace(/~~(?=\S)(.+?)(?<=\S)~~/g, "$1")
+      .replace(/(^|[^\w*])\*(?=\S)(.+?)(?<=\S)\*(?!\w)/g, "$1$2")
+      .replace(/(^|[^\w])_(?=\S)(.+?)(?<=\S)_(?!\w)/g, "$1$2")
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: NUL marks the placeholders of kept spans
+      .replace(/\u0000(\d+)\u0000/g, (_, i) => kept[Number(i)])
+      .trim()
+  );
 }
 
 // [{kind: "heading" | "item" | "text", text, level?, depth?, marker?, gap}]: gap marks a blank line before. Every line stays a

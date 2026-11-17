@@ -22,7 +22,7 @@ import { setLibraryWaiting } from "./preview-lifecycle.js";
 import { L, T, errorText, setStrings, languageRefresh } from "./i18n.js";
 import { neighbour, visit } from "./roster-order.js";
 import { hasAsset, primaryKind } from "./switch-sources.js";
-import { renderNav, setTitle, setTopActions, reflowTopActions } from "./nav.js";
+import { renderNav, setTitle, setTopActions } from "./nav.js";
 import { confirmQuit, quitKey } from "./quit.js";
 import { forget } from "./thumbs.js";
 import { setSpineConsent } from "./spine-runtime.js";

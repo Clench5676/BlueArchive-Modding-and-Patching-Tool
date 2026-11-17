@@ -322,7 +322,7 @@ test("a Spine load that times out says how far it got", async () => {
 test("Now Loading freezes the previews shown beneath it; one started behind it keeps preparing", () => {
   const env = surface(),
     calls = [];
-  let shown = true;
+  const shown = true;
   const life = previewLifecycle(
     { suspend: () => calls.push("pause"), resume: () => calls.push("resume"), shown: () => shown },
     env,

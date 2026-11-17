@@ -1206,7 +1206,7 @@ def test_official_roster_partial_and_complete_mod_preflight(tmp_path, monkeypatc
                 monkeypatch.setattr(library, "_official_for", official_for)
                 inspection.validate()
                 # Release environments before Windows removes the core's temporary clones.
-                del inspection
+                inspection = None
     elapsed = time.perf_counter() - started
     record_property("roster_counts", str(counters))
     record_property("roster_seconds", round(elapsed, 3))

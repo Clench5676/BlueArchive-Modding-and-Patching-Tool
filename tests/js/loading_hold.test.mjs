@@ -176,10 +176,10 @@ test("Escape reaches the top popup while focus remains on the held page", async 
     host.hidden = true;
   });
   try {
-    const escape = event(stage, "Escape");
-    stage.listeners.keydown(escape);
-    assert.equal(escape.prevented || escape.stopped, false);
-    Popup.onKey({ ...escape, defaultPrevented: escape.prevented });
+    const escapeKey = event(stage, "Escape");
+    stage.listeners.keydown(escapeKey);
+    assert.equal(escapeKey.prevented || escapeKey.stopped, false);
+    Popup.onKey({ ...escapeKey, defaultPrevented: escapeKey.prevented });
     assert.ok(closed, "the popup's own Escape handler runs");
     assert.equal(Loading.held(), true);
     const background = event();
@@ -396,7 +396,6 @@ for (const entry of ["Enable Mods"])
           assert.equal(ev.stopped, blocked, `${entry}: ${type}`);
         }
     };
-    let start;
     const source = readFileSync(new URL("../../src/bmpt/web/js/mod-switch.js", import.meta.url), "utf8");
     const run = source.slice(source.indexOf("async function run(params)"), source.indexOf("// a toggle job followed"));
     const env = {
@@ -410,7 +409,7 @@ for (const entry of ["Enable Mods"])
       finished: () => assertInput(false),
       refused: assert.fail,
     };
-    start = new Function(
+    const start = new Function(
       "env",
       `const { ${Object.keys(env).join(", ")} } = env; let inFlight = false; ${run}; return run;`,
     )(env);

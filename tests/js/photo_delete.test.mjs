@@ -2,8 +2,6 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { compact } from "./helpers/source-text.mjs";
 import { test } from "node:test";
-import { CONTROL, SPACE } from "../../src/bmpt/web/js/ui-tokens.js";
-import { row } from "../../src/bmpt/web/js/ui-grid.js";
 const source = readFileSync(new URL("../../src/bmpt/web/js/photography/controller.js", import.meta.url), "utf8");
 const dense = compact(source);
 const code = source.slice(source.indexOf("async function deletePhoto()"), source.indexOf("async function applyGame()"));

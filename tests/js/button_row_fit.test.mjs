@@ -548,7 +548,7 @@ for (const locale of LOCALES)
     assert.match(detail, /const CARD = \{ w: 242, h: 209 \};/);
     // (the action bar's group cards bring their own fit: action_list.test.mjs)
     assert.match(detail, /const f = captionFit \|\| fitText\(caption, 56, 28, w - 50\)[,;]/);
-    const names = [...model.match(/export const ACTIONS = \{([\s\S]*?)\n\};/)[1].matchAll(/^  (\w+): \{/gm)].map(
+    const names = [...model.match(/export const ACTIONS = \{([\s\S]*?)\n\};/)[1].matchAll(/^ {2}(\w+): \{/gm)].map(
       (m) => m[1],
     );
     assert.ok(names.includes("retreat") && names.includes("knockdown"));

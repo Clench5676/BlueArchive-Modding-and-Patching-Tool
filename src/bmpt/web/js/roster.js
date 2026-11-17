@@ -22,7 +22,6 @@ import {
   toolbarLayout,
   toolbarTree,
 } from "./roster-widgets.js";
-import { current as modsState } from "./mod-switch.js";
 import { countNodes, countText, iconsOf } from "./mod-counts.js";
 import { rpc, spineBase } from "./api.js";
 import { L, T, language } from "./i18n.js";
@@ -32,7 +31,7 @@ import { prioritise, thumbnailScope } from "./thumbs.js";
 import { spineAllowed } from "./spine-runtime.js";
 import { configuredKey, hasAsset, previewBase, primaryKind } from "./switch-sources.js";
 import { $, RECRUIT, S, advanceOf, clone, glyphsOf } from "./util.js";
-import { DEFAULT_VIEW, SORTS, arrange, filtering, normalizeView, order as orderOf } from "./roster-order.js";
+import { DEFAULT_VIEW, arrange, normalizeView, order as orderOf } from "./roster-order.js";
 
 const { node, sprite, label, find } = NGUI;
 const fitText = (...a) => NGUI.fitText(...a);

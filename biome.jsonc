@@ -29,7 +29,9 @@
         "useIterableCallbackReturn": "off",
         "noAssignInExpressions": "off",
         // CSS: a fallback value followed by the preferred one (overflow: hidden; overflow: clip).
-        "noDuplicateProperties": "off"
+        "noDuplicateProperties": "off",
+        // Object.prototype.hasOwnProperty.call stays: older system WebViews lack Object.hasOwn.
+        "noPrototypeBuiltins": "off"
       },
       "correctness": {
         // Callbacks keep the parameters of the signature they implement.

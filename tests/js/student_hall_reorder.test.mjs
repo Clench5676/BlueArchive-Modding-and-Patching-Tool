@@ -327,8 +327,8 @@ test("Alt arrows remain available and Escape cancels only the active grab", () =
   assert.deepEqual(h.moved, [["resource-2", 1]]);
   h.send("pointerdown");
   h.send("pointermove", 395);
-  const escape = h.send("keydown", 0, { key: "Escape" });
-  assert.equal(escape.stopped, true);
+  const escapeKey = h.send("keydown", 0, { key: "Escape" });
+  assert.equal(escapeKey.stopped, true);
   h.send("pointerup", 395);
   assert.equal(h.moved.length, 1);
 });

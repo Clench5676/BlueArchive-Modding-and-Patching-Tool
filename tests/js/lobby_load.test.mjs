@@ -423,6 +423,7 @@ test("zoom limits are cached by both the configured art revision and the live la
     performance,
     SLICE_MS: 8,
     setTimeout: (fn) => fn(),
+    // biome-ignore lint/correctness/useYield: the stand-in finishes in one step
     measureSafe: function* (loaded) {
       measured.push(loaded[0]);
       return { whole: {} };

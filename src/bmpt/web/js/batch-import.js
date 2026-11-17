@@ -16,7 +16,7 @@ import { spineAllowed } from "./spine-runtime.js";
 import { thumbnailScope, forget } from "./thumbs.js";
 import { modelThumbnail } from "./model-still.js";
 import { S } from "./util.js";
-import { XS_BUTTON, SPACE, TYPE, CONTROL, POPUP_FRAME, POPUP_TYPE } from "./ui-tokens.js";
+import { XS_BUTTON, SPACE, CONTROL, POPUP_FRAME, POPUP_TYPE } from "./ui-tokens.js";
 import { row as layoutRow, stack as layoutStack, container } from "./ui-grid.js";
 import { ROW_W as OPTION_WIDTH, rowBase, radioRow } from "./settings-rows.js";
 import {

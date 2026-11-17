@@ -139,7 +139,7 @@ class TestNormalizeLegacySpineAssets:
         """原始文件不被修改"""
         original = tmp_path / "CH0808_home2.png"
         original.write_bytes(b"original data")
-        result = normalize_legacy_assets(tmp_path, MOCK_BUNDLE_PNG_NAMES)
+        normalize_legacy_assets(tmp_path, MOCK_BUNDLE_PNG_NAMES)
         assert original.exists()
         assert original.read_bytes() == b"original data"
         assert original.name == "CH0808_home2.png"
@@ -215,7 +215,7 @@ class TestAtlasOperations:
         files = list(output_dir.glob("*.atlas"))
         assert len(files) == 1
         output_atlas = SpineAtlas.ReadAtlasFile(files[0])
-        assert output_atlas.version == False  # Spine 3
+        assert output_atlas.version == False  # noqa: E712  Spine 3
 
     def test_unpack_atlas_frames(self, sample_case: "SampleCase", tmp_path: Path):
         """测试解包 atlas 帧"""

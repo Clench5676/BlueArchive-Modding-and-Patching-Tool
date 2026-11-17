@@ -362,7 +362,6 @@ def _census_pair(pair):
                     b, radius, _ = ar.measure(new, rig, w0[f], other=False, core=True)
                     a = ar.measure(new, rig, w1[f], other=False, core=True, radii=False)[0]
                     assert np.isfinite(a).all(), (change.clip.peek_name(), f)
-                    before = ar.push_of(d, b, radius, 0.5)[free, 2:]
                     after = ar.push_of(d, a, radius, 0.5)[free, 2:]
                     growth = np.maximum(a, 0) - np.maximum(b, 0)
                     inward = min(

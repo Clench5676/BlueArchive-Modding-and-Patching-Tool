@@ -459,7 +459,7 @@ def test_older_standalone_classic_without_record_prevents_migration(folders, mon
     monkeypatch.setattr(sys, "platform", "darwin")
     monkeypatch.setattr(sys, "argv", [executable])
     monkeypatch.setattr(sys, "executable", executable)
-    process = f"987654 /Applications/Old Tool.app/Contents/MacOS/Tool --classic\n"
+    process = "987654 /Applications/Old Tool.app/Contents/MacOS/Tool --classic\n"
     monkeypatch.setattr(
         data_paths.subprocess, "run", lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout=process)
     )

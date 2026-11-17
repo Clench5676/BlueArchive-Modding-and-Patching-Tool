@@ -298,6 +298,7 @@ export function stillCrop(camera, target, box, W, H, aspect) {
 // the view turns to the character's front once the action's first frame is posed
 export const ACTIONS = {
   idle: { slots: ["Formation_Idle", "Cafe_Idle", "Idle"] },
+  // biome-ignore lint/suspicious/noThenProperty: "then" names the action that follows, the object is never awaited
   reaction: { slots: ["Cafe_Reaction"], then: "idle" },
   walk: { slots: ["Cafe_Walk"] },
   victory: { slots: ["Victory_Start"], next: "Victory_End" },

@@ -12,7 +12,6 @@ import threading
 import time
 from collections import OrderedDict
 from concurrent.futures import FIRST_COMPLETED, Future, TimeoutError as FutureTimeout, wait
-from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 

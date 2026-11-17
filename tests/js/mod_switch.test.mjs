@@ -2892,45 +2892,43 @@ test("the drift prompt asks the impacts of the mods its entries are configured w
   assert.equal(items[0].badge.text, "Outdated");
   // the badge keeps its whole word on the generic list's card (250 wide: popup.js listCard, 26 down to 20, 70 kept)
   const NGUI = await import("../../src/bmpt/web/js/ngui.js");
-  {
-    try {
-      for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
-        const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
-        const bf = NGUI.fitText(ui.mods.heldBadge, 26, 20, 250 - 70, 1);
-        assert.equal(bf.text, ui.mods.heldBadge, `${lang}: whole`);
-        assert.ok(NGUI.glyphWidth(bf.text, bf.fs) <= 250 - 70, `${lang}: inside the card`);
-        // with the tick box in the corner (the update list): whole, and short of the box on every kind's card
-        const Pop = await import("../../src/bmpt/web/js/popup.js");
-        const { switchGrid } = await import("../../src/bmpt/web/js/switch-layout.js");
-        const { TAN10 } = await import("../../src/bmpt/web/js/util.js");
-        for (const kind of [null, "spr", "lobby", "model"]) {
-          const card = switchGrid(kind, Pop.listCardBox(Pop.listLayout(false, kind)).w).card;
-          const room = Pop.badgeRoom(card);
-          const fit = NGUI.fitText(ui.mods.heldBadge, 26, 20, room - 24, 1);
-          assert.equal(fit.text, ui.mods.heldBadge, `${lang} ${kind}: whole beside the tick box`);
-          assert.ok(NGUI.glyphWidth(fit.text, fit.fs) + 24 <= room, `${lang} ${kind}: short of the tick box`);
-          // drawn: the badge's right edge, held at the box's height along the slant, stops BADGE_GAP short of the box
-          const tree = Pop.listCard(
-            { key: "k", label: "K", badge: { text: ui.mods.heldBadge, color: "#ff5a00", ink: "#ffffff" } },
-            0,
-            0,
-            false,
-            card,
-            kind,
-            true,
-          );
-          const using = tree.children.find((n) => n.name === "Using"),
-            box = tree.children.find((n) => n.name === "Tick");
-          const right = using.pos[0] + using.widgets[0].w_ / 2 + (box.pos[1] - using.pos[1]) * TAN10;
-          assert.ok(
-            right + Pop.BADGE_GAP <= box.pos[0] - Pop.TICK_BOX.w / 2 + 1e-9,
-            `${lang} ${kind}: drawn short of the tick box`,
-          );
-        }
+  try {
+    for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
+      const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
+      const bf = NGUI.fitText(ui.mods.heldBadge, 26, 20, 250 - 70, 1);
+      assert.equal(bf.text, ui.mods.heldBadge, `${lang}: whole`);
+      assert.ok(NGUI.glyphWidth(bf.text, bf.fs) <= 250 - 70, `${lang}: inside the card`);
+      // with the tick box in the corner (the update list): whole, and short of the box on every kind's card
+      const Pop = await import("../../src/bmpt/web/js/popup.js");
+      const { switchGrid } = await import("../../src/bmpt/web/js/switch-layout.js");
+      const { TAN10 } = await import("../../src/bmpt/web/js/util.js");
+      for (const kind of [null, "spr", "lobby", "model"]) {
+        const card = switchGrid(kind, Pop.listCardBox(Pop.listLayout(false, kind)).w).card;
+        const room = Pop.badgeRoom(card);
+        const fit = NGUI.fitText(ui.mods.heldBadge, 26, 20, room - 24, 1);
+        assert.equal(fit.text, ui.mods.heldBadge, `${lang} ${kind}: whole beside the tick box`);
+        assert.ok(NGUI.glyphWidth(fit.text, fit.fs) + 24 <= room, `${lang} ${kind}: short of the tick box`);
+        // drawn: the badge's right edge, held at the box's height along the slant, stops BADGE_GAP short of the box
+        const tree = Pop.listCard(
+          { key: "k", label: "K", badge: { text: ui.mods.heldBadge, color: "#ff5a00", ink: "#ffffff" } },
+          0,
+          0,
+          false,
+          card,
+          kind,
+          true,
+        );
+        const using = tree.children.find((n) => n.name === "Using"),
+          box = tree.children.find((n) => n.name === "Tick");
+        const right = using.pos[0] + using.widgets[0].w_ / 2 + (box.pos[1] - using.pos[1]) * TAN10;
+        assert.ok(
+          right + Pop.BADGE_GAP <= box.pos[0] - Pop.TICK_BOX.w / 2 + 1e-9,
+          `${lang} ${kind}: drawn short of the tick box`,
+        );
       }
-    } finally {
-      I18n.setStrings("en-US", strings);
     }
+  } finally {
+    I18n.setStrings("en-US", strings);
   }
   assert.equal(items[1].badge, undefined);
   assert.equal(items[2].badge, undefined, "a card that cannot be ticked keeps its own state");

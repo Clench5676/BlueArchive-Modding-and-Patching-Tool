@@ -25,6 +25,7 @@ const sizes = [
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-7, `${a} != ${b}`);
 // Deterministic advance fixture: real locale strings feed the same measured-width
 // contract as the DOM canvas. Native font rendering is checked by hand.
+// biome-ignore lint/suspicious/noControlCharactersInRegex: anything outside ASCII counts as a wide glyph
 const textWidth = (text, font) => [...text].reduce((w, c) => w + font * (/[^\x00-\x7f]/.test(c) ? 1 : 0.65), 0);
 const prefabs = cornerPrefabs.UICharacterCollection,
   right = "NUITop_Scenes/Top/Right/";

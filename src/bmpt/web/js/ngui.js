@@ -660,6 +660,7 @@ export async function render(tree, host, opts = {}) {
       const text = pick(opts.texts, n.name, p) ?? w.text;
       if (!text) return null;
       const align =
+        // biome-ignore lint/suspicious/noSparseArray: NGUI's alignment enum starts at 1
         [, "left", "center", "right", "justify"][w.align] || ["left", "center", "right"][(w.pivot ?? 4) % 3];
       Object.assign(el.style, {
         display: "flex",
@@ -858,6 +859,7 @@ function tierTag({ el, path, w, h, kind }, z, inks, S) {
     const inkW = glyphWidth(textEl.textContent, fs) * sx * S,
       inkH = lines.length * fontSizeFor(textEl.textContent, fs) * LINE_PITCH * sy * S;
     const align =
+      // biome-ignore lint/suspicious/noSparseArray: NGUI's alignment enum starts at 1
       [, "left", "center", "right", "justify"][tw.align] || ["left", "center", "right"][(tw.pivot ?? 4) % 3];
     const vertical = ["flex-start", "center", "flex-end"][Math.floor((tw.pivot ?? 4) / 3)];
     return overlaps(tagBox(info.text, body[0], body[1]), inkBox(box, inkW, inkH, align, vertical));

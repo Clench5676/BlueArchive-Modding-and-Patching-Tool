@@ -271,6 +271,7 @@ test("the face's facing: the head's forward read on the formation idle, carried 
 test("the front view keeps the camera's height angle and turns the yaw to the facing", async () => {
   const { frontView } = await import("../../src/bmpt/web/js/model.js");
   const round = (v) => v.toArray().map((x) => Math.round(x * 1000) / 1000 + 0);
+  // biome-ignore lint/suspicious/noApproximativeNumericConstant: the expected value is rounded to three places
   assert.deepEqual(round(frontView(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 2, 2))), [0.707, 0.707, 0]);
   assert.deepEqual(round(frontView(new THREE.Vector3(0, 0, -1), new THREE.Vector3(3, 0, 0))), [0, 0, -1]);
 });

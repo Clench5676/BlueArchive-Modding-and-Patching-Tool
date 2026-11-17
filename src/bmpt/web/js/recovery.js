@@ -1,5 +1,6 @@
 // Runs before styles and the module graph. Recovery needs only the built-in document and local RPC.
 (function () {
+  // biome-ignore lint/suspicious/noRedundantUseStrict: the page injects this file inline as a classic script
   "use strict";
   const config = window.BAMT_CONFIG || {},
     strings = config.strings || {};
