@@ -11,7 +11,7 @@ from bmpt.webui.student_hall import empty_hall, normalize_hall, portrait_lines, 
 
 
 def entry(**extra):
-    return {"id": str(uuid4()), "alt": "hoshino", "source": "mod:example", **extra}
+    return {"id": str(uuid4()), "variant": "hoshino", "source": "mod:example", **extra}
 
 
 def test_same_character_different_resources_keep_independent_positions(tmp_path):
@@ -159,8 +159,8 @@ def test_library_only_cross_server_entries_are_available_without_local_core(tmp_
     register_api(registry, service)
     result = registry.call("hall.options", {})["result"]
     (choice,) = result["choices"]
-    assert {key: choice[key] for key in ("alt", "source", "kind", "core", "names", "label", "portrait")} == {
-        "alt": "unreleased",
+    assert {key: choice[key] for key in ("variant", "source", "kind", "core", "names", "label", "portrait")} == {
+        "variant": "unreleased",
         "source": "mod:future-mod",
         "kind": "lobby",
         "core": None,

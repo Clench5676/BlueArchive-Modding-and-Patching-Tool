@@ -417,7 +417,7 @@ export function importArtwork(ui, layouts) {
       }
       return t;
     },
-    // UIPopup_GachaCharList.Btn_Checkbox, as the roster's alt grouping toggle: its own caption, the body sized
+    // UIPopup_GachaCharList.Btn_Checkbox, as the roster's variant grouping toggle: its own caption, the body sized
     // to it.
     toggle(caption, on) {
       const t = at(get("UIPopup_GachaCharList.Btn_Checkbox")),

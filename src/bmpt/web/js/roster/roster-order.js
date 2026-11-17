@@ -1,7 +1,7 @@
 // The student list's cards and their order for a view (merge, segment filters, the display settings' filters and
 // sort, the search), shared by the roster and the detail screen's arrows. No DOM: the tests run it in Node.
 // arrange gives the cards as the roster shows them, order the same cards in one list, neighbour the card before
-// or after the shown alt (or student, merged), visit the recently viewed order after a visit.
+// or after the shown variant (or family, merged), visit the recently viewed order after a visit.
 import { studentName } from "../core/names.js";
 
 export const SORTS = ["recent", "added", "name", "mods", "default"];
@@ -28,7 +28,7 @@ const pick = (value, allowed, fallback) => (allowed.includes(value) ? value : fa
 /**
  * What the roster list shows and in what order.
  * @typedef {object} RosterView
- * @property {boolean} merged Group the alts of one character.
+ * @property {boolean} merged Group the variants of one character.
  * @property {"all"|"mods"|"none"} mods The mods segment filter.
  * @property {"all"|"yes"|"no"} recruit The recruitment segment filter.
  * @property {string} sort The sort key, one of SORTS.
@@ -94,8 +94,8 @@ export const terms = (query) =>
     .map(fold)
     .filter(Boolean);
 
-// what an alt is found by: its names, its student's base names, the aliases the UI never shows (the alt's and
-// the student's, the CN server's wording) and the user's own aliases of the alt (v.custom changes after an edit)
+// what a variant is found by: its names, its family's base names, the aliases the UI never shows (the variant's and
+// the family's, the CN server's wording) and the user's own aliases of the variant (v.custom changes after an edit)
 const haystacks = new WeakMap();
 function haystack(v, f) {
   let h = haystacks.get(v);
@@ -145,13 +145,13 @@ const time = (iso) => {
   return Number.isFinite(t) ? t : -Infinity;
 };
 
-// cards: one per alt, or one per student when merged (its attributes are any of its alts'; the card shows the
-// first alt, or the first one the search found)
+// cards: one per variant, or one per family when merged (its attributes are any of its variants'; the card shows the
+// first variant, or the first one the search found)
 function cards(data, view, words, label) {
   const list = [];
   let n = 0;
-  for (const f of data.students || []) {
-    const vs = f.alts || [];
+  for (const f of data.families || []) {
+    const vs = f.variants || [];
     if (!vs.length) continue;
     if (view.merged) {
       const hit = words.length ? vs.find((v) => matches(v, f, words)) : vs[0];
@@ -175,7 +175,7 @@ function cards(data, view, words, label) {
           hit || vs[0],
           words.length ? (label((hit || vs[0]).names)?.full ?? f.key) : (label(f.base) ?? f.key),
         ),
-        student: f.key,
+        family: f.key,
         n: n++,
         matched: !!hit,
         recruit: vs.some((v) => v.recruitable),
@@ -199,7 +199,7 @@ function cards(data, view, words, label) {
         list.push({
           ...v,
           name: studentName(v, label(v.names)?.full ?? v.key),
-          student: f.key,
+          family: f.key,
           n: n++,
           matched: matches(v, f, words),
           recruit: !!v.recruitable,
@@ -228,7 +228,7 @@ function comparator(view, collator) {
 
 /**
  * Arrange the roster's cards for a view.
- * @param {{students?: object[]}} data The roster data of roster.list.
+ * @param {{families?: object[]}} data The roster data of roster.list.
  * @param {object} [options]
  * @param {(names: object) => *} [options.label] Gives the UI language's value of a {lang: value} object.
  * @param {Intl.Collator|null} [options.collator]
@@ -262,23 +262,23 @@ export function arrange(
 
 /**
  * The cards in the roster's order, in one list.
- * @param {{students?: object[]}} data The roster data of roster.list.
+ * @param {{families?: object[]}} data The roster data of roster.list.
  * @returns {object[]}
  */
 export const order = (data, view, opts) => arrange(data, view, opts).groups.flatMap((g) => g.items);
 
-// a visit to an alt in roster.list's data, as the server records it (webui/state.py UiState.visit: first in the
+// a visit to a variant in roster.list's data, as the server records it (webui/state.py UiState.visit: first in the
 // recently viewed, the ones before it one down, at most RECENT_MAX kept), so the list has it without a new roster.list
 export const RECENT_MAX = 50;
 /**
- * Record a visit to an alt in roster.list's data, as the server does (webui/state.py UiState.visit: first in
+ * Record a visit to a variant in roster.list's data, as the server does (webui/state.py UiState.visit: first in
  * the recently viewed, the ones before it one down, at most RECENT_MAX kept), so the list has it without a new
  * roster.list.
- * @param {{students?: object[]}} data The roster data; updated in place.
- * @param {string} key The visited alt's key.
+ * @param {{families?: object[]}} data The roster data; updated in place.
+ * @param {string} key The visited variant's key.
  */
 export function visit(data, key) {
-  const vs = (data?.students || []).flatMap((f) => f.alts || []);
+  const vs = (data?.families || []).flatMap((f) => f.variants || []);
   const was = vs.find((v) => v.key === key)?.recent ?? Infinity;
   for (const v of vs) {
     if (v.key === key) v.recent = 0;
@@ -288,19 +288,19 @@ export function visit(data, key) {
 
 /**
  * Find the card a step away from the shown one in a list, wrapping round.
- * An alt the list hides (another chip of the student, a deep link) steps to the nearest listed card after or
+ * A variant the list hides (another chip of the family, a deep link) steps to the nearest listed card after or
  * before its place in full.
  * @param {object[]} list
  * @param {object[]|(() => object[])|null} full The unfiltered order, or a function making it.
- * @param {{student: string, alt: string, merged: boolean}} at
+ * @param {{family: string, variant: string, merged: boolean}} at
  * @param {number} delta The step, +1 or -1.
  * @returns {object|null} The card, or null when there is nowhere else to go.
  */
 export function neighbour(list, full, at, delta) {
   const usable = list.filter((c) => c.spr || c.lobby || c.model || c.storedKinds?.length);
   if (!usable.length) return null;
-  const id = (c) => (at.merged ? c.student : c.key);
-  const here = at.merged ? at.student : at.alt;
+  const id = (c) => (at.merged ? c.family : c.key);
+  const here = at.merged ? at.family : at.variant;
   const step = (i, len) => (((i + delta) % len) + len) % len;
   let next = null;
   const i = usable.findIndex((c) => id(c) === here);

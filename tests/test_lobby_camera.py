@@ -398,7 +398,7 @@ def test_camera_choice_applies_switches_and_restores(camera_env):
     pin = lib.current_pin()
     record = save(e)
     meta = record[lc.TAG]
-    assert (meta["alt"], meta["source"], meta["number"], meta["base"], meta["root"]) == (
+    assert (meta["variant"], meta["source"], meta["number"], meta["base"], meta["root"]) == (
         "azusa",
         "official",
         1,

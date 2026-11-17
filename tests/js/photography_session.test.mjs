@@ -42,7 +42,7 @@ function harness({ start = "portrait", show } = {}) {
     console,
     Promise,
     tab: start,
-    altId: "cycling",
+    variantKey: "cycling",
     open: true,
     fullscreen: true,
     mainPlayer: player,
@@ -50,7 +50,7 @@ function harness({ start = "portrait", show } = {}) {
     lobbyFrom: null,
     lobbyStale: false,
     previewAvailable: () => true,
-    alt: () => ({ key: "cycling", spr: "cycling_spr", lobby: "cycling_home" }),
+    variant: () => ({ key: "cycling", spr: "cycling_spr", lobby: "cycling_home" }),
     current: () => ({ kind: "self" }),
     modsOn: () => true,
     specialFraming: () => null,
@@ -105,8 +105,8 @@ function harness({ start = "portrait", show } = {}) {
     },
   };
   // detail.js's setters of the screen's state the bridge writes
-  for (const name of ["tab", "fullscreen", "face", "shownLeft", "shownKey", "lobbyFrom", "lobbyStale"]) {
-    const setter = { fullscreen: "setFullscreenState", face: "setFaceState" }[name];
+  for (const name of ["tab", "fullscreen", "expression", "shownLeft", "shownKey", "lobbyFrom", "lobbyStale"]) {
+    const setter = { fullscreen: "setFullscreenState", expression: "setExpressionState" }[name];
     env[setter ?? `set${name[0].toUpperCase()}${name.slice(1)}`] = (value) => {
       env[name] = value;
     };
@@ -175,17 +175,17 @@ test("camera Back returns to the ready detail page instead of a full lobby witho
   assert.equal(h.calls.filter(([name]) => name === "detail.ready").length, 1);
   assert.ok(h.calls.some(([name, on]) => name === "fullscreen" && on === false));
 });
-test("face previews reuse the detail face renderer and request each face once", async () => {
+test("expression previews reuse the detail face renderer and request each expression once", async () => {
   const h = harness();
-  await h.bridge.facePreview("01");
-  await h.bridge.facePreview("01");
-  await h.bridge.facePreview("02");
+  await h.bridge.expressionPreview("01");
+  await h.bridge.expressionPreview("01");
+  await h.bridge.expressionPreview("02");
   const requests = h.calls.filter(([name]) => name === "thumbnail");
   assert.equal(requests.length, 2);
   assert.deepEqual(requests[0], ["thumbnail", "/portrait", "face", "01"]);
 });
 test("default thumbnail is the student collection portrait", async () => {
   const h = harness();
-  h.env.alt = () => ({ portrait: "/Student_Portrait_Cycling_Collection.png", spr: "cycling_spr" });
+  h.env.variant = () => ({ portrait: "/Student_Portrait_Cycling_Collection.png", spr: "cycling_spr" });
   assert.equal(await h.bridge.defaultThumbnail(), "/Student_Portrait_Cycling_Collection.png");
 });

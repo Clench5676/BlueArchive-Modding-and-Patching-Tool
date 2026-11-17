@@ -54,25 +54,25 @@ test("card, info panel and detail switch share a render; original, Mods, models 
 });
 
 test("cache revisions include installation, model parts, Mod updates and explicit invalidation", () => {
-  const alt = {
+  const variant = {
     model: "hina",
     modelFiles: [{ path: "/game-a/hina", crc: 1 }],
     modList: [{ id: "m", kind: "model", files: [{ hash: "old" }] }],
   };
-  const student = { version: "a", alts: [alt] };
-  const key = () => modelStillVersion(student, alt);
+  const family = { version: "a", variants: [variant] };
+  const key = () => modelStillVersion(family, variant);
   const a = key();
-  Object.assign(alt.modList[0], { fresh: false, alias: "Owner label", label: "Original label" });
+  Object.assign(variant.modList[0], { fresh: false, alias: "Owner label", label: "Original label" });
   assert.equal(key(), a, "display metadata cannot invalidate source bytes");
-  student.version = "b";
+  family.version = "b";
   assert.notEqual(key(), a);
   const b = key();
-  alt.modelFiles[0].path = "/game-b/hina";
+  variant.modelFiles[0].path = "/game-b/hina";
   assert.notEqual(key(), b);
   const c = key();
-  alt.modList[0].files[0].hash = "new";
+  variant.modList[0].files[0].hash = "new";
   assert.notEqual(key(), c);
-  assert.notEqual(key(), modelStillVersion(student, alt, 1));
+  assert.notEqual(key(), modelStillVersion(family, variant, 1));
 });
 
 for (const error of [new Error("shader compilation failed"), null])

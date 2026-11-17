@@ -82,7 +82,7 @@ const saved = () => ({
   mode: "portraits",
   background: "office-day",
   portraitScale: 1,
-  portraits: ["a", "b", "c"].map((id) => ({ id, alt: id, source: `mod:${id}`, x: 700, y: 1100, scale: 1 })),
+  portraits: ["a", "b", "c"].map((id) => ({ id, variant: id, source: `mod:${id}`, x: 700, y: 1100, scale: 1 })),
   memorials: [],
   active: null,
 });
@@ -389,7 +389,7 @@ function memoryFixture() {
 }
 test("a mode transition retains old complete art and controls until target resources and chrome are both ready", async () => {
   const value = setup();
-  value.memorials = [{ id: "m1", alt: "memory", source: "mod:memory" }];
+  value.memorials = [{ id: "m1", variant: "memory", source: "mod:memory" }];
   value.active = "m1";
   const memory = memoryFixture();
   Hall.fixture(value, renderer, memory.pool);
@@ -430,8 +430,8 @@ test("playlist edits and source-identical active UUID changes never restart the 
   const value = setup();
   value.mode = "memorial";
   value.memorials = [
-    { id: "m1", alt: "memory", source: "mod:memory" },
-    { id: "m2", alt: "other", source: "mod:other" },
+    { id: "m1", variant: "memory", source: "mod:memory" },
+    { id: "m2", variant: "other", source: "mod:other" },
   ];
   value.active = "m1";
   const memory = memoryFixture(),
@@ -454,7 +454,7 @@ test("playlist edits and source-identical active UUID changes never restart the 
 });
 test("portraits and the last memorial survive round trips with one memory load and stable player identity", async () => {
   const value = setup();
-  value.memorials = [{ id: "m1", alt: "memory", source: "mod:memory" }];
+  value.memorials = [{ id: "m1", variant: "memory", source: "mod:memory" }];
   value.active = "m1";
   const memory = memoryFixture();
   Hall.fixture(value, renderer, memory.pool);
@@ -476,7 +476,7 @@ test("the real memorial wrapper rejects null metadata or a false frame result be
   setup();
   const host = new Element(),
     signal = new AbortController().signal,
-    choice = { alt: "m", core: "m", source: "official" };
+    choice = { variant: "m", core: "m", source: "official" };
   const player = {
     setVolume() {},
     setZoomLimit() {},
@@ -498,8 +498,8 @@ test("Next then Previous during staging cancels the pending source and resumes t
   const value = setup();
   value.mode = "memorial";
   value.memorials = [
-    { id: "m1", alt: "a", source: "mod:a" },
-    { id: "m2", alt: "b", source: "mod:b" },
+    { id: "m1", variant: "a", source: "mod:a" },
+    { id: "m2", variant: "b", source: "mod:b" },
   ];
   value.active = "m1";
   const memory = memoryFixture(),
@@ -576,7 +576,7 @@ test("viewing zoom projects every portrait hit with the artwork, and editing kee
 test("a retained memorial changes caption language without replaying and rejects stale language requests", async () => {
   setup();
   const controller = new AbortController(),
-    source = { alt: "hero", talks: { Talk_01_M: ["voice"] }, signal: controller.signal };
+    source = { variant: "hero", talks: { Talk_01_M: ["voice"] }, signal: controller.signal };
   const requests = [],
     published = [];
   let oldReady;

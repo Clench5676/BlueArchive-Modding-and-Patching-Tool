@@ -147,7 +147,7 @@ class Catalog:
         with self._lock:
             result = self._get()[0].get(key.lower())
             if result is None:
-                raise ServiceError("catalog_student_not_found", key=key)
+                raise ServiceError("catalog_family_not_found", key=key)
             return copy.deepcopy(result)
 
     def assignment_families(self) -> list[Family]:
@@ -212,7 +212,7 @@ class Catalog:
                 for variant in family.variants:
                     if variant.key == key.lower():
                         return variant
-        raise ServiceError("catalog_alt_not_found", key=key)
+        raise ServiceError("catalog_variant_not_found", key=key)
 
     def variant(self, key: str) -> Variant:
         """Return an independent copy of an installed variant.
@@ -226,7 +226,7 @@ class Catalog:
         with self._lock:
             result = self._get()[1].get(key.lower())
             if result is None:
-                raise ServiceError("catalog_alt_not_found", key=key)
+                raise ServiceError("catalog_variant_not_found", key=key)
             return copy.deepcopy(result)
 
     def variant_for_core(self, core: str) -> Variant | None:

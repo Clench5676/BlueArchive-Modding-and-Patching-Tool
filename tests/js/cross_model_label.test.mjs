@@ -26,7 +26,7 @@ const functionSource = (name) => {
 const NAME_KEY = { "en-US": "en", "zh-CN": "zh-CN", "zh-TW": "zh-TW", "ja-JP": "ja", "ko-KR": "ko", "th-TH": "th" };
 const yukino = {
   key: "yukino",
-  student: "yukino",
+  family: "yukino",
   custom: [],
   names: {
     en: { full: "Yukino", short: "Original" },
@@ -39,24 +39,24 @@ const yukino = {
 };
 const swimsuit = {
   key: "yukino_swimsuit",
-  student: "yukino",
+  family: "yukino",
   custom: [],
   names: {
     en: { full: "Yukino (Swimsuit)", short: "Swimsuit" },
     "zh-CN": { full: "雪乃（泳装）", short: "泳装" },
   },
 };
-const students = [
+const families = [
   {
     key: "yukino",
     base: { en: "Yukino", "zh-CN": "雪乃", "zh-TW": "雪乃", ja: "ユキノ", ko: "유키노", th: "ยูกิโนะ" },
-    alts: [yukino, swimsuit],
+    variants: [yukino, swimsuit],
   },
-  { key: "azusa", base: { en: "Azusa" }, alts: [] },
+  { key: "azusa", base: { en: "Azusa" }, variants: [] },
 ];
 const own = {
   key: "azusa",
-  student: "azusa",
+  family: "azusa",
   custom: [],
   names: { en: { full: "Azusa", short: "Original" }, "zh-CN": { full: "梓", short: "原皮" } },
 };
@@ -66,10 +66,10 @@ function page_(locale, extra = {}) {
   const key = NAME_KEY[locale];
   const lang = (value) => (value && typeof value === "object" ? (value[key] ?? value.en) : value);
   const ctx = vm.createContext({
-    alt: () => own,
+    variant: () => own,
     crossName,
     studentName,
-    otherStudents: students,
+    otherStudents: families,
     L: lang,
     T: (k, params) => text(locale, k, params),
     shortName: (v) => studentName(v, lang(v.names)?.short ?? v.key),
@@ -89,7 +89,7 @@ function page_(locale, extra = {}) {
   );
   return ctx;
 }
-const card = (alt) => ({ key: `v:${alt.key}`, kind: "alt", alt, cross: true });
+const card = (variant) => ({ key: `v:${variant.key}`, kind: "variant", variant, cross: true });
 
 const EXPECTED = {
   "en-US": "Yukino (Original)",
@@ -110,18 +110,18 @@ test("another student's costume other than the original, and the student's alias
   const ctx = page_("zh-CN");
   assert.equal(ctx.candidateLabel(card(swimsuit), own), "雪乃（泳装）");
   assert.equal(page_("en-US").candidateLabel(card(swimsuit), own), "Yukino (Swimsuit)");
-  // the user's alias of the alt stands for the student; the costume keeps its name
+  // the user's alias of the variant stands for the student; the costume keeps its name
   const aliased = { ...yukino, custom: ["Yuki"] };
   assert.equal(page_("en-US").candidateLabel(card(aliased), own), "Yuki (Original)");
   assert.equal(page_("zh-CN").candidateLabel(card(aliased), own), "Yuki（原皮）");
-  // no student read for the card: the alt's own full name stands in for the student's
+  // no family read for the card: the variant's own full name stands in for the student's
   assert.equal(page_("en-US", { otherStudents: [] }).candidateLabel(card(swimsuit), own), "Yukino (Swimsuit)");
 });
 
 test("the student's own cards, mods and the original keep their labels", () => {
-  const ctx = page_("en-US", { alt: () => own });
-  const self = { key: "self", kind: "self", alt: own, label: "Original" };
-  const sibling = { key: "v:azusa_swimsuit", kind: "alt", alt: own, label: "Swimsuit" };
+  const ctx = page_("en-US", { variant: () => own });
+  const self = { key: "self", kind: "self", variant: own, label: "Original" };
+  const sibling = { key: "v:azusa_swimsuit", kind: "variant", variant: own, label: "Swimsuit" };
   const mod = { key: "m:1", kind: "mod", mod: {}, label: "My mod", origin: own };
   const other = {
     key: "m:2",
@@ -151,7 +151,7 @@ async function optimizeParams(c, locale) {
     switchPopupPage: 1,
     pageToken: 1,
     pending: null,
-    alt: () => own,
+    variant: () => own,
     $: () => ({ hidden: false, querySelector: () => null }),
     renderPopup: async () => {},
     message: async () => {},
@@ -172,8 +172,8 @@ for (const locale of LOCALES)
     const [call] = await optimizeParams(card(yukino), locale);
     assert.equal(call.method, "model.optimize");
     assert.deepEqual(
-      [call.params.alt, call.params.source, call.params.name],
-      ["azusa", "alt:yukino", EXPECTED[locale]],
+      [call.params.variant, call.params.source, call.params.name],
+      ["azusa", "variant:yukino", EXPECTED[locale]],
     );
     assert.equal(call.options.name, EXPECTED[locale]);
     assert.equal(
@@ -184,10 +184,10 @@ for (const locale of LOCALES)
   });
 
 test("Optimize Physics on the student's own cards keeps its names", async () => {
-  const [self] = await optimizeParams({ key: "self", kind: "self", alt: own }, "en-US");
+  const [self] = await optimizeParams({ key: "self", kind: "self", variant: own }, "en-US");
   assert.equal(self.params.name, "Original");
   const [sibling] = await optimizeParams(
-    { key: "v:azusa_swimsuit", kind: "alt", alt: { key: "azusa_swimsuit" }, label: "Swimsuit" },
+    { key: "v:azusa_swimsuit", kind: "variant", variant: { key: "azusa_swimsuit" }, label: "Swimsuit" },
     "en-US",
   );
   assert.equal(sibling.params.name, "Swimsuit");
@@ -217,9 +217,9 @@ for (const locale of LOCALES)
     const pick = (names) => names?.[key] ?? names?.en;
     const smallest = { playable: 99, other: 99 };
     let total = 0;
-    for (const alt of Object.values(catalog.variants)) {
-      const student = catalog.students[alt.student_id],
-        costume = pick(alt.names)?.short;
+    for (const variant of Object.values(catalog.variants)) {
+      const student = catalog.students[variant.student_id],
+        costume = pick(variant.names)?.short;
       if (!student || !costume) continue;
       const label = crossName({ custom: [] }, student.names[key] ?? student.names.en, costume, T);
       const fit = markedLabel(label, { fs: 34, fsMin: 24, color: "#fff", maxW: MAX_W, maxLines: 2 });
@@ -230,7 +230,7 @@ for (const locale of LOCALES)
           glyphsOf(line, fit.fs) <= MAX_W + 1e-9,
           `${locale} ${label}: "${line}" is wider than the bar's ${MAX_W} at ${fit.fs}`,
         );
-      const group = alt.kind === "playable" ? "playable" : "other";
+      const group = variant.kind === "playable" ? "playable" : "other";
       smallest[group] = Math.min(smallest[group], fit.fs);
       total++;
     }

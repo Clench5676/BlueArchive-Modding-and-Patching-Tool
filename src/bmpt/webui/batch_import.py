@@ -258,32 +258,32 @@ class BatchImport(JudgeMixin):
         Assets the install lacks stay absent in the picker.
 
         Returns:
-            ``students``, each with its ``key``, ``base`` names, ``aliases``, ``school`` and ``alts``.
+            ``families``, each with its ``key``, ``base`` names, ``aliases``, ``school`` and ``variants``.
         """
-        students = []
-        for student in self.services.catalog.assignment_families():
-            alts = []
-            for alt in student.variants:
-                value = alt.to_json()
+        families = []
+        for family in self.services.catalog.assignment_families():
+            variants = []
+            for variant in family.variants:
+                value = variant.to_json()
                 value["fileId"] = value.pop("file_id")
-                alts.append(value)
-            students.append(
+                variants.append(value)
+            families.append(
                 {
-                    "key": student.key,
-                    "base": student.names,
-                    "aliases": student.aliases,
-                    "school": student.school,
-                    "alts": alts,
+                    "key": family.key,
+                    "base": family.names,
+                    "aliases": family.aliases,
+                    "school": family.school,
+                    "variants": variants,
                 }
             )
-        return {"students": students}
+        return {"families": families}
 
-    def assign_character(self, id: str, alt: str) -> str:
+    def assign_character(self, id: str, variant: str) -> str:
         """Assign a row to a student of the user's choice, for a mod whose target the files do not give.
 
         Args:
             id: The row's id.
-            alt: The student's alt key, which may be one the install lacks.
+            variant: The student's variant key, which may be one the install lacks.
 
         Returns:
             The id of the job that analyzes the row again, as ``set_source`` returns it.
@@ -292,9 +292,9 @@ class BatchImport(JudgeMixin):
             ServiceError: ``bad_params`` for an unknown row or one that is done; the row's own error when it is
                 blocked for another reason than its target.
         """
-        if not isinstance(id, str) or not isinstance(alt, str):
-            raise ServiceError("bad_params", key="alt")
-        selected = self.services.catalog.assignment_variant(alt)
+        if not isinstance(id, str) or not isinstance(variant, str):
+            raise ServiceError("bad_params", key="variant")
+        selected = self.services.catalog.assignment_variant(variant)
         with self._lock:
             candidate = self._latest.get(id)
             if candidate is None or candidate.entry["state"] in ("done", "library", "installed"):
@@ -387,7 +387,7 @@ class BatchImport(JudgeMixin):
         try:
             mod_id = library.find_legacy_import_source(candidate.provenance, candidate.entry["kind"])
             if not mod_id:
-                snapshot = library.legacy_import_snapshot(candidate.entry["kind"], candidate.entry["alt"])
+                snapshot = library.legacy_import_snapshot(candidate.entry["kind"], candidate.entry["variant"])
                 if not snapshot:
                     return
                 options = {**self.options(), "output": None, "compression": "none", "crc": "off", "extraBytes": ""}
@@ -419,7 +419,7 @@ class BatchImport(JudgeMixin):
                         != candidate.provenance
                     ):
                         return
-                    if library.legacy_import_snapshot(candidate.entry["kind"], candidate.entry["alt"]) != snapshot:
+                    if library.legacy_import_snapshot(candidate.entry["kind"], candidate.entry["variant"]) != snapshot:
                         return
                     if len(self._legacy_checks) >= 128:
                         self._legacy_checks.clear()

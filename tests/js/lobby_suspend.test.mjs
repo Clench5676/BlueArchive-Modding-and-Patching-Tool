@@ -150,7 +150,7 @@ function instance(h, id) {
         stopRendering(){this.stopRequestAnimationFrame=true;}, startRendering(){this.stopRequestAnimationFrame=false;this.starts++;},
         time:{ last:performance.now(),delta:0,totalTime:7,update(){this.delta=(performance.now()-this.last)/1000;this.last=performance.now();this.totalTime+=this.delta;}},
         drawFrame(){this.time.update();this.draws++;S.current.intro.frame(this,this.time.delta);this.trackTime+=this.time.delta;this.effectTime+=this.time.delta;S.current.drawnAt=performance.now();} };
-      const c = S.current = {core:'fixture',alt:'fixture',host,signal:controller.signal,deferPlayback:true,suspended:true,
+      const c = S.current = {core:'fixture',variant:'fixture',host,signal:controller.signal,deferPlayback:true,suspended:true,
         backgroundPaused:false,visualLoads:new Map(),resumeAudio:new Set(),pendingSounds:[],view:{x:0,y:0,w:1920,h:1080},
         meta:{main:'main',sequences:[{anim:'Talk_01_M',duration:10,cues:[{clip:'one',t:0},{clip:'two',t:3}]}]},
         info:{sounds:{start:{clips:['start'],volume:1,pitch:1}}},touch:{id:${JSON.stringify(id)}},

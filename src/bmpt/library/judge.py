@@ -17,7 +17,7 @@ from typing import Any, Hashable, Iterable, Sequence
 
 from bmpt.engine import SEARCH_DIR_SUFFIXES, parse_filename, spine_kind
 
-LIBRARY_SOURCES = ("mod:", "alt:")
+LIBRARY_SOURCES = ("mod:", "variant:")
 CRC_STATES = ("ok", "fixed", "needs_fix")
 KINDS = ("spr", "lobby", "model", "other")
 MODEL_CATEGORIES = {"character", "characters", "npcs"}

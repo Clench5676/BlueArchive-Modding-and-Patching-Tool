@@ -265,7 +265,7 @@ def test_current_npc_without_roster_entry_imports_applies_and_restores(env, monk
     if crc_name:
         source = rename_crc(source)
     (entry,) = analyze(env, [source])["entries"]
-    assert (entry["state"], entry["kind"], entry["alt"]) == ("ready", "model", "en0002")
+    assert (entry["state"], entry["kind"], entry["variant"]) == ("ready", "model", "en0002")
     (result,) = run(env, [entry])
     assert result["outcome"] == "imported" and result["applied"], result
     assert target.read_bytes() == source.read_bytes()

@@ -101,7 +101,7 @@ const actionSets = (locale) => {
     "Windows, mod (five)": [t("popup.apply"), openWindows, t("compatibility.check"), t("act.update"), t("btn.delete")],
     "game file (three)": [t("popup.apply"), open, t("btn.extract")],
     "Windows, game file (three)": [t("popup.apply"), openWindows, t("btn.extract")],
-    "alt picker (two)": [open, t("btn.extract")],
+    "variant picker (two)": [open, t("btn.extract")],
   };
 };
 // one row where the XS or XXS bodies at their minimum width fit it (a 3D model's four), else rows

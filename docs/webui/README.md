@@ -22,9 +22,9 @@ Composed screens take their sizes, gaps and alignment from the design system ([`
 the scales in `ui-tokens.js`, the layout primitives in `ui-grid.js`).
 
 - Screens: consent popup, Student Hall, student roster, Import Mod (Batch Import), student detail (Portrait, Memorial
-  Lobby and 3D tabs), the switch popups (portrait, memorial lobby, 3D model) and the alt picker. The lobby is
+  Lobby and 3D tabs), the switch popups (portrait, memorial lobby, 3D model) and the variant picker. The lobby is
   framed and touched like the game, plays its intro timeline when entered (a tap skips it; the settings' L2D tab
-  turns it off) and plays its dialogue with voices and the lines in the UI language; the 3D tab shows the alt's
+  turns it off) and plays its dialogue with voices and the lines in the UI language; the 3D tab shows the variant's
   chibi, exported from the install or a selected library Mod. A tab can remain available for a library-only Mod even
   when the installation has no corresponding original resource; application remains unavailable in that case.
 - Nav entries without a web screen yet open the classic Tk GUI on that tab (`bamt --tab <name>`).

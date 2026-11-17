@@ -90,7 +90,7 @@ test("a collection still covers the frame with the catalog background before dra
   }
 });
 
-test("a face cancels blinking immediately, stale blinks cannot replace it, and default resumes", () => {
+test("an expression cancels blinking immediately, stale blinks cannot replace it, and default resumes", () => {
   const timers = new Map(),
     tracks = [],
     clears = [];
@@ -111,7 +111,7 @@ test("a face cancels blinking immediately, stale blinks cannot replace it, and d
     "player",
     "setTimeout",
     "clearTimeout",
-    `let mainPlayer = player, face = "00", blinkTimer;\nfunction scheduleBlink(player) {${code}\nreturn { applyFace, set: (value) => { face = value; applyFace(); } };`,
+    `let mainPlayer = player, expression = "00", blinkTimer;\nfunction scheduleBlink(player) {${code}\nreturn { applyExpression, set: (face) => { expression = face; applyExpression(); } };`,
   );
   const h = run(
     player,
@@ -121,7 +121,7 @@ test("a face cancels blinking immediately, stale blinks cannot replace it, and d
     },
     (id) => timers.delete(id),
   );
-  h.applyFace();
+  h.applyExpression();
   assert.equal(timers.size, 1);
   const stale = [...timers.values()][0];
   h.set("03");
@@ -141,17 +141,17 @@ test("a face cancels blinking immediately, stale blinks cannot replace it, and d
   assert.equal(timers.size, 1);
 });
 
-test("merging uses alts rather than students and leaves unidentified and generic Mods separate", async () => {
+test("merging uses variants rather than families and leaves unidentified and generic Mods separate", async () => {
   const { importGroups } = await import("../../src/bmpt/web/js/mods/import-groups.js");
   const entries = [
-    { id: "p1", kind: "spr", alt: "base" },
-    { id: "l1", kind: "lobby", alt: "base" },
-    { id: "p2", kind: "spr", alt: "dress" },
-    { id: "m1", kind: "model", alt: "dress" },
-    { id: "other", kind: "other", alt: "base" },
+    { id: "p1", kind: "spr", variant: "base" },
+    { id: "l1", kind: "lobby", variant: "base" },
+    { id: "p2", kind: "spr", variant: "dress" },
+    { id: "m1", kind: "model", variant: "dress" },
+    { id: "other", kind: "other", variant: "base" },
     { id: "unknown", kind: "spr" },
   ];
-  const identify = (entry) => ({ alt: entry.alt && { key: entry.alt, student: { key: "student" } } });
+  const identify = (entry) => ({ variant: entry.variant && { key: entry.variant, family: { key: "student" } } });
   assert.equal(importGroups(entries, false, identify).length, entries.length);
   const groups = importGroups(entries, true, identify);
   assert.deepEqual(

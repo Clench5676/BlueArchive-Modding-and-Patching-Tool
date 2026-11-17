@@ -127,18 +127,18 @@ export function crcText(entry) {
 export const sizeText = (bytes) => ModSwitch.sizeText(bytes);
 
 /**
- * One card of a prompt, for popup.js listPopup (its thumbnail is added by the page): the alt's name (the
+ * One card of a prompt, for popup.js listPopup (its thumbnail is added by the page): the variant's name (the
  * kind is a chip of the details panel, not part of the label), the kind and install chips (the install only
  * when more than one is known), "No Official Copy" on an overwritten entry; damaged and stuck entries cannot be
  * ticked and are drawn dim with their state.
  * @param {object} entry The scan entry.
  * @param {object} [options]
  * @param {object|null} [options.state] mods.state.
- * @param {(entry: object) => string} [options.nameOf] Names the entry's alt.
+ * @param {(entry: object) => string} [options.nameOf] Names the entry's variant.
  * @param {string} [options.which] The prompt, "untracked" or "drift".
  */
-export function card(entry, { state = null, nameOf = (e) => e?.alt || e?.core || "", which = "untracked" } = {}) {
-  const name = nameOf(entry) || entry?.alt || entry?.core || "";
+export function card(entry, { state = null, nameOf = (e) => e?.variant || e?.core || "", which = "untracked" } = {}) {
+  const name = nameOf(entry) || entry?.variant || entry?.core || "";
   // the card's label is the name alone, at the most room the card has; the kind is the details panel's first chip
   const label = name;
   const installs = state?.installs || [];
@@ -256,12 +256,12 @@ export function overwrittenKind(files) {
   const modded = (files || []).filter(
     (f) => !(typeof f.official === "boolean" ? f.official : f.applied === "official"),
   );
-  return modded.length && modded.every((f) => /^(mod|alt):/.test(f.applied || "")) ? "overwritten" : "addFirst";
+  return modded.length && modded.every((f) => /^(mod|variant):/.test(f.applied || "")) ? "overwritten" : "addFirst";
 }
 
 // --- the page ---
 
-let names = async () => (e) => e?.alt || e?.core || "";
+let names = async () => (e) => e?.variant || e?.core || "";
 const shown = { drift: new Set(), untracked: new Set() }; // entry|state shown by each prompt in this page
 let busy = false; // a prompt is open (or its action runs)
 let started = false; // the start sequence reached its prompts: later scans may show them

@@ -23,7 +23,6 @@ from ..core import devmode
 from ..core.errors import ServiceError
 from ..core.filelock import file_lock
 from .storage import atomic_json, sync_directory
-from .migrations import migrate_photo_names
 
 logger = logging.getLogger(__name__)
 
@@ -176,7 +175,7 @@ class Photographs:
         key = data["selected"].get(variant)
         if key in (None, "official"):
             return key
-        if self.family(data["photos"][key]["alt"]) != self.family(variant):
+        if self.family(data["photos"][key]["variant"]) != self.family(variant):
             self._warn("selection", "photo of another family", variant)
             return None
         return key
@@ -188,7 +187,7 @@ class Photographs:
         except FileNotFoundError:
             return None
 
-    def _read(self, *, locked: bool = False) -> _Manifest:
+    def _read(self) -> _Manifest:
         try:
             stamp = self._signature()
             if self._cached is not None and stamp == self._stamp:
@@ -210,12 +209,7 @@ class Photographs:
                 or data["next"] < 1
             ):
                 raise ValueError("Invalid photograph manifest")
-            migrated = migrate_photo_names(data)
-            if migrated and not locked:
-                with file_lock(self.root / "index.lock"):
-                    self._cached = None
-                    return self._read(locked=True)
-            counters = data.get("next_by_alt", {})
+            counters = data.get("next_by_variant", {})
             if not isinstance(counters, dict) or any(
                 not isinstance(key, str) or type(value) is not int or value < 1 for key, value in counters.items()
             ):
@@ -223,10 +217,6 @@ class Photographs:
         except (OSError, ValueError, TypeError, RecursionError) as error:
             self._warn("manifest", str(error) if isinstance(error, ValueError) else type(error).__name__, "")
             raise ServiceError("photo_library_invalid") from error
-        if migrated:
-            self._write(data)
-            stamp = self._signature()
-            logger.info("Migrated API names in %s", self.index)
         photos, held_photos = {}, {}
         for key, entry in data["photos"].items():
             reason = self._unusable_photo(key, entry)
@@ -255,7 +245,7 @@ class Photographs:
             return "not an object"
         if entry.get("id") != key:
             return "id differs from its key"
-        if not isinstance(entry.get("alt"), str):
+        if not isinstance(entry.get("variant"), str):
             return "no variant"
         if not isinstance(entry.get("sha256"), str) or not _DIGEST.fullmatch(entry["sha256"]):
             return "bad digest"
@@ -276,7 +266,7 @@ class Photographs:
     def _entry(self, variant: str, key: str) -> dict:
         self._path(key)
         entry = self._read()["photos"].get(key)
-        if entry is None or self.family(entry["alt"]) != self.family(variant):
+        if entry is None or self.family(entry["variant"]) != self.family(variant):
             raise ServiceError("photo_missing")
         return entry
 
@@ -302,9 +292,9 @@ class Photographs:
                     "provenance": "generated" if entry.get("builtin") else "capture",
                 }
                 for key, entry in data["photos"].items()
-                if self.family(entry["alt"]) == self.family(variant)
+                if self.family(entry["variant"]) == self.family(variant)
             ]
-            return {"alt": variant, "photos": photos, "app": self._chosen(data, variant)}
+            return {"variant": variant, "photos": photos, "app": self._chosen(data, variant)}
 
     def app_url(self, variant: str) -> str | None:
         """Return a variant's selected photograph URL, or None for official, default, or stale choices."""
@@ -358,23 +348,27 @@ class Photographs:
         self.root.mkdir(parents=True, exist_ok=True)
         with self._lock, file_lock(self.root / "index.lock"):
             self._cached = None
-            data = copy.deepcopy(self._read(locked=True))
+            data = copy.deepcopy(self._read())
             before = copy.deepcopy(data)
-            counters = data.setdefault("next_by_alt", {})
+            counters = data.setdefault("next_by_variant", {})
             number = max(
                 counters.get(variant, 1),
                 max(
                     (
                         int(item.get("number", 0)) + 1
                         for item in data["photos"].values()
-                        if item["alt"] == variant and not item.get("builtin")
+                        if item["variant"] == variant and not item.get("builtin")
                     ),
                     default=1,
                 ),
             )
             if builtin:
                 existing = next(
-                    (item["id"] for item in data["photos"].values() if item["alt"] == variant and item.get("builtin")),
+                    (
+                        item["id"]
+                        for item in data["photos"].values()
+                        if item["variant"] == variant and item.get("builtin")
+                    ),
                     None,
                 )
                 if existing:
@@ -383,9 +377,9 @@ class Photographs:
             entry = {
                 "id": key,
                 "number": number if not builtin else 0,
-                "alt": variant,
+                "variant": variant,
                 "mode": mode,
-                "face": expression,
+                "expression": expression,
                 "action": action,
                 "source": source,
                 "width": width,
@@ -416,7 +410,7 @@ class Photographs:
                 # A manifest rename can succeed before its directory flush fails.
                 # Restore it before removing the image; retain valid bytes if rollback fails.
                 self._cached = None
-                if self._read(locked=True)["photos"].get(key):
+                if self._read()["photos"].get(key):
                     self._write(before)
                 path.unlink(missing_ok=True)
                 sync_directory(path.parent)
@@ -437,7 +431,7 @@ class Photographs:
         self.root.mkdir(parents=True, exist_ok=True)
         with self._lock, file_lock(self.root / "index.lock"):
             self._cached = None
-            data = copy.deepcopy(self._read(locked=True))
+            data = copy.deepcopy(self._read())
             if key not in (None, "official"):
                 self.image(variant, key)
             data["selected"][variant] = key
@@ -463,7 +457,7 @@ class Photographs:
         self.root.mkdir(parents=True, exist_ok=True)
         with self._lock, file_lock(self.root / "index.lock"):
             self._cached = None
-            data = copy.deepcopy(self._read(locked=True))
+            data = copy.deepcopy(self._read())
             self._entry(variant, key)
             # a kept row that names the file keeps it: a held record or selection, or a selection that is stale now
             stale = {

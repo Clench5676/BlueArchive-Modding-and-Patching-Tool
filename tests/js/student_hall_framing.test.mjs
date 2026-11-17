@@ -50,7 +50,7 @@ test("intentional stored positions and relative zoom remain untouched while hit 
 test("new entries use the verified lobby anchor with relative scale one", () => {
   const state = createDraft({ revision: 0, mode: "portraits", portraits: [], memorials: [], active: null });
   state.begin("layout");
-  const entry = state.add({ alt: "hero", source: "mod:a", kind: "spr" }, () => "first");
+  const entry = state.add({ variant: "hero", source: "mod:a", kind: "spr" }, () => "first");
   assert.equal(entry.scale, 1);
   close(entry.x, PORTRAIT_ANCHOR.x);
   close(entry.y, PORTRAIT_ANCHOR.y);

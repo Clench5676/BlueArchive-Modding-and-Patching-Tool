@@ -19,7 +19,7 @@ from ...core.logging_utils import log_failure
 from .. import pointers, rig_archive, staging
 from ..original_checks import OriginalChecks
 from ..judge import supports_kind
-from ..migrations import API_NOUNS, LEGACY_REMAP, legacy_remapped, migrate_state_names
+from ..migrations import LEGACY_REMAP, legacy_remapped
 from ..models import Pin
 from ..profiles import Profiles
 from ..storage import (
@@ -136,7 +136,6 @@ class ModLibrary(
         self._applied: dict[str, dict[str, Any]] = {}
         self._migrations: set[str] = set()
         self._migration_pending = False
-        self._names_pending = False
         self._base: tuple[dict, set, dict, set] = (
             {},
             set(),
@@ -275,12 +274,7 @@ class ModLibrary(
         return None
 
     def _parse_file(self, path: Path) -> tuple[dict, set, dict, set, list]:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        parsed = self._parse_state(data)
-        if migrate_state_names(data):
-            self._names_pending = True
-            parsed = self._parse_state(data)
-        return parsed
+        return self._parse_state(json.loads(path.read_text(encoding="utf-8")))
 
     def _read_state(self) -> _Reading:
         """Read state.json, else (when it is unreadable or gone) its previous copy; never raises.
@@ -339,7 +333,7 @@ class ModLibrary(
             return
         self._records, self._favorites, self._applied, self._migrations, self._held = reading.state
         self._base = copy.deepcopy(reading.state[:4])
-        self._migration_pending = self._names_pending or LEGACY_REMAP not in self._migrations
+        self._migration_pending = LEGACY_REMAP not in self._migrations
         if self._migration_pending:
             try:
                 self._save()
@@ -414,7 +408,7 @@ class ModLibrary(
         self._base, self._seen = copy.deepcopy(disk[:4]), signature_
         self._state_good, self._state_error, self._reread = True, None, False
         self._version += 1
-        self._migration_pending = self._names_pending or LEGACY_REMAP not in self._migrations
+        self._migration_pending = LEGACY_REMAP not in self._migrations
         if self._migration_pending and migrate:
             self._migrate_state()
 
@@ -459,9 +453,6 @@ class ModLibrary(
                 held = _held_after(self._disk_held(reading), merged[0], base[0], mine[0])
             if LEGACY_REMAP not in merged[3]:
                 merged = (legacy_remapped(merged[0]), merged[1], merged[2], merged[3] | {LEGACY_REMAP})
-            names_migrated = self._names_pending
-            if names_migrated:
-                merged = (*merged[:3], merged[3] | {API_NOUNS})
             payload = {
                 "version": 1,
                 "mods": [*merged[0].values(), *held],
@@ -472,13 +463,10 @@ class ModLibrary(
             self._keep_state_file(reading.kind)
             atomic_json(path, payload)
             self._seen = self._state_signature()
-            if names_migrated:
-                logger.info("Migrated API names in %s", path)
         self._records, self._favorites, self._applied, self._migrations = merged
         self._held = held
         self._state_good, self._state_error, self._reread = True, None, False
         self._migration_pending = False
-        self._names_pending = False
         self._base = copy.deepcopy(merged)
         self._version += 1
 

@@ -78,12 +78,12 @@ def register(rpc: RpcRegistry, s: Services) -> None:
         rpc: The registry to add the methods to.
         s: The Services every method works on.
     """
-    from .assigned_catalog import students_with_assignments, student_with_assignments, stored_asset_fields
+    from .assigned_catalog import families_with_assignments, family_with_assignments, stored_asset_fields
 
-    def visible_students() -> list[Any]:
-        return students_with_assignments(s.catalog, s.library.assigned_targets())
+    def visible_families() -> list[Any]:
+        return families_with_assignments(s.catalog, s.library.assigned_targets())
 
-    def visible_alt(key: str) -> Any:
+    def visible_variant(key: str) -> Any:
         try:
             return s.catalog.variant(key)
         except (ServiceError, KeyError):
@@ -91,25 +91,25 @@ def register(rpc: RpcRegistry, s: Services) -> None:
                 return s.catalog.assignment_variant(key)
             raise
 
-    def alias_target(student: Any) -> str:
-        # A missing normal base never gives its nickname to a skin. A special-only student has no such base:
-        # attach the aliases stored under its student key to one stable, catalog-ordered scene and persist that
+    def alias_target(family: Any) -> str:
+        # A missing normal base never gives its nickname to a skin. A special-only family has no such base:
+        # attach the aliases stored under its family key to one stable, catalog-ordered scene and persist that
         # choice.
-        if student.variants and all(v.key.startswith(SPECIAL_PREFIX) for v in student.variants):
-            return min(student.variants, key=lambda v: (v.order, v.key)).key
-        return student.key
+        if family.variants and all(v.key.startswith(SPECIAL_PREFIX) for v in family.variants):
+            return min(family.variants, key=lambda v: (v.order, v.key)).key
+        return family.key
 
-    def alt_aliases(students: list[Any] | None = None) -> dict[str, list[str]]:
+    def variant_aliases(families: list[Any] | None = None) -> dict[str, list[str]]:
         targets = {
             f.key: target
-            for f in (visible_students() if students is None else students)
+            for f in (visible_families() if families is None else families)
             if (target := alias_target(f)) != f.key
         }
         return s.state.aliases(targets)
 
     photo_failure: dict[str, str] = {}  # the error code of the last failed photograph lookup, logged once
 
-    def alt_json(
+    def variant_json(
         v: Any,
         mods: dict[str, list],
         favorites: set[str],
@@ -142,7 +142,7 @@ def register(rpc: RpcRegistry, s: Services) -> None:
             "custom": (custom or {}).get(v.key, []),
             "key": v.key,
             "fileId": v.file_id,
-            "student": v.family,
+            "family": v.family,
             "names": v.names,
             "playable": v.playable,
             "aliases": v.aliases,  # the search matches them, the page never shows them (the CN server's names)
@@ -152,7 +152,7 @@ def register(rpc: RpcRegistry, s: Services) -> None:
             "lobby": v.lobby,
             "date": v.date,
             "model": v.model,
-            # a model with no slot (an event or story alt with no model of its own: a field player or NPC):
+            # a model with no slot (an event or story variant with no model of its own: a field player or NPC):
             # previewed and offered as a costume
             "fieldModel": getattr(v, "field_model", None),
             "spineCategory": getattr(v, "spine_category", None),
@@ -193,7 +193,7 @@ def register(rpc: RpcRegistry, s: Services) -> None:
             # when the newest of its own mods was added (ISO), for the roster's "recently added" sort
             "added": max((m.added for m in own if getattr(m, "added", None)), default=None),
             "recent": recent.index(v.key) if v.key in recent else None,
-            # the portrait game file carries something other than the official portrait (a mod or another alt)
+            # the portrait game file carries something other than the official portrait (a mod or another variant)
             "replaced": (modified or {}).get(v.key),
         }
 
@@ -208,32 +208,32 @@ def register(rpc: RpcRegistry, s: Services) -> None:
     def roster_list() -> dict[str, Any]:
         if not s.game_found():
             raise ServiceError("game_not_found")
-        catalog_students = s.catalog.families()
-        snapshot = s.library.roster_snapshot([v.key for f in catalog_students for v in f.variants])
-        catalog_students = students_with_assignments(s.catalog, snapshot.get("assigned", []))
+        catalog_families = s.catalog.families()
+        snapshot = s.library.roster_snapshot([v.key for f in catalog_families for v in f.variants])
+        catalog_families = families_with_assignments(s.catalog, snapshot.get("assigned", []))
         mods, favorites, recent = mods_by_target(snapshot["mods"]), snapshot["favorites"], s.state.recent()
-        modified, custom = snapshot["modified"], alt_aliases(catalog_students)
+        modified, custom = snapshot["modified"], variant_aliases(catalog_families)
         previews = s.state.preview_snapshot(snapshot["install"]) if snapshot["install"] is not None else {}
         by_id = {mod.id: mod for mod in snapshot["mods"]}
-        alts = {v.key: v for student in catalog_students for v in student.variants}
+        variants = {v.key: v for family in catalog_families for v in family.variants}
         snapshot["previews"] = {
-            key: valid_preview_sources(key, sources, by_id, alts) for key, sources in previews.items()
+            key: valid_preview_sources(key, sources, by_id, variants) for key, sources in previews.items()
         }
         seen = s.state.seen_mods()
-        students = []
-        for f in catalog_students:
-            students.append(
+        families = []
+        for f in catalog_families:
+            families.append(
                 {
                     "key": f.key,
                     "base": f.names,
                     "aliases": f.aliases,
                     "school": f.school,
-                    "alts": [
-                        alt_json(v, mods, favorites, recent, seen, modified, custom, snapshot) for v in f.variants
+                    "variants": [
+                        variant_json(v, mods, favorites, recent, seen, modified, custom, snapshot) for v in f.variants
                     ],
                 }
             )
-        return {"students": students}
+        return {"families": families}
 
     def model_files(core: str | None, state: dict) -> list[dict[str, Any]]:
         """All model slot parts, with the same Needs Fix and restore judgements as the file table."""
@@ -280,9 +280,9 @@ def register(rpc: RpcRegistry, s: Services) -> None:
             return {}
 
     def preview_source_valid(
-        alt: str, kind: str, source: str, mods: dict | None = None, alts: dict | None = None
+        variant: str, kind: str, source: str, mods: dict | None = None, variants: dict | None = None
     ) -> bool:
-        v = alts.get(alt) if alts is not None else visible_alt(alt)
+        v = variants.get(variant) if variants is not None else visible_variant(variant)
         if v is None:
             return False
         core = getattr(v, kind, None)
@@ -296,19 +296,19 @@ def register(rpc: RpcRegistry, s: Services) -> None:
             )
             if mod is None or mod.kind != kind:
                 return False
-            if mod.target == alt:
+            if mod.target == variant:
                 return True
             if not core:
                 return False
-            other = alts.get(mod.target) if alts is not None else visible_alt(mod.target)
-        elif source.startswith("alt:") and kind == "spr":
+            other = variants.get(mod.target) if variants is not None else visible_variant(mod.target)
+        elif source.startswith("variant:") and kind == "spr":
             if not core:
                 return False
-            other = alts.get(source[4:]) if alts is not None else s.catalog.variant(source[4:])
-        elif source.startswith("alt:") and kind == "model":
-            # another alt's costume on this alt's model slot: any other model, the student's own or, chosen
+            other = variants.get(source[8:]) if variants is not None else s.catalog.variant(source[8:])
+        elif source.startswith("variant:") and kind == "model":
+            # another variant's costume on this variant's model slot: any other model, the student's own or, chosen
             # through the switch's search, another student's, whose check did not refuse it (costume_check)
-            other = alts.get(source[4:]) if alts is not None else s.catalog.variant(source[4:])
+            other = variants.get(source[8:]) if variants is not None else s.catalog.variant(source[8:])
             if not (
                 bool(core)
                 and other is not None
@@ -334,20 +334,20 @@ def register(rpc: RpcRegistry, s: Services) -> None:
         sources = s.state.preview_sources(pin.key, key)
         return valid_preview_sources(key, sources)
 
-    def valid_preview_sources(key: str, sources: dict, mods: dict | None = None, alts: dict | None = None) -> dict:
+    def valid_preview_sources(key: str, sources: dict, mods: dict | None = None, variants: dict | None = None) -> dict:
         valid = {}
         for kind, source in sources.items():
             try:
-                if preview_source_valid(key, kind, source, mods, alts):
+                if preview_source_valid(key, kind, source, mods, variants):
                     valid[kind] = source
             except (ServiceError, KeyError):
                 pass
         return valid
 
-    def costume_keys(alt: str, others: Any) -> list[str]:
+    def costume_keys(variant: str, others: Any) -> list[str]:
         if (
-            not isinstance(alt, str)
-            or not alt
+            not isinstance(variant, str)
+            or not variant
             or not isinstance(others, list)
             or len(others) > 64
             or not all(isinstance(o, str) and o and len(o) <= 256 for o in others)
@@ -356,20 +356,20 @@ def register(rpc: RpcRegistry, s: Services) -> None:
         return list(dict.fromkeys(others))
 
     @rpc.method("model.costumes")
-    def model_costumes(alt: str, others: list[str]) -> dict[str, str | None]:
-        """Return the saved verdicts of other alts' costumes on an alt's model (Switch 3D Model).
+    def model_costumes(variant: str, others: list[str]) -> dict[str, str | None]:
+        """Return the saved verdicts of other variants' costumes on a variant's model (Switch 3D Model).
 
         A verdict is "ok", "preview" (past the stretch limit: shown, and applied only for another student's
         costume), "refused", or None when not checked yet (``model.checkCostumes``). "ok" and "preview" pairs are
-        offered; ``others`` may name any student's alts (the switch's search hits).
+        offered; ``others`` may name any student's variants (the switch's search hits).
         """
         out: dict[str, str | None] = {}
-        for other in costume_keys(alt, others):
+        for other in costume_keys(variant, others):
             try:
-                if not preview_source_valid(alt, "model", f"alt:{other}"):
+                if not preview_source_valid(variant, "model", f"variant:{other}"):
                     out[other] = "refused"
                     continue
-                verdict = s.library.costume_verdict(alt, other)
+                verdict = s.library.costume_verdict(variant, other)
             except (ServiceError, KeyError):
                 out[other] = "refused"
                 continue
@@ -377,16 +377,16 @@ def register(rpc: RpcRegistry, s: Services) -> None:
         return out
 
     @rpc.method("model.costumeCautions")
-    def model_costume_cautions(alt: str, others: list[str]) -> dict[str, list[str]]:
+    def model_costume_cautions(variant: str, others: list[str]) -> dict[str, list[str]]:
         """Return what the offered pairs among ``others`` may draw differently in the game than in the preview.
 
         These are the switch's cautions (``model_adapt.Result.cautions``): ``{other: ["ex_parts" |
         "carried_shader", ...]}``, only the pairs that have any.
         """
         out: dict[str, list[str]] = {}
-        for other in costume_keys(alt, others):
+        for other in costume_keys(variant, others):
             try:
-                verdict = s.library.costume_verdict(alt, other)
+                verdict = s.library.costume_verdict(variant, other)
             except (ServiceError, KeyError):
                 continue
             cautions = (verdict or {}).get("cautions")
@@ -400,15 +400,15 @@ def register(rpc: RpcRegistry, s: Services) -> None:
         )
 
     @rpc.method("model.checkCostumes")
-    def model_check_costumes(alt: str, others: list[str]) -> str:
-        """Start a job that checks other alts' costumes on an alt's model to their end.
+    def model_check_costumes(variant: str, others: list[str]) -> str:
+        """Start a job that checks other variants' costumes on a variant's model to their end.
 
         See ``Services.costume_check``; the result is ``{other: "ok" | "preview" | "refused"}``. A refusal of the
         moment is "refused" and not saved. Class 2, read-only; the page cancels it (``jobs.cancel``) once its 3D tab
         is left: a queued one never runs, a running one stops between its pairs and phases, saving no verdict (the
         "cancelled" state).
         """
-        keys = costume_keys(alt, others)
+        keys = costume_keys(variant, others)
 
         def run(log: Any, progress: Any, cancelled: Callable[[], bool]) -> dict[str, str]:
             out: dict[str, str] = {}
@@ -419,8 +419,8 @@ def register(rpc: RpcRegistry, s: Services) -> None:
                     progress(i, len(keys), "")
                 try:
                     verdict = (
-                        s.costume_check(alt, other, cancelled=cancelled)
-                        if preview_source_valid(alt, "model", f"alt:{other}")
+                        s.costume_check(variant, other, cancelled=cancelled)
+                        if preview_source_valid(variant, "model", f"variant:{other}")
                         else None
                     )
                 except (ServiceError, KeyError):
@@ -431,18 +431,24 @@ def register(rpc: RpcRegistry, s: Services) -> None:
         return s.submit("costume-check", run, cancellable=True)
 
     @rpc.method("model.optimize")
-    def model_optimize(alt: str, source: str, name: str = "") -> str:
-        """Start a job that runs Optimize Physics on an alt's 3D model from one source.
+    def model_optimize(variant: str, source: str, name: str = "") -> str:
+        """Start a job that runs Optimize Physics on a variant's 3D model from one source.
 
-        The source is "official" or "alt:<key>", another alt's costume. The result is ``{"mod": id}``, the
+        The source is "official" or "variant:<key>", another variant's costume. The result is ``{"mod": id}``, the
         copy kept in the library, or ``{"unneeded": true, "reason": "official" | "no_gain"}``. ``name`` is the source
         as the screen shows it, the copy's name.
         """
-        if not isinstance(alt, str) or not alt or not isinstance(source, str) or not source or len(source) > 264:
+        if (
+            not isinstance(variant, str)
+            or not variant
+            or not isinstance(source, str)
+            or not source
+            or len(source) > 264
+        ):
             raise ServiceError("bad_params", key="source")
         if not isinstance(name, str) or len(name) > 200:
             raise ServiceError("bad_params", key="name")
-        if source != "official" and not preview_source_valid(alt, "model", source):
+        if source != "official" and not preview_source_valid(variant, "model", source):
             raise ServiceError("source_unsupported", source=source)
 
         library = s.library
@@ -450,20 +456,20 @@ def register(rpc: RpcRegistry, s: Services) -> None:
 
         def run(log: Any, progress: Any) -> dict[str, Any]:
             progress({"current": 1, "total": 1, "step": ""})
-            return library.optimize_costume(alt, source, name, pin=pin, progress=progress)
+            return library.optimize_costume(variant, source, name, pin=pin, progress=progress)
 
         return s.submit("model.optimize", run, writes="library", library=library)
 
-    @rpc.method("student.get")
+    @rpc.method("family.get")
     @s.timings.measure("detail.data")
-    def student_get(key: str) -> dict[str, Any]:
-        f = student_with_assignments(s.catalog, s.library.assigned_targets(), key)
+    def family_get(key: str) -> dict[str, Any]:
+        f = family_with_assignments(s.catalog, s.library.assigned_targets(), key)
         mods, favorites, recent = mods_by_target(), s.library.favorites(), s.state.recent()
         seen = s.state.seen_mods()
-        alts = []
-        custom = alt_aliases()
+        variants = []
+        custom = variant_aliases()
         for v in f.variants:
-            item = alt_json(v, mods, favorites, recent, seen, custom=custom)
+            item = variant_json(v, mods, favorites, recent, seen, custom=custom)
             item["state"] = to_json(s.library.state(v.key))
             item["modList"] = [
                 {**to_json(m), "fresh": seen is not None and m.user_added and m.id not in seen}
@@ -477,42 +483,42 @@ def register(rpc: RpcRegistry, s: Services) -> None:
                     pass
             item["modelCores"] = getattr(s.library, "model_cores", lambda key: [v.model] if v.model else [])(v.key)
             item["modelFiles"] = model_files(v.model, item["state"])
-            alts.append(item)
+            variants.append(item)
         # Include the installation: two servers can have the same resource hash.
         return {
             "key": f.key,
             "base": f.names,
             "aliases": f.aliases,
             "school": f.school,
-            "alts": alts,
+            "variants": variants,
             "version": getattr(s.game, "cache_version", s.game.resource_version) if s.game_found() else None,
         }
 
     @rpc.method("aliases.set")
-    def aliases_set(aliases: list[str], alt: str | None = None, student: str | None = None) -> list[str]:
-        """Keep the user's own aliases of an alt, which the roster search matches, and return them as kept.
+    def aliases_set(aliases: list[str], variant: str | None = None, family: str | None = None) -> list[str]:
+        """Keep the user's own aliases of a variant, which the roster search matches, and return them as kept.
 
         Each is cleaned (``state.alias_text``), and empty and repeated ones are dropped. ``alias_too_long`` or
         ``alias_too_many`` past the limits; nothing is kept then.
         """
         if (
-            not isinstance(alt if alt is not None else student, str)
+            not isinstance(variant if variant is not None else family, str)
             or not isinstance(aliases, list)
             or not all(isinstance(a, str) for a in aliases)
         ):
             raise ServiceError("bad_params", key="aliases")
-        # The student argument edits the original alt only.
+        # The family argument edits the original variant only.
         key = (
-            visible_alt(alt).key
-            if alt is not None
-            else alias_target(student_with_assignments(s.catalog, s.library.assigned_targets(), student))
+            visible_variant(variant).key
+            if variant is not None
+            else alias_target(family_with_assignments(s.catalog, s.library.assigned_targets(), family))
         )
         names = [alias_text(a) for a in aliases]
         if any(len(name) > ALIAS_LENGTH for name in names):
             raise ServiceError("alias_too_long", max=ALIAS_LENGTH)
         if len({alias_key(name) for name in names if name}) > ALIAS_MAX:
             raise ServiceError("alias_too_many", max=ALIAS_MAX)
-        alt_aliases()
+        variant_aliases()
         return s.state.set_aliases(key, names)
 
     warmed: dict[str, Any] = {"game": None}
@@ -539,25 +545,25 @@ def register(rpc: RpcRegistry, s: Services) -> None:
 
     @rpc.method("lobby.camera.save")
     def lobby_camera_save(
-        alt: str, lobby: str, view: dict, scale: float, offset: list, source: str = "official"
+        variant: str, lobby: str, view: dict, scale: float, offset: list, source: str = "official"
     ) -> str:
-        """Start a job that keeps the lobby's framing as a new Memorial Lobby choice of the alt.
+        """Start a job that keeps the lobby's framing as a new Memorial Lobby choice of the variant.
 
         The framing is ``lobby.js cameraParams`` (``library/lobby_camera.py``): its art is the source the lobby
-        showed ("official", ``mod:<id>`` of a lobby mod of the alt, or one of its cameras), its camera the
-        prefab scaled by ``scale`` and moved by ``offset``. The result is ``{alt, lobby, number, scale, offset,
+        showed ("official", ``mod:<id>`` of a lobby mod of the variant, or one of its cameras), its camera the
+        prefab scaled by ``scale`` and moved by ``offset``. The result is ``{variant, lobby, number, scale, offset,
         mod}``. ``view`` is the framed view, for the log only.
         """
         from ..gameassets import AssetNotFound
         from ..library import lobby_camera
 
-        v = visible_alt(alt) if isinstance(alt, str) else None
+        v = visible_variant(variant) if isinstance(variant, str) else None
         if v is None or not v.lobby or lobby != v.lobby:
             raise ServiceError("bad_params", key="lobby")
         if (
             not isinstance(source, str)
             or len(source) > 264
-            or not (source == "official" or preview_source_valid(alt, "lobby", source))
+            or not (source == "official" or preview_source_valid(variant, "lobby", source))
         ):
             raise ServiceError("source_unsupported", source=str(source)[:264])
         if not isinstance(view, dict) or not all(lobby_camera._number(view.get(key)) for key in ("x", "y", "w", "h")):
@@ -576,11 +582,11 @@ def register(rpc: RpcRegistry, s: Services) -> None:
 
         def run(log: Any, progress: Any) -> dict[str, Any]:
             progress({"current": 1, "total": 1, "step": ""})
-            log(f"Lobby camera of {alt}: view {view}, scale {k:.4f}, offset {ox:.1f}, {oy:.1f}")
-            record = library.save_camera(alt, source, k, [ox, oy], prefab, root, pin=pin, log=log)
+            log(f"Lobby camera of {variant}: view {view}, scale {k:.4f}, offset {ox:.1f}, {oy:.1f}")
+            record = library.save_camera(variant, source, k, [ox, oy], prefab, root, pin=pin, log=log)
             meta = record[lobby_camera.TAG]
             return {
-                "alt": alt,
+                "variant": variant,
                 "lobby": v.lobby,
                 "number": meta["number"],
                 "scale": meta["scale"],
@@ -591,7 +597,7 @@ def register(rpc: RpcRegistry, s: Services) -> None:
         return s.submit("lobby.camera.save", run, writes="library", library=library)
 
     @rpc.method("lobby.lines")
-    def lobby_lines(alt: str, talks: dict[str, list[str]] | None = None, lang: str | None = None) -> dict[str, Any]:
+    def lobby_lines(variant: str, talks: dict[str, list[str]] | None = None, lang: str | None = None) -> dict[str, Any]:
         """Return the memorial lobby's lines by voice clip, ``{clip: {lang: text, "voice": bool}}``.
 
         The lines are Kivo's (zh-CN, ja, the voices) and, for a ``lang`` other than zh-CN, the Global server's
@@ -599,7 +605,7 @@ def register(rpc: RpcRegistry, s: Services) -> None:
         skeleton, else Kivo's clip names). ``lines_unavailable`` when neither can be read; the Global text is left
         out when its table takes longer than ``LINES_WAIT``.
         """
-        v = visible_alt(alt)
+        v = visible_variant(variant)
         lang = lang or LINE_LANGS.get(i18n_manager.lang, "en")
         character = getattr(v, "schale_id", None)
         # the Global table (a download the first time) is read while Kivo's page is
@@ -615,7 +621,7 @@ def register(rpc: RpcRegistry, s: Services) -> None:
                 table = pending.result(timeout=max(0.0, until - time.monotonic()))
                 official = globallines.by_clip(table, clip_talks(talks) or globallines.talks_of(kivo or {}))
             except FutureTimeout:
-                logger.info("Global lobby lines not ready after %.0f s: only Kivo's for %s", LINES_WAIT, alt)
+                logger.info("Global lobby lines not ready after %.0f s: only Kivo's for %s", LINES_WAIT, variant)
             except ServiceError:
                 pass
         if kivo is None and not official:
@@ -623,26 +629,26 @@ def register(rpc: RpcRegistry, s: Services) -> None:
         return globallines.merge(kivo or {}, official)
 
     @rpc.method("favorites.set")
-    def favorites_set(alt: str, on: bool) -> None:
-        s.library.set_favorite(alt, bool(on))
+    def favorites_set(variant: str, on: bool) -> None:
+        s.library.set_favorite(variant, bool(on))
         s.events.publish("library.changed")
 
     @rpc.method("ui.visit")
-    def ui_visit(alt: str) -> None:
-        s.state.visit(alt)
+    def ui_visit(variant: str) -> None:
+        s.state.visit(variant)
 
     @rpc.method("ui.preview")
-    def ui_preview(alt: str, kind: str, source: str) -> dict:
-        if not all(isinstance(value, str) for value in (alt, kind, source)) or kind not in (
+    def ui_preview(variant: str, kind: str, source: str) -> dict:
+        if not all(isinstance(value, str) for value in (variant, kind, source)) or kind not in (
             "spr",
             "lobby",
             "model",
         ):
             raise ServiceError("bad_params", key="source")
-        if not preview_source_valid(alt, kind, source):
+        if not preview_source_valid(variant, kind, source):
             raise ServiceError("bad_params", key="source")
         pin = s.library.current_pin()
         if pin is None:
             raise ServiceError("game_not_found")
-        s.state.set_preview_source(pin.key, alt, kind, source)
-        return s.state.preview_sources(pin.key, alt)
+        s.state.set_preview_source(pin.key, variant, kind, source)
+        return s.state.preview_sources(pin.key, variant)

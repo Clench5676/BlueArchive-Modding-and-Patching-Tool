@@ -74,15 +74,15 @@ def done(services, key):
 
 def test_save_select_asset_and_roster_thumbnail(app, services, photography_env):
     env = photography_env
-    saved = rpc(app, "photography.save", alt="hoshino", png=env["png"], mode="portrait")["result"]
+    saved = rpc(app, "photography.save", variant="hoshino", png=env["png"], mode="portrait")["result"]
     key = saved["saved"]
-    selected = rpc(app, "photography.select", alt="hoshino", id=key)["result"]
+    selected = rpc(app, "photography.select", variant="hoshino", id=key)["result"]
     url = selected["photos"][0]["url"]
     assert call(app, url)[2] == env["raw"]
     roster = rpc(app, "roster.list")["result"]
-    assert roster["students"][0]["alts"][0]["thumbnail"] == url
-    assert rpc(app, "student.get", key="hoshino")["result"]["alts"][0]["thumbnail"] == url
-    current = rpc(app, "photography.list", alt="hoshino")["result"]
+    assert roster["families"][0]["variants"][0]["thumbnail"] == url
+    assert rpc(app, "family.get", key="hoshino")["result"]["variants"][0]["thumbnail"] == url
+    current = rpc(app, "photography.list", variant="hoshino")["result"]
     assert current["default"].startswith("/asset/photography/default/")
     assert current["game"]["id"] == "official"
 
@@ -93,7 +93,7 @@ def test_applied_is_scoped_to_the_shown_skin_but_deletion_checks_every_skin(app,
     alternative = replace(original, key="hoshino_swimsuit", portrait="Student_Portrait_Test_swimsuit_Collection")
     services.catalog.f.variants.append(alternative)
     keys = [
-        rpc(app, "photography.save", alt=v.key, png=photography_env["png"], mode="portrait")["result"]["saved"]
+        rpc(app, "photography.save", variant=v.key, png=photography_env["png"], mode="portrait")["result"]["saved"]
         for v in (original, alternative)
     ]
     choices = dict(zip([v.portrait for v in (original, alternative)], keys))
@@ -117,48 +117,50 @@ def test_applied_is_scoped_to_the_shown_skin_but_deletion_checks_every_skin(app,
 
     services.library.photograph_removal_info = removal_info
     for variant, own, other in [(original, keys[0], keys[1]), (alternative, keys[1], keys[0])]:
-        result = rpc(app, "photography.list", alt=variant.key)["result"]
-        assert {entry["alt"] for entry in result["photos"]} == {original.key, alternative.key}
+        result = rpc(app, "photography.list", variant=variant.key)["result"]
+        assert {entry["variant"] for entry in result["photos"]} == {original.key, alternative.key}
         assert {entry["id"] for entry in result["photos"] if entry["applied"]} == {own}
         assert result["game"]["id"] == own and result["game"]["enabled"] == enabled
         for key in (own, other):
-            assert rpc(app, "photography.removalInfo", alt=variant.key, id=key)["result"] == removal_info(
+            assert rpc(app, "photography.removalInfo", variant=variant.key, id=key)["result"] == removal_info(
                 variant.key, key
             )
     # Returning to official must not mark the other skin's persisted photo Applied.
     choices[original.portrait] = None
-    result = rpc(app, "photography.list", alt=original.key)["result"]
+    result = rpc(app, "photography.list", variant=original.key)["result"]
     assert result["game"]["id"] == "official" and not any(entry["applied"] for entry in result["photos"])
-    assert rpc(app, "photography.removalInfo", alt=original.key, id=keys[1])["result"]["used"]
+    assert rpc(app, "photography.removalInfo", variant=original.key, id=keys[1])["result"]["used"]
 
 
 @pytest.mark.parametrize("unavailable", ["game", "target", "unknown"])
 def test_unavailable_or_unknown_target_has_no_applied_photo(app, services, photography_env, unavailable):
-    key = rpc(app, "photography.save", alt="hoshino", png=photography_env["png"], mode="portrait")["result"]["saved"]
+    key = rpc(app, "photography.save", variant="hoshino", png=photography_env["png"], mode="portrait")["result"][
+        "saved"
+    ]
     photography_env["chosen"].update(id=key, known=unavailable != "unknown")
     if unavailable == "game":
         services.library.pins = []
     elif unavailable == "target":
         services.catalog.v.portrait = None
-    result = rpc(app, "photography.list", alt="hoshino")["result"]
+    result = rpc(app, "photography.list", variant="hoshino")["result"]
     assert not any(entry["applied"] for entry in result["photos"])
 
 
 def test_apply_waits_for_real_job_and_restore_resets_app_choice(app, services, photography_env):
-    key = rpc(app, "photography.save", alt="hoshino", png=photography_env["png"], mode="lobby")["result"]["saved"]
-    rpc(app, "photography.select", alt="hoshino", id=key)
-    done(services, rpc(app, "photography.apply", alt="hoshino", id=key)["result"])
-    assert rpc(app, "photography.list", alt="hoshino")["result"]["game"]["id"] == key
-    failed = rpc(app, "photography.delete", alt="hoshino", id=key)["result"]
+    key = rpc(app, "photography.save", variant="hoshino", png=photography_env["png"], mode="lobby")["result"]["saved"]
+    rpc(app, "photography.select", variant="hoshino", id=key)
+    done(services, rpc(app, "photography.apply", variant="hoshino", id=key)["result"])
+    assert rpc(app, "photography.list", variant="hoshino")["result"]["game"]["id"] == key
+    failed = rpc(app, "photography.delete", variant="hoshino", id=key)["result"]
     deadline = time.monotonic() + 3
     while services.jobs.get(failed).pending and time.monotonic() < deadline:
         time.sleep(0.01)
     assert services.jobs.get(failed).error["code"] == "asset_delete_confirm"
-    done(services, rpc(app, "photography.restore", alt="hoshino")["result"])
-    result = rpc(app, "photography.list", alt="hoshino")["result"]
+    done(services, rpc(app, "photography.restore", variant="hoshino")["result"])
+    result = rpc(app, "photography.list", variant="hoshino")["result"]
     assert result["app"] is None and result["game"]["id"] == "official"
     assert len(result["photos"]) == 1
-    assert "thumbnail" not in rpc(app, "roster.list")["result"]["students"][0]["alts"][0]
+    assert "thumbnail" not in rpc(app, "roster.list")["result"]["families"][0]["variants"][0]
 
 
 def test_capture_upload_has_a_bounded_larger_limit_without_widening_other_rpcs(app, services, photography_env):
@@ -167,7 +169,7 @@ def test_capture_upload_has_a_bounded_larger_limit_without_widening_other_rpcs(a
         app,
         "/api/rpc",
         "POST",
-        {"method": "photography.save", "params": {"alt": "hoshino", "png": large, "mode": "portrait"}},
+        {"method": "photography.save", "params": {"variant": "hoshino", "png": large, "mode": "portrait"}},
     )
     assert status == "200 OK" and json.loads(data)["error"]["code"] == "photo_invalid"
     assert call(app, "/api/rpc", "POST", {"method": "app.info", "params": {"value": large}})[0] == "400 Bad Request"
@@ -175,14 +177,15 @@ def test_capture_upload_has_a_bounded_larger_limit_without_widening_other_rpcs(a
 
 def test_missing_original_keeps_app_photography_and_default_restore_available(app, services, photography_env):
     services.catalog.v.portrait = None
-    saved = rpc(app, "photography.save", alt="hoshino", png=photography_env["png"], mode="portrait")["result"]
-    current = rpc(app, "photography.list", alt="hoshino")["result"]
+    saved = rpc(app, "photography.save", variant="hoshino", png=photography_env["png"], mode="portrait")["result"]
+    current = rpc(app, "photography.list", variant="hoshino")["result"]
     assert not current["applicable"] and current["default"] is None
-    rpc(app, "photography.select", alt="hoshino", id=saved["saved"])
-    done(services, rpc(app, "photography.restore", alt="hoshino")["result"])
+    rpc(app, "photography.select", variant="hoshino", id=saved["saved"])
+    done(services, rpc(app, "photography.restore", variant="hoshino")["result"])
     assert services.photographs.list("hoshino")["app"] is None
     assert (
-        rpc(app, "photography.apply", alt="hoshino", id=saved["saved"])["error"]["code"] == "photo_target_unavailable"
+        rpc(app, "photography.apply", variant="hoshino", id=saved["saved"])["error"]["code"]
+        == "photo_target_unavailable"
     )
 
 
@@ -196,7 +199,7 @@ def test_default_asset_is_pinned_and_reads_only_official_bundles(app, services, 
         return env["raw"]
 
     services.game.collection_portrait_from = original
-    default = rpc(app, "photography.list", alt="hoshino")["result"]["default"]
+    default = rpc(app, "photography.list", variant="hoshino")["result"]["default"]
     assert call(app, default)[2] == env["raw"]
     assert call(app, default.replace(env["pin"].id, "another-install"))[0] == "404 Not Found"
 
@@ -206,14 +209,14 @@ def test_saving_does_not_wait_for_an_unrelated_game_status_read(app, services, p
         raise AssertionError("A capture must not request game status")
 
     services.library.photograph_choice = blocked
-    saved = rpc(app, "photography.save", alt="hoshino", png=photography_env["png"], mode="portrait")["result"]
+    saved = rpc(app, "photography.save", variant="hoshino", png=photography_env["png"], mode="portrait")["result"]
     assert services.photographs.image("hoshino", saved["saved"]) == photography_env["raw"]
 
 
 def test_photo_only_library_moves_with_images_and_app_choice(app, services, photography_env, tmp_path):
-    saved = rpc(app, "photography.save", alt="hoshino", png=photography_env["png"], mode="portrait")["result"]
+    saved = rpc(app, "photography.save", variant="hoshino", png=photography_env["png"], mode="portrait")["result"]
     key = saved["saved"]
-    rpc(app, "photography.select", alt="hoshino", id=key)
+    rpc(app, "photography.select", variant="hoshino", id=key)
     old = services.library_dir()
     assert not (old / "state.json").exists() and not (old / "profiles.json").exists()
     target = services.move_library(tmp_path / "moved-library")
@@ -226,7 +229,7 @@ def test_photo_only_library_moves_with_images_and_app_choice(app, services, phot
 def test_preview_cache_clear_does_not_remove_photographs(app, services, photography_env):
     from types import SimpleNamespace
 
-    saved = rpc(app, "photography.save", alt="hoshino", png=photography_env["png"], mode="portrait")["result"]
+    saved = rpc(app, "photography.save", variant="hoshino", png=photography_env["png"], mode="portrait")["result"]
     services._cache = SimpleNamespace(clear=lambda: None)
     services.clear_cache()
     assert services.photographs.image("hoshino", saved["saved"]) == photography_env["raw"]
@@ -306,21 +309,21 @@ def test_restore_reuses_or_creates_one_default_and_reports_the_deletion_identity
     stream = io.BytesIO()
     Image.new("RGBA", (202, 228), (200, 30, 10, 255)).save(stream, format="PNG")
     changed_png = "data:image/png;base64," + base64.b64encode(stream.getvalue()).decode()
-    done(services, rpc(app, "photography.restore", alt="hoshino", png=changed_png)["result"])
-    result = rpc(app, "photography.list", alt="hoshino")["result"]
+    done(services, rpc(app, "photography.restore", variant="hoshino", png=changed_png)["result"])
+    result = rpc(app, "photography.list", variant="hoshino")["result"]
     defaults = [entry for entry in result["photos"] if entry.get("builtin")]
     assert len(defaults) == 1
     key = defaults[0]["id"]
     assert not existing or key == generated
     assert result["app"] == result["game"]["id"] == key
     for entry in result["photos"]:
-        info = rpc(app, "photography.removalInfo", alt="hoshino", id=entry["id"])["result"]
+        info = rpc(app, "photography.removalInfo", variant="hoshino", id=entry["id"])["result"]
         assert entry["applied"] == info["used"] == (entry["id"] == key)
     assert services.photographs.image("hoshino", key) == (env["raw"] if existing else stream.getvalue())
-    done(services, rpc(app, "photography.restore", alt="hoshino", png=env["png"])["result"])
+    done(services, rpc(app, "photography.restore", variant="hoshino", png=env["png"])["result"])
     assert len(services.photographs.list("hoshino")["photos"]) == 2
-    done(services, rpc(app, "photography.delete", alt="hoshino", id=saved)["result"])
-    failed = rpc(app, "photography.delete", alt="hoshino", id=key)["result"]
+    done(services, rpc(app, "photography.delete", variant="hoshino", id=saved)["result"])
+    failed = rpc(app, "photography.delete", variant="hoshino", id=key)["result"]
     deadline = time.monotonic() + 3
     while services.jobs.get(failed).pending and time.monotonic() < deadline:
         time.sleep(0.01)
@@ -358,8 +361,8 @@ def test_a_save_or_selection_arriving_while_the_manifest_is_parsed_does_not_dead
     from bmpt.library.photographs import Photographs
 
     env = photography_env
-    key = rpc(app, "photography.save", alt="hoshino", png=env["png"], mode="portrait")["result"]["saved"]
-    rpc(app, "photography.select", alt="hoshino", id=key)
+    key = rpc(app, "photography.save", variant="hoshino", png=env["png"], mode="portrait")["result"]["saved"]
+    rpc(app, "photography.select", variant="hoshino", id=key)
     reading, writing, release = threading.Event(), threading.Event(), threading.Event()
     real_chosen, real_save, real_select = Photographs._chosen, Photographs.save, Photographs.select
 
@@ -441,7 +444,7 @@ def test_a_library_move_waits_for_a_photograph_save_and_the_photo_lands_in_the_n
     from bmpt.library.photographs import Photographs
 
     env = photography_env
-    rpc(app, "photography.save", alt="hoshino", png=env["png"], mode="portrait")  # a library worth moving
+    rpc(app, "photography.save", variant="hoshino", png=env["png"], mode="portrait")  # a library worth moving
     old = services.library_dir()
     saving, release = threading.Event(), threading.Event()
     real_save = Photographs.save

@@ -53,7 +53,7 @@ own module:
   view stays 16:9 and centred across.
 - **Limits.** `measureFraming` paints every pose the lobby rests in; a cell outside the game's view that some pose
   leaves unpainted may not be shown. Zoom-in stops at 2x the game's view.
-- **RPC `lobby.camera.save`** `{alt, lobby, source, view, scale, offset}` starts a library writer job. The saved
+- **RPC `lobby.camera.save`** `{variant, lobby, source, view, scale, offset}` starts a library writer job. The saved
   camera is a generated generic mod of the lobby's own UI prefab bundle (`library/lobby_camera.py`): the prefab's
   scale targets are reframed through a camera node, every other object byte for byte, saved with the CRC fix and
   checked after; a prefab whose structure does not fit is refused (`lobby_camera_unsupported`). The intro is held at
@@ -63,7 +63,7 @@ own module:
   1.5 s, the view on screen) flies into the album. The album opens Switch Memorial Lobby itself (`detail.js`, through
   the camera bridge) over the framing, whose controls take no input meanwhile; a lobby changed there is framed anew
   from the game's view.
-- **The choice.** The App lists a camera as a lobby mod of its alt (`camera: {source, number, scale, offset}`),
+- **The choice.** The App lists a camera as a lobby mod of its variant (`camera: {source, number, scale, offset}`),
   named after its source, in Switch Memorial Lobby; rename and delete as for mods. Apply writes the source's art
   through the lobby's own apply, then the prefab through the generic one; any other lobby choice puts the prefab back
   to the camera's base. Before a master-switch plan and a camera's apply, a camera framed on an official prefab the
@@ -77,7 +77,7 @@ own module:
 
 Online data, fetched on demand and kept in memory only (never written to disk):
 
-- Kivo (`lines/kivo.py`): one student page per alt (zh-CN, ja and the voices, by voice clip name).
+- Kivo (`lines/kivo.py`): one student page per variant (zh-CN, ja and the voices, by voice clip name).
 - The Global server's CharacterDialog table (`lines/global_lines.py`), as ba-data publishes it (one bounded download per
   session, only when the UI language is not zh-CN; `lobby.lines` waits up to 3 s for it, then answers with Kivo's
   lines alone). A dialogue's rows go on the talk animation's voice clips in order.
@@ -108,18 +108,18 @@ hold only the manifest's own lock, never the services lock.
 
 | RPC | Parameters | Result |
 | --- | --- | --- |
-| `photography.list` | `alt` | Captures, App choice, verified default URL, game intent/availability/error |
-| `photography.removalInfo` | `alt, id` | What a deletion would affect |
-| `photography.save` | `alt, png, mode, face?, action?, source?` | Captures/App choice and saved ID |
-| `photography.select` | `alt, id` (nullable) | Captures and updated App choice |
-| `photography.delete` | `alt, id` | Updated gallery after protected deletion |
-| `photography.export` | `alt, id, png?` | Lossless export of a capture |
-| `photography.apply` | `alt, id` (nullable) | Actual writer job ID |
-| `photography.restore` | `alt` | Default restore job ID; clears App choice after success |
+| `photography.list` | `variant` | Captures, App choice, verified default URL, game intent/availability/error |
+| `photography.removalInfo` | `variant, id` | What a deletion would affect |
+| `photography.save` | `variant, png, mode, expression?, action?, source?` | Captures/App choice and saved ID |
+| `photography.select` | `variant, id` (nullable) | Captures and updated App choice |
+| `photography.delete` | `variant, id` | Updated gallery after protected deletion |
+| `photography.export` | `variant, id, png?` | Lossless export of a capture |
+| `photography.apply` | `variant, id` (nullable) | Actual writer job ID |
+| `photography.restore` | `variant` | Default restore job ID; clears App choice after success |
 
 Capture uploads are bounded to 48 MiB encoded PNG data and 4096 pixels per dimension; only the save RPC gets the
-larger HTTP body allowance. Assets use `/asset/photography/<alt>/<id>.png` and
-`/asset/photography/default/<install-id>/<alt>.png?revision=<resource-version>` (verified original bundles, so a
+larger HTTP body allowance. Assets use `/asset/photography/<variant>/<id>.png` and
+`/asset/photography/default/<install-id>/<variant>.png?revision=<resource-version>` (verified original bundles, so a
 changed install cannot serve another install's default). Game Apply replaces only the selected named textures of the
 Collection card portrait (`UICharacterCollectionPopulatorUnit/Grid/UICollectCard/Char_Portrait`), with lossless
 RGBA32 at native dimensions; restoring one texture inlines its exact original GPU payload, and all-default

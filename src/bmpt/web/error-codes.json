@@ -7,14 +7,6 @@
     "code": "E6002",
     "level": "notice"
   },
-  "alt_incompatible": {
-    "code": "E2014",
-    "level": "failed"
-  },
-  "alt_not_found": {
-    "code": "E2015",
-    "level": "failed"
-  },
   "archive_invalid": {
     "code": "E3029",
     "level": "failed"
@@ -99,16 +91,16 @@
     "code": "E1002",
     "level": "notice"
   },
-  "catalog_alt_not_found": {
-    "code": "E2003",
-    "level": "failed"
-  },
   "catalog_data_invalid": {
     "code": "E2001",
     "level": "failed"
   },
-  "catalog_student_not_found": {
+  "catalog_family_not_found": {
     "code": "E2002",
+    "level": "failed"
+  },
+  "catalog_variant_not_found": {
+    "code": "E2003",
     "level": "failed"
   },
   "classic_failed": {
@@ -431,7 +423,7 @@
     "code": "E6009",
     "level": "failed"
   },
-  "photo_delete_other_alt": {
+  "photo_delete_other_variant": {
     "code": "E6010",
     "level": "failed"
   },
@@ -557,6 +549,14 @@
   },
   "update_unsupported": {
     "code": "E7006",
+    "level": "failed"
+  },
+  "variant_incompatible": {
+    "code": "E2014",
+    "level": "failed"
+  },
+  "variant_not_found": {
+    "code": "E2015",
     "level": "failed"
   }
 }

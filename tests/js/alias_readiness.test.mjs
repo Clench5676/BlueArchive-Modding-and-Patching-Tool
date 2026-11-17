@@ -24,7 +24,7 @@ test("a cold student pencil waits visibly for the popup frame before using it", 
     );
   const env = {
     customAliases: () => [],
-    altId: "student",
+    variantKey: "student",
     $: () => ({}),
     ALIAS_MAX: 8,
     AL: { w: 10 },

@@ -118,7 +118,7 @@ def _target_pin(library: Any, settings: Any, server: str, platform: str) -> Any:
 def _sources(library: Any, scope: str, target: str | None) -> tuple[list[str], list[dict]]:
     assignments = []
     if scope == "single":
-        if not isinstance(target, str) or not target.startswith(("mod:", "alt:")):
+        if not isinstance(target, str) or not target.startswith(("mod:", "variant:")):
             raise ServiceError("bad_params", key="target")
         return [target], assignments
     if scope == "library":
@@ -134,7 +134,7 @@ def _sources(library: Any, scope: str, target: str | None) -> tuple[list[str], l
                     {
                         "server": folder.get("server", "global"),
                         "core": core,
-                        "alt": entry.get("alt"),
+                        "variant": entry.get("variant"),
                         "kind": entry.get("kind"),
                         "source": source,
                     }
@@ -153,12 +153,12 @@ def _prepare(
     progress: Any,
     kind: str | None = None,
 ) -> tuple[list[Path], dict]:
-    if source.startswith("alt:"):
-        alt = source[4:]
-        targets = library._game_files(alt, kind, pin)
+    if source.startswith("variant:"):
+        variant = source[8:]
+        targets = library._game_files(variant, kind, pin)
         paths = [library._official_for(path, pin) for path in targets]
         if not paths:
-            raise ServiceError("game_file_not_found", target=alt)
+            raise ServiceError("game_file_not_found", target=variant)
         contents = integrity.Contents()
         for path in paths:
             contents.merge(integrity.inspect(path))
@@ -171,14 +171,14 @@ def _prepare(
             output = directory / _member_name(live)
             shutil.copy2(original, output)
             prepared.append(output)
-        return prepared, {"source": source, "alt": alt, "kind": kind}
+        return prepared, {"source": source, "variant": variant, "kind": kind}
     record = library._record(source[4:])
     paths = library._paths(record)
     entry = {
         "id": _safe_name(source),
         "core": core_of(paths[0].name),
         "kind": record["kind"],
-        "alt": library._target_of(record),
+        "variant": library._target_of(record),
         "files": [{"path": str(path)} for path in paths],
     }
     candidate = Candidate({path.name: path for path in paths}, entry)
@@ -202,7 +202,7 @@ def _prepare(
     )
     return prepared, {
         "source": source,
-        "alt": library._target_of(record),
+        "variant": library._target_of(record),
         "kind": record["kind"],
         "name": library._label(record),
     }
@@ -388,12 +388,12 @@ def export_zip(
         pin: The game install and server the operation is fixed to; the mods must fit this install.
         scope: ``single`` (the one mod in ``target``), ``library`` (every mod) or ``applied`` (the mods currently
             applied to the game).
-        target: With ``single``, ``mod:<library id>`` for a library mod or ``alt:<key>`` for an alt's
+        target: With ``single``, ``mod:<library id>`` for a library mod or ``variant:<key>`` for a variant's
             official game files.
         folder: Where the archive is written, as ``mods-<scope>-<server>-<platform>-<id>.zip``.
         server: The game server the mods are for.
         platform: The game platform the mods are for.
-        kind: With a ``alt:`` target, the asset kind (``spr``, ``lobby``, ``model`` or ``other``) of the
+        kind: With a ``variant:`` target, the asset kind (``spr``, ``lobby``, ``model`` or ``other``) of the
             official files to export; None for all of them.
         log: Receives user-facing messages of the job.
         progress: Receives the progress lines of the job.
@@ -439,7 +439,7 @@ def export_zip(
                         record = library._records.get(source[4:]) if source.startswith("mod:") else None
                         line.item(
                             i,
-                            alt=library._target_of(record) if record else "",
+                            variant=library._target_of(record) if record else "",
                             kind=record["kind"] if record else "",
                             name=library._progress_name(record) if record else "",
                             core=core_of(record["files"][0]) if record and record.get("files") else "",

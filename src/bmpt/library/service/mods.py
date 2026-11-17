@@ -54,7 +54,7 @@ class ModsMixin:
         try:
             return self.catalog.variant(key)
         except (KeyError, ServiceError) as error:
-            if isinstance(error, ServiceError) and error.code != "catalog_alt_not_found":
+            if isinstance(error, ServiceError) and error.code != "catalog_variant_not_found":
                 raise
             if callable(getattr(self.catalog, "assignment_variant", None)) and any(
                 (record.get("assignment") or record.get("target")) == key for record in self._records.values()
@@ -62,7 +62,7 @@ class ModsMixin:
                 try:
                     return self.catalog.assignment_variant(key)
                 except (KeyError, ServiceError) as lookup:
-                    if isinstance(lookup, ServiceError) and lookup.code != "catalog_alt_not_found":
+                    if isinstance(lookup, ServiceError) and lookup.code != "catalog_variant_not_found":
                         raise
             # Current NPC bundles may have no roster entry. Their stored filename owns the model slot.
             record = next(
@@ -92,7 +92,7 @@ class ModsMixin:
                     model=key,
                 )
             if isinstance(error, KeyError):
-                raise ServiceError("alt_not_found", alt=key) from error
+                raise ServiceError("variant_not_found", variant=key) from error
             raise
 
     def _record(self, mod_id: str) -> dict[str, Any]:
@@ -136,9 +136,9 @@ class ModsMixin:
 
     @staticmethod
     def _optimized_from(record: dict[str, Any]) -> str:
-        """The source an Optimize Physics copy was built from ("alt:<key>"), "" for any other mod."""
+        """The source an Optimize Physics copy was built from ("variant:<key>"), "" for any other mod."""
         source = record.get("optimized_from")
-        return source if isinstance(source, str) and source.startswith("alt:") else ""
+        return source if isinstance(source, str) and source.startswith("variant:") else ""
 
     @classmethod
     def _costume_outdated(cls, record: dict[str, Any]) -> bool:
@@ -168,7 +168,7 @@ class ModsMixin:
             record["id"],
             paths[0],
             self._label(record),
-            camera["alt"] if camera else self._target_of(record),
+            camera["variant"] if camera else self._target_of(record),
             "lobby" if camera else record["kind"],
             record["added"],
             not record["seen"],

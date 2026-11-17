@@ -20,7 +20,7 @@ class JsonResult:
             if isinstance(value, Path):
                 return str(value.absolute())
             if isinstance(value, dict):
-                return {"alt" if key == "variant" else key: convert(item) for key, item in value.items()}
+                return {key: convert(item) for key, item in value.items()}
             if isinstance(value, (tuple, list)):
                 return [convert(item) for item in value]
             return value
@@ -48,7 +48,7 @@ class ModEntry(JsonResult):
     user_added: bool = False  # explicit add, rather than adoption, recovery or re-filing
     alias: str = ""
     label_base: str = ""  # stored name before aliases and localized repair suffixes
-    optimized_from: str = ""  # an Optimize Physics copy: the costume it was built from, "alt:<key>"
+    optimized_from: str = ""  # an Optimize Physics copy: the costume it was built from, "variant:<key>"
     # a memorial lobby camera: {source, number, scale, offset}; listed as a lobby choice of its variant
     camera: dict | None = None
 
@@ -246,7 +246,7 @@ class EntryState(JsonResult):
     variant: str  # the variant key of the core in its own install
     names: dict | None  # the variant's shipped names when the current catalog does not map the core, else None
     kind: Kind
-    source: str  # what the files carry: "official", "mod:<id>", "alt:<key>", "removed", "unknown", "damaged"
+    source: str  # what the files carry: "official", "mod:<id>", "variant:<key>", "removed", "unknown", "damaged"
     configured: str | None  # the configured source, None for official
     state: EntryStateName
     overwritten: bool  # a non-official file with no official copy anywhere

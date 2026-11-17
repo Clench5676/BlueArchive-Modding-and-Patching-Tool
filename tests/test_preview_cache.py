@@ -549,10 +549,10 @@ def test_model_revision_rpc_hashes_validated_glb(preview_app, preview_services, 
         return AssetResponse(b"glTF exact bytes", "model/gltf-binary", False)
 
     monkeypatch.setattr(preview_services, "asset", asset)
-    result = rpc(preview_app, "preview.modelRevision", alt="shiroko", source="mod:1")["result"]
+    result = rpc(preview_app, "preview.modelRevision", variant="shiroko", source="mod:1")["result"]
     assert result["revision"] == hashlib.sha256(b"glTF exact bytes").hexdigest()
     assert calls == [("model/shiroko.glb", {"source": "mod:1"})]
-    assert rpc(preview_app, "preview.modelRevision", alt="../bad")["error"]["code"] == "bad_params"
+    assert rpc(preview_app, "preview.modelRevision", variant="../bad")["error"]["code"] == "bad_params"
 
 
 def test_asset_revision_rpc_tracks_exact_background_and_framing_bytes(preview_app, preview_services, monkeypatch):

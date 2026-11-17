@@ -6,16 +6,6 @@
 `{"error": {"code", "params"}}`. Methods whose result is a job id run on the worker (see [Jobs](#jobs-and-events)); details of what each
 one changes are in the other files ([`README.md`](README.md)).
 
-Three nouns name the App's characters on the API (RPC methods, params, results, event payloads, asset route parameters),
-as the screens call them. The catalog data and the library's internals keep their own schema
-(`students`, `variants`), read through the catalog module.
-
-| Noun | What it is | On screen (en / zh) |
-|---|---|---|
-| `alt` / `alts`, `altId` (`alt_id`) | one alt of a student, keyed by its catalog key; a source `alt:<key>` is that alt's official files | Alt / 换皮 |
-| `face` / `faces` | a portrait face key, `00`..`NN` | Faces / 差分 |
-| `student` / `students` | a student with all their alts | Students / 学生 |
-
 | Method | What it does |
 |---|---|
 | `app.info` | version, language, platform, game found, resource version, consents (`consent`, `spineConsent`), `uiCached`, paths, `dataDirWritable`, `debug` |
@@ -24,18 +14,18 @@ as the screens call them. The catalog data and the library's internals keep thei
 | `app.openClassic {tab}` / `app.classic` / `classic.front` | start or raise the classic window / its status / Bring to Front |
 | `classic.queue {method, params}` / `classic.clearQueue` | queue a refused write for when the classic window closes / empty the queue |
 | `i18n.strings {lang}` | `{key: text}` for `webui.*` |
-| `roster.list` | students with alts, mod counts, fresh flags, favourites, aliases, configured and preview sources; one library snapshot |
-| `student.get {key}` | a student with its alts, mods and each alt's state (judged cheaply), `configured` per slot, `modelCores`, `modelFiles`, `version` |
+| `roster.list` | families with variants, mod counts, fresh flags, favourites, aliases, configured and preview sources; one library snapshot |
+| `family.get {key}` | a family with its variants, mods and each variant's state (judged cheaply), `configured` per slot, `modelCores`, `modelFiles`, `version` |
 | `settings.get` / `settings.set {key, value}` | the settings popup's values (roster view, lobby zoom and intro, tray, classicPrompt, game folders — refused with `game_not_found` unless the folder is a game install) |
 | `settings.pickFolder {start?}` / `settings.clearCache` / `settings.detectGame {region}` | native folder picker / clear the asset cache / detect the install (scan consent) |
-| `lobby.warm` / `lobby.lines {alt, talks, lang}` | build the lobby prefab index in the background / the dialogue lines per language (`lines_unavailable` when no source can be read) |
-| `favorites.set {alt, on}` / `aliases.set {student, aliases}` | favourites / the user's own aliases (validated, at most 8 of 24 characters) |
+| `lobby.warm` / `lobby.lines {variant, talks, lang}` | build the lobby prefab index in the background / the dialogue lines per language (`lines_unavailable` when no source can be read) |
+| `favorites.set {variant, on}` / `aliases.set {family, aliases}` | favourites / the user's own aliases (validated, at most 8 of 24 characters) |
 | `mods.add {paths, background}` / `mods.pick {background}` | import files (identity is core plus SHA-1); with `background` a writer job |
 | `mods.remove {id, confirm}` / `mods.removalInfo {id}` / `mods.rename {id, label}` / `mods.seen {id|ids}` | delete (restores affected entries) / the deletion confirmation's data / rename / mark seen |
 | `mods.other` | the generic (`other`) mods for Settings' Other Mods |
-| `ui.preview {alt, kind, source}` | store a preview choice in `webui.json`; never touches the manifest or game files |
-| `model.costumes {alt, others}` / `model.checkCostumes {...}` / `model.optimize {alt, source, name}` | costume verdicts / check pairs to their end (job) / Optimize Physics (writer job) |
-| `model.costumeCautions {alt, others}` | what offered pairs may draw differently in the game: `ex_parts`, `carried_shader` |
+| `ui.preview {variant, kind, source}` | store a preview choice in `webui.json`; never touches the manifest or game files |
+| `model.costumes {variant, others}` / `model.checkCostumes {...}` / `model.optimize {variant, source, name}` | costume verdicts / check pairs to their end (job) / Optimize Physics (writer job) |
+| `model.costumeCautions {variant, others}` | what offered pairs may draw differently in the game: `ex_parts`, `carried_shader` |
 | `mods.state` / `mods.sizes {kind}` | the switch snapshot / Mod Cache or originals size, measured on demand |
 | `mods.toggle {enabled, expect}` | the switch over every known install (writer job); also Retry |
 | `mods.consent {granted}` / `mods.explained` / `mods.scan {dismissed}` / `mods.entries` | scan consent / first-toggle explanation shown / request a scan / the last scan's entries |
@@ -44,18 +34,18 @@ as the screens call them. The catalog data and the library's internals keep thei
 | `mods.updateDue` / `mods.refreshCostumes` / `mods.retryFailed` / `mods.confirmUntested {confirm}` | whether the start asks to check mods / rebuild outdated costume builds (writer job) / write failed entries again once per App build (writer job) / confirm an `untested_build` refusal |
 | `mods.clearBuilt` / `mods.forget {install}` | Clear Mod Cache / Remove from List (jobs) |
 | `mods.troubleshootState` / `mods.applyOfficial` / `mods.restoreConfig` | Troubleshoot Mods (pre-release builds only) |
-| `actions.apply {alt, source, kind}` / `actions.restore {alt, kind}` | switch what the current install shows (writer job; `deferred` while mods are off; refusals of the moment keep the earlier choice) |
+| `actions.apply {variant, source, kind}` / `actions.restore {variant, kind}` | switch what the current install shows (writer job; `deferred` while mods are off; refusals of the moment keep the earlier choice) |
 | `actions.update {mod}` / `actions.extract {target}` / `actions.compare {mod}` | rebuild against the current game file / extract / per-asset differences |
 | `actions.remap {mod, geometry?}` / `actions.redrawn {mod, geometry}` / `actions.oldRig {mod}` | atlas remap onto the current rig / redrawn-art check / apply a texture-only portrait with its recorded rig (see Atlas remap) |
 | `actions.graft {mod}` / `actions.graftBuild {token, geometry}` / `actions.graftCheck {token, geometry}` / `actions.discardGraft {token}` | carry official new animations into a mod's skeleton; refused with `graft_spine_licence` until the Spine licence is confirmed |
 | `actions.compatibility {mod}` / `actions.compatibilityStamp {mod}` / `actions.acceptRemap` / `actions.discardRemap` | the compatibility report (job) / its cheap stamp / accept or discard a repair preview |
 | `import.analyze {paths, recursive}` / `import.run {ids, options, revision}` / `import.pick` | Batch Import (see Import grouping); `run` requires the latest analysis's revision |
 | `import.options` / `import.setOptions {...}` | the import options dialog's values |
-| `import.catalog` / `import.assignCharacter {id, alt}` / `import.setSource {id, server, platform}` | offline assignment catalog / confirm ownership / choose a source by hand |
+| `import.catalog` / `import.assignCharacter {id, variant}` / `import.setSource {id, server, platform}` | offline assignment catalog / confirm ownership / choose a source by hand |
 | `export.options` / `export.start {scope, folder, server, platform, ...}` | ZIP export (see below) |
 | `hall.get` / `hall.update {value, revision}` / `hall.options` / `hall.dialogueLayout` / `hall.lines` / `hall.voice` / `hall.viewed` | the Student Hall's persisted state (stale revisions rejected with `hall_conflict`), sources, dialogue and voices |
 | `photography.*` | see [Student photography](lobby-and-photography.md#student-photography) |
-| `preview.cacheGet {key, renderer}` / `preview.cachePut {...}` / `preview.modelRevision {alt, source}` / `preview.assetRevision {paths}` | the preview cache and the revisions persisted stills are keyed by |
+| `preview.cacheGet {key, renderer}` / `preview.cachePut {...}` / `preview.modelRevision {variant, source}` / `preview.assetRevision {paths}` | the preview cache and the revisions persisted stills are keyed by |
 | `jobs.get {id}` | a job's state and its last log lines |
 | `os.reveal {path}` | reveal in the file manager |
 | `debug.trace {events}` / `preview.failed {url, step, error}` | input tracing with `--debug` / bounded preview diagnostics in the session log |
@@ -84,13 +74,13 @@ exports user-requested files at runtime; no game assets are included in applicat
 
 The batch import (`import.analyze`) and Add (`mods.add`, drag and drop) group files with one rule,
 `judge.mod_versions`. Portrait and lobby files use their physical core and kind as the set key; model files use their
-alt's prefab slot key across every physical core in that slot. The set stays together whatever its parts' dates;
+variant's prefab slot key across every physical core in that slot. The set stays together whatever its parts' dates;
 only a repeated part whose dates the install does not keep together splits the set by date, one row or Mod per date.
 Library Mods stored before this rule keep their split. Batch folders separate alternatives.
 
 Import Mod keeps incomplete rows in the session: a row is `incomplete` when its CAB dependencies cannot resolve
 through its selected files and unreplaced install files, or its source folders contain unselected files of the same
-alt and kind. The analysis searches source folders using UnityFS directories only, without loading unselected
+variant and kind. The analysis searches source folders using UnityFS directories only, without loading unselected
 bundles' assets. Each row's `missing` lists the unresolved CAB ids and found files; a blocked or incomplete row also
 carries `bundles` (what the check read per file: platforms, Unity versions, CABs, references) and `resolution` (how
 each file found its official parts, and for a guessed source every server and platform tried with its failure), which
@@ -147,7 +137,7 @@ replacements in current slots import even without an official copy. Output passe
 add/apply. A direct copy honours the CRC option (On, Off, or Auto from the official file) and appends the configured
 Extra Bytes before the CRC fix. Spine import previews compose only the asset types the import writes
 (`gameassets.spine.Composition`); models expose the import preview through
-`/asset/model/<alt>.glb?source=import:<key>`, and every model source but `live` reads bundles outside the slot
+`/asset/model/<variant>.glb?source=import:<key>`, and every model source but `live` reads bundles outside the slot
 through `ModLibrary.preview_reads` (so no source but `live` follows the Enable Mods switch). The reason keys exist
 under `webui.import.reason.*` and `webui.error.*` with the same text in all locales.
 
@@ -186,12 +176,12 @@ are matched to the kept release whose alpha masks they follow. A repaired copy a
 | `/asset/spine/spr/<core>@<id>/<file>`, `/asset/spine/lobby/<core>@<id>/<file>`: the core in another known install, `<id>` from `mods.state.installs` | heavy |
 | `/asset/spine/lobby/<core>/lobby.json` (prefab layout, touch boxes, clips, idle pools, sounds, post-processing, effects, materials, pins, intro; no skeleton is extracted) | heavy |
 | `/asset/spine/lobby/<core>/fx_<id>.png`, `/asset/spine/lobby/<core>/sfx_<id>.wav` | heavy |
-| `/asset/model/<alt>.glb` (`?source=` `live`, `official`, `mod:<id>`, `import:<key>`, `alt:<key>`; `&clip=<name>`: one clip of that model, [`model-actions.md`](model-actions.md#clips-on-demand)) | heavy |
-| `/asset/voice/<alt>/<clip>` (a lobby voice relayed from Kivo) | heavy |
+| `/asset/model/<variant>.glb` (`?source=` `live`, `official`, `mod:<id>`, `import:<key>`, `variant:<key>`; `&clip=<name>`: one clip of that model, [`model-actions.md`](model-actions.md#clips-on-demand)) | heavy |
+| `/asset/voice/<variant>/<clip>` (a lobby voice relayed from Kivo) | heavy |
 | `/asset/office/<day|night>/layout.json` and its texture routes (the Hall's office background) | heavy |
 | `/asset/photography/...` | see [Student photography](lobby-and-photography.md#student-photography) |
 
-Thumbnails (faces, busts, face cards, alt cards) are rendered in the page from the skeletons, in one shared
+Thumbnails (faces, busts, expression cards, variant cards) are rendered in the page from the skeletons, in one shared
 offscreen WebGL context, framed on the face and kept as in-memory blob URLs (plus the Preview Cache's validated
 lossless PNGs on disk). `spineAssetBase` resolves the manifest for every load, before the cache lookup; the revision
 includes the ordered resolved paths, sizes and nanosecond times, and `Services.asset` checks it before and after

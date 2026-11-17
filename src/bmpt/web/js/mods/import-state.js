@@ -243,7 +243,7 @@ export function createImportState({ rpc, waitJob, changed = () => {}, suggest = 
     recheck() {
       return analyze(retryPaths.length ? retryPaths : pathsOf(state.entries), retryRecursive, "recheck");
     },
-    async assignCharacter(id, alt) {
+    async assignCharacter(id, variant) {
       if (busy() || !state.entries.some((entry) => entry.id === id)) return false;
       const contextAtStart = contextRevision;
       state.phase = "analyzing";
@@ -253,7 +253,7 @@ export function createImportState({ rpc, waitJob, changed = () => {}, suggest = 
       revision++;
       emit();
       try {
-        const job = await rpc("import.assignCharacter", { id, alt });
+        const job = await rpc("import.assignCharacter", { id, variant });
         const entry = await waitForJob(job);
         state.analysisRevision = entry.revision;
         state.entries = state.entries.map((item) => (item.id === id ? entry : item));

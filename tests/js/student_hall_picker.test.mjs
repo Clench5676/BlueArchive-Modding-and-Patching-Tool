@@ -132,8 +132,8 @@ test("adding a memorial disables its current control synchronously and the redra
   const draft = createDraft({ revision: 0, mode: "memorial", portraits: [], memorials: [], active: null });
   draft.begin("memorial");
   const choice = {
-    alt: "hero",
-    student: "hero",
+    variant: "hero",
+    family: "hero",
     kind: "lobby",
     source: "official",
     core: "hero_home",
@@ -189,8 +189,8 @@ test("Escape in the picker's search closes the search and clears it; the picker 
     const draft = createDraft({ revision: 0, mode: "memorial", portraits: [], memorials: [], active: null });
     draft.begin("memorial");
     const choice = {
-      alt: "hero",
-      student: "hero",
+      variant: "hero",
+      family: "hero",
       kind: "lobby",
       source: "official",
       core: "hero_home",
@@ -236,14 +236,14 @@ test("portrait replacement reuses Hall rows and explicit choice buttons without 
     draft = createDraft({
       revision: 0,
       mode: "portraits",
-      portraits: [{ id: "a", alt: "hero", source: "mod:old", x: 800, y: 1100, scale: 1 }],
+      portraits: [{ id: "a", variant: "hero", source: "mod:old", x: 800, y: 1100, scale: 1 }],
       memorials: [],
       active: null,
     });
   draft.begin("layout");
   const choice = {
-    alt: "hero-alt",
-    student: "hero",
+    variant: "hero-alt",
+    family: "hero",
     kind: "spr",
     source: "official",
     core: "hero_alt_spr",
@@ -286,8 +286,8 @@ test("the portrait picker draws names and plates from the row layout, with Done 
   const draft = createDraft({ revision: 0, mode: "portraits", portraits: [], memorials: [], active: null });
   draft.begin("layout");
   const choice = {
-    alt: "hero",
-    student: "hero",
+    variant: "hero",
+    family: "hero",
     kind: "spr",
     source: "official",
     core: "hero_spr",

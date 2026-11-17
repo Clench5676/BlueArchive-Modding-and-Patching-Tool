@@ -35,7 +35,7 @@ const stage = () => document.getElementById("stage");
 /**
  * Show the framing button beside the photography button: in the fullscreen lobby only, and not in a lobby
  * without a prefab (nothing to keep the camera in).
- * @param {object} [bridge] The detail screen's hooks (lobby(), the shown alt and the actions the camera
+ * @param {object} [bridge] The detail screen's hooks (lobby(), the shown variant and the actions the camera
  *     needs); the last given ones are kept.
  * @returns {Promise<void>} Settles when the button is drawn.
  */
@@ -190,15 +190,15 @@ async function save() {
     // choice's still (its Switch Memorial Lobby card, framed by the camera) starts drawing behind it. Its line:
     // Saving, the student and the memorial lobby (job-progress.js modJob).
     const line = modJob(
-      { alt: hooks.alt(), kind: "lobby" },
-      { nameOf: Loading.altName, action: "progress.actionSave" },
+      { variant: hooks.variant(), kind: "lobby" },
+      { nameOf: Loading.variantName, action: "progress.actionSave" },
     );
     await Loading.task(
       async (update) => {
         update(line());
         const saved = await waitJob(
           await rpc("lobby.camera.save", {
-            alt: hooks.alt(),
+            variant: hooks.variant(),
             lobby: hooks.lobby(),
             source: hooks.source(),
             view: state.view,

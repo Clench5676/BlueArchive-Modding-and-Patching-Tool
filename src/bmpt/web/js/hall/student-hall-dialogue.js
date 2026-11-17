@@ -13,7 +13,7 @@ const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const PREPARE_TIMEOUT = 25000,
   TEXT_LIFETIME = 5000;
 const UNAVAILABLE_BACKOFF = 30000;
-const MISSING_DIALOGUE = new Set(["lines_unavailable", "catalog_alt_not_found", "alt_not_found"]);
+const MISSING_DIALOGUE = new Set(["lines_unavailable", "catalog_variant_not_found", "variant_not_found"]);
 // Common/Lobby_balloon's 136 x 146 atlas silhouette: the rounded body is [38,4]..[128,129] at half alpha.
 // Its left-pointing tail and translucent outer shadow are outside this rectangle. These are geometry, not pixels.
 const BALLOON_BODY = {
@@ -265,7 +265,7 @@ export function createDialogue({
   expressions = talkExpression,
   currentLanguage = language,
   bounds,
-  onDiagnostic = (error, entry) => console.warn("Portrait dialogue unavailable", entry.alt, error),
+  onDiagnostic = (error, entry) => console.warn("Portrait dialogue unavailable", entry.variant, error),
 } = {}) {
   const linesCache = memoryMemo(4 * 1024 * 1024, 128),
     audioCache = memoryMemo(),
@@ -483,7 +483,7 @@ export function createDialogue({
   async function play(entry) {
     if (busy || disposed || signal?.aborted) return;
     const lang = LANGS[currentLanguage()] || "en",
-      cacheKey = `${entry.alt}:${lang}`;
+      cacheKey = `${entry.variant}:${lang}`;
     if ((unavailable.get(cacheKey) || 0) > Date.now()) return;
     unavailable.delete(cacheKey);
     busy = true;
@@ -515,7 +515,7 @@ export function createDialogue({
         try {
           response = await linesCache.get(
             cacheKey,
-            () => call("hall.lines", { alt: entry.alt, lang }, { signal: requestSignal }),
+            () => call("hall.lines", { variant: entry.variant, lang }, { signal: requestSignal }),
             undefined,
             requestSignal,
           );
@@ -573,9 +573,9 @@ export function createDialogue({
       let data;
       try {
         data = await audioCache.get(
-          `${entry.alt}:${clip}`,
+          `${entry.variant}:${clip}`,
           async () => {
-            const response = await call("hall.voice", { alt: entry.alt, clip }, { signal: requestSignal });
+            const response = await call("hall.voice", { variant: entry.variant, clip }, { signal: requestSignal });
             return { bytes: Uint8Array.from(atob(response.audio), (char) => char.charCodeAt(0)), mime: response.mime };
           },
           (value) => value.bytes.byteLength,
@@ -625,7 +625,7 @@ export function createDialogue({
               linesCache.forgetPending(cacheKey);
               const response = await linesCache.get(
                 cacheKey,
-                () => call("hall.lines", { alt: entry.alt, lang }, { signal: requestSignal }),
+                () => call("hall.lines", { variant: entry.variant, lang }, { signal: requestSignal }),
                 undefined,
                 requestSignal,
               );
@@ -683,8 +683,8 @@ export function createDialogue({
         await draw(shown.entry, shown.row, my, requestSignal);
         if (my !== token || disposed || requestSignal?.aborted || lang !== (LANGS[currentLanguage()] || "en")) return;
         const response = await linesCache.get(
-          `${shown.entry.alt}:${lang}`,
-          () => call("hall.lines", { alt: shown.entry.alt, lang }, { signal: requestSignal }),
+          `${shown.entry.variant}:${lang}`,
+          () => call("hall.lines", { variant: shown.entry.variant, lang }, { signal: requestSignal }),
           undefined,
           requestSignal,
         );

@@ -6,7 +6,7 @@ import { rpc } from "../core/api.js";
 import { language } from "../core/i18n.js";
 import { $ } from "../core/util.js";
 import {
-  altId,
+  variantKey,
   fam,
   tab,
   fullscreen,
@@ -27,7 +27,7 @@ import {
   setLobbyShot,
 } from "./detail.js";
 import { renderScreen } from "./detail-screen.js";
-import { renderFaces } from "./detail-strip.js";
+import { renderExpressions } from "./detail-strip.js";
 import { modsOn } from "./detail-switchers.js";
 
 // the UI language -> its key in the lobby lines
@@ -35,7 +35,7 @@ const LINE_LANG = { "zh-CN": "zh-CN", "zh-TW": "zh-TW", "en-US": "en", "ja-JP": 
 // the memorial lobby: every layer in and drawn, the still for the switch card, the dialogue strip; the lines when
 // they come in time (later ones re-render the strip)
 export async function showLobby(v, my, alive = () => true) {
-  const still = () => alive() && open && my === leftToken && tab === "lobby" && altId === v.key;
+  const still = () => alive() && open && my === leftToken && tab === "lobby" && variantKey === v.key;
   if (!(await ensureSpine())) {
     if (still()) Lobby.hide($("lobby"));
     return;
@@ -76,7 +76,7 @@ export async function showLobby(v, my, alive = () => true) {
       })
       .catch(renderFailed);
   } else if (!lobbyShot && !fullscreen) setLobbyShot(snapshotLobby());
-  await Promise.all([renderScreen(), renderFaces(), Promise.race([lines, sleep(LINES_CAP)])]);
+  await Promise.all([renderScreen(), renderExpressions(), Promise.race([lines, sleep(LINES_CAP)])]);
 }
 
 let linesRevision = 0;
@@ -89,18 +89,18 @@ export function refreshLobbyLines(v, meta, alive = () => true) {
     alive() &&
     open &&
     tab === "lobby" &&
-    altId === v.key &&
+    variantKey === v.key &&
     language() === lang &&
     Lobby.meta() === meta;
   const talks = Object.fromEntries(meta.sequences.map((sq) => [sq.anim, sq.cues.map((cue) => cue.clip)]));
   // Change the subtitle picker immediately, retaining voice metadata while the
   // next language's table is fetched. Pending voice cues must keep playing.
   Lobby.setLines(undefined, (line) => line?.[key] || "");
-  return (isSpecial(v) ? Promise.resolve({}) : rpc("lobby.lines", { alt: v.key, talks, lang: key }))
+  return (isSpecial(v) ? Promise.resolve({}) : rpc("lobby.lines", { variant: v.key, talks, lang: key }))
     .then((table) => {
       if (!still()) return;
       Lobby.setLines(table, (line) => line?.[key] || "");
-      return renderFaces();
+      return renderExpressions();
     })
     .catch((err) => {
       console.error("Lobby lines failed", err);

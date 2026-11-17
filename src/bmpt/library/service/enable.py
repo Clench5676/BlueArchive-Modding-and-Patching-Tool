@@ -357,7 +357,7 @@ class EnableMixin:
                             "install": pin.key,
                             "core": core,
                             "kind": self._kind(core, pin) or "spr",
-                            "alt": self._core_map(pin).key(core) or core,
+                            "variant": self._core_map(pin).key(core) or core,
                         }
                         if error.code not in STOPPING:  # a refusal of the moment belongs to the switch, not the choice
                             self._selection_error(pin, [core], error.to_json())
@@ -443,7 +443,7 @@ class EnableMixin:
                 writes.append(
                     (
                         pin,
-                        self._untested_entry(pin, core_name, targets, entry.get("alt"), entry.get("kind")),
+                        self._untested_entry(pin, core_name, targets, entry.get("variant"), entry.get("kind")),
                         targets,
                     )
                 )

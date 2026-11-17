@@ -28,7 +28,7 @@ export const visualButton = (...args) => whiteButton(...args);
  * The gallery button's box at the bottom left (the lobby camera's album takes the same).
  */
 export const galleryBox = () => photographyToolbarLayout().gallery;
-let sessionAlt = null,
+let sessionVariant = null,
   generation = 0,
   repository,
   bridge,
@@ -60,9 +60,9 @@ const CHOICE_ICONS = {
 const P = (key) => T(`photo.${key}`);
 const call = async (name, params = {}) => {
   const scope = generation,
-    key = sessionAlt;
-  const value = await rpc(`photography.${name}`, { alt: key, ...params });
-  if (scope !== generation || key !== sessionAlt) throw new DOMException("Photography ended", "AbortError");
+    key = sessionVariant;
+  const value = await rpc(`photography.${name}`, { variant: key, ...params });
+  if (scope !== generation || key !== sessionVariant) throw new DOMException("Photography ended", "AbortError");
   return value;
 };
 const normalized = (value) => ({
@@ -71,7 +71,10 @@ const normalized = (value) => ({
     ...entry,
     name: entry.builtin
       ? P("generatedThumbnail")
-      : [entry.alt !== sessionAlt ? L(entry.names)?.full || entry.alt : "", T("photo.captureName", { n: entry.number })]
+      : [
+          entry.variant !== sessionVariant ? L(entry.names)?.full || entry.variant : "",
+          T("photo.captureName", { n: entry.number }),
+        ]
           .filter(Boolean)
           .join(" - "),
   })),
@@ -80,7 +83,7 @@ const DEFAULT = "generated",
   OFFICIAL = "official";
 const galleryPhotos = () =>
   [
-    ...((repository?.photos || []).some((entry) => entry.alt === sessionAlt && entry.builtin)
+    ...((repository?.photos || []).some((entry) => entry.variant === sessionVariant && entry.builtin)
       ? []
       : [
           {
@@ -112,9 +115,9 @@ const waitFrame = async (delay = 0) => {
   await tick();
 };
 async function repositoryRead() {
-  const key = sessionAlt,
+  const key = sessionVariant,
     value = await call("list");
-  if (key !== sessionAlt) throw new DOMException("Photography ended", "AbortError");
+  if (key !== sessionVariant) throw new DOMException("Photography ended", "AbortError");
   repository = normalized(value);
   return repository;
 }
@@ -339,7 +342,7 @@ export function destroy() {
   document.documentElement.classList.remove("photo-active", "photo-lobby");
   if (bridge?.cancel) bridge.cancel();
   else void bridge?.release();
-  sessionAlt = null;
+  sessionVariant = null;
   repository = null;
 }
 /**
@@ -373,7 +376,7 @@ async function open(hooks) {
   if (active) return;
   bridge = hooks;
   const scope = ++generation;
-  sessionAlt = hooks.info().alt;
+  sessionVariant = hooks.info().variant;
   active = true;
   saving = false;
   mode = hooks.info().mode === "lobby" ? "lobby" : "portrait";
@@ -392,7 +395,7 @@ async function open(hooks) {
           }),
         ]);
         await Promise.all([
-          hooks.prepareFaces(),
+          hooks.prepareExpressions(),
           hooks.generatedThumbnail().then(async (url) => {
             generatedThumbnail = url;
             if (url) await NGUI.load(url);
@@ -784,7 +787,7 @@ async function drawControls() {
     const panelHost = document.createElement("div");
     layer.append(panelHost);
     bindCorner(panelHost, boxes.choices, { corner: "bottom-right" });
-    const entries = mode === "portrait" ? bridge.faces() : bridge.actions(),
+    const entries = mode === "portrait" ? bridge.expressions() : bridge.actions(),
       box = choiceLayout(mode, entries.length);
     choiceShield(panelHost, box);
     await choicePanel(panelHost, box);
@@ -794,16 +797,16 @@ async function drawControls() {
           panelHost,
           [box.x + 12, box.y + 12, box.width - 24, box.rows * box.rowHeight],
           box.contentHeight,
-          "photo-faces",
+          "photo-expressions",
         );
       for (let index = 0; index < items.length; index++)
         buttons.push(
           (async () => {
             const key = items[index],
-              preview = await bridge.facePreview(key),
+              preview = await bridge.expressionPreview(key),
               x = 6 + (index % box.columns) * 146,
               y = Math.floor(index / box.columns) * box.rowHeight;
-            const tree = bridge.faceCard(key, preview),
+            const tree = bridge.expressionCard(key, preview),
               scale = 128 / 242,
               height = 209 * scale;
             await NGUI.render(tree, area, { scale, origin: [x + 64, y + height / 2] });
@@ -812,13 +815,13 @@ async function drawControls() {
               [x, y, 128, height],
               safe(async () => {
                 if (saving) return;
-                bridge.setFace(key);
+                bridge.setExpression(key);
                 await drawControls();
               }),
               key === "00" ? P("natural") : `${P("expressions")} ${key}`,
               90,
             );
-            hit.setAttribute("aria-pressed", String(key === bridge.face()));
+            hit.setAttribute("aria-pressed", String(key === bridge.expression()));
           })(),
         );
     } else {
@@ -854,7 +857,7 @@ async function capture() {
   if (!active || saving) return;
   saving = true;
   const scope = generation,
-    key = sessionAlt,
+    key = sessionVariant,
     current = bridge,
     effects = feedback;
   const scoped = {
@@ -876,7 +879,7 @@ async function capture() {
         if (scope !== generation) throw new DOMException("Photography ended", "AbortError");
         return shot;
       },
-      save: (payload) => rpc("photography.save", { alt: key, ...payload }),
+      save: (payload) => rpc("photography.save", { variant: key, ...payload }),
       onCaptured: () => effects?.flash(),
       onSaved: (_, shot) => effects?.saved(shot.png),
     });
@@ -894,7 +897,9 @@ async function openGallery(keepSelection = false) {
   await repositoryRead();
   if (!keepSelection)
     selected =
-      repository.app || repository.photos.find((entry) => entry.alt === sessionAlt && entry.builtin)?.id || DEFAULT;
+      repository.app ||
+      repository.photos.find((entry) => entry.variant === sessionVariant && entry.builtin)?.id ||
+      DEFAULT;
   const host = galleryHost(),
     handle = {
       close: () => {
@@ -978,7 +983,7 @@ async function galleryDraw(keepScroll = galleryOffset()) {
 }
 // a photo's job under the loading screen with its line: the verb, the student and Student Thumbnail (job-progress.js)
 function photoTask(action, work) {
-  const line = modJob({ alt: sessionAlt, kind: "photo" }, { nameOf: Loading.altName, action });
+  const line = modJob({ variant: sessionVariant, kind: "photo" }, { nameOf: Loading.variantName, action });
   return Loading.task(
     async (update) => {
       update(line());
@@ -1005,7 +1010,7 @@ async function deletePhoto() {
   if (info.official) return;
   if (info.used) {
     const warning =
-      info.used_elsewhere && !info.used_here ? "error.photo_delete_other_alt" : "error.asset_delete_confirm";
+      info.used_elsewhere && !info.used_here ? "error.photo_delete_other_variant" : "error.asset_delete_confirm";
     const answer = await Popup.message({
       title: P("delete"),
       lines: [T(warning)],

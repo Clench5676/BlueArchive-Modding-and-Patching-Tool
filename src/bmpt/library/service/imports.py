@@ -38,7 +38,6 @@ from ..judge import (
     mod_versions,
     other_target,
 )
-from ..migrations import migrate_journal_names
 from ..models import (
     AddResult,
     ApplyResult,
@@ -608,7 +607,7 @@ class ImportsMixin:
 
         Args:
             variant_key: Variant key or generic target selecting the destination slot.
-            source: official, mod:<id>, or alt:<key> source selected by the import.
+            source: official, mod:<id>, or variant:<key> source selected by the import.
             kind: Library kind restricting which slot receives the source.
             pin: Game install and server the operation is fixed to.
             settings: Import-specific adapter supplying save and conversion settings during this call.
@@ -690,7 +689,7 @@ class ImportsMixin:
         if known:
             record = self._record(known)
             if self._target_of(record) != variant or record["kind"] != kind:
-                raise ServiceError("mod_target_mismatch", id=known, alt=variant)
+                raise ServiceError("mod_target_mismatch", id=known, variant=variant)
             result.duplicates.append(self._entry(record))
             return result
         record = self._store(files, variant, variant, kind, user_added=True, assignment=variant)
@@ -915,7 +914,6 @@ class ImportsMixin:
                         )
                     ):
                         raise ValueError("Invalid import journal")
-                    migrate_journal_names(data, journal)
                     directory = self.root / "mods" / mod_id
                     if (
                         directory.parent.is_symlink()

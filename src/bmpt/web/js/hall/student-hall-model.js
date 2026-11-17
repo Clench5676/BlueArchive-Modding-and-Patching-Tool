@@ -3,15 +3,15 @@ import { order, normalizeView, fold, terms } from "../roster/roster-order.js";
 import { PORTRAIT_ANCHOR, hallScale } from "./student-hall-framing.js";
 
 const copy = (value) => structuredClone(value);
-/** The key of a portrait or lobby source: its alt and its source. */
-export const sourceKey = (source) => `${source.alt}:${source.source}`;
+/** The key of a portrait or lobby source: its variant and its source. */
+export const sourceKey = (source) => `${source.variant}:${source.source}`;
 function canonicalDraft(value) {
   const result = copy(value);
   result.portraitScale = hallScale(result.portraitScale);
   for (const group of ["portraits", "memorials"]) {
     const kept = new Map();
     result[group] = result[group].filter((entry) => {
-      if (!entry.alt || !entry.source) return true;
+      if (!entry.variant || !entry.source) return true;
       const key = sourceKey(entry),
         first = kept.get(key);
       if (!first) {
@@ -61,7 +61,7 @@ export function createDraft(saved) {
       if (!draft) throw new Error("No Hall draft");
       const entries = choice.kind === "spr" ? draft.portraits : draft.memorials;
       if (entries.some((entry) => sourceKey(entry) === sourceKey(choice))) return null;
-      const entry = { id: uuid(), alt: choice.alt, source: choice.source };
+      const entry = { id: uuid(), variant: choice.variant, source: choice.source };
       if (choice.kind === "spr") {
         const n = draft.portraits.length;
         Object.assign(entry, { x: PORTRAIT_ANCHOR.x + (((n + 2) % 5) - 2) * 240, y: PORTRAIT_ANCHOR.y, scale: 1 });
@@ -118,7 +118,7 @@ export function createDraft(saved) {
         )
       )
         return false;
-      entry.alt = choice.alt;
+      entry.variant = choice.variant;
       entry.source = choice.source;
       return true;
     },
@@ -133,28 +133,28 @@ export function createDraft(saved) {
 }
 
 /**
- * Group the source choices of a kind into the students the roster order works on.
+ * Group the source choices of a kind into the families the roster order works on.
  * @param {object[]} choices
  * @param {string|null} [kind] The kind to keep; all by default.
  */
 export function pickerData(choices, kind = null) {
   if (kind) choices = choices.filter((choice) => choice.kind === kind);
-  const students = new Map(),
-    alts = new Map();
+  const families = new Map(),
+    variants = new Map();
   for (const choice of choices) {
-    const student = choice.student || choice.alt;
-    if (!students.has(student))
-      students.set(student, {
-        key: student,
-        base: choice.studentNames || {},
-        aliases: choice.studentAliases || [],
+    const family = choice.family || choice.variant;
+    if (!families.has(family))
+      families.set(family, {
+        key: family,
+        base: choice.familyNames || {},
+        aliases: choice.familyAliases || [],
         school: choice.school,
-        alts: [],
+        variants: [],
       });
-    if (!alts.has(choice.alt)) {
+    if (!variants.has(choice.variant)) {
       const v = {
-        key: choice.alt,
-        student,
+        key: choice.variant,
+        family,
         names: choice.names || {},
         aliases: choice.aliases || [],
         custom: choice.custom || [],
@@ -171,10 +171,10 @@ export function pickerData(choices, kind = null) {
         modNames: [],
         modCounts: { spr: 0, lobby: 0 },
       };
-      alts.set(choice.alt, v);
-      students.get(student).alts.push(v);
+      variants.set(choice.variant, v);
+      families.get(family).variants.push(v);
     }
-    const v = alts.get(choice.alt);
+    const v = variants.get(choice.variant);
     v.aliases = [...new Set([...v.aliases, ...(choice.aliases || [])])];
     v.custom = [...new Set([...v.custom, ...(choice.custom || [])])];
     const added = choice.modAdded || choice.added;
@@ -188,7 +188,7 @@ export function pickerData(choices, kind = null) {
       if (choice.kind === "spr") v.replaced = choice.source;
     }
   }
-  return { students: [...students.values()] };
+  return { families: [...families.values()] };
 }
 /**
  * The students to pick from, in the roster's order for a view and a search.
@@ -210,13 +210,13 @@ function sourceMatches(choice, words) {
   const text = fold(
     [
       choice.label,
-      choice.alt,
+      choice.variant,
       choice.fileId,
       ...(choice.aliases || []),
       ...(choice.custom || []),
-      ...(choice.studentAliases || []),
+      ...(choice.familyAliases || []),
       ...namesOf(choice.names),
-      ...namesOf(choice.studentNames),
+      ...namesOf(choice.familyNames),
     ]
       .filter(Boolean)
       .join(" "),
@@ -234,11 +234,11 @@ export function portraitRows(choices, view, query, label, locale) {
   const cards = studentChoices(choices, view, query, label, locale, "spr"),
     words = terms(query);
   return cards
-    .map((card) => ({
-      student: card,
-      key: view.merged ? card.student : card.key,
+    .map((student) => ({
+      student,
+      key: view.merged ? student.family : student.key,
       choices: mods.filter((c) => {
-        const belongs = view.merged ? (c.student || c.alt) === card.student : c.alt === card.key;
+        const belongs = view.merged ? (c.family || c.variant) === student.family : c.variant === student.key;
         return belongs && sourceMatches(c, words);
       }),
     }))
@@ -262,10 +262,10 @@ export function memorialChoices(
   label = (names) => names?.en,
   locale = "en",
 ) {
-  const keyOf = (choice) => (view.merged ? choice.student || choice.alt : choice.alt);
-  const visible = new Set(students.map((card) => (view.merged ? card.student : card.key))),
+  const keyOf = (choice) => (view.merged ? choice.family || choice.variant : choice.variant);
+  const visible = new Set(students.map((student) => (view.merged ? student.family : student.key))),
     words = terms(query);
-  const selectedKey = view.merged ? students.find((card) => card.key === selected)?.student || selected : selected;
+  const selectedKey = view.merged ? students.find((student) => student.key === selected)?.family || selected : selected;
   const list = choices.filter(
     (choice) =>
       choice.kind === "lobby" &&
@@ -273,7 +273,7 @@ export function memorialChoices(
       (!selected || keyOf(choice) === selectedKey) &&
       sourceMatches(choice, words),
   );
-  const mods = new Map(students.map((card) => [view.merged ? card.student : card.key, card.mods || 0]));
+  const mods = new Map(students.map((student) => [view.merged ? student.family : student.key, student.mods || 0]));
   const index = new Map(choices.map((choice, i) => [choice, i]));
   const value = (choice) =>
     viewed[sourceKey(choice)] ??
@@ -282,7 +282,7 @@ export function memorialChoices(
     const parsed = Date.parse(choice.modAdded || choice.added || "");
     return Number.isFinite(parsed) ? parsed : -Infinity;
   };
-  const title = (choice) => [label(choice.names)?.full || choice.alt, choice.label].filter(Boolean).join(" - ");
+  const title = (choice) => [label(choice.names)?.full || choice.variant, choice.label].filter(Boolean).join(" - ");
   const collator = new Intl.Collator(locale, { numeric: true, sensitivity: "base" });
   const difference = (a, b) => (a === b ? 0 : a - b);
   const direction = view.order === "asc" ? 1 : -1;
@@ -348,11 +348,11 @@ export function portraitSelection(selected, { type, id = null, ids = [] }) {
  */
 export function portraitReplacements(entry, choices, placed) {
   const current = choices.find((choice) => choice.kind === "spr" && sourceKey(choice) === sourceKey(entry));
-  if (!current?.student) return [];
+  if (!current?.family) return [];
   const used = new Set(placed.map(sourceKey));
   used.add(sourceKey(entry));
-  // Every other portrait of the student: a Mod portrait may also go back to its own alt's official art.
+  // Every other portrait of the student: a Mod portrait may also go back to its own variant's official art.
   return choices.filter(
-    (choice) => choice.kind === "spr" && choice.student === current.student && !used.has(sourceKey(choice)),
+    (choice) => choice.kind === "spr" && choice.family === current.family && !used.has(sourceKey(choice)),
   );
 }

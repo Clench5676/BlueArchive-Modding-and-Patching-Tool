@@ -108,8 +108,8 @@ def test_preview_source_reconciliation_keeps_hall_placement_and_other_skins(tmp_
     state.set_preview_source("install", "b", "model", "mod:keep")
     hall = {
         "revision": 4,
-        "portraits": [{"id": "one", "alt": "a", "source": "mod:gone", "x": 480}],
-        "memorials": [{"id": "two", "alt": "b", "source": "mod:gone"}],
+        "portraits": [{"id": "one", "variant": "a", "source": "mod:gone", "x": 480}],
+        "memorials": [{"id": "two", "variant": "b", "source": "mod:gone"}],
         "active": "two",
     }
     state.set("student_hall", hall)
@@ -267,13 +267,13 @@ def test_photo_usage_targets_retain_configured_and_applied_only_references(tmp_p
         "configured": {
             portrait_edit.TAG: {
                 "choices": {
-                    "a": {"photo": "shared", "alt": "skin-a"},
-                    "b": {"photo": "reset", "alt": "skin-b"},
+                    "a": {"photo": "shared", "variant": "skin-a"},
+                    "b": {"photo": "reset", "variant": "skin-b"},
                     "legacy": {"photo": "unknown-target"},
                 }
             }
         },
-        "applied": {portrait_edit.TAG: {"choices": {"b": {"photo": "shared", "alt": "skin-b"}}}},
+        "applied": {portrait_edit.TAG: {"choices": {"b": {"photo": "shared", "variant": "skin-b"}}}},
     }
     config = {
         "folders": {"install": {"configured": {"collection": {"source": "mod:configured", "photo_defaults": ["b"]}}}}
@@ -408,8 +408,8 @@ def test_preview_fallback_deduplicates_hall_sources_and_leaves_unrelated_revisio
         "revision": 2,
         "portraits": [],
         "memorials": [
-            {"id": "official", "alt": "a", "source": "official"},
-            {"id": "removed", "alt": "a", "source": "mod:gone"},
+            {"id": "official", "variant": "a", "source": "official"},
+            {"id": "removed", "variant": "a", "source": "mod:gone"},
         ],
         "active": "removed",
     }
@@ -479,7 +479,7 @@ def test_a_held_record_without_choices_or_with_broken_ones_uses_no_photo(tmp_pat
         {
             "id": "d" * 32,
             portrait_edit.TAG: {
-                "choices": {"x": {"photo": "held-photo", "alt": "skin-a"}, "y": {"photo": 5}, "z": "broken"}
+                "choices": {"x": {"photo": "held-photo", "variant": "skin-a"}, "y": {"photo": 5}, "z": "broken"}
             },
         },
     ]

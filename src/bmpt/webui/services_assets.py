@@ -73,16 +73,16 @@ class AssetsMixin:
         if kind == "spine" and len(parts) == 4:
             return self._spine_asset(parts[1], parts[2], parts[3])
         if kind == "model" and len(parts) == 2 and parts[1].endswith(".glb"):
-            # An alt's 3D chibi, exported losslessly and cached only with separate preview consent.
+            # A variant's 3D chibi, exported losslessly and cached only with separate preview consent.
             key = _stem(parts[1])
             field_only = False
             try:
-                alt = self.catalog.variant(key)
-                core, target = alt.model, alt.key
-                if not core and getattr(alt, "field_model", None):
-                    core, field_only = alt.field_model, True
+                variant = self.catalog.variant(key)
+                core, target = variant.model, variant.key
+                if not core and getattr(variant, "field_model", None):
+                    core, field_only = variant.field_model, True
             except (ServiceError, KeyError) as error:
-                if isinstance(error, ServiceError) and error.code != "catalog_alt_not_found":
+                if isinstance(error, ServiceError) and error.code != "catalog_variant_not_found":
                     raise
                 # NPC models can exist without a student-list entry. Resolve only
                 # cores indexed from this game's own files, never arbitrary names.
@@ -103,7 +103,7 @@ class AssetsMixin:
             with spans.span(
                 "asset.model."
                 + ("clip." if clip else "")
-                + (kind if kind in ("live", "official", "mod", "import", "alt") else "other")
+                + (kind if kind in ("live", "official", "mod", "import", "variant") else "other")
             ):
                 if field_only:  # no slot: its own files only, never a mod or another costume
                     if source not in ("live", "official"):
@@ -114,12 +114,12 @@ class AssetsMixin:
             return AssetResponse(data, MIME[".glb"], light=False)
         if kind == "voice" and len(parts) == 3:
             # a memorial lobby voice clip from Kivo, relayed so it is never cached
-            alt = self.catalog.variant(parts[1])
-            return AssetResponse(self.kivo.audio(alt.page_id or "", _stem(parts[2])), "audio/ogg", light=False)
+            variant = self.catalog.variant(parts[1])
+            return AssetResponse(self.kivo.audio(variant.page_id or "", _stem(parts[2])), "audio/ogg", light=False)
         raise KeyError(path)
 
     def costume_check(self, target: str, other: str, cancelled: Callable[[], bool] | None = None) -> dict[str, Any]:
-        """Check another alt's costume on an alt's model to its end, as the Switch 3D Model card shows it.
+        """Check another variant's costume on a variant's model to its end, as the Switch 3D Model card shows it.
 
         The slot is built (``library.costume_preview``) and its preview exported. The verdict is saved for the
         pair, keyed by the build signature: the rule's refusals, program errors and export failures, so the pair
@@ -127,8 +127,8 @@ class AssetsMixin:
         checked again.
 
         Args:
-            target: The alt whose model wears the costume.
-            other: The alt whose costume it is.
+            target: The variant whose model wears the costume.
+            other: The variant whose costume it is.
             cancelled: The job's flag (``jobs.cancel``), checked between the phases (before the build, after it,
                 before the export and before any verdict is saved); the build stops at its next step
                 (``costume_preview``).
@@ -176,7 +176,7 @@ class AssetsMixin:
         return library.costume_verdict(target, other) or library.record_costume_verdict(target, other, True)
 
     def _model_asset(self, core: str, target: str, source: str, path: str, clip: str | None = None) -> bytes:
-        """Export an alt's 3D chibi as GLB from one source.
+        """Export a variant's 3D chibi as GLB from one source.
 
         The source is the live game files, official copies, a library mod or an import candidate (KeyError, a 404,
         for anything else). Every source but ``live`` reads the files outside its own parts by the library's rule
@@ -184,8 +184,8 @@ class AssetsMixin:
 
         Args:
             core: The model's core.
-            target: The alt the model belongs to.
-            source: ``live``, ``official``, ``mod:<id>``, ``alt:<key>`` or ``import:<key>``.
+            target: The variant the model belongs to.
+            source: ``live``, ``official``, ``mod:<id>``, ``variant:<key>`` or ``import:<key>``.
             path: The asset path, for the KeyError.
             clip: One clip of that model instead, from the same files (a costume's adapted bundles included).
         """
@@ -204,9 +204,9 @@ class AssetsMixin:
         try:
             cores = set(getattr(self.library, "model_cores", lambda key: [core])(target))
         except ServiceError as error:
-            if error.code != "catalog_alt_not_found" or target != core:
+            if error.code != "catalog_variant_not_found" or target != core:
                 raise
-            cores = {core}  # An indexed NPC prefab can have no catalog alt.
+            cores = {core}  # An indexed NPC prefab can have no catalog variant.
 
         def fits(bundles: list[Path]) -> bool:
             return bool(bundles) and all(
@@ -222,11 +222,11 @@ class AssetsMixin:
             if not fits(bundles):
                 raise KeyError(path)
             return self.game.model_glb(core, overrides=bundles, reads=self.library.preview_reads("configured"), **extra)
-        if source.startswith("alt:"):
-            verdict = self.library.costume_verdict(target, source[4:])
+        if source.startswith("variant:"):
+            verdict = self.library.costume_verdict(target, source[8:])
             if verdict is not None and not verdict["ok"] and not verdict.get("preview"):
                 raise KeyError(path)  # checked to its end and refused: never offered (costume_check)
-            bundles = self.library.costume_preview(target, source[4:])
+            bundles = self.library.costume_preview(target, source[8:])
             if not fits(bundles):
                 raise KeyError(path)
             return self.game.model_glb(core, overrides=bundles, reads=self.library.preview_reads("official"), **extra)

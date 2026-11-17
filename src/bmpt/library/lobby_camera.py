@@ -582,7 +582,7 @@ def compose(
 def meta_of(record: dict | None) -> dict | None:
     """Return a generic record's camera parameters, or None for absent or noncamera records."""
     meta = (record or {}).get(TAG) if (record or {}).get("kind") == "other" else None
-    return meta if isinstance(meta, dict) and isinstance(meta.get("alt"), str) else None
+    return meta if isinstance(meta, dict) and isinstance(meta.get("variant"), str) else None
 
 
 def cameras(library: ModLibrary, variant: str | None = None) -> list[dict]:
@@ -595,7 +595,7 @@ def cameras(library: ModLibrary, variant: str | None = None) -> list[dict]:
     return [
         record
         for record in library._records.values()
-        if (meta := meta_of(record)) is not None and (variant is None or meta["alt"] == variant)
+        if (meta := meta_of(record)) is not None and (variant is None or meta["variant"] == variant)
     ]
 
 
@@ -615,7 +615,7 @@ def camera_of(library: ModLibrary, source: Any) -> dict | None:
 def _live(library: ModLibrary, name: str, pin: Pin) -> Path:
     found = [Path(path) for entry, path in library._listing(pin) if entry == name]
     if len(found) != 1:
-        raise ServiceError("game_file_not_found", alt=name)
+        raise ServiceError("game_file_not_found", variant=name)
     return found[0]
 
 
@@ -683,13 +683,13 @@ def save(
     k, (ox, oy) = check_params(scale, offset)
     v = library._variant(variant)
     if not v.lobby:
-        raise ServiceError("game_file_not_found", alt=variant)
+        raise ServiceError("game_file_not_found", variant=variant)
     core = v.lobby.lower()
     earlier = camera_of(library, source)
     if earlier is not None:
         meta = meta_of(earlier)
-        if meta["alt"] != variant:
-            raise ServiceError("mod_target_mismatch", id=earlier["id"], alt=variant)
+        if meta["variant"] != variant:
+            raise ServiceError("mod_target_mismatch", id=earlier["id"], variant=variant)
         k, (ox, oy) = compose((meta["scale"], tuple(meta["offset"])), (k, (ox, oy)))
         k, (ox, oy) = check_params(k, (ox, oy))
         source = meta["source"]
@@ -721,7 +721,7 @@ def save(
         held = patch_prefab(base, output, root, k, (ox, oy), timeline=timeline, crc=library.settings.crc_needed(live))
         number = 1 + max((meta_of(r).get("number", 0) for r in cameras(library, variant)), default=0)
         meta = {
-            "alt": variant,
+            "variant": variant,
             "core": core,
             "source": source,
             "scale": k,
@@ -755,8 +755,8 @@ def apply(library: ModLibrary, variant: str, record: dict, log, progress, pin: P
     from .models import ApplyResult
 
     meta = meta_of(record)
-    if meta["alt"] != variant:
-        raise ServiceError("mod_target_mismatch", id=record["id"], alt=variant)
+    if meta["variant"] != variant:
+        raise ServiceError("mod_target_mismatch", id=record["id"], variant=variant)
     refresh(library, [pin], log, only={record["id"]})
     record = library._record(record["id"])
     art = library._apply_choice(variant, meta["source"], log, progress, "lobby", pin, create_backup=create_backup)
@@ -785,7 +785,7 @@ def release(library: ModLibrary, variant: str, pin: Pin, log, progress) -> None:
     for slot, entry in list(_configured(library, pin).items()):
         record = camera_of(library, entry.get("source"))
         meta = meta_of(record)
-        if meta is None or meta["alt"] != variant:
+        if meta is None or meta["variant"] != variant:
             continue
         base = meta.get("base", "official")
         base_record = library._records.get(base[4:]) if isinstance(base, str) and base.startswith("mod:") else None
@@ -814,7 +814,7 @@ def stale(library: ModLibrary, record: dict, pin: Pin) -> Path | None:
     if paths[0].name != record["files"][0]:
         return paths[0]
     timeline = meta.get("timeline")
-    if timeline and timeline not in {path.name for path in library._game_files(meta["alt"], "lobby", pin)}:
+    if timeline and timeline not in {path.name for path in library._game_files(meta["variant"], "lobby", pin)}:
         return paths[0]
     return None
 
@@ -845,7 +845,7 @@ def refresh(library: ModLibrary, pins: list[Pin], log, only: set[str] | None = N
                 with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
                     output = Path(temporary) / live.name
                     base = library._official_for(live, pin)
-                    timeline = timeline_file(library, meta["alt"], meta["source"], base, pin)
+                    timeline = timeline_file(library, meta["variant"], meta["source"], base, pin)
                     held = patch_prefab(
                         base,
                         output,
@@ -888,7 +888,7 @@ def preview_files(library: ModLibrary, record: dict, pin: Pin) -> tuple[Path, Pa
     meta = meta_of(record)
     official = library._official_for(live, pin, full=False)
     try:
-        timeline = timeline_file(library, meta["alt"], meta["source"], official, pin)
+        timeline = timeline_file(library, meta["variant"], meta["source"], official, pin)
     except ServiceError:
         timeline = None
     return library._paths(record)[0], official, timeline

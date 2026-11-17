@@ -30,7 +30,7 @@ def assigned(services, monkeypatch):
 
     def assignment_variant(key):
         if key not in variants:
-            raise ServiceError("catalog_alt_not_found", key=key)
+            raise ServiceError("catalog_variant_not_found", key=key)
         return variants[key]
 
     monkeypatch.setattr(services.catalog, "assignment_families", lambda: families, raising=False)
@@ -65,11 +65,11 @@ def assigned(services, monkeypatch):
 def test_roster_and_family_include_saved_assignment_with_no_local_handles(app, services, assigned):
     roster = rpc(app, "roster.list")
     assert "error" not in roster, roster
-    variants = [variant for family in roster["result"]["students"] for variant in family["alts"]]
+    variants = [variant for family in roster["result"]["families"] for variant in family["variants"]]
     assert {variant["key"] for variant in variants} == {assigned.local.key, assigned.future.key}
-    family = rpc(app, "student.get", key=assigned.future.family)
+    family = rpc(app, "family.get", key=assigned.future.family)
     assert "error" not in family, family
-    for source in (variants, family["result"]["alts"]):
+    for source in (variants, family["result"]["variants"]):
         future = next(variant for variant in source if variant["key"] == assigned.future.key)
         assert all(future[kind] is None for kind in ("spr", "lobby", "model"))
         assert future["localKinds"] == []
@@ -79,8 +79,10 @@ def test_roster_and_family_include_saved_assignment_with_no_local_handles(app, s
     assigned.targets.clear()
     assigned.mods[:] = [mod for mod in assigned.mods if mod.target != assigned.future.key]
     remaining = rpc(app, "roster.list")["result"]
-    assert [variant["key"] for family in remaining["students"] for variant in family["alts"]] == [assigned.local.key]
-    assert rpc(app, "student.get", key=assigned.unused.family)["error"]["code"] == "student_not_found"
+    assert [variant["key"] for family in remaining["families"] for variant in family["variants"]] == [
+        assigned.local.key
+    ]
+    assert rpc(app, "family.get", key=assigned.unused.family)["error"]["code"] == "family_not_found"
 
 
 def test_assigned_roster_keeps_one_snapshot_and_filters_saved_preview_choices(app, services, assigned, monkeypatch):
@@ -98,8 +100,8 @@ def test_assigned_roster_keeps_one_snapshot_and_filters_saved_preview_choices(ap
     assert "error" not in result, result
     future = next(
         variant
-        for family in result["result"]["students"]
-        for variant in family["alts"]
+        for family in result["result"]["families"]
+        for variant in family["variants"]
         if variant["key"] == assigned.future.key
     )
     assert assigned.calls == [[assigned.local.key]]
@@ -108,7 +110,7 @@ def test_assigned_roster_keeps_one_snapshot_and_filters_saved_preview_choices(ap
 
 @pytest.mark.parametrize("kind", ["spr", "lobby", "model"])
 def test_own_mod_preview_is_saved_without_an_install_target(app, services, assigned, kind):
-    result = rpc(app, "ui.preview", alt=assigned.future.key, kind=kind, source=f"mod:own-{kind}")
+    result = rpc(app, "ui.preview", variant=assigned.future.key, kind=kind, source=f"mod:own-{kind}")
     assert result == {"result": {kind: f"mod:own-{kind}"}}
     assert services.state.preview_sources("current", assigned.future.key) == {kind: f"mod:own-{kind}"}
     assert services.library.applied == []
@@ -120,26 +122,26 @@ def test_own_mod_preview_is_saved_without_an_install_target(app, services, assig
         ("spr", "official"),
         ("lobby", "official"),
         ("model", "official"),
-        ("spr", "alt:hoshino"),
+        ("spr", "variant:hoshino"),
         ("spr", "mod:sibling"),
         ("spr", "mod:own-lobby"),
         ("spr", "mod:missing"),
     ],
 )
 def test_absent_target_rejects_official_cross_variant_and_wrong_kind_previews(app, services, assigned, kind, source):
-    result = rpc(app, "ui.preview", alt=assigned.future.key, kind=kind, source=source)
+    result = rpc(app, "ui.preview", variant=assigned.future.key, kind=kind, source=source)
     assert result["error"]["code"] == "bad_params"
     assert services.state.preview_sources("current", assigned.future.key) == {}
     assert services.library.applied == []
 
 
 def test_assignment_metadata_supports_aliases_and_memorial_dialogue(app, services, assigned, monkeypatch):
-    assert rpc(app, "aliases.set", alt=assigned.future.key, aliases=["Future nickname"])["result"] == [
+    assert rpc(app, "aliases.set", variant=assigned.future.key, aliases=["Future nickname"])["result"] == [
         "Future nickname"
     ]
     future = next(
         variant
-        for variant in rpc(app, "student.get", key="hoshino")["result"]["alts"]
+        for variant in rpc(app, "family.get", key="hoshino")["result"]["variants"]
         if variant["key"] == assigned.future.key
     )
     assert future["custom"] == ["Future nickname"]
@@ -150,12 +152,15 @@ def test_assignment_metadata_supports_aliases_and_memorial_dialogue(app, service
         return {"future_memoriallobby_1": {"ja": "Future dialogue", "zh-CN": "Dialogue", "audio": ""}}
 
     monkeypatch.setattr(services.kivo, "lines", lines)
-    result = rpc(app, "lobby.lines", alt=assigned.future.key, lang="zh-CN")
+    result = rpc(app, "lobby.lines", variant=assigned.future.key, lang="zh-CN")
     assert "error" not in result, result
     assert result["result"]["future_memoriallobby_1"]["ja"] == "Future dialogue"
     assert pages == [assigned.future.page_id]
     assert (
-        rpc(app, "aliases.set", alt=assigned.unused.key, aliases=["Unowned"])["error"]["code"]
-        == "catalog_alt_not_found"
+        rpc(app, "aliases.set", variant=assigned.unused.key, aliases=["Unowned"])["error"]["code"]
+        == "catalog_variant_not_found"
     )
-    assert rpc(app, "lobby.lines", alt=assigned.unused.key, lang="zh-CN")["error"]["code"] == "catalog_alt_not_found"
+    assert (
+        rpc(app, "lobby.lines", variant=assigned.unused.key, lang="zh-CN")["error"]["code"]
+        == "catalog_variant_not_found"
+    )

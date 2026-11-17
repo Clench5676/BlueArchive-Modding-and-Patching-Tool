@@ -28,10 +28,10 @@ BLOCKS = (
         "profiles_unreadable reveal_failed safe_restart_unavailable scan_off state_changed unknown_method "
     ).split(),
     (
-        "catalog_data_invalid catalog_student_not_found catalog_alt_not_found game_directory_missing "
+        "catalog_data_invalid catalog_family_not_found catalog_variant_not_found game_directory_missing "
         "game_file_locked game_file_not_found game_file_outside_resources game_not_found game_running "
-        "game_status_unavailable original_invalid original_unavailable steam_busy alt_incompatible "
-        "alt_not_found untested_build game_file_denied game_app_denied game_disk_full "
+        "game_status_unavailable original_invalid original_unavailable steam_busy variant_incompatible "
+        "variant_not_found untested_build game_file_denied game_app_denied game_disk_full "
         "game_file_write_failed "
     ).split(),
     (
@@ -61,7 +61,7 @@ BLOCKS = (
     (
         "alias_too_long alias_too_many hall_conflict hall_duplicate_memorial hall_duplicate_portrait "
         "hall_last_memorial hall_last_portrait photo_apply_failed photo_capture_unavailable "
-        "photo_delete_other_alt photo_in_use photo_invalid photo_library_invalid photo_missing "
+        "photo_delete_other_variant photo_in_use photo_invalid photo_library_invalid photo_missing "
         "photo_target_unavailable lobby_camera_failed lobby_camera_unsupported "
     ).split(),
     (

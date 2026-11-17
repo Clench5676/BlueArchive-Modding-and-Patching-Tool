@@ -156,7 +156,7 @@ class ViewsMixin:
 
         made = {}
         for record in lobby_camera.cameras(self):
-            made.setdefault(lobby_camera.meta_of(record)["alt"], []).append(record)
+            made.setdefault(lobby_camera.meta_of(record)["variant"], []).append(record)
         for key in dict.fromkeys([*variant_keys, *sorted(assigned)]):
             try:
                 configured[key] = (
@@ -261,7 +261,7 @@ class ViewsMixin:
         """
         from ...gameassets.costume_rule import COSTUME_RULE
 
-        if choice.get("kind") != "model" or not str(choice.get("source") or "").startswith("alt:"):
+        if choice.get("kind") != "model" or not str(choice.get("source") or "").startswith("variant:"):
             return False
         return any((self._applied.get(str(path.resolve())) or {}).get("costume_rule") != COSTUME_RULE for path in paths)
 
@@ -293,7 +293,7 @@ class ViewsMixin:
             pin: Game install and server the operation is fixed to; None uses the current install if available.
 
         Returns:
-            Variant keys mapped to mod:<id>, alt:<key>, or unknown; empty without an install.
+            Variant keys mapped to mod:<id>, variant:<key>, or unknown; empty without an install.
         """
         pin = self.current_pin() if pin is None else pin
         if pin is None:
@@ -339,7 +339,7 @@ class ViewsMixin:
         pin = self._current(pin)
         paths = self._spine_parts(core, pin)
         if not paths:
-            raise ServiceError("game_file_not_found", alt=core)
+            raise ServiceError("game_file_not_found", variant=core)
         resolve = self._official_or_current if current_fallback else self._official_for
         return [resolve(path, pin) for path in paths]
 
@@ -371,7 +371,7 @@ class ViewsMixin:
         pin = self._current(pin)
         paths = self._spine_parts(core, pin)
         if not paths:
-            raise ServiceError("game_file_not_found", alt=core)
+            raise ServiceError("game_file_not_found", variant=core)
         view = self._view([pin], "family")
         kind = self._kind(core, pin) or "spr"
         parts = [view.part(path, pin, kind) for path in paths]

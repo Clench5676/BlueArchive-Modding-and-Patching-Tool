@@ -163,10 +163,10 @@ export function helpLines(state, { sep = listSep() } = {}) {
 }
 
 /**
- * An entry as the result and the messages name it: the alt's name and the kind.
- * @param {(entry: object) => string} [nameOf] Names the entry's alt.
+ * An entry as the result and the messages name it: the variant's name and the kind.
+ * @param {(entry: object) => string} [nameOf] Names the entry's variant.
  */
-export function entryLabel(entry, nameOf = (e) => e?.alt || e?.core || "", sep = listSep()) {
+export function entryLabel(entry, nameOf = (e) => e?.variant || e?.core || "", sep = listSep()) {
   if (entry?.kind === "other") {
     const name = entry.files?.[0]?.file?.split(/[\\/]/).pop() || nameOf(entry);
     return `${name}${sep}${T("settings.mods.other")}`;
@@ -186,7 +186,7 @@ const MAX_LISTED = 6; // failed entries a result names; the rest are counted
  * A silent success, or {title, lines} for adopted entries and unfinished work. Each failed entry keeps its
  * error string.
  * @param {object} result The result of mods.toggle.
- * @param {(entry: object) => string} nameOf Names an entry's alt.
+ * @param {(entry: object) => string} nameOf Names an entry's variant.
  */
 export function resultSummary(result, nameOf) {
   const list = (k) => result?.[k] || [];
@@ -291,7 +291,7 @@ export function driftChoice(button, entries, selected) {
 let state = null;
 let explainedHere = false; // the explanation was shown in this page (mods.state follows a moment later)
 let inFlight = false; // a toggle (or Retry) this page started runs
-let names = async () => (e) => e?.alt || e?.core || ""; // main.js gives the alts' names (the roster's data)
+let names = async () => (e) => e?.variant || e?.core || ""; // main.js gives the variants' names (the roster's data)
 let refreshPage = async () => {}; // main.js resolves this once the visible page has refreshed and drawn
 const REFRESH_CAP = 15000;
 let host = null,
@@ -379,7 +379,7 @@ export async function refresh() {
 /**
  * Set up the top bar's switch and the events it follows.
  * @param {object} [options]
- * @param {() => ((entry: object) => string)} [options.names] Gives the function that names an entry's alt.
+ * @param {() => ((entry: object) => string)} [options.names] Gives the function that names an entry's variant.
  * @param {() => Promise<void>} [options.refreshPage] Resolves once the visible page has refreshed and drawn.
  */
 export async function init(options = {}) {
@@ -722,7 +722,7 @@ export async function refused(err, method = null, params = null, retry = null) {
  * The untested build confirmation's lines: how many entries the update affected, then each one as a list item
  * ("name - kind"), the rest counted.
  */
-export function untestedLines(params, nameOf = (e) => e?.alt || e?.core || "") {
+export function untestedLines(params, nameOf = (e) => e?.variant || e?.core || "") {
   const entries = params?.entries || [];
   const listed = entries.slice(0, MAX_LISTED).map((e) => entryLabel(e, nameOf, " - "));
   if (entries.length > MAX_LISTED) listed.push(`+${entries.length - MAX_LISTED}`);
@@ -811,7 +811,7 @@ async function queueDone({ submitted = [], dropped = [] } = {}) {
   const what = (d) => {
     if (d.method === "mods.toggle") return T(d.params?.enabled ? "mods.onTitle" : "mods.offTitle");
     if (d.method === "mods.restoreDrift") return T("mods.driftApply");
-    return entryLabel({ alt: d.params?.alt, kind: d.params?.kind }, nameOf);
+    return entryLabel({ variant: d.params?.variant, kind: d.params?.kind }, nameOf);
   };
   await Popup.message({
     title: T("classic.notApplied"),

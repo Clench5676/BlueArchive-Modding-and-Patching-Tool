@@ -741,8 +741,8 @@ test("entries a game update's rig change holds: their own help line and Details,
   const s = base({
     held: 2,
     heldEntries: [
-      { install: "/a", core: "a_spr", alt: "a", kind: "spr" },
-      { install: "/a", core: "b_home", alt: "b", kind: "lobby" },
+      { install: "/a", core: "a_spr", variant: "a", kind: "spr" },
+      { install: "/a", core: "b_home", variant: "b", kind: "lobby" },
     ],
   });
   const lines = MS.helpLines(s);
@@ -763,30 +763,30 @@ test("a toggle's end: silence, or the result popup naming each failed entry with
     null,
   );
   assert.deepEqual(MS.resultSummary({ enabled: true, done: [] }), null);
-  const names = (e) => ({ airi: "Airi", ch0251: "Airi (Band)" })[e.alt] || e.alt;
+  const names = (e) => ({ airi: "Airi", ch0251: "Airi (Band)" })[e.variant] || e.variant;
   const r = MS.resultSummary(
     {
       enabled: false,
       done: [{}, {}, {}],
-      adopted: [{ alt: "airi" }],
+      adopted: [{ variant: "airi" }],
       failed: [
         {
-          entry: { install: "/g", core: "airi_spr", alt: "airi", kind: "spr" },
+          entry: { install: "/g", core: "airi_spr", variant: "airi", kind: "spr" },
           code: "game_file_locked",
           params: {},
         },
         {
-          entry: { install: "/g", core: "ch0251_home", alt: "ch0251", kind: "lobby" },
+          entry: { install: "/g", core: "ch0251_home", variant: "ch0251", kind: "lobby" },
           code: "not_enough_space",
           params: { need: 3 * 1048576, free: 1048576 },
         },
       ],
-      stuck: [{ alt: "ch0251" }],
+      stuck: [{ variant: "ch0251" }],
       left: [
         {
           install: "/g",
           core: "zz_spr",
-          alt: "zz",
+          variant: "zz",
           kind: "spr",
           code: "not_enough_space",
           params: { need: 2 * 1048576, free: 1048576 },
@@ -808,7 +808,7 @@ test("a toggle's end: silence, or the result popup naming each failed entry with
   const many = MS.resultSummary({
     enabled: true,
     failed: Array.from({ length: 9 }, (_, i) => ({
-      entry: { core: `c${i}_spr`, alt: `c${i}` },
+      entry: { core: `c${i}_spr`, variant: `c${i}` },
       code: "game_file_locked",
     })),
   });
@@ -917,7 +917,7 @@ test("sizes and the free-space refusal's sizes", () => {
 
 test("the top bar's switch follows mods.state, and the first toggle explains once from any place", async () => {
   answers["mods.state"] = base({ explained: false });
-  await MS.init({ names: async () => (e) => e.alt });
+  await MS.init({ names: async () => (e) => e.variant });
   const toggle = switchHost.children.find((e) => e.className === "ms-toggle");
   assert.equal(switchHost.hidden, false);
   assert.equal(toggle.getAttribute("role"), "switch");
@@ -1413,10 +1413,10 @@ test("an untested game build: the confirmation names the entries, Apply Anyway c
   const entries = Array.from({ length: 8 }, (_, i) => ({
     install: "/g",
     core: `c${i}_spr`,
-    alt: `c${i}`,
+    variant: `c${i}`,
     kind: i ? "spr" : "lobby",
   }));
-  const lines = MS.untestedLines({ entries }, (e) => e.alt.toUpperCase());
+  const lines = MS.untestedLines({ entries }, (e) => e.variant.toUpperCase());
   assert.equal(lines[0].text, "Affected by the game update: 8");
   assert.deepEqual(
     lines.slice(1).map((l) => l.text),
@@ -1466,7 +1466,7 @@ test("the classic modal queues the refused write only when its box is ticked, on
   assert.equal(await m, null);
   assert.equal(queued(), 0);
   // ticked, closed with Escape: queued with its call
-  m = MS.classicModal({ method: "actions.apply", params: { alt: "airi", source: "alt:ch0251", kind: "spr" } });
+  m = MS.classicModal({ method: "actions.apply", params: { variant: "airi", source: "variant:ch0251", kind: "spr" } });
   await drawn(dialog, "check");
   action(dialog, "check").click();
   press("Escape");
@@ -1476,7 +1476,7 @@ test("the classic modal queues the refused write only when its box is ticked, on
   assert.equal(dialog.hidden, true, "plain confirmations stay silent");
   assert.deepEqual(called("classic.queue")[0], {
     method: "actions.apply",
-    params: { alt: "airi", source: "alt:ch0251", kind: "spr" },
+    params: { variant: "airi", source: "variant:ch0251", kind: "spr" },
   });
   // ticked, Bring to Front: raised and queued
   m = MS.classicModal({ method: "mods.toggle", params: { enabled: true, expect: false } });
@@ -1543,7 +1543,7 @@ const gameFile = (core, extra = {}) => ({
 const entry = (core, state, extra = {}) => ({
   install: GLOBAL,
   core,
-  alt: core.replace(/_spr$|_home.*$/, ""),
+  variant: core.replace(/_spr$|_home.*$/, ""),
   names: null,
   kind: /_spr$/.test(core) ? "spr" : "lobby",
   source: "unknown",
@@ -1593,7 +1593,7 @@ test("which entries each prompt lists: drift while mods are on, untracked and ch
 
 test("a prompt's cards: the name, the kind and install chips, No Official Copy, and what cannot be ticked", () => {
   const two = base({ installs: [install(GLOBAL, "Global"), install(JAPAN, "Japan", { id: "0123abcd4567" })] });
-  const nameOf = (e) => ({ airi: "Airi", hina: "Hina" })[e.alt] || e.alt;
+  const nameOf = (e) => ({ airi: "Airi", hina: "Hina" })[e.variant] || e.variant;
   const c = P.card(entry("airi_spr", "untracked"), { state: base(), nameOf });
   assert.deepEqual(
     [c.key, c.label, c.full, c.chips, c.disabled, c.size],
@@ -1681,14 +1681,14 @@ test("the untracked prompt's buttons: add the ticked cards, Don't Ask Again dism
 
 test("Apply Mod Configuration's result names the entries skipped because their files changed", () => {
   assert.deepEqual(P.driftSummary({ done: [{}], failed: [], skipped: [], stuck: [] }), null);
-  const nameOf = (e) => e.alt;
+  const nameOf = (e) => e.variant;
   const r = P.driftSummary(
     {
       done: [{}],
       stuck: [],
-      failed: [{ entry: { core: "airi_spr", alt: "Airi", kind: "spr" }, code: "game_file_locked", params: {} }],
+      failed: [{ entry: { core: "airi_spr", variant: "Airi", kind: "spr" }, code: "game_file_locked", params: {} }],
       skipped: [
-        { install: GLOBAL, core: "hina_home", alt: "Hina", kind: "lobby", why: "changed" },
+        { install: GLOBAL, core: "hina_home", variant: "Hina", kind: "lobby", why: "changed" },
         { core: "x_spr", why: "missing" },
       ],
     },
@@ -1772,7 +1772,7 @@ test("the tray's refusal shows as the page's own, and its toggle is followed to 
       adopted: [],
       stuck: [],
       left: [],
-      failed: [{ entry: { core: "airi_spr", alt: "airi", kind: "spr" }, code: "game_file_locked", params: {} }],
+      failed: [{ entry: { core: "airi_spr", variant: "airi", kind: "spr" }, code: "game_file_locked", params: {} }],
     },
   };
   const followed = MS.trayToggle({ job: "job-tray-3", enabled: false, expect: true });
@@ -1786,7 +1786,7 @@ test("the tray's refusal shows as the page's own, and its toggle is followed to 
 });
 
 test("the tray's Back to Official opens the drift prompt: two buttons and no way out but them", async () => {
-  P.init({ names: async () => (e) => ({ airi: "Airi", hina: "Hina" })[e.alt] || e.alt });
+  P.init({ names: async () => (e) => ({ airi: "Airi", hina: "Hina" })[e.variant] || e.variant });
   answers["mods.state"] = base();
   await MS.refresh();
   answers["mods.entries"] = [
@@ -1874,7 +1874,7 @@ test("held refusal prompts accept Overwritten, Add First and its result, and sca
   answers["mods.adopt"] = "job-held-adopt";
   jobs["job-held-adopt"] = {
     state: "done",
-    result: { added: [], failed: [{ entry: { alt: "airi", core: "airi_spr" }, code: "game_file_locked" }] },
+    result: { added: [], failed: [{ entry: { variant: "airi", core: "airi_spr" }, code: "game_file_locked" }] },
   };
   held = Loading.hold(() => P.overwritten({ name: "Airi", core: "airi_spr", files: [gameFile("airi_spr")] }));
   await drawn(dialog, "cancel");
@@ -1908,7 +1908,7 @@ test("a toggle holds page input through the refresh and drawing, then shows an a
   answers["mods.toggle"] = "job-refresh";
   jobs["job-refresh"] = {
     state: "done",
-    result: { enabled: false, failed: [{ entry: { alt: "airi", core: "airi_spr" }, code: "game_file_locked" }] },
+    result: { enabled: false, failed: [{ entry: { variant: "airi", core: "airi_spr" }, code: "game_file_locked" }] },
   };
   await MS.init({
     refreshPage: async () => {
@@ -2143,7 +2143,7 @@ test("main refreshes on external Enable Mods changes and keeps the awaited local
   };
   await new Function(
     "ModSwitch",
-    "altNames",
+    "variantNames",
     "refreshAfterToggle",
     "libraryChanged",
     "timed",
@@ -2194,7 +2194,7 @@ test("detail refresh callers await changes queued while an earlier refresh is dr
   const h = new Function(
     "env",
     `let { ${Object.keys(env).join(", ")} } = env;
-    let open = true, busy = false, fullscreen = false, fam = { alts: [{ spr: "airi_spr" }] };
+    let open = true, busy = false, fullscreen = false, fam = { variants: [{ spr: "airi_spr" }] };
     ${changed}
     async function reloadChanged() { heldChange = undefined; await env.draw(); }
     return { filesChanged };`,
@@ -2442,7 +2442,7 @@ test("an update's impact as a list: only the mods to update, each a card with it
       configured: false,
     },
   ];
-  const nameOf = (e) => e.alt[0].toUpperCase() + e.alt.slice(1);
+  const nameOf = (e) => e.variant[0].toUpperCase() + e.variant.slice(1);
   // what was handled by itself (rebuilt, new parts, gone) is never listed; a mod a repaired copy replaced neither
   const listed = Impact.heldOf({ due: true, mods });
   assert.deepEqual(
@@ -2472,11 +2472,11 @@ test("an update's impact as a list: only the mods to update, each a card with it
       impact: "rig_changed",
       label: "UI Font",
     },
-    (e) => e.alt,
+    (e) => e.variant,
   );
   assert.deepEqual([generic.label, generic.full, generic.thumb], ["UI Font", "UI Font", null]);
   assert.equal(
-    Impact.card({ id: "g", target: "other-set:0d94", kind: "other", impact: "rig_changed" }, (e) => e.alt).label,
+    Impact.card({ id: "g", target: "other-set:0d94", kind: "other", impact: "rig_changed" }, (e) => e.variant).label,
     "Other Mods",
   );
   // the details: the mod's name, what changed (without the kind's prefix); Go To, the preview, Update and Apply
@@ -2615,10 +2615,10 @@ test("what an update changed in a mod's official parts: each change once, a repa
 
 test("the held entries' Details name each mod with Go To and Fix where its mod is known, then how the hold ends", () => {
   const entries = [
-    { install: "/a", core: "a_spr", alt: "a", kind: "spr", source: "mod:1", label: "Swim A" },
-    { install: "/a", core: "b_home", alt: "b", kind: "lobby", source: "alt:c" },
+    { install: "/a", core: "a_spr", variant: "a", kind: "spr", source: "mod:1", label: "Swim A" },
+    { install: "/a", core: "b_home", variant: "b", kind: "lobby", source: "variant:c" },
   ];
-  const lines = Impact.heldLines(entries, (e) => e.alt.toUpperCase());
+  const lines = Impact.heldLines(entries, (e) => e.variant.toUpperCase());
   assert.deepEqual(
     lines.map((l) => [l.text, l.button?.label || null, (l.more || []).map((b) => b.label)]),
     [
@@ -2882,7 +2882,7 @@ test("the drift prompt asks the impacts of the mods its entries are configured w
   const entries = [
     { install: "/a", core: "a_spr", configured: "mod:1" },
     { install: "/a", core: "b_spr", configured: "mod:2" },
-    { install: "/a", core: "c_spr", configured: "alt:x" },
+    { install: "/a", core: "c_spr", configured: "variant:x" },
     { install: "/b", core: "a_spr", configured: "mod:1" },
   ];
   assert.deepEqual(Impact.configuredMods(entries), ["1", "2"]);
@@ -3000,7 +3000,7 @@ test("the impact list: a card's click shows it, its corner ticks it; Update and 
       .find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === "Update and Apply")
       .click();
     await until(() => called("actions.apply").length > 0, "applied");
-    assert.deepEqual(called("actions.apply").at(-1), { alt: "hina", source: "mod:r2", kind: "lobby" });
+    assert.deepEqual(called("actions.apply").at(-1), { variant: "hina", source: "mod:r2", kind: "lobby" });
     await until(
       () => !prompt.hidden && !walk(prompt).some((e) => e.dataset?.key === "r"),
       "the list again, without the fixed mod",

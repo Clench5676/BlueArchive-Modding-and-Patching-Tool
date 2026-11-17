@@ -11,7 +11,7 @@ configuration lives in a file of its own that older builds never open::
      "folders": {"<install key>": {
          "server": "global",
          "named_by": {"<data directory id>": "<ISO>"}, "hidden": ["<data directory id>"],
-         "configured": {"<core>": {"alt", "kind", "source", "since"}},
+         "configured": {"<core>": {"variant", "kind", "source", "since"}},
          "updated": {"<core>": "<ISO>"},
          "built": {"<core>": {"source", "inputs": [...], "parts": {"<file name>": {"sha1", "mod_file"}}}},
          "dismissed": {"drift": {"<core>": [[name, size, mtime_ns]]}, "untracked": {...}},
@@ -42,7 +42,6 @@ from pathlib import Path
 from typing import Any
 
 from ..core.errors import ServiceError
-from .migrations import migrate_profile_names
 from ..core.filelock import file_lock, replace
 from ..core.logging_utils import log_failure
 
@@ -151,7 +150,7 @@ class Profiles:
             prev = None
         return self.signature(), prev
 
-    def _load_raw(self) -> tuple[dict[str, Any] | None, bool]:
+    def _load(self) -> tuple[dict[str, Any] | None, bool]:
         """Read the configuration with the file lock held.
 
         The source is profiles.json, else profiles.json.prev (logged), else None when neither exists.
@@ -182,23 +181,6 @@ class Profiles:
             raise ServiceError("profiles_unreadable", file=str(self.path))
         return None, False
 
-    def _load(self) -> tuple[dict[str, Any] | None, bool]:
-        data, bad = self._load_raw()
-        if data is not None and migrate_profile_names(data):
-            self._persist(data, bad)
-            logger.info("Migrated API names in %s", self.path)
-            bad = False
-        return data, bad
-
-    def _persist(self, data: dict[str, Any], bad: bool) -> None:
-        self.root.mkdir(parents=True, exist_ok=True)
-        if bad:
-            with contextlib.suppress(OSError):
-                replace(self.path, self.bad)
-        elif self.path.exists():
-            self._copy(self.path, self.prev)
-        self._write(data)
-
     def read(self) -> dict[str, Any] | None:
         """Read the current normalized configuration under the shared file lock.
 
@@ -220,7 +202,6 @@ class Profiles:
             with file_lock(self.lock_path):
                 signatures = self._signatures()
                 data, _bad = self._load()
-                signatures = self._signatures()
             self._data = normalized(data) if data is not None else None
             self._seen = signatures
             return self._data
@@ -260,7 +241,14 @@ class Profiles:
                 if after is not None:
                     after(data)
                 return data
-            self._persist(data, bad)
+            self.root.mkdir(parents=True, exist_ok=True)
+            if bad:
+                # keep what could not be read for the user; .prev is the last good file already
+                with contextlib.suppress(OSError):
+                    replace(self.path, self.bad)
+            elif self.path.exists():
+                self._copy(self.path, self.prev)
+            self._write(data)
             self._data, self._seen = data, self._signatures()
             if after is not None:
                 after(data)

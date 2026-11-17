@@ -75,7 +75,7 @@ def test_an_export_names_each_mod_and_its_step_on_the_progress_line(setup_librar
         p["current"] == 1
         and p["total"] == 1
         and p["action"] == "export"
-        and p["alt"] == mod.target
+        and p["variant"] == mod.target
         and p["kind"] == mod.kind
         and p["core"] == mod.core
         for p in lines
@@ -167,7 +167,7 @@ def test_single_original_variant_archive_uses_current_bundle_names(setup_library
     if backup:
         env.original.with_name(env.original.name + ".backup").write_bytes(expected)
         env.original.write_bytes(make_mod(env.original, env.tmp / "external").read_bytes())
-    manifest, files = contents(run(env, "single", "alt:test"))
+    manifest, files = contents(run(env, "single", "variant:test"))
     (entry,) = manifest["mods"]
     assert files[export_service._member_path(entry["directory"], env.original.name)] == expected
 
@@ -303,7 +303,7 @@ def test_each_exported_mod_carries_a_package_manifest(setup_library):
 
 def test_an_official_variant_export_marks_its_files_official(setup_library):
     env = setup_library
-    result = run(env, "single", "alt:test")
+    result = run(env, "single", "variant:test")
     data = package(result)
     assert [item["role"] for item in data["files"]] == ["official"]
     assert "release" not in data["target"]

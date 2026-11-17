@@ -1,19 +1,19 @@
 /**
- * The saved aliases of an alt: the first is the display name; all remain searchable and editable.
+ * The saved aliases of a variant: the first is the display name; all remain searchable and editable.
  */
-export const customAliases = (alt) =>
-  Array.isArray(alt?.custom) ? alt.custom.filter((a) => typeof a === "string" && a) : [];
+export const customAliases = (variant) =>
+  Array.isArray(variant?.custom) ? variant.custom.filter((a) => typeof a === "string" && a) : [];
 /**
- * The display name of an alt: its first alias, else the original name.
+ * The display name of a variant: its first alias, else the original name.
  */
-export const studentName = (alt, original) => customAliases(alt)[0] || original;
+export const studentName = (variant, original) => customAliases(variant)[0] || original;
 /**
- * Another student's costume: "Student (Costume)" in the language's brackets, the rule job progress names an
- * alt by (progress.subject). "Student" is the student's base name, or the user's alias of the alt; the
+ * Another student's costume: "Student (Costume)" in the language's brackets, the rule job progress names a
+ * variant by (progress.subject). The student is the family's base name, or the user's alias of the variant; the
  * costume is always named, the original one too.
  */
-export const crossName = (alt, student, costume, translate) =>
-  translate("progress.subject", { name: studentName(alt, student), parts: costume });
+export const crossName = (variant, student, costume, translate) =>
+  translate("progress.subject", { name: studentName(variant, student), parts: costume });
 
 /**
  * A mod's name. The backend's label is presentation text in the language of its last read, so the repair

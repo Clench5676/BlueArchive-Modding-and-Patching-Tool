@@ -45,7 +45,7 @@ test("a missing name falls back to English, Simplified Chinese only for Simplifi
   assert.deepEqual(nameKeys("ko-KR"), ["ko", "en", "zh-CN"]);
 });
 
-test("Thai student and alt names use English until Thai source values exist", () => {
+test("Thai student and variant names use English until Thai source values exist", () => {
   setStrings("th-TH", {});
   assert.deepEqual(nameKeys("th-TH"), ["th", "en", "zh-CN"]);
   assert.equal(L(names), "Hoshino");

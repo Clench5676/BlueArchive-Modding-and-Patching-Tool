@@ -1191,7 +1191,7 @@ let view = null,
   token = 0;
 
 /**
- * Load and show an alt's chibi. The shown view is kept for the same alt of the same install (version:
+ * Load and show a variant's chibi. The shown view is kept for the same variant of the same install (version:
  * the game's resource version; another game folder or file source loads it again).
  * @param {object} [options]
  * @param {string} [options.frame] The framing, "left" or "full".

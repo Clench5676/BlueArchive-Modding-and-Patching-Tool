@@ -46,7 +46,7 @@ function harness(overrides = {}) {
     QUEUEABLE: ["actions.apply", "actions.restore"],
     refused: (err) => messages.push(String(err)),
     overwrittenMessage: async () => {},
-    alt: () => ({}),
+    variant: () => ({}),
     fullName: () => "Example",
     resumeChanged: () => {},
     leftPage: new Promise((resolve) => {
@@ -249,7 +249,7 @@ test("a 3D model's costume build shows its percentage and step, only growing whi
         return {};
       },
     });
-    assert.equal(await h.job("model.optimize", { alt: "hina", source: "alt:aoba" }, { name: "Example" }), true);
+    assert.equal(await h.job("model.optimize", { variant: "hina", source: "variant:aoba" }, { name: "Example" }), true);
     const sep = translate("progress.sep");
     const head = `${translate("progress.modHead", { action: translate("progress.actionOptimize") })}Example${sep}${translate("tab.portrait")}${sep}${translate("progress.from", { name: "aoba" })}`;
     const percent = (n) => `${sep}${translate("progress.percent", { percent: n })}`;
@@ -281,7 +281,7 @@ test("adding from a student's page opens Import Mod instead of a picker of its o
   assert.ok(!source.includes("ModAdd"), "the student page no longer adds through mods.add");
 });
 
-test("detail progress identifies the target Mod's student alt and kind instead of the active tab or bundle", async () => {
+test("detail progress identifies the target Mod's student variant and kind instead of the active tab or bundle", async () => {
   const strings = JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8"));
   const flat = (o, prefix = "", out = {}) => {
     for (const [key, value] of Object.entries(o)) {
@@ -291,9 +291,9 @@ test("detail progress identifies the target Mod's student alt and kind instead o
     return out;
   };
   setStrings("en-US", flat(strings));
-  const student = {
+  const family = {
     names: { en: "Yoshimi" },
-    alts: [
+    variants: [
       {
         key: "band",
         names: { en: { full: "Yoshimi (Band)", short: "Band" } },
@@ -303,8 +303,8 @@ test("detail progress identifies the target Mod's student alt and kind instead o
   };
   const h = harness({
     T: translate,
-    fam: student,
-    alt: () => ({ key: "base" }),
+    fam: family,
+    variant: () => ({ key: "base" }),
     waitJob: async (_id, update) => {
       update({ label: "Repairing: assets-_mx-test.bundle", current: 2, total: 2 });
       return {};
@@ -323,7 +323,7 @@ test("an apply adds no notice, while mods are off (only saved) or on", async () 
     null,
   ]) {
     const h = harness({ waitJob: async () => result });
-    assert.equal(await h.job("actions.apply", { alt: "v", source: "mod:a" }), true);
+    assert.equal(await h.job("actions.apply", { variant: "v", source: "mod:a" }), true);
     assert.deepEqual(h.notices, [], JSON.stringify(result));
   }
 });

@@ -1,5 +1,5 @@
 // The detail screen's switch popups on the shared list popup (switch portrait, memorial lobby, 3D model) and the
-// alt picker.
+// variant picker.
 import { notify, closed as popupClosed, listPopup, message } from "../ui/popup.js";
 import { isSpecial, specialFraming } from "./special-view.js";
 import * as Compatibility from "../mods/mod-compatibility.js";
@@ -30,7 +30,7 @@ import { $ } from "../core/util.js";
 import {
   fam,
   ctx,
-  altId,
+  variantKey,
   pending,
   renderFailed,
   pageToken,
@@ -40,7 +40,7 @@ import {
   originalName,
   fullName,
   shortName,
-  alt,
+  variant,
   isFav,
   repairedId,
   optimizeSource,
@@ -57,7 +57,7 @@ import {
   judgeCross,
   costumeChecking,
   appliedKey,
-  altBase,
+  variantBase,
   candidateLabel,
   gameFile,
   baseName,
@@ -87,9 +87,9 @@ import { albumClosed, setAlbumClosed } from "./detail-fullscreen.js";
 export let pickerSel = null;
 
 // --- the detail screen's popups, on the shared popup module (popup.js): the list popups (switch portrait or memorial
-// lobby, the alt picker) and the frame (compare, aliases, details); Escape and the backdrop close them ---
+// lobby, the variant picker) and the frame (compare, aliases, details); Escape and the backdrop close them ---
 
-// switch portrait or memorial lobby: the alt's own skeleton and added ones, then the other alts' portraits;
+// switch portrait or memorial lobby: the variant's own skeleton and added ones, then the other variants' portraits;
 // OK writes the chosen one into the game files (applyCandidate)
 // While mods are off the popup saves the choice instead of writing it (popupMode): it starts on the configured source,
 // whose card carries "Set", and its button reads Save. On an overwritten kind its cards are greyed (switch-sources.js):
@@ -106,7 +106,7 @@ export function renderPopup(scroll = 0) {
 }
 async function drawPopup(scroll = 0) {
   if (!switchThumbnails || switchPopupPage !== pageToken) return;
-  const v = alt(),
+  const v = variant(),
     kind = popupKind,
     applied = intendedKey(v, kind);
   const mode = popupMode(fam, v, kind, modsOn(), otherStudents);
@@ -123,7 +123,7 @@ async function drawPopup(scroll = 0) {
               null,
               kind === "lobby",
               specialFraming(v),
-              (c.origin || c.alt || v).bg,
+              (c.origin || c.variant || v).bg,
               work,
             ),
       work.signal,
@@ -133,8 +133,8 @@ async function drawPopup(scroll = 0) {
       kind: c.kind,
       recruit: c.kind !== "mod" && c.recruit,
       label: candidateLabel(c, v),
-      full: c.kind === "mod" ? c.label : fullName(c.alt),
-      original: c.cross ? originalName(c.alt) : c.mod?.alias ? modOriginalName(c.mod) : "",
+      full: c.kind === "mod" ? c.label : fullName(c.variant),
+      original: c.cross ? originalName(c.variant) : c.mod?.alias ? modOriginalName(c.mod) : "",
       nameEdit:
         c.kind === "mod"
           ? {
@@ -237,8 +237,8 @@ async function drawPopup(scroll = 0) {
     onClose: () => closePopup(false),
     details: (it) => {
       const c = it.src;
-      const file = c.kind === "mod" ? c.mod.file : gameFile(c.alt, kind);
-      const size = c.kind === "mod" ? c.mod.size : partsOf(c.alt, kind).reduce((n, f) => n + (f.size || 0), 0);
+      const file = c.kind === "mod" ? c.mod.file : gameFile(c.variant, kind);
+      const size = c.kind === "mod" ? c.mod.size : partsOf(c.variant, kind).reduce((n, f) => n + (f.size || 0), 0);
       // File and Size; no State or CRC rows (the chips say what is applied): only a problem shows, a
       // row of its own in the warning colour (no file of this kind in the game, the configured choice's error)
       const error = c.key === mode.set ? selectionError(v, kind) : null;
@@ -333,7 +333,7 @@ async function drawPopup(scroll = 0) {
                   if (!(await removeMod(c.id))) return;
                   await reload();
                   ctx.invalidateRoster();
-                  if (pending === c.key) setPending(popupMode(fam, alt(), kind, modsOn(), otherStudents).start);
+                  if (pending === c.key) setPending(popupMode(fam, variant(), kind, modsOn(), otherStudents).start);
                   renderPopup();
                 },
               ]
@@ -343,8 +343,8 @@ async function drawPopup(scroll = 0) {
                   closePopup(false);
                   job(
                     "actions.extract",
-                    { target: `alt:${c.alt.key}` },
-                    { name: fullName(c.alt), onDone: (r) => reveal(r?.folder) },
+                    { target: `variant:${c.variant.key}` },
+                    { name: fullName(c.variant), onDone: (r) => reveal(r?.folder) },
                   );
                 },
               ],
@@ -354,14 +354,14 @@ async function drawPopup(scroll = 0) {
   });
 }
 // Optimize Physics on a 3D candidate (model.optimize): the copy is selected, or "No optimization needed" shows
-async function runOptimize(c, v = alt()) {
+async function runOptimize(c, v = variant()) {
   const source = optimizeSource(c);
   if (!source || busy) return;
   const shown = c.kind === "self" ? shortName(v) : candidateLabel(c, v);
   let result = null;
   const ok = await job(
     "model.optimize",
-    { alt: v.key, source, name: shown },
+    { variant: v.key, source, name: shown },
     {
       name: shown,
       onDone: (r) => {
@@ -381,16 +381,23 @@ async function runOptimize(c, v = alt()) {
   await renderPopup($("popup").querySelector(".popup-cards")?.scrollTop || 0);
 }
 export async function openPopup(kind = "spr") {
-  const student = fam,
-    v = alt();
+  const family = fam,
+    v = variant();
   if (kind === "model") {
     void costumesReady(v).catch((err) => console.error("Costume check failed", err));
     // the switch opens at once with the student's own cards; another student's model already chosen
     // gets its card, and the popup its start, once the roster is in
     if (otherStudents) judgeCross(v);
     else
-      void readOthers().then((students) => {
-        if (!students || !open || fam !== student || alt() !== v || popupKind !== kind || switchPopupPage !== pageToken)
+      void readOthers().then((families) => {
+        if (
+          !families ||
+          !open ||
+          fam !== family ||
+          variant() !== v ||
+          popupKind !== kind ||
+          switchPopupPage !== pageToken
+        )
           return;
         const start = popupMode(fam, v, kind, modsOn(), otherStudents).start;
         if (pending === popupStart) setPending(start);
@@ -403,17 +410,17 @@ export async function openPopup(kind = "spr") {
   switchThumbnails = thumbnailScope({ priority: "popup" });
   switchPopupPage = pageToken;
   popupKind = kind;
-  popupStart = popupMode(fam, alt(), kind, modsOn(), otherStudents).start;
+  popupStart = popupMode(fam, variant(), kind, modsOn(), otherStudents).start;
   setStartLoose(kind === "model" && !otherStudents);
   setPending(popupStart);
   popupSeg = 0;
   setCrossShown([]);
-  const mods = candidates(alt(), kind)
+  const mods = candidates(variant(), kind)
     .filter((c) => c.kind === "mod")
     .map((c) => c.mod);
   try {
     await drawPopup();
-    if (open && fam === student && alt() === v && popupKind === kind && !$("popup").hidden) await markSeen(mods);
+    if (open && fam === family && variant() === v && popupKind === kind && !$("popup").hidden) await markSeen(mods);
   } catch (err) {
     closePopup(false);
     renderFailed(err);
@@ -424,12 +431,12 @@ const seeing = new Set();
 export async function markSeen(mods, scroll = 0) {
   const ids = [...new Set(mods.filter((m) => m.fresh && !seeing.has(m.id)).map((m) => m.id))];
   if (!ids.length) return;
-  const student = fam;
+  const family = fam;
   ids.forEach((id) => seeing.add(id));
   try {
     await rpc("mods.seen", { ids });
-    clearUnseen(student, ids);
-    if (fam !== student) clearUnseen(fam, ids);
+    clearUnseen(family, ids);
+    if (fam !== family) clearUnseen(fam, ids);
     ctx.invalidateRoster();
     // The save may finish after the switch closed and another popup took its host.
     if (open)
@@ -459,8 +466,8 @@ function closeSwitch(apply) {
   $("popup").hidden = true;
   $("popup").innerHTML = "";
   popupClosed($("popup"));
-  const chosen = popupCandidate(alt(), popupKind, pending);
-  if (popupKind === "model") judgeCross(alt());
+  const chosen = popupCandidate(variant(), popupKind, pending);
+  if (popupKind === "model") judgeCross(variant());
   // only a choice other than the start (what the game shows; while mods are off, the configured source)
   // a start taken before the roster was in may stand for another student's model not listed yet: kept as it is
   if (apply && startLoose && pending === popupStart) return;
@@ -495,7 +502,7 @@ async function removeMod(id) {
   }
 }
 
-// the Add First or Overwritten message of an alt's files of a kind (prompts.js); resolves with true once its mod
+// the Add First or Overwritten message of a variant's files of a kind (prompts.js); resolves with true once its mod
 // was added to the library
 export async function overwrittenMessage(v, kind = "spr") {
   const page = pageToken;
@@ -512,15 +519,15 @@ export async function overwrittenMessage(v, kind = "spr") {
   return added;
 }
 
-// alt picker: every alt of the student in the same list layout
+// variant picker: every variant of the family in the same list layout
 let pickerSeg = 0;
 function closePicker() {
   $("picker").hidden = true;
   popupClosed($("picker"));
 }
 export async function openPicker(scroll = 0) {
-  pickerSel = pickerSel || altId;
-  const items = fam.alts
+  pickerSel = pickerSel || variantKey;
+  const items = fam.variants
     .filter(hasAsset)
     .sort(byRank)
     .map((o) => ({
@@ -532,11 +539,11 @@ export async function openPicker(scroll = 0) {
       thumb:
         primaryKind(o) === "model"
           ? null
-          : thumb(altBase(o, primaryKind(o)), "card", null, primaryKind(o) === "lobby", specialFraming(o), o.bg),
+          : thumb(variantBase(o, primaryKind(o)), "card", null, primaryKind(o) === "lobby", specialFraming(o), o.bg),
       big: () =>
         primaryKind(o) === "model"
           ? null
-          : thumb(altBase(o, primaryKind(o)), "bust", null, primaryKind(o) === "lobby", specialFraming(o), o.bg),
+          : thumb(variantBase(o, primaryKind(o)), "bust", null, primaryKind(o) === "lobby", specialFraming(o), o.bg),
       inUse: false,
       fav: isFav(o),
       isNew: hasFresh(o),
@@ -593,7 +600,7 @@ export async function openPicker(scroll = 0) {
               closePicker();
               job(
                 "actions.extract",
-                { target: `alt:${o.key}` },
+                { target: `variant:${o.key}` },
                 { name: fullName(o), onDone: (r) => reveal(r?.folder) },
               );
             },

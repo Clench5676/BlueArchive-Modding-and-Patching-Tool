@@ -280,7 +280,7 @@ class AssetCache:
 
 
 # Increment when an exporter changes its output or interpretation of source files.
-PREVIEW_SCHEMA = "preview-exports-v2"
+PREVIEW_SCHEMA = "preview-exports-v1"
 PREVIEW_ENTRY_LIMIT = 256 * 1024 * 1024
 _PREVIEW_MAGIC = b"BAMTPreview1\n"
 

@@ -1205,7 +1205,7 @@ def test_target_mismatch_and_missing_targets(setup_library):
     env = setup_library
     entry = env.library.add([make_mod(env.original, env.tmp / "input")])[0]
     expect_error("mod_target_mismatch", lambda: env.library.apply("other", f"mod:{entry.id}"))
-    expect_error("alt_not_found", lambda: env.library.state("missing"))
+    expect_error("variant_not_found", lambda: env.library.state("missing"))
     expect_error("source_unsupported", lambda: env.library.apply("test", "bad"))
     env.original.unlink()
     expect_error("game_file_not_found", lambda: env.library.apply("test", f"mod:{entry.id}"))
@@ -1267,7 +1267,7 @@ def test_variant_apply_and_restore_select_kinds(setup_library, monkeypatch, kind
 
     patch_everywhere(monkeypatch, [service], "rebuild", update)
     selected = {path for path in originals if kind is None or (path == env.original) == (kind == "spr")}
-    result = env.library.apply("test", "alt:other", kind=kind)
+    result = env.library.apply("test", "variant:other", kind=kind)
     assert set(result.files) == selected
     assert set(calls) == {path.name for path in selected}
     assert all(path.read_bytes() == before[path] for path in originals.keys() - selected)
@@ -1303,7 +1303,7 @@ def test_default_portrait_choices_ignore_unavailable_lobby_originals(setup_libra
         return RebuildResult(True, "updated", [FilePair(result, targets[0])])
 
     patch_everywhere(monkeypatch, [service], "rebuild", update)
-    env.library.apply("test", "alt:other")
+    env.library.apply("test", "variant:other")
     assert {path: path.read_bytes() for path in untouched} == untouched
     expect_error("original_unavailable", lambda: env.library.restore("test", kind=None))
 
@@ -1377,11 +1377,11 @@ def test_variant_swap_uses_official_source_and_keeps_target_original(setup_libra
 
     patch_everywhere(monkeypatch, [service], "rebuild", update)
     original_bytes = env.original.read_bytes()
-    result = env.library.apply("test", "alt:other")
+    result = env.library.apply("test", "variant:other")
     assert result.files == [env.original]
     assert calls[0][0] == [env.root / "originals" / other.name]
     assert calls[0][2]["match_strategy"] == "name_type"
-    assert env.library.state("test").applied == "alt:other"
+    assert env.library.state("test").applied == "variant:other"
     env.library.restore("test")
     assert env.original.read_bytes() == original_bytes
 
@@ -1402,7 +1402,7 @@ def test_official_preview_uses_kept_parts_while_a_mod_remains_in_game(setup_libr
     expect_error("game_file_not_found", lambda: env.library.official_bundles("missing_spr"))
 
 
-@pytest.mark.parametrize("source_type", ["alt", "mod"])
+@pytest.mark.parametrize("source_type", ["variant", "mod"])
 def test_variant_swap_rejects_incompatible_texture_page_counts(setup_library, monkeypatch, source_type):
     env = setup_library
     env.catalog.variants["other"].family = "test"
@@ -1417,8 +1417,8 @@ def test_variant_swap_rejects_incompatible_texture_page_counts(setup_library, mo
 
     monkeypatch.setattr(Bundle, "load", load)
     before = {path: path.read_bytes() for path in (env.original, other)}
-    source = "alt:other" if source_type == "alt" else f"mod:{entry.id}"
-    expect_error("alt_incompatible", lambda: env.library.apply("test", source))
+    source = "variant:other" if source_type == "variant" else f"mod:{entry.id}"
+    expect_error("variant_incompatible", lambda: env.library.apply("test", source))
     assert {path: path.read_bytes() for path in before} == before
     assert not (env.root / "originals").exists()
 
@@ -1690,7 +1690,7 @@ def test_extract_uses_core_and_returns_core_folder(setup_library, monkeypatch):
     assert progress == [{"current": 1, "total": 1, "step": "import.step.extract"}]
     assert folder == env.tmp / "extracted" / "test_spr"
     assert (folder / "test.atlas").read_bytes() == b"atlas"
-    env.library.extract("alt:test", env.tmp / "extracted")
+    env.library.extract("variant:test", env.tmp / "extracted")
     assert calls == [[entry.file], [env.original]]
 
 
@@ -1851,7 +1851,7 @@ def test_variant_swap_keeps_and_releases_only_the_target_copy(setup_library, mon
     env.library.apply("other", f"mod:{entry.id}")
     swap_by_copying(monkeypatch)
     official = env.original.read_bytes()
-    env.library.apply("test", "alt:other")
+    env.library.apply("test", "variant:other")
     assert kept_copy(env, env.original).read_bytes() == official
     env.library.restore("test")
     assert env.original.read_bytes() == official and not kept_copy(env, env.original).exists()
@@ -2358,7 +2358,7 @@ def test_integration_variant_swap_adapts_names_and_atlas_pages(tmp_path, monkeyp
     settings.set("compression_method", "lz4")
     catalog = FakeCatalog(FakeVariant("test", cores[0]), FakeVariant("other", cores[1]))
     library = ModLibrary(tmp_path / "library", catalog, object(), settings)
-    result = library.apply("test", "alt:other")
+    result = library.apply("test", "variant:other")
     assert result.files
 
     def assets(core_name):
@@ -2387,7 +2387,7 @@ def test_integration_variant_swap_adapts_names_and_atlas_pages(tmp_path, monkeyp
             if obj.type == AssetType.TextAsset and obj.peek_name().endswith(".atlas"):
                 assert target_texture_name + ".png" in obj.read().m_Script.splitlines()
     assert all(
-        file.crc == "fixed" and file.applied == "alt:other"
+        file.crc == "fixed" and file.applied == "variant:other"
         for file in library.state("test").files
         if file.file in result.files
     )
@@ -3041,14 +3041,14 @@ def test_missing_official_journal_recovers_outside_bytes_after_interrupted_rollb
     assert not list((env.root / "originals").glob("*.bundle"))
 
 
-@pytest.mark.parametrize("source_type", ["mod", "alt"])
+@pytest.mark.parametrize("source_type", ["mod", "variant"])
 def test_adapted_apply_without_official_target_keeps_the_outside_mod(setup_library, monkeypatch, source_type):
     env = setup_library
     env.catalog.variants["other"].family = "test"
     other = game_bundle(env.game_dir, "other_spr")
     env.original.write_bytes(header_bundle(b"outside target"))
     outside = env.original.read_bytes()
-    source = "alt:other"
+    source = "variant:other"
     if source_type == "mod":
         (mod,) = env.library.add([make_mod(other, env.tmp / "incoming")])
         source = f"mod:{mod.id}"

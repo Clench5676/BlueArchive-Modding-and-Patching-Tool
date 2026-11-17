@@ -24,7 +24,7 @@ function harness({ locale = "en-US", answer = "ok", used = true, error = null, r
   const deps = {
     T,
     overwrittenLines,
-    Loading: { task: (fn) => fn(() => {}), altName: (e) => e?.alt || "" },
+    Loading: { task: (fn) => fn(() => {}), variantName: (e) => e?.variant || "" },
     modJob: () => () => ({ text: "" }),
     ModSwitch: {
       refresh: async () => {},
@@ -142,8 +142,8 @@ test("Settings switches generic Mods through the shared apply and restore jobs",
   await h.select(mod, h.changed, true);
   await h.select({ ...mod, selected: true }, h.changed, false);
   assert.deepEqual(h.calls, [
-    ["actions.apply", { alt: mod.target, kind: "other", source: "mod:m1" }],
-    ["actions.restore", { alt: mod.target, kind: "other" }],
+    ["actions.apply", { variant: mod.target, kind: "other", source: "mod:m1" }],
+    ["actions.restore", { variant: mod.target, kind: "other" }],
   ]);
   assert.equal(h.changes(), 2);
 });
@@ -182,7 +182,7 @@ test("refused writes keep the list and expose the shared refusal flow", async ()
   assert.equal(h.changes(), 1);
   assert.deepEqual(
     h.refused.map((args) => args.slice(0, 3)),
-    [[error, "actions.apply", { alt: mod.target, kind: "other", source: "mod:m1" }]],
+    [[error, "actions.apply", { variant: mod.target, kind: "other", source: "mod:m1" }]],
   );
   // an untested game build's confirmation makes the same write again
   assert.equal(typeof h.refused[0][3], "function");

@@ -322,13 +322,13 @@ class CopiesMixin:
             targets = index.get(own, [])
             replaced = self._replaced_parts({path.name: path for path in self._paths(record)}, targets, pin)
             return sorted(path.name for path in targets if path not in replaced)
-        if source.startswith("alt:") and self._kind(core, pin) == "model":
+        if source.startswith("variant:") and self._kind(core, pin) == "model":
             try:
-                return sorted(path.name for path in self._costume_files(source[4:], pin)[2])
+                return sorted(path.name for path in self._costume_files(source[8:], pin)[2])
             except ServiceError:
                 return []
-        if source.startswith("alt:"):
-            other = self._core_map(pin).core(source[4:], self._kind(core, pin) or "spr")
+        if source.startswith("variant:"):
+            other = self._core_map(pin).core(source[8:], self._kind(core, pin) or "spr")
             return sorted(path.name for path in index.get(other.lower(), [])) if other else []
         return []
 
@@ -508,7 +508,7 @@ class CopiesMixin:
                     continue
                 else:
                     folder["configured"][core_name] = {
-                        "alt": variant_key,
+                        "variant": variant_key,
                         "kind": kind,
                         "source": source,
                         "since": stamp,
@@ -745,7 +745,7 @@ class CopiesMixin:
                         source = candidate
             if source:
                 configured[core] = {
-                    "alt": view.maps[pin.key].key(core) or core,
+                    "variant": view.maps[pin.key].key(core) or core,
                     "kind": kind,
                     "source": source,
                     "since": stamp,
@@ -873,7 +873,7 @@ class CopiesMixin:
                     continue
                 logger.info("Configured %s in %s with %s (taken over)", entry.core, entry.pin.key, entry.takeover)
                 folder["configured"][entry.core] = {
-                    "alt": entry.variant,
+                    "variant": entry.variant,
                     "kind": entry.kind,
                     "source": entry.takeover,
                     "since": stamp,
@@ -1058,7 +1058,7 @@ class CopiesMixin:
 
             def change(data: dict) -> None:
                 folder = data["folders"].get(pin.key) or self._new_folder(data, pin, named)
-                folder["configured"][core] = {"alt": variant, "kind": entry.kind, "source": source, "since": stamp}
+                folder["configured"][core] = {"variant": variant, "kind": entry.kind, "source": source, "since": stamp}
                 folder["updated"].pop(core, None)
                 if core in folder["built"]:
                     replaced.append(folder["built"][core])
@@ -1104,7 +1104,7 @@ class CopiesMixin:
                         {
                             "install": item["install"],
                             "core": item["core"],
-                            "alt": entry.get("alt"),
+                            "variant": entry.get("variant"),
                             "kind": entry.get("kind"),
                             "source": source,
                             **({"label": self._label(record)} if record else {}),

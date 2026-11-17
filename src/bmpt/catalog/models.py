@@ -35,7 +35,7 @@ class Variant:
 
     def to_json(self) -> dict:
         """Return an independent JSON-ready record for RPC responses."""
-        return {"student" if key == "family" else key: value for key, value in asdict(self).items()}
+        return asdict(self)
 
 
 @dataclass
@@ -50,13 +50,7 @@ class Family:
 
     def to_json(self) -> dict:
         """Return an independent JSON-ready record for RPC responses."""
-        return {
-            "key": self.key,
-            "names": dict(self.names),
-            "school": self.school,
-            "alts": [v.to_json() for v in self.variants],
-            "aliases": list(self.aliases),
-        }
+        return asdict(self)
 
 
 @dataclass(frozen=True)

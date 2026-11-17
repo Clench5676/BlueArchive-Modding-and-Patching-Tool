@@ -11,26 +11,26 @@ import { T } from "../core/i18n.js";
 import { $ } from "../core/util.js";
 import {
   stage,
-  altId,
+  variantKey,
   fam,
   layouts,
   ctx,
   tab,
   fullscreen,
-  face,
+  expression,
   mainPlayer,
   open,
   thumbnailWork,
   thumb,
   settleImages,
-  alt,
+  variant,
   currentBase,
   shownSource,
   previewAvailable,
   current,
   renderAll,
   leftKey,
-  setFaceState,
+  setExpressionState,
   setLobbyFrom,
   setLobbyStale,
   setFullscreenState,
@@ -39,7 +39,7 @@ import {
   setShownKey,
 } from "./detail.js";
 import { stripCard } from "./detail-strip.js";
-import { loadSpine, detailViewport, applyFace, disposePortrait } from "./detail-portrait.js";
+import { loadSpine, detailViewport, applyExpression, disposePortrait } from "./detail-portrait.js";
 import { modsOn } from "./detail-switchers.js";
 import { setFullscreen, slidOut, setStage, showExit } from "./detail-fullscreen.js";
 
@@ -51,10 +51,10 @@ export let photoLastAction = "",
 export const photoFaces = new Map();
 async function photoPreload() {
   if (photoPrepared) return photoPrepared;
-  photoOrigin = altId;
+  photoOrigin = variantKey;
   photoSession = true;
   photoPrepared = (async () => {
-    const v = alt(),
+    const v = variant(),
       portraitAvailable = previewAvailable(v, "spr"),
       lobbyAvailable = previewAvailable(v, "lobby"),
       portrait = $("portrait"),
@@ -93,7 +93,7 @@ async function photoPreload() {
         await Lobby.prepareFrame();
       })(),
     ]);
-    if (photoOrigin !== altId || !open) throw new DOMException("Photography source changed", "AbortError");
+    if (photoOrigin !== variantKey || !open) throw new DOMException("Photography source changed", "AbortError");
     if (portraitAvailable && !Visual.isOpen()) {
       const layout = await (layouts.visual ||= NGUI.layout("UICharacterVisualMode"));
       const parts = await Visual.prepare({
@@ -110,7 +110,7 @@ async function photoPreload() {
         uiHost: $("visual-ui"),
         players: () => [...portrait.querySelectorAll(".layer")].map((layer) => layer.player).filter(Boolean),
         onBack: () => setFullscreen(false),
-        alive: () => open && photoOrigin === altId,
+        alive: () => open && photoOrigin === variantKey,
       });
     }
     if (portraitAvailable) {
@@ -146,11 +146,11 @@ function photoVisibility(mode) {
 }
 export const photoBridge = {
   info: () => ({
-    alt: altId,
+    variant: variantKey,
     mode: tab,
-    source: tab === "portrait" ? currentBase() : shownSource(alt(), "lobby"),
-    hasPortrait: previewAvailable(alt(), "spr"),
-    hasLobby: previewAvailable(alt(), "lobby"),
+    source: tab === "portrait" ? currentBase() : shownSource(variant(), "lobby"),
+    hasPortrait: previewAvailable(variant(), "spr"),
+    hasLobby: previewAvailable(variant(), "lobby"),
   }),
   async full(mode) {
     await photoPreload();
@@ -178,7 +178,7 @@ export const photoBridge = {
   async leave() {
     Lobby.suspend();
     setShownLeft(tab);
-    setShownKey(leftKey(tab, alt()));
+    setShownKey(leftKey(tab, variant()));
     await setFullscreen(false);
     await renderAll();
     await settleImages();
@@ -218,30 +218,32 @@ export const photoBridge = {
       Lobby.interactive(false);
     }
   },
-  generatedThumbnail: async () => (alt().spr ? await thumbnailWork.thumb(currentBase(), "roster") : alt().portrait),
+  generatedThumbnail: async () =>
+    variant().spr ? await thumbnailWork.thumb(currentBase(), "roster") : variant().portrait,
   defaultThumbnail: async () =>
-    alt().portrait || (alt().spr ? await thumb(spineBase("official-spr", alt().spr), "roster") : null),
+    variant().portrait || (variant().spr ? await thumb(spineBase("official-spr", variant().spr), "roster") : null),
   thumbnailChanged() {
     ctx?.invalidateRoster();
   },
-  faces: () => (mainPlayer?.skeleton?.data.animations || []).map((a) => a.name).filter((name) => /^\d{2}$/.test(name)),
-  facePreview(key) {
+  expressions: () =>
+    (mainPlayer?.skeleton?.data.animations || []).map((a) => a.name).filter((name) => /^\d{2}$/.test(name)),
+  expressionPreview(key) {
     if (!photoFaces.has(key)) photoFaces.set(key, thumbnailWork.thumb(currentBase(), "face", key));
     return photoFaces.get(key);
   },
-  async prepareFaces() {
-    await Promise.all(photoBridge.faces().map((key) => photoBridge.facePreview(key)));
+  async prepareExpressions() {
+    await Promise.all(photoBridge.expressions().map((key) => photoBridge.expressionPreview(key)));
   },
-  faceCard(key, preview) {
-    const tree = stripCard(`Face${key}`, 0, { thumb: preview, selected: key === face });
+  expressionCard(key, preview) {
+    const tree = stripCard(`Expression${key}`, 0, { thumb: preview, selected: key === expression });
     tree.pos = [0, 0];
     return tree;
   },
-  face: () => face,
+  expression: () => expression,
   action: () => Lobby.playing() || photoLastAction,
-  setFace(value) {
-    setFaceState(value);
-    applyFace();
+  setExpression(value) {
+    setExpressionState(value);
+    applyExpression();
   },
   actions: () =>
     [

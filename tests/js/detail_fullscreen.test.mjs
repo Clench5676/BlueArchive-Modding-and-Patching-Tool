@@ -25,7 +25,7 @@ function harness(start, hasLobby = true) {
       });
     return nodes.get(id);
   };
-  const selection = { skin: "cycling", mod: false, source: "configured portrait", face: "02" };
+  const selection = { skin: "cycling", mod: false, source: "configured portrait", expression: "02" };
   const env = {
     console,
     Promise,
@@ -36,7 +36,7 @@ function harness(start, hasLobby = true) {
     open: true,
     busy: false,
     photoSession: false,
-    altId: selection.skin,
+    variantKey: selection.skin,
     selection,
     mainPlayer: { skeleton: {} },
     layouts: { visual: {} },
@@ -44,7 +44,7 @@ function harness(start, hasLobby = true) {
     stage: () => node("stage"),
     document: { querySelector: () => node("topbar") },
     T: (key) => key,
-    alt: () => ({ key: selection.skin }),
+    variant: () => ({ key: selection.skin }),
     previewAvailable: (_, kind) => kind !== "lobby" || hasLobby,
     switchKindOf: (part) => (part === "portrait" ? "spr" : part),
     detailViewport: () => ({ detail: true }),

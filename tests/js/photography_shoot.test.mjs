@@ -13,7 +13,7 @@ function setup({ paused = false, failCapture = false, failSave = false } = {}) {
       bridge: {
         pause: (on) => calls.push(["pause", on]),
         redraw: async () => calls.push(["draw"]),
-        face: () => "02",
+        expression: () => "02",
         action: () => "",
         info: () => ({ source: "/real/source" }),
       },
@@ -43,7 +43,7 @@ test("one shutter press saves directly and resumes playback before waiting for s
   assert.deepEqual(h.calls[5][1], {
     png: "native PNG",
     mode: "portrait",
-    face: "02",
+    expression: "02",
     action: "",
     source: "/real/source",
   });

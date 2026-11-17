@@ -38,7 +38,7 @@ def put(gallery, data):
 
 
 def row(key, variant="student:a", **extra):
-    return {"id": key, "alt": variant, "sha256": DIGEST, "number": 1, **extra}
+    return {"id": key, "variant": variant, "sha256": DIGEST, "number": 1, **extra}
 
 
 def base(**changes):
@@ -53,7 +53,7 @@ def gallery(tmp_path):
 def test_a_bad_photo_record_costs_that_record_only_and_is_written_back_unchanged(gallery, caplog):
     good = gallery.save("student:a", capture()[0], "portrait")["saved"]
     data = manifest(gallery)
-    stale = {"id": BAD, "alt": "student:a", "sha256": "short"}
+    stale = {"id": BAD, "variant": "student:a", "sha256": "short"}
     data["photos"].update(
         {
             "not-an-id": row("x" * 32),
@@ -84,7 +84,7 @@ def test_a_bad_photo_record_costs_that_record_only_and_is_written_back_unchanged
 
 
 def test_a_held_record_cannot_be_used(gallery):
-    data = base(photos={BAD: {"id": BAD, "alt": "student:a", "sha256": "bad"}})
+    data = base(photos={BAD: {"id": BAD, "variant": "student:a", "sha256": "bad"}})
     put(gallery, data)
     with pytest.raises(ServiceError, match="photo_missing"):
         gallery.image("student:a", BAD)
@@ -144,7 +144,7 @@ def test_deleting_a_photo_a_kept_row_names_is_refused(tmp_path):
     key = gallery.save("student:a", capture()[0], "portrait")["saved"]
     file = gallery.root / "images" / f"{key}.png"
     data = manifest(gallery)
-    data["photos"][BAD] = {"id": key, "alt": "student:a"}  # a held record that names this photo's file
+    data["photos"][BAD] = {"id": key, "variant": "student:a"}  # a held record that names this photo's file
     put(gallery, data)
     with pytest.raises(ServiceError, match="photo_in_use"):
         gallery.delete("student:a", key)
@@ -178,8 +178,8 @@ def test_deleting_a_photo_a_kept_row_names_is_refused(tmp_path):
         b'{"version": 1, "photos": [], "selected": {}, "next": 1}',
         b'{"version": 1, "photos": {}, "selected": [], "next": 1}',
         b'{"version": 1, "photos": {}, "selected": {}, "next": 0}',
-        b'{"version": 1, "photos": {}, "selected": {}, "next": 1, "next_by_alt": []}',
-        b'{"version": 1, "photos": {}, "selected": {}, "next": 1, "next_by_alt": {"a": 0}}',
+        b'{"version": 1, "photos": {}, "selected": {}, "next": 1, "next_by_variant": []}',
+        b'{"version": 1, "photos": {}, "selected": {}, "next": 1, "next_by_variant": {"a": 0}}',
         b"\xff\xfe",
     ],
 )
@@ -243,14 +243,14 @@ def test_a_stale_selection_keeps_family_get_and_roster_list_answering(app, servi
     put(gallery, data)
     raw = gallery.index.read_bytes()
     with caplog.at_level(logging.WARNING):
-        family = rpc(app, "student.get", key="hoshino")
+        family = rpc(app, "family.get", key="hoshino")
         roster = rpc(app, "roster.list")
     assert "error" not in family and "error" not in roster
-    entries = [variant for item in roster["result"]["students"] for variant in item["alts"]]
+    entries = [variant for item in roster["result"]["families"] for variant in item["variants"]]
     assert entries and all("thumbnail" not in variant for variant in entries)
-    assert all("thumbnail" not in variant for variant in family["result"]["alts"])
+    assert all("thumbnail" not in variant for variant in family["result"]["variants"])
     assert gallery.index.read_bytes() == raw
-    assert rpc(app, "photography.list", alt="hoshino")["result"]["app"] is None
+    assert rpc(app, "photography.list", variant="hoshino")["result"]["app"] is None
     assert not [r for r in caplog.records if "Photograph lookup failed" in r.getMessage()]
 
 
@@ -260,19 +260,19 @@ def test_a_corrupt_manifest_leaves_every_student_list_working_and_the_file_uncha
     gallery.index.write_bytes(b"{ not json")
     with caplog.at_level(logging.WARNING):
         for _ in range(3):
-            family = rpc(app, "student.get", key="hoshino")
+            family = rpc(app, "family.get", key="hoshino")
             roster = rpc(app, "roster.list")
             assert "error" not in family and "error" not in roster
-    assert all("thumbnail" not in variant for item in roster["result"]["students"] for variant in item["alts"])
+    assert all("thumbnail" not in variant for item in roster["result"]["families"] for variant in item["variants"])
     assert (
         len([r for r in caplog.records if "Photograph lookup failed" in r.getMessage()]) == 1
     )  # once, not per student
     # the photograph features themselves refuse, and nothing overwrites the file
-    assert rpc(app, "photography.list", alt="hoshino")["error"]["code"] == "photo_library_invalid"
-    assert rpc(app, "photography.select", alt="hoshino", id=None)["error"]["code"] == "photo_library_invalid"
+    assert rpc(app, "photography.list", variant="hoshino")["error"]["code"] == "photo_library_invalid"
+    assert rpc(app, "photography.select", variant="hoshino", id=None)["error"]["code"] == "photo_library_invalid"
     png = capture()[0]
     assert (
-        rpc(app, "photography.save", alt="hoshino", png=png, mode="portrait")["error"]["code"]
+        rpc(app, "photography.save", variant="hoshino", png=png, mode="portrait")["error"]["code"]
         == "photo_library_invalid"
     )
     assert gallery.index.read_bytes() == b"{ not json"
@@ -297,12 +297,12 @@ def test_a_valid_selection_still_gives_the_thumbnail(app, services):
     gallery = services.photographs
     key = gallery.save("hoshino", capture()[0], "portrait")["saved"]
     gallery.select("hoshino", key)
-    variants = [v for item in rpc(app, "roster.list")["result"]["students"] for v in item["alts"]]
+    variants = [v for item in rpc(app, "roster.list")["result"]["families"] for v in item["variants"]]
     assert variants[0]["thumbnail"].endswith(f"{key}.png")
 
 
 def test_deep_copies_of_the_manifest_carry_the_held_rows(gallery):
-    put(gallery, base(photos={BAD: {"id": BAD, "alt": "student:a", "sha256": "bad"}}))
+    put(gallery, base(photos={BAD: {"id": BAD, "variant": "student:a", "sha256": "bad"}}))
     data = gallery._read()
     clone = copy.deepcopy(data)
     assert clone.held_photos == data.held_photos and clone.document() == data.document()

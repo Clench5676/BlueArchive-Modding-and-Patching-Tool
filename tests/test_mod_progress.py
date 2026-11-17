@@ -9,13 +9,13 @@ from bmpt.core.progress_meter import Meter
 def test_each_item_is_reported_as_it_starts_counted_from_one_with_who_it_is():
     seen = []
     line = ItemProgress(seen.append, 13, "process")
-    line.item(1, alt="ch0063", kind="model", name="My Swim Edit", step=STEP_CHECK)
+    line.item(1, variant="ch0063", kind="model", name="My Swim Edit", step=STEP_CHECK)
     assert seen == [
         {
             "current": 1,
             "total": 13,
             "action": "process",
-            "alt": "ch0063",
+            "variant": "ch0063",
             "kind": "model",
             "name": "My Swim Edit",
             "source": "",
@@ -27,26 +27,26 @@ def test_each_item_is_reported_as_it_starts_counted_from_one_with_who_it_is():
     line.step(STEP_CHECK)  # already shown: nothing
     line.fraction(0.0)
     assert len(seen) == 1
-    line.item(2, alt="ch0145", kind="model", source="ch0063", action="apply")
+    line.item(2, variant="ch0145", kind="model", source="ch0063", action="apply")
     assert (seen[-1]["current"], seen[-1]["source"], seen[-1]["action"], seen[-1]["step"]) == (2, "ch0063", "apply", "")
 
 
 def test_the_share_only_grows_within_an_item_and_starts_again_with_the_next():
     seen = []
     line = ItemProgress(seen.append, 2)
-    line.item(1, alt="a", kind="spr")
+    line.item(1, variant="a", kind="spr")
     line.fraction(0.4)
     line.fraction(0.3)
     line.step("import.step.save", at=0.2)  # a step that starts earlier keeps the share shown
     assert [(p["step"], p["fraction"]) for p in seen] == [("", 0.0), ("", 0.4), ("import.step.save", 0.4)]
-    line.item(2, alt="b", kind="spr")
+    line.item(2, variant="b", kind="spr")
     assert seen[-1]["fraction"] == 0.0
 
 
 def test_a_build_fills_its_share_of_the_item_and_the_write_starts_where_it_ended():
     seen = []
     line = ItemProgress(seen.append, 1)
-    line.item(1, alt="a", kind="model")
+    line.item(1, variant="a", kind="model")
     part = line.part(0.0, 1.0, build=0.9)
     part.phase("read")
     part(0.5)
@@ -61,14 +61,14 @@ def test_a_build_fills_its_share_of_the_item_and_the_write_starts_where_it_ended
         (STEP_WRITE, 0.9),
     ]
     # nothing built: the write starts halfway through the share; the official files put back are their own step
-    line.item(1, alt="a", kind="spr")
+    line.item(1, variant="a", kind="spr")
     plain = line.part(0.0, 1.0, build=0.9)
     plain.phase("restore")
     assert (seen[-1]["step"], seen[-1]["fraction"]) == (STEP_RESTORE, 0.5)
     line.done()
     assert seen[-1]["fraction"] == 1.0
     # a later share of the item: its write at its start when it builds nothing
-    line.item(1, alt="a", kind="model")
+    line.item(1, variant="a", kind="model")
     line.part(0.0, 0.9)(1.0)
     line.part(0.9, 1.0, build=0.0).phase("write")
     assert (seen[-1]["step"], seen[-1]["fraction"]) == (STEP_WRITE, 0.9)
@@ -76,7 +76,7 @@ def test_a_build_fills_its_share_of_the_item_and_the_write_starts_where_it_ended
 
 def test_without_a_job_nothing_is_reported_and_a_plain_callback_is_told_no_phase():
     line = ItemProgress(None, 3)
-    line.item(1, alt="a", kind="spr")
+    line.item(1, variant="a", kind="spr")
     line.part(0.0, 1.0)(0.5)
     assert mod_progress.single(None) is None
     plain = []

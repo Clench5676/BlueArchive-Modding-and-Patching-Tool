@@ -1,6 +1,6 @@
-// Boot and routing: #/roster (the student list) and #/student/<student>/<alt> (the detail screen). The game's
+// Boot and routing: #/roster (the student list) and #/student/<family>/<variant> (the detail screen). The game's
 // loading screen covers the start and every change of screen until the new one is ready; a change inside the detail
-// screen (an alt chip, the arrows) is covered too, through its first complete frame.
+// screen (a variant chip, the arrows) is covered too, through its first complete frame.
 import { notify } from "../ui/popup.js";
 import * as Consent from "./consent.js";
 import * as BatchImport from "../mods/batch-import.js";
@@ -116,10 +116,10 @@ const refreshLanguage = languageRefresh({
 const ctx = {
   dragged: false,
   back: () => goBack(),
-  go: (student, alt, kind) => {
+  go: (family, variant, kind) => {
     const target = kind === "spr" ? "portrait" : kind;
     const tab = ["portrait", "lobby", "model"].includes(target) ? `/${target}` : "";
-    location.hash = `#/student/${encodeURIComponent(student)}/${encodeURIComponent(alt)}${tab}`;
+    location.hash = `#/student/${encodeURIComponent(family)}/${encodeURIComponent(variant)}${tab}`;
   },
   invalidateRoster: () => {
     rosterStale = true;
@@ -134,17 +134,17 @@ const ctx = {
     if (rosterStale) roster().catch(() => {});
     return Promise.resolve(rosterData);
   },
-  // the card before or after the shown alt (merged: student) in the roster's order, within its filters
-  step: async (delta, student, alt) => {
+  // the card before or after the shown variant (merged: family) in the roster's order, within its filters
+  step: async (delta, family, variant) => {
     const data = await roster();
     stepCards ||= Roster.order(data);
     const next = neighbour(
       stepCards,
       () => Roster.order(data, { unfiltered: true }),
-      { student, alt, merged: Roster.merged() },
+      { family, variant, merged: Roster.merged() },
       delta,
     );
-    if (next) ctx.go(next.student, next.key);
+    if (next) ctx.go(next.family, next.key);
   },
 };
 
@@ -178,9 +178,9 @@ function roster() {
 // library.changed without its cores): their thumbnails are rendered again
 function forgetReplaced(before, after) {
   if (!before) return;
-  const was = new Map(before.students.flatMap((f) => f.alts.map((v) => [v.key, v.replaced ?? null])));
-  for (const f of after.students) {
-    for (const v of f.alts)
+  const was = new Map(before.families.flatMap((f) => f.variants.map((v) => [v.key, v.replaced ?? null])));
+  for (const f of after.families) {
+    for (const v of f.variants)
       if (hasAsset(v) && was.has(v.key) && was.get(v.key) !== (v.replaced ?? null)) {
         const kind = primaryKind(v);
         forget(spinePrefix(kind, kind === "spr" ? v.spr : v.lobby));
@@ -188,14 +188,14 @@ function forgetReplaced(before, after) {
   }
 }
 
-// an entry's alt named as the roster names it (entries of cores the catalog does not map carry their shipped
+// an entry's variant named as the roster names it (entries of cores the catalog does not map carry their shipped
 // names, else their core); resolves once the roster's data is in
-async function altNames() {
+async function variantNames() {
   const data = await roster().catch(() => rosterData);
-  const byKey = new Map((data?.students || []).flatMap((f) => f.alts.map((v) => [v.key, v])));
+  const byKey = new Map((data?.families || []).flatMap((f) => f.variants.map((v) => [v.key, v])));
   return (entry) => {
-    const v = byKey.get(entry?.alt);
-    return studentName(v, (v && L(v.names)?.full) || L(entry?.names)?.full || entry?.alt || entry?.core || "");
+    const v = byKey.get(entry?.variant);
+    return studentName(v, (v && L(v.names)?.full) || L(entry?.names)?.full || entry?.variant || entry?.core || "");
   };
 }
 
@@ -205,22 +205,22 @@ let nameIndex = new Map(),
 function progressNames(entry) {
   if (nameIndexOf !== rosterData) {
     nameIndexOf = rosterData;
-    nameIndex = new Map((rosterData?.students || []).flatMap((f) => f.alts.map((v) => [v.key, v])));
+    nameIndex = new Map((rosterData?.families || []).flatMap((f) => f.variants.map((v) => [v.key, v])));
   }
-  const v = nameIndex.get(entry?.alt);
-  return studentName(v, (v && L(v.names)?.full) || entry?.alt || entry?.core || "");
+  const v = nameIndex.get(entry?.variant);
+  return studentName(v, (v && L(v.names)?.full) || entry?.variant || entry?.core || "");
 }
 
 // Go To from the update summary or the held entries' Details (update-impact.js): the mod's student page on the tab of
 // its kind, its switch open on the mod (Detail.takeWanted); Settings closes first
-async function openMod({ id, alt, kind }) {
+async function openMod({ id, variant, kind }) {
   const data = await roster().catch(() => rosterData);
-  const student = (data?.students || []).find((f) => f.alts.some((v) => v.key === alt));
-  if (!student || !id) return;
+  const family = (data?.families || []).find((f) => f.variants.some((v) => v.key === variant));
+  if (!family || !id) return;
   if (!$("settings").hidden) Settings.close();
-  Detail.want({ id, alt, kind });
+  Detail.want({ id, variant, kind });
   const before = location.hash;
-  ctx.go(student.key, alt, kind);
+  ctx.go(family.key, variant, kind);
   if (location.hash === before) await Detail.takeWanted();
 }
 
@@ -295,9 +295,9 @@ function watchFront() {
 }
 
 // the visit the detail screen records (ui.visit) goes into the roster's data too, so "Recently Viewed" has it on the
-// way back; the alt is the one the detail screen shows for the link
+// way back; the variant is the one the detail screen shows for the link
 function visited(fam, key) {
-  const vs = fam?.alts || [];
+  const vs = fam?.variants || [];
   const shown = vs.some((v) => v.key === key && hasAsset(v)) ? key : (vs.find(hasAsset) || vs[0])?.key;
   if (rosterData && shown) visit(rosterData, shown);
 }
@@ -593,13 +593,13 @@ async function route() {
       if (!stepCards && rosterData && !$("screen-roster").hidden) stepCards = Roster.order(rosterData);
       Roster.invalidate();
       Roster.hide();
-      const inPlace = !$("screen-detail").hidden && !!Detail.currentAlt();
+      const inPlace = !$("screen-detail").hidden && !!Detail.currentVariant();
       await Loading.hold(
         () =>
           Loading.scene(
             async (covered) => {
               // no client deadline, as roster.list: a writer job can hold the library lock for its whole run
-              const fam = await rpc("student.get", { key: parts[1] });
+              const fam = await rpc("family.get", { key: parts[1] });
               await covered;
               if (!current()) return; // a later navigation took over
               visited(fam, parts[2]);
@@ -834,7 +834,7 @@ async function start() {
   await ui;
   renderNav(-1, navOptions);
   // the Enable Mods switch in the top bar, and what the writer jobs switched
-  await timed("mod-state", () => ModSwitch.init({ names: altNames, refreshPage: refreshAfterToggle }));
+  await timed("mod-state", () => ModSwitch.init({ names: variantNames, refreshPage: refreshAfterToggle }));
   let enabled = ModSwitch.current()?.enabled !== false;
   ModSwitch.onChange((state) => {
     const next = state.enabled !== false;
@@ -842,8 +842,8 @@ async function start() {
     enabled = next;
     libraryChanged(null);
   });
-  Prompts.init({ names: altNames });
-  Impact.init({ names: altNames, go: openMod });
+  Prompts.init({ names: variantNames });
+  Impact.init({ names: variantNames, go: openMod });
   Loading.setNames(progressNames);
   const settingsChanged = async (key, prefs) => {
     ctx.prefs = prefs;

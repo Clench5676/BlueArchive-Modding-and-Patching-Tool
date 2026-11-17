@@ -52,7 +52,7 @@ function portraitHarness(portrait, confirm = async () => false, decode = () => P
     HARD_CAP: 15000,
     Loading: { covering: () => true },
     commit: (fn) => fn(),
-    alt: () => ({ portrait }),
+    variant: () => ({ portrait }),
     Lobby: { licenseRequired: (layer, retry) => status.push({ layer, retry }) },
     renderLeft: () => {
       retries++;
@@ -160,12 +160,12 @@ test("detail thumbnail fallbacks use collection portraits only for the matching 
     detailSource.indexOf("function collectionPortrait("),
     detailSource.indexOf("function begin()"),
   );
-  const alts = [
+  const variants = [
     { key: "ibuki", spr: "ibuki_spr", portrait: "/ibuki.png", modList: [{ id: "added", kind: "spr" }] },
     { key: "special:npc", lobby: "npc" },
   ];
-  const read = new Function("fam", "spineBase", "altBase", `${code}; return collectionPortrait;`)(
-    { alts },
+  const read = new Function("fam", "spineBase", "variantBase", `${code}; return collectionPortrait;`)(
+    { variants },
     (kind, core) => `${kind}/${core}`,
     (v) => `installed/${v.spr}`,
   );

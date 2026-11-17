@@ -72,14 +72,14 @@ test("a special scene's category decides cache eviction even when its core ends 
   assert.deepEqual(h.refreshed, [{ cores: ["scene_spr"] }]);
 });
 
-test("a visit records the selected background alongside a portrait in its student", () => {
+test("a visit records the selected background alongside a portrait in its family", () => {
   const fam = {
-    alts: [
+    variants: [
       { key: "arona", spr: "arona_spr" },
       { key: "special:arona_workpage", spr: null, lobby: "arona_workpage" },
     ],
   };
-  const rosterData = { students: [fam] };
+  const rosterData = { families: [fam] };
   const code = source.slice(source.indexOf("function visited("), source.indexOf("function showScreen("));
   const visited = new Function("rosterData", "hasAsset", "visit", `${code}; return visited;`)(
     rosterData,
@@ -87,6 +87,6 @@ test("a visit records the selected background alongside a portrait in its studen
     visit,
   );
   visited(fam, "special:arona_workpage");
-  assert.equal(fam.alts[1].recent, 0);
-  assert.equal(fam.alts[0].recent, undefined);
+  assert.equal(fam.variants[1].recent, 0);
+  assert.equal(fam.variants[0].recent, undefined);
 });

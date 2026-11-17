@@ -94,18 +94,18 @@ export const covering = () => active() && overlay.mode === "full";
 /** Whether automatic popups must wait: for page work, input holds and independent writer progress. */
 export const busy = () => pending.size > 0 || active() || held() || (!!writerOverlay && !writerOverlay.closing);
 
-// How a job over mods names an alt ({alt, core}) in its progress line (job-progress.js modLine): the roster's
+// How a job over mods names a variant ({variant, core}) in its progress line (job-progress.js modLine): the roster's
 // names once the App has them (setNames), the key until then.
-let nameOf = (entry) => entry?.alt || entry?.core || "";
+let nameOf = (entry) => entry?.variant || entry?.core || "";
 /**
- * Give a job's progress line the roster's names for alts; until then it shows the key.
- * @param {(entry: {alt?: string, core?: string}) => string} fn Names an alt or core.
+ * Give a job's progress line the roster's names for variants; until then it shows the key.
+ * @param {(entry: {variant?: string, core?: string}) => string} fn Names a variant or core.
  */
 export function setNames(fn) {
   if (typeof fn === "function") nameOf = fn;
 }
-/** How a job over mods names an alt ({alt, core}) in its progress line (job-progress.js modLine). */
-export const altName = (entry) => nameOf(entry);
+/** How a job over mods names a variant ({variant, core}) in its progress line (job-progress.js modLine). */
+export const variantName = (entry) => nameOf(entry);
 
 /**
  * Make a progress line: {text}, or {text, parts} for a job over mods, whose parts fitLine shortens to the
@@ -174,7 +174,7 @@ export async function task(run, { label = null } = {}) {
     }
     if (typeof f === "number" && Number.isFinite(f) && (best === null || f > best)) best = f;
     // label false: work that is no job over mods (a screen being prepared) shows no line until it reports one
-    const quiet = label === false && !value?.text && !value?.label && !value?.alt && !value?.core;
+    const quiet = label === false && !value?.text && !value?.label && !value?.variant && !value?.core;
     setProgress(o, quiet ? "" : progressLine(best === null ? value : { ...value, fraction: best }, label || undefined));
   };
   o.relabelProgress = () => update();

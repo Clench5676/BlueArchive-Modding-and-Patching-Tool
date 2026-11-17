@@ -73,7 +73,7 @@ def adapt_variant_sources(
             for key, values in source_slots.items()
         )
     ):
-        raise ServiceError("alt_incompatible")
+        raise ServiceError("variant_incompatible")
     texture_names = {}
     adapted = []
     for key, objects in source_slots.items():

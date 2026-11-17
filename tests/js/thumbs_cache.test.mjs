@@ -142,7 +142,7 @@ test("a failed portrait capture reuses an existing still of the same source revi
     assert.equal(await thumb(base, "portrait"), still);
     const twin = spineBase("official-spr", "pajamas_other");
     set(twin, "a");
-    assert.equal(await thumb(twin, "portrait"), null, "a similarly named alt is a different source");
+    assert.equal(await thumb(twin, "portrait"), null, "a similarly named variant is a different source");
     set(base, "b");
     assert.equal(await thumb(base, "portrait"), null, "never show art from an older revision");
   } finally {

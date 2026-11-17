@@ -1,7 +1,7 @@
 // Roster: the game's student list prefabs rendered by ngui.js: UICharacterCollection gives the list frame, ruled paper,
 // segment filters, search / sort / order buttons, search box and empty list; UICharacterCollectionPopulatorUnit the card
 // template (UICollectCard) and the "not owned" section bar; UIPopup_GachaCharList.Btn_Checkbox the checkbox toggle,
-// reused for "group the alts of one character". Which cards show, and in what order, is roster-order.js. Cards with
+// reused for "group the variants of one character". Which cards show, and in what order, is roster-order.js. Cards with
 // mods come first; cards without mods follow the section bar, dimmed like not-owned students; favourites (the game's
 // pins) come first in each group. The view is kept across launches (settings key "roster"), the search for the session.
 // Only the rows near the view are rendered.
@@ -82,7 +82,7 @@ export function invalidate() {
 export function init(prefs) {
   view = { ...normalizeView(prefs), scroll: 0 };
 }
-/** Whether the roster groups the alts of one character. */
+/** Whether the roster groups the variants of one character. */
 export const merged = () => view.merged;
 
 let saveTimer = 0;
@@ -261,11 +261,11 @@ const portraitOf = (e) => {
   if (!spineAllowed()) return e.portrait || null;
   const thumb = thumbnailWork.thumb;
   const kind = primaryKind(e),
-    alts = data.students.find((f) => f.key === e.student)?.alts || [];
+    variants = data.families.find((f) => f.key === e.family)?.variants || [];
   // Model-only entries stay navigable without requesting a Spine skeleton for a GLB.
   if (kind === "model") return e.portrait || null;
   if (e.previewSources?.[kind] || configuredKey(e, kind)) {
-    return thumb(previewBase(e, kind, false, alts), "roster", null, kind === "lobby", specialFraming(e), e.bg);
+    return thumb(previewBase(e, kind, false, variants), "roster", null, kind === "lobby", specialFraming(e), e.bg);
   }
   const core = kind === "spr" ? e.spr : e.lobby;
   return core
@@ -310,7 +310,7 @@ async function renderRow(host, rowKey) {
     if (hasAsset(it.e))
       hit.addEventListener("click", () => {
         if (!ctx.dragged)
-          location.hash = `#/student/${encodeURIComponent(it.e.student)}/${encodeURIComponent(it.e.key)}`;
+          location.hash = `#/student/${encodeURIComponent(it.e.family)}/${encodeURIComponent(it.e.key)}`;
       });
     else hit.disabled = true;
     row.appendChild(hit);

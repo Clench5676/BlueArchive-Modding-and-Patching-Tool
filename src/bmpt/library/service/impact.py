@@ -295,7 +295,7 @@ class ImpactMixin:
                 entry = entries[record["id"]]
                 line.item(
                     i,
-                    alt=entry.target,
+                    variant=entry.target,
                     kind=entry.kind,
                     name=self._progress_name(record),
                     core=entry.core,
@@ -465,7 +465,7 @@ class ImpactMixin:
                     }
                 )
             for core, choice in sorted(choices.items()):
-                if choice.get("kind") != "model" or not str(choice.get("source") or "").startswith("alt:"):
+                if choice.get("kind") != "model" or not str(choice.get("source") or "").startswith("variant:"):
                     continue
                 if not holds(core, choice):
                     continue
@@ -478,7 +478,7 @@ class ImpactMixin:
                 out.append(
                     {
                         "id": "",
-                        "target": choice.get("alt"),
+                        "target": choice.get("variant"),
                         "kind": "model",
                         "core": core,
                         "source": choice["source"],
@@ -588,13 +588,13 @@ class ImpactMixin:
         That is the variant and kind it writes, and the mod's own name (``_progress_name``) or the variant whose files
         it takes.
         """
-        identity = {"alt": variant or "", "kind": kind or ""}
+        identity = {"variant": variant or "", "kind": kind or ""}
         if isinstance(source, str) and source.startswith("mod:"):
             record = self._records.get(source[4:])
             if record is not None:
                 identity["name"] = self._progress_name(record)
-        elif isinstance(source, str) and source.startswith("alt:"):
-            identity["source"] = source[4:]
+        elif isinstance(source, str) and source.startswith("variant:"):
+            identity["source"] = source[8:]
         return identity
 
     def _progress_name(self, record: dict[str, Any]) -> str:
@@ -830,7 +830,7 @@ class ImpactMixin:
         entry = {
             "install": pin.key,
             "core": core,
-            "alt": variant or self._core_map(pin).key(core) or core,
+            "variant": variant or self._core_map(pin).key(core) or core,
             "kind": kind,
         }
         if kind == "other":

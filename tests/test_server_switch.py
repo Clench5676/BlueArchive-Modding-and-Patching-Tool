@@ -27,9 +27,9 @@ def test_missing_japanese_folder_keeps_global_and_hall_then_recovers(app, servic
     hall = empty_hall()
     hall["background"] = "office-night"
     hall["portraits"] = [
-        {"id": str(uuid4()), "alt": "hoshino", "source": "mod:m1", "x": 400, "y": 980, "scale": 1, "mirror": False}
+        {"id": str(uuid4()), "variant": "hoshino", "source": "mod:m1", "x": 400, "y": 980, "scale": 1, "mirror": False}
     ]
-    hall["memorials"] = [{"id": str(uuid4()), "alt": "hoshino", "source": "mod:m1"}]
+    hall["memorials"] = [{"id": str(uuid4()), "variant": "hoshino", "source": "mod:m1"}]
     hall["active"] = hall["memorials"][0]["id"]
     services.state.set("student_hall", hall)
     before = services.state.path.read_bytes(), settings.path.read_bytes()
@@ -76,7 +76,7 @@ def test_absent_catalog_model_record_has_complete_names_for_display(tmp_path):
     record = library.variant_metadata(key)
     assert isinstance(record, Variant)
     assert all(value["full"] == key for value in record.names.values())
-    result = Photography(SimpleNamespace(catalog=catalog, library=library)).describe({"photos": [{"alt": key}]})
+    result = Photography(SimpleNamespace(catalog=catalog, library=library)).describe({"photos": [{"variant": key}]})
     assert result["photos"][0]["names"] == record.names
 
 

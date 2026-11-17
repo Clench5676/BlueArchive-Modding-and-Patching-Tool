@@ -23,8 +23,8 @@ async function write(method, params, mod, name, changed) {
         ? "progress.actionRestore"
         : "progress.actionApply";
   const line = modJob(
-    { alt: mod?.target || "", kind: "other", core: mod?.core || mod?.file?.split(/[\\/]/).pop() || name, name },
-    { nameOf: Loading.altName, action },
+    { variant: mod?.target || "", kind: "other", core: mod?.core || mod?.file?.split(/[\\/]/).pop() || name, name },
+    { nameOf: Loading.variantName, action },
   );
   try {
     await Loading.task(
@@ -75,7 +75,7 @@ async function write(method, params, mod, name, changed) {
  */
 export async function select(mod, changed, useMod = !mod.selected) {
   const method = useMod ? "actions.apply" : "actions.restore";
-  const params = { alt: mod.target, kind: "other", ...(useMod ? { source: `mod:${mod.id}` } : {}) };
+  const params = { variant: mod.target, kind: "other", ...(useMod ? { source: `mod:${mod.id}` } : {}) };
   return write(method, params, mod, mod.label, changed);
 }
 

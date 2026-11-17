@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createMemorialPool } from "../../src/bmpt/web/js/hall/student-hall-memorial.js";
-const choice = (name, id = name) => ({ id, alt: name, source: `mod:${name}` });
+const choice = (name, id = name) => ({ id, variant: name, source: `mod:${name}` });
 function fixture() {
   const events = [],
     hosts = [],

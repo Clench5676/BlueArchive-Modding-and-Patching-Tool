@@ -242,7 +242,7 @@ class EditingMixin:
             raise ServiceError("bad_params", key="geometry")
         targets = self._spine_parts(core_of(paths[0].name), pin)
         if not targets:
-            raise ServiceError("game_file_not_found", alt=record["target"])
+            raise ServiceError("game_file_not_found", variant=record["target"])
         originals = {target: self._official_for(target, pin) for target in targets}
         lowest = 1.0
         try:
@@ -342,7 +342,7 @@ class EditingMixin:
         identity = self._identity({path.name: path for path in paths})
         targets = self._spine_parts(core_of(paths[0].name), pin)
         if not targets:
-            raise ServiceError("game_file_not_found", alt=record["target"])
+            raise ServiceError("game_file_not_found", variant=record["target"])
 
         def step(key: str, current: int = 1) -> None:
             if progress:
@@ -464,7 +464,7 @@ class EditingMixin:
         identity = self._identity({path.name: path for path in paths})
         targets = self._spine_parts(core_of(paths[0].name), pin)
         if not targets:
-            raise ServiceError("game_file_not_found", alt=record["target"])
+            raise ServiceError("game_file_not_found", variant=record["target"])
 
         def step(key: str, current: int = 1) -> None:
             if progress:

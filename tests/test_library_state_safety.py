@@ -353,16 +353,16 @@ def test_an_instance_holding_good_state_keeps_its_last_write_when_the_file_break
 def test_the_same_failure_through_the_real_rpc_registry(rpc_env):
     env = rpc_env
     env.add(env.spr)
-    assert "error" not in rpc(env.app, "favorites.set", alt="test", on=True)
+    assert "error" not in rpc(env.app, "favorites.set", variant="test", on=True)
     folder = env.s.library_dir()
     (folder / "state.json.prev").unlink(missing_ok=True)
     (folder / "state.json").write_bytes(b"{broken")
     env.reload_library()
     roster = rpc(env.app, "roster.list")
     assert "error" not in roster
-    family = rpc(env.app, "student.get", key="test")
-    assert "error" not in family and family["result"]["alts"][0]["mods"] == 0
-    answer = rpc(env.app, "favorites.set", alt="test", on=True)
+    family = rpc(env.app, "family.get", key="test")
+    assert "error" not in family and family["result"]["variants"][0]["mods"] == 0
+    answer = rpc(env.app, "favorites.set", variant="test", on=True)
     assert answer["error"]["code"] == "library_state_unreadable"
     assert answer["error"]["params"]["file"] == str(folder / "state.json")
     assert (folder / "state.json").read_bytes() == b"{broken" and not (folder / "state.json.bad").exists()
@@ -461,7 +461,7 @@ class RosterCatalog(LibraryCatalog):
 
 @pytest.fixture
 def rpc_env(tmp_path, monkeypatch, header_only_bundles):
-    """The web UI's services over a real library and the real RPC registry (roster.list, student.get, mods.*)."""
+    """The web UI's services over a real library and the real RPC registry (roster.list, family.get, mods.*)."""
     monkeypatch.setattr(i18n.i18n_manager, "lang", "en-US")
     monkeypatch.setattr(safety, "check_game_not_running", lambda: None)
     monkeypatch.setattr(Bundle, "check_need_crc", lambda *args, **kwargs: False)
@@ -1278,7 +1278,7 @@ def crash_in_services(env, write_check=None) -> tuple:
     return first, second
 
 
-ANSWERS = (("roster.list", {}), ("student.get", {"key": "test"}), ("mods.state", {}), ("settings.get", {}))
+ANSWERS = (("roster.list", {}), ("family.get", {"key": "test"}), ("mods.state", {}), ("settings.get", {}))
 
 
 def test_after_a_steam_repair_every_call_answers_through_the_rpc_registry(rpc_env):
@@ -1300,15 +1300,15 @@ def test_reads_answer_and_writes_refuse_through_the_rpc_registry_while_a_recover
     library = env.s.library
     for method, params in ANSWERS:
         assert "error" not in rpc(env.app, method, **params), method
-    family = rpc(env.app, "student.get", key="test")["result"]["alts"][0]
+    family = rpc(env.app, "family.get", key="test")["result"]["variants"][0]
     assert {mod["id"] for mod in family["modList"]} == {first.id, second.id}
-    answer = rpc(env.app, "favorites.set", alt="test", on=True)
+    answer = rpc(env.app, "favorites.set", variant="test", on=True)
     assert answer["error"]["code"] == "classic_open"  # a write: the real error
     job = env.job("mods.toggle", enabled=False, expect=True)
     assert job.state == "failed" and job.error["code"] == "classic_open"
     assert "error" not in rpc(env.app, "mods.state")
     library._write_check = None
-    assert "error" not in rpc(env.app, "favorites.set", alt="test", on=True)
+    assert "error" not in rpc(env.app, "favorites.set", variant="test", on=True)
     job = env.job("mods.toggle", enabled=False, expect=True)
     assert job.state == "done", job.error
     assert not list((library.root / "transactions").glob("*/journal.json"))
@@ -1395,7 +1395,7 @@ def sweep(env) -> list[str]:
         ("app.info", {}),
         ("settings.get", {}),
         ("roster.list", {}),
-        ("student.get", {"key": "test"}),
+        ("family.get", {"key": "test"}),
         ("mods.state", {}),
         ("mods.other", {}),
         ("mods.entries", {}),
@@ -1426,7 +1426,7 @@ SWEPT = [
     "app.info",
     "settings.get",
     "roster.list",
-    "student.get",
+    "family.get",
     "mods.state",
     "mods.other",
     "mods.entries",

@@ -269,7 +269,8 @@ def test_adoption_toggle_and_drift_progress_name_the_action(world, monkeypatch, 
     assert result.added and not result.failed
     lines = [p for (p,) in progress]
     assert [
-        (p["current"], p["total"], p["action"], p["alt"], p["kind"], p["core"], p["step"], p["fraction"]) for p in lines
+        (p["current"], p["total"], p["action"], p["variant"], p["kind"], p["core"], p["step"], p["fraction"])
+        for p in lines
     ] == [
         (1, 1, "add", "test", "spr", "test_spr", "import.step.add", 0.0),
         (1, 1, "add", "test", "spr", "test_spr", "import.step.add", 1.0),
@@ -279,7 +280,7 @@ def test_adoption_toggle_and_drift_progress_name_the_action(world, monkeypatch, 
     def lines():
         assert all(len(args) == 1 and isinstance(args[0], dict) for args in progress)
         return [
-            (p["current"], p["total"], p["action"], p["alt"], p["kind"], p["core"], p["step"], p["fraction"])
+            (p["current"], p["total"], p["action"], p["variant"], p["kind"], p["core"], p["step"], p["fraction"])
             for (p,) in progress
         ]
 
@@ -305,7 +306,7 @@ def test_apply_configures_and_restore_drops_it(world):
     mod = world.add(world.spr)
     world.library.apply("test", f"mod:{mod.id}")
     configured = world.folder()["configured"]["test_spr"]
-    assert (configured["source"], configured["alt"], configured["kind"]) == (f"mod:{mod.id}", "test", "spr")
+    assert (configured["source"], configured["variant"], configured["kind"]) == (f"mod:{mod.id}", "test", "spr")
     assert world.library.configured("test") == {"spr": f"mod:{mod.id}", "lobby": None}
     assert list(world.folder()["named_by"]) == ["A"]  # the first record names its data directory
     world.library.restore("test")
@@ -879,7 +880,7 @@ def test_the_first_build_migrates_what_the_library_wrote(world):
     folder = world.folder()
     assert set(folder["configured"]) == {"test_spr"}
     assert folder["configured"]["test_spr"]["source"] == f"mod:{mod.id}"
-    assert folder["configured"]["test_spr"]["alt"] == "test" and list(folder["named_by"]) == ["A"]
+    assert folder["configured"]["test_spr"]["variant"] == "test" and list(folder["named_by"]) == ["A"]
     assert other.exists()
     world.toggle(False)  # existing users keep their mods through the first Off
     world.toggle(True)
@@ -908,7 +909,7 @@ def test_a_missing_profiles_file_with_its_prev_is_read_not_migrated(world):
     config = world.library.profiles.read()
     assert config["kept"] == "from prev" and config["enabled"] is False
     assert config["folders"][world.key()]["configured"]["test_spr"] == {
-        "alt": "test",
+        "variant": "test",
         "kind": "spr",
         "source": f"mod:{mod.id}",
         "since": since,
@@ -1223,14 +1224,16 @@ def test_another_installs_variant_source_stays_configured_and_is_applied_from_th
             data["folders"]
             .setdefault(pin.key, {"server": "japan"})
             .update(
-                configured={"test_spr": {"alt": "test", "kind": "spr", "source": "alt:ch9999", "since": "2026-01-01"}}
+                configured={
+                    "test_spr": {"variant": "test", "kind": "spr", "source": "variant:ch9999", "since": "2026-01-01"}
+                }
             )
         )
     )
     world.toggle(False)
     world.toggle(True)
     assert calls and calls[-1] == [next(folder.glob("*ch9999_spr*")).name]
-    assert world.library.profiles.read()["folders"][pin.key]["configured"]["test_spr"]["source"] == "alt:ch9999"
+    assert world.library.profiles.read()["folders"][pin.key]["configured"]["test_spr"]["source"] == "variant:ch9999"
 
 
 # --- the unfinished list: the red dot and Retry without a scan ---
@@ -1631,7 +1634,7 @@ def test_a_variant_record_without_its_core_there_is_unknown_and_adopted(world, m
 
     patch_everywhere(monkeypatch, ["bmpt.library.service"], "adapt_variant_sources", lambda sources, *args: sources)
     patch_everywhere(monkeypatch, [service], "rebuild", update)
-    world.library.apply("test", "alt:other")
+    world.library.apply("test", "variant:other")
     other.unlink()  # that variant's portrait is gone from this install
     world.reload()
     entry = world.entries()[(world.key(), "test_spr")]
@@ -1659,7 +1662,7 @@ def test_missing_entries_are_skipped_and_not_counted(world):
     world.spr.unlink()  # a renamed core: no game files
     result = world.toggle(True)
     assert result.skipped == [
-        {"install": world.key(), "core": "test_spr", "alt": "test", "kind": "spr", "why": "missing"}
+        {"install": world.key(), "core": "test_spr", "variant": "test", "kind": "spr", "why": "missing"}
     ]
     assert world.unfinished() == []
 
@@ -2282,7 +2285,7 @@ def test_keeping_an_outside_change_of_a_core_only_another_install_has(world):
         lambda d: (
             d["folders"]
             .setdefault(pin.key, {"server": "japan"})
-            .update(configured={"ch9999_spr": {"alt": "ch9999", "kind": "spr", "source": "official", "since": "x"}})
+            .update(configured={"ch9999_spr": {"variant": "ch9999", "kind": "spr", "source": "official", "since": "x"}})
         )
     )
     world.library._switch(pin, "ch9999_spr", "official")
@@ -2725,7 +2728,7 @@ def test_a_variant_entry_whose_source_files_changed_is_rebuilt(world, monkeypatc
 
     patch_everywhere(monkeypatch, ["bmpt.library.service"], "adapt_variant_sources", lambda sources, *args: sources)
     patch_everywhere(monkeypatch, [service], "rebuild", update)
-    world.library.apply("test", "alt:other")
+    world.library.apply("test", "variant:other")
     world.toggle(False)
     assert world.folder()["built"]["test_spr"]["inputs"] == [other.name]
     renamed = game_update(other, payload=b"other v2")
@@ -3245,7 +3248,7 @@ def test_delete_clears_configured_sources_built_keys_and_dismissals(world):
                 "source": f"mod:{mod.id}",
                 "parts": {world.spr.name: {"sha1": shared}, second.name: {"sha1": orphan}},
             },
-            "other_spr": {"source": "alt:test", "parts": {world.spr.name: {"sha1": shared}}},
+            "other_spr": {"source": "variant:test", "parts": {world.spr.name: {"sha1": shared}}},
         }
         folder["dismissed"] = {"drift": {"test_spr": [], "other_spr": []}, "untracked": {"test_spr": []}}
 

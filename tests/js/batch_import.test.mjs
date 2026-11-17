@@ -254,7 +254,7 @@ const filled = (text, params) => text.replace(/\{(\w+)\}/g, (_, key) => params[k
 const entry = (id, state = "ready", kind = "spr") => ({
   id,
   paths: [`/fixtures/${id}.bundle`],
-  alt: id,
+  variant: id,
   core: `${id}_spr`,
   kind,
   files: [{ path: `/fixtures/${id}.bundle`, size: 1024, target: `${id}_spr.bundle` }],
@@ -272,9 +272,9 @@ const mixed = () => [
   entry("e", "blocked", "model"),
 ];
 const catalog = {
-  students: ["a", "b", "c", "d", "e"].map((id) => ({
+  families: ["a", "b", "c", "d", "e"].map((id) => ({
     key: id,
-    alts: [
+    variants: [
       {
         key: id,
         custom: id === "a" ? ["Saved Alias"] : [],
@@ -332,12 +332,12 @@ async function fixture({ licensed = false, native = true, suggest, countIcons = 
     }
     if (method === "import.catalog")
       return {
-        students: [
-          ...structuredClone(catalog.students),
+        families: [
+          ...structuredClone(catalog.families),
           {
             key: "future",
             base: { en: "Future" },
-            alts: [
+            variants: [
               {
                 key: "future",
                 names: { en: { full: "Future Student" } },
@@ -703,7 +703,7 @@ test("Remove Imported keeps pending and failed rows and never calls a library mu
 
 test("manual character picker searches cross-server students and confirms ownership through its own RPC", async () => {
   const h = await fixture();
-  const unknown = { ...entry("unidentified", "blocked", "lobby"), alt: null, reason: "mod_target_unknown" };
+  const unknown = { ...entry("unidentified", "blocked", "lobby"), variant: null, reason: "mod_target_unknown" };
   await h.analyze([unknown]);
   await h.action("assignCharacter").click();
   await flush();
@@ -719,11 +719,11 @@ test("manual character picker searches cross-server students and confirms owners
   await flush();
   assert.deepEqual(h.calls.find((call) => call.method === "import.assignCharacter").params, {
     id: "unidentified",
-    alt: "future",
+    variant: "future",
   });
   h.sources.at(-1).resolve({
     ...unknown,
-    alt: "future",
+    variant: "future",
     assignment: "future",
     libraryOnly: true,
     state: "ready",
@@ -732,13 +732,13 @@ test("manual character picker searches cross-server students and confirms owners
   });
   await confirming;
   await h.page.settled();
-  assert.equal(h.page.model.state.entries[0].alt, "future");
+  assert.equal(h.page.model.state.entries[0].variant, "future");
   assert.equal(h.page.model.state.analysisRevision, 9);
 });
 
 test("Assign Character says so when nothing matches, and blocks Confirm while the chosen student is filtered out", async () => {
   const h = await fixture({ blockedConfirm: true });
-  const unknown = { ...entry("unidentified", "blocked", "lobby"), alt: null, reason: "mod_target_unknown" };
+  const unknown = { ...entry("unidentified", "blocked", "lobby"), variant: null, reason: "mod_target_unknown" };
   await h.analyze([unknown]);
   await h.action("assignCharacter").click();
   await flush();
@@ -784,7 +784,7 @@ test("Assign Character says so when nothing matches, and blocks Confirm while th
   assert.equal(assigned(), 1);
   h.sources.at(-1).resolve({
     ...unknown,
-    alt: "future",
+    variant: "future",
     assignment: "future",
     libraryOnly: true,
     state: "ready",
@@ -865,7 +865,7 @@ test("four incoming models render in the list and comparison without a Spine lic
   );
 });
 
-test("an NPC model without a roster entry renders from the analyzed alt id", async () => {
+test("an NPC model without a roster entry renders from the analyzed variant key", async () => {
   const h = await fixture();
   await h.analyze([{ ...entry("en0002", "ready", "model"), core: "en0002" }]);
   assert.equal(h.row("en0002").querySelector(".import-thumb").dataset.source, "blob:model:en0002:import:source-en0002");
@@ -1352,7 +1352,7 @@ test("reanalysis replaces the incoming preview for the same entry ID", async () 
 test("special lobby categories keep lobby source selection and framing", async () => {
   const h = await fixture({ licensed: true });
   const special = structuredClone(catalog);
-  special.students[1].alts[0].spineCategory = "spinebackground";
+  special.families[1].variants[0].spineCategory = "spinebackground";
   await h.page.show(h.context, special);
   await h.analyze([entry("b", "ready", "lobby")]);
   assert.ok(
@@ -2747,12 +2747,12 @@ test("all six locales translate source routes, choices and conversion reasons", 
   }
 });
 
-test("merged rows keep alt identity, say every asset kind and state as an ungrouped row does, and select only eligible Mods", async () => {
+test("merged rows keep variant identity, say every asset kind and state as an ungrouped row does, and select only eligible Mods", async () => {
   const h = await fixture({ licensed: true });
   const a = entry("a"),
-    lobby = { ...entry("a-lobby", "update", "lobby"), alt: "a" };
-  const model = { ...entry("a-model", "blocked", "model"), alt: "a" };
-  const other = { ...entry("generic", "ready", "other"), alt: "a" };
+    lobby = { ...entry("a-lobby", "update", "lobby"), variant: "a" };
+  const model = { ...entry("a-model", "blocked", "model"), variant: "a" };
+  const other = { ...entry("generic", "ready", "other"), variant: "a" };
   await h.analyze([a, lobby, model, other]);
   const merge = h.action("merge").querySelector("input");
   assert.equal(merge.checked, false);
@@ -2770,7 +2770,7 @@ test("merged rows keep alt identity, say every asset kind and state as an ungrou
   await check.dispatch("change");
   assert.deepEqual([...h.page.model.state.checked].sort(), ["a", "a-lobby", "generic"]);
   assert.equal(h.page.model.state.checked.has("a-model"), false);
-  const newPortrait = { ...entry("a-second"), alt: "a" };
+  const newPortrait = { ...entry("a-second"), variant: "a" };
   const adding = h.page.drop(newPortrait.paths);
   await flush();
   h.analyses.at(-1).resolve({ entries: [a, lobby, model, other, newPortrait], skipped: 0 });
@@ -2792,8 +2792,8 @@ test("merged rows keep alt identity, say every asset kind and state as an ungrou
 test("results omit state badges, follow the merge setting and route every student or generic Mod", async () => {
   const h = await fixture({ countIcons: true });
   const a = entry("a"),
-    lobby = { ...entry("a-lobby", "update", "lobby"), alt: "a" },
-    model = { ...entry("a-model", "ready", "model"), alt: "a" },
+    lobby = { ...entry("a-lobby", "update", "lobby"), variant: "a" },
+    model = { ...entry("a-model", "ready", "model"), variant: "a" },
     other = entry("generic", "ready", "other");
   await h.analyze([a, lobby, model, other]);
   const merge = h.action("merge").querySelector("input");
@@ -2940,7 +2940,7 @@ test("all six locales use short completion, merge and applied labels", () => {
 
 test("re-entering recreates cancelled row stills and merged rows prefer an available rendered asset", async () => {
   const h = await fixture({ licensed: true });
-  const model = { ...entry("a-model", "ready", "model"), alt: "a" },
+  const model = { ...entry("a-model", "ready", "model"), variant: "a" },
     portrait = entry("a");
   await h.analyze([model, portrait]);
   const merge = h.action("merge").querySelector("input");
@@ -2998,7 +2998,7 @@ for (const merged of [false, true])
     const h = await fixture(),
       target = { server: "global", platform: "windows" };
     const same = { ...entry("a"), source: { ...target, detected: true }, target };
-    const lobby = { ...entry("a-lobby", "update", "lobby"), alt: "a", source: { ...target }, target };
+    const lobby = { ...entry("a-lobby", "update", "lobby"), variant: "a", source: { ...target }, target };
     const platform = { ...entry("b", "convert"), source: { ...target, platform: "android" }, target };
     const server = { ...entry("c", "convert"), source: { ...target, server: "japan" }, target };
     const blocked = { ...entry("d", "blocked"), source: { ...target }, target };
@@ -3168,8 +3168,8 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
           const h = await fixture({ countIcons });
           const entries = [
             { ...entry("a"), core: "shiroko_swimsuit_very_long_variant_identifier_spr", size: 123456789 },
-            { ...entry("a-lobby", "ready", "lobby"), alt: "a" },
-            { ...entry("a-model", "ready", "model"), alt: "a" },
+            { ...entry("a-lobby", "ready", "lobby"), variant: "a" },
+            { ...entry("a-model", "ready", "model"), variant: "a" },
             entry("b", "update", "lobby"),
           ];
           await h.analyze(entries);
@@ -3261,10 +3261,10 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
 
 test("import identities and search keep aliases on the selected skin", () => {
   const data = {
-    students: [
+    families: [
       {
         key: "base",
-        alts: [
+        variants: [
           { key: "base", custom: ["Original nickname"], names: { en: { full: "Original" } } },
           { key: "skin", custom: ["Skin nickname", "Search skin"], names: { en: { full: "Maid" } } },
           { key: "other", names: { en: { full: "Swimsuit" } } },
@@ -3273,7 +3273,7 @@ test("import identities and search keep aliases on the selected skin", () => {
     ],
   };
   const catalog = catalogEntries(data),
-    identity = (alt) => entryIdentity({ alt }, catalog);
+    identity = (variant) => entryIdentity({ variant }, catalog);
   assert.equal(identity("skin").name, "Skin nickname");
   assert.match(identity("skin").search, /search skin/);
   assert.equal(identity("base").name, "Original nickname");
@@ -3398,8 +3398,8 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
           const h = await fixture({ countIcons });
           const entries = [
             entry("a"),
-            { ...entry("a-lobby", "ready", "lobby"), alt: "a" },
-            { ...entry("a-model", "ready", "model"), alt: "a" },
+            { ...entry("a-lobby", "ready", "lobby"), variant: "a" },
+            { ...entry("a-model", "ready", "model"), variant: "a" },
           ];
           await h.analyze(entries);
           if (merged) {
@@ -3468,8 +3468,8 @@ for (const [locale, sep] of [
       const h = await fixture();
       const entries = [
         entry("a"),
-        { ...entry("a-lobby", "ready", "lobby"), alt: "a" },
-        { ...entry("a-model", "ready", "model"), alt: "a" },
+        { ...entry("a-lobby", "ready", "lobby"), variant: "a" },
+        { ...entry("a-model", "ready", "model"), variant: "a" },
       ];
       await h.analyze(entries);
       const merge = h.action("merge").querySelector("input");
@@ -3910,8 +3910,8 @@ test("blocked and library rows cannot enter requests through merged or stale sel
   const h = await fixture();
   const items = [
     entry("a"),
-    { ...entry("a-model", "blocked", "model"), alt: "a" },
-    { ...entry("a-lobby", "library", "lobby"), alt: "a" },
+    { ...entry("a-model", "blocked", "model"), variant: "a" },
+    { ...entry("a-lobby", "library", "lobby"), variant: "a" },
   ];
   await h.analyze(items);
   const merge = h.action("merge").querySelector("input");
@@ -4026,7 +4026,7 @@ test("report context reads the live list after removal, recheck, and clearing", 
 
 test("merged result rows total the omitted asset counts", async () => {
   const h = await fixture();
-  await h.analyze([entry("a"), { ...entry("a-lobby", "ready", "lobby"), alt: "a" }]);
+  await h.analyze([entry("a"), { ...entry("a-lobby", "ready", "lobby"), variant: "a" }]);
   const merge = h.action("merge").querySelector("input");
   merge.checked = true;
   await merge.dispatch("change");
@@ -4057,7 +4057,7 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
       const h = await fixture();
       await h.analyze([
         entry("a"),
-        { ...entry("a-lobby", "blocked", "lobby"), alt: "a", source: null, reason: "source_unknown" },
+        { ...entry("a-lobby", "blocked", "lobby"), variant: "a", source: null, reason: "source_unknown" },
       ]);
       const merge = h.action("merge").querySelector("input");
       merge.checked = true;
@@ -4242,7 +4242,7 @@ test("Advanced Options, Import State, Import Results and Assign Character each d
   assert.deepEqual(bar.syncs.at(-1), [640, 900, 0]);
   await h.action("close", h.dialog).click();
   // Assign Character
-  const unknown = { ...entry("unidentified", "blocked", "lobby"), alt: null, reason: "mod_target_unknown" };
+  const unknown = { ...entry("unidentified", "blocked", "lobby"), variant: null, reason: "mod_target_unknown" };
   await h.analyze([unknown]);
   await h.action("assignCharacter").click();
   await flush();
@@ -4289,15 +4289,15 @@ test("Import Results draws the game's scrollbar on its area", async () => {
 
 test("Assign Character scrolls in one area: no scroller inside it, paging goes back to the top, the bar follows each page", async () => {
   const h = await fixture();
-  const unknown = { ...entry("unidentified", "blocked", "lobby"), alt: null, reason: "mod_target_unknown" };
+  const unknown = { ...entry("unidentified", "blocked", "lobby"), variant: null, reason: "mod_target_unknown" };
   await h.analyze([unknown]);
-  const original = catalog.students,
+  const original = catalog.families,
     many = [];
   // 60 students: three pages of 24 at most
   for (let i = 0; i < 60; i++)
     many.push({
       key: `s${i}`,
-      alts: [
+      variants: [
         {
           key: `s${i}`,
           custom: [],
@@ -4306,7 +4306,7 @@ test("Assign Character scrolls in one area: no scroller inside it, paging goes b
         },
       ],
     });
-  catalog.students = many;
+  catalog.families = many;
   try {
     await h.action("assignCharacter").click();
     await flush();
@@ -4333,13 +4333,13 @@ test("Assign Character scrolls in one area: no scroller inside it, paging goes b
     assert.equal(area.scrollTop, 0);
     await h.action("close", h.dialog).click();
   } finally {
-    catalog.students = original;
+    catalog.families = original;
   }
 });
 
 // --- Assign Character's page arrows are named by the pages they turn, not by their painted glyphs ---
 test("Assign Character's previous and next page buttons are named in every language and keep their painted arrows", async () => {
-  const unknown = { ...entry("unidentified", "blocked", "lobby"), alt: null, reason: "mod_target_unknown" };
+  const unknown = { ...entry("unidentified", "blocked", "lobby"), variant: null, reason: "mod_target_unknown" };
   try {
     for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
       const ui = JSON.parse(
@@ -4488,7 +4488,7 @@ test("several incomplete rows prompt by themselves with one list confirmation an
   );
   const completed = {
     ...entry("a-complete"),
-    alt: "a",
+    variant: "a",
     paths: [...a.paths, ...a.missing.found.map((f) => f.path)],
   };
   await resolveAnalysis(

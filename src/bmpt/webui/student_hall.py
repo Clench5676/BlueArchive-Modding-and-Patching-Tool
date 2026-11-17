@@ -50,7 +50,7 @@ def normalize_hall(value: Any) -> dict:
         value: The stored hall; anything that is not a dict gives an empty hall.
 
     Returns:
-        A copy that holds each (alt, source) once per group. Of duplicate memorials, the first one kept takes
+        A copy that holds each (variant, source) once per group. Of duplicate memorials, the first one kept takes
         the id of the active one.
     """
     result = copy.deepcopy(value) if isinstance(value, dict) else empty_hall()
@@ -61,7 +61,7 @@ def normalize_hall(value: Any) -> dict:
             continue
         seen, kept = {}, []
         for entry in entries:
-            key = (entry.get("alt"), entry.get("source")) if isinstance(entry, dict) else None
+            key = (entry.get("variant"), entry.get("source")) if isinstance(entry, dict) else None
             if key and all(isinstance(part, str) and part for part in key):
                 if key in seen:
                     if group == "memorials" and entry.get("id") == result.get("active"):
@@ -79,7 +79,7 @@ def validate_hall(value: Any) -> dict:
     Args:
         value: The hall as the page sends it: ``mode`` (``portraits`` or ``memorial``), ``background``,
             ``portraitScale``, and the ``portraits`` and ``memorials`` lists. Each entry has a UUID ``id``, a
-            ``alt`` and a ``source`` (``official`` or ``mod:<id>``); a portrait also has ``mirror``, ``x``,
+            ``variant`` and a ``source`` (``official`` or ``mod:<id>``); a portrait also has ``mirror``, ``x``,
             ``y`` and ``scale``, which default to the standard place.
 
     Returns:
@@ -87,7 +87,7 @@ def validate_hall(value: Any) -> dict:
 
     Raises:
         ServiceError: ``bad_params`` naming the invalid field; ``hall_duplicate_portrait`` or
-            ``hall_duplicate_memorial`` for the same alt and source twice in a group.
+            ``hall_duplicate_memorial`` for the same variant and source twice in a group.
     """
     if not isinstance(value, dict) or value.get("mode") not in ("portraits", "memorial"):
         raise ServiceError("bad_params", key="hall")
@@ -117,18 +117,18 @@ def validate_hall(value: Any) -> dict:
         for entry in entries:
             if not isinstance(entry, dict):
                 raise ServiceError("bad_params", key=group)
-            uid, alt, source = (entry.get(k) for k in ("id", "alt", "source"))
+            uid, variant, source = (entry.get(k) for k in ("id", "variant", "source"))
             try:
                 valid_id = isinstance(uid, str) and str(UUID(uid)) == uid
             except ValueError:
                 valid_id = False
-            if not valid_id or uid in ids or not isinstance(alt, str) or not alt or len(alt) > 200:
+            if not valid_id or uid in ids or not isinstance(variant, str) or not variant or len(variant) > 200:
                 raise ServiceError("bad_params", key="entry")
             if not isinstance(source, str) or not (source == "official" or re.fullmatch(r"mod:[a-zA-Z0-9_-]+", source)):
                 raise ServiceError("bad_params", key="source")
             ids.add(uid)
-            item = {"id": uid, "alt": alt, "source": source}
-            key = (alt, source)
+            item = {"id": uid, "variant": variant, "source": source}
+            key = (variant, source)
             if key in sources:
                 raise ServiceError("hall_duplicate_portrait" if group == "portraits" else "hall_duplicate_memorial")
             sources.add(key)
@@ -514,7 +514,7 @@ def portrait_motion_layout(game: Any, core: str | None) -> dict:
 
     Args:
         game: The game assets service.
-        core: The portrait's Spine core, such as an alt's ``spr``; None gives no motion.
+        core: The portrait's Spine core, such as a variant's ``spr``; None gives no motion.
 
     Returns:
         Animation name mapped to its clip (``track``, ``loop``, ``intro``, ``outro``, ``mode``, ``sync``); empty
@@ -668,21 +668,21 @@ def register_api(rpc: Any, s: Any) -> None:
     def get() -> dict:
         value = s.state.get("student_hall")
         if value is None:
-            student = next((item for item in s.catalog.families() if item.key == "shiroko"), None)
-            alt = next(
+            family = next((item for item in s.catalog.families() if item.key == "shiroko"), None)
+            variant = next(
                 (
                     v
-                    for v in (student.variants if student else [])
+                    for v in (family.variants if family else [])
                     if v.key in ("shiroko", "shiroko_original") or v.file_id.lower() == "shiroko_original"
                 ),
                 None,
             )
-            if alt is not None and alt.spr and alt.lobby:
+            if variant is not None and variant.spr and variant.lobby:
                 initial = empty_hall()
                 initial["portraits"] = [
                     {
                         "id": str(uuid4()),
-                        "alt": alt.key,
+                        "variant": variant.key,
                         "source": "official",
                         "x": PORTRAIT_ORIGIN[0],
                         "y": PORTRAIT_ORIGIN[1],
@@ -690,7 +690,7 @@ def register_api(rpc: Any, s: Any) -> None:
                         "mirror": False,
                     }
                 ]
-                initial["memorials"] = [{"id": str(uuid4()), "alt": alt.key, "source": "official"}]
+                initial["memorials"] = [{"id": str(uuid4()), "variant": variant.key, "source": "official"}]
                 initial["active"] = initial["memorials"][0]["id"]
 
                 def initialize(data):
@@ -704,17 +704,17 @@ def register_api(rpc: Any, s: Any) -> None:
     def options() -> dict:
         if not s.game_found():
             raise ServiceError("game_directory_missing")
-        students = s.catalog.families()
-        alts = {v.key: v for f in students for v in f.variants}
-        student_names = {student.key: student.names for student in students}
-        student_aliases = {student.key: list(getattr(student, "aliases", [])) for student in students}
-        schools = {student.key: student.school for student in students}
+        families = s.catalog.families()
+        variants = {v.key: v for f in families for v in f.variants}
+        family_names = {family.key: family.names for family in families}
+        family_aliases = {family.key: list(getattr(family, "aliases", [])) for family in families}
+        schools = {family.key: family.school for family in families}
         mods = s.library.mods()
-        if any(mod.target not in alts for mod in mods) and hasattr(s.catalog, "assignment_families"):
-            for student in s.catalog.assignment_families():
-                student_names.setdefault(student.key, student.names)
-                student_aliases.setdefault(student.key, list(getattr(student, "aliases", [])))
-                schools.setdefault(student.key, student.school)
+        if any(mod.target not in variants for mod in mods) and hasattr(s.catalog, "assignment_families"):
+            for family in s.catalog.assignment_families():
+                family_names.setdefault(family.key, family.names)
+                family_aliases.setdefault(family.key, list(getattr(family, "aliases", [])))
+                schools.setdefault(family.key, family.school)
         favorites = getattr(s.library, "favorites", lambda: set())()
         recent = s.state.recent()
         custom = s.state.aliases()
@@ -728,12 +728,12 @@ def register_api(rpc: Any, s: Any) -> None:
 
         def metadata(v: Any, source: str, mod: Any = None) -> dict:
             key = f"{v.key}:{source}"
-            student = getattr(v, "family", v.key)
+            family = getattr(v, "family", v.key)
             return {
-                "student": student,
-                "studentNames": student_names.get(student, {}),
-                "school": schools.get(student),
-                "studentAliases": student_aliases.get(student, []),
+                "family": family,
+                "familyNames": family_names.get(family, {}),
+                "school": schools.get(family),
+                "familyAliases": family_aliases.get(family, []),
                 "model": getattr(v, "model", None),
                 "fileId": getattr(v, "file_id", v.key),
                 "aliases": list(getattr(v, "aliases", [])),
@@ -754,13 +754,13 @@ def register_api(rpc: Any, s: Any) -> None:
             }
 
         choices = []
-        for v in alts.values():
+        for v in variants.values():
             for kind in ("spr", "lobby"):
                 core = getattr(v, kind, None)
                 if core:
                     choices.append(
                         {
-                            "alt": v.key,
+                            "variant": v.key,
                             "source": "official",
                             "kind": kind,
                             "core": core,
@@ -774,7 +774,7 @@ def register_api(rpc: Any, s: Any) -> None:
             # a lobby camera frames the game's lobby, not the hall's
             if mod.kind not in ("spr", "lobby") or getattr(mod, "camera", None):
                 continue
-            v = alts.get(mod.target)
+            v = variants.get(mod.target)
             if v is None:
                 try:
                     v = s.library.variant_metadata(mod.target)
@@ -782,7 +782,7 @@ def register_api(rpc: Any, s: Any) -> None:
                     continue
             choices.append(
                 {
-                    "alt": v.key,
+                    "variant": v.key,
                     "source": "mod:" + mod.id,
                     "kind": mod.kind,
                     "core": getattr(v, mod.kind, None),
@@ -804,17 +804,17 @@ def register_api(rpc: Any, s: Any) -> None:
         return save_hall(s.state, value, revision)
 
     @rpc.method("hall.viewed")
-    def viewed(alt: str, source: str) -> list[str]:
-        v = s.library.variant_metadata(alt)
+    def viewed(variant: str, source: str) -> list[str]:
+        v = s.library.variant_metadata(variant)
         if source == "official":
             valid = bool(v.lobby)
         else:
             valid = isinstance(source, str) and any(
-                "mod:" + mod.id == source and mod.target == alt and mod.kind == "lobby" for mod in s.library.mods()
+                "mod:" + mod.id == source and mod.target == variant and mod.kind == "lobby" for mod in s.library.mods()
             )
         if not valid:
             raise ServiceError("bad_params", key="source")
-        key = f"{alt}:{source}"
+        key = f"{variant}:{source}"
 
         def change(data: dict) -> None:
             prefs = data.setdefault("prefs", {})
@@ -828,15 +828,15 @@ def register_api(rpc: Any, s: Any) -> None:
         return dialogue_layout(s.game)
 
     @rpc.method("hall.lines")
-    def lines(alt: str, lang: str = "ja") -> dict:
+    def lines(variant: str, lang: str = "ja") -> dict:
         if lang not in ("en", "zh-CN", "zh-TW", "ja", "ko", "th"):
             raise ServiceError("bad_params", key="lang")
         try:
-            v = s.library.variant_metadata(alt)
+            v = s.library.variant_metadata(variant)
         except ServiceError as error:
-            if error.code not in ("catalog_alt_not_found", "alt_not_found"):
+            if error.code not in ("catalog_variant_not_found", "variant_not_found"):
                 raise
-            logger.debug("Portrait dialogue has no catalog mapping: %s", alt)
+            logger.debug("Portrait dialogue has no catalog mapping: %s", variant)
             return {"lines": {}, "pending": False, "unavailable": True, "animationPending": False}
         rows, waiting, animation_pending = rows_for(v, lang)
         return {
@@ -847,8 +847,8 @@ def register_api(rpc: Any, s: Any) -> None:
         }
 
     @rpc.method("hall.voice")
-    def voice(alt: str, clip: str) -> dict:
-        v = s.library.variant_metadata(alt)
+    def voice(variant: str, clip: str) -> dict:
+        v = s.library.variant_metadata(variant)
         if not isinstance(clip, str) or not re.fullmatch(r"[a-z0-9_]+_lobby_\d+(?:_\d+)?", clip):
             raise ServiceError("bad_params", key="clip")
         rows, _, _ = rows_for(v, "zh-CN")

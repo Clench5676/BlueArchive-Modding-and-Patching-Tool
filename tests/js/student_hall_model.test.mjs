@@ -15,17 +15,17 @@ const saved = () => ({
   background: "office-day",
   portraits: [],
   memorials: [
-    { id: "a", alt: "hero", source: "official" },
-    { id: "b", alt: "hero", source: "mod:alternate" },
+    { id: "a", variant: "hero", source: "official" },
+    { id: "b", variant: "hero", source: "mod:alternate" },
   ],
   active: "b",
 });
-const source = (alt, kind = "spr", extra = {}) => ({
-  alt,
-  student: "hero",
-  studentNames: { en: "Hero" },
-  names: { en: { full: alt } },
-  source: "mod:" + alt,
+const source = (variant, kind = "spr", extra = {}) => ({
+  variant,
+  family: "hero",
+  familyNames: { en: "Hero" },
+  names: { en: { full: variant } },
+  source: "mod:" + variant,
   kind,
   favorite: false,
   recruitable: true,
@@ -54,9 +54,9 @@ test("the same portrait source cannot be added twice, but different assets of on
 test("legacy duplicate portrait reads retain the first UUID and every intentional position or relative scale", () => {
   const value = saved();
   value.portraits = [
-    { id: "first", alt: "hero", source: "mod:one", x: 410, y: 905, scale: 0.6 },
-    { id: "second", alt: "hero", source: "mod:one", x: 1000, y: 1120, scale: 1 },
-    { id: "other", alt: "hero", source: "mod:two", x: 1310, y: 1055, scale: 1.3 },
+    { id: "first", variant: "hero", source: "mod:one", x: 410, y: 905, scale: 0.6 },
+    { id: "second", variant: "hero", source: "mod:one", x: 1000, y: 1120, scale: 1 },
+    { id: "other", variant: "hero", source: "mod:two", x: 1310, y: 1055, scale: 1.3 },
   ];
   const state = createDraft(value);
   assert.deepEqual(state.current().portraits, [value.portraits[0], value.portraits[2]]);
@@ -82,7 +82,7 @@ test("portrait rows include official portraits and library mods, merge skins wit
     source("hero", "spr", { source: "official" }),
     source("hero", "spr", { aliases: ["Alias Two"] }),
     source("hero_swimsuit", "spr", { custom: ["Summer Nickname"] }),
-    source("other", "spr", { student: "other", studentNames: { en: "Other" } }),
+    source("other", "spr", { family: "other", familyNames: { en: "Other" } }),
   ];
   const view = normalizeView({ merged: true, sort: "name" });
   const all = portraitRows(choices, view, "", label, "en");
@@ -91,13 +91,13 @@ test("portrait rows include official portraits and library mods, merge skins wit
   assert.deepEqual(
     portraitRows(choices, view, "Alias Two", label, "en")
       .flatMap((row) => row.choices)
-      .map((choice) => choice.alt),
+      .map((choice) => choice.variant),
     ["hero"],
   );
   assert.deepEqual(
     portraitRows(choices, view, "Summer Nickname", label, "en")
       .flatMap((row) => row.choices)
-      .map((choice) => choice.alt),
+      .map((choice) => choice.variant),
     ["hero_swimsuit"],
   );
 });
@@ -105,7 +105,7 @@ test("memorial availability filters students, selected student narrows candidate
   const choices = [
     source("hero", "lobby", { source: "official", viewed: 3 }),
     source("hero", "lobby", { viewed: 0 }),
-    source("new", "lobby", { student: "new", recruitable: false, viewed: 1 }),
+    source("new", "lobby", { family: "new", recruitable: false, viewed: 1 }),
   ];
   const view = normalizeView({ sort: "recent", order: "desc" });
   const students = studentChoices(choices, view, "", label, "en");
@@ -123,17 +123,17 @@ test("memorial availability filters students, selected student narrows candidate
 });
 test("memorial sort controls respect direction, localized names, mod counts and aliases", () => {
   const a = source("raw_z", "lobby", {
-    student: "a",
+    family: "a",
     names: { en: { full: "Alpha" } },
     aliases: ["Secret"],
     mods: 5,
     order: 0,
   });
-  const b = source("raw_a", "lobby", { student: "b", names: { en: { full: "Zulu" } }, mods: 1, order: 1 });
+  const b = source("raw_a", "lobby", { family: "b", names: { en: { full: "Zulu" } }, mods: 1, order: 1 });
   const choices = [a, b],
     students = studentChoices(choices, normalizeView({}), "", label, "en");
   assert.deepEqual(
-    memorialChoices(choices, students, null, { sort: "name", order: "asc" }, "", {}, label).map((c) => c.alt),
+    memorialChoices(choices, students, null, { sort: "name", order: "asc" }, "", {}, label).map((c) => c.variant),
     ["raw_z", "raw_a"],
   );
   assert.equal(memorialChoices(choices, students, null, { sort: "name", order: "desc" }, "", {}, label)[0], b);
@@ -157,7 +157,7 @@ test("dialogue bounds clear the actual local toolbar and bottom navigation at an
 
 test("portrait layers and mirror are draft-only, preserve identity and survive save or restore on cancel", () => {
   const value = saved();
-  value.portraits = ["a", "b", "c"].map((id) => ({ id, alt: id, source: `mod:${id}`, x: 500, y: 1000, scale: 1 }));
+  value.portraits = ["a", "b", "c"].map((id) => ({ id, variant: id, source: `mod:${id}`, x: 500, y: 1000, scale: 1 }));
   const state = createDraft(value);
   state.begin("layout");
   assert.equal(state.layer("a", "back"), false);
@@ -187,18 +187,18 @@ test("portrait layers and mirror are draft-only, preserve identity and survive s
   );
   assert.equal(state.saved().portraits[2].mirror, true);
 });
-test("merged memorial students expose every alt and source in the selected student", () => {
+test("merged memorial students expose every variant and source in the selected family", () => {
   const choices = [
     source("hero", "lobby", { source: "official" }),
     source("hero_swimsuit", "lobby"),
-    source("other", "lobby", { student: "other" }),
+    source("other", "lobby", { family: "other" }),
   ];
   const view = normalizeView({ merged: true, sort: "name", order: "asc" }),
     students = studentChoices(choices, view, "", label, "en");
   assert.equal(students.length, 2);
-  const hero = students.find((card) => card.student === "hero");
+  const hero = students.find((student) => student.family === "hero");
   assert.deepEqual(
-    memorialChoices(choices, students, hero.key, view, "").map((choice) => choice.alt),
+    memorialChoices(choices, students, hero.key, view, "").map((choice) => choice.variant),
     ["hero", "hero_swimsuit"],
   );
 });
@@ -221,9 +221,9 @@ test("memorial resources are unique while distinct sources of the same student r
 
 test("legacy memorial repeats keep first position and preserve an active duplicate UUID without mutation", () => {
   const value = saved();
-  value.memorials.push({ id: "active-duplicate", alt: "hero", source: "official" });
+  value.memorials.push({ id: "active-duplicate", variant: "hero", source: "official" });
   value.active = "active-duplicate";
-  value.portraits = [{ id: "portrait-id", alt: "hero", source: "official" }];
+  value.portraits = [{ id: "portrait-id", variant: "hero", source: "official" }];
   const before = structuredClone(value),
     state = createDraft(value);
   assert.deepEqual(
@@ -244,16 +244,16 @@ test("legacy memorial repeats keep first position and preserve an active duplica
 
 test("picker Has Mod, No Mod and mod-count sorting are scoped to the selected asset kind", () => {
   const choices = [];
-  for (const alt of ["spr_only", "lobby_only", "both", "none"]) {
+  for (const variant of ["spr_only", "lobby_only", "both", "none"]) {
     for (const kind of ["spr", "lobby"])
-      choices.push(source(alt, kind, { student: alt, source: "official", mods: 99 }));
+      choices.push(source(variant, kind, { family: variant, source: "official", mods: 99 }));
   }
   choices.push(
-    source("spr_only", "spr", { student: "spr_only", mods: 99 }),
-    source("lobby_only", "lobby", { student: "lobby_only", mods: 99 }),
-    source("both", "spr", { student: "both", mods: 99 }),
-    source("both", "lobby", { student: "both", mods: 99 }),
-    source("both", "lobby", { student: "both", source: "mod:second", mods: 99 }),
+    source("spr_only", "spr", { family: "spr_only", mods: 99 }),
+    source("lobby_only", "lobby", { family: "lobby_only", mods: 99 }),
+    source("both", "spr", { family: "both", mods: 99 }),
+    source("both", "lobby", { family: "both", mods: 99 }),
+    source("both", "lobby", { family: "both", source: "mod:second", mods: 99 }),
   );
   const pick = (kind, mods) =>
     studentChoices(choices, normalizeView({ mods, sort: "mods", order: "desc" }), "", label, "en", kind);
@@ -288,7 +288,7 @@ test("picker Has Mod, No Mod and mod-count sorting are scoped to the selected as
   );
 });
 
-test("merged picker students aggregate only the current resource kind", () => {
+test("merged picker families aggregate only the current resource kind", () => {
   const choices = [
     source("hero", "spr", { source: "official", mods: 100 }),
     source("hero", "lobby", { source: "official", mods: 100 }),
@@ -297,8 +297,8 @@ test("merged picker students aggregate only the current resource kind", () => {
     source("hero_swimsuit", "lobby", { mods: 100 }),
   ];
   for (const kind of ["spr", "lobby"]) {
-    const [student] = studentChoices(choices, normalizeView({ merged: true, mods: "mods" }), "", label, "en", kind);
-    assert.equal(student.mods, 1);
+    const [family] = studentChoices(choices, normalizeView({ merged: true, mods: "mods" }), "", label, "en", kind);
+    assert.equal(family.mods, 1);
   }
   assert.equal(
     studentChoices(
@@ -315,25 +315,25 @@ test("merged picker students aggregate only the current resource kind", () => {
 
 import { portraitReplacements } from "../../src/bmpt/web/js/hall/student-hall-model.js";
 const swapChoices = [
-  { alt: "base", student: "hero", kind: "spr", source: "mod:current" },
-  { alt: "base", student: "hero", kind: "spr", source: "official" },
-  { alt: "other", student: "hero", kind: "spr", source: "official" },
-  { alt: "base", student: "hero", kind: "spr", source: "mod:another" },
-  { alt: "other", student: "hero", kind: "spr", source: "mod:placed" },
-  { alt: "other", student: "hero", kind: "lobby", source: "mod:lobby" },
-  { alt: "other", student: "stranger", kind: "spr", source: "mod:wrong-student" },
+  { variant: "base", family: "hero", kind: "spr", source: "mod:current" },
+  { variant: "base", family: "hero", kind: "spr", source: "official" },
+  { variant: "other", family: "hero", kind: "spr", source: "official" },
+  { variant: "base", family: "hero", kind: "spr", source: "mod:another" },
+  { variant: "other", family: "hero", kind: "spr", source: "mod:placed" },
+  { variant: "other", family: "hero", kind: "lobby", source: "mod:lobby" },
+  { variant: "other", family: "stranger", kind: "spr", source: "mod:wrong-family" },
 ];
-test("portrait replacements include the student's official art and same-student mods, excluding self, placed and lobby art", () => {
-  const entry = { id: "a", alt: "base", source: "mod:current" },
-    placed = [entry, { alt: "other", source: "mod:placed" }];
+test("portrait replacements include the student's official art and same-family mods, excluding self, placed and lobby art", () => {
+  const entry = { id: "a", variant: "base", source: "mod:current" },
+    placed = [entry, { variant: "other", source: "mod:placed" }];
   assert.deepEqual(
-    portraitReplacements(entry, swapChoices, placed).map((c) => `${c.alt}:${c.source}`),
+    portraitReplacements(entry, swapChoices, placed).map((c) => `${c.variant}:${c.source}`),
     ["base:official", "other:official", "base:mod:another"],
   );
   // An official portrait never lists itself, only the student's other portraits.
   assert.deepEqual(
-    portraitReplacements({ id: "b", alt: "base", source: "official" }, swapChoices, []).map(
-      (c) => `${c.alt}:${c.source}`,
+    portraitReplacements({ id: "b", variant: "base", source: "official" }, swapChoices, []).map(
+      (c) => `${c.variant}:${c.source}`,
     ),
     ["base:mod:current", "other:official", "base:mod:another", "other:mod:placed"],
   );
@@ -341,14 +341,14 @@ test("portrait replacements include the student's official art and same-student 
   assert.deepEqual(portraitReplacements(entry, swapChoices, [...placed, ...swapChoices]), []);
 });
 test("replacing a portrait keeps its identity, position, mirror, size and layer; Cancel restores its source", () => {
-  const entry = { id: "a", alt: "base", source: "mod:current", x: 812, y: 1240, scale: 1.73, mirror: true };
+  const entry = { id: "a", variant: "base", source: "mod:current", x: 812, y: 1240, scale: 1.73, mirror: true };
   const state = {
     revision: 0,
     mode: "portraits",
     portraits: [
-      { id: "below", alt: "below", source: "official", x: 0, y: 1100, scale: 1 },
+      { id: "below", variant: "below", source: "official", x: 0, y: 1100, scale: 1 },
       entry,
-      { id: "above", alt: "above", source: "official", x: 100, y: 1100, scale: 1 },
+      { id: "above", variant: "above", source: "official", x: 100, y: 1100, scale: 1 },
     ],
     memorials: [],
     active: null,
@@ -358,7 +358,7 @@ test("replacing a portrait keeps its identity, position, mirror, size and layer;
   draft.begin("layout");
   assert.equal(draft.replacePortrait("a", swapChoices[5], swapChoices), false);
   assert.ok(draft.replacePortrait("a", swapChoices[2], swapChoices));
-  assert.deepEqual(draft.current().portraits[1], { ...entry, alt: "other", source: "official" });
+  assert.deepEqual(draft.current().portraits[1], { ...entry, variant: "other", source: "official" });
   assert.deepEqual(
     draft.current().portraits.map((e) => e.id),
     ["below", "a", "above"],

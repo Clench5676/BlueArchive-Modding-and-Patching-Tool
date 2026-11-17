@@ -41,7 +41,7 @@ test("a renderer replaced during recovery is frozen and captured once through th
     saves = 0;
   Object.assign(bridge, {
     pause: (on) => (player.paused = on),
-    face: () => "02",
+    expression: () => "02",
     action: () => "",
     info: () => ({ source: "same source" }),
   });
@@ -55,7 +55,7 @@ test("a renderer replaced during recovery is frozen and captured once through th
     capture: async () => ({ png: "valid" }),
     save: async (payload) => {
       saves++;
-      assert.equal(payload.face, "02");
+      assert.equal(payload.expression, "02");
       assert.equal(payload.source, "same source");
       return { saved: "one" };
     },

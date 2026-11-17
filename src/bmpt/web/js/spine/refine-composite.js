@@ -55,11 +55,11 @@ export function poseTracks(S, atlasText, skeletonData, tracks = null) {
   return geometry(S, atlas, data, skeleton);
 }
 
-function defaultTracks(data, face = "00", idleTime = 0) {
+function defaultTracks(data, expression = "00", idleTime = 0) {
   const idle = idleAnimation(data),
     tracks = [];
   if (idle) tracks.push({ track: 0, animation: idle.name, time: idleTime, loop: true });
-  if (data.findAnimation(face)) tracks.push({ track: 1, animation: face, time: 0, loop: true });
+  if (data.findAnimation(expression)) tracks.push({ track: 1, animation: expression, time: 0, loop: true });
   return tracks;
 }
 

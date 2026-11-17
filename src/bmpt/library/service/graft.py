@@ -158,7 +158,7 @@ class GraftMixin:
         identity = self._identity({path.name: path for path in paths})
         targets = self._spine_parts(core_of(paths[0].name), pin)
         if not targets:
-            raise ServiceError("game_file_not_found", alt=record["target"])
+            raise ServiceError("game_file_not_found", variant=record["target"])
         if progress:
             progress({"current": 1, "total": 1, "step": "import.step.check"})
         with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX + "remap-") as temporary:
@@ -345,7 +345,7 @@ class GraftMixin:
         self._grafts.pop(token, None)
         targets = self._spine_parts(core_of(paths[0].name), pin)
         if not targets:
-            raise ServiceError("game_file_not_found", alt=record["target"])
+            raise ServiceError("game_file_not_found", variant=record["target"])
 
         def step(key: str, current: int = 1) -> None:
             if progress:
@@ -600,7 +600,7 @@ class GraftMixin:
         report["partial"] = True  # placed as the official rig places them: always for a look
         targets = self._spine_parts(core_of(paths[0].name), pin)
         if not targets:
-            raise ServiceError("game_file_not_found", alt=record["target"])
+            raise ServiceError("game_file_not_found", variant=record["target"])
 
         def step(key: str, current: int = 1) -> None:
             if progress:
@@ -702,7 +702,7 @@ class GraftMixin:
         record = self._record(state["source"])
         targets = self._spine_parts(core_of(paths[0].name), pin)
         if not targets:
-            raise ServiceError("game_file_not_found", alt=record["target"])
+            raise ServiceError("game_file_not_found", variant=record["target"])
 
         def step(key: str, current: int = 1) -> None:
             if progress:

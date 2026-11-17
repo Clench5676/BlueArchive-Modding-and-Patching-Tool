@@ -1,11 +1,11 @@
 import { validRect } from "../lobby/lobby-health.js";
 
 /**
- * Whether an alt is a special slot (a spine category, or a key starting with "special:").
+ * Whether a variant is a special slot (a spine category, or a key starting with "special:").
  */
 export const isSpecial = (v) => !!(v?.spineCategory || v?.key?.startsWith("special:"));
 /**
- * The framing of a special alt's own lobby art: null for an ordinary alt.
+ * The framing of a special variant's own lobby art: null for an ordinary variant.
  * @returns {string|null} "character" or "scene" by its name, or null.
  */
 export function specialFraming(v) {
