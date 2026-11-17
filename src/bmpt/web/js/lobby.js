@@ -208,11 +208,10 @@ async function sourcesOf(core, mod, refresh = false, signal = null, official = f
   return { artBase: dir(artBase), base: dir(base), official };
 }
 
-// the layers of a lobby in the prefab's draw order with its offsets and scales; skeletons the prefab keeps
-// inactive (talk-only scenes) are left out. Without prefab data every skeleton sits at the standard place,
-// backgrounds first.
 /**
- * Read the layers of a lobby.
+ * Read the layers of a lobby in the prefab's draw order with its offsets and scales; skeletons the prefab keeps
+ * inactive (talk-only scenes) are left out. Without prefab data every skeleton sits at the standard place,
+ * backgrounds first.
  * @param {object|null} [mod]
  * @param {object|null} [sources]
  * @param {object|null} [framing]
@@ -1406,11 +1405,11 @@ export function zoomAt(factor, sx, sy) {
     h = (w * 9) / 16;
   setView(clampView({ x: ux - fx * w, y: uy - fy * h, w, h }), false);
 }
-// the zoom-out setting {mode, custom} (ZOOM_MODES; custom in game views across): a view wider than the new limit
-// comes back inside it, around the same centre; Full Art and Unlocked measure the lobby's clips (once).
 /**
- * Set the zoom-out limit.
- * @param {{mode: string, custom?: number}} zoom
+ * Set the zoom-out setting: a view wider than the new limit comes back inside it, around the same centre; Full
+ * Art and Unlocked measure the lobby's clips (once).
+ * @param {{mode: string, custom?: number}} zoom One of ZOOM_MODES, and for "custom" how many game views across
+ *     the view may be.
  */
 export function setZoomLimit(zoom) {
   zoomMode = ZOOM_MODES.includes(zoom?.mode) ? zoom.mode : "art";
@@ -2221,11 +2220,10 @@ export function resume() {
   c.suspended = false;
   resumeScene(c);
 }
-// Resolve only after every optional FX/material image is in and an actual complete composite has been drawn.
-// Preparing the intro's frame zero queues its time-zero sounds for activation instead of consuming them
-// silently.
 /**
- * Draw the lobby's first complete frame.
+ * Draw the lobby's first complete frame: it settles only after every optional FX/material image is in and an
+ * actual complete composite has been drawn. Preparing the intro's frame zero queues its time-zero sounds for
+ * activation instead of consuming them silently.
  * @returns {Promise<boolean>} True when it is drawn; false when the lobby changed meanwhile.
  */
 export async function prepareFrame() {

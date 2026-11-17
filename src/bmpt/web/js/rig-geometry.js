@@ -98,8 +98,13 @@ function pose(S, data, missing, idle, overlay) {
   return drawn;
 }
 
-// The rest pose "" (the idle on track 0 and "00" on track 1 where the skeleton has them, track time 0) and one pose
-// per other animation by its name (the idle on track 0, the animation on track 1).
+/**
+ * The poses of a rig: the rest pose "" (the idle on track 0 and "00" on track 1 where the skeleton has them,
+ * track time 0) and one pose per other animation by its name (the idle on track 0, the animation on track 1).
+ * @param {object} S The spine runtime's namespace.
+ * @param {string} atlasText The atlas file's text.
+ * @param {object} skeletonData The skeleton data.
+ */
 export function poses(S, atlasText, skeletonData) {
   const { data, missing } = load(S, atlasText, skeletonData);
   const idle = idleOf(data),
@@ -114,10 +119,14 @@ export function poses(S, atlasText, skeletonData) {
 
 const byStem = (items, name) => Object.entries(items || {}).find(([other]) => stem(other) === stem(name));
 
-// The rig a portrait mod's textures were drawn for and the official rig, per official atlas that has a skeleton of
-// the same stem. The source: the mod's own atlas and skeleton where its files carry them (report.mod is the mod's
-// assets over the official ones: an asset that differs from the official one is the mod's), else the recorded ones
-// (report.source), else the official ones. ModLibrary.remap makes the same choice from the files.
+/**
+ * The rig a portrait mod's textures were drawn for and the official rig, per official atlas that has a skeleton
+ * of the same stem. The source: the mod's own atlas and skeleton where its files carry them (report.mod is the
+ * mod's assets over the official ones: an asset that differs from the official one is the mod's), else the
+ * recorded ones (report.source), else the official ones. ModLibrary.remap makes the same choice from the files.
+ * @param {object} report The remap report.
+ * @param {object} [S] The spine runtime's namespace.
+ */
 export function forRemap(report, S = globalThis.spine) {
   if (report?.kind !== "spr") return {};
   const official = report.official,
@@ -143,7 +152,9 @@ export function forRemap(report, S = globalThis.spine) {
   return result;
 }
 
-// Rest poses only: what the redrawn check needs.
+/**
+ * The geometry with its rest poses only: what the redrawn check needs.
+ */
 export function restOnly(geometry) {
   return Object.fromEntries(
     Object.entries(geometry).map(([name, { source, target }]) => [
@@ -156,8 +167,10 @@ export function restOnly(geometry) {
   );
 }
 
-// The setup pose of a rig for the graft (graft.py setup): per bone its world matrix [a, b, c, d, x, y], per slot its
-// bone, and per skin attachment that draws a region its page, world vertices, page UVs and triangles.
+/**
+ * The setup pose of a rig for the graft (graft.py setup): per bone its world matrix [a, b, c, d, x, y], per
+ * slot its bone, and per skin attachment that draws a region its page, world vertices, page UVs and triangles.
+ */
 export function setupOf(S, atlasText, skeletonData) {
   const { data, missing } = load(S, atlasText, skeletonData);
   const skeleton = new S.Skeleton(data);
@@ -206,8 +219,11 @@ export function setupOf(S, atlasText, skeletonData) {
   return { bones, slotBones, skin };
 }
 
-// Poses for the graft's check (graft.py choose), in rebake.rig's shape: the rest pose left empty and, per animation of
-// `check` (name -> slots) the skeleton has, what those slots draw with the idle on track 0 and the animation on track 1.
+/**
+ * Poses for the graft's check (graft.py choose), in rebake.rig's shape: the rest pose left empty and, per
+ * animation of `check` (name -> slots) the skeleton has, what those slots draw with the idle on track 0 and the
+ * animation on track 1.
+ */
 export function partPoses(S, atlasText, skeletonData, check) {
   const { data, missing } = load(S, atlasText, skeletonData);
   const idle = idleOf(data);
@@ -220,9 +236,15 @@ export function partPoses(S, atlasText, skeletonData, check) {
   return { slots: Array.from(data.slots, (slot) => slot.name), poses: result };
 }
 
-// The graft's check of a rig without a picture to compare (graft.py plain): the animations of `names` the runtime
-// cannot pose (all of them when the rig does not read), each tried on track 0 from the setup pose at `times` (shares of its duration). An animation fails when
-// posing it throws or gives a bone or a drawn vertex that is not finite; one the skeleton lacks fails too.
+/**
+ * The graft's check of a rig without a picture to compare (graft.py plain): the animations of `names` the
+ * runtime cannot pose (all of them when the rig does not read), each tried on track 0 from the setup pose at
+ * `times` (shares of its duration). An animation fails when posing it throws or gives a bone or a drawn vertex
+ * that is not finite; one the skeleton lacks fails too.
+ * @param {string[]} names The animations to try.
+ * @param {number[]} [times] The shares of each animation's duration to pose at.
+ * @returns {string[]} The names that fail.
+ */
 export function failedPoses(S, atlasText, skeletonData, names, times = [0, 0.37, 0.81]) {
   let rig;
   try {

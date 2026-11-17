@@ -1,10 +1,10 @@
 import { segmentTree, segmentOrigin, segmentDensity, SEGMENT_SCALE } from "./mod-switch-skin.js";
-// The Enable Mods switch (docs/webui/mods-switch.md, "Enable Mods switch"): one switch for every game folder, in the top bar
-// (#mod-switch) and in Settings' Mods tab. A click on the current state does nothing; a click on the other state asks
-// first, and only the confirmation submits mods.toggle; the first toggle from any place explains it once instead (its
-// button confirms); the square "?" opens the help, with Retry and Details.
-// A write refused while the classic UI is open opens the classic modal, which can queue it until the window closes.
-// The pure parts (the view from mods.state, the click, the help's lines, the result, the start prompts, the classic
+// The Enable Mods switch (docs/webui/mods-switch.md, "Enable Mods switch"): one switch for every game folder, in
+// the top bar (#mod-switch) and in Settings' Mods tab. A click on the current state does nothing; a click on the
+// other state asks first, and only the confirmation submits mods.toggle; the first toggle from any place
+// explains it once instead (its button confirms); the square "?" opens the help, with Retry and Details. A write
+// refused while the classic UI is open opens the classic modal, which can queue it until the window closes. The
+// pure parts (the view from mods.state, the click, the help's lines, the result, the start prompts, the classic
 // modal's outcome) are tested in Node (tests/js/mod_switch.test.mjs).
 import { notify } from "./popup.js";
 import * as NGUI from "./ngui.js";
@@ -24,10 +24,15 @@ export const PROMPT_BLOCKERS = ["game_running", "steam_busy", "classic_open"];
 // the calls the classic modal can keep for when the classic window closes (webui/classic.py QUEUE_METHODS)
 export const QUEUEABLE = ["actions.apply", "actions.restore", "mods.toggle", "mods.restoreDrift"];
 
-// the language's list separator: 、 in Chinese and Japanese, a comma elsewhere
+/**
+ * The language's list separator: 、 in Chinese and Japanese, a comma elsewhere.
+ */
 export const listSep = (lang = language()) => (/^(zh|ja)/i.test(lang) ? "、" : ", ");
 
-// sizes as the help shows them
+/**
+ * A size as the help shows it.
+ * @param {number} bytes The size in bytes.
+ */
 export function sizeText(bytes) {
   const b = Math.max(0, Number(bytes) || 0);
   if (!b) return "0 MB";
@@ -36,7 +41,11 @@ export function sizeText(bytes) {
   return `${(b / 1073741824).toFixed(2)} GB`;
 }
 
-// an error's string; the free-space refusal names sizes
+/**
+ * An error's string; the free-space refusal names sizes.
+ * @param {string} code The error code.
+ * @param {object} [params] The error's parameters.
+ */
 export function errorText(code, params = {}) {
   const p = { ...(params || {}) };
   if (code === "not_enough_space")
@@ -44,13 +53,17 @@ export function errorText(code, params = {}) {
   return T(`error.${code || "internal"}`, p);
 }
 
-// view(state, {place}): how the switch draws from mods.state. place "top" (the top bar) hides it without a current
-// install (the roster and the detail screen are not available then);
-// "settings" always shows it.
-//   on: mods are enabled; busy: a toggle queued or running, or writes queued for the classic window (dimmed);
-//   unavailable: greyed, with reason (game_running, game_status_unavailable, steam_busy, classic_open,
-//   game_not_found, profiles_unreadable); dot: entries not switched or left as is (the services count them from the
-//   last scan with the scan consent, from the unfinished list without it)
+/**
+ * How the switch draws from mods.state: on (mods are enabled); busy (a toggle queued or running, or writes
+ * queued for the classic window: dimmed); unavailable (greyed, with a reason: game_running,
+ * game_status_unavailable, steam_busy, classic_open, game_not_found, profiles_unreadable); dot (entries not
+ * switched or left as is: the services count them from the last scan with the scan consent, from the unfinished
+ * list without it).
+ * @param {object} state mods.state.
+ * @param {object} [options] Options.
+ * @param {"top"|"settings"} [options.place] "top" (the top bar) hides the switch without a current install (the
+ *     roster and the detail screen are not available then); "settings" always shows it.
+ */
 export function view(state, { place = "top" } = {}) {
   if (!state) return { hidden: true, on: true, busy: false, unavailable: false, reason: null, dot: false };
   const busy = !!state.busy;
@@ -66,12 +79,17 @@ export function view(state, { place = "top" } = {}) {
   };
 }
 
-// clickAction(state, explained, want): what a click on the switch does. want: the state clicked (true for ON, false
-// for OFF), null for the other one (the keyboard, which presses the switch as a whole)
-//   "none": the current state was clicked, nothing happens in any state; "busy": a toggle runs (refused, a message
-//   popup); "queued": writes wait for the classic window (the classic modal, its box ticked); "reason": unavailable (the
-//   reason as a message popup); "explain": the first toggle ever (the explanation, its button toggles); "classic": the
-//   classic window is open (the confirmation, then the classic modal); "confirm": the confirmation, then the toggle
+/**
+ * What a click on the switch does: "none" (the current state was clicked: nothing happens in any state), "busy"
+ * (a toggle runs: refused, a message popup), "queued" (writes wait for the classic window: the classic modal,
+ * its box ticked), "reason" (unavailable: the reason as a message popup), "explain" (the first toggle ever: the
+ * explanation, its button toggles), "classic" (the classic window is open: the confirmation, then the classic
+ * modal) or "confirm" (the confirmation, then the toggle).
+ * @param {object} state mods.state.
+ * @param {boolean} [explained] Whether the first toggle's explanation was shown already.
+ * @param {boolean|null} [want] The state clicked (true for ON, false for OFF); null for the other one (the
+ *     keyboard, which presses the switch as a whole).
+ */
 export function clickAction(state, explained = false, want = null) {
   if (!state) return "none";
   if (want != null && !!want === (state.enabled !== false)) return "none";
@@ -82,8 +100,13 @@ export function clickAction(state, explained = false, want = null) {
   return "confirm";
 }
 
-// the state a click on the top bar's switch names: its ON or OFF segment, null when the click names neither (Enter or
-// Space on the focused switch)
+/**
+ * The state a click on the top bar's switch names: its ON or OFF segment.
+ * @param {Element} target The clicked element.
+ * @param {Element|null} [root] The switch's element.
+ * @returns {boolean|null} True for ON, false for OFF; null when the click names neither (Enter or Space on the
+ *     focused switch).
+ */
 export function clickedState(target, root = null) {
   for (let n = target; n && n !== root; n = n.parentNode) {
     if (n.classList?.contains("ms-on")) return true;
@@ -92,23 +115,37 @@ export function clickedState(target, root = null) {
   return null;
 }
 
-// the toggle a click submits, and the Retry of the help (the same intent again)
+/**
+ * The toggle a click submits: the opposite of the current state (`expect` is what the page believes the state
+ * is now).
+ */
 export const toggleParams = (state) => ({ enabled: state?.enabled === false, expect: state?.enabled !== false });
+/**
+ * The Retry of the help: the same intent as the current state asks again.
+ */
 export const retryParams = (state) => ({ enabled: state?.enabled !== false, expect: state?.enabled !== false });
 
-// the reason a greyed switch shows
+/**
+ * The reason a greyed switch shows.
+ */
 export const reasonText = (state) => (state?.reason ? errorText(state.reason, state.reasonParams) : "");
 
-// the help's opening text, which the first toggle's explanation repeats
+/**
+ * The help's opening text, which the first toggle's explanation repeats.
+ */
 export const basics = () => [T("mods.helpOn"), T("mods.helpOff")];
 
-// the first toggle's explanation: {title, lines, ok}; the box closes with Cancel too, and only ok toggles
+/**
+ * The first toggle's explanation: {title, lines, ok}; the box closes with Cancel too, and only ok toggles.
+ */
 export function explanation(state) {
   const action = T(state?.enabled === false ? "mods.onTitle" : "mods.offTitle");
   return { title: action, lines: [...basics(), T("mods.explainOnce")], ok: action };
 }
 
-// the confirmation before a toggle, on the game's neutral notice: {title, lines, ok, cancel}; only ok toggles
+/**
+ * The confirmation before a toggle, on the game's neutral notice: {title, lines, ok, cancel}; only ok toggles.
+ */
 export function confirmation(state) {
   const on = state?.enabled !== false;
   return {
@@ -119,8 +156,11 @@ export function confirmation(state) {
   };
 }
 
-// helpLines(state): the "?" help's lines, [{text, button: {id, label}}]. Buttons: retry (pending and left entries), details
-// (stuck entries: the Overwritten message, never a Retry), held (entries a game update's rig change holds: their names)
+/**
+ * The "?" help's lines, [{text, button: {id, label}}]. Buttons: retry (pending and left entries), details
+ * (stuck entries: the Overwritten message, never a Retry), held (entries a game update's rig change holds:
+ * their names).
+ */
 export function helpLines(state, { sep = listSep() } = {}) {
   const s = state || {};
   const lines = basics().map((text) => ({ text }));
@@ -137,7 +177,11 @@ export function helpLines(state, { sep = listSep() } = {}) {
   return lines;
 }
 
-// an entry as the result and the messages name it: the variant's name and the kind
+/**
+ * An entry as the result and the messages name it: the variant's name and the kind.
+ * @param {(entry: object) => string} [nameOf] Names the entry's variant.
+ * @param {string} [sep] The list separator.
+ */
 export function entryLabel(entry, nameOf = (e) => e?.variant || e?.core || "", sep = listSep()) {
   if (entry?.kind === "other") {
     const name = entry.files?.[0]?.file?.split(/[\\/]/).pop() || nameOf(entry);
@@ -154,8 +198,12 @@ export function entryLabel(entry, nameOf = (e) => e?.variant || e?.core || "", s
 
 const MAX_LISTED = 6; // failed entries a result names; the rest are counted
 
-// resultSummary(result, nameOf): a silent success, or {title, lines} for adopted entries and unfinished work.
-// Each failed entry keeps its error string.
+/**
+ * A silent success, or {title, lines} for adopted entries and unfinished work. Each failed entry keeps its
+ * error string.
+ * @param {object} result The result of mods.toggle.
+ * @param {(entry: object) => string} nameOf Names an entry's variant.
+ */
 export function resultSummary(result, nameOf) {
   const list = (k) => result?.[k] || [];
   const title = T(result?.enabled === false ? "mods.offState" : "mods.onState");
@@ -187,22 +235,35 @@ export function resultSummary(result, nameOf) {
   return { title, lines };
 }
 
-// classicOutcome({queued, checked}): what closing the classic modal does, however it closes. Opened on
-// a refused write: ticked, the write is queued ("queue"); unticked, nothing. Opened on writes already queued (a click
-// on the busy switch, the box ticked): unticked, the queue is emptied ("clear").
+/**
+ * What closing the classic modal does, however it closes. Opened on a refused write: ticked, the write is
+ * queued ("queue"); unticked, nothing. Opened on writes already queued (a click on the busy switch, the box
+ * ticked): unticked, the queue is emptied ("clear").
+ * @param {object} [options] How it was opened and closed.
+ * @param {boolean} [options.queued] Opened on writes already queued.
+ * @param {boolean} [options.checked] The box was ticked.
+ * @returns {"queue"|"clear"|null} What to do with the queue.
+ */
 export function classicOutcome({ queued = false, checked = false } = {}) {
   if (queued) return checked ? null : "clear";
   return checked ? "queue" : null;
 }
 
-// startDue(name, {info, state, entries}): whether a start popup has something to show, in the order of START
-//   consent: the asset consent until it is given; spine: its licence confirmation until it is acknowledged (an earlier
-//   stored No shows it again);
-//   scan: the scan consent while unanswered and a game folder is known;
-//   update: released builds; drift and untracked: only with the scan consent, from the start scan's entries not
-//   dismissed, never while the game, Steam or the classic UI may be writing; no drift while mods are off, and none
-//   for a game update (entries updated: the update summary tells them, update-impact.js)
+// The start popups, in the order they are asked. startDue says whether one has something to show: consent (the
+// asset consent until it is given), spine (its licence confirmation until it is acknowledged; an earlier stored
+// No shows it again), scan (the scan consent while unanswered and a game folder is known), update (released
+// builds), drift and untracked (only with the scan consent, from the start scan's entries not dismissed, never
+// while the game, Steam or the classic UI may be writing; no drift while mods are off, and none for a game
+// update: the update summary tells them, update-impact.js).
 export const START = ["consent", "spine", "scan", "update", "drift", "untracked"];
+/**
+ * Whether a start popup has something to show.
+ * @param {string} name One of START.
+ * @param {object} [options] What the start knows.
+ * @param {object} [options.info] The app's information.
+ * @param {object|null} [options.state] mods.state.
+ * @param {object[]} [options.entries] The start scan's entries.
+ */
 export function startDue(name, { info = {}, state = null, entries = [] } = {}) {
   const scanned = state?.scan === true && !PROMPT_BLOCKERS.includes(state?.reason);
   const open = (e) => !e.dismissed;
@@ -224,11 +285,19 @@ export function startDue(name, { info = {}, state = null, entries = [] } = {}) {
   }
 }
 
-// the untracked prompt's buttons: Add and Turn On Mods only while mods are off
+/**
+ * The untracked prompt's buttons: Add and Turn On Mods only while mods are off.
+ */
 export const untrackedButtons = (state) => ["add", ...(state?.enabled === false ? ["addTurnOn"] : []), "later"];
 
-// the drift prompt's two buttons: Apply Mod Configuration sends the selected cards and keeps the rest as they are
-// (dismissed); Keep as Is dismisses every card
+/**
+ * The outcome of the drift prompt's two buttons: Apply Mod Configuration sends the selected cards and keeps the
+ * rest as they are (dismissed); Keep as Is dismisses every card.
+ * @param {"apply"|"keep"} button The button pressed.
+ * @param {object[]} entries The cards.
+ * @param {string[]} selected The keys of the selected cards.
+ * @returns {{restore: object[], dismiss: object[]}} The entries to restore and to dismiss.
+ */
 export function driftChoice(button, entries, selected) {
   const keys = new Set(selected);
   const key = (e) => `${e.install}|${e.core}`;
@@ -250,7 +319,13 @@ let host = null,
 const listeners = new Set();
 let lastSignature = "";
 
+/**
+ * The state of mods.state as last read.
+ */
 export const current = () => state;
+/**
+ * Draw the switch again after a locale change.
+ */
 export function relabel() {
   if (!els) return;
   els.label.textContent = T("mods.switch");
@@ -265,7 +340,11 @@ export function relabel() {
   fitLabel(els.label);
   return render();
 }
-// fn(state) when what Settings' Mods tab shows changed (not on every progress step)
+/**
+ * Subscribe to changes of what Settings' Mods tab shows (not every progress step).
+ * @param {(state: object) => void} fn Called with the state.
+ * @returns {() => void} Unsubscribes.
+ */
 export function onChange(fn) {
   listeners.add(fn);
   return () => listeners.delete(fn);
@@ -312,12 +391,21 @@ function update(next) {
   }
 }
 
+/**
+ * Read mods.state again and draw the switch.
+ * @returns {Promise<object>} The state.
+ */
 export async function refresh() {
   update(await rpc("mods.state").catch(() => null));
   return state;
 }
 
-// init({names, refreshPage}): the top bar's switch and the events; names() names an entry's variant
+/**
+ * Set up the top bar's switch and the events it follows.
+ * @param {object} [options] Options.
+ * @param {() => ((entry: object) => string)} [options.names] Gives the function that names an entry's variant.
+ * @param {() => Promise<void>} [options.refreshPage] Resolves once the visible page has refreshed and drawn.
+ */
 export async function init(options = {}) {
   if (options.names) names = options.names;
   if (options.refreshPage) refreshPage = options.refreshPage;
@@ -331,6 +419,9 @@ export async function init(options = {}) {
 
 // the tray's events (webui/tray.py), also on the no-game screen: the tray switches the known installs without one
 let trayHeard = false;
+/**
+ * Follow the tray's events (tray.open, tray.toggle).
+ */
 export function listenTray() {
   if (trayHeard) return;
   trayHeard = true;
@@ -345,6 +436,9 @@ export function listenTray() {
 
 // the drift prompt (prompts.js), which the tray's Back to Official opens
 let driftPrompt = null;
+/**
+ * Set the function that opens the drift prompt.
+ */
 export function setDriftPrompt(fn) {
   driftPrompt = fn;
 }
@@ -447,8 +541,11 @@ async function render() {
 
 // --- clicks ---
 
-// click(from, want): the switch was clicked (the top bar, Settings) on the state want (null: the other one); the same
-// rules everywhere
+/**
+ * The switch was clicked (the top bar, Settings): the same rules everywhere.
+ * @param {"top"|"settings"} [from] Where it was clicked.
+ * @param {boolean|null} [want] The state clicked; null: the other one.
+ */
 export async function click(from = "top", want = null) {
   const s = state;
   switch (clickAction(s, explainedHere, want)) {
@@ -541,8 +638,8 @@ async function run(params) {
   if (refusal) await refused(refusal, "mods.toggle", params, () => run(params));
 }
 
-// a toggle job followed to its end: the indicator, action and count, then the message popup or the result popup. method: the
-// call a classic_open refusal may queue (the tray's toggle has none: the tray never queues)
+// a toggle job followed to its end: the indicator, action and count, then the message popup or the result popup.
+// method: the call a classic_open refusal may queue (the tray's toggle has none: the tray never queues)
 async function follow(id, params, method) {
   try {
     await finished(await toggleJob(id, params));
@@ -560,8 +657,11 @@ function toggleJob(id, params, update = null) {
   return Loading.task((report) => waitJob(id, report), { label: running });
 }
 
-// turn(params): a toggle asked for by another control (the untracked prompt's Add and Turn On Mods): the first
-// toggle's explanation first, as from any place
+/**
+ * A toggle asked for by another control (the untracked prompt's Add and Turn On Mods): the first toggle's
+ * explanation first, as from any place.
+ * @param {{enabled: boolean, expect: boolean}} params The toggle.
+ */
 export async function turn(params) {
   const s = state || (await refresh());
   if (!s) return;
@@ -571,9 +671,12 @@ export async function turn(params) {
 
 // --- the tray: it brings the window to the front, and the page shows what follows ---
 
-// tray.open {view, ...}: "explain", the first toggle's explanation from the tray, whose button submits the toggle the
-// tray asked for ({enabled, expect}); "error", the tray's toggle refused at submit ({code, params}), shown as for the
-// page's own toggle (the tray never queues for the classic window); "drift", the drift prompt
+/**
+ * A tray.open event {view, ...}: "explain" (the first toggle's explanation from the tray, whose button submits
+ * the toggle the tray asked for, {enabled, expect}), "error" (the tray's toggle refused at submit, {code,
+ * params}, shown as for the page's own toggle; the tray never queues for the classic window) or "drift" (the
+ * drift prompt).
+ */
 export async function trayOpen(data = {}) {
   const view = data?.view;
   if (view === "explain") {
@@ -588,8 +691,10 @@ export async function trayOpen(data = {}) {
   if (view === "drift") await driftPrompt?.();
 }
 
-// tray.toggle {job, enabled, expect}: the tray submitted the toggle; the page follows it as its own (progress, the end
-// message popup, the result popup)
+/**
+ * A tray.toggle {job, enabled, expect} event: the tray submitted the toggle; the page follows it as its own
+ * (progress, the end message popup, the result popup).
+ */
 export async function trayToggle(data = {}) {
   if (!data?.job) return;
   await follow(data.job, { enabled: !!data.enabled, expect: !!data.expect }, null);
@@ -614,9 +719,15 @@ async function finished(result) {
   });
 }
 
-// a refusal (at submit or from the job): the classic modal for the classic window, the untested build's confirmation
-// (with retry, the refused call made again once confirmed), else its string; switched elsewhere first, the switch
-// redraws from mods.state
+/**
+ * Handle a refusal (at submit or from the job): the classic modal for the classic window, the untested build's
+ * confirmation (with retry, the refused call made again once confirmed), else its string; switched elsewhere
+ * first, the switch redraws from mods.state.
+ * @param {object} err The refusal.
+ * @param {string|null} [method] The refused call's method.
+ * @param {object|null} [params] The refused call's parameters.
+ * @param {(() => Promise<*>)|null} [retry] Makes the call again.
+ */
 export async function refused(err, method = null, params = null, retry = null) {
   const code = err?.code || "internal";
   if (code === "untested_build" && retry) {
@@ -631,12 +742,14 @@ export async function refused(err, method = null, params = null, retry = null) {
   if (code === "state_changed") refresh();
 }
 
-// --- an untested game build (docs/webui/library.md, "Untested game build"): the writes onto the cores its update changed
-// wait for a confirmation; Apply Anyway gives the refusal's confirm back (mods.confirmUntested) and the call is made
-// again, Cancel leaves everything as it was ---
+// --- an untested game build (docs/webui/library.md, "Untested game build"): the writes onto the cores its
+// update changed wait for a confirmation; Apply Anyway gives the refusal's confirm back (mods.confirmUntested)
+// and the call is made again, Cancel leaves everything as it was ---
 
-// untestedLines(params, nameOf): the confirmation's lines, how many entries the update affected, then each one as a
-// list item ("name - kind"), the rest counted
+/**
+ * The untested build confirmation's lines: how many entries the update affected, then each one as a list item
+ * ("name - kind"), the rest counted.
+ */
 export function untestedLines(params, nameOf = (e) => e?.variant || e?.core || "") {
   const entries = params?.entries || [];
   const listed = entries.slice(0, MAX_LISTED).map((e) => entryLabel(e, nameOf, " - "));
@@ -647,7 +760,10 @@ export function untestedLines(params, nameOf = (e) => e?.variant || e?.core || "
   ];
 }
 
-// confirmUntested(err): true once the user confirmed the writes an untested_build refusal named
+/**
+ * Ask the user to confirm the writes an untested_build refusal named.
+ * @returns {Promise<boolean>} True once the user confirmed.
+ */
 export async function confirmUntested(err) {
   try {
     const nameOf = await names().catch(() => undefined);
@@ -667,17 +783,27 @@ export async function confirmUntested(err) {
   }
 }
 
-// untestedRetry(err, retry): for a caller with its own error message, the confirmation and the call again; false for
-// another refusal, which the caller shows itself
+/**
+ * For a caller with its own error message: the confirmation and the call again.
+ * @param {object} err The refusal.
+ * @param {() => Promise<*>} retry Makes the call again.
+ * @returns {Promise<boolean>} False for another refusal, which the caller shows itself.
+ */
 export async function untestedRetry(err, retry) {
   if (err?.code !== "untested_build") return false;
   if (await confirmUntested(err)) await retry();
   return true;
 }
 
-// --- the classic modal: "Close the classic UI first", with "Apply automatically once it closes". Any
-// way of closing follows the box: ticked, the refused write is queued; unticked, nothing (or, opened on writes already
-// queued, the queue is emptied) ---
+// --- the classic modal: "Close the classic UI first", with "Apply automatically once it closes" ---
+/**
+ * Open the classic modal; any way of closing follows the box: ticked, the refused write is queued; unticked,
+ * nothing (or, opened on writes already queued, the queue is emptied).
+ * @param {object} [options] What it was opened on.
+ * @param {string|null} [options.method] The refused call's method.
+ * @param {object|null} [options.params] Its parameters.
+ * @param {boolean} [options.queued] Opened on writes already queued.
+ */
 export async function classicModal({ method = null, params = null, queued = false } = {}) {
   const r = await Popup.message({
     title: T("classic.opened"),
@@ -725,7 +851,9 @@ async function queueDone({ submitted = [], dropped = [] } = {}) {
 
 // --- the help ---
 
-// openHelp(): the "?" help on the message popup (title Enable Mods); a line's button acts, most of them closing it
+/**
+ * Open the "?" help on the message popup (title Enable Mods); a line's button acts, most of them closing it.
+ */
 export async function openHelp() {
   const s = state || (await refresh());
   if (!s) return;
@@ -751,7 +879,10 @@ export async function openHelp() {
   await Popup.message({ title: T("mods.switch"), lines, width: 2098, fitTogether: [0, 1], plain: true });
 }
 
-// Settings' mod cache cleanup: a library job; kept originals stay, Off needs them
+/**
+ * Settings' mod cache cleanup: a library job; kept originals stay, Off needs them.
+ * @returns {Promise<boolean>} Whether it ran.
+ */
 export async function clearBuilt() {
   try {
     const id = await rpc("mods.clearBuilt");
@@ -763,8 +894,11 @@ export async function clearBuilt() {
   }
 }
 
-// the scan consent popup, over Settings' Check Game Files; the consent is given
-// there, never by the button that opened it
+/**
+ * Open the scan consent popup, over Settings' Check Game Files; the consent is given there, never by the button
+ * that opened it.
+ * @returns {Promise<boolean>} Whether the consent was given.
+ */
 export function askScan() {
   return Consent.scan($("consent"), { over: true }).then((granted) => {
     refresh();
@@ -793,7 +927,10 @@ async function overwritten() {
   });
 }
 
-// Settings' Game Files Check: a scan with the dismissed entries listed again; resolves once it is in (or after 60 s)
+/**
+ * Settings' Game Files Check: a scan with the dismissed entries listed again; resolves once it is in (or after
+ * 60 s).
+ */
 export async function check() {
   const done = new Promise((resolve) => {
     let off = null;

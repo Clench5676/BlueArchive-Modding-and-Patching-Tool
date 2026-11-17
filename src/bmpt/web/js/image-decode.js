@@ -1,11 +1,12 @@
-// Pictures decoded before a screen shows. WebKit (the app's window on macOS) lets go of what a hidden screen draws:
-// the blob images ngui.js bakes (sliced and tinted sprites) have no other user than that screen's elements. When the
-// screen shows again, WebKit paints its first frames without those pictures until they are loaded and decoded again:
-// the roster came back from the detail screen without its frame, its card frames and the dimming of the cards without
-// mods for about 100 ms. A screen about to show waits for decode() of every picture it draws, so its first frame has
-// them all. No DOM here: the tests run it in Node.
+// Pictures decoded before a screen shows. WebKit (the app's window on macOS) lets go of what a hidden screen
+// draws: the blob images ngui.js bakes (sliced and tinted sprites) have no other user than that screen's
+// elements, so when the screen shows again its first frames paint without them until they are loaded and decoded
+// again. A screen about to show waits for decode() of every picture it draws, so its first frame has them all.
+// No DOM here: the tests run it in Node.
 
-// cssUrls('url("a"), url(b)') -> ["a", "b"]: the URLs in a CSS image value (an element's style.backgroundImage)
+/**
+ * The URLs in a CSS image value (an element's style.backgroundImage): 'url("a"), url(b)' gives ["a", "b"].
+ */
 export function cssUrls(value) {
   const out = [];
   for (const m of String(value || "").matchAll(
@@ -17,16 +18,25 @@ export function cssUrls(value) {
   return out;
 }
 
-// imageUrls(elements) -> the distinct URLs the elements' inline backgrounds draw, in the elements' order
+/**
+ * The distinct URLs the elements' inline backgrounds draw, in the elements' order.
+ */
 export function imageUrls(elements) {
   const urls = new Set();
   for (const el of elements) for (const url of cssUrls(el?.style?.backgroundImage)) urls.add(url);
   return [...urls];
 }
 
-// Share overlapping decode work and retain a bounded set of image objects. A
-// retained image still rechecks decode readiness when requested again: WebKit
-// may discard decoded pixels while a view is hidden. No assets are written out.
+/**
+ * Make a decoder that shares overlapping decode work and keeps a bounded set of image objects. A kept image
+ * still rechecks decode readiness when requested again: WebKit may discard decoded pixels while a view is
+ * hidden. No assets are written out.
+ * @param {() => HTMLImageElement} create Makes an image element.
+ * @param {object} [options] Options.
+ * @param {number} [options.maxBytes] The most bytes of images kept.
+ * @param {number} [options.maxEntries] The most images kept.
+ * @returns {(url: string, options?: object) => Promise<boolean>} Decodes the picture at a URL.
+ */
 export function imageDecoder(create, { maxBytes = 32 * 1024 * 1024, maxEntries = 256 } = {}) {
   const images = new Map();
   let bytes = 0;
@@ -72,8 +82,16 @@ export function imageDecoder(create, { maxBytes = 32 * 1024 * 1024, maxEntries =
   };
 }
 
-// Resolve true only when every picture decoded successfully. Failures settle
-// without hanging the screen, but must not publish an incomplete loading word.
+/**
+ * Decode several pictures. Failures settle without hanging the screen, but must not publish an incomplete
+ * loading word.
+ * @param {string[]} urls The pictures.
+ * @param {(url: string, options?: object) => Promise<boolean>} decode The decoder (imageDecoder).
+ * @param {number} [cap] The longest wait in milliseconds.
+ * @param {object} [options] Options.
+ * @param {AbortSignal} [options.signal] Stops the wait.
+ * @returns {Promise<boolean>} True only when every picture decoded successfully.
+ */
 export function decodeAll(urls, decode, cap = Infinity, { signal } = {}) {
   const all = Promise.all(
     urls.map((url) =>

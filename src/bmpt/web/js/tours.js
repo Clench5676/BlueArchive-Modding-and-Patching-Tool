@@ -9,9 +9,10 @@ import { FOOTER, POPUP_FOOTER, POPUP_FRAME } from "./ui-tokens.js";
 import { S, wrapPath } from "./util.js";
 
 const { node, label, sprite, find } = NGUI;
-// An illustrated page keeps the original frame and content, the frame as much taller (or shorter) as the footer's top stands
-// above the original's (its 177-high bodies centred 122 above the bottom), the content moved by half of it (the frame grows
-// both ways from its centre), so the room under the caption is what it was. The XS footer stands lower: -46.5.
+// An illustrated page keeps the original frame and content, the frame as much taller (or shorter) as the
+// footer's top stands above the original's (its 177-high bodies centred 122 above the bottom), the content moved
+// by half of it (the frame grows both ways from its centre), so the room under the caption is what it was. The
+// XS footer stands lower: -46.5.
 const RISE = POPUP_FOOTER.bottom + POPUP_FOOTER.control.h - (FOOTER.centre - FOOTER.rise + FOOTER.body.h / 2);
 const LIFT = RISE / 2;
 // bottom: the lowest content edge of an illustrated page, the caption (centre -445, 70 high)

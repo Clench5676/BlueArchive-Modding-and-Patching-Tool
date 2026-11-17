@@ -1,12 +1,11 @@
-// Loading screen, from the game's own prefabs:
-//   - UILoading (Resources/UI/UILoading.prefab): its black backdrop (BlackBG). The game also shows an illustration
-//     there (the UITexture LoadingImage); the tool leaves the middle of the screen empty.
-//   - UIRepeater: "Now Loading" letters, three hopping dots and Arona turning round, in the bottom-right corner;
-//     app.css animates it like the game's legacy clip "UIAni_Repeat 1". Its UIAudioPlay is never played.
-// Boot keeps its opaque cover. scene(fn) and page(fn) shade the current screen
-// while a complete destination is prepared. wait(promise) shades an in-page wait. There is one
-// page overlay at a time; a newer call takes over the one on screen instead of flashing a new one.
-// Writer progress has its own indicator and lifetime, independent of page changes.
+// Loading screen, from the game's own prefabs: UILoading's black backdrop (BlackBG; the game also shows an
+// illustration there, the UITexture LoadingImage, which the tool leaves empty) and UIRepeater, the "Now Loading"
+// letters, three hopping dots and Arona turning round, in the bottom-right corner (app.css animates it like the
+// game's clip UIAni_Repeat 1; its UIAudioPlay is never played).
+// Boot keeps its opaque cover. scene(fn) and page(fn) shade the current screen while a complete destination is
+// prepared; wait(promise) shades an in-page wait. There is one page overlay at a time: a newer call takes over
+// the one on screen instead of flashing a new one. Writer progress has its own indicator and lifetime,
+// independent of page changes.
 import { loadingLabel, loadingLetterSprites, loadingInkLine, alphaBounds } from "./ngui-label.js";
 import { alignBaseline, domBaseline, publishAligned } from "./loading-baseline.js";
 import { spriteUrl } from "./api.js";
@@ -52,11 +51,17 @@ const initialCover = document.getElementById("loading-boot");
 let styled = !!initialCover && !initialCover.classList.contains("neutral"),
   assetsAllowed = styled;
 let firstLoading = null;
+/**
+ * The timings of the first loading screen, for the start-up report.
+ */
 export const timings = () => firstLoading || {};
 
 // --- setup ---
 
-// Before asset consent, covers use only system text and a neutral backdrop.
+/**
+ * Set the loading screen up from the app's information. Before asset consent, covers use only system text and a
+ * neutral backdrop.
+ */
 export function init(info) {
   assetsAllowed = info?.consent === true && !!info?.gameFound;
   styled = assetsAllowed;
@@ -73,7 +78,9 @@ export function init(info) {
     .catch(() => {});
 }
 
-// the strings are in: the overlay's label and the fallback indicator's text
+/**
+ * Redraw the overlay's label and the fallback indicator's text once the strings are in.
+ */
 export function relabel() {
   for (const o of [overlay, writerOverlay]) {
     if (!o) continue;
@@ -84,29 +91,53 @@ export function relabel() {
   }
 }
 
+/**
+ * Whether a page overlay is up.
+ */
 export const active = () => !!overlay && !overlay.closing;
+/**
+ * Whether a full cover is up.
+ */
 export const covering = () => active() && overlay.mode === "full";
-// Automatic popups wait for page work, input holds and independent writer progress.
+/**
+ * Whether automatic popups must wait: for page work, input holds and independent writer progress.
+ */
 export const busy = () => pending.size > 0 || active() || held() || (!!writerOverlay && !writerOverlay.closing);
 
 // How a job over mods names a variant ({variant, core}) in its progress line (job-progress.js modLine): the roster's
 // names once the App has them (setNames), the key until then.
 let nameOf = (entry) => entry?.variant || entry?.core || "";
+/**
+ * Give a job's progress line the roster's names for variants; until then it shows the key.
+ * @param {(entry: {variant?: string, core?: string}) => string} fn Names a variant or core.
+ */
 export function setNames(fn) {
   if (typeof fn === "function") nameOf = fn;
 }
+/**
+ * How a job over mods names a variant ({variant, core}) in its progress line (job-progress.js modLine).
+ */
 export const variantName = (entry) => nameOf(entry);
 
-// A progress line: {text}, or {text, parts} for a job over mods, whose parts fitLine shortens to the line's width.
-// value: a job's progress, a line, or a text.
+/**
+ * Make a progress line: {text}, or {text, parts} for a job over mods, whose parts fitLine shortens to the
+ * line's width.
+ * @param {string|{text: string, parts?: object[]}|object} value A job's progress, a line, or a text.
+ * @param {object} [fallback] The progress to show when the job has none.
+ */
 export function progressLine(value, fallback) {
   if (typeof value === "string") return { text: value };
   if (value && typeof value.text === "string") return value;
   return modLine(value, { nameOf }) || { text: progressText(value || {}, fallback) };
 }
 
-// fraction: the share done of the item at hand, after the line as job-progress.js's percentText writes it (whole
-// percents, below 100 while the item runs); nothing without one
+/**
+ * The text of a job's progress line.
+ * @param {object} [progress] The job's progress; `fraction` is the share done of the item at hand, after the
+ *     line as job-progress.js's percentText writes it (whole percents, below 100 while the item runs); nothing
+ *     without one.
+ * @param {string} [fallback] The text when the job reports no label.
+ */
 export function progressText(
   { label = "", current = 0, total = 0, fraction = null } = {},
   fallback = T("progress.process", { name: T("progress.mods") }),
@@ -118,9 +149,16 @@ export function progressText(
     : line;
 }
 
-// A writer task stays visible until it settles. Progress survives the sprite upgrade and belongs to this task only,
-// so a late callback cannot change a newer task's indicator. label: its line while the job has not reported one;
-// false for none.
+/**
+ * Show a writer task's progress until it settles. Progress survives the sprite upgrade and belongs to this task
+ * only, so a late callback cannot change a newer task's indicator.
+ * @param {(update: (progress: object) => void) => Promise<*>} run The task; it reports its progress through
+ *     update.
+ * @param {object} [options] Options.
+ * @param {string|false|null} [options.label] The line to show while the job has not reported one; false for
+ *     none.
+ * @returns {Promise<*>} What the task returned.
+ */
 export async function task(run, { label = null } = {}) {
   const my = ++writerGen;
   const o = writerOverlay && !writerOverlay.closing ? writerOverlay : open("indicator", false, true);
@@ -234,6 +272,9 @@ function open(mode, opaque = false, writer = false) {
   return o;
 }
 
+/**
+ * Draw the overlays again, after the screen changed under them.
+ */
 export function refresh() {
   for (const o of [overlay, writerOverlay]) o?.relabelProgress?.();
   if (overlay)
@@ -615,8 +656,15 @@ function decorate(o) {
 
 // --- modes ---
 
-// Only opaque boot waits for black. Other scenes retain the current frame while
-// callers build hidden content and publish it after their readiness barrier.
+/**
+ * Run the work that prepares a complete destination under the loading screen: only an opaque boot waits for
+ * black; other scenes keep the current frame while callers build hidden content and publish it after their
+ * readiness barrier.
+ * @param {(...args: *[]) => Promise<*>} fn The work.
+ * @param {object} [options] Options.
+ * @param {boolean} [options.opaque] Wait for black first (the boot).
+ * @param {Promise<*>|null} [options.until] Ends the scene early when it settles.
+ */
 export async function scene(fn, { opaque = false, until = null } = {}) {
   if (!opaque)
     return hold(
@@ -650,9 +698,17 @@ export async function scene(fn, { opaque = false, until = null } = {}) {
   return result;
 }
 
-// wait(promise, {label, cap}): the indicator over the current screen once the wait passes WAIT_AFTER; resolves with
-// the result. label: what the indicator says to assistive technology (the page's "loading" by default); cap: how long
-// the indicator stays at most (a wait known to take longer than HARD_CAP, such as the classic UI's start)
+/**
+ * Show the indicator over the current screen once the wait passes WAIT_AFTER, and resolve with the result of
+ * the promise.
+ * @param {Promise<*>} promise The wait.
+ * @param {object} [options] Options.
+ * @param {string|null} [options.label] What the indicator says to assistive technology (the page's "loading" by
+ *     default).
+ * @param {number} [options.cap] How long the indicator stays at most in milliseconds (a wait known to take
+ *     longer than HARD_CAP, such as the classic UI's start).
+ * @param {boolean} [options.immediate] Show it at once, not after WAIT_AFTER.
+ */
 export async function wait(promise, { label: text = null, cap = HARD_CAP, immediate = false } = {}) {
   promise = track(promise);
   if (covering()) return promise; // a scene covers it already
@@ -703,7 +759,19 @@ export async function wait(promise, { label: text = null, cap = HARD_CAP, immedi
 // A write holds input from submission through the final reload. Default holds leave popups available; all blocks
 // them too. Leaving the page releases its hold while the job keeps reporting its end.
 const holds = new Set();
+/**
+ * Whether an input hold is on.
+ */
 export const held = () => holds.size > 0;
+/**
+ * Run work while the screen's input is held under Now Loading.
+ * @param {(update?: (progress: object) => void) => Promise<*>} work The work.
+ * @param {object} [options] Options.
+ * @param {Promise<*>|null} [options.until] Ends the hold early when it settles.
+ * @param {boolean} [options.all] A strict hold: open popups are locked too, and automatic popups wait for it to
+ *     end.
+ * @param {Function|null} [options.progress] Receives the work's progress.
+ */
 export async function hold(work, { until = null, all = false, progress = null } = {}) {
   let latest = null;
   const el = stage(),
@@ -731,16 +799,22 @@ export async function hold(work, { until = null, all = false, progress = null } 
   }
 }
 
-// Read-only previews retain their frame-swap guard but allow existing popups to cancel or supersede the wait.
-// Writers keep their explicit strict hold.
+/**
+ * Hold the screen for a read-only preview: it keeps its frame-swap guard but allows existing popups to cancel
+ * or supersede the wait. Writers keep their explicit strict hold.
+ * @param {(...args: *[]) => Promise<*>} fn The work.
+ * @param {object} [options] As for hold().
+ */
 export function page(fn, options = {}) {
   return hold(() => fn(Promise.resolve()), options);
 }
 
-// Now Loading locks every control beneath it, the top bar and the bottom menu included: while a hold, a
-// page overlay or a writer's progress is up, no click, key, wheel, touch or focus reaches the screen. Open popups
-// stay usable unless a strict hold (all) covers them too; automatic popups wait for a strict hold to end, so a popup
-// is never shown where it cannot be closed.
+/**
+ * Whether Now Loading locks every control beneath it, the top bar and the bottom menu included: while a hold, a
+ * page overlay or a writer's progress is up, no click, key, wheel, touch or focus reaches the screen. Open
+ * popups stay usable unless a strict hold (all) covers them too; automatic popups wait for a strict hold to
+ * end, so a popup is never shown where it cannot be closed.
+ */
 export const locked = () => held() || active() || (!!writerOverlay && !writerOverlay.closing);
 const strict = () => [...holds].some((hold) => hold.all);
 const exempt = (ev) => !strict() && Popup.allowsInput(ev);
@@ -791,10 +865,15 @@ function wire(el = stage()) {
   );
   wired.add(el);
 }
-// Controls outside the stage miss the stage's listeners and draw above its overlays: the native window's toolbar row
-// (window-chrome.js) holds the top bar there. Each one registered here is locked the same way, whenever it was made,
-// and a full cover hides the row (the root class, app.css), so the top bar is neither shown nor pressed over Now Loading.
 const outside = new Set();
+/**
+ * Lock a control outside the stage the same way, whenever it was made: such controls miss the stage's listeners
+ * and draw above its overlays (the native window's toolbar row, window-chrome.js, holds the top bar there). A
+ * full cover hides the row (the root class, app.css), so the top bar is neither shown nor pressed over Now
+ * Loading.
+ * @param {HTMLElement} el The control.
+ * @returns {() => void} Stops locking it.
+ */
 export function lockOutside(el) {
   if (!el?.addEventListener) return () => {};
   outside.add(el);

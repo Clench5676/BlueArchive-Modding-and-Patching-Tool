@@ -19,8 +19,9 @@ export function withoutFile(T, key, params = {}) {
 
 export const hasDetails = (entry) => entry?.state === "blocked" || entry?.state === "incomplete";
 
-// One paragraph for the reason, one for each file (its name, build target, Unity version) and one each for the unresolved
-// dependencies and the files found: lines of a paragraph sit at the text's line pitch, paragraphs at the popup's gap.
+// One paragraph for the reason, one for each file (its name, build target, Unity version) and one each for the
+// unresolved dependencies and the files found: lines of a paragraph sit at the text's line pitch, paragraphs at
+// the popup's gap.
 export function detailLines(entry, { reason = "", T, separator = ", " }) {
   const error = entry.error || { code: entry.reason || (entry.state === "incomplete" ? "mod_parts_missing" : null) };
   const lines = reason ? [withCode(reason, error, T)] : [];

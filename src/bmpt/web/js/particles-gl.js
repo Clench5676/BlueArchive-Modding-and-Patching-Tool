@@ -1,12 +1,10 @@
-// Draws a memorial lobby's particle effects (particles.js) inside its skeleton players, in linear light like them:
-// each system, and apart from it its trails, goes into the WebGL2 context of the player that draws the skeleton part
-// it sorts after (or before the bottom one), blended into that player's linear framebuffer (linear.js) between the
-// frame's clear and the skeleton, between two skeleton parts (one per render queue of a skeleton's atlas pages,
-// skeleton-parts.js; every skeleton's parts of a lobby in the bottom player's context, lobby-stage.js) or after the
-// last one. The shaders port the game's compiled DSFX programs; their textures come from the lobby's own route
-// (fx_<id>.png, memory only) and are sampled as sRGB where the game imports them so. The prefab's plain mesh renderers
-// (mesh-fx.js: lens dirt, light quads, water and cloud meshes) draw with the same programs, sorted with the systems.
-// Without linear light (no WebGL2) nothing is drawn.
+// Draws a memorial lobby's particle effects (particles.js) inside its skeleton players, in linear light like
+// them: each system, and apart from it its trails, goes into the WebGL2 context of the player that draws the
+// skeleton part it sorts after (or before the bottom one), blended into that player's linear framebuffer
+// (linear.js). The shaders port the game's compiled DSFX programs; their textures come from the lobby's own
+// route (fx_<id>.png, memory only) and are sampled as sRGB where the game imports them so. The prefab's plain
+// mesh renderers (mesh-fx.js) draw with the same programs, sorted with the systems. Without linear light (no
+// WebGL2) nothing is drawn.
 import * as Linear from "./linear.js";
 import { Meshes } from "./mesh-fx.js";
 import {
@@ -162,11 +160,9 @@ export const PROGRAMS = {
   o = vec4(m.a * k * m.rgb * v_col.rgb * _Color.rgb * _Multiply, clamp(k * sel * v_col.a * v_col.a * _Color.a * _Multiply, 0.0, 1.0));
 }`,
   },
-  // DSFX/FX_SHADER_AlphaBlend_Add_Distort_1a (the material's blend; ch0334's boosters add, One One): the distortion
-  // texture's xy times its power (custom data 2 through _CustomData_DistortPower_CD2XYXY, plus the material's) shifts
-  // the main UV and the mask UV, each by its keyword (_Main_Distort_Use, _Mask_Distort_Use). The vertex program puts
-  // the custom data's share of the distortion UV in v_t3.zw, of the main and mask UVs in v_t5; v_t4 is custom data 2.
-  // Only the alpha takes the main texture's red with RGB (_RGBRGBA 0); the colour is always times its alpha.
+  // DSFX/FX_SHADER_AlphaBlend_Add_Distort_1a (ch0334's boosters add, One One): the distortion texture's xy times
+  // its power shifts the main UV and the mask UV, each by its keyword (_Main_Distort_Use, _Mask_Distort_Use). Only
+  // the alpha takes the main texture's red with RGB (_RGBRGBA 0); the colour is always times its alpha.
   distort1a: {
     tex: ["_Tex_Main", "_Tex_Mask", "_Tex_Distort"],
     colors: ["_Color"],
@@ -210,11 +206,10 @@ export const PROGRAMS = {
   o = vec4(${on("_AlphaPremultiplyOn")} ? rgb * a : rgb, a);
 }`,
   },
-  // DSFX/FX_SHADER_AlphaBlend_Add_Double_Distort_1a (One OneMinusSrcAlpha in the lobbies: ch0188's and ch0356's water
-  // splashes): two distortions from one texture, its red and its green channel, each with its own tiling, scroll and
-  // power; _Tex_Main_Distort and _Tex_Mask_Distort (Off, R, G, RG) say which shift the main and the mask UV. Custom
-  // data as in distort1a: v_t3.zw red, v_t5.xy green, v_t5.zw main, v_t6.xy mask; the vertex program tiles the custom
-  // data's distortion UVs by _Tex_DistortRG_ST, the fragment program the plain ones by _R / _GTilingxyOffsetzw.
+  // DSFX/FX_SHADER_AlphaBlend_Add_Double_Distort_1a (One OneMinusSrcAlpha in the lobbies: ch0188's and ch0356's
+  // water splashes): two distortions from one texture, its red and its green channel, each with its own tiling,
+  // scroll and power; _Tex_Main_Distort and _Tex_Mask_Distort (Off, R, G, RG) say which shift the main and the
+  // mask UV.
   doubleDistort: {
     tex: ["_Tex_Main", "_Tex_Mask", "_Tex_DistortRG"],
     colors: ["_Color"],
@@ -402,8 +397,8 @@ void main() {
   o = vec4(t.rgb * _Color0.rgb * v_col.rgb, 1.0);
 }`,
   },
-  // Unity's Sprites/Default (One OneMinusSrcAlpha): the sprite's texture times the renderer's colour and the material's,
-  // premultiplied; the intro's flash and fade sprites
+  // Unity's Sprites/Default (One OneMinusSrcAlpha): the sprite's texture times the renderer's colour and the
+  // material's, premultiplied; the intro's flash and fade sprites
   sprite: {
     tex: ["_MainTex"],
     floats: [],
@@ -425,8 +420,11 @@ void main() {
 // a program's own vertex outputs past TEXCOORD0..2 (v_t3...), which its fragment program reads
 const extra = (p, dir) => Array.from({ length: p.vertex?.outs || 0 }, (_, i) => `${dir} vec4 v_t${3 + i};`);
 
-// the vertex GLSL of a program: the particle's position, its vertex streams passed on as they are and, for the
-// programs that port their vertex program too, what that computes (with the textures' _ST and the vectors)
+/**
+ * The vertex GLSL of a program: the particle's position, its vertex streams passed on as they are and, for the
+ * programs that port their vertex program too, what that computes (with the textures' _ST and the vectors).
+ * @param {string} kind The program's key in PROGRAMS.
+ */
 export function vertexSource(kind) {
   const p = PROGRAMS[kind],
     v = p.vertex;
@@ -443,7 +441,10 @@ export function vertexSource(kind) {
   return lines.join("\n");
 }
 
-// the fragment GLSL of a program: its uniforms (textures with their _ST, floats, colours, vectors) and body
+/**
+ * The fragment GLSL of a program: its uniforms (textures with their _ST, floats, colours, vectors) and body.
+ * @param {string} kind The program's key in PROGRAMS.
+ */
 export function fragmentSource(kind) {
   const p = PROGRAMS[kind];
   const lines = [HEAD, ...extra(p, "in")];
@@ -633,10 +634,19 @@ function mat4(a, b) {
   return o;
 }
 
-// A lobby's effects: create() once its lobby.json is in, layers() once its players are, then every player calls
-// below() in its update hook (after the clear, before the skeleton; the bottom player also advances the simulation),
-// between() after each part of its skeleton but the last (drawsAfter() says whether that draws anything) and above()
-// in its draw hook (after the skeleton, before linear.js copies the frame out). dispose() frees it all.
+/**
+ * Make a lobby's effects, once its lobby.json is in. layers() is called once its players are, then every player
+ * calls below() in its update hook (after the clear, before the skeleton; the bottom player also advances the
+ * simulation), between() after each part of its skeleton but the last (drawsAfter() says whether that draws
+ * anything) and above() in its draw hook (after the skeleton, before linear.js copies the frame out). dispose()
+ * frees it all.
+ * @param {object} fx The lobby's "fx" data from lobby.json.
+ * @param {object} [options] Options.
+ * @param {string} [options.base] The URL the lobby's textures are read from.
+ * @param {(skeleton: object, bone: object) => (object|null)} [options.bone] Reads a bone's world transform
+ *     every frame.
+ * @param {(url: string) => Promise<HTMLImageElement>} [options.load] Loads an image, for the tests.
+ */
 export function create(fx, { base, bone, load = loadImage } = {}) {
   const effects = new Effects(fx, { bone });
   const plain = new Meshes(fx, { bone }); // the mesh renderers, drawn like the systems

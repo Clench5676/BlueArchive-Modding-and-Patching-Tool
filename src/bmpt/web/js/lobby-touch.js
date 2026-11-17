@@ -266,15 +266,13 @@ function up(e) {
   }
   cursor(...(pointer || []));
 }
-// What one wheel event says about its device: "notch" (a mouse wheel), "maybe" (a wheel, or a trackpad step that
-// happens to look like one) or "smooth" (a trackpad, a Magic Mouse). Lines or pages (deltaMode 1, 2) are a
-// wheel; both axes or neither a trackpad. Where the engine reports wheelDeltaY as 3 x deltaY for every device
-// (WebKit, Chromium on macOS for a trackpad), the pixel step itself tells: a macOS notch is k x 4 px off by a
-// hair, a trackpad's steps are whole pixels. Chromium and WebView2 count whole notches in wheelDeltaY, in steps
-// of 120.
 /**
- * Classify a wheel event by its device.
- * @returns {"notch"|"maybe"|"smooth"} The kind of step.
+ * What one wheel event says about its device: "notch" (a mouse wheel), "maybe" (a wheel, or a trackpad step
+ * that happens to look like one) or "smooth" (a trackpad, a Magic Mouse).
+ * Lines or pages (deltaMode 1, 2) are a wheel; both axes or neither a trackpad. Where the engine reports
+ * wheelDeltaY as 3 x deltaY for every device (WebKit, Chromium on macOS for a trackpad), the pixel step itself
+ * tells: a macOS notch is k x 4 px off by a hair, a trackpad's steps are whole pixels. Chromium and WebView2
+ * count whole notches in wheelDeltaY, in steps of 120.
  */
 export function wheelStep(e) {
   if (e.deltaMode === 1 || e.deltaMode === 2) return "notch";
@@ -292,13 +290,13 @@ export function wheelStep(e) {
   }
   return w && w % 120 === 0 ? "notch" : "smooth";
 }
-// A mouse wheel zooms, a trackpad swipe pans. Events this close together are one scroll and keep its kind, so a
-// trackpad step or its momentum that looks like a notch still pans; but a scroll read as a wheel turns out a
-// trackpad at the first event a wheel never sends.
 /**
- * Tell a mouse from a trackpad for a wheel event.
- * @param {number} [now] The time in milliseconds.
- * @param {{at: number, kind: string|null}} [last]
+ * Tell a mouse (the wheel zooms) from a trackpad (the swipe pans) for a wheel event.
+ * Events this close together are one scroll and keep its kind, so a trackpad step or its momentum that looks
+ * like a notch still pans; but a scroll read as a wheel turns out a trackpad at the first event a wheel never
+ * sends.
+ * @param {number} [now] The time of the event in milliseconds.
+ * @param {{at: number, kind: string|null}} [last] The previous scroll: its time and the kind it was read as.
  * @returns {"mouse"|"trackpad"} The device kind.
  */
 export function wheelKind(e, now = performance.now(), last = scroll) {
@@ -427,11 +425,11 @@ export function detach() {
   host = null;
 }
 
-// The dragged bones follow the pointer (SkeletonUtilityBone override), clamped to their box in the parent bone's
-// space, and ease back to rest when let go. The game's per-frame follow factors are for 60 fps; here they are
-// frame-rate independent.
 /**
- * Move the dragged bones: called every frame, after the animation and before the world transform (lobby.js).
+ * Move the dragged bones; called every frame, after the animation and before the world transform (lobby.js).
+ * The bones follow the pointer (SkeletonUtilityBone override), clamped to their box in the parent bone's space,
+ * and ease back to rest when let go. The game's per-frame follow factors are for 60 fps; here they are
+ * frame-rate independent.
  * @param {object} player The spine-player whose frame it is.
  * @param {number} delta The frame time in seconds.
  */

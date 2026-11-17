@@ -9,7 +9,7 @@ const jobSource = source.slice(source.indexOf("async function job("), source.ind
 const loadingSource = readFileSync(new URL("../../src/bmpt/web/js/loading.js", import.meta.url), "utf8");
 const progressSource = loadingSource.slice(
   loadingSource.indexOf("export function progressText("),
-  loadingSource.indexOf("// A writer task"),
+  loadingSource.indexOf("export async function task("),
 );
 function harness(overrides = {}) {
   const messages = [],

@@ -17,8 +17,8 @@ const checks = new WeakMap();
 const RESTART_WAIT = 3000;
 const NOTES_FONT = 44;
 
-// The release's Markdown on the same UIPopup_Sort frame used by notices, in the UI language (release-notes.js): headings
-// larger, list items with a hanging bullet. No HTML, images or update jobs.
+// The release's Markdown on the same UIPopup_Sort frame used by notices, in the UI language (release-notes.js):
+// headings larger, list items with a hanging bullet. No HTML, images or update jobs.
 const dialogTitle = (key, simulation) => T(key) + (simulation ? T("update.simulation.suffix") : "");
 const HEADING_FONT = [56, 52, 48];
 
@@ -58,9 +58,9 @@ export async function releaseNotes(info, { simulation = false, onSimulatedPage, 
   }
 }
 
-// The first launch after an upgrade, pre-releases included: the running version's own notes once, when no popup is open
-// and blocked() is false. The server records the launch (app.upgradeNotes), so it is asked before the feature tours; the
-// offer stays pending until the popup has closed.
+// The first launch after an upgrade, pre-releases included: the running version's own notes once, when no popup
+// is open and blocked() is false. The server records the launch (app.upgradeNotes), so it is asked before the
+// feature tours; the offer stays pending until the popup has closed.
 export async function afterUpgrade({ blocked = () => false } = {}) {
   const own = await rpc("app.upgradeNotes");
   if (!own?.due) return;
@@ -69,8 +69,9 @@ export async function afterUpgrade({ blocked = () => false } = {}) {
   await rpc("app.upgradeNotesPresented", { version: own.current });
 }
 
-// Settings supplies the server's shared prerelease gate. Synthetic data never enters the updater service. With notes,
-// the build's own release notes (app.releaseNotes) stand in for a newer release's, so they can be read before publishing.
+// Settings supplies the server's shared prerelease gate. Synthetic data never enters the updater service. With
+// notes, the build's own release notes (app.releaseNotes) stand in for a newer release's, so they can be read
+// before publishing.
 export async function simulate(host, prefs, notes = true) {
   if (prefs?.prereleasePreviews !== true || checks.has(host)) return null;
   const own = notes ? await rpc("app.releaseNotes").catch(() => null) : null;
@@ -115,23 +116,24 @@ export function check(host, info, { onCheck, onError, beforeShow, simulation = f
   return done;
 }
 
-// the offer's three captions (Label_Locale widgets) on the footer's bodies in the frame (FRAME_W wide, taken to the popup
-// frames' class): the popups' footer fit (popupFrame applies the same to the three choices), a long one wraps to two lines
-// before it shrinks, clear of the body's edges; all three share one size
+// the offer's three captions (Label_Locale widgets) on the footer's bodies in the frame (FRAME_W wide, taken to
+// the popup frames' class): the popups' footer fit (popupFrame applies the same to the three choices), a long
+// one wraps to two lines before it shrinks, clear of the body's edges; all three share one size
 export function offerCaptions(widgets) {
   const texts = widgets.map((l) => l.text),
     { kind, room } = Popup.footerLayout(texts, frameGeometry(FRAME_W).w);
   return Popup.footerLabels(widgets, texts, { width: room, caption: kind.caption });
 }
 
-// the frame, 1700 wide, as high as its content needs: the light box where a message's lines start under the title, then Status
-// (96 high) and the Progress bar (20 high, the lowest content), and the popups' footer clearance (POPUP_FOOTER) under that
+// the frame, 1700 wide, as high as its content needs: the light box where a message's lines start under the
+// title, then Status (96 high) and the Progress bar (20 high, the lowest content), and the popups' footer
+// clearance (POPUP_FOOTER) under that
 const STATUS = { gap: 6, h: 96 };
 const PROGRESS = { gap: 8, h: 20 };
 const TOP = Popup.MSG.title;
 const FRAME_W = 1700;
-// the frame for a box boxH high: its height, the box's top and the centres of Status and Progress (popup-local y), and the
-// lowest content edge
+// the frame for a box boxH high: its height, the box's top and the centres of Status and Progress (popup-local
+// y), and the lowest content edge
 export function frameFor(boxH) {
   const below = STATUS.gap + STATUS.h + PROGRESS.gap + PROGRESS.h;
   const h = Math.ceil(TOP + boxH + below + POPUP_FOOTER.clearance);
@@ -141,9 +143,9 @@ export function frameFor(boxH) {
     progress = boxBottom - STATUS.gap - STATUS.h - PROGRESS.gap - PROGRESS.h / 2;
   return { w: FRAME_W, h, boxTop, status, progress, contentBottom: progress - PROGRESS.h / 2 };
 }
-// The content shown is centred in the room the frame keeps under the title: the version box alone while the offer waits,
-// with Status once there is a line, with the Progress bar too while downloading (no empty band under
-// the box). The shift moves the whole group down from its top place.
+// The content shown is centred in the room the frame keeps under the title: the version box alone while the
+// offer waits, with Status once there is a line, with the Progress bar too while downloading (no empty band
+// under the box). The shift moves the whole group down from its top place.
 export function contentShift({ status = false, progress = false } = {}) {
   const full = STATUS.gap + STATUS.h + PROGRESS.gap + PROGRESS.h;
   const shown = status || progress ? STATUS.gap + STATUS.h + (progress ? PROGRESS.gap + PROGRESS.h : 0) : 0;

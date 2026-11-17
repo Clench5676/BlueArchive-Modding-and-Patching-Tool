@@ -1,7 +1,10 @@
-// The top bar and the bottom menu, moved as the game's lobby moves them (UILobby's UIAni_Lobby, ui-tokens.js LOBBY_ENTRY).
+// The top bar and the bottom menu, moved as the game's lobby moves them (UILobby's UIAni_Lobby, ui-tokens.js
+// LOBBY_ENTRY).
 // - Entry: both wait off the screen until the first screen shows (enter()), then come in on the clip's own curves.
-// - Immersive scenes (window-layout.js isImmersive: detail and Hall fullscreen, photography) send both away. A pointer at
-//   the window's top or bottom edge brings that edge's bar back, usable, until the pointer has been off it for HIDE_DELAY;
+// - Immersive scenes (window-layout.js isImmersive: detail and Hall fullscreen, photography) send both away. A
+//   pointer at
+//   the window's top or bottom edge brings that edge's bar back, usable, until the pointer has been off it for
+//   HIDE_DELAY;
 //   leaving the window over a bar keeps it. The scenes' own controls make room (corner-layout.js, bamtChromeInsets).
 // - The macOS window buttons travel with the top bar: the same offsets go to the native side (window.motion).
 // Offsets are viewport CSS pixels away from the screen: up for the top bar, down for the bottom menu.

@@ -74,10 +74,10 @@ export function contentWidth(keyWidths, headWidths) {
   return Math.min(BOX.maxW - 2 * BOX.padX, Math.max(BOX.minW, Math.ceil(Math.max(keys, heads))));
 }
 
-// Where the list goes for a card (button: { left, right, top } in units, its visible body): the box's sprite rect
-// { left, top, w, h } in units, the content's visible height (view) and whether it scrolls. The box's visible bottom edge
-// stands GAP over the card, centred on it, shifted only as far as the stage (less EDGE) needs; as tall as the content,
-// at most up to the stage's top bar.
+// Where the list goes for a card (button: { left, right, top } in units, its visible body): the box's sprite
+// rect { left, top, w, h } in units, the content's visible height (view) and whether it scrolls. The box's
+// visible bottom edge stands GAP over the card, centred on it, shifted only as far as the stage (less EDGE)
+// needs; as tall as the content, at most up to the stage's top bar.
 export function placeList(button, contentW, contentH) {
   const w = contentW + 2 * BOX.padX,
     visW = w - BOX_INSET.left - BOX_INSET.right;

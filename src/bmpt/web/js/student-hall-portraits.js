@@ -33,9 +33,9 @@ function startIdle(player) {
   if (player.skeleton.data.findAnimation("00")) player.animationState.setAnimation(1, "00", true);
   player.blinkAt = 2.5 + Math.random() * 3.5;
 }
-// Applying stage coordinates to the skeleton keeps the game's absolute framing and never fits to art bounds.
 /**
- * Pose a portrait's skeleton at its entry's stage coordinates.
+ * Pose a portrait's skeleton at its entry's stage coordinates: this keeps the game's absolute framing and never
+ * fits to art bounds.
  * @param {{x: number, y: number, mirror?: boolean}} entry
  * @param {object} skeleton The spine skeleton; its position and scale are set.
  */

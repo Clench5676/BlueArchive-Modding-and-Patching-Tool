@@ -1,5 +1,6 @@
-// Where an empty list's message goes. Batch Import's list (Items ListEmpty) and the student roster (UICharacterCollection
-// LeftInfo_Empty) centre their block on the middle of the paper the eye sees; no DOM, so the tests can run it.
+// Where an empty list's message goes. Batch Import's list (Items ListEmpty) and the student roster
+// (UICharacterCollection LeftInfo_Empty) centre their block on the middle of the paper the eye sees; no DOM, so
+// the tests can run it.
 export const EMPTY_GAP = 85; // between the centres of Items' ListEmpty message and the drop hint under it
 
 // The box centres (px, down) of the ListEmpty message and the drop hint under it (null: none) that put the block's ink

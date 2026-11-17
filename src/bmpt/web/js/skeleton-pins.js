@@ -7,19 +7,32 @@ const cache = new WeakMap(); // skeleton -> [pin, bone] of its pins
 
 // for checks: pin the bones (true) or let the animation move them (false)
 export let shown = true;
+/**
+ * For checks: pin the bones (true) or let the animation move them (false).
+ */
 export const show = (on) => {
   shown = !!on;
 };
 
-// Unity's Mathf.LerpAngle: the shorter way round
+/**
+ * Unity's Mathf.LerpAngle: the shorter way round.
+ * @param {number} a The start angle in degrees.
+ * @param {number} b The end angle in degrees.
+ * @param {number} t The share of the way, 0 to 1.
+ */
 export function lerpAngle(a, b, t) {
   let d = b - a - Math.floor((b - a) / 360) * 360;
   if (d > 180) d -= 360;
   return a + d * t;
 }
 
-// after the animation, before the world transform: the pinned bones of a skeleton (the layer named name) to their
-// prefab place, lerped by the component's overrideAlpha as spine-unity does
+/**
+ * Move the pinned bones of a skeleton to their prefab place, lerped by the component's overrideAlpha as
+ * spine-unity does; called after the animation and before the world transform.
+ * @param {object} skeleton The spine skeleton.
+ * @param {string} name The layer's name.
+ * @param {object[]|null} pins The layer's pins from lobby.json.
+ */
 export function pin(skeleton, name, pins) {
   if (!skeleton || !pins?.length || !shown) return;
   let list = cache.get(skeleton);
@@ -44,5 +57,7 @@ export function pin(skeleton, name, pins) {
   }
 }
 
-// a layer's player (its skeleton, its layer's name)
+/**
+ * Pin the bones of a layer's player (its skeleton, its layer's name).
+ */
 export const apply = (player, pins) => pin(player?.skeleton, player?.bamtLayer?.name, pins);

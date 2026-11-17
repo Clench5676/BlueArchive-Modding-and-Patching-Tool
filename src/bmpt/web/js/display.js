@@ -23,7 +23,8 @@ const LIST = { cx: 212, top: 377, bottom: -404, w: 2244 - CUT };
 // one row of check boxes per group: the bottom line 36 under the row (as under the prefab's second row), the
 // list's 12 of padding between groups
 const GROUP = { x: -1109 + HALF, top: -150, pitch: 308, unitX: [165, 712, 1259, 1806], unitY: -76, line: -176 };
-// the sort keys' grid (Sort_Normal/Option_Normal/Grid), relative to the Sort panel: three to a line in the narrower panel
+// the sort keys' grid (Sort_Normal/Option_Normal/Grid), relative to the Sort panel: three to a line in the
+// narrower panel
 const SORT = { titleY: 446.5, x: -1015 + HALF, y: 330, cell: [480, 174], perLine: 3 };
 // where the prefab's controls stand once the frame is narrower: the close button, the tabs, Reset All
 const CLOSE = [1323 - HALF, 639],
@@ -46,8 +47,10 @@ const moveX = (n, dx) => {
 const widen = (n, dw) => {
   for (const w of n?.widgets || []) if (w.w_ != null) w.w_ += dw;
 };
-// the prefab's frame CUT narrower: the frame, its sides' decorations and controls, the panels and their headers (exported
-// for the tests)
+/**
+ * Narrow the prefab's frame, which is cut: the frame, its sides' decorations and controls, the panels and their
+ * headers (exported for the tests).
+ */
 export function narrow(popup) {
   const at = (n, path) => (n ? find(n, path) : null);
   const bg = at(popup, "Base/BG");
@@ -66,8 +69,8 @@ export function narrow(popup) {
   widen(tag, -CUT);
   moveX(at(tag, "Label_Locale_ListAll"), HALF);
   moveX(at(tag, "Btn_Reset"), -HALF);
-  // the header's triangle pattern (Img_Deco_Weapon, its rounded corners on the left, fading to the right) from the header's
-  // left end: the prefab stands it from the right end outwards, past the header and the frame
+  // the header's triangle pattern (Img_Deco_Weapon, its rounded corners on the left, fading to the right) from the
+  // header's left end: the prefab stands it from the right end outwards, past the header and the frame
   const deco = at(tag, "DecoTex_Normal"),
     tagW = tag?.widgets.find((w) => w.w_ != null)?.w_;
   if (deco?.pos && tagW) deco.pos = [-tagW / 2, deco.pos[1]];
@@ -110,8 +113,8 @@ const setText = (n, text, fsMax, fsMin, w) =>
     fsMin,
     w,
   );
-// Options side by side share one size (NGUI.fitGroup): the largest from fsMax at which every text fits w after wrapping.
-// widgets: for each text, the label widgets that show it.
+// Options side by side share one size (NGUI.fitGroup): the largest from fsMax at which every text fits w after
+// wrapping. widgets: for each text, the label widgets that show it.
 function shareSize(widgets, texts, fsMax, fsMin, w) {
   const fits = NGUI.fitGroup(texts, fsMax, fsMin, w);
   widgets.forEach((shown, i) =>
@@ -435,8 +438,16 @@ function finish(result) {
   fn?.(result);
 }
 
-// open({view, count, onDone}): view is the roster's view (sort, order, filters); count(draft) the number of cards the
-// draft shows; onDone(draft) with the confirmed draft, or null when cancelled
+/**
+ * Open the display settings of the roster.
+ * @param {object} options What it shows and answers.
+ * @param {RosterView} options.view The roster's view: sort, order and filters.
+ * @param {(draft: RosterView) => number} options.count The number of cards the draft shows.
+ * @param {(draft: RosterView|null) => void} options.onDone Called with the confirmed draft, or null when
+ *     cancelled.
+ * @param {string[]} [options.sorts] The sort keys offered.
+ * @param {boolean} [options.sortOnly] Show the sort tab only.
+ */
 export async function open({ view, count: counter, onDone, sorts = SORTS, sortOnly: onlySort = false }) {
   await load();
   sortKeys = sorts;
@@ -474,6 +485,10 @@ const load = () =>
 // draw both tabs once off screen, so the first open finds the frame's images made (the popup's large panels take
 // a while to slice the first time); once per session, started when the pointer comes to the sort button
 let warming = null;
+/**
+ * Draw both tabs once off screen, so the first open finds the frame's images made (the popup's large panels
+ * take a while to slice the first time); once per session, started when the pointer comes to the sort button.
+ */
 export function warm() {
   warming ||= drawAhead().catch((err) => {
     warming = null;
@@ -500,6 +515,9 @@ async function drawAhead() {
   await Promise.all(trees.map((t) => NGUI.render(t, scratch, { scale: S, origin: [960, 540] })));
 }
 
+/**
+ * Whether the display settings are shown.
+ */
 export const isOpen = () => !$("display").hidden;
 
 // Prefabs and derived UI values belong to the selected installation.

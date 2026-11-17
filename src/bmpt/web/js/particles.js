@@ -1,26 +1,11 @@
-// The memorial lobbies' Unity ParticleSystem effects (dust, glints, petals, Michiru's sparkler), simulated from their
-// prefab data (lobby.json "fx", read by gameassets/particles.py). Pure data and simulation, no DOM and no GL:
-// particles-gl.js draws what geometry() builds, in the lobby's layer stack.
-//
-// Space: lobby units are NGUI units around the prefab root (x right, y up, z away from the camera); the game's
-// orthographic camera drops z. A system's matrix W maps its own space to lobby units: under a SkeletonUtilityBone
-// (Follow) it is the skeleton GameObject times the bone's world transform times the transforms below the bone, else
-// the prefab pose. Unity world units are WORLD lobby units (the UI root: the 1665-unit high view is 2 world units
-// high); the Local scaling mode, world-space forces and gravity are in world units.
-//
-// Simulated, by Unity's modules: main (duration, looping, prewarm, start delay, lifetime, speed, size and rotation in
-// 1D or 3D, colour, gravity, max particles, simulation space, scaling mode, simulation speed, ring buffer: pause or
-// loop until replaced), emission (rate over time and over distance, bursts with cycles and probability), shape
-// (sphere, hemisphere, cone and cone volume, box with its shell and edges, circle, edge, rectangle, donut: arc and
-// edge modes, radius thickness, position, rotation, scale, random and spherical direction), velocity over lifetime
-// (linear, orbital with offset, radial, speed modifier), limit velocity (dampen), force over lifetime, colour, size
-// and rotation over lifetime, colour by speed, texture sheet animation (grid: whole sheet or one row), custom data
-// (vectors, colours), sub-emitters (birth, death) and trails (particle mode: trailGeometry); a mesh particle draws
-// one of its renderer's meshes (up to four, picked per particle) and takes its vertex colours. Systems below
-// GameObjects the lobby's SpineEventToggleObjects switches (CH0217's fish bubbles) play while the skeleton's Spine
-// events have them on (spineEvent). Not simulated: noise, collision, triggers, lights, inherit velocity, size and
-// rotation by speed and external forces (no system a lobby draws uses them) and limit velocity's drag (CH0318's
-// dust, too slow for it to tell); a system keeps drawing without them.
+// The memorial lobbies' Unity ParticleSystem effects (dust, glints, petals, Michiru's sparkler), simulated from
+// their prefab data (lobby.json "fx", read by gameassets/particles.py). Pure data and simulation, no DOM and no
+// GL: particles-gl.js draws what geometry() builds, in the lobby's layer stack. Lobby units are NGUI units
+// around the prefab root (x right, y up, z away from the camera; the game's orthographic camera drops z); Unity
+// world units are WORLD lobby units (the 1665-unit high view is 2 world units high), and the Local scaling mode,
+// world-space forces and gravity are in world units. Noise, collision, triggers, lights, inherit velocity, size
+// and rotation by speed, external forces and limit velocity's drag are not simulated (no system a lobby draws
+// uses them); a system keeps drawing without them.
 
 import { toLinear } from "./touch-fx.js";
 
@@ -34,10 +19,14 @@ const EPS = 1e-9; // seconds: emission times this close count as the same
 
 // --- values ---------------------------------------------------------------------------------------------------------
 
-// an AnimationCurve (particles.py _keys: [time, value, inSlope, outSlope]) at t, as Unity evaluates it: constant
-// outside its keys, cubic Hermite between them, each segment from the last key at or before t; a segment whose left
-// out-slope or right in-slope is infinite (null: a Constant tangent) holds the left key's value (Unity's curve cache,
-// which the particle modules evaluate, makes such a segment stepped)
+/**
+ * An AnimationCurve (particles.py _keys: [time, value, inSlope, outSlope]) at t, as Unity evaluates it:
+ * constant outside its keys, cubic Hermite between them, each segment from the last key at or before t; a
+ * segment whose left out-slope or right in-slope is infinite (null: a Constant tangent) holds the left key's
+ * value (Unity's curve cache, which the particle modules evaluate, makes such a segment stepped).
+ * @param {number[][]} keys The curve's keys.
+ * @param {number} t The time.
+ */
 export function curve(keys, t) {
   if (t <= keys[0][0]) return keys[0][1];
   const last = keys[keys.length - 1];
@@ -54,7 +43,12 @@ export function curve(keys, t) {
   return (2 * s3 - 3 * s2 + 1) * v0 + (s3 - 2 * s2 + s) * dt * m0 + (3 * s2 - 2 * s3) * v1 + (s3 - s2) * dt * m1;
 }
 
-// a MinMaxCurve (particles.py curve) at normalized time t with the particle's random r
+/**
+ * A MinMaxCurve (particles.py curve) at normalized time t with the particle's random r.
+ * @param {object|number} c The curve.
+ * @param {number} t The normalized time, 0 to 1.
+ * @param {number} r The particle's random value, 0 to 1.
+ */
 export function value(c, t, r) {
   if (typeof c === "number") return c;
   if (!c) return 0;
@@ -84,6 +78,9 @@ function ramp(keys, t, fixed, n) {
   for (let k = 1; k <= n; k++) out.push(a[k] + (b[k] - a[k]) * f);
   return out;
 }
+/**
+ * A gradient at normalized time t: [r, g, b, a].
+ */
 export const gradientAt = (g, t) => [...ramp(g.c, t, g.fixed, 3), ramp(g.a, t, g.fixed, 1)[0]];
 const lerp4 = (a, b, r) => [
   a[0] + (b[0] - a[0]) * r,
@@ -91,7 +88,13 @@ const lerp4 = (a, b, r) => [
   a[2] + (b[2] - a[2]) * r,
   a[3] + (b[3] - a[3]) * r,
 ];
-// a MinMaxGradient (particles.py gradient) at normalized time t with the particle's random r: [r, g, b, a] as stored
+/**
+ * A MinMaxGradient (particles.py gradient) at normalized time t with the particle's random r: [r, g, b, a] as
+ * stored.
+ * @param {object|null} g The gradient.
+ * @param {number} t The normalized time, 0 to 1.
+ * @param {number} r The particle's random value, 0 to 1.
+ */
 export function colorAt(g, t, r) {
   if (!g) return [1, 1, 1, 1];
   if (g.col) return g.col;
@@ -101,8 +104,13 @@ export function colorAt(g, t, r) {
   return gradientAt(g.g, t);
 }
 
-// a small deterministic hash: the k-th random value of a particle (Unity keeps one random seed per particle and
-// derives every module's value from it)
+/**
+ * A small deterministic hash: the k-th random value of a particle (Unity keeps one random seed per particle and
+ * derives every module's value from it).
+ * @param {number} seed The particle's seed.
+ * @param {number} k Which of the particle's random values.
+ * @returns {number} The value, 0 to 1.
+ */
 export function rnd(seed, k) {
   let h = (seed ^ Math.imul(k + 1, 0x9e3779b1)) >>> 0;
   h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
@@ -154,6 +162,9 @@ const R = {
 // --- 3 x 4 affine matrices (row-major) ------------------------------------------------------------------------------
 
 export const IDENTITY = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0];
+/**
+ * Multiply two 3 x 4 matrices (12 numbers each, row by row).
+ */
 export function mul(a, b) {
   const o = new Array(12);
   for (let i = 0; i < 3; i++) {
@@ -164,16 +175,25 @@ export function mul(a, b) {
   }
   return o;
 }
+/**
+ * Move a point by a 3 x 4 matrix.
+ */
 export const apply = (m, x, y, z) => [
   m[0] * x + m[1] * y + m[2] * z + m[3],
   m[4] * x + m[5] * y + m[6] * z + m[7],
   m[8] * x + m[9] * y + m[10] * z + m[11],
 ];
+/**
+ * Turn a direction by a 3 x 4 matrix, leaving out its translation.
+ */
 export const applyDir = (m, x, y, z) => [
   m[0] * x + m[1] * y + m[2] * z,
   m[4] * x + m[5] * y + m[6] * z,
   m[8] * x + m[9] * y + m[10] * z,
 ];
+/**
+ * The inverse of a 3 x 4 matrix.
+ */
 export function invert(m) {
   const [a, b, c, , d, e, f, , g, h, i] = m;
   const A = e * i - f * h,
@@ -213,7 +233,9 @@ function rotationOf(m) {
   out[3] = out[7] = out[11] = 0;
   return out;
 }
-// Quaternion.Euler(x, y, z) in degrees as a 3 x 4 matrix (Unity's order: z, then x, then y)
+/**
+ * Quaternion.Euler(x, y, z) in degrees as a 3 x 4 matrix (Unity's order: z, then x, then y).
+ */
 export function euler(x, y, z) {
   const rx = (x * Math.PI) / 180,
     ry = (y * Math.PI) / 180,
@@ -229,8 +251,10 @@ export function euler(x, y, z) {
     Z = [cz, -sz, 0, 0, sz, cz, 0, 0, 0, 0, 1, 0];
   return mul(Y, mul(X, Z));
 }
-// a system's simulation matrix for its scaling mode: Hierarchy keeps every scale, Local only the system's own (in
-// world units), Shape none (world units; the shape takes the scale when emitting)
+/**
+ * A system's simulation matrix for its scaling mode: Hierarchy keeps every scale, Local only the system's own
+ * (in world units), Shape none (world units; the shape takes the scale when emitting).
+ */
 export function scaled(W, def) {
   const mode = def.main.scaling;
   if (mode === 0) return W;
@@ -263,12 +287,13 @@ const norm = (v) => {
 // radius thickness: 0 emits from the surface, 1 from the whole area (2D) or volume (3D), uniformly
 const shell = (r, thickness, dims) => Math.pow(1 - thickness + thickness * r, 1 / dims);
 
-// Where around an arc, or along an edge, a particle is emitted (0..1), by the shape's mode for it
-// (ParticleSystemShapeMultiModeValue): loop (1) and ping-pong (2) go round over the system's time at the mode's speed,
-// a spread above 0 keeping them to multiples of it; burst spread (3) without a spread spreads the particles emitted
-// together evenly (batch: the particle's index i of n). Random (0): null, the shape draws a random value. How burst
-// spread and a spread above 0 go together (CH0069's and CH0294's halos: 0.12) is neither in the game's data nor in
-// its compiled code: those keep the random value too.
+/**
+ * Where around an arc, or along an edge, a particle is emitted (0..1), by the shape's mode for it
+ * (ParticleSystemShapeMultiModeValue): loop (1) and ping-pong (2) go round over the system's time at the mode's
+ * speed, a spread above 0 keeping them to multiples of it; burst spread (3) without a spread spreads the
+ * particles emitted together evenly (batch: the particle's index i of n). Random (0) gives null: the shape
+ * draws a random value.
+ */
 export function along(mode, spread, speed, time, duration, batch, u = 0) {
   if (mode === 3) return spread > 0 ? null : batch && batch.n > 0 ? batch.i / batch.n : 0;
   if (mode !== 1 && mode !== 2) return null;
@@ -277,9 +302,16 @@ export function along(mode, spread, speed, time, duration, batch, u = 0) {
   return spread > 0 ? Math.round(t / spread) * spread : t;
 }
 
-// an emission point and direction in the shape's space (Unity's ParticleSystemShapeType), before the shape's own
-// position, rotation and scale; r() gives random values, arcPos (0..1) places it on the arc and edgePos (0..1) on an
-// edge where their modes say (along)
+/**
+ * An emission point and direction in the shape's space (Unity's ParticleSystemShapeType), before the shape's
+ * own position, rotation and scale.
+ * @param {object} shape The shape module.
+ * @param {() => number} r Gives random values, 0 to 1.
+ * @param {number|null} [arcPos] Places the point on the arc, 0..1, where the shape's mode for it says (see
+ *     along).
+ * @param {number|null} [edgePos] Places the point on an edge, 0..1.
+ * @returns {{p: number[], d: number[]}} The point and the direction.
+ */
 export function shapePoint(shape, r, arcPos = null, edgePos = null) {
   const type = shape.type,
     rad = shape.radius,
@@ -529,13 +561,10 @@ export class Effects {
     this.simulate(s, dt);
   }
 
-  // emission over the next dt seconds of a clock (the rest of the step): bursts fire when it passes their time within
-  // a loop (cycles times, every interval), the rate adds up over time. A burst up to EPS past the span's end fires in
-  // it (frames of 1/60 s add up to a hair under a loop's end), so the loops it visits reach that far too: else the
-  // loop that starts there would never fire its burst at 0, the next span taking it as already past. Each particle
-  // gets the share of the step left after its emission time: a burst's time, or when the rate's count passed a whole
-  // number (within EPS, as reap() takes deaths), so one that lives a whole number of the rate's intervals is replaced
-  // in the step it dies in at any frame rate.
+  // emission over the next dt seconds of a clock (the rest of the step): bursts fire when it passes their time
+  // within a loop (cycles times, every interval), the rate adds up over time. A burst up to EPS past the span's
+  // end fires in it, because frames of 1/60 s add up to a hair under a loop's end. Each particle gets the share of
+  // the step left after its emission time.
   emitSpan(s, clock, dt, inst) {
     const main = s.def.main,
       em = s.def.emission || { rate: 0, bursts: [] },
@@ -963,8 +992,12 @@ export class Effects {
 // streams put them), colour, normal (world axes: a mesh's own turned with the particle, a billboard's to the camera)
 export const STRIDE = 2 + 12 + 4 + 3;
 
-// the particle colour as the vertex stream carries it: clamped and 8-bit like Unity's Color32, then (in linear light)
-// decoded from sRGB; alpha as it is
+/**
+ * The particle colour as the vertex stream carries it: clamped and 8-bit like Unity's Color32, then (in linear
+ * light) decoded from sRGB; alpha as it is.
+ * @param {number[]} c The colour [r, g, b, a].
+ * @param {boolean} linear Whether the lobby draws in linear light.
+ */
 export function vertexColor(c, linear) {
   const q = (x) => Math.round(Math.min(1, Math.max(0, x)) * 255) / 255;
   const out = [q(c[0]), q(c[1]), q(c[2]), q(c[3])];
@@ -996,8 +1029,10 @@ const QUAD = [
   [-0.5, -0.5, 0, 0],
 ];
 
-// the index of the mesh a particle draws among a mesh renderer's meshes (particles.py _mesh_choice): Unity picks one
-// per particle, uniformly at random or by the meshes' weights
+/**
+ * The index of the mesh a particle draws among a mesh renderer's meshes (particles.py _mesh_choice): Unity
+ * picks one per particle, uniformly at random or by the meshes' weights.
+ */
 export function meshIndex(rend, seed) {
   const n = rend.meshes?.length || 1;
   if (n === 1) return 0;
@@ -1017,6 +1052,16 @@ export function meshIndex(rend, seed) {
 // colours from sRGB unless the renderer's Apply Active Color Space is off (colorSpace 0: the colours as stored).
 // Positions are lobby units (z dropped: the camera is orthographic).
 let scratch = new Float32Array(0);
+/**
+ * The triangles of one system's particles for this frame, as vertices of STRIDE floats: for a billboard 6 per
+ * particle, for a mesh particle its mesh's indices.
+ * @param {object} fxs The lobby's effects.
+ * @param {object} s The system's state.
+ * @param {object} [options] Options.
+ * @param {Object<string, object>} [options.meshes] The loaded meshes by id.
+ * @param {boolean} [options.linear] Whether the lobby draws in linear light.
+ * @returns {{data: Float32Array, count: number}} The vertices and their number.
+ */
 export function geometry(fxs, s, { meshes = {}, linear = true } = {}) {
   const def = s.def,
     rend = def.renderer,
@@ -1175,6 +1220,20 @@ const cross3 = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], 
 // system (Local). The max particle size is a share of the view's height at the particle's depth. Trails are not built
 // (no halo has them).
 let scratch3 = new Float32Array(0);
+/**
+ * One system's triangles for a perspective camera (the 3D model view's halo, model-fx.js), as geometry() builds
+ * them for the lobby's orthographic one, with z kept: positions in the simulation's units and space. Billboards
+ * face the camera, stretched ones lie along the velocity, meshes turn with the camera, the world or the system
+ * as their alignment says; the max particle size is a share of the view's height at the particle's depth.
+ * Trails are not built (no halo has them).
+ * @param {object} fxs The model's effects.
+ * @param {object} s The system's state.
+ * @param {{x: number[], y: number[], z: number[], eye: number[], k: number}} view The camera in the
+ *     simulation's space: its right, up and forward unit vectors (Unity's handedness: x cross y is z), its
+ *     position, and the visible height per unit of depth (2 tan(fov / 2)).
+ * @param {object} [options] As for geometry().
+ * @returns {{data: Float32Array, count: number}} The vertices (STRIDE3 floats each) and their number.
+ */
 export function geometry3d(fxs, s, view, { meshes = {}, linear = true } = {}) {
   const def = s.def,
     rend = def.renderer,
@@ -1363,6 +1422,16 @@ export function geometry3d(fxs, s, view, { meshes = {}, linear = true } = {}) {
 // times colorOverLifetime at the particle's age, times the particle's colour (Inherit Particle Color). The trail's UV
 // is TEXCOORD0.xy, whatever the renderer's custom streams say.
 let trailScratch = new Float32Array(0);
+/**
+ * One system's trails for this frame (the trail module; the renderer's second submesh, drawn with its trail
+ * material), in geometry()'s vertex layout: for each particle with a trail, a ribbon facing the camera from the
+ * particle back through the points it left, its width widthOverTrail times the particle's size and its colour
+ * colorOverTrail times colorOverLifetime times the particle's colour.
+ * @param {object} fxs The lobby's effects.
+ * @param {object} s The system's state.
+ * @param {object} [options] Options.
+ * @param {boolean} [options.linear] Whether the lobby draws in linear light.
+ */
 export function trailGeometry(fxs, s, { linear = true } = {}) {
   const def = s.def,
     tr = def.modules?.trail,
@@ -1445,9 +1514,12 @@ export function trailGeometry(fxs, s, { linear = true } = {}) {
   return { data: data.subarray(0, o), count: o / STRIDE };
 }
 
-// A sprite's quad (lobby.json fx.sprites: a SpriteRenderer, intro.py sprite): its rect around the pivot, in the
-// GameObject's units, through its matrix M; the sprite's UVs (flipped as the renderer says) in TEXCOORD0 and its
-// colour as the renderer's vertex colour (decoded from sRGB in linear light, like a particle's).
+/**
+ * A sprite's quad (lobby.json fx.sprites: a SpriteRenderer, intro.py sprite): its rect around the pivot, in the
+ * GameObject's units, through its matrix M; the sprite's UVs (flipped as the renderer says) in TEXCOORD0 and
+ * its colour as the renderer's vertex colour (decoded from sRGB in linear light, like a particle's).
+ * @returns {{data: Float32Array, count: number}} The six vertices of the quad.
+ */
 export function spriteGeometry(def, M, color, { linear = true } = {}) {
   const [x0, y0, x1, y1] = def.quad,
     [u0, v0, u1, v1] = def.uv,
@@ -1478,25 +1550,34 @@ export function spriteGeometry(def, M, color, { linear = true } = {}) {
 
 // --- draw order -----------------------------------------------------------------------------------------------------
 
-// Unity draws transparent renderers by sorting layer (its value: Default 0, the game's one other layer 2), order in
-// layer, render queue, then back to front: by the distance from the camera plus, for a particle renderer, its sorting
-// fudge (Unity world units). The key's last part is that distance in lobby units, negated (the farther draws first).
+/**
+ * The key Unity draws transparent renderers by: sorting layer (its value: Default 0, the game's one other layer
+ * 2), order in layer, render queue, then back to front by the distance from the camera plus, for a particle
+ * renderer, its sorting fudge (Unity world units). The key's last part is that distance in lobby units, negated
+ * (the farther draws first).
+ */
 export const sortKey = (x) => [
   x.sortingLayer || 0,
   x.order || 0,
   x.queue ?? 3000,
   -((x.z || 0) + (x.fudge || 0) * WORLD),
 ];
-// two sort keys compared part by part (negative: a draws first, 0: a tie)
+/**
+ * Compare two sort keys part by part.
+ * @returns {number} Negative when a draws first, 0 for a tie.
+ */
 export function compareKeys(ka, kb) {
   for (let i = 0; i < ka.length; i++) if (ka[i] !== kb[i]) return ka[i] - kb[i];
   return 0;
 }
 const before = (a, b) => compareKeys(sortKey(a), sortKey(b)) <= 0;
 
-// The index of the last of a lobby's skeleton parts (steps: each with sortingLayer, order, queue and z, in the order
-// they draw) that sorts before the system, after which it draws (a tie puts it after); -1 before them all. Hibiki's
-// river surface (queue 3000) draws after her lobby's background page (2900), before her own (3050).
+/**
+ * The index of the last of a lobby's skeleton parts (steps: each with sortingLayer, order, queue and z, in the
+ * order they draw) that sorts before the system, after which it draws (a tie puts it after); -1 before them
+ * all. Hibiki's river surface (queue 3000) draws after her lobby's background page (2900), before her own
+ * (3050).
+ */
 export function lastBefore(def, steps) {
   let at = -1;
   steps.forEach((step, i) => {
@@ -1505,16 +1586,21 @@ export function lastBefore(def, steps) {
   return at;
 }
 
-// The render queues a layer's skeleton draws in, lowest first. spine-unity gives every submesh the material of its
-// atlas page and Unity sorts each submesh by its own material's queue, so a skeleton whose pages sit in several
-// queues (lobby.json layer "pages": {page: queue}) draws in as many parts, one per queue; else in one, its queue.
+/**
+ * The render queues a layer's skeleton draws in, lowest first. spine-unity gives every submesh the material of
+ * its atlas page and Unity sorts each submesh by its own material's queue, so a skeleton whose pages sit in
+ * several queues (lobby.json layer "pages": {page: queue}) draws in as many parts, one per queue; else in one,
+ * its queue.
+ */
 export function queuesOf(layer) {
   const queues = [...new Set(Object.values(layer?.pages || {}))].sort((a, b) => a - b);
   return queues.length ? queues : [layer?.queue ?? 3000];
 }
 
-// systems in drawing order: sorting layer, order in layer, queue, back to front (with the sorting fudge), then the
-// prefab's order
+/**
+ * The systems in drawing order: sorting layer, order in layer, queue, back to front (with the sorting fudge),
+ * then the prefab's order.
+ */
 export function drawOrder(systems) {
   return systems.slice().sort((a, b) => {
     return compareKeys(sortKey(a.def), sortKey(b.def)) || a.index - b.index;

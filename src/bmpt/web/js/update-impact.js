@@ -1,20 +1,16 @@
-// What a game update did under the library's mods (docs/webui/library.md, "Game update impact"). At the start, before the
-// first screen (gate): once the current install's resource version differs from the last one seen and the library has
-// mods (mods.updateDue), the page asks whether to check them; Check runs under the loading screen with its progress
-// (run): the library classifies every mod from the official parts it was built against (mods.impact), with mods on
-// and the file check allowed the game files are scanned and the applied entries the update overwrote with official
-// files, which need no repair, are applied again (mods.restoreDrift). Once the first screen is in, the summary shows
-// the mods to update as a list (check; the drift prompt's popup), only when there are any: the held mods (ticked,
-// with the Outdated badge; Update and Apply for the ticked ones); what the check handled by itself (entries applied
-// again, mods rebuilt, with new parts or gone) is never listed. A card's details hold Go To, the update's preview (the
-// review, whose Accept is Update and Apply) and Update and Apply. Closing it records the version as seen
-// (mods.impactSeen). Settings' View Mods to Update opens the list from the last check without checking (view,
-// mods.impactLast); its Check Update Impact runs the check again, after a question when no game update is
-// recorded since the last check. Before the question, what the App built from a costume under an older costume rule (Optimize Physics
-// copies, costume swaps in the game files: mods.updateDue's outdated) is built again without asking
-// (mods.refreshCostumes, refresh). Then the entries whose last write failed are written again once under a new build of
-// the App, without asking (mods.updateDue's retry, mods.retryFailed): an App update may have fixed the cause; while the
-// game update question is due, only after its Check. The pure parts are tested in Node (tests/js/mod_switch.test.mjs).
+// What a game update did under the library's mods (docs/webui/library.md, "Game update impact"). At the start,
+// before the first screen (gate): once the current install's resource version differs from the last one seen and
+// the library has mods (mods.updateDue), the page asks whether to check them; Check runs under the loading
+// screen with its progress (run): the library classifies every mod from the official parts it was built against
+// (mods.impact), and with mods on and the file check allowed the applied entries the update overwrote with
+// official files, which need no repair, are applied again (mods.restoreDrift). Once the first screen is in, the
+// summary lists the mods to update, only when there are any (check; the drift prompt's popup): the held mods,
+// ticked, with the Outdated badge; what the check handled by itself is never listed. A card's details hold Go
+// To, the update's preview and Update and Apply. Closing it records the version as seen (mods.impactSeen);
+// Settings' View Mods to Update opens the list from the last check without checking (view, mods.impactLast), and
+// its Check Update Impact runs the check again. Before the question, costume builds of an older costume rule are
+// built again (refresh), and entries whose last write failed are written again once under a new build of the App
+// (mods.updateDue's retry). The pure parts are tested in Node (tests/js/mod_switch.test.mjs).
 import * as Compatibility from "./mod-compatibility.js";
 import * as Loading from "./loading.js";
 import { modJob } from "./job-progress.js";
@@ -39,8 +35,10 @@ export const DETAIL = Object.freeze({ fontSize: TYPE.dense.fs, minFontSize: TYPE
 
 const kindKey = (kind) => (kind === "model" ? "tab.model" : kind === "lobby" ? "tab.lobby" : "tab.portrait");
 
-// changeText(mod): what the update changed in a mod's official parts ("Official Portrait: atlas repacked, 1 new
-// animation", from mods.impact's changes), "" when nothing is known. A repack carries its texture sizes.
+/**
+ * What the update changed in a mod's official parts ("Official Portrait: atlas repacked, 1 new animation", from
+ * mods.impact's changes), "" when nothing is known. A repack carries its texture sizes.
+ */
 export function changeText(mod, sep = T("mods.impact.sep")) {
   const c = mod?.changes || {};
   const parts = [];
@@ -60,8 +58,11 @@ export function changeText(mod, sep = T("mods.impact.sep")) {
     : T("mods.impact.official", { kind: T(kindKey(mod.kind)), changes });
 }
 
-// modName(mod, nameOf): "student - kind - mod name" (the mod's own name left out where it only repeats the student's),
-// then "Applied" for a mod its student is configured with (mods.impact's configured: whatever the switch says)
+/**
+ * "student - kind - mod name" (the mod's own name left out where it only repeats the student's), then "Applied"
+ * for a mod its student is configured with (mods.impact's configured: whatever the switch says).
+ * @param {(entry: object) => string} [nameOf] Names the mod's variant.
+ */
 export function modName(mod, nameOf = (e) => e?.variant || e?.core || "") {
   const applied = mod?.configured ? ` - ${T("status.applied")}` : "";
   if (mod?.kind === "other") return `${mod.label || mod.core || ""} - ${T("settings.mods.other")}${applied}`;
@@ -70,8 +71,16 @@ export function modName(mod, nameOf = (e) => e?.variant || e?.core || "") {
   return `${mod?.label && mod.label !== nameOf(entry) ? `${named} - ${mod.label}` : named}${applied}`;
 }
 
-// a mod's lines: its name with Go To (none for a generic mod: no student page) and, for a held mod (fix), Fix after
-// it; then what changed in its official parts
+/**
+ * A mod's lines: its name with Go To (none for a generic mod: no student page) and, for a held mod (fix), Fix
+ * after it; then what changed in its official parts.
+ * @param {object} mod The mod as mods.impact lists it.
+ * @param {(entry: object) => string} nameOf Names the mod's variant.
+ * @param {object} [options] Options.
+ * @param {number} [options.indent] The indent of the change line.
+ * @param {boolean} [options.marker] Hang a bullet before the line.
+ * @param {boolean} [options.fix] Add the Fix button.
+ */
 export function modLines(mod, nameOf, { indent = ITEM.indent, marker = true, fix = false } = {}) {
   const page = mod?.id && mod.kind !== "other" && mod.target;
   const repair = fix && mod?.id ? [{ label: T("mods.impact.fix"), fn: ({ close }) => close(`${FIX}${mod.id}`) }] : [];
@@ -90,21 +99,27 @@ export function modLines(mod, nameOf, { indent = ITEM.indent, marker = true, fix
   return change ? [line, { text: change, indent, ...DETAIL }] : [line];
 }
 
-// reappliable(entries, result): the scan's entries a game update overwrote with official files (state updated, not
-// dismissed) that need no repair: not those whose configured mod's rig changed (held: listed with their mods, applied
-// only once repaired)
+/**
+ * The scan's entries a game update overwrote with official files (state updated, not dismissed) that need no
+ * repair: not those whose configured mod's rig changed (held: listed with their mods, applied only once
+ * repaired).
+ */
 export function reappliable(entries, result) {
   const updated = (entries || []).filter((e) => e && e.state === "updated" && !e.dismissed);
   const held = heldKeys(updated, result?.mods || []);
   return updated.filter((e) => !held.has(`${e.install}|${e.core}`));
 }
 
-// the mods a drift prompt's entries are configured with ("mod:<id>"), for mods.impact {ids}
+/**
+ * The mods a drift prompt's entries are configured with ("mod:<id>"), for mods.impact {ids}.
+ */
 export const configuredMods = (entries) => [
   ...new Set((entries || []).map((e) => /^mod:(.+)$/.exec(e?.configured || "")?.[1]).filter(Boolean)),
 ];
 
-// the keys of the entries whose configured mod's rig an update changed (from mods.impact {ids})
+/**
+ * The keys of the entries whose configured mod's rig an update changed (from mods.impact {ids}).
+ */
 export function heldKeys(entries, impacts) {
   const changed = new Set((impacts || []).filter((m) => m.impact === "rig_changed").map((m) => m.id));
   return new Set(
@@ -120,8 +135,14 @@ let names = async () => (e) => e?.variant || e?.core || "";
 let goTo = async () => {}; // main.js: a mod's student page with its switch open on the mod
 let busy = false;
 let pending = null; // a check's outcome waiting for the first screen: {result, reapplied, failed}
+/**
+ * Whether a check or a repair is running.
+ */
 export const isBusy = () => busy;
 
+/**
+ * Follow game updates while the program runs: the game services are rebuilt for the new resource version.
+ */
 export function init(options = {}) {
   if (options.names) names = options.names;
   if (options.go) goTo = options.go;
@@ -135,7 +156,9 @@ export function init(options = {}) {
   });
 }
 
-// open(mod): Go To, the mod's student page with its switch open on the mod
+/**
+ * Go To: the mod's student page with its switch open on the mod.
+ */
 export const open = (mod) =>
   Promise.resolve(goTo({ id: mod.id, variant: mod.target, kind: mod.kind })).catch((err) =>
     console.error("impact", err),
@@ -171,8 +194,9 @@ async function scanned(step) {
   return (await rpc("mods.entries").catch(() => [])) || [];
 }
 
-// run({force}): the check under the loading screen with its progress: classify, scan, apply again what needs no repair.
-// force: whatever was seen (Check Update Impact). Resolves with {result, reapplied, failed}; throws what the jobs refuse.
+// run({force}): the check under the loading screen with its progress: classify, scan, apply again what needs no
+// repair. force: whatever was seen (Check Update Impact). Resolves with {result, reapplied, failed}; throws what
+// the jobs refuse.
 async function run({ force = false, scan = true } = {}) {
   await names().catch(() => undefined); // the roster in, for the names on the progress line
   return Loading.task(
@@ -216,10 +240,12 @@ async function retry() {
   });
 }
 
-// gate(): at the start before the first screen (and after a game update while the program runs): the costume builds of
-// an older costume rule built again (refresh), the failed writes tried again (retry), then the question and the
-// check. Resolves true when a summary waits
-// (check shows it); Later asks again at the next start.
+/**
+ * At the start before the first screen (and after a game update while the program runs): the costume builds of
+ * an older costume rule built again (refresh), the failed writes tried again (retry), then the question and the
+ * check. Later asks again at the next start.
+ * @returns {Promise<boolean>} True when a summary waits (check shows it).
+ */
 export async function gate() {
   if (busy) return false;
   const due = await rpc("mods.updateDue").catch(() => null);
@@ -265,16 +291,22 @@ export async function gate() {
 
 // --- the list (the drift prompt's popup) ---
 
-// heldOf(result): the mods the list shows, those to update: a mod whose rig changed, unless a repaired copy took its
-// place (it has one and its student is not configured with it)
+/**
+ * The mods the list shows, those to update: a mod whose rig changed, unless a repaired copy took its place (it
+ * has one and its student is not configured with it).
+ */
 export const heldOf = (result) =>
   (result?.mods || []).filter((m) => m.impact === "rig_changed" && !(m.repaired_id && !m.configured));
 
-// a card's key: its mod, else its core
+/**
+ * A card's key: its mod, else its core.
+ */
 export const modKey = (mod) => mod?.id || `${mod?.core || ""}`;
 
-// card(mod, nameOf): a mod's card: the student's name, its own picture (none for a 3D model), the kind and Applied
-// as chips, the Outdated badge
+/**
+ * A mod's card: the student's name, its own picture (none for a 3D model), the kind and Applied as chips, the
+ * Outdated badge.
+ */
 export function card(mod, nameOf = (e) => e?.variant || e?.core || "") {
   const entry = { variant: mod.target, core: mod.core, kind: mod.kind };
   const base = mod.kind === "model" || mod.kind === "other" || !mod.id ? null : spineBase("mod", mod.id);
@@ -302,8 +334,11 @@ export function card(mod, nameOf = (e) => e?.variant || e?.core || "") {
   };
 }
 
-// details(mod): the details panel of a card (its name is the mod's, card.full; the Official chip over it): what the
-// update changed, one line, no caption (the state is the card's badge); Go To, the update's preview and Update and Apply.
+/**
+ * The details panel of a card (its name is the mod's, card.full; the Official chip over it): what the update
+ * changed, one line, no caption (the state is the card's badge); Go To, the update's preview and Update and
+ * Apply.
+ */
 export function details(mod) {
   const changes = changeText(mod).replace(/^[^:：]*[:：]\s*/, "");
   const fields = changes ? [[null, changes]] : [];
@@ -322,8 +357,12 @@ export function details(mod) {
   };
 }
 
-// footer(count, ticked): the list's footer: Close, Check Update Impact and, with mods to update, Update and Apply
-// for the ticked ones (greyed with none ticked); ids for the buttons' actions
+/**
+ * The list's footer buttons: Close, Check Update Impact and, with mods to update, Update and Apply for the
+ * ticked ones (greyed with none ticked); the ids are the buttons' actions.
+ * @param {number} count The number of mods to update.
+ * @param {number} ticked The number ticked.
+ */
 export const footer = (count, ticked) => [
   ["close", T("display.close")],
   ["check", T("mods.impact.check")],
@@ -443,7 +482,8 @@ function presentList(outcome, nameOf) {
               },
             }
           : {}),
-        // Update and Apply without a count, so the S footer's caption keeps to one line; the tick boxes show what it updates
+        // Update and Apply without a count, so the S footer's caption keeps to one line; the tick boxes show what it
+        // updates
         buttons: footer(items.length, ticked.length).map(([id, label, greyed]) => ({
           label,
           fn: act[id],
@@ -574,8 +614,10 @@ async function fix(mods, nameOf, { review = false } = {}) {
   return { fixed, partial };
 }
 
-// the mods.state entries a game update's rig change holds ({install, core, variant, kind, source, label}) as the
-// summary's mods (applied by definition)
+/**
+ * The mods.state entries a game update's rig change holds ({install, core, variant, kind, source, label}) as
+ * the summary's mods (applied by definition).
+ */
 export const heldMods = (entries) =>
   (entries || []).map((e) => ({
     id: /^mod:(.+)$/.exec(e?.source || "")?.[1] || "",
@@ -586,14 +628,19 @@ export const heldMods = (entries) =>
     configured: true,
   }));
 
-// heldLines(entries, nameOf): the held entries, each as the summary names a held mod (Go To and Update and Apply where its
-// mod is known); no hint under them
+/**
+ * The held entries, each as the summary names a held mod (Go To and Update and Apply where its mod is known);
+ * no hint under them.
+ */
 export function heldLines(entries, nameOf) {
   return heldMods(entries).flatMap((m) => modLines(m, nameOf, { fix: true }));
 }
 
-// the switch help's Details of the held entries; resolves with what a button asked ({go: mod} or {fix: [mod]}, the
-// caller closes the help first, then opens or repairs it), else {}
+/**
+ * The switch help's Details of the held entries.
+ * @returns {Promise<{go?: object, fix?: object[]}>} What a button asked: {go: mod} or {fix: [mod]} (the caller
+ *     closes the help first, then opens or repairs it), else {}.
+ */
 export async function heldDetails(entries) {
   const nameOf = await names().catch(() => undefined);
   const answer = await Popup.message({
@@ -610,7 +657,10 @@ export async function heldDetails(entries) {
   return {};
 }
 
-// repair(mods): Fix from outside the summary (the switch help's Details)
+/**
+ * Fix from outside the summary (the switch help's Details).
+ * @returns {Promise<object[]>} The mods fixed.
+ */
 export async function repair(mods) {
   if (busy || !mods?.length) return [];
   busy = true;
@@ -629,8 +679,10 @@ async function seen(result) {
     );
 }
 
-// check(): once the first screen is in, the mods to update a check left (gate), as the list, until it is closed (its
-// preview, updates and a new check run over it, presentList); Go To leaves for the mod's student page
+/**
+ * Once the first screen is in, show the mods to update a check left (gate), as the list, until it is closed
+ * (its preview, updates and a new check run over it, presentList); Go To leaves for the mod's student page.
+ */
 export async function check() {
   if (busy || !pending) return null;
   busy = true;
@@ -662,9 +714,13 @@ export async function check() {
   }
 }
 
-// view({always}): the mods to update from the last check, without checking (mods.impactLast), as the list; always:
-// Settings' View Mods to Update, opened even with none; else (the tray's Back to Official, Settings' Check after a game
-// update's entries) only with mods to update. Resolves with true when a Go To left for a student page.
+/**
+ * The mods to update from the last check, without checking (mods.impactLast), as the list.
+ * @param {object} [options] Options.
+ * @param {boolean} [options.always] True (Settings' View Mods to Update): open it even with none; false (the
+ *     tray's Back to Official, Settings' Check after a game update's entries): only with mods to update.
+ * @returns {Promise<boolean>} True when a Go To left for a student page.
+ */
 export async function view({ always = true } = {}) {
   if (busy) return false;
   let chosen = null;
@@ -688,10 +744,15 @@ export async function view({ always = true } = {}) {
   return location.hash !== before;
 }
 
-// show(): the list only when the last check left mods to update (view)
+/**
+ * The list, only when the last check left mods to update (view).
+ */
 export const show = () => view({ always: false });
 
-// impacts(entries): the impacts of the mods the entries are configured with, [] when none or on a failure
+/**
+ * The impacts of the mods the entries are configured with.
+ * @returns {Promise<object[]>} The impacts; [] when none or on a failure.
+ */
 export async function impacts(entries) {
   const ids = configuredMods(entries);
   if (!ids.length) return [];

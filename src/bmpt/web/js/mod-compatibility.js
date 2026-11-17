@@ -29,8 +29,11 @@ const reason = (entry) => {
     ? T(`compatibility.why.${kind}`, { name })
     : entry;
 };
-// Animations a graft cannot carry, each with its reasons: "Hat_01 (bone hat missing)". A reason list, or one text
-// (the converter's).
+/**
+ * The animations a graft cannot carry, each with its reasons: "Hat_01 (bone hat missing)".
+ * @param {Object<string, string[]|string>} refused The refused animations by name: a reason list, or one text
+ *     (the converter's).
+ */
 export const refusedNames = (refused) =>
   Object.entries(refused || {}).map(([name, reasons]) =>
     T("compatibility.refusedAnimation", { name, why: joined([].concat(reasons || []).map(reason)) }),
@@ -58,12 +61,23 @@ function progressTask(action, subject, run) {
     });
   return Loading.task((update) => run((p) => update({ label: text(p) })), { label: text() });
 }
+/**
+ * Whether a mod can be repaired: not a 3D model and not itself a repaired copy.
+ */
 export const eligible = (mod) => mod?.kind !== "model" && !mod?.repaired_from && !mod?.repaired_id;
-// The remap, for a portrait the game drew anew its old rig as a whole (assessment.oldRig), and the graft of the
-// official rig's new animations into the mod's own rig (assessment.graft): all are Update.
-// A portrait whose textures were drawn on a rig the App no longer has: nothing repairs it, and a plain update would
-// leave it as it is (report.rig.unknown).
+/**
+ * Whether the mod is a portrait whose textures were drawn on a rig the App no longer has: nothing repairs it,
+ * and a plain update would leave it as it is (report.rig.unknown).
+ * @param {string} id The mod's id.
+ */
 export const rigUnknown = (id) => reports.get(id)?.assessment?.issues?.some(({ key }) => key === "rigUnknown") === true;
+/**
+ * Whether a mod can be updated by a remap, from its report. The remap, the old rig kept as a whole for a
+ * portrait the game drew anew (assessment.oldRig) and the graft of the official rig's new animations into the
+ * mod's own rig (assessment.graft) are all Update.
+ * @param {string} id The mod's id.
+ * @param {object|null} [mod] The mod, when known.
+ */
 export const canRemap = (id, mod = null) =>
   eligible(mod) &&
   eligible(reports.get(id)) &&
@@ -71,6 +85,13 @@ export const canRemap = (id, mod = null) =>
     (reports.get(id)?.assessment?.remap === true || reports.get(id)?.assessment?.oldRig === true)) ||
     reports.get(id)?.assessment?.graft === true);
 
+/**
+ * Read a skeleton file with the Spine runtime.
+ * @param {{data: ArrayBuffer|string, version?: string}} input The skeleton's file data.
+ * @param {object} [runtime] The spine runtime's namespace.
+ * @returns {{regions: string[], animations: string[], attachments: object}} The regions it draws, its
+ *     animations and its attachments.
+ */
 export function readSkeleton(input, runtime = globalThis.spine) {
   const bytes = Uint8Array.from(atob(input.data), (c) => c.charCodeAt(0));
   const text = new TextDecoder().decode(bytes).trim();
@@ -121,6 +142,14 @@ export function readSkeleton(input, runtime = globalThis.spine) {
   return { regions: [...regions], animations: data.animations.map((animation) => animation.name) };
 }
 
+/**
+ * Compare a mod's rig with the official one for a compatibility report, as the issues the page shows (atlases
+ * the game repacked since the mod's textures were drawn on them, a rig the App no longer has, a portrait the
+ * game drew anew, animations the official skeleton gained).
+ * @param {object} report The library's report.
+ * @param {object} [runtime] The spine runtime's namespace.
+ * @param {boolean} [summarize] Reduce the issues to a short summary.
+ */
 export function compare(report, runtime = globalThis.spine, summarize = false) {
   if (!runtime && report.kind !== "model")
     return { available: false, issues: [{ key: "unavailable", params: {} }], author: false, remap: false };
@@ -257,12 +286,16 @@ async function assess(report) {
   return compare(report, available ? globalThis.spine : null);
 }
 
-// The result popup, plain and left-aligned: what changed, under "Changes:", one list item each (a
-// Details button as high as its line), then, where Update repairs it, the game's dotted rule and what Update does, under
-// "Auto update:". Nothing a user does not act on (no "Mod adapted to the current version required",
-// no "CRC fix changes checksums only"). Footer buttons two sizes smaller (Popup.FOOTER.S); every line at
-// one type size.
+// The result popup, plain and left-aligned: what changed, under "Changes:", one list item each (a Details button
+// as high as its line), then, where Update repairs it, the game's dotted rule and what Update does, under "Auto
+// update:". Nothing a user does not act on (no "Mod adapted to the current version required", no "CRC fix
+// changes checksums only"). Footer buttons two sizes smaller (Popup.FOOTER.S); every line at one type size.
 const ITEM = Object.freeze({ marker: "\u2022", markerGap: 44, indent: 52 });
+/**
+ * The lines of a compatibility result.
+ * @param {object} result The comparison (compare).
+ * @param {boolean} repair Whether a repair is offered after it.
+ */
 export function resultLines(result, repair) {
   const item = (line) => ({ ...(typeof line === "string" ? { text: line } : line), ...ITEM });
   const changes = new Map();
@@ -292,8 +325,11 @@ export function resultLines(result, repair) {
   return lines;
 }
 
-// What Update can do, first the default: the graft keeps the mod's own rig, the remap puts the
-// mod's pixels on the official rig, the old rig keeps a redrawn portrait's whole rig.
+/**
+ * The repairs Update can do for a comparison, the default first: the graft keeps the mod's own rig, the remap
+ * puts the mod's pixels on the official rig, the old rig keeps a redrawn portrait's whole rig.
+ * @returns {string[]} "graft", "remap" or "oldRig".
+ */
 export function repairs(result) {
   const out = [];
   if (result.graft)
@@ -332,6 +368,12 @@ const chosen = (response, choices) =>
       ? response.button
       : null;
 
+/**
+ * Show a compatibility report.
+ * @param {object} report The library's report.
+ * @param {object} [options] Options.
+ * @param {(choice: string) => void} [options.onRemap] Called when the user picks a repair.
+ */
 export async function show(report, { onRemap } = {}) {
   if (report.kind !== "model" && !(await ensureSpine())) return;
   const result = compare(report, globalThis.spine, true);
@@ -351,8 +393,13 @@ export async function show(report, { onRemap } = {}) {
   if (kind) await onRemap(kind);
 }
 
-// The repair review's lines: one per kind of region with its count, the names behind a Details button. Regions are
-// named "<atlas> - <region>"; the atlas is left out when every region of the report is in the same one.
+/**
+ * The repair review's lines: one per kind of region with its count, the names behind a Details button. Regions
+ * are named "<atlas> - <region>"; the atlas is left out when every region of the report is in the same one.
+ * @param {object} report The repair's report.
+ * @param {object} [options] Options.
+ * @param {boolean} [options.convert] Offer the converter for what a graft refused.
+ */
 export function reviewLines(report, { convert = false } = {}) {
   // an old rig set up as a whole (actions.oldRig) moves nothing: its line names the atlases kept
   if (report.rigs?.length)
@@ -468,8 +515,11 @@ async function converted(id, subject) {
   }
 }
 
-// The converter, fetched once with the user's consent to its licence (Windows), or the note that the macOS build is
-// the user's own to compile. Resolves true when it is in place.
+/**
+ * The optional converter (bmpt/spine_converter.py), fetched once with the user's consent to its licence
+ * (Windows), or the note that the macOS build is the user's own to compile.
+ * @returns {Promise<boolean>} True when it is in place.
+ */
 export async function ensureConverter() {
   const status = await rpc("actions.converterStatus");
   if (status.installed) return true;
@@ -569,10 +619,18 @@ async function grafted(id, subject) {
   }
 }
 
-// prepare(id, label, subject, kind, choice): the repair's preview, no review: the compatibility check if none is in
-// hand, the repair (the choice given; "default": the first of repairs(), no question; null: asked when there are more),
-// its job under the loading screen. Resolves with the job's result ({preview, report, compare, pages, drawings}, or
-// {unchanged}), or null when nothing was made (no repair chosen). The caller accepts (accept) or discards it.
+/**
+ * Prepare the repair's preview, no review: the compatibility check if none is in hand, the repair (the choice
+ * given; "default": the first of repairs(), no question; null: asked when there are more), its job under the
+ * loading screen. The caller accepts (accept) or discards it.
+ * @param {string} id The mod's id.
+ * @param {string} [label] The mod's label.
+ * @param {string} [subject] What the dialogs call the mod.
+ * @param {string} [kind] The mod's kind.
+ * @param {"default"|"graft"|"remap"|"oldRig"|null} [choice] The repair.
+ * @returns {Promise<object|null>} The job's result ({preview, report, compare, pages, drawings}, or
+ *     {unchanged}); null when nothing was made (no repair chosen).
+ */
 export async function prepare(id, label = "", subject = label, kind = "", choice = null) {
   // A portrait is baked through world space: the page poses both rigs with the runtime and posts what they draw.
   let checked = reports.get(id);
@@ -623,8 +681,14 @@ export async function prepare(id, label = "", subject = label, kind = "", choice
       })();
 }
 
-// accept(id, result, onRemapped, subject): store a prepared repair (actions.acceptRemap); resolves with the saved
-// copy ({mod: {id}}). The preview is the caller's to discard (discard) either way.
+/**
+ * Store a prepared repair (actions.acceptRemap). The preview is the caller's to discard (discard) either way.
+ * @param {string} id The mod's id.
+ * @param {object} result The prepared repair.
+ * @param {(saved: object) => void} [onRemapped] Called with the saved copy.
+ * @param {string} [subject] What the dialogs call the mod.
+ * @returns {Promise<{mod: {id: string}}>} The saved copy.
+ */
 export async function accept(id, result, onRemapped = () => {}, subject = "") {
   return Loading.hold(
     () =>
@@ -643,12 +707,25 @@ export async function accept(id, result, onRemapped = () => {}, subject = "") {
   );
 }
 
+/**
+ * Discard a prepared repair's preview.
+ */
 export const discard = (result) =>
   result?.preview ? rpc("actions.discardRemap", { preview: result.preview }).catch(() => {}) : Promise.resolve();
 
-// review(id, result, options): the repair review (Compare.show): both pictures, the report's lines and marks; resolves
-// true when accepted. options: {label, kind, accept, discard}: the review's title, kind and button labels.
-// options.convert: a graft's review may end with "convert" (the converter route for what it refused).
+/**
+ * Show the repair review: both pictures, the report's lines and marks.
+ * @param {string} id The mod's id.
+ * @param {object} result The prepared repair.
+ * @param {object} [options] Options.
+ * @param {string} [options.label] The review's title.
+ * @param {string} [options.kind] The mod's kind.
+ * @param {string} [options.accept] The Accept button's label.
+ * @param {string} [options.discard] The Discard button's label.
+ * @param {boolean} [options.convert] A graft's review may end with "convert" (the converter route for what it
+ *     refused).
+ * @returns {Promise<boolean>} True when accepted.
+ */
 export function review(
   id,
   result,
@@ -693,6 +770,10 @@ export function review(
   );
 }
 
+/**
+ * Prepare a repair, review it and store it when accepted.
+ * @returns {Promise<object|null>} The result; null when nothing was made.
+ */
 export async function remap(id, onRemapped = () => {}, label = "", subject = label, kind = "", choice = null) {
   const result = await prepare(id, label, subject, kind, choice);
   if (!result) return null;
@@ -724,12 +805,17 @@ async function converterRemap(id, onRemapped, label, subject, kind) {
   }
 }
 
-// The official animations a Mod lacks after an update that kept its own skeleton (UpdateResult.rig), as a line.
+/**
+ * The official animations a Mod lacks after an update that kept its own skeleton (UpdateResult.rig), as a line.
+ */
 export function rigNotice(result) {
   const names = new Set(Object.values(result?.rig?.animations || {}).flat());
   return names.size ? T("compatibility.rigChanged", { n: names.size }) : "";
 }
 
+/**
+ * Check a mod's compatibility against the official files.
+ */
 export async function inspect(id, label = "", stamp = null, subject = label) {
   stamp ??= await rpc("actions.compatibilityStamp", { mod: id });
   const report = await progressTask("Compatibility", subject, async (update) =>
@@ -760,7 +846,10 @@ export async function inspect(id, label = "", stamp = null, subject = label) {
   return checked;
 }
 
-// Reuse a report only while the exact Mod, install and candidate official source files still match.
+/**
+ * The compatibility report for an update: a report is reused only while the exact Mod, install and candidate
+ * official source files still match.
+ */
 export async function forUpdate(id, label = "", subject = label) {
   const stamp = await rpc("actions.compatibilityStamp", { mod: id });
   if (stamps.get(id) !== stamp || !reports.has(id)) return inspect(id, label, stamp, subject);
@@ -770,6 +859,9 @@ export async function forUpdate(id, label = "", subject = label) {
   return checked;
 }
 
+/**
+ * Check a mod's compatibility and show the report, with the repair offered.
+ */
 export async function check(id, label = "", onRemapped = () => {}, mod = null, subject = label) {
   if (mod?.kind !== "model" && !(await ensureSpine())) return;
   const report = await Loading.hold(() => inspect(id, label, null, subject), { all: true });

@@ -66,12 +66,9 @@ export const handOffPrompt = (item, T) => ({
   cancel: T("popup.cancel"),
 });
 
-// activate: a click (or Enter, or Space) on an entry. The callbacks: go(route) shows a web screen; ask(item)
-// shows the hand-off prompt and resolves with {button, checked} ("ok" is Open, the box Don't Ask Again);
-// open(tab) hands over to the classic UI on that tab; savePrompt(false) turns the prompt off (only Open with the
-// box ticked calls it, before the hand-off).
 /**
- * Handle a click on an entry.
+ * Handle a click (or Enter, or Space) on an entry. Only Open with the box ticked calls savePrompt, before the
+ * hand-off.
  * @param {NavItem} item
  * @param {object} options
  * @param {boolean} [options.prompt] Whether the hand-off prompt shows first (the pref classicPrompt; on unless
@@ -111,8 +108,6 @@ const rgbOf = (color) => {
   return m ? m.slice(1, 4).map((h) => parseInt(h, 16) / 255) : null;
 };
 
-// tintOf: grid is the layout of UILobby's Front/Bottom/Menu/BG/Grid, or null when there is no game or it could
-// not be read.
 /**
  * The tint of a greyed entry, in the first of the three modes (see the greyed look) that applies.
  * @param {NguiNode|null} grid The layout of UILobby's Front/Bottom/Menu/BG/Grid; null when there is no game or

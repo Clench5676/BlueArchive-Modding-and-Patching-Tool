@@ -65,12 +65,25 @@ async function write(method, params, mod, name, changed) {
   if (refusal) await ModSwitch.refused(refusal, method, params, () => write(method, params, mod, name, changed));
 }
 
+/**
+ * Apply a mod of the other kinds (game files that are not a portrait, lobby or model) or put the official files
+ * back.
+ * @param {object} mod The mod, as mods.other lists it.
+ * @param {() => Promise<void>} changed Called after the write, whatever came of it, to refresh the page.
+ * @param {boolean} [useMod] True applies the mod, false restores the official files; the opposite of what is
+ *     applied by default.
+ */
 export async function select(mod, changed, useMod = !mod.selected) {
   const method = useMod ? "actions.apply" : "actions.restore";
   const params = { variant: mod.target, kind: "other", ...(useMod ? { source: `mod:${mod.id}` } : {}) };
   return write(method, params, mod, mod.label, changed);
 }
 
+/**
+ * Delete a mod of the other kinds after asking, which also restores the official files it was applied over.
+ * @param {object} mod The mod, as mods.other lists it.
+ * @param {() => Promise<void>} changed Called after the write, to refresh the page.
+ */
 export async function remove(mod, changed) {
   if (busy) return;
   try {
@@ -87,7 +100,9 @@ export async function remove(mod, changed) {
   }
 }
 
-// the state, then the file names in the language's list separator
+/**
+ * The state of a mod, then its file names in the language's list separator.
+ */
 export const valueText = (mod) =>
   [
     T(["active", "set"].includes(mod.state) ? "status.applied" : `settings.mods.otherState.${mod.state}`),
@@ -97,6 +112,12 @@ export const valueText = (mod) =>
     .filter(Boolean)
     .join(" - ");
 
+/**
+ * The Settings rows of the mods of the other kinds, each with its Use Mod, Official and Delete buttons.
+ * @param {object[]} mods The mods, as mods.other lists them.
+ * @param {Function} valueRow Makes a value row (settings-rows.js).
+ * @param {() => Promise<void>} changed Called after a write, to refresh the page.
+ */
 export function rows(mods, valueRow, changed) {
   return mods.map((mod, i) =>
     valueRow(

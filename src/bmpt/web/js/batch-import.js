@@ -56,11 +56,12 @@ import {
 import { characterPicker } from "./character-picker.js";
 import { scrollbar as gameScrollbar, scrollbarTrack } from "./scrollbar.js";
 
-// The list's top in the panel: 12 under Items' grey Inbox (its top edge is at 98). The search field, open, takes its place and
-// pushes the rows down by SEARCH_ROOM.
+// The list's top in the panel: 12 under Items' grey Inbox (its top edge is at 98). The search field, open, takes
+// its place and pushes the rows down by SEARCH_ROOM.
 const LIST_TOP = 110,
   SEARCH_ROOM = 92;
-// The list's box in the panel (px): where it starts, how wide it is and where it ends; the search field and the tools under it share its width.
+// The list's box in the panel (px): where it starts, how wide it is and where it ends; the search field and the
+// tools under it share its width.
 const LIST_X = 26,
   LIST_W = 1220,
   LIST_BOTTOM = 616;
@@ -99,9 +100,9 @@ const sizeText = (size) =>
   size >= 1048576 ? `${(size / 1048576).toFixed(1)} MB` : `${Math.ceil((size || 0) / 1024)} KB`;
 const baseName = (path) => path?.split(/[\\/]/).pop() || "";
 const listSeparator = () => (/^(zh|ja)/i.test(language()) ? "、" : ", ");
-// the dialogs' scrolling area [left, top, width, height] (px in the stage; app.css .import-dialog-content has the same numbers)
-// and their frame's height: the area 83.5 px under the frame's top, and the XS footer every popup has about
-// SPACE.xl under the area (POPUP_FOOTER.clearance)
+// the dialogs' scrolling area [left, top, width, height] (px in the stage; app.css .import-dialog-content has
+// the same numbers) and their frame's height: the area 83.5 px under the frame's top, and the XS footer every
+// popup has about SPACE.xl under the area (POPUP_FOOTER.clearance)
 export const DIALOG_H = 1320.5;
 export const DIALOG_AREA = [228, 203, 1464, 640];
 
@@ -309,9 +310,10 @@ export function createImportPage({
       });
     return work;
   };
-  // The game list's scrollbar (UICharacterCollection/SeletControl/List/Scroll Bar) over a native scrolling area, as
-  // Popup.scrollArea draws it: the area's own bar is hidden (app.css), this one follows its scroll position and shows only
-  // while the content overflows. box: the area's [left, top, width, height] in host, the edge the painted bar ends on.
+  // The game list's scrollbar (UICharacterCollection/SeletControl/List/Scroll Bar) over a native scrolling area,
+  // as Popup.scrollArea draws it: the area's own bar is hidden (app.css), this one follows its scroll position and
+  // shows only while the content overflows. box: the area's [left, top, width, height] in host, the edge the
+  // painted bar ends on.
   const scrollBars = new Map();
   const syncBar = (area) => {
     scrollBars.get(area)?.bar?.sync(area.clientHeight, area.scrollHeight, area.scrollTop);
@@ -399,9 +401,10 @@ export function createImportPage({
     b.refresh();
   }
   const EMPTY_BOX = [1200, 100]; // each empty-list label's box (px), its text centred in it
-  // The row under the list is one row of buttonXS controls (CONTROL.buttonXS: 104 high, caption 40 down to XS_BUTTON.fsMin), SPACE.m
-  // apart, drawn from the prefabs' 162-high bodies. Import stands out by its gold, not by its size. Its right edge is the list
-  // tools'. The 902 is the row's centre line in the stage (px; the App's own: the row clears the bottom nav's 104 px area).
+  // The row under the list is one row of buttonXS controls (CONTROL.buttonXS: 104 high, caption 40 down to
+  // XS_BUTTON.fsMin), SPACE.m apart, drawn from the prefabs' 162-high bodies. Import stands out by its gold, not
+  // by its size. Its right edge is the list tools'. The 902 is the row's centre line in the stage (px; the App's
+  // own: the row clears the bottom nav's 104 px area).
   const FOOTER_ROW = {
     scale: (CONTROL.buttonXS.h * S) / BUTTON_BODY_H,
     y: 902,
@@ -414,8 +417,8 @@ export function createImportPage({
       min: (XS_BUTTON.fsMin * BUTTON_BODY_H) / CONTROL.buttonXS.h,
     },
   };
-  // The list's tools (the Items prefab's Btn_Receive bodies at TOOL_SCALE) fill the list's width, SPACE.m apart, each in the share of
-  // it its caption needs in the longest language: [key, caption key, share].
+  // The list's tools (the Items prefab's Btn_Receive bodies at TOOL_SCALE) fill the list's width, SPACE.m apart,
+  // each in the share of it its caption needs in the longest language: [key, caption key, share].
   const TOOL_SCALE = (0.34 * CONTROL.buttonXS.h) / CONTROL.buttonS.h;
   const TOOLBAR = [
     ["files", "addFiles", 174],
@@ -606,8 +609,8 @@ export function createImportPage({
     if (!identities.has(entry)) identities.set(entry, entryIdentity(entry, catalog));
     return identities.get(entry);
   };
-  // a refused row's reason is on its badge (stateText); the note line keeps only what a badge cannot say: a missing official
-  // copy's repair guidance
+  // a refused row's reason is on its badge (stateText); the note line keeps only what a badge cannot say: a
+  // missing official copy's repair guidance
   const rowNote = (entry) =>
     entry.state === "blocked" && entry.reason === "original_unavailable" ? report(entry, entry) : "";
   // the badge's short reason: the row's reason label, the error's own text when it needs no parameters, or Import Check
@@ -707,8 +710,9 @@ export function createImportPage({
     dom.start = button(T("import.action", { n: 0 }), "start", { width: rowWidth, scale: rowScale, primary: true });
     shareSizes();
     dom.fillAll = button(missingText("fillAll", { n: 1 }), "fillAll", { width: wide, scale: rowScale });
-    // As on the roster/detail screens, reserve the nav's entire 104 px area, with 24 px above it. One row, right-aligned: the
-    // count's room ends before Fill All (hidden until a row can be filled), which stands left of Advanced Options.
+    // As on the roster/detail screens, reserve the nav's entire 104 px area, with 24 px above it. One row,
+    // right-aligned: the count's room ends before Fill All (hidden until a row can be filled), which stands left of
+    // Advanced Options.
     const bar = layoutRow(
       [wide, wide, rowWidth, rowWidth].map((w) => ({ w, h: rowHeight })),
       { x: 0, y: FOOTER_ROW.y - rowHeight / 2, w: FOOTER_ROW.right, gap: rowGap, justify: "end" },
@@ -785,8 +789,9 @@ export function createImportPage({
     listTop = top;
     placeEmpty();
   }
-  // Items' ListEmpty message, with the drop hint under it while nothing is added: one block whose ink centre sits on the
-  // middle of the grey frame (diagonal centre, header strip and toolbar included), wherever the list starts.
+  // Items' ListEmpty message, with the drop hint under it while nothing is added: one block whose ink centre sits
+  // on the middle of the grey frame (diagonal centre, header strip and toolbar included), wherever the list
+  // starts.
   function placeEmpty() {
     if (!dom.empty) return;
     const [x, y] = PAPER_CENTRE(S),
@@ -1229,7 +1234,8 @@ export function createImportPage({
 
   function rowCopy(group, result = false) {
     const entry = representative(group.entries);
-    // A grouped row in the list reads like an ungrouped one: its kinds as text on the metadata line, its states on the status tag.
+    // A grouped row in the list reads like an ungrouped one: its kinds as text on the metadata line, its states on
+    // the status tag.
     const groupedRow = merged && !result;
     const kindCounts = () =>
       Object.entries(group.counts)
@@ -1571,12 +1577,12 @@ export function createImportPage({
     if (visible && result.button === "ok") await model.pick(true, result.checked);
   }
 
-  // Popup.popupFrame clones UIPopup_Sort/Center: Base/BG, Btn_Close and Btn/Btn_Ok / Btn_Cancel.
-  // content(area, {primary(enabled)}): primary(false) blocks the confirm button (the game's disabled one, answering nothing)
-  // until primary(true); it may be called while the content is built.
-  // width: the frame's (units); bodyWidth: the content's, centred (px). padding instead: the content fills the frame's container
-  // (container: the frame less padding units on each side), and content gets its width in px.
-  // the dialogs are the L class at most, their area the frame's content box (padding SPACE.xl) unless one names its own
+  // Popup.popupFrame clones UIPopup_Sort/Center: Base/BG, Btn_Close and Btn/Btn_Ok / Btn_Cancel. content(area,
+  // {primary(enabled)}): primary(false) blocks the confirm button (the game's disabled one, answering nothing)
+  // until primary(true); it may be called while the content is built. width: the frame's (units); bodyWidth: the
+  // content's, centred (px). padding instead: the content fills the frame's container (container: the frame less
+  // padding units on each side), and content gets its width in px. the dialogs are the L class at most, their area
+  // the frame's content box (padding SPACE.xl) unless one names its own
   async function dialog(
     title,
     {
@@ -1689,7 +1695,8 @@ export function createImportPage({
     if (model.busy() || !(await model.loadOptions())) return;
     const draft = { ...model.state.options, types: [...model.state.options.types] };
     let error;
-    // The L frame (POPUP_FRAME.L: UIPopup_Option_PC's) with its content in a container padded SPACE.xl on each side (panels in a popup).
+    // The L frame (POPUP_FRAME.L: UIPopup_Option_PC's) with its content in a container padded SPACE.xl on each side
+    // (panels in a popup).
     await dialog(
       T("import.options.title"),
       {
@@ -1713,8 +1720,9 @@ export function createImportPage({
         },
       },
       (area, { width: contentWidth }) => {
-        // The option groups (Settings' rows, OPTION_WIDTH wide) stack SPACE.l apart, centred in the content; the hint and the error
-        // line stack with them. parts: { element, w, h } in px, in order; holder: the element that stands in the stack for a group.
+        // The option groups (Settings' rows, OPTION_WIDTH wide) stack SPACE.l apart, centred in the content; the hint
+        // and the error line stack with them. parts: { element, w, h } in px, in order; holder: the element that stands
+        // in the stack for a group.
         const parts = [];
         const add = (key, height, holder = null) => {
           const group = el("div", "import-option");

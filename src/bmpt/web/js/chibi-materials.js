@@ -1,23 +1,11 @@
 // Materials for the 3D chibi: ports of the game's character shaders (MX/C-*, compiled for D3D11 in the shader
-// bundles). Every term follows the game's ForwardLit and Outline passes:
-//   light term  N.L + 0.77 N.V + (1 - 2 mask.g) * _MaskGSensitivity, against the threshold (+0.15 * (1 - data.y))
-//   diffuse     lerp(light tone, shadow tint * shadow tone, shadow) * data.x + ambient
-//   rim         saturate((1 - N.V) * multiplier - leveler) * colour.a * strength, tinted by the light tone
-//   Layer4      the mask alpha picks one of four layers (cut at 0.25, 0.5, 0.75), each with its own tint, threshold
-//               and view light
-//   face        its own light direction (_ShadowLightDir, in the renderer's space: the root bone), a softer edge
-//   hair        the light term plus a highlight band from the direction map (_HairSpecTex)
-//   weapon      N.H (the view and a fixed light, _FakeLightDir) and N.V per vertex, a mask for shadow and highlight
-//   eyes/mouth  unlit, blended over the face; the bottom-left quarter of the atlas shows the mouth tile
-//   outline     an inverted hull along the smoothed normal (tangent), 0.1 % of the screen width times colour.a,
-//               coloured per vertex (the texture at the vertex)
-//   props       DSFX/FX_SHADER_Matcap (a matcap at the view-space normal), MX/E-Water-* (the surface colour) and the
-//               unlit and effect shaders, each with its own texture slot and colour
-// The game runs in linear colour space: colour textures are decoded from sRGB, masks are not, Color properties are
-// converted to linear, and HDR Color properties (most of the character shaders' tints) and Vector properties are used
-// as stored. The light is the formation screen's (see LIGHT and AMBIENT below): the character light's direction from
-// above, taken into the space of the character's slot, its colour from the screen's white directional light, and the
-// ambient probe of the scene the screen runs in.
+// bundles). Every term follows the game's ForwardLit and Outline passes: the light
+// term against a threshold, the diffuse blend of light tone and shadow tint, the rim, the four-layer mask, the
+// face's own light direction, the hair's highlight band, the weapon's per-vertex terms, unlit eyes and mouth,
+// and the outline as an inverted hull. The game runs in linear colour space: colour textures are decoded from
+// sRGB, masks are not, Color properties are converted to linear, and HDR Color properties (most of the character
+// shaders' tints) and Vector properties are used as stored. The light is the formation screen's (see LIGHT and
+// AMBIENT below).
 import * as THREE from "three";
 
 // glTF space mirrors Unity's x axis
@@ -26,10 +14,13 @@ const mirror = (v) => new THREE.Vector3(-v[0], v[1], v[2]);
 // Unity's GammaToLinearSpace (HDR values above 1 by a 2.2 power)
 const toLinear = (c) => (c <= 0.04045 ? c / 12.92 : c < 1 ? Math.pow((c + 0.055) / 1.055, 2.4) : Math.pow(c, 2.2));
 
-// The character light globals the game's URP sets from the main light:
-// rgb is the main light's linear colour times its intensity, or CharacterLightColor's override.
-// tone = n * 0.75 + 0.25 with n = rgb / max(max(rgb), 1e-4); shadow tone = lerp(1, n / 2, t) with
-// t = saturate((max - min) / max * 0.88); data = (max * 0.85 + 0.15, (max + min) / 2).
+/**
+ * The character light globals the game's URP sets from the main light:
+ * rgb is the main light's linear colour times its intensity, or
+ * CharacterLightColor's override. tone = n * 0.75 + 0.25 with n = rgb / max(max(rgb), 1e-4); shadow tone =
+ * lerp(1, n / 2, t) with t = saturate((max - min) / max * 0.88); data = (max * 0.85 + 0.15, (max + min) / 2).
+ * @param {number[]} rgb The light's linear colour times its intensity.
+ */
 export function characterLight(rgb) {
   const hi = Math.max(...rgb),
     lo = Math.min(...rgb),
@@ -48,6 +39,12 @@ export function characterLight(rgb) {
 // the viewer shows the character in its own space, so they are taken into the slot's space (the inverse rotation),
 // then into glTF's (Unity's x mirrored). The light then falls on the character from the side it does in the game.
 export const FORMATION_SLOT = [0.007243064697831869, 0.9999737739562988, -3.166044e-10, -4.371024e-8];
+/**
+ * A light direction taken into the formation slot's space (the inverse of the slot's rotation) and then into
+ * glTF's (Unity's x mirrored), so the light falls on the character from the side it does in the game.
+ * @param {number[]} v The direction in Unity world space.
+ * @param {number[]} [q] The slot's rotation as a quaternion.
+ */
 export function slotSpace(v, q = FORMATION_SLOT) {
   const r = new THREE.Vector3(v[0], v[1], v[2]).applyQuaternion(new THREE.Quaternion(...q).normalize().invert());
   return mirror([r.x, r.y, r.z]);
@@ -118,6 +115,11 @@ const CUBE = [
     [0, 0, -1],
   ],
 ];
+/**
+ * The ambient probe for a Trilight ambient: the spherical harmonics as the engine passes them to a renderer
+ * (unity_SHAr ... unity_SHC).
+ * @param {object} colours The ambient's sky, equator and ground colours.
+ */
 export function trilightProbe({ sky, equator, ground }) {
   const faces = [equator, equator, sky, ground, equator, equator].map((c) => c.map(toLinear));
   const sh = [0, 1, 2].map(() => new Array(9).fill(0));
@@ -158,7 +160,10 @@ export function trilightProbe({ sky, equator, ground }) {
 // the shared ambient probe (Unity space; the vertex shader mirrors the normal)
 export const AMBIENT = { ambientSH: { value: trilightProbe(EMPTY_SCENE_AMBIENT) } };
 
-// the character shaders' ambient term at a world normal (Unity space), as the vertex shader computes it
+/**
+ * The character shaders' ambient term at a world normal (Unity space), as the vertex shader computes it: the
+ * probe evaluated, clamped at 0 and scaled to a channel sum of at most 0.3.
+ */
 export function ambientAt(probe, n) {
   const [x, y, z] = n,
     b = [x * y, y * z, z * z, z * x];
@@ -209,6 +214,9 @@ function defaultTexture(name) {
   }
   return defaults[name];
 }
+/**
+ * Free the default textures the materials share.
+ */
 export function disposeDefaults() {
   for (const t of Object.values(defaults || {})) t.dispose();
   defaults = null;
@@ -588,6 +596,13 @@ void main() {
 // the offset of one outline unit in clip space, x and y: 0.002 of the stage width (the game's screen), per the
 // canvas size in stage pixels; shared by every outline and set on resize
 export const OUTLINE = { outlineScale: { value: new THREE.Vector2(0.002, 0.002) } };
+/**
+ * Set the outline's offset for a canvas: OUTLINE's unit is 0.002 of the stage width (the game's screen), shared
+ * by every outline and set on resize.
+ * @param {number} width The canvas width in stage pixels.
+ * @param {number} height The canvas height in stage pixels.
+ * @param {number} [stageWidth] The stage's width in stage pixels.
+ */
 export function setOutlineScale(width, height, stageWidth = 1920) {
   OUTLINE.outlineScale.value.set((0.002 * stageWidth) / Math.max(1, width), (0.002 * stageWidth) / Math.max(1, height));
 }
@@ -655,10 +670,16 @@ function applyState(mat, state) {
 // the shading kinds whose vertex programs do not read the ambient probe (Layer4, Single, Hair, Face and Weapon do)
 const NO_AMBIENT = new Set(["transparent", "simple", "eyemouth", "eyebrow", "halo", "matcap", "water", "unlit"]);
 
-// chibiMaterial(ex, textures, mouth): the game shader of a material (ex: the GLB material extras, textures: its
-// textures by slot name, mouth: the shared mouth tile state). Returns {material, objectSpace, outline, queue}:
-// objectSpace is set when the shader reads directions in the renderer's space (face, hair), and the caller keeps its
-// objectToWorld current; outline whether the shader draws one; queue the render queue, for the draw order.
+/**
+ * The game shader of a material.
+ * @param {object} ex The GLB's material extras.
+ * @param {Object<string, THREE.Texture>} textures The material's textures by slot name.
+ * @param {object} mouth The shared mouth tile state.
+ * @returns {{material: THREE.Material, objectSpace: boolean, outline: boolean, queue: number}} objectSpace is
+ *     set when the shader reads directions in the renderer's space (face, hair) and the caller keeps its
+ *     objectToWorld current; outline tells whether the shader draws one; queue is the render queue, for the
+ *     draw order.
+ */
 export function chibiMaterial(ex, textures, mouth) {
   const kind = ex.kind || "general";
   const shader = ex.shader || "";
@@ -864,7 +885,9 @@ function glowUniforms(ex, uniforms, defines) {
   uniforms.glow = { value: new THREE.Vector4(g.x, g.y, g.z, strength) };
 }
 
-// the inverted hull: the texture times _OutlineTint (and the light colour), back faces only
+/**
+ * The inverted hull of a material: the texture times _OutlineTint (and the light colour), back faces only.
+ */
 export function outlineMaterial(ex, map) {
   const t = colorOf(ex, "_OutlineTint", [0.5, 0.5, 0.5, 1]);
   const mat = new THREE.ShaderMaterial({

@@ -20,9 +20,13 @@ import { wheelKind, wheelStep } from "../lobby-touch.js";
 import { bindCorner, bindEdge } from "../corner-layout.js";
 import { prepareBack } from "../visual-mode.js";
 export { FRAME };
-// the white button of the visual mode's toolbar, for the lobby's camera framing (lobby-camera.js)
+/**
+ * Make the white button of the visual mode's toolbar, for the lobby's camera framing (lobby-camera.js).
+ */
 export const visualButton = (...args) => whiteButton(...args);
-// the gallery button's box at the bottom left (the lobby camera's album takes the same)
+/**
+ * The gallery button's box at the bottom left (the lobby camera's album takes the same).
+ */
 export const galleryBox = () => photographyToolbarLayout().gallery;
 let sessionVariant = null,
   generation = 0,
@@ -311,9 +315,16 @@ async function whiteButton(
   if (pressed) hit.setAttribute("aria-pressed", "true");
   return hit;
 }
+/**
+ * Give the controller the detail screen's hooks (the bridge to the current student, its preview and its
+ * captures).
+ */
 export function attach(hooks) {
   bridge = hooks;
 }
+/**
+ * Close the photography mode and free everything it made.
+ */
 export function destroy() {
   generation++;
   controlsRevision++;
@@ -332,6 +343,10 @@ export function destroy() {
   sessionVariant = null;
   repository = null;
 }
+/**
+ * Show the photography button in the visual mode, when the shown mode is the portrait or the lobby.
+ * @param {boolean} on Whether the visual mode is shown.
+ */
 export async function visualEntry(on) {
   document.getElementById("photo-launcher")?.remove();
   if (!on || active || !bridge || !["portrait", "lobby"].includes(bridge.info().mode)) return;

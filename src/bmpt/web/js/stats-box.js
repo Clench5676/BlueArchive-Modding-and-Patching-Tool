@@ -1,10 +1,12 @@
-// The game's light stats box (STATS_BOX in ui-tokens.js): the fill, its line, the dotted dividers between rows and the rows
-// themselves, laid out as pure data. statsBox() takes what holds the box and its width and the rows, and gives the nodes
-// (positions in the caller's frame) and the box's height; nothing here touches the page, so tests can run it.
+// The game's light stats box (STATS_BOX in ui-tokens.js): the fill, its line, the dotted dividers between rows
+// and the rows themselves, laid out as pure data. statsBox() takes what holds the box and its width and the
+// rows, and gives the nodes (positions in the caller's frame) and the box's height; nothing here touches the
+// page, so tests can run it.
 //
 // A row is {caption, value, colour, ariaLabel, cut, reserve, secondary, minH, slot}:
 //   caption    the left column's text, one line (rows without one start the value at the box's padding)
-//   value      the text, wrapped by wrapPath() into up to three lines from 38 down to 26 and never cut; or an already fitted
+//   value the text, wrapped by wrapPath() into up to three lines from 38 down to 26 and never cut; or an already
+//   fitted
 //              {text, fs, lines} (a caller that fits several rows together)
 //   colour     the value's colour as "#rrggbb/a" (black)
 //   ariaLabel  the value label's accessible text
@@ -12,16 +14,20 @@
 //   reserve    width left free at the value's right (an icon, a button), the value's room is narrower by it
 //   secondary  a smaller one-line text under the value, cut with an ellipsis
 //   minH       the row's height at least (STATS_BOX.rowMin)
-//   more       width a button at the value's end takes (its gap included) when the value is longer than one line: the value is
-//              then cut to the one line it has at its full size, the button's width left free (a details panel that does not
+//   more width a button at the value's end takes (its gap included) when the value is longer than one line: the
+//   value is
+//              then cut to the one line it has at its full size, the button's width left free (a details panel
+//              that does not
 //              scroll); a value that fits keeps the whole row
 //   bold       the value drawn bold (a caption standing as its own row)
 //   joined     no divider under the row (a caption row and the value under it read as one)
-//   slot       (g) => nodes a caller adds in the row; g = {i, x, y, valueY, right, room, text, h, cut}: the row's index, the value's
-//              left edge, the row's centre, the value's centre, the inner right edge, the value's room, the fitted value, the
+//   slot (g) => nodes a caller adds in the row; g = {i, x, y, valueY, right, room, text, h, cut}: the row's
+//   index, the value's
+//              left edge, the row's centre, the value's centre, the inner right edge, the value's room, the
+//              fitted value, the
 //              row's height and whether `more` cut the value
-// type: the box's sizes when it is one size down from the prefab's ({caption, value: {fs, fsMin, lines}, rowMin}; STATS_BOX's
-// by default).
+// type: the box's sizes when it is one size down from the prefab's ({caption, value: {fs, fsMin, lines},
+// rowMin}; STATS_BOX's by default).
 import * as NGUI from "./ngui.js";
 import { STATS_BOX as B } from "./ui-tokens.js";
 import { wrapPath } from "./util.js";
@@ -32,7 +38,8 @@ const lineHeight = (fitted) => fitted.lines * fitted.fs * B.linePitch;
 // bold text's width over the regular weight's (the font has one weight: the browser draws bold heavier, a little wider)
 const BOLD_WIDTH = 1.06;
 
-// the box's width in what holds it: "frame" is a popup frame's width, "panel" a panel's, "table" a table's the box stands over
+// the box's width in what holds it: "frame" is a popup frame's width, "panel" a panel's, "table" a table's the
+// box stands over
 export const boxWidth = (holder, width) => width - B.inset[holder];
 
 // the width the captions take: the widest one and the gap to the values (none without captions)
@@ -53,8 +60,8 @@ const graphemes = (text) =>
   globalThis.Intl?.Segmenter
     ? [...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text)].map((part) => part.segment)
     : Array.from(text);
-// a value on one line at size fs within room: the whole of it when it fits (cut false), else as much of its first line as
-// fits (whole graphemes)
+// a value on one line at size fs within room: the whole of it when it fits (cut false), else as much of its
+// first line as fits (whole graphemes)
 export function oneLine(text, fs, room) {
   const first = String(text).split("\n")[0];
   if (first === String(text) && NGUI.glyphWidth(first, fs) <= room) return { text: first, fs, lines: 1, cut: false };
@@ -69,20 +76,21 @@ export function oneLine(text, fs, room) {
   return { text: parts.slice(0, lo).join(""), fs, lines: 1, cut: true };
 }
 
-// the room a value's text may fill: the box less its padding on both sides, the caption column, what the row reserves and the slack
+// the room a value's text may fill: the box less its padding on both sides, the caption column, what the row
+// reserves and the slack
 export const valueRoom = (holder, width, { capW = 0, reserve = 0 } = {}) =>
   boxWidth(holder, width) - 2 * B.padX - capW - reserve - B.slack;
 
-// the height of a box whose values take these numbers of lines at the full value size (no secondary lines, no minH); type: the
-// box's sizes, as statsBox takes them
+// the height of a box whose values take these numbers of lines at the full value size (no secondary lines, no
+// minH); type: the box's sizes, as statsBox takes them
 export const boxHeight = (lines, type = null) => {
   const rowMin = type?.rowMin ?? B.rowMin,
     fs = type?.value?.fs ?? B.value.fs;
   return lines.reduce((sum, n) => sum + Math.max(rowMin, n * fs * B.linePitch + B.rowPad), 0) + 2 * B.padY;
 };
 
-// the value cut to its first `cut` lines and an ellipsis, when it takes more (lines counted as drawn, a line break in the text
-// included); the last line kept gives up graphemes until the ellipsis fits in room
+// the value cut to its first `cut` lines and an ellipsis, when it takes more (lines counted as drawn, a line
+// break in the text included); the last line kept gives up graphemes until the ellipsis fits in room
 function cutTo(fitted, cut, room = Infinity) {
   const lines = fitted.text.split("\n");
   if (!cut || lines.length <= cut) return { ...fitted, lines: Math.max(fitted.lines ?? 0, lines.length) };
@@ -93,11 +101,12 @@ function cutTo(fitted, cut, room = Infinity) {
   return { ...fitted, text: `${kept.join("\n")}\u2026`, lines: cut };
 }
 
-// holder: "frame", "panel" or "table", width: its width; at: the box's top centre in the caller's frame; name: the box node's name;
-// names: the rows' node name prefixes ({caption: "F", value: "V", divider: "L"} by default).
-// Gives {nodes, height, width, capW, rows: [{y, h, top, bottom, text, room}]}; the nodes are the box (fill and line) first, then
-// each row's caption, value, secondary line, slot nodes and the divider under it (none under the last row).
-// boldCaptions: the captions drawn bold (their column measured a little wider for the heavier strokes)
+// holder: "frame", "panel" or "table", width: its width; at: the box's top centre in the caller's frame; name:
+// the box node's name; names: the rows' node name prefixes ({caption: "F", value: "V", divider: "L"} by
+// default). Gives {nodes, height, width, capW, rows: [{y, h, top, bottom, text, room}]}; the nodes are the box
+// (fill and line) first, then each row's caption, value, secondary line, slot nodes and the divider under it
+// (none under the last row). boldCaptions: the captions drawn bold (their column measured a little wider for the
+// heavier strokes)
 export function statsBox({
   holder,
   width,

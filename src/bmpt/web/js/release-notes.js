@@ -83,9 +83,9 @@ export function inline(text) {
   );
 }
 
-// [{kind: "heading" | "item" | "text", text, level?, depth?, marker?, gap}]: gap marks a blank line before. Every line stays a
-// line, as GitHub shows a release's text; an indented line under a list item continues it at its indent (depth + 1, no
-// bullet).
+// [{kind: "heading" | "item" | "text", text, level?, depth?, marker?, gap}]: gap marks a blank line before.
+// Every line stays a line, as GitHub shows a release's text; an indented line under a list item continues it at
+// its indent (depth + 1, no bullet).
 export function blocks(lines) {
   const out = [];
   let gap = false;

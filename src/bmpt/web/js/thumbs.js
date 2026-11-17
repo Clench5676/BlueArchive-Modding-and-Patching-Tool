@@ -143,11 +143,11 @@ function faceBox(skeleton) {
 export const FACE_W = [170, 400];
 export const NOT_FACE = 600;
 
-// thumbFrame(found, bounds, frame, aspect) -> the skeleton rect {x, y, width, height} a thumbnail shows. found: the
-// face box {x0, y0, x1, y1} or null; bounds: the skeleton's {x, y, w, h}. Every frame is sized on the face, never on the
-// bounds, so a weapon, wings or a prop beside the character never shrink her; the bounds only stand in without a face.
-// face: the whole head (face and hair), the face a little below the centre; bust and roster: head down to the waist;
-// card: the head.
+// thumbFrame(found, bounds, frame, aspect) -> the skeleton rect {x, y, width, height} a thumbnail shows. found:
+// the face box {x0, y0, x1, y1} or null; bounds: the skeleton's {x, y, w, h}. Every frame is sized on the face,
+// never on the bounds, so a weapon, wings or a prop beside the character never shrink her; the bounds only stand
+// in without a face. face: the whole head (face and hair), the face a little below the centre; bust and roster:
+// head down to the waist; card: the head.
 export function thumbFrame(found, bounds, frame, aspect) {
   const face = found && found.x1 - found.x0 <= NOT_FACE ? found : null;
   const faceW = face ? Math.min(Math.max(face.x1 - face.x0, FACE_W[0]), FACE_W[1]) : bounds.w * 0.17;

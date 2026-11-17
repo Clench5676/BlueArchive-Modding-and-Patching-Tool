@@ -1,11 +1,11 @@
-// First-launch consent for caching light game assets. Before consent the UI reads every game asset straight from the
-// install (in memory). After consent light UI assets (atlas sprites, UI textures, prefab layouts) are cached in the user
-// data directory; previews and exports of portraits, memorial lobbies, backgrounds and 3D models follow the Preview
-// Cache setting (on by default, bounded); voices are always read from the game files.
-// Also the scan consent (scan()): whether the app may check the game files on its own (the start and the end of each
-// portrait and memorial lobby file) and read Steam's records on this device (the install location to find the game,
-// the update status, the file lists that tell official files); asked once like the asset consent, again when it came to
-// cover more; Settings' Mods tab asks again or withdraws it.
+// First-launch consent for caching light game assets. Before consent the UI reads every game asset straight from
+// the install (in memory). After consent light UI assets (atlas sprites, UI textures, prefab layouts) are cached
+// in the user data directory; previews and exports of portraits, memorial lobbies, backgrounds and 3D models
+// follow the Preview Cache setting (on by default, bounded); voices are always read from the game files. Also
+// the scan consent (scan()): whether the app may check the game files on its own (the start and the end of each
+// portrait and memorial lobby file) and read Steam's records on this device (the install location to find the
+// game, the update status, the file lists that tell official files); asked once like the asset consent, again
+// when it came to cover more; Settings' Mods tab asks again or withdraws it.
 import { notify } from "./popup.js";
 import * as NGUI from "./ngui.js";
 import * as Buttons from "./game-buttons.js";

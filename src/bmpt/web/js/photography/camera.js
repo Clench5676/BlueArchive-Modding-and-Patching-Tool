@@ -4,10 +4,37 @@ const HEIGHT = 360,
   WIDTH = (HEIGHT * 404) / 456;
 export const FRAME = Object.freeze({ x: (1920 - WIDTH) / 2, y: 360, width: WIDTH, height: HEIGHT, size: HEIGHT });
 const bounded = (value, low, high) => (low <= high ? Math.max(low, Math.min(high, value)) : (low + high) / 2);
+/**
+ * The capture square on the stage: its left and top edge and its size, in stage pixels. `size` is the width
+ * and the height of a square frame; `width` and `height` are set for the portrait-shaped one.
+ * @typedef {{x: number, y: number, width?: number, height?: number, size: number}} CaptureFrame
+ */
+
+/**
+ * The smallest zoom of a portrait: the one at which the portrait's box (left, top, right, bottom in its own
+ * units) still fills the frame's height, but never above the home scale.
+ * @param {number[]} box The portrait's box [left, top, right, bottom].
+ * @param {number} homeScale The zoom the portrait starts at.
+ * @param {CaptureFrame} [frame] The capture frame.
+ */
 export const portraitMinimum = (box, homeScale, frame = FRAME) =>
   Math.min(homeScale, (frame.height || frame.size) / Math.max(1, box[3] - box[1]));
+/**
+ * The widest view of a lobby the camera allows: wide enough that the art's bounds fill the frame's height,
+ * never narrower than the normal view.
+ * @param {{y0: number, y1: number}} bounds The art's vertical bounds in lobby units.
+ * @param {number} normalWidth The width of the lobby's normal view.
+ * @param {CaptureFrame} [frame] The capture frame.
+ */
 export const lobbyMaximumWidth = (bounds, normalWidth, frame = FRAME) =>
   Math.max(normalWidth, ((bounds.y1 - bounds.y0) * 1920) / (frame.height || frame.size));
+/**
+ * The box of the choice list at the bottom right (portrait or lobby choices) with its grid: columns, the
+ * visible rows (at most three) and the height of all rows for scrolling.
+ * @param {"portrait"|"lobby"} kind Which choices are listed; portraits are drawn in up to four columns, lobbies
+ *     in up to three.
+ * @param {number} count The number of choices.
+ */
 export function choiceLayout(kind, count) {
   const columns = kind === "portrait" ? Math.min(4, Math.max(1, count)) : Math.min(3, Math.max(1, count));
   const rowHeight = kind === "portrait" ? 128 : 61,
@@ -26,6 +53,12 @@ export function choiceLayout(kind, count) {
     contentHeight: totalRows * rowHeight,
   };
 }
+/**
+ * Keep a portrait's view inside what the frame may show of its bounds.
+ * @param {{cx: number, cy: number, k: number}} view The view: the centre and the zoom.
+ * @param {number[]} bounds The portrait's bounds [x0, y0, x1, y1].
+ * @param {CaptureFrame} [frame] The capture frame.
+ */
 export function portraitCaptureView(view, bounds, frame = FRAME) {
   const [x0, y0, x1, y1] = bounds,
     k = view.k;
@@ -35,6 +68,12 @@ export function portraitCaptureView(view, bounds, frame = FRAME) {
     cy: bounded(view.cy, y0 - (540 - frame.y - (frame.height || frame.size)) / k, y1 - (540 - frame.y) / k),
   };
 }
+/**
+ * Keep a lobby's view inside what the frame may show of the art's bounds.
+ * @param {{x: number, y: number, w: number, h: number}} view The view in lobby units.
+ * @param {{x0: number, y0: number, x1: number, y1: number}} bounds The art's bounds in lobby units.
+ * @param {CaptureFrame} [frame] The capture frame.
+ */
 export function lobbyCaptureView(view, bounds, frame = FRAME) {
   const left = frame.x / 1920,
     right = (frame.x + (frame.width || frame.size)) / 1920;
@@ -47,17 +86,26 @@ export function lobbyCaptureView(view, bounds, frame = FRAME) {
   };
 }
 
-// The mode that is not shown, when the student has it: the mode button switches to it, and a student without it gets no
-// button (bridge.info() tells hasPortrait and hasLobby).
+/**
+ * The mode the mode button switches to: the one that is not shown, when the student has it.
+ * @param {"portrait"|"lobby"} mode The shown mode.
+ * @param {{hasPortrait: boolean, hasLobby: boolean}} info What the student has (bridge.info()).
+ * @returns {"portrait"|"lobby"|null} The other mode; null when the student has no other, so no button shows.
+ */
 export const otherMode = (mode, info) => {
   const next = mode === "portrait" ? "lobby" : "portrait";
   return (next === "lobby" ? info?.hasLobby : info?.hasPortrait) ? next : null;
 };
-// A Dialogue / Actions caption: a dialogue (it carries its number n) is named as the detail screen names it; any other
-// clip (an idle pose) keeps its clip name until it has a label of its own.
+/**
+ * The caption of an entry in the Dialogue and Actions lists: a dialogue (it carries its number n) is named as
+ * the detail screen names it; any other clip (an idle pose) keeps its clip name until it has a label of its
+ * own.
+ * @param {{anim: string, n?: number}} entry The list entry.
+ * @param {(key: string, params?: object) => string} T The translate function.
+ */
 export const actionCaption = (entry, T) =>
   Number.isFinite(entry?.n) ? T("lobby.dialogue", { n: entry.n }) : entry?.anim;
-// Keep the existing right edge and neighbouring grid/mode controls fixed.
+// The right edge and the neighbouring grid and mode controls stay where they are.
 export const OCCLUSION_BUTTON = Object.freeze([1352, 25, 196, 76]);
 // The toolbar's text buttons (Occlusion Guide, Grid) share one caption size: the largest up to 38 units at which every caption
 // fits its 196 x 76 body (18 clear of each side, 8 above and below) on up to two lines. Stage px.

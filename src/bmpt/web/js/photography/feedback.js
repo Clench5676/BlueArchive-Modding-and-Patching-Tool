@@ -1,4 +1,9 @@
-// Transient camera feedback stays outside the media roots used by captureScene.
+/**
+ * A page rectangle in stage pixels.
+ * @param {DOMRect} rect The rectangle on the page.
+ * @param {DOMRect} stage The stage's rectangle on the page.
+ * @returns {{x: number, y: number, width: number, height: number}} The rectangle in the 1920 x 1080 stage.
+ */
 export function stageRect(rect, stage) {
   const scale = 1920 / stage.width;
   return {
@@ -8,6 +13,13 @@ export function stageRect(rect, stage) {
     height: rect.height * scale,
   };
 }
+/**
+ * The translation and scale that carry the capture frame onto a target rectangle, for the picture's flight into
+ * the album.
+ * @param {CaptureFrame} frame The capture frame in stage pixels.
+ * @param {{x: number, y: number, width: number, height: number}} target The target in stage pixels.
+ * @returns {{x: number, y: number, scale: number}} The shift of the frame's centre and the scale.
+ */
 export function flightTransform(frame, target) {
   const width = frame.width || frame.size,
     height = frame.height || frame.size;
@@ -17,6 +29,13 @@ export function flightTransform(frame, target) {
     scale: Math.min(target.width / width, target.height / height),
   };
 }
+/**
+ * Make the camera's feedback layer (shutter flash and the picture flying to the album) over the stage.
+ * @param {HTMLElement} stage The stage.
+ * @param {CaptureFrame} frame The capture frame.
+ * @param {() => (HTMLElement|null)} album Gives the album's icon, which the saved picture flies to.
+ * @returns {object} The layer's controls.
+ */
 export function cameraFeedback(stage, frame, album) {
   const host = document.createElement("div");
   host.className = "photo-feedback";

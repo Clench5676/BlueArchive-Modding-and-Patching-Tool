@@ -2,6 +2,12 @@
 import * as NGUI from "../ngui.js";
 import { FRAME } from "./camera.js";
 export { FRAME };
+/**
+ * The capture frame as a rectangle of the page, for the stage's size on screen.
+ * @param {{left: number, top: number, width: number}} stageBox The stage's box on the page.
+ * @param {CaptureFrame} [box] The capture frame in stage pixels.
+ * @returns {{left: number, top: number, width: number, height: number}} The crop in page pixels.
+ */
 export function projectedCrop(stageBox, box = FRAME) {
   const factor = stageBox.width / 1920;
   return {
@@ -20,6 +26,14 @@ function visibility(element, root) {
   }
   return opacity;
 }
+/**
+ * Compose a PNG of the capture frame from the scene's media (canvases, images and NGUI layers that are visible
+ * in it); UI, guide, cursor and subtitle layers are never inputs.
+ * @param {HTMLElement[]} roots The elements that hold the scene's media.
+ * @param {HTMLElement} stage The stage.
+ * @returns {Promise<{png: Blob, width: number, height: number}>} The picture. Rejects with code
+ *     capture_not_ready when nothing is drawn yet.
+ */
 export async function captureScene(roots, stage) {
   const unavailable = () => Object.assign(new Error("Renderer is not ready"), { code: "capture_not_ready" });
   const crop = projectedCrop(stage.getBoundingClientRect());

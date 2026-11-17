@@ -1,17 +1,12 @@
 // A lobby skeleton drawn with the materials the game's spine-unity gives it (lobby.json layer "materials",
-// gameassets/spine_materials.py), in spine-player's batch:
-// - the atlas pages that the game draws with a shader of its own: Aru's third page multiplies (Spine/Blend Modes/
-//   Skeleton PMA Multiply), the water and river pages of CH0319, CH0326 and CH0355 scroll a noise distortion
-//   (Spine/Skeleton MX Standard - NoiseFlowAnimation), CH0310's game screen glitches in two passes (Spine/Skeleton MX
-//   Portrait Noise). Their slots draw with ports of those compiled programs, from the game's own vertex colours
-//   (premultiplied, alpha 0 for an additive slot) and with the shader's blend. The other pages keep spine-player's
-//   drawing, which is the game's Spine/Skeleton.
-// - slot blend modes: Multiply and Screen slots of a skeleton without replacement materials for that mode keep their
-//   page's material and draw as Normal (ch0163's light_01, Hiyori's R_eye_ligth_02, airi0's FX_Light_01); with them
-//   (Hina's multiply light), the replacement's shader.
-// - the dark colour (two-colour tint) never reaches the screen: the renderer's tintBlack is off in every lobby and no
-//   lobby shader reads it (CH0205's wing and Neru's halo animate one).
-// Hooks spine-player's PolygonBatcher (the page of each draw is its texture) and SkeletonRenderer; needs linear.js.
+// gameassets/spine_materials.py), in spine-player's batch. The atlas pages the game draws with a shader of its
+// own (Aru's multiply page, the scrolling water and river pages, CH0310's glitching game screen) draw with ports
+// of those compiled programs, from the game's own vertex colours and with the shader's blend; the other pages
+// keep spine-player's drawing, which is the game's Spine/Skeleton. Multiply and Screen slots of a skeleton
+// without replacement materials for that mode keep their page's material and draw as Normal; with them, the
+// replacement's shader. The dark colour (two-colour tint) never reaches the screen: no lobby shader reads it.
+// Hooks spine-player's PolygonBatcher (the page of each draw is its texture) and SkeletonRenderer; needs
+// linear.js.
 import * as Linear from "./linear.js";
 import { toLinear } from "./touch-fx.js";
 
@@ -23,6 +18,10 @@ const states = new WeakMap(),
 // for checks: draw with the game's materials (true) or as spine-player alone does (false: the slots' own blend modes,
 // the dark colour, spine-player's shader on every page)
 export let shown = true;
+/**
+ * For checks: draw with the game's materials (true) or as spine-player alone does (false: the slots' own blend
+ * modes, the dark colour, spine-player's shader on every page).
+ */
 export const show = (on) => {
   shown = !!on;
 };
@@ -62,12 +61,10 @@ void main() {
   v_pos = a_position.xy;
   gl_Position = u_projTrans * vec4(a_position.x + u_shift, a_position.yzw);
 }`;
-// What every program shares: the page, and the game's vertex colour from spine-player's. linear.js tints the slots as
-// their page's shader takes them (u_tinted; slot-colours.js): straight colour through that shader's curve (UnityCG's
-// cubic for Spine/Skeleton and the blend-mode shaders, none for the MX ones), an additive slot's colour times its
-// alpha as a whole with alpha 1. The game's mesh carries it premultiplied, an additive slot with alpha 0
-// (u_additive). Untinted (spine-player's straight colour), programs that convert it to linear light take it decoded
-// with the cubic (lin), the MX ones as stored (raw).
+// What every program shares: the page, and the game's vertex colour from spine-player's. linear.js tints the
+// slots as their page's shader takes them (u_tinted; slot-colours.js), the game's mesh carrying the colour
+// premultiplied (an additive slot with alpha 0, u_additive); programs that convert it to linear light take an
+// untinted colour decoded with the cubic (lin), the MX ones as stored (raw).
 const HEAD = `#version 300 es
 precision highp float;
 in vec4 v_light;
@@ -94,9 +91,9 @@ bool inside(vec2 q) { return all(greaterThanEqual(q, vec2(0.001))) && all(lessTh
 float unused() { return u_dark > 0.5 ? v_dark.a : 0.0; }
 `;
 
-// The programs, from the game's D3D11 bytecode. pma: Spine/Skeleton and the Spine/Blend Modes shaders (the vertex
-// colour converted to linear light, premultiplied, times _Color premultiplied; with _STRAIGHT_ALPHA_INPUT the texture
-// premultiplied first). noiseFlow, portraitNoise: below.
+// The programs, from the game's D3D11 bytecode. pma: Spine/Skeleton and the Spine/Blend Modes shaders (the
+// vertex colour converted to linear light, premultiplied, times _Color premultiplied; with _STRAIGHT_ALPHA_INPUT
+// the texture premultiplied first). noiseFlow and portraitNoise follow.
 export const PROGRAMS = {
   pma: {
     floats: ["straight"],
@@ -109,12 +106,10 @@ void main() {
   o = t * vertexColour(true) * vec4(_Color.rgb * _Color.a, _Color.a) + unused();
 }`,
   },
-  // Spine/Skeleton MX Standard - NoiseFlowAnimation: the page's UV shifted along both axes by a scrolling noise,
-  // inside a square (0.001 to 0.999 around the centre) of a plane in the skeleton's space: the vertex position less
-  // _CenterX / Y (Unity units: the skeleton's times its data scale), times 0.01, turned by _Rotate, skewed by
-  // _SkewedX / Y, and bent towards a vanishing line by _SlopeForward and _SlopeSide (two sides of the line, each
-  // clamped to its half). The shift is (2 noise - 1) x _PixelNoisePower x 0.001 x the vertex alpha; the texture is
-  // premultiplied by its alpha and times the vertex colour as stored.
+  // Spine/Skeleton MX Standard - NoiseFlowAnimation: the page's UV shifted along both axes by a scrolling noise
+  // inside a square of a plane in the skeleton's space (the vertex position less _CenterX / Y, rotated, skewed and
+  // bent towards a vanishing line by the material's values). The shift is (2 noise - 1) x _PixelNoisePower x 0.001
+  // x the vertex alpha; the texture is premultiplied by its alpha and times the vertex colour as stored.
   noiseFlow: {
     tex: ["_NoiseTex"],
     floats: [
@@ -166,12 +161,11 @@ void main() {
   o = vec4(t.rgb * t.a, t.a) * col + unused();
 }`,
   },
-  // Spine/Skeleton MX Portrait Noise, its two passes (Glitch, then ForwardLit): each draws the horizontal bands where
-  // sin(screen v x _GlitchThickness + time) is at or above 0 (the first) or at or below it (the second), shifted
-  // across by _GlitchOffset (the first right, the second left, in the camera's clip space) on the frames a hash of the
-  // time passes _GlitchFreq; colour: the page (_Black lifting its darks) times _Color, 0.72 x the scan line texture's
-  // red, plus _PortraitNoiseTint times (its red x luminance + its green x 0.03); alpha the page's times the vertex
-  // alpha times _Color.a (0 for an additive slot). The vertex colour's rgb is never read.
+  // Spine/Skeleton MX Portrait Noise, its two passes (Glitch, then ForwardLit): each draws the horizontal bands
+  // where sin(screen v x _GlitchThickness + time) is at or above 0 (the first) or at or below it (the second),
+  // shifted across by _GlitchOffset on the frames a hash of the time passes _GlitchFreq; colour: the page times
+  // _Color, 0.72 x the scan line texture's red, plus _PortraitNoiseTint times (its red x luminance + its green x
+  // 0.03). The vertex colour's rgb is never read.
   portraitNoise: {
     tex: ["_PortraitNoiseTex"],
     passes: 2,
@@ -196,8 +190,13 @@ void main() {
   },
 };
 
-// the frame's glitch of a Portrait Noise pass: frac(sin(t x (12.9898 + 78.233)) x 43758.5) at or above _GlitchFreq,
-// t being _Time.y for the first pass and _Time.w (3 t) for the second
+/**
+ * Whether a frame glitches in a Portrait Noise pass: frac(sin(t x (12.9898 + 78.233)) x 43758.5) at or above
+ * _GlitchFreq.
+ * @param {number} t The time: _Time.y for the first pass and _Time.w (3 t) for the second.
+ * @param {number} pass Which pass, 1 or 2.
+ * @param {number} freq The material's _GlitchFreq.
+ */
 export function glitch(t, pass, freq) {
   const x = Math.sin((pass ? 3 * t : t) * 91.2228) * 43758.5;
   return x - Math.floor(x) >= freq;
@@ -274,9 +273,12 @@ function loadImage(url) {
   });
 }
 
-// the slot blend modes drawn as Normal: Multiply and Screen without replacement materials (lobby.json layer
-// materials.blend), whose slots keep their page's material. The slots keep their blend mode (the painted area still
-// leaves such lights out); only their draws change. slotBlends keeps the declared modes for an explicit NPC exception.
+/**
+ * The slot blend modes drawn as Normal: Multiply and Screen without replacement materials (lobby.json layer
+ * materials.blend), whose slots keep their page's material. The slots keep their blend mode (the painted area
+ * still leaves such lights out); only their draws change. slotBlends keeps the declared modes for an explicit
+ * NPC exception.
+ */
 export function fallbackModes(materials, slotBlends = false) {
   const out = new Set();
   if (slotBlends) return out;
@@ -285,10 +287,12 @@ export function fallbackModes(materials, slotBlends = false) {
   return out;
 }
 
-// the material a draw takes: a replacement material for its slot's blend mode on its page, else its page's own when a
-// ported program draws it. BlendModeMaterials.CloneAtlasRegionWithMaterial takes the list's entry whose pageName is
-// the page's and gives a page the list does not name no material, as a null reference does: both draw as
-// spine-player's own (in today's lobbies every Multiply slot with a list is on a page it names: Hina's on Hina_home3)
+/**
+ * The material a draw takes: a replacement material for its slot's blend mode on its page, else its page's own
+ * when a ported program draws it. BlendModeMaterials.CloneAtlasRegionWithMaterial takes the list's entry whose
+ * pageName is the page's and gives a page the list does not name no material, as a null reference does: both
+ * draw as spine-player's own.
+ */
 export function materialOf(materials, page, mode) {
   const name = MODE[mode];
   const by = name && materials?.blend?.[name];
@@ -296,8 +300,18 @@ export function materialOf(materials, page, mode) {
   return materials?.pages?.[page] || null;
 }
 
-// switch a loaded player (linear.js attached) to its layer's materials; screen() gives the game's view in the layer's
-// skeleton units (lobby.js layerViewport), base the lobby's route for the materials' own textures
+/**
+ * Switch a loaded player (linear.js attached) to its layer's materials.
+ * @param {object} player The spine-player.
+ * @param {object} layer The lobby's layer; its materials come from lobby.json.
+ * @param {object} [options] Options.
+ * @param {() => (object|null)} [options.screen] Gives the game's view in the layer's skeleton units (lobby.js
+ *     layerViewport).
+ * @param {string} [options.base] The lobby's route, for the materials' own textures.
+ * @param {(url: string) => Promise<HTMLImageElement>} [options.load] Loads an image, for the tests.
+ * @param {boolean} [options.slotBlends] Keep the declared blend modes of every slot.
+ * @returns {boolean} False when the player cannot take them (no WebGL2 or no materials).
+ */
 export function attach(player, layer, { screen = () => null, base = "", load = loadImage, slotBlends = false } = {}) {
   const mats = layer?.materials;
   if (!mats || !Linear.active(player) || states.has(player)) return false;
@@ -484,7 +498,10 @@ export function attach(player, layer, { screen = () => null, base = "", load = l
   return true;
 }
 
-// before the player is disposed (and before linear.js lets go): spine-player's own methods, blend modes and objects back
+/**
+ * Give a player spine-player's own methods, blend modes and objects back, before it is disposed (and before
+ * linear.js lets go).
+ */
 export function detach(player) {
   const st = states.get(player);
   if (!st) return;
@@ -512,8 +529,10 @@ export function detach(player) {
   st.images.clear();
 }
 
-// for checks: what each attached player draws with ported materials (pages by program, the programs compiled) and
-// which slots fell back to Normal
+/**
+ * For checks: what each attached player draws with ported materials (pages by program, the programs compiled)
+ * and which slots fell back to Normal.
+ */
 export const stats = () =>
   [...attached].map((st) => ({
     pages: Object.fromEntries(Object.entries(st.mats.pages || {}).map(([p, m]) => [p, m.program])),

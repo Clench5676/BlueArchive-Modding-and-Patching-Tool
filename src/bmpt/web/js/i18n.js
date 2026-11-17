@@ -51,9 +51,10 @@ export function T(key, vars = {}) {
   return s.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "");
 }
 
-// an error's text: its code's string with its params, error.internal without a code. error.internal shows what the error
-// says of itself (its params' error, else its message); with nothing to say it ends where that detail would start, so
-// no raw key (error.undefined) and no empty detail ("Something went wrong: ") is shown. t: a caller's own T (quit.js)
+// an error's text: its code's string with its params, error.internal without a code. error.internal shows what
+// the error says of itself (its params' error, else its message); with nothing to say it ends where that detail
+// would start, so no raw key (error.undefined) and no empty detail ("Something went wrong: ") is shown. t: a
+// caller's own T (quit.js)
 export function errorText(err, t = T) {
   const code = err?.code || "internal",
     params = { ...(err?.params || {}) };

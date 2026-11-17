@@ -6,6 +6,22 @@ function notify(callback, ...args) {
     console.warn("Photography feedback failed", error);
   }
 }
+/**
+ * Take one picture: pause the scene, draw it until a complete real frame can be captured (up to 60 attempts,
+ * each waiting a little longer), restore playback and save the picture without a review modal.
+ * @param {object} options What the shot uses.
+ * @param {object} options.bridge The detail screen's hooks: pause, expression, action, info and redraw.
+ * @param {"portrait"|"lobby"} options.mode What is photographed.
+ * @param {boolean} options.paused Whether the scene was paused before; the pause is put back to this.
+ * @param {() => Promise<{png: Blob}>} options.capture Takes the picture; throws code capture_not_ready until
+ *     the renderer is ready.
+ * @param {(ms: number) => Promise<void>} options.wait Waits between attempts.
+ * @param {(payload: object) => Promise<object>} options.save Saves the picture with its pose.
+ * @param {(shot: object) => void} [options.onCaptured] Called once the picture is taken (failures only logged).
+ * @param {(result: object, payload: object) => void} [options.onSaved] Called once it is saved.
+ * @param {() => boolean} [options.alive] False ends the shot with an AbortError.
+ * @returns {Promise<object>} What save returned.
+ */
 export async function photograph({
   bridge,
   mode,

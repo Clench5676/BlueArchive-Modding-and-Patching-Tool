@@ -1,19 +1,21 @@
-// Switch geometry in NGUI units. Preserve popup.js's Common_Btn_BG body,
-// Common_Line_Raius20px frame and Common_Bg_Raius10px name band.
-// The cards are laid out in a container (the paper, SPACE.xl in from each side), a row of equal columns and a stack of rows
-// (ui-grid.js). The cards are the App's own sizes (250 to 790 wide, their incline adds up to 144), not spans of the 12-column
-// grid, so the columns are spread between the content box's edges instead of snapped to it.
+// Switch geometry in NGUI units. Preserve popup.js's Common_Btn_BG body, Common_Line_Raius20px frame and
+// Common_Bg_Raius10px name band. The cards are laid out in a container (the paper, SPACE.xl in from each side),
+// a row of equal columns and a stack of rows (ui-grid.js). The cards are the App's own sizes (250 to 790 wide,
+// their incline adds up to 144), not spans of the 12-column grid, so the columns are spread between the content
+// box's edges instead of snapped to it.
 import { CHIP, POPUP, SPACE, STATS_BOX } from "./ui-tokens.js";
 import { container, row as layoutRow, stack as layoutStack } from "./ui-grid.js";
 const GRID_WIDTH = 1818;
 // the paper's inset on every side: SPACE.xl, as it always was
 const INSET = SPACE.xl;
-// The gap between neighbouring cards, across (the least one) and down. No prefab gives the switch cards a gap (none of the
-// prefab numbers pinned in tests/test_ui_tokens.py is 48), so it is the nearest scale value to the 48 it was: the grid's gutter.
+// The gap between neighbouring cards, across (the least one) and down. No prefab gives the switch cards a gap
+// (none of the prefab numbers pinned in tests/test_ui_tokens.py is 48), so it is the nearest scale value to the
+// 48 it was: the grid's gutter.
 const GAP = SPACE.xl;
 const lean = Math.tan((10 * Math.PI) / 180);
 
-// The pitch of `count` equal boxes of width `w` spread edge to edge over `span` (the first box's left edge to the last one's right).
+// The pitch of `count` equal boxes of width `w` spread edge to edge over `span` (the first box's left edge to
+// the last one's right).
 function spreadPitch(count, w, span) {
   if (count < 2) return span - w;
   const { boxes } = layoutRow(
@@ -23,15 +25,17 @@ function spreadPitch(count, w, span) {
   return boxes[1].x - boxes[0].x;
 }
 
-// The list popups' cards in the L class: at least MIN_COLUMNS of a kind a row, the card scaled
-// down (its aspect and name band kept) until they fit the paper less its inset, the vertical scrollbar's band (SCROLL_BAND)
-// and the inclined edges' overhang; a portrait strip (horizontal) at PORTRAIT_SCALE, its names clear of the scrollbar under it.
+// The list popups' cards in the L class: at least MIN_COLUMNS of a kind a row, the card scaled down (its aspect
+// and name band kept) until they fit the paper less its inset, the vertical scrollbar's band (SCROLL_BAND) and
+// the inclined edges' overhang; a portrait strip (horizontal) at PORTRAIT_SCALE, its names clear of the
+// scrollbar under it.
 export const MIN_COLUMNS = Object.freeze({ lobby: 2, model: 3, photo: 3 });
 export const PORTRAIT_SCALE = 0.875; // 280 x 616: whole units
 export const SCROLL_BAND = SPACE.m;
 export function switchGrid(kind, width = GRID_WIDTH) {
-  // The generic list (no kind): six columns of 250 x 226 cards, centred, at the card's width and SPACE.l across (34 before; the
-  // gap that keeps six columns inside the paper's inset at the standard width) and SPACE.xxl down (56 before).
+  // The generic list (no kind): six columns of 250 x 226 cards, centred, at the card's width and SPACE.l across
+  // (34 before; the gap that keeps six columns inside the paper's inset at the standard width) and SPACE.xxl down
+  // (56 before).
   if (!kind)
     return {
       card: { w: 250, h: 226, bar: 68 },
@@ -111,7 +115,8 @@ export function placeSwitchCards(trees, { columns, pitch, rowH, horizontal, left
     // A full row sets the spacing; short rows retain its left inset and column positions.
     // Portraits retain a compact fixed gap as one strip, including past the paper.
     if (leftAligned && !horizontal && row.length >= columns && columns > 1) {
-      // (the cards' ink boxes may overlap, their inclined edges interlocking: a negative gap, which a row of boxes does not take)
+      // (the cards' ink boxes may overlap, their inclined edges interlocking: a negative gap, which a row of boxes
+      // does not take)
       pitch[0] = (area.w + row[0].left - row[columns - 1].right) / (columns - 1);
     }
     const left = Math.min(...row.map((b, i) => b.left + i * pitch[0]));
@@ -130,9 +135,9 @@ export function placeSwitchCards(trees, { columns, pitch, rowH, horizontal, left
   }));
 }
 
-// Portrait body: image on the left, name/chips/stacked fields on the right;
-// the existing full-width action row remains below both halves.
-// (the two halves are SPACE.l apart, the chips SPACE.s, a field to the next SPACE.m, a value to its line SPACE.xs: the scale's own values)
+// Portrait body: image on the left, name/chips/stacked fields on the right; the existing full-width action row
+// remains below both halves. (the two halves are SPACE.l apart, the chips SPACE.s, a field to the next SPACE.m,
+// a value to its line SPACE.xs: the scale's own values)
 export const portraitPanel = { left: -1340, right: -550, top: 490, bottom: -530, gap: SPACE.l };
 
 export function splitPortraitPanel(tree, find, wrap) {

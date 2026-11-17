@@ -3167,9 +3167,9 @@ function messageLines(lines, w, fitTogether, plain, assets = true) {
   return { tree: node("Lines", [0, 0], [], out), height: paragraphs.h, buttons, fitted, boxes: paragraphs.boxes };
 }
 
-// Shared by ordinary messages and text-only tours, including row fitting, frame padding and footer clearance.
 /**
- * Lay out a message: the frame, the content box and the lines' rows. `scroll` in the result tells whether the
+ * Lay out a message: the frame, the content box and the lines' rows. Ordinary messages and text-only tours share
+ * it, including row fitting, frame padding and footer clearance. `scroll` in the result tells whether the
  * lines scroll in the frame: asked for, or forced because the frame would be taller than MSG.cap. Non-scrolling
  * bodies, including their check row, centre in the content box.
  * @param {MessageOptions & {assets?: boolean}} [opts] The message, as for message(); assets false measures
