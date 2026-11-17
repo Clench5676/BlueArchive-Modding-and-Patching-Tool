@@ -1,7 +1,7 @@
-// The four sites of the light stats box with the locale files' real strings, in every shipped language, longest first (English,
-// Thai): every value inside its row and its box, nothing overlapping, the size inside 38 down to 26, the lines inside three,
-// the update frame clear of its buttons. Text is measured on a stand-in canvas (a CJK code point one em, anything else
-// half; a Thai base letter 0.6, its combining marks nothing), so what is asserted is the logic, not a font.
+// The four sites of the light stats box with the locale files' real strings, in every shipped language, longest first
+// (English, Thai): every value inside its row and its box, nothing overlapping, the size from 38 down to 26, at most
+// three lines, the update frame clear of its buttons. Text is measured on a stand-in canvas (a CJK code point one em,
+// anything else half; a Thai base letter 0.6, its combining marks nothing): the logic is asserted, not a font.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { register } from "node:module";
@@ -212,7 +212,8 @@ function assertRows({
     fill = box.widgets[0],
     line = box.children[0].widgets[0];
   const boxRect = rectOf(box);
-  // drawn through the component: the tokens' fill, a line 5 larger across and down, dotted dividers of the divider colour
+  // drawn through the component: the tokens' fill, a line 5 larger across and down, dotted dividers of the divider
+  // colour
   assert.deepEqual(
     [fill.sprite, fill.color, line.sprite, line.color],
     ["Common_Bg_Raius10px", `${B.fill}/1.00`, "Common_Line_Raius10px", `${B.line}/1.00`],
@@ -365,7 +366,7 @@ for (const locale of LOCALES)
         continue;
       }
       const { fill, boxRect } = assertRows({ nodes, what, count: fields.length, size: Box.STATS_BOX_S });
-      // The stats box keeps its own inset inside the new four-column details panel.
+      // The stats box keeps its own inset inside the four-column details panel.
       const bounds = Popup.listLayout().left,
         panel = bounds.r - bounds.l;
       assert.equal(fill.w_, panel - 40, what);
@@ -491,7 +492,8 @@ for (const locale of LOCALES)
         });
         assert.equal(shape.w_, layout.width - 200, `${what}: the frame less 200`);
         assert.equal(boxRect.right - boxRect.left, layout.width - 200);
-        // rows with a button are 156 high at least and keep SPACE.m between text and button; rows without are 64 at least
+        // rows with a button are 156 high at least and keep SPACE.m between text and button; rows without are 64 at
+        // least
         lines.forEach((line, i) => {
           const row = child(nodes, `Row_${i}`).widgets[0],
             button = slot(i),

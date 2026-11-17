@@ -19,7 +19,11 @@ function paeth(a, b, c) {
   return pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
 }
 
-// An 8-bit, non-interlaced PNG (grey, RGB, palette, grey + alpha, RGBA) as { width, height, data: RGBA bytes }.
+/**
+ * Decode an 8-bit, non-interlaced PNG (grey, RGB, palette, grey + alpha or RGBA).
+ * @param {ArrayBuffer|Uint8Array} buffer The file's bytes.
+ * @returns {Promise<{width: number, height: number, data: Uint8Array}>} The RGBA bytes.
+ */
 export async function decodePng(buffer) {
   const bytes = new Uint8Array(buffer);
   if (SIGNATURE.some((b, i) => bytes[i] !== b)) throw new Error("Not a PNG");

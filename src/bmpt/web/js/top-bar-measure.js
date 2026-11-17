@@ -1,5 +1,11 @@
-// Measure with the browser's text layout, including trailing letter spacing and
-// script shaping. Canvas font shorthand and glyph counts cannot reproduce it.
+/**
+ * Measure an element's text with the browser's text layout, including trailing letter spacing and script
+ * shaping; canvas font shorthand and glyph counts cannot reproduce it.
+ * @param {number} [scale] A factor applied to the measured width.
+ * @param {Document} [doc]
+ * @param {(element: HTMLElement) => CSSStyleDeclaration} [styleOf]
+ * @returns {number} The width, rounded up.
+ */
 export function naturalTextWidth(element, scale = 1, doc = document, styleOf = getComputedStyle) {
   const style = styleOf(element),
     probe = doc.createElement("span");

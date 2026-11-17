@@ -505,7 +505,7 @@ test("a Spine player restarted under Now Loading draws again once it ends", asyn
   }, {});
   const p = await load.ready;
   freezeShown(true);
-  p.startRendering(); // an owner restarting its clock behind Now Loading (photography opening)
+  p.startRendering(); // a host restarting its clock behind Now Loading (photography opening)
   flush();
   assert.equal(p.stopRequestAnimationFrame, true, "the skipped frame ended the loop");
   freezeShown(false);

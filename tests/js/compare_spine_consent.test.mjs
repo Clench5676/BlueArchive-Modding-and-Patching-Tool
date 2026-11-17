@@ -97,7 +97,7 @@ test("closing compare before its licence gate settles prevents late players", as
   assert.equal(h.host.children.length, 0);
 });
 
-// The compare callers retain their public frame fields while the shared geometry rounds their old width up to L.
+// The compare callers retain their public frame fields while the shared geometry rounds their width up to L.
 import { compareFrame } from "../../src/bmpt/web/js/popup-frames.js";
 import { POPUP_FOOTER, POPUP_FRAME, SPACE } from "../../src/bmpt/web/js/ui-tokens.js";
 test("compare and repair frames use L and keep their scrolling findings inside the content box", () => {

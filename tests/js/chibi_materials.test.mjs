@@ -295,7 +295,7 @@ test("the formation screen's light falls on the character from its slot's side",
   assert.deepEqual(CHARACTER_LIGHT_DIR, [0.10158, 0.9941, 0.03812]);
   const l = LIGHT.charLightDir.value;
   [0.087169, 0.995464, -0.03812].forEach((v, i) => near(l.getComponent(i), v));
-  // the weapons' fixed light (_FakeLightDir, world space, not normalised) likewise
+  // the weapons' fixed light (_FakeLightDir, world space, not normalised) is read the same way
   const weapon = chibiMaterial(
     { shader: "MX/C-Weapon", kind: "weapon", vectors: ["_FakeLightDir"], colors: { _FakeLightDir: [0.1, 0.65, 0, 0] } },
     {},

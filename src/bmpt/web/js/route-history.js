@@ -1,7 +1,15 @@
-// In-app Back follows page entry points. Student tabs/arrows update the current
-// detail entry so returning from a detail workflow does not traverse every pose.
+// In-app Back follows page entry points. Student tabs and arrows update the current detail entry, so returning
+// from a detail workflow does not traverse every pose.
 export const ROOT_ROUTE = "#/hall";
 const screen = (route) => route.split("/")[1] || "hall";
+/**
+ * Start a history of the pages the user entered.
+ * @returns
+ *     {{current: () => string, entries: () => string[], commit: (route: string, options?: {home?: boolean}) => string, back: (requested?: string) => string|null}}
+ *     current: the last route; entries: a copy of all; commit: enter a route (home resets to the root) and
+ *     return the route; back: the route to go back to, or the last committed page when the requested one is not
+ *     the last, or null at the root.
+ */
 export function routeHistory(root = ROOT_ROUTE) {
   const entries = [root];
   let returning = null;

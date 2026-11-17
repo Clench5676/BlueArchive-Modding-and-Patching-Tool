@@ -64,7 +64,8 @@ globalThis.document = {
   getElementById: () => null,
   querySelector: () => null,
 };
-// the window's key listeners in the browser's order: capture ones first, then the bubbling ones, each in the order added
+// the window's key listeners in the browser's order: capture ones first, then the bubbling ones, each in the
+// order added
 const listeners = [];
 globalThis.addEventListener = (type, fn, options) => {
   if (type === "keydown") listeners.push({ fn, capture: options === true || !!options?.capture });

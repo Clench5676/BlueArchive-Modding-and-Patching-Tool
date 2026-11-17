@@ -1,10 +1,10 @@
-// A chibi's animation clips by what they show. The controller names its clips "<Prefab>_<Slot>", where the slot's
-// spelling varies between characters: a battle form's number may sit on any word (Normal01_Idle, Normal_Idle01,
-// Normal_Attack01_Start, Vital_Dying_ing02, Normal_Idle_01), words change case (Move_ing, Normal_attack_Start) and
-// some are misspelt (Rnadom, Fomation, Callsigh, STart, Strart, Nomal, Publlic, "Formation Pickup"). parseClip folds
-// a name to { slot, form, index }; only names with the character's own prefix count (the shared base controller's
-// Kneel_Idle, Exs2 or PublicSkill01 are not the character's). actionsOf groups the clips into the 3D tab's actions,
-// menuOf into the action bar's group cards and their lists' sections.
+// A chibi's animation clips by what they show. The controller names its clips "<Prefab>_<Slot>", where the
+// slot's spelling varies between characters: a battle form's number may sit on any word (Normal01_Idle,
+// Normal_Idle01, Normal_Idle_01), words change case (Move_ing, Normal_attack_Start) and some are misspelt
+// (Rnadom, Fomation, Callsigh, Nomal, Publlic, "Formation Pickup"). parseClip folds a name to { slot, form,
+// index }; only names with the character's own prefix count (the shared base controller's Kneel_Idle, Exs2 or
+// PublicSkill01 are not the character's). actionsOf groups the clips into the 3D tab's actions, menuOf into the
+// action bar's group cards and their lists' sections.
 
 // misspellings, fixed before the words are read
 const FIXES = [
@@ -74,8 +74,13 @@ const UNPREFIXED = new Set([
 ]);
 const RENAMED = { Ex: "Exs", Vital_Dying: "Vital_Dying_Ing" };
 
-// name -> { slot, form, index } (form and index 0 when the name has none), or null for another prefab's clip or a
-// slot no action plays
+/**
+ * Fold a clip name to its slot, battle form and index.
+ * @param {string} name The clip's name.
+ * @param {string} dev The character's prefab name.
+ * @returns {{slot: string, form: number, index: number}|null} Form and index are 0 when the name has none; null
+ *     for another prefab's clip or a slot no action plays.
+ */
 export function parseClip(name, dev) {
   const prefix = `${dev}_`.toLowerCase();
   if (typeof name !== "string" || !dev || !name.toLowerCase().startsWith(prefix)) return null;
@@ -109,9 +114,9 @@ export function parseClip(name, dev) {
   return SLOTS.has(slot) ? { slot, form, index } : null;
 }
 
-// The 3D tab's actions in menu order: id, the group (its card on the action bar) and section it is listed in, and the
-// clips it plays in turn (play: the first is required). A looping clip loops; a chain plays
-// through once and holds its last clip (or loops it, as the attack's Ing and the idles do).
+// The 3D tab's actions in menu order: id, the group (its card on the action bar) and section it is listed in,
+// and the clips it plays in turn (play: the first is required). A looping clip loops; a chain plays through once
+// and holds its last clip (or loops it, as the attack's Ing and the idles do).
 export const ACTION_DEFS = [
   { id: "idle", group: "basic", pick: ["Formation_Idle", "Cafe_Idle", "Idle"] },
   { id: "reaction", group: "basic", play: ["Cafe_Reaction"] },
@@ -173,9 +178,15 @@ export const GROUPS = ["basic", "combat", "move", "skills", "status", "random", 
 export const SECTIONS = { move: ["movement", "kneel", "stand"] };
 const SLOTS = new Set(ACTION_DEFS.flatMap((d) => [...(d.pick || []), ...(d.play || [])]));
 
-// the actions a model's clip names give, in menu order: { key, id, group, section, form, index, number, clips }.
-// key: id, the skill's number, "@form" (e.g. "attack@2", "ex2"); number: the skill's number when the model has several
-// of that skill, else null; form: 0 unless the model has two or more battle forms.
+/**
+ * The actions a model's clip names give, in menu order.
+ * @param {string[]} names The model's clip names.
+ * @param {string} dev The character's prefab name.
+ * @returns
+ *     {{key: string, id: string, group: string, section: string, form: number, index: number, number: number|null, clips: string[]}[]}
+ *     key is the id, the skill's number and "@form" (e.g. "attack@2", "ex2"); number is the skill's number when
+ *     the model has several of that skill, else null; form is 0 unless the model has two or more battle forms.
+ */
 export function actionsOf(names, dev) {
   const parsed = [];
   for (const name of names || []) {
@@ -219,8 +230,11 @@ export function actionsOf(names, dev) {
   return out;
 }
 
-// the action groups: [{ id, sections: [{ id, form, actions }] }], groups and sections in menu order, a section per
-// battle form after the shared one
+/**
+ * The action groups: [{ id, sections: [{ id, form, actions }] }], groups and sections in menu order, a section
+ * per battle form after the shared one. A group's sections are in order; a group without sections has one,
+ * named like the group.
+ */
 export function menuOf(actions) {
   const tabs = [];
   for (const group of GROUPS) {
@@ -239,14 +253,19 @@ export function menuOf(actions) {
   return tabs;
 }
 
-// the label of an action, a group or a section: T(key, params) is the page's translator
-// (the battle form with it on row 4's cards; the list's keys leave it to their section's title: withForm false)
+/**
+ * The label of an action: the battle form with it on row 4's cards; the list's keys leave it to their section's
+ * title.
+ * @param {object} [options]
+ * @param {boolean} [options.withForm] False leaves the battle form out.
+ */
 export function actionLabel(a, T, { withForm = true } = {}) {
   const name = a.number ? T(`model.action.${a.id}N`, { n: a.number }) : T(`model.action.${a.id}`);
   return a.form && withForm ? T("model.menu.form", { name, n: a.form }) : name;
 }
+/** The label of an action group. */
 export const groupLabel = (id, T) => T(`model.menu.group.${id}`);
-// a section of a group without sections is named like the group
+/** The label of a section; a section of a group without sections is named like the group. */
 export function sectionLabel(section, T) {
   const name = GROUPS.includes(section.id) ? groupLabel(section.id, T) : T(`model.menu.section.${section.id}`);
   return section.form ? T("model.menu.form", { name, n: section.form }) : name;

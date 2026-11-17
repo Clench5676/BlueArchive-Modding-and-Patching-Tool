@@ -1,9 +1,15 @@
-// Card gestures own their pointer stream; the surrounding UIScrollView remains independently scrollable.
+// Card gestures own their pointer stream; the surrounding UIScrollView stays scrollable on its own.
 export const TOUCH_REORDER_HOLD = 260;
 const TOUCH_SLOP = 9,
   DRAG_SLOP = 4,
   EDGE_WIDTH = 64,
   EDGE_SPEED = 640;
+/**
+ * Make the drag feedback of a card being reordered: a clone that follows the pointer and a marker where it
+ * would land.
+ * @param {() => HTMLElement} marker
+ * @param {number} pitch The distance between two cards.
+ */
 export function dragFeedback(visual, marker, pitch, count) {
   let ghost = null,
     originalOpacity = "",
@@ -61,6 +67,16 @@ export function dragFeedback(visual, marker, pitch, count) {
     cleanup,
   };
 }
+/**
+ * Bind drag-to-reorder on a card's hit area: a mouse drag, or a touch press held for TOUCH_REORDER_HOLD ms.
+ * @param {HTMLElement} hit The card's hit element.
+ * @param {object} options
+ * @param {number} options.pitch The distance between two cards.
+ * @param {(id: string, to: number) => void} options.move
+ * @param {() => boolean} [options.enabled]
+ * @param {object|null} [options.feedback] The drag feedback, as dragFeedback makes it.
+ * @returns {() => void} Unbinds the gestures.
+ */
 export function bindReorder(
   hit,
   { id, index, count, scroll, pitch, move, enabled = () => true, signal, feedback = null },

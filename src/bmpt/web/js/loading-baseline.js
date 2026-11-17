@@ -1,10 +1,17 @@
-// Range fallback uses measured font metrics only. The normal browser path uses
-// a zero-height inline block whose bottom is the text's actual alphabetic baseline.
+/**
+ * The baseline of a text from a range's rect and measured font metrics. This fallback uses font metrics only;
+ * the normal browser path (domBaseline) uses a zero-height inline block whose bottom is the text's actual
+ * alphabetic baseline.
+ */
 export const rangeBaseline = (rect, metrics) =>
   rect.top +
   (rect.height - metrics.fontBoundingBoxAscent - metrics.fontBoundingBoxDescent) / 2 +
   metrics.fontBoundingBoxAscent;
 
+/**
+ * The y of the actual alphabetic baseline of the text in an element, in viewport px, measured with a
+ * zero-height inline probe.
+ */
 export function domBaseline(root) {
   const label = root.querySelector?.(".ngui span") || root.querySelector?.(".ngui") || root;
   const probe = document.createElement("span");
@@ -27,6 +34,14 @@ export function domBaseline(root) {
   }
 }
 
+/**
+ * Shift an element vertically so its text baseline lies at a target y of the stage.
+ * @param {HTMLElement} element The element to move.
+ * @param {number} target The baseline's y in stage px.
+ * @param {HTMLElement} stage The stage, for its scale.
+ * @param {(element: HTMLElement) => number} [measure] Measures the element's baseline in viewport px.
+ * @returns {boolean} False when the stage has no size or the baseline cannot be measured.
+ */
 export function alignBaseline(element, target, stage, measure = domBaseline) {
   const rect = stage.getBoundingClientRect(),
     scale = rect.width / 1920;
@@ -39,6 +54,10 @@ export function alignBaseline(element, target, stage, measure = domBaseline) {
   return true;
 }
 
+/**
+ * Align a prepared layer's baseline, show it and put it into the host in place of what was there.
+ * @returns {boolean} False when it could not be aligned; nothing is published then.
+ */
 export function publishAligned(host, next, target, stage, measure = domBaseline) {
   if (!alignBaseline(next, target, stage, measure)) return false;
   next.style.visibility = "";

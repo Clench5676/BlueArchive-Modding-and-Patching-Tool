@@ -1,11 +1,11 @@
-// The halo's particle effects in the 3D model view (model.js): Tsurugi's drops, Mika's stars and rings. The GLB's root
-// extras carry them as gameassets/model.py exports them (haloFx: the lobby player's systems, materials, meshes and
-// textures, each system on its glTF node, each texture a glTF texture). The lobbies' simulation (particles.js
-// Effects) runs them in the model's Unity space, scaled to lobby units, each system placed by its node's world matrix
-// every frame (the halo follower moves them); geometry3d() builds their triangles for the view's camera and three.js
-// draws them with the lobbies' ports of the DSFX programs (particles-gl.js), after the model's transparents of a lower
-// queue, depth tested but not written. The model view draws into the canvas in sRGB, not in linear light like the
-// lobbies: each program's colour is encoded at its end, so glows blend in sRGB (a little brighter where they overlap).
+// The halo's particle effects in the 3D model view (model.js): Tsurugi's drops, Mika's stars and rings. The
+// GLB's root extras carry them (haloFx: the lobby player's systems, materials, meshes and textures, each system
+// on its glTF node, each texture a glTF texture). The lobbies' simulation (particles.js Effects) runs them in
+// the model's Unity space, scaled to lobby units, each system placed by its node's world matrix every frame;
+// geometry3d() builds their triangles for the view's camera and three.js draws them with the lobbies' ports of
+// the DSFX programs (particles-gl.js), after the model's transparents of a lower queue, depth tested but not
+// written. The model view draws in sRGB, not in linear light like the lobbies: each program's colour is encoded
+// at its end, so glows blend in sRGB (a little brighter where they overlap).
 import * as THREE from "three";
 import { Effects, IDENTITY, STRIDE3, WORLD, geometry3d } from "./particles.js";
 import { PROGRAMS, fragmentSource, vertexSource } from "./particles-gl.js";
@@ -53,7 +53,10 @@ function swap(src, from, to) {
   return src.replace(from, to);
 }
 
-// a lobby program's vertex GLSL for three.js: 3D positions through the object's model-view and the camera's projection
+/**
+ * A lobby program's vertex GLSL for three.js: 3D positions through the object's model-view and the camera's
+ * projection.
+ */
 export function vertex3d(kind) {
   let src = swap(vertexSource(kind), "#version 300 es\n", "");
   src = swap(src, "in vec2 a_pos;", "in vec3 position;");
@@ -61,9 +64,11 @@ export function vertex3d(kind) {
   return swap(src, "u_proj * vec4(a_pos, 0.0, 1.0)", "projectionMatrix * modelViewMatrix * vec4(position, 1.0)");
 }
 
-// a lobby program's fragment GLSL for three.js: the textures read with V flipped (glTF images are stored top row first,
-// Unity's UV origin is the bottom-left corner), the colour encoded to sRGB at the end (premultiplied: u_premul 1, the
-// colour divided by the alpha first)
+/**
+ * A lobby program's fragment GLSL for three.js: the textures read with V flipped (glTF images are stored top
+ * row first, Unity's UV origin is the bottom-left corner), the colour encoded to sRGB at the end
+ * (premultiplied: u_premul 1, the colour divided by the alpha first).
+ */
 export function fragment3d(kind) {
   let src = swap(fragmentSource(kind), "#version 300 es\n", "");
   src = swap(
@@ -88,8 +93,12 @@ void main() {
 }`;
 }
 
-// the blend of a material (its BlendMode src and dst): the game's for colour; coverage only where the game's blend
-// covers what is behind (additive light adds none, as the lobbies' player does)
+/**
+ * The blend of a material (its BlendMode src and dst): the game's for colour; coverage only where the game's
+ * blend covers what is behind (additive light adds none, as the lobbies' player does).
+ * @param {{src: number, dst: number}} mat
+ * @returns {object} The three.js blend settings.
+ */
 export function blendOf(mat) {
   const src = FACTORS[mat.src] ?? THREE.OneFactor,
     dst = FACTORS[mat.dst] ?? THREE.ZeroFactor;
@@ -103,13 +112,21 @@ export function blendOf(mat) {
   };
 }
 
-// three.js matrix (column-major 4 x 4) <-> particles.js matrix (row-major 3 x 4)
+/**
+ * Convert a three.js matrix (column-major 4 x 4) to a particles.js matrix (row-major 3 x 4).
+ * @param {THREE.Matrix4} m
+ * @returns {number[]}
+ */
 export const rows = (m) => {
   const e = m.elements;
   return [e[0], e[4], e[8], e[12], e[1], e[5], e[9], e[13], e[2], e[6], e[10], e[14]];
 };
 
-// The camera in the simulation's space (particles.js geometry3d's view): toSim maps three.js world space there.
+/**
+ * The camera in the simulation's space (particles.js geometry3d's view).
+ * @param {THREE.Matrix4} toSim Maps three.js world space to the simulation's.
+ * @returns {object} The view: eye and axes in lobby units.
+ */
 export function viewOf(camera, toSim) {
   camera.updateMatrixWorld();
   const e = camera.matrixWorld.elements;
@@ -121,9 +138,17 @@ export function viewOf(camera, toSim) {
   return { x: dir(e[0], e[1], e[2]), y: dir(e[4], e[5], e[6]), z, eye, k };
 }
 
-// The effects of one model: fx is the GLB's haloFx, nodes its glTF nodes (three.js objects by index), textures its
-// glTF textures (by index), root the glTF scene. group goes into the view's scene; update() advances and draws them,
-// settle() puts them at a fixed moment for a still, dispose() frees what they made (the glTF textures are the view's).
+/**
+ * Make the effects of one model.
+ * @param {object|undefined} fx
+ * @param {object} options
+ * @param {THREE.Object3D[]} options.nodes Its glTF nodes (three.js objects by index).
+ * @param {THREE.Texture[]} options.textures Its glTF textures (by index).
+ * @param {THREE.Object3D} options.root
+ * @returns {{group: THREE.Group, update: Function, settle: Function, dispose: Function}|null} group goes into
+ *     the view's scene; update() advances and draws the effects, settle() puts them at a fixed moment for a
+ *     still, dispose() frees what they made (the glTF textures are the view's); null without systems.
+ */
 export function createModelFx(fx, { nodes, textures, root }) {
   const defs = (fx?.systems || []).filter((d) => nodes[d.node]);
   if (!defs.length) return null;

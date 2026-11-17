@@ -1,5 +1,13 @@
-// Freeze input only after the existing Hall permission has saved/discarded the draft.
-// A cancelled or timed out native request cannot consume a later page approval.
+/**
+ * Guard the native window's close: input is frozen only after the Hall's permission has saved or discarded its
+ * draft, and a cancelled or timed out native request cannot consume a later page approval.
+ * @param {object} options
+ * @param {() => Promise<boolean|void>} options.prepare Asks the page whether it may close; false refuses.
+ * @param {() => HTMLElement[]} options.root The elements frozen while the close is approved.
+ * @param {() => *} [options.revision] A token of the page's state; an approval holds only for it.
+ * @param {() => Element} [options.focus] Gives the element that has the focus now.
+ * @param {object} [options.target] The window that hosts the native callbacks.
+ */
 export function installCloseGuard({
   prepare,
   root,

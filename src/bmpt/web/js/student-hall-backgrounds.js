@@ -4,6 +4,12 @@ import { withTimeout } from "./async.js";
 import { T } from "./i18n.js";
 import { S } from "./util.js";
 
+/**
+ * Choose the Hall background: the saved one, else office-day, else the first with a picture, else the first.
+ * @param {string|undefined} saved The saved background's name.
+ * @param {object[]} choices
+ * @returns {object|null} The background; null without any.
+ */
 export function backgroundChoice(saved, choices) {
   return (
     choices.find((b) => b.name === saved) ||
@@ -14,9 +20,15 @@ export function backgroundChoice(saved, choices) {
   );
 }
 
+/** The caption of a background: its locale key's text, or its name without the BG_ and _Collection marks. */
 export const label = (background) =>
   background.labelKey ? T(background.labelKey) : background.name.replace(/^BG_|_Collection$/g, "").replaceAll("_", " ");
 
+/**
+ * The CSS and canvas blend modes of a background layer's material.
+ * @param {object|undefined} material The material, with its shader and blend factors.
+ * @returns {{css: string, canvas: string}} The blend modes; normal for a plain or unsupported material.
+ */
 export function blending(material) {
   if (!material) return { css: "normal", canvas: "source-over" };
   const { shader, src, dst, srcA = src, dstA = dst, op = 0, opA = 0, mask = 15 } = material;
@@ -35,6 +47,11 @@ export function blending(material) {
   return dst === 1 ? { css: "plus-lighter", canvas: "lighter" } : { css: "normal", canvas: "source-over" };
 }
 
+/**
+ * Draw a background's layers into an element, with the native lossless images instead of NGUI's optional
+ * small-widget downsample.
+ * @returns {Promise<RenderView|null>} What was drawn; null when cancelled.
+ */
 export async function layers(background, target, { signal } = {}) {
   const response = await withTimeout(fetch(background.layoutUrl, { signal }), 15000, "Office background", { signal });
   if (!response.ok) throw new Error(`Office background: HTTP ${response.status}`);
@@ -85,6 +102,12 @@ export async function layers(background, target, { signal } = {}) {
   return view;
 }
 
+/**
+ * Draw a background into an element: its layers, or its picture.
+ * @param {object} [options]
+ * @param {object[]} [options.choices] The available backgrounds, for the fallback.
+ * @returns {Promise<void>} Settles when it has finished.
+ */
 export async function render(background, target, { signal, choices = [] } = {}) {
   if (!background || signal?.aborted) return;
   try {
@@ -118,7 +141,13 @@ export async function render(background, target, { signal, choices = [] } = {}) 
   }
 }
 
-// Both picker previews and full-scene layers use the same pass blend and NGUI geometry.
+/**
+ * Paint a drawn background's layers onto a canvas. Both picker previews and full-scene layers use the same pass
+ * blend and NGUI geometry.
+ * @param {RenderView} view What layers() drew.
+ * @param {CanvasRenderingContext2D} context The canvas context, 1920 x 1080.
+ * @returns {Promise<void>} Settles when it has finished.
+ */
 export async function paint(view, context, { signal } = {}) {
   const ordered = [...view.nodes.values()]
     .flatMap((n) => n.els)
@@ -147,6 +176,10 @@ export async function paint(view, context, { signal } = {}) {
   }
 }
 
+/**
+ * A picture of a background for the picker: its URL, or a drawn layout as an object URL.
+ * @returns {Promise<string|null>} The picture's URL; null when cancelled.
+ */
 export async function preview(background, { signal } = {}) {
   if (!background.layoutUrl) return background.url;
   const target = document.createElement("div"),

@@ -8,11 +8,17 @@ export const SKELETON_SCALE = 0.01;
 // CharacterPos as UICharacterDetail has it, for a layout without the node
 export const CHARACTER_POS = Object.freeze({ pos: [-738, -746], scale: [101, 101] });
 
-// portraitViewport(node, {origin, s, box}) -> a spine-player viewport showing exactly the box, with the skeleton's
-// origin on the node. node: the layout node (pos, scale in prefab units); origin: the prefab centre on the stage and s
-// the stage px per prefab unit (detail.js toStage); box: the player's box on the stage {left, top, width, height}.
-// spine-player keeps one zoom for both axes and fits the viewport into its canvas: a viewport of the canvas's own
-// aspect fills it exactly, so a skeleton unit is the same number of px across and down.
+/**
+ * A spine-player viewport showing exactly the box, with the skeleton's origin on the node. spine-player keeps
+ * one zoom for both axes and fits the viewport into its canvas: a viewport of the canvas's own aspect fills it
+ * exactly, so a skeleton unit is the same number of px across and down.
+ * @param {{pos: number[], scale: number[]}} node The layout node, in prefab units.
+ * @param {object} options
+ * @param {number[]} options.origin The prefab centre on the stage (detail.js toStage).
+ * @param {number} options.s Stage px per prefab unit.
+ * @param {{left: number, top: number, width: number, height: number}} options.box The player's box on the
+ *     stage.
+ */
 export function portraitViewport(node, { origin, s, box }) {
   const pos = Array.isArray(node?.pos) ? node.pos : CHARACTER_POS.pos;
   const scale = Number(node?.scale?.[0]) > 0 ? node.scale[0] : CHARACTER_POS.scale[0];
@@ -33,8 +39,11 @@ export function portraitViewport(node, { origin, s, box }) {
   };
 }
 
-// where a skeleton point lands on the stage, by spine-player's own camera arithmetic for a canvas of the box's size
-// at a device pixel ratio (its drawing buffer is the box times the ratio)
+/**
+ * Where a skeleton point lands on the stage, by spine-player's own camera arithmetic for a canvas of the box's
+ * size at a device pixel ratio (its drawing buffer is the box times the ratio).
+ * @returns {number[]} [x, y] in stage px.
+ */
 export function stagePoint(view, box, x, y, dpr = 1) {
   const cw = Math.round(box.width * dpr),
     ch = Math.round(box.height * dpr);

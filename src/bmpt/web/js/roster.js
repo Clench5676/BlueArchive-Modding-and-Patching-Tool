@@ -1,15 +1,10 @@
-// Roster: the game's student list prefabs rendered by ngui.js
-//   UICharacterCollection               list frame, ruled paper, segment filters, search / sort / order buttons, the
-//                                       search box (CharacterSearch) and the empty list (LeftInfo_Empty)
-//   UICharacterCollectionPopulatorUnit  card template (UICollectCard) and the "not owned" section bar
-//   UIPopup_GachaCharList.Btn_Checkbox  checkbox toggle, reused for "group the variants of one character"
-// Which cards show, and in what order, is roster-order.js: two segment filters (mods: all / modded / no mod;
-// recruitment: all / recruitable / not recruitable), the search (every name language and the file id), and the display
-// settings behind the sort button (display.js: filter groups and the sort key; the order button flips the order).
-// Cards with mods come first; cards without mods follow the section bar, dimmed like not-owned students. Favourites
-// (the game's pins) come first in each group. Grouped, each character shows its first variant (or the first one the
-// search found). The view is kept across launches (settings key "roster"), the search for the session. Only the rows
-// near the view are rendered; the list scrolls with the wheel, by dragging and with the scrollbar.
+// Roster: the game's student list prefabs rendered by ngui.js: UICharacterCollection gives the list frame, ruled paper,
+// segment filters, search / sort / order buttons, search box and empty list; UICharacterCollectionPopulatorUnit the card
+// template (UICollectCard) and the "not owned" section bar; UIPopup_GachaCharList.Btn_Checkbox the checkbox toggle,
+// reused for "group the variants of one character". Which cards show, and in what order, is roster-order.js. Cards with
+// mods come first; cards without mods follow the section bar, dimmed like not-owned students; favourites (the game's
+// pins) come first in each group. The view is kept across launches (settings key "roster"), the search for the session.
+// Only the rows near the view are rendered.
 import { clipRosterBand } from "./roster-card.js";
 import { specialFraming } from "./special-view.js";
 import * as NGUI from "./ngui.js";
@@ -33,7 +28,7 @@ import { configuredKey, hasAsset, previewBase, primaryKind } from "./switch-sour
 import { $, RECRUIT, S, advanceOf, clone, glyphsOf } from "./util.js";
 import { DEFAULT_VIEW, arrange, normalizeView, order as orderOf } from "./roster-order.js";
 
-const { node, sprite, label, find } = NGUI;
+const { node, sprite, find } = NGUI;
 const fitText = (...a) => NGUI.fitText(...a);
 
 const PANEL_TOP = (720 - 525) * S; // the collection prefab's frame top, below its round back button
@@ -75,14 +70,19 @@ let thumbnailWork = thumbnailScope();
 const listTop = () => (searching ? SEARCH_LIST_TOP : PAPER_TOP);
 const clipTop = () => ORIGIN[1] - listTop() * S;
 
+/** Mark the roster's drawn list as stale, so the next show() draws it again. */
 export function invalidate() {
   dirty = true;
 }
 
-// the saved view (settings.get's "roster"); called once at start, before the roster or a detail screen shows
+/**
+ * Restore the saved view (settings.get's "roster"); called once at start, before the roster or a detail screen
+ * shows.
+ */
 export function init(prefs) {
   view = { ...normalizeView(prefs), scroll: 0 };
 }
+/** Whether the roster groups the variants of one character. */
 export const merged = () => view.merged;
 
 let saveTimer = 0;
@@ -111,8 +111,12 @@ function opts(extra = {}) {
   return { query, label: L, collator, ...extra };
 }
 
-// the cards in the roster's order, as it shows them (the detail screen's arrows step through these); unfiltered: the
-// whole roster in the same order
+/**
+ * The cards in the roster's order, as it shows them (the detail screen's arrows step through these).
+ * @param {object} [options]
+ * @param {boolean} [options.unfiltered] True: the whole roster in the same order.
+ * @returns {object[]}
+ */
 export function order(rosterData, { unfiltered = false } = {}) {
   return orderOf(rosterData, view, opts({ unfiltered }));
 }
@@ -209,7 +213,8 @@ function layoutItems() {
 function cardTree(e) {
   const t = clone(layouts.card);
   const name = find(t, "Label_CharName");
-  // name: the recruit icon and the name centred as one group; long names shrink and wrap; the yellow marker under the glyphs
+  // name: the recruit icon and the name centred as one group; long names shrink and wrap; the yellow marker under
+  // the glyphs
   const iconH = 64,
     iconW = e.recruit ? iconH / RECRUIT.ratio + 8 : 0;
   const f = fitText(e.name, 50, 30, 430 - iconW);
@@ -379,7 +384,8 @@ function emptyTree() {
   t.active = true;
   const message = find(t, "Label_Locale").widgets[0];
   Object.assign(message, { text: T("roster.empty"), w_: 1200 });
-  // the picture and the message sit on the middle of the paper the eye sees: all of it, or what the open search box leaves
+  // the picture and the message sit on the middle of the paper the eye sees: all of it, or what the open search
+  // box leaves
   t.pos[1] = emptyListY((listTop() + PAPER_BOTTOM) / 2, message);
   return t;
 }
@@ -707,13 +713,16 @@ function warm() {
 // request with show() and drops a failed one, which show() then asks for again.
 const PREFABS = ["UICharacterCollection", "UICharacterCollectionPopulatorUnit", "UIPopup_GachaCharList.Btn_Checkbox"];
 const prefabs = () => Promise.all(PREFABS.map((name) => NGUI.layout(name)));
-// Never awaited: a failure surfaces when show() asks again.
+/** Ask for the roster's prefabs in the background. Never awaited: a failure surfaces when show() asks again. */
 export function preload() {
   prefabs().catch(() => {});
 }
 
-// Show the roster from its saved data. Required UI and available pictures decode
-// before reveal. Offscreen rows do not extend that barrier.
+/**
+ * Show the roster from its saved data. Required UI and available pictures decode before reveal; offscreen rows
+ * do not extend that barrier.
+ * @returns {Promise<void>} Settles when it has finished.
+ */
 export async function show(context, rosterData) {
   if (thumbnailWork.signal.aborted) thumbnailWork = thumbnailScope();
   prioritise(null);
@@ -734,14 +743,18 @@ export async function show(context, rosterData) {
   warm();
 }
 
+/** Hide the roster: stop its motion and thumbnail work and mark its list stale. */
 export function hide() {
   wheelMotion?.stop();
   thumbnailWork.cancel();
   dirty = true;
 }
 
-// Names and name-based ordering come from the already loaded multilingual data.
-// Reuse the thumbnail scope/cache; a language change never needs roster.list.
+/**
+ * Redraw the roster's names and name-based order after a language change. They come from the already loaded
+ * multilingual data and reuse the thumbnail scope and cache; a language change never needs roster.list.
+ * @returns {Promise<void>} Settles when it has finished.
+ */
 export async function relabel() {
   dirty = true;
   if (!data || !layouts || $("screen-roster").hidden) return;

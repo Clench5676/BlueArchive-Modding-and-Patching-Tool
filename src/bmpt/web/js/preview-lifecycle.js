@@ -3,8 +3,14 @@
 // Now Loading freezes it. loading.js switches this with freezeShown(locked()).
 const freezable = new Set();
 let frozenNow = false;
+/**
+ * Whether the previews shown are frozen under Now Loading.
+ */
 export const frozen = () => frozenNow;
-// on screen: laid out and not hidden (a preview prepared in a hidden layer is not shown)
+/**
+ * Whether a preview element is on screen: laid out and not hidden (a preview prepared in a hidden layer is not
+ * shown).
+ */
 export function onScreen(el) {
   if (!el?.isConnected) return false;
   try {
@@ -13,6 +19,12 @@ export function onScreen(el) {
     return true;
   }
 }
+/**
+ * Freeze or thaw the previews already shown: Now Loading freezes them (animation, sound, timers) and resumes
+ * them once it is gone. A preview that starts while Now Loading is up is being prepared behind it and keeps
+ * going; only the next Now Loading freezes it. loading.js switches this with freezeShown(locked()).
+ * @param {boolean} on True while Now Loading is up.
+ */
 export function freezeShown(on) {
   on = !!on;
   if (on === frozenNow) return;
@@ -32,7 +44,15 @@ export function freezeShown(on) {
     }
   }
 }
-// shown(): whether the preview is on screen now; freeze() and thaw() stop and restart it
+/**
+ * Register a preview that Now Loading freezes.
+ * @param {object} [options]
+ * @param {() => boolean} [options.shown] Whether the preview is on screen now.
+ * @param {() => void} [options.freeze] Stops the preview.
+ * @param {() => void} [options.thaw] Restarts it.
+ * @returns {{held: () => boolean, dispose: () => void}} held tells whether it is frozen now; dispose
+ *     unregisters it.
+ */
 export function freezeWhileLoading({ shown = () => true, freeze = () => {}, thaw = () => {} } = {}) {
   const member = { shown, freeze, thaw, held: false };
   freezable.add(member);
@@ -45,8 +65,17 @@ export function freezeWhileLoading({ shown = () => true, freeze = () => {}, thaw
   };
 }
 
-// A background window has no reliable frame clock. Resume with fresh clocks; lost contexts need new GPU owners.
-// shown: given, the preview also stops while Now Loading is up over it (freezeWhileLoading).
+/**
+ * Follow the page's visibility and focus for a preview: a background window has no reliable frame clock, so it
+ * resumes with fresh clocks, and lost contexts need new GPU owners.
+ * @param {object} [hooks] What the preview does.
+ * @param {() => void} [hooks.suspend] The window went away.
+ * @param {() => void} [hooks.resume] It came back; clocks restart.
+ * @param {() => void} [hooks.recover] A lost context must be rebuilt.
+ * @param {(() => boolean)|null} [hooks.shown] When given, the preview also stops while Now Loading is up over
+ *     it (freezeWhileLoading).
+ * @param {object} [env] The page, for the tests.
+ */
 export function previewLifecycle(
   { suspend = () => {}, resume = () => {}, recover = () => {}, shown = null } = {},
   { document: doc = globalThis.document, window: win = globalThis.window, now = () => performance.now() } = {},
@@ -131,14 +160,23 @@ export function previewLifecycle(
 }
 
 // While a read of the page waits for the Mod library (a job holds it; the backend's library.waiting event), or a
-// preview waits for a job (the model lock, a costume build of the same pair; preview.waiting), preview deadlines stop:
-// that wait is not the preview's own work. Each source is told apart, so one ending does not end the other. A spell
-// longer than LIBRARY_WAIT_CAP counts again, in case its end was never heard (the event stream reconnected).
+// preview waits for a job (the model lock, a costume build of the same pair; preview.waiting), preview deadlines
+// stop: that wait is not the preview's own work. Each source is told apart, so one ending does not end the
+// other. A spell longer than LIBRARY_WAIT_CAP counts again, in case its end was never heard (the event stream
+// reconnected).
 export const LIBRARY_WAIT_CAP = 120000;
 const waitWatchers = new Set();
 const waitingFor = new Map(); // source -> its cap timer
 let libraryBusy = false;
+/**
+ * Whether a read or a preview is waiting for the library or a job.
+ */
 export const libraryWaiting = () => libraryBusy;
+/**
+ * Note that a source starts or stops waiting for the library or a job.
+ * @param {boolean} busy Whether it waits.
+ * @param {string} [source] Which source waits: "library" or "preview".
+ */
 export function setLibraryWaiting(busy, source = "library") {
   busy = !!busy;
   clearTimeout(waitingFor.get(source));
@@ -154,8 +192,13 @@ export function setLibraryWaiting(busy, source = "library") {
   for (const update of [...waitWatchers]) update();
 }
 
-// Deadlines count foreground time, including waits for requestAnimationFrame during initial loading, and leave out
-// the time a read or a preview waits for the library or a job (setLibraryWaiting).
+/**
+ * Start a deadline that counts foreground time, including waits for requestAnimationFrame during initial
+ * loading, and leaves out the time a read or a preview waits for the library or a job (setLibraryWaiting).
+ * @param {() => void} callback Called when the deadline passes.
+ * @param {number} ms The deadline in milliseconds.
+ * @returns {() => void} Cancels the deadline.
+ */
 export function previewTimer(callback, ms, env = {}) {
   const now = env.now || (() => performance.now());
   let timer,

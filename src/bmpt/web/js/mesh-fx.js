@@ -1,16 +1,10 @@
-// The plain mesh renderers of a memorial lobby (lobby.json fx.renderers, gameassets/meshfx.py): lens dirt and light
-// quads, Hanako's water surface, Maki's clouds, Utaha's window glow. particles-gl.js draws them with the particle
-// programs (their shaders are the same effect shaders), sorted with the particle systems and the skeletons' atlas
-// pages; this module places them, plays the Animator clips that loop them (fx.clips: scale, position, Euler angles,
-// material colours) and builds their triangles. Pure data, no DOM and no GL.
-//
-// A renderer is placed like a particle system: by the bone its anchor follows (the skeleton GameObject times the
-// bone's world transform), times its chain of local transforms below that bone (from the prefab root without an
-// anchor), each transform as the clips leave it this frame. Most are Unity's built-in Quad; triangles the material
-// culls are dropped the way Unity culls them, front faces clockwise on screen, mirrored transforms turning that round.
-// A mesh's vertex colours reach the shader as stored: Unity converts no Mesh.colors to linear light (only a particle
-// renderer's, with Apply Active Color Space), and the programs these renderers use (FX_SHADER_Lobby_Order,
-// FX_SHADER_Additive_0, FX_SHADER_AlphaBlend_Add_Distort_0) pass COLOR0 on unchanged (mov o2, v3).
+// The plain mesh renderers of a memorial lobby (lobby.json fx.renderers, gameassets/meshfx.py): lens dirt and
+// light quads, Hanako's water surface, Maki's clouds, Utaha's window glow. particles-gl.js draws them with the
+// particle programs, sorted with the particle systems and the skeletons' atlas pages; this module places them
+// like a particle system (by the bone its anchor follows times its chain of local transforms, each as the clips
+// leave it this frame), plays the Animator clips that loop them (fx.clips: scale, position, Euler angles,
+// material colours) and builds their triangles. Pure data, no DOM and no GL. Triangles the material culls are
+// dropped the way Unity culls them, and a mesh's vertex colours reach the shader as stored.
 import { IDENTITY, STRIDE, mul, vertexColor } from "./particles.js";
 import { toLinear } from "./touch-fx.js";
 
@@ -26,11 +20,19 @@ const MAX_DT = 0.1;
 
 // for checks: draw the mesh renderers (true) or leave them out (false); their clips keep playing either way
 export let shown = true;
+/**
+ * For checks: draw the mesh renderers (true) or leave them out (false); their clips keep playing either way.
+ */
 export const show = (on) => {
   shown = !!on;
 };
 
-// a local transform (position, rotation quaternion x y z w, scale) as a 3 x 4 matrix
+/**
+ * A local transform as a 3 x 4 matrix.
+ * @param {number[]} p The position.
+ * @param {number[]} q The rotation quaternion x y z w.
+ * @param {number[]} s The scale.
+ */
 export function trs(p, q, s) {
   const n = Math.hypot(q[0], q[1], q[2], q[3]) || 1,
     [x, y, z, w] = q.map((v) => v / n);
@@ -70,6 +72,9 @@ const qmul = (a, b) => [
   a[3] * b[2] + a[0] * b[1] - a[1] * b[0] + a[2] * b[3],
   a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2],
 ];
+/**
+ * A rotation quaternion from Euler angles in degrees, in Unity's order by default.
+ */
 export function eulerQuat(e, order = 4) {
   const h = e.map((d) => (d * Math.PI) / 360);
   const axis = {
@@ -82,7 +87,13 @@ export function eulerQuat(e, order = 4) {
   return q;
 }
 
-// a track's value at t seconds into its clip: its samples are 1 / rate apart, linear in between (one sample: constant)
+/**
+ * A track's value at t seconds into its clip: its samples are 1 / rate apart, linear in between (one sample:
+ * constant).
+ * @param {Array<number|number[]>} values The samples; each a number or a vector.
+ * @param {number} rate The samples per second.
+ * @param {number} t The time in seconds.
+ */
 export function sample(values, rate, t) {
   if (values.length === 1) return values[0];
   const f = Math.max(0, t * rate),
@@ -208,9 +219,10 @@ export class Meshes {
     });
   }
 
-  // One renderer's triangles for this frame, in particles.js geometry's vertex layout: {data, count}. meshes: lobby.json
-  // fx.meshes; positions in lobby units (z dropped: the camera is orthographic), TEXCOORD0 the mesh's UV (z 0, w 1 as
-  // a two-component stream reads), the vertex colour the mesh's (as stored, 8 bits a channel) or white.
+  // One renderer's triangles for this frame, in particles.js geometry's vertex layout: {data, count}. meshes:
+  // lobby.json fx.meshes; positions in lobby units (z dropped: the camera is orthographic), TEXCOORD0 the mesh's
+  // UV (z 0, w 1 as a two-component stream reads), the vertex colour the mesh's (as stored, 8 bits a channel) or
+  // white.
   geometry(s, { meshes = {} } = {}) {
     const def = s.def,
       mesh = def.mesh === "quad" ? QUAD : meshes[def.mesh];

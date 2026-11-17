@@ -31,7 +31,7 @@ const backCode =
   statementOf(visualSource, "const CORNERS =") +
   "\n" +
   visualSource
-    .slice(visualSource.indexOf("export async function prepare("), visualSource.indexOf("// open({parts"))
+    .slice(visualSource.indexOf("export async function prepare("), visualSource.indexOf("export async function open("))
     .replaceAll("export ", "") +
   visualSource.slice(
     visualSource.indexOf("async function renderBg("),
@@ -254,7 +254,8 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
               leftCamera++;
             },
             switchMode() {},
-            // the student has both modes, so the mode button is drawn (the test of its omission is photography_choices.test.mjs)
+            // the student has both modes, so the mode button is drawn (the test of its omission is
+            // photography_choices.test.mjs)
             bridge: {
               info: () => ({ hasPortrait: true, hasLobby: true }),
               playbackTree: () => ({
@@ -293,7 +294,8 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
             dx = ((228.83 - 171) * S) / 2,
             dy = ((hitH - FULLSCREEN_BUTTON.h) * S) / 2;
           near(b[1] + dy, CORNER_MARGIN);
-          near(guide[1] + guide[3] / 2, CORNER_MARGIN + env.toolbarLayout().top[3] / 2); // centred in the row, which the 82 px icon makes as high as it is near(guide[1]+guide[3]/2,rotate[1]+rotate[3]/2);
+          // centred in the row, which the 82 px icon makes as high as it is
+          near(guide[1] + guide[3] / 2, CORNER_MARGIN + env.toolbarLayout().top[3] / 2);
           near(b[2], 228.83 * S);
           near(b[3], hitH * S);
           assert.equal(backHit.label, strings.back);

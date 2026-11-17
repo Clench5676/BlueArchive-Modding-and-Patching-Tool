@@ -1,10 +1,9 @@
-// NGUI prefab renderer. Takes a layout tree read from the game's UI prefabs (/asset/ui/layout/<Root>.json: nodes
-// with local positions in NGUI units and UISprite / UITexture / UILabel widgets) and builds absolutely positioned DOM:
-//   - sprites: Simple / Sliced (9-slice, borders from the atlas) / Tiled, tinted like NGUI (mColor multiplies the
-//     mostly white sprite), flipped, sheared by inclineAngle
-//   - textures: the game's UITexture images, or per-node overrides
-//   - labels: plain text in the page font, sized from the label's font size (italic: a placeholder's slant)
-// Depth becomes z-index; NGUI y points up, the stage's y points down.
+// NGUI prefab renderer: builds absolutely positioned DOM from a layout tree read from the game's UI prefabs
+// (/asset/ui/layout/<Root>.json: nodes with local positions in NGUI units and UISprite / UITexture / UILabel
+// widgets). Sprites are simple, sliced (9-slice, borders from the atlas) or tiled, tinted like NGUI (mColor
+// multiplies the mostly white sprite), flipped and sheared by inclineAngle; textures are the game's UITexture
+// images or per-node overrides; labels are plain text in the page font. Depth becomes z-index; NGUI's y points
+// up, the stage's y down.
 import { hasAffirmative, skinAffirmatives, goldTemplate } from "./affirmative-buttons.js";
 import { labelEffect, labelClipPadding } from "./ngui-label.js";
 import { clipButtonPatterns, tagOf, tagBox, overlaps, inkBox } from "./button-layout.js";
@@ -20,8 +19,9 @@ const PIVY = [0, 0, 0, 0.5, 0.5, 0.5, 1, 1, 1]; // fraction of the height above 
 // measured for the page font (Resource Han Rounded): ascent 1.16, descent 0.29, CJK ink 0.84 above to 0.09 below the
 // baseline, so in a 1.15 line box the ink centre is 0.06 em low
 const GLYPH_LIFT = 0.06;
-// Latin glyphs of this font are small next to its CJK glyphs and read low (lowercase mass sits on the baseline): text
-// without CJK or Thai is drawn 12 % larger and lifted a little more. Measuring goes through textWidth, so layout agrees.
+// Latin glyphs of this font are small next to its CJK glyphs and read low (lowercase mass sits on the baseline):
+// text without CJK or Thai is drawn 12 % larger and lifted a little more. Measuring goes through textWidth, so
+// layout agrees.
 const LATIN_SCALE = 1.12,
   LATIN_LIFT = 0.085;
 // CJK here: Han, kana, CJK punctuation and full-width forms, and Hangul (syllables, jamo, compatibility jamo).
@@ -30,6 +30,11 @@ const isLatin = (str) =>
   !/[\u0e00-\u0e7f\u2e80-\u9fff\u3000-\u303f\uff00-\uffef\u3040-\u30ff\uac00-\ud7af\u1100-\u11ff\u3130-\u318f]/.test(
     str,
   );
+/**
+ * The font size to draw a text at: Latin-only text is drawn larger than the nominal size, so it matches CJK
+ * text.
+ * @returns {number} The size to draw with.
+ */
 export const fontSizeFor = (str, fs) => fs * (isLatin(str) ? LATIN_SCALE : 1);
 const measureCtx = document.createElement("canvas").getContext("2d");
 // the font stack text in a language draws with (app.css --font): the UI language's (the html lang), or another one's
@@ -53,6 +58,12 @@ function fontStack() {
   if (stack) stacks.set(lang, stack); // not before the style sheet is in
   return stack || "RHR, sans-serif";
 }
+/**
+ * Measure the widest line of a text in the page font.
+ * @param {string} str The text; lines are split at newlines.
+ * @param {number} fs The nominal font size, as given to fontSizeFor.
+ * @returns {number} The width of the widest line in pixels.
+ */
 export function textWidth(str, fs) {
   measureCtx.font = `500 ${fontSizeFor(str, fs)}px ${fontStack()}`;
   return Math.max(
@@ -65,7 +76,9 @@ export function textWidth(str, fs) {
 let index = null,
   textures = null,
   initDone = null;
+/** The atlas index: atlas name to sprite name to its metadata. Empty until init() has loaded it. */
 export const atlasIndex = () => index || {};
+/** The UI texture index: texture name to the URL of its image. Empty until init() has loaded it. */
 export const textureIndex = () => textures || {};
 let atlasDone = null,
   texturesDone = null;
@@ -74,19 +87,33 @@ const images = new Map(),
 let resourceContext = null,
   resourceRevision = 0;
 const resourceListeners = new Set();
-// Developer previews (pre-release builds and development runs) tag every button body with its size preset, XS, S, M or L;
-// packaged release candidates and stable builds do not (settings.get `buttonSizeTags`).
-// A body's size in the app's own units is what it measures on the stage: its prefab size, the nodes' scales and the render's
+// Developer previews (pre-release builds and development runs) tag every button body with its size preset, XS,
+// S, M or L; packaged release candidates and stable builds do not (settings.get `buttonSizeTags`). A body's size
+// in the app's own units is what it measures on the stage: its prefab size, the nodes' scales and the render's
 // scale against the stage's (a button drawn at a smaller render scale is a smaller button).
 const STAGE_SCALE = 1920 / 2960;
 let tierTags = false;
+/**
+ * Switch the size tags on button bodies on or off.
+ * @param {boolean} on Whether render() adds the tags.
+ */
 export const setTierTags = (on) => {
   tierTags = !!on;
 };
+/**
+ * Subscribe to a change of the resource context.
+ * @param {() => void} fn Called after the caches are cleared.
+ * @returns {() => boolean} Unsubscribes the listener.
+ */
 export function onResourceChange(fn) {
   resourceListeners.add(fn);
   return () => resourceListeners.delete(fn);
 }
+/**
+ * Switch the game resources the UI is drawn from. A change clears every cache and informs the listeners.
+ * @param {*} value The new context; compared with the current one by identity.
+ * @returns {boolean} False when the context was already current.
+ */
 export function setResourceContext(value) {
   if (value === resourceContext) return false;
   resourceContext = value;
@@ -98,7 +125,10 @@ export function setResourceContext(value) {
   return true;
 }
 
-// the atlas and texture indexes, fetched once however many callers wait for them (the loading screen asks first)
+/**
+ * Fetch the atlas and texture indexes once, however many callers wait for them (the loading screen asks first).
+ * @returns {Promise<void[]>} Settles when both indexes are in; a failed fetch is tried again on the next call.
+ */
 export function init() {
   const revision = resourceRevision;
   initDone ||= Promise.all([
@@ -144,6 +174,11 @@ async function assetJson(url, cache, label = url) {
   }
 }
 
+/**
+ * Load an image, shared by URL unless a signal is given.
+ * @param {{signal?: AbortSignal}} [options] With a signal the load is private and is dropped when it aborts.
+ * @returns {Promise<HTMLImageElement>} The decoded-on-demand image; rejects after 15 s.
+ */
 export function load(url, { signal } = {}) {
   url = uiExportUrl(url);
   if (signal) {
@@ -179,6 +214,11 @@ export function load(url, { signal } = {}) {
   return images.get(url);
 }
 
+/**
+ * Read the pixels of a sprite's atlas image.
+ * @param {{atlas?: string, sprite: string}} widget The sprite widget; the atlas defaults to Common.
+ * @returns {Promise<ImageData>} The whole atlas image's pixels.
+ */
 export async function spritePixels(widget) {
   const img = await load(spriteUrl(widget.atlas || "Common", widget.sprite));
   const canvas = document.createElement("canvas");
@@ -189,8 +229,12 @@ export async function spritePixels(widget) {
   return context.getImageData(0, 0, canvas.width, canvas.height);
 }
 
-// canvases become in-memory blob URLs (never written anywhere). A canvas with no backing store gives no blob and
-// encodes to "data:,": that is a failure, so the caches below drop it and the next render draws the picture again.
+/**
+ * Turn a canvas into an in-memory blob URL (never written anywhere).
+ * A canvas with no backing store gives no blob and encodes to "data:,": that is a failure, so the caches below
+ * drop it and the next render draws the picture again.
+ * @returns {Promise<string>} The blob URL; rejects when the canvas cannot be encoded.
+ */
 export const canvasUrl = (c) =>
   withTimeout(
     new Promise((resolve, reject) =>
@@ -213,7 +257,11 @@ export const canvasUrl = (c) =>
     "UI image encoding",
   );
 
-// multiply the image by the tint colour, keeping its alpha (alpha of the tint is applied as opacity)
+/**
+ * Multiply an image by a tint colour, keeping its alpha (the tint's alpha is applied as opacity).
+ * @param {string} hex The tint as "#rrggbb"; white returns the URL unchanged.
+ * @returns {Promise<string>} The URL of the tinted image.
+ */
 export async function tinted(url, hex) {
   if (hex === "#ffffff") return url;
   const key = `${url}|${hex}`;
@@ -281,8 +329,16 @@ async function gradientTint(url, colors) {
   return gradients.get(key);
 }
 
-// Draw a sliced sprite into one image, at least 2× with higher effective DPI when requested.
 const baked = new Map();
+/**
+ * Draw a sliced sprite into one image, at least 2x with a higher effective DPI when requested.
+ * @param {number[]} b The borders [top, right, bottom, left] in source pixels.
+ * @param {number} wpx The drawn width in stage pixels.
+ * @param {number} hpx The drawn height in stage pixels.
+ * @param {number|number[]} bs The border scale, or one per border (top, right, bottom, left).
+ * @param {number} [density=2] Pixels per stage pixel.
+ * @returns {Promise<string>} The URL of the drawn image.
+ */
 export function slicedImage(url, b, wpx, hpx, bs, density = 2) {
   const scales = Array.isArray(bs) ? bs : [bs, bs, bs, bs];
   const key = `${url}|${b.join(",")}|${wpx}x${hpx}|${scales.join(",")}|${density}`;
@@ -379,12 +435,41 @@ const colorOf = (c) => {
   return { hex: hex.toLowerCase(), a: Number(a ?? 1) };
 };
 
-// opts: scale (stage px per unit), origin [x, y] (stage px of the root's origin),
-//       on / off (node names or paths to force), shift { name|path: [dx, dy] units },
-//       texts { name|path: text }, textures { name|path: url }, textureNames { texture name: url },
-//       rasterDensity (optional sliced-sprite pixels per stage px; minimum 2),
-//       styles { name|path: css }, rootPath (prefix used in paths), z (z-index offset), deferImages (fill in later)
-// pictures includes all deferred work; images and thumbnails let a screen give optional thumbnails a shorter wait.
+/**
+ * Options of render().
+ * @typedef {object} RenderOptions
+ * @property {number} [scale] Stage pixels per NGUI unit.
+ * @property {number[]} [origin] [x, y] in stage pixels of the root's origin.
+ * @property {string[]} [on] Node names or paths to force on.
+ * @property {string[]} [off] Node names or paths to force off.
+ * @property {Object<string, number[]>} [shift] Node name or path to a [dx, dy] shift in units.
+ * @property {Object<string, string>} [texts] Node name or path to the text it shows.
+ * @property {Object<string, string>} [textures] Node name or path to a texture URL.
+ * @property {Object<string, string>} [textureNames] Texture name to URL.
+ * @property {number} [rasterDensity] Pixels per stage pixel of sliced sprites; at least 2.
+ * @property {Object<string, string>} [styles] Node name or path to CSS applied after the images are in.
+ * @property {string} [rootPath] Prefix of the paths.
+ * @property {number} [z] Offset added to every z-index.
+ * @property {boolean} [deferImages] Fill the pictures in later instead of waiting for them.
+ * @property {AbortSignal} [signal] Drops the pictures still loading when it aborts.
+ */
+
+/**
+ * What render() drew.
+ * @typedef {object} RenderView
+ * @property {Map<string, HTMLElement>} nodes The elements by node name and path.
+ * @property {number} scale Stage pixels per NGUI unit.
+ * @property {number[]} origin [x, y] in stage pixels of the root's origin.
+ * @property {Promise<void>[]} pictures All the picture work, deferred work included.
+ * @property {Promise<void>[]} images The pictures other than thumbnails.
+ * @property {Promise<void>[]} thumbnails The optional thumbnails, so a screen can give them a shorter wait.
+ */
+
+/**
+ * Draw a layout tree into a host element.
+ * @param {RenderOptions} [opts]
+ * @returns {Promise<RenderView>} The drawn elements and the picture work.
+ */
 export async function render(tree, host, opts = {}) {
   if (hasAffirmative(tree)) tree = skinAffirmatives(tree, goldTemplate);
   // Popup branches publish together, including decoded textures, even when the caller renders into a live layer.
@@ -400,9 +485,9 @@ export async function render(tree, host, opts = {}) {
   const placeholderLabel = needsPlaceholder(tree)
     ? find(await layout("UIPopup_Sort"), "Center/Popup/Btn/Btn_Cancel/Label_Locale").widgets.find((w) => "text" in w)
     : null;
-  // A still being made holds its place with the game's loading ring: UIRatioNoticePopup's LoadingIcon and
-  // its TweenRotation; without that prefab the placeholder text stands in, as before.
-  // a widget may stand for work under way with the same ring (loadingRing: a button whose action is still loading)
+  // A still being made holds its place with the game's loading ring (UIRatioNoticePopup's LoadingIcon and its
+  // TweenRotation); without that prefab the placeholder text stands in. A widget may stand for work under way with
+  // the same ring (loadingRing: a button whose action is still loading).
   const needsRing = (n) => n.widgets?.some((w) => w.loadingRing) || n.children?.some(needsRing);
   const loadingIcon =
     needsPlaceholder(tree) || needsRing(tree)
@@ -487,10 +572,9 @@ export async function render(tree, host, opts = {}) {
     for (const c of n.children || []) walk(c, x, y, nsx, nsy, a, p);
   }
 
-  // the game's loading ring at a placeholder's centre, turned as its TweenRotation turns it (from and to about z, in
-  // degrees, over its duration; a loop or ping-pong); it shows after a moment, so a still that comes at once never
-  // flashes it
-  // (``box``: a loadingRing widget whose box the ring fits into, centred, and whose colour tints it)
+  // The game's loading ring at a placeholder's centre, turned as its TweenRotation turns it (from and to about z,
+  // in degrees, over its duration; a loop or ping-pong). It shows after a moment, so a still that comes at once
+  // never flashes. box: a loadingRing widget whose box the ring fits into, centred, and whose colour tints it.
   function spinner(n, icon, p, x, y, sx, sy, alpha, depth, box = null) {
     const sprite = icon.widgets?.find((w) => "sprite" in w);
     if (!sprite) return null;
@@ -746,7 +830,8 @@ export async function render(tree, host, opts = {}) {
                 backgroundSize: `${meta.width * S}px ${meta.height * S}px`,
               });
             } else {
-              // simple sprites keep their own aspect unless told to stretch (NGUI stretches; game widgets are sized to match)
+              // simple sprites keep their own aspect unless told to stretch (NGUI stretches; game widgets are sized to
+              // match)
               const fit = Math.min((ww * S) / meta.width, (hh * S) / meta.height);
               return downscaled(
                 url,
@@ -838,8 +923,9 @@ export async function render(tree, host, opts = {}) {
   return view;
 }
 
-// The size tag at a button body's top left corner: the preset's letters, or the height in units when the pill is none of them.
-// Where it would cover the caption (the inks of the text widgets inside the body) it is a dot there, the same label on hover.
+// The size tag at a button body's top left corner: the preset's letters, or the height in units when the pill is
+// none of them. Where it would cover the caption (the inks of the text widgets inside the body) it is a dot
+// there, the same label on hover.
 function tierTag({ el, path, w, h, kind }, z, inks, S) {
   const info = tagOf(w, h, kind);
   if (!info) return null;
@@ -878,7 +964,11 @@ function tierTag({ el, path, w, h, kind }, z, inks, S) {
   return tag;
 }
 
-// find a subtree by path ("A/B/C", relative to the given node)
+/**
+ * Find a subtree by path.
+ * @param {string} path Names joined by "/", for example "A/B/C".
+ * @returns {NguiNode|null} The node, or null when a part is missing.
+ */
 export function find(tree, path) {
   let n = tree;
   for (const part of path.split("/").filter(Boolean)) {
@@ -888,7 +978,11 @@ export function find(tree, path) {
   return n;
 }
 
-// the first node with this name, depth first
+/**
+ * Find the first node with a name, depth first.
+ * @param {NguiNode} tree The node to search from, itself included.
+ * @returns {NguiNode|null} The node, or null when there is none.
+ */
 export function findNamed(tree, name) {
   if (tree.name === name) return tree;
   for (const c of tree.children || []) {
@@ -898,8 +992,14 @@ export function findNamed(tree, name) {
   return null;
 }
 
-// "Root" or "Root.Node": a prefab root, or the first node of that name inside it
 const layouts = new Map();
+/**
+ * Load a prefab layout, shared by name.
+ * Cold exports scan prefab bundles and can wait for a lobby's bundle locks. The scene owns the slow-load
+ * indicator and navigation cancellation; elapsed time alone does not make a valid server response fail.
+ * @param {string} name "Root" for a prefab root, or "Root.Node" for the first node of that name inside it.
+ * @returns {Promise<NguiNode>}
+ */
 export function layout(name) {
   if (!layouts.has(name)) {
     const revision = resourceRevision;
@@ -923,14 +1023,24 @@ export function layout(name) {
   return layouts.get(name);
 }
 
-// stage rectangle [left, top, width, height] of an element made by render()
+/**
+ * The stage rectangle of an element made by render().
+ * @returns {number[]} [left, top, width, height] in stage pixels.
+ */
 export const rect = (el) => ["left", "top", "width", "height"].map((k) => parseFloat(el.style[k]));
 
-// every picture drawn under root (its elements' CSS backgrounds, as render() sets them) loaded and decoded, for a
-// screen about to show (see image-decode.js); resolves after cap ms at the latest. A picture still being made (a
-// thumbnail) has no background yet and fills in later as before. shown: an element whose pictures are on screen now,
-// so decoded already; they are left out (a Chromium decode() takes a frame or two even then).
 const decodeImage = imageDecoder(() => new Image());
+/**
+ * Wait until every picture drawn under an element is loaded and decoded, for a screen about to show (see
+ * image-decode.js).
+ * A picture still being made (a thumbnail) has no background yet and fills in later.
+ * @param {HTMLElement|HTMLElement[]} root An element whose descendants are checked, or a list of elements.
+ * @param {number} cap The longest wait in milliseconds.
+ * @param {HTMLElement|null} [shown] An element whose pictures are on screen already, so decoded; they are left
+ *     out (a Chromium decode() takes a frame or two even then).
+ * @param {{signal?: AbortSignal}} [options]
+ * @returns {Promise<void>} Settles when the pictures are decoded or the cap has passed.
+ */
 export function decoded(root, cap, shown = null, { signal } = {}) {
   const onScreen = shown?.isConnected && shown.getClientRects().length ? imageUrls(shown.querySelectorAll("*")) : [];
   const skip = new Set(onScreen);
@@ -938,8 +1048,24 @@ export function decoded(root, cap, shown = null, { signal } = {}) {
   const urls = imageUrls(elements).filter((url) => !skip.has(url));
   return decodeAll(urls, decodeImage, cap, { signal });
 }
+/**
+ * A node of an NGUI layout tree, as read from a prefab or made by node().
+ * @typedef {object} NguiNode
+ * @property {string} name The node's name; paths join names with "/".
+ * @property {boolean} active Whether the node is drawn.
+ * @property {number[]} pos Local position [x, y] in NGUI units, y up.
+ * @property {number[]} scale Local scale [x, y].
+ * @property {number} rotZ Rotation about z in degrees.
+ * @property {object[]} widgets The UISprite, UITexture and UILabel widgets on the node.
+ * @property {NguiNode[]} children The child nodes.
+ */
 
-// a plain node, for building widgets by hand: node("Name", [x, y], [widget], [children])
+/**
+ * Build a plain node by hand.
+ * @param {number[]} pos Local position [x, y] in NGUI units.
+ * @param {NguiNode[]} [children]
+ * @param {number[]} [scale] Local scale [x, y].
+ */
 export const node = (name, pos, widgets = [], children = [], scale = [1, 1]) => ({
   name,
   active: true,
@@ -949,6 +1075,13 @@ export const node = (name, pos, widgets = [], children = [], scale = [1, 1]) => 
   widgets,
   children,
 });
+/**
+ * Build a sprite widget.
+ * @param {string} name The sprite's name in its atlas.
+ * @param {number} w The widget width in NGUI units.
+ * @param {number} h The widget height in NGUI units.
+ * @param {object} [opts] Fields that replace the defaults (atlas Common, type 1, pivot 4, depth 5, white).
+ */
 export const sprite = (name, w, h, opts = {}) => ({
   sprite: name,
   atlas: "Common",
@@ -962,6 +1095,13 @@ export const sprite = (name, w, h, opts = {}) => ({
   flip: 0,
   ...opts,
 });
+/**
+ * Build a label widget.
+ * @param {string} color The colour as "#rrggbb/alpha".
+ * @param {number} w The widget width in NGUI units.
+ * @param {number} h The widget height in NGUI units.
+ * @param {object} [opts] Fields that replace the defaults (pivot 4, depth 9, align 0).
+ */
 export const label = (text, fontSize, color, w, h, opts = {}) => ({
   cls: "UILabel",
   text,
@@ -975,17 +1115,20 @@ export const label = (text, fontSize, color, w, h, opts = {}) => ({
   ...opts,
 });
 
-// glyph extent: a closing full-width bracket or corner bracket is mostly blank on the right
+/**
+ * The ink width of the widest line of a text. A closing full-width bracket or corner bracket is mostly blank on
+ * the right.
+ * @returns {number} The width in pixels.
+ */
 export const glyphWidth = (str, fs) =>
   Math.max(
     ...String(str)
       .split("\n")
       .map((l) => textWidth(l, fs) - (/[\uff09\u300d]$/.test(l) ? fs * 0.45 : 0)),
   );
-// fit text into maxW: shrink from fsMax to fsMin on one line; if it still does not fit, break into up to maxLines lines
-// at the smallest size that fits. Breaks go at separators (full-width comma and enumeration comma, ", ", " - ", spaces,
-// after an asterisk, before brackets) first, then between CJK or Thai
-// words; the CJK line-breaking rules hold (NO_START, NO_END). Wrapped text is never larger than fsMin.
+// Text breaks go at separators (the full-width comma and enumeration comma, ", ", " - ", spaces, after an
+// asterisk, before brackets) first, then between CJK or Thai words; the CJK line-breaking rules hold (NO_START,
+// NO_END).
 const CJK = /[\u3040-\u30ff\u3400-\u9fff\uff00-\uffef]/;
 const THAI = /[\u0e00-\u0e7f]/;
 // never at the start of a line (UAX #14 CL, CP, EX, IS, NS, IN and the small kana of CJ, as CSS line-break: strict
@@ -1001,7 +1144,8 @@ const NO_START = new RegExp(
 // never at the end of a line (UAX #14 OP): opening brackets and quotes
 const NO_END = /[\uff08\uff3b\uff5b\uff5f\u3008\u300a\u300c\u300e\u3010\u3014\u3016\u3018\u301a\u301d\u2018\u201c([{]$/;
 function tokensOf(str, cjkBreaks) {
-  // A Terror form joins the character and the form with an asterisk (Shiroko*Terror, full-width in CJK): a break may follow it.
+  // A Terror form joins the character and the form with an asterisk (Shiroko*Terror, full-width in CJK): a break
+  // may follow it.
   let tokens = String(str)
     .split(/(?<=[\uff0c\u3001]|, | - |\s)|(?=[\uff08(])|(?<=\S[*\uff0a])(?=\S)/)
     .filter(Boolean);
@@ -1011,7 +1155,8 @@ function tokensOf(str, cjkBreaks) {
     typeof Intl !== "undefined" && Intl.Segmenter
       ? new Intl.Segmenter(textLang() || "zh", { granularity: "word" })
       : null;
-  // "chars": CJK may break between any two characters (the kinsoku rules below still hold), for a word wider than its line
+  // "chars": CJK may break between any two characters (the kinsoku rules below still hold), for a word wider than
+  // its line
   const perChar = (tok) =>
     tok.match(/[\u3040-\u30ff\u3400-\u9fff\uff00-\uffef]|[^\u3040-\u30ff\u3400-\u9fff\uff00-\uffef]+/g);
   // the segmenter cuts a Latin run at its punctuation (".skel" into "." and "skel"): printable ASCII runs stay one word
@@ -1056,7 +1201,15 @@ function breakLines(tokens, fs, maxW) {
   if (cur) lines.push(cur.trimEnd());
   return lines;
 }
-// lang: the text's language when it is not the page's (it is drawn in that language's fonts, app.css)
+/**
+ * Fit text into a width: shrink it from fsMax to fsMin on one line; if it still does not fit, break it into up
+ * to maxLines lines at the smallest size that fits. Wrapped text is never larger than fsMin.
+ * @param {number} fsMin The smallest font size before wrapping.
+ * @param {string|null} [lang] The text's language when it is not the page's; it is drawn in that language's
+ *     fonts (app.css).
+ * @returns {{text: string, fs: number, lines: number, overflow?: boolean}} The text with its line breaks, the
+ *     size and the number of lines.
+ */
 export function fitText(str, fsMax, fsMin, maxW, maxLines = 2, lang = null) {
   const outer = measureLang;
   measureLang = lang || outer;
@@ -1080,8 +1233,8 @@ function balanced(tokens, fs, maxW, lines) {
 }
 function fitLines(str, fsMax, fsMin, maxW, maxLines) {
   const fit = fitWrapped(str, fsMax, fsMin, maxW, maxLines);
-  // Text with no break to wrap at (one long word) used to jump from fsMin to fsMin - 8. It keeps the largest size under fsMin
-  // at which it fits on one line: a wrap that wins a larger size is still used.
+  // Text with no break to wrap at (one long word) keeps the largest size under fsMin at which it fits on one line;
+  // a wrap that wins a larger size is still used.
   if (maxLines > 1 && fit.fs < fsMin) {
     for (let fs = fsMin - 2; fs > fit.fs && fs >= fsMin - 8; fs -= 2)
       if (glyphWidth(str, fs) <= maxW) return { text: str, fs, lines: 1 };
@@ -1102,7 +1255,8 @@ function fitWrapped(str, fsMax, fsMin, maxW, maxLines) {
       }
     }
   }
-  // Nothing fits above fsMin - 8 (one long word): that size and smaller, down to 40 % of fsMin, so the text stays in its box.
+  // Nothing fits above fsMin - 8 (one long word): that size and smaller, down to 40 % of fsMin, so the text stays
+  // in its box.
   for (let fs = fsMin - 8; fs >= sizeFloor(fsMin); fs -= 2) {
     const lines = wrapAt(str, fs, maxW, maxLines);
     if (lines) return { text: lines.join("\n"), fs, lines: lines.length };
@@ -1127,8 +1281,14 @@ function wrapAt(str, fs, maxW, maxLines) {
 
 // NGUI's line pitch (render() lineHeight 1.15) of text drawn at fs
 export const LINE_PITCH = 1.15;
-// Draw a caption at the size already chosen for its sibling group. Try every permitted word/CJK break at that size;
-// fitText can otherwise choose a smaller size before trying Thai word breaks, undoing the group's shared size.
+/**
+ * Draw a caption at the size already chosen for its sibling group, trying every permitted word and CJK break at
+ * that size. fitText can otherwise choose a smaller size before trying Thai word breaks, undoing the group's
+ * shared size.
+ * @param {string|null} [lang] The text's language when it is not the page's.
+ * @returns {{text: string, fs: number, lines: number, overflow: boolean}} The wrapped text; overflow is true
+ *     when it does not fit.
+ */
 export function wrapText(str, fs, maxW, maxLines = 2, lang = null) {
   const outer = measureLang,
     previous = charBreaks;
@@ -1144,13 +1304,23 @@ export function wrapText(str, fs, maxW, maxLines = 2, lang = null) {
 }
 // the smallest size text is shrunk to so that it stays in its box, 40 % of the size range's floor
 const sizeFloor = (fsMin) => Math.max(8, Math.floor(fsMin * 0.4));
-// Labels of widgets of one kind side by side (an action row, tabs, segments, the buttons of a popup) share one size: the
-// largest from fsMax down at which every label fits its box after wrapping onto at most maxLines lines (breaks as in
-// fitText: words in Latin scripts, words in Thai, CJK rules) and, with maxH, within that height. Wrapping that wins only a
-// step or two of size over every label on one line is not used. A size under fsMin only where some label cannot fit at fsMin,
-// in steps of 2 down to 40 % of it: text never runs past its box. maxW may be a list (a box per label). Gives
-// [{ text, fs, lines }] in the labels' order, every fs the same; overflow: true on each when not even the smallest size
-// fits (the caller shortens the text or enlarges the box).
+/**
+ * Fit the labels of widgets of one kind side by side (an action row, tabs, segments, the buttons of a popup) to
+ * one shared size.
+ * The size is the largest from fsMax down at which every label fits its box after wrapping onto at most
+ * maxLines lines (breaks as in fitText: words in Latin scripts, words in Thai, CJK rules) and, with maxH,
+ * within that height. A wrap that wins only a step or two of size over every label on one line is not used. A
+ * size under fsMin is used only where some label cannot fit at fsMin, in steps of 2 down to 40 % of it: text
+ * never runs past its box.
+ * @param {string[]} strs
+ * @param {number|number[]} maxW The width of the box, or one per label.
+ * @param {number} [maxLines=2] The most lines per label.
+ * @param {{lang?: string|string[]|null, maxH?: number}} [options] One language for every label or a list with
+ *     each label's own (null: the page's), and the height of the box.
+ * @returns {{text: string, fs: number, lines: number, overflow?: boolean}[]} One result per label, in order,
+ *     with the same fs; overflow is true on each when not even the smallest size fits (the caller shortens the
+ *     text or enlarges the box).
+ */
 export function fitGroup(strs, fsMax, fsMin, maxW, maxLines = 2, { lang = null, maxH = Infinity } = {}) {
   const outer = measureLang;
   // lang: one language for every label, or a list with each label's own (null: the page's), as the Language row has
@@ -1180,8 +1350,8 @@ export function fitGroup(strs, fsMax, fsMin, maxW, maxLines = 2, { lang = null, 
     };
     if (!labels.length) return [];
     let wrapped = solve(maxLines);
-    // A CJK word wider than its line (the katakana of "Explorer") keeps the labels under fsMin: break inside it instead, as
-    // the guidelines allow for CJK, when that keeps the size within the range.
+    // A CJK word wider than its line (the katakana of "Explorer") keeps the labels under fsMin: break inside it
+    // instead, as the guidelines allow for CJK, when that keeps the size within the range.
     if (maxLines > 1 && (!wrapped || wrapped[0].fs < fsMin)) {
       charBreaks = true;
       try {
@@ -1204,8 +1374,8 @@ export function fitGroup(strs, fsMax, fsMin, maxW, maxLines = 2, { lang = null, 
   }
 }
 
-// the ways str can be set at fs on one line or, with maxLines 2, on the two lines that make it narrowest, within maxH, each
-// { lines, width }, narrowest first
+// the ways str can be set at fs on one line or, with maxLines 2, on the two lines that make it narrowest, within
+// maxH, each { lines, width }, narrowest first
 function layoutOptions(str, fs, maxLines, maxH) {
   const options = [{ lines: [str], width: glyphWidth(str, fs) }];
   if (maxLines > 1) {
@@ -1226,12 +1396,23 @@ function layoutOptions(str, fs, maxLines, maxH) {
     .sort((x, y) => x.width - y.width);
 }
 
-// A row of buttons that share the width `total` (their bodies, without the gaps between them): one size for every caption,
-// the largest at which each fits after wrapping onto at most two lines, with `inset` of clear space across each body (both
-// sides together). Bodies are equal. Only where equal bodies would force the size below fsMin, the bottom of the prefab's
-// range, is a body at least as wide as its caption needs and the rest as equal as the width allows: a long word takes width
-// from its neighbours, who keep the same size, so one word costs the row a little evenness instead of the size of every
-// caption. Gives [{ text, fs, lines, width }].
+/**
+ * Fit the captions of a row of buttons that share one width.
+ * All captions get one size, the largest at which each fits after wrapping onto at most two lines, with `inset`
+ * of clear space across each body (both sides together). Bodies are equal, except where equal bodies would
+ * force the size below fsMin, the bottom of the prefab's range: then a body is at least as wide as its caption
+ * needs and the rest are as equal as the width allows. A long word takes width from its neighbours, who keep
+ * the same size, so one word costs the row a little evenness instead of the size of every caption.
+ * @param {string[]} strs
+ * @param {number} fsMin The bottom of the prefab's size range.
+ * @param {number} total The width of the bodies together, without the gaps between them.
+ * @param {number} inset The clear space across each body, both sides together.
+ * @param {number} [maxLines=2] The most lines per caption.
+ * @param {{lang?: string|string[]|null, maxH?: number}} [options] The language or languages, and the height of
+ *     the box.
+ * @returns {{text: string, fs: number, lines: number, width: number}[]} One result per caption: the wrapped
+ *     text, the shared size, the line count and the body width.
+ */
 export function fitRow(strs, fsMax, fsMin, total, inset, maxLines = 2, { lang = null, maxH = Infinity } = {}) {
   const outer = measureLang;
   measureLang = lang || outer;
@@ -1269,19 +1450,27 @@ export function fitRow(strs, fsMax, fsMin, total, inset, maxLines = 2, { lang = 
   }
 }
 
-// A glyph that stands for the vertical band Latin and Thai text occupies, so a title does not move with the descenders and
-// ascenders of its own letters: capital H for Latin, a consonant for Thai. Han, kana and Hangul fill the same band whatever
-// the characters are: null, their own ink counts.
+/**
+ * A glyph that stands for the vertical band Latin and Thai text occupies, so a title does not move with the
+ * descenders and ascenders of its own letters: capital H for Latin, a consonant for Thai.
+ * @returns {string|null} The glyph, or null for Han, kana and Hangul, which fill the same band whatever the
+ *     characters are, so their own ink counts.
+ */
 export function inkReference(str) {
   const text = String(str);
   if (/[\u2e80-\u9fff\uff00-\uffef\uac00-\ud7af\u1100-\u11ff\u3130-\u318f]/.test(text)) return null;
   return /[\u0e00-\u0e7f]/.test(text) ? "\u0e01" : "H";
 }
-// How far (CSS px, down) text drawn at px CSS pixels in a label box has to move for the centre of its ink to sit on the box's
-// centre: the box centres its lines (NGUI's 1.15 pitch) by font metrics, the ink of the first line's top and the last line's
-// bottom is what the eye centres. Measured with the font stack the text draws with, so it works on a tree that is not in
-// the document yet (computed style is empty there). reference: the ink of the script's reference glyph where it has one
-// (inkReference), not of these letters: one baseline for every title of a language.
+/**
+ * How far text drawn in a label box has to move down for the centre of its ink to sit on the box's centre.
+ * The box centres its lines (NGUI's 1.15 pitch) by font metrics, while the eye centres the ink of the first
+ * line's top and the last line's bottom. It is measured with the font stack the text draws with, so it works on
+ * a tree that is not in the document yet (computed style is empty there).
+ * @param {number} px The font size in CSS pixels.
+ * @param {{reference?: boolean}} [options] reference: measure the script's reference glyph (inkReference)
+ *     instead of these letters, giving one baseline for every title of a language.
+ * @returns {number} The shift in CSS pixels, down.
+ */
 export function inkShift(str, px, { reference = false } = {}) {
   const lines = String(str).split("\n");
   measureCtx.font = `500 ${px}px ${fontStack()}`;
@@ -1299,9 +1488,13 @@ export function inkShift(str, px, { reference = false } = {}) {
     : 0;
 }
 
-// The ink of text drawn at px CSS pixels in a label box: its top and bottom as offsets (down) from the box's centre, the
-// extent the eye sees (first line's ascent to last line's descent, lines at NGUI's 1.15 pitch, centred as inkShift
-// describes). Without font metrics, the em box of the lines.
+/**
+ * The ink of text drawn in a label box: its top and bottom as offsets from the box's centre.
+ * It is the extent the eye sees (first line's ascent to last line's descent, lines at NGUI's 1.15 pitch,
+ * centred as inkShift describes); without font metrics, the em box of the lines.
+ * @param {number} px The font size in CSS pixels.
+ * @returns {{top: number, bottom: number}} The offsets in CSS pixels, down from the centre.
+ */
 export function inkBand(str, px) {
   const lines = String(str).split("\n");
   measureCtx.font = `500 ${px}px ${fontStack()}`;
@@ -1314,7 +1507,15 @@ export function inkBand(str, px) {
   return { top: centre - half, bottom: centre + half };
 }
 
-// fitGroup into the label widgets of one group: each one's text and size (the same for all), and its box at least maxW wide
+/**
+ * Fit the label widgets of one group with fitGroup: each one's text and size (the same for all), and its box at
+ * least maxW wide.
+ * @param {object[]} widgets The label widgets; each is updated in place.
+ * @param {string[]} strs The texts, one per widget.
+ * @param {number} [maxLines=2] The most lines per label.
+ * @param {{maxH?: number}} [opts]
+ * @returns {{text: string, fs: number, lines: number}[]} The fit of each widget, as fitGroup gives it.
+ */
 export function fitLabels(widgets, strs, fsMax, fsMin, maxW, maxLines = 2, opts = {}) {
   // each widget's own language, as the Language row's options have
   const fits = fitGroup(strs, fsMax, fsMin, maxW, maxLines, {
@@ -1327,8 +1528,13 @@ export function fitLabels(widgets, strs, fsMax, fsMin, maxW, maxLines = 2, opts 
   return fits;
 }
 
-// fitText into a label widget: its text and size, and its box at least maxW wide, so text fitted to maxW never spills
-// out of a narrower box (a prefab label is often a little narrower than the button drawn round it)
+/**
+ * Fit text into a label widget: its text and size, and its box at least maxW wide, so text fitted to maxW never
+ * spills out of a narrower box (a prefab label is often a little narrower than the button drawn round it).
+ * @param {object} widget The label widget; updated in place.
+ * @param {number} fsMin The smallest size before wrapping.
+ * @returns {{text: string, fs: number, lines: number}} The fit, as fitText gives it.
+ */
 export function fitLabel(widget, str, fsMax, fsMin, maxW, maxLines = 2) {
   const f = fitText(str, fsMax, fsMin, maxW, maxLines, widget.lang);
   Object.assign(widget, { text: f.text, fontSize: f.fs, w_: Math.max(widget.w_ || 0, maxW) });

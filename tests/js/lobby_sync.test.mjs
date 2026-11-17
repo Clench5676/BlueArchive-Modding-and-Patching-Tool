@@ -115,7 +115,8 @@ test("a random-timing clip waits, plays on its track and waits again from that s
   r.tick(15.4);
   assert.deepEqual(state.log, []);
   r.tick(0.1);
-  // set at full weight (its intro mix 0), its sound keys watched, nothing queued after it: the track holds its last frame
+  // set at full weight (its intro mix 0), its sound keys watched, nothing queued after it: the track holds its
+  // last frame
   assert.deepEqual(state.log, [["set", 3, "Train_00_R"]]);
   assert.equal(state.tracks[3].mixDuration, 0);
   assert.deepEqual(entries, [["Train_00_R", "Train_00_R"]]);

@@ -63,11 +63,11 @@ test("the closest zoom is the bust, beside the panel and fullscreen", () => {
     near((KOHARU.max.y - FACE) * pxPerUnit(bust, frame), frame.y - 24, 1e-6);
     // the box then runs well past the host's height: head and shoulders, not the whole chibi
     assert.ok((KOHARU.max.y - KOHARU.min.y) * pxPerUnit(bust, frame) > 1.4 * frame.h);
-    // 0.45 of the formation distance (the old limit) still showed her whole, shorter than the host
+    // at 0.45 of the formation distance she would still show whole, shorter than the host
     assert.ok((KOHARU.max.y - KOHARU.min.y) * pxPerUnit(0.45 * fit, frame) < frame.h);
     assert.ok(bust < 0.35 * fit);
   }
-  // a box whose top lies at or below the face still closes in; a very tall one does not stop further out than before
+  // a box whose top lies at or below the face still closes in; a very tall one stops no further out than 0.45 of it
   const fit = FORMATION_VIEW.distance;
   near(bustDistance({ min: { y: -0.4 }, max: { y: 0.3 } }, FACE, FULL, fit), fit * 0.1);
   near(bustDistance({ min: { y: -0.4 }, max: { y: 5 } }, FACE, FULL, fit), fit * 0.45);

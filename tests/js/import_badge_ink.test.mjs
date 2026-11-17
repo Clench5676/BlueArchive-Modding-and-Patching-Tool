@@ -1,7 +1,7 @@
-// Import Mod's status badges: the ink of the text (the extent the eye sees, one baseline per language: NGUI.inkShift with the
-// reference glyph) is centred on the badge background (UIMailBoxContent TimeLimit/Bg), for every state text of the page, one
-// line or wrapped, in every shipped language. Measured on the shared stand-in canvas (helpers/fit_canvas.mjs): what is
-// asserted is the geometry, not a font.
+// Import Mod's status badges: the ink of the text (the extent the eye sees, one baseline per language:
+// NGUI.inkShift with the reference glyph) is centred on the badge background (UIMailBoxContent TimeLimit/Bg),
+// for every state text of the page, one line or wrapped, in every shipped language. Measured on the shared
+// stand-in canvas (helpers/fit_canvas.mjs): what is asserted is the geometry, not a font.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { installFitPage, text, LOCALES, context, webui } from "./helpers/fit_canvas.mjs";
@@ -53,8 +53,9 @@ const ui = {
 const art = () => importArtwork(ui, layouts);
 const textOf = (node) => node.widgets.find((w) => "text" in w);
 
-// the ink centre of the badge's text minus the badge background's centre, in stage px (the row drawn at ROW_SCALE). The label's
-// lines fill the top of its box at NGUI's pitch (pivot 1); the ink is that of the reference glyph on every line, else the text's own.
+// the ink centre of the badge's text minus the badge background's centre, in stage px (the row drawn at
+// ROW_SCALE). The label's lines fill the top of its box at NGUI's pitch (pivot 1); the ink is that of the
+// reference glyph on every line, else the text's own.
 function inkOffset(tree) {
   const status = find(tree, "TimeLimit"),
     node = find(status, "Label_Locale_TimeLimit"),
@@ -220,7 +221,8 @@ test("the correction is the distance between the ink's centre and the background
       }
     });
 
-  // every text and badge rectangle of a row in px of the row, from the fixture's renderer (on plain elements, while it draws)
+  // every text and badge rectangle of a row in px of the row, from the fixture's renderer (on plain elements,
+  // while it draws)
   async function draw(tree, scale = ROW_SCALE, origin = [ROW_WIDTH / 2, (329 * ROW_SCALE) / 2]) {
     const original = document.createElement,
       host = {
@@ -260,8 +262,9 @@ test("the correction is the distance between the ink's centre and the background
   }
   const overlaps = (a, [x, y, w, h]) => a.left < x + w && a.left + a.width > x && a.top < y + h && a.top + a.height > y;
 
-  // the ink of the badge's text, centred on its background like every badge of the page (import_badge_ink.test.mjs has the shipped
-  // states in every language): the new texts, found and not found, one line or on their own line, in all shipped languages
+  // the ink of the badge's text, centred on its background like every badge of the page (import_badge_ink.test.mjs
+  // has the shipped states in every language): the new texts, found and not found, one line or on their own line,
+  // in all shipped languages
   for (const locale of LOCALES)
     test(`the ink of the new status texts is centred on the badge background within half a pixel in ${locale}`, () => {
       setStrings(locale, {});
@@ -295,8 +298,9 @@ test("the correction is the distance between the ink's centre and the background
         }
     });
 
-  // --- the spacing under the meta line (the divider-to-meta gap is the prefab's rhythm) and the control under the badge ---
-  // a label whose lines fill the top of its box (pivots 0 to 2): the y (units, up) of its ink's top and bottom
+  // --- the spacing under the meta line (the divider-to-meta gap is the prefab's rhythm) and the control under the
+  // badge --- a label whose lines fill the top of its box (pivots 0 to 2): the y (units, up) of its ink's top and
+  // bottom
   const inkOf = (node) => {
     const w = textOf(node),
       px = fontSizeFor(w.text, w.fontSize),
@@ -342,8 +346,8 @@ test("the correction is the distance between the ink's centre and the background
     const w = textOf(node);
     return node.pos[1] + ([-1, 0, 1][Math.floor((w.pivot ?? 4) / 3)] * w.h_) / 2;
   };
-  // the Choose Files control under a badge: one gap (the divider-to-meta rhythm) below the badge, its right edge on the badge's,
-  // at its full height, and one gap above the grown card's bottom
+  // the Choose Files control under a badge: one gap (the divider-to-meta rhythm) below the badge, its right edge
+  // on the badge's, at its full height, and one gap above the grown card's bottom
   function controlUnder(tree, m, room, plain, label) {
     const c = tree.control,
       gap = m.dividerBottom - m.metaInk.top,
@@ -410,7 +414,8 @@ test("the correction is the distance between the ink's centre and the background
         meta: METAS[0],
         muted: true,
       };
-      // a badge too wide for the line, a control wider than the row and one taller than the badge: only the first leaves the line
+      // a badge too wide for the line, a control wider than the row and one taller than the badge: only the first
+      // leaves the line
       for (const [value, room, own] of [
         [state, control, true],
         [missingLabel("missingNotFound", { n: 1 }, locale), { ...control, width: ROW_WIDTH / 2 }, false],
@@ -430,8 +435,8 @@ test("the correction is the distance between the ink's centre and the background
       }
     });
 
-  // --- the design system (docs/design-system/) in Import Mod's rows: the scales and rules of decisions 1 to 3, in en-US and zh-CN ---
-  // the scales the row takes, and the rules as assertions on its boxes
+  // --- the design system (docs/design-system/) in Import Mod's rows: the scales and rules of the design system, in
+  // en-US and zh-CN --- the scales the row takes, and the rules as assertions on its boxes
   const PITCH = LINE.stack * TYPE.dense.fs,
     DESIGN_LOCALES = ["en-US", "zh-CN"];
   const metaFor = (locale, n = 3) =>
@@ -487,7 +492,8 @@ test("the correction is the distance between the ink's centre and the background
       ]) {
         assert.equal(textOf(find(tree, path)).fontSize, TYPE.dense.fs, path);
       }
-      // the name plate (title and divider) keeps the prefab's place; the first line starts ROW_TEXT_TOP under the card's centre
+      // the name plate (title and divider) keeps the prefab's place; the first line starts ROW_TEXT_TOP under the
+      // card's centre
       const card = find(prefabs.UIMailBoxContent, "List_01");
       assert.equal(find(tree, "Label_System").pos[1], find(card, "Label_System").pos[1]);
       assert.equal(find(tree, "Line").pos[1], find(card, "Line").pos[1]);
@@ -521,7 +527,8 @@ test("the correction is the distance between the ink's centre and the background
         const m = measure(tree),
           meta = find(tree, "Label_Locale_Received");
         assert.ok(!m.second, `${locale} ${state}: the badge is on the first line`);
-        // rule 1: the visual centre of every element of the row on its centre line (a text's reference glyph, a widget's box)
+        // rule 1: the visual centre of every element of the row on its centre line (a text's reference glyph, a
+        // widget's box)
         assert.ok(
           Math.abs(firstLineCentre(meta) - backgroundCentre(m.status)) <= 0.01,
           `${locale} ${state}: meta ${firstLineCentre(meta)} against badge ${backgroundCentre(m.status)}`,
@@ -535,8 +542,8 @@ test("the correction is the distance between the ink's centre and the background
       setStrings(locale, {});
       const rowArt = art(),
         kind = text(locale, "tab.lobby");
-      // a badge on its own line (too wide for the metadata's), a route and a note: the badge's cell, then the route, then the note,
-      // a pitch a line
+      // a badge on its own line (too wide for the metadata's), a route and a note: the badge's cell, then the route,
+      // then the note, a pitch a line
       const tree = rowArt.row({
         name: "Student",
         kind,
@@ -614,7 +621,8 @@ test("the correction is the distance between the ink's centre and the background
       const rowArt = art(),
         control = chooseSize(rowArt),
         caption = missingLabel("choose", {}, locale);
-      // width: the caption and CONTROL.buttonXS.pad each side (the body's slice border included), 240 at least, in the button's own units
+      // width: the caption and CONTROL.buttonXS.pad each side (the body's slice border included), 240 at least, in the
+      // button's own units
       const button = find(prefabs.UIMailBoxContent, "List_01/Btn_Receive"),
         sx = button.scale?.[0] ?? 1,
         lx = find(button, "Label_Locale").scale?.[0] ?? 1;
@@ -670,7 +678,8 @@ test("the correction is the distance between the ink's centre and the background
           // a badge on its own line still keeps the gap, with or without the control
           else assert.ok(Math.abs(stagePx(m.above - m.bgTop - (m.dividerBottom - m.metaInk.top))) <= 1);
         }
-      // the second badge's extra height is only what the gap needs: the same row with the badge on the first line is 348
+      // the second badge's extra height is only what the gap needs: the same row with the badge on the first line is
+      // 348
       assert.equal(
         rowArt.row({ name: "Student", kind, state: states[0], stateKey: "ready", meta: METAS[0], textSize: 42 })
           .rowHeight,
@@ -808,7 +817,8 @@ test("the correction is the distance between the ink's centre and the background
               bg = parent.els[0],
               points = pattern.style.clipPath.match(/-?[\d.]+(?=px)/g).map(Number);
             assert.equal(points.length, 8);
-            // Map the polygon out of the pattern's local coordinates into the body's rectangle, undoing both sprite transforms.
+            // Map the polygon out of the pattern's local coordinates into the body's rectangle, undoing both sprite
+            // transforms.
             const [a, b, c, d, e, f] = spriteMaskTransform(pattern.style, bg.style);
             for (let i = 0; i < points.length; i += 2) {
               const x = a * points[i] + c * points[i + 1] + e,
@@ -979,7 +989,8 @@ test("the correction is the distance between the ink's centre and the background
       });
     });
 
-  // A refused row's badge opens its details; the hit area is the badge background's box, wrapped or not, every language.
+  // A refused row's badge opens its details; the hit area is the badge background's box, wrapped or not, every
+  // language.
   for (const locale of LOCALES)
     test(`badge-hit: the details hit area covers the badge background in ${locale}`, () => {
       setStrings(locale, {});

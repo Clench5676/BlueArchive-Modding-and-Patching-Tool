@@ -3,6 +3,7 @@ import { order, normalizeView, fold, terms } from "./roster-order.js";
 import { PORTRAIT_ANCHOR, hallScale } from "./student-hall-framing.js";
 
 const copy = (value) => structuredClone(value);
+/** The key of a portrait or lobby source: its variant and its source. */
 export const sourceKey = (source) => `${source.variant}:${source.source}`;
 function canonicalDraft(value) {
   const result = copy(value);
@@ -23,6 +24,13 @@ function canonicalDraft(value) {
   }
   return result;
 }
+/**
+ * Make the Hall's editable draft over the saved data: begin() starts an edit, dirty() tells it differs,
+ * cancel() drops it and accept() makes it the saved data.
+ * @returns
+ *     {{current: () => object, saved: () => object, kind: () => string|null, begin: (kind: string) => object, dirty: () => boolean, cancel: () => void, accept: (value: object) => void, add: Function}}
+ *     The draft's controls (more for the editors).
+ */
 export function createDraft(saved) {
   let base = canonicalDraft(saved),
     draft = null,
@@ -124,6 +132,11 @@ export function createDraft(saved) {
   };
 }
 
+/**
+ * Group the source choices of a kind into the families the roster order works on.
+ * @param {object[]} choices
+ * @param {string|null} [kind] The kind to keep; all by default.
+ */
 export function pickerData(choices, kind = null) {
   if (kind) choices = choices.filter((choice) => choice.kind === kind);
   const families = new Map(),
@@ -177,6 +190,13 @@ export function pickerData(choices, kind = null) {
   }
   return { families: [...families.values()] };
 }
+/**
+ * The students to pick from, in the roster's order for a view and a search.
+ * @param {object[]} choices
+ * @param {(names: object) => string} label Gives the UI language's name.
+ * @param {string|null} [kind]
+ * @returns {object[]}
+ */
 export function studentChoices(choices, view, query, label, locale, kind = null) {
   return order(pickerData(choices, kind), normalizeView(view), {
     query,
@@ -203,6 +223,12 @@ function sourceMatches(choice, words) {
   );
   return !words.length || words.every((word) => text.includes(word));
 }
+/**
+ * The picker's portrait rows: one per student, with the portraits that match the search.
+ * @param {object[]} choices
+ * @param {(names: object) => string} label Gives the UI language's name.
+ * @returns {object[]}
+ */
 export function portraitRows(choices, view, query, label, locale) {
   const mods = choices.filter((c) => c.kind === "spr");
   const cards = studentChoices(choices, view, query, label, locale, "spr"),
@@ -218,6 +244,14 @@ export function portraitRows(choices, view, query, label, locale) {
     }))
     .filter((row) => row.choices.length);
 }
+/**
+ * The memorial lobbies to pick from, in the order of the view: the students' lobbies first when they match.
+ * @param {object[]} choices
+ * @param {string|null} selected
+ * @param {object} [viewed] The students already viewed in the picker.
+ * @param {(names: object) => string} [label] Gives the UI language's name.
+ * @returns {object[]}
+ */
 export function memorialChoices(
   choices,
   students,
@@ -267,6 +301,13 @@ export function memorialChoices(
   });
 }
 
+/**
+ * The room the Hall's content has, between its toolbars and the navigation.
+ * @param {{top: number, width: number}} rootBox
+ * @param {{bottom?: number}[]} [toolbarBoxes]
+ * @param {{top: number, height: number}|null} [navBox]
+ * @returns {{left: number, top: number, right: number, bottom: number}} The bounds in stage pixels.
+ */
 export function contentBounds(rootBox, toolbarBoxes = [], navBox = null) {
   const scale = rootBox?.width > 0 ? 1920 / rootBox.width : 1,
     top = rootBox?.top || 0;
@@ -278,7 +319,18 @@ export function contentBounds(rootBox, toolbarBoxes = [], navBox = null) {
   return { left: 24, top: toolbarBottom + 16, right: 1896, bottom: Math.min(1044, navTop - 16) };
 }
 
-// Selection belongs to the editor session, never the persisted Hall draft.
+/**
+ * The selected portrait after an editor event. The selection belongs to the editor session, never the persisted
+ * Hall draft.
+ * @param {string|null} selected The selected portrait's id.
+ * @param {object} options
+ * @param {"end"|"escape"|"click"|"drag"|"remove"|"redraw"} options.type The event: end and escape clear the
+ *     selection, click toggles it, drag takes the dragged one, remove clears a removed one and redraw keeps it
+ *     while it is still there.
+ * @param {string|null} [options.id]
+ * @param {string[]} [options.ids]
+ * @returns {string|null}
+ */
 export function portraitSelection(selected, { type, id = null, ids = [] }) {
   if (["end", "escape"].includes(type)) return null;
   if (type === "click") return selected === id ? null : id;
@@ -288,6 +340,12 @@ export function portraitSelection(selected, { type, id = null, ids = [] }) {
   return selected;
 }
 
+/**
+ * The choices a placed portrait can be replaced with: the choices of its student that are not placed yet.
+ * @param {object[]} choices
+ * @param {object[]} placed
+ * @returns {object[]}
+ */
 export function portraitReplacements(entry, choices, placed) {
   const current = choices.find((choice) => choice.kind === "spr" && sourceKey(choice) === sourceKey(entry));
   if (!current?.family) return [];

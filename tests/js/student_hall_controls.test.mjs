@@ -183,7 +183,7 @@ test("normal and edit actions pack immediately left of the right-aligned numberl
     near(actions.at(-1)[2] + actions.at(-1)[3], 1875);
     for (let i = 0; i < actions.length - 1; i++)
       near(actions[i + 1][2] - (actions[i][2] + actions[i][3]), (actions[i + 1][0] === "Mode" ? SPACE.l : SPACE.m) * S);
-    for (const [name, , x, width] of actions)
+    for (const [name, , _x, width] of actions)
       if (["Layout", "Background", "Adjust", "Add", "Mode", "Fullscreen"].includes(name)) assert.equal(width, 156 * S);
   }
 });

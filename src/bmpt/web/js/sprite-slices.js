@@ -1,5 +1,9 @@
-// NGUI's atlas borders describe nine-slice cuts, not the painted stroke width.
-// Rendering and content-window geometry share these exact source and raster cuts.
+/**
+ * The nine-slice borders of an atlas sprite: NGUI's atlas borders describe the cuts, not the painted stroke
+ * width, and rendering and content-window geometry share these exact source and raster cuts.
+ * @param {object} meta The sprite's metadata: width, height and the four borders.
+ * @returns {number[]} [top, right, bottom, left] in source pixels.
+ */
 export function spriteBorders(meta) {
   const b = [meta.borderTop, meta.borderRight, meta.borderBottom, meta.borderLeft].map((v) => v || 0);
   for (const [i, j, size] of [
@@ -15,6 +19,15 @@ export function spriteBorders(meta) {
   return b;
 }
 
+/**
+ * The cuts of one axis of a sliced sprite, in source and raster pixels.
+ * @param {number} source The source length in pixels.
+ * @param {number} before The border before the stretched part in source pixels.
+ * @param {number} after The border after it.
+ * @param {number} extent The drawn length in stage pixels.
+ * @param {number[]} borderScale The scales of the two borders.
+ * @param {number} [density] Raster pixels per stage pixel.
+ */
 export function sliceAxis(source, before, after, extent, borderScale, density = 2) {
   const size = Math.max(1, Math.round(extent * density));
   const [beforeScale, afterScale] = Array.isArray(borderScale) ? borderScale : [borderScale, borderScale];
@@ -38,6 +51,9 @@ export function sliceAxis(source, before, after, extent, borderScale, density = 
   };
 }
 
+/**
+ * Map a source coordinate to the drawn axis, in stage pixels.
+ */
 export function slicePoint(value, axis) {
   const span = axis.spans.find(([a, b]) => b > a && value >= a && value <= b);
   if (!span) throw new Error("Sprite content lies outside its atlas rectangle");

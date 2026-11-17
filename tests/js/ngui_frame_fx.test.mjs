@@ -151,15 +151,17 @@ test("WebGL2 absence leaves the static prefab frame usable", async () => {
   assert.equal(frames.size, 0);
 });
 
-// --- the page's composite against the game's blend ---------------------------------------------------------------------------
-// The game blends One / OneMinusSrcAlpha in linear light over the card: result = light + behind * (1 - alpha), the light being
-// the shader's colour (HDR, 44 and 1084 in linear light), the alpha only the mask. The values below are the material's own.
+// --- the page's composite against the game's blend ---
+// The game blends One / OneMinusSrcAlpha in linear light over the card: result = light + behind * (1 - alpha), the
+// light being the shader's colour (HDR, 44 and 1084 in linear light), the alpha only the mask. The values below are
+// the material's own.
 const rings = [
   ["yellow (applied)", selectedFrame(slot, { w: 312, h: 480 }, true, false)],
   ["blue (previewed)", selectedFrame(slot, { w: 312, h: 480 }, false, true)],
 ].map(([name, frame]) => [name, frame.children.find((n) => n.frameEffect).frameEffect]);
-// the mask program's output for a texel of the ring's gradient (FX_TEX_Bulletline_03 is grey: red = green = blue = g, decoded
-// from sRGB; the mask texture is white; _RGBRGBA is 0): rgb = g * g * vertex colour * _Color, alpha = g
+// the mask program's output for a texel of the ring's gradient (FX_TEX_Bulletline_03 is grey: red = green = blue
+// = g, decoded from sRGB; the mask texture is white; _RGBRGBA is 0): rgb = g * g * vertex colour * _Color, alpha
+// = g
 function shaderOut(effect, g) {
   assert.equal(effect.material.floats._RGBRGBA, 0);
   assert.equal(effect.material.tex._Tex_Mask.default, "white");
@@ -170,8 +172,9 @@ function shaderOut(effect, g) {
     alpha: Math.min(1, g * tint[3] * tint[3] * effect.material.colors._Color[3]),
   };
 }
-const gameOver = (light, alpha, behind) => toSrgb(light + toLinear(behind) * (1 - alpha)); // the blend, then the display encoding
-// what the canvas used to be: the straight colour light / alpha, clamped, over the card by alpha (the page's blend)
+// the blend, then the display encoding
+const gameOver = (light, alpha, behind) => toSrgb(light + toLinear(behind) * (1 - alpha));
+// a straight-alpha composite, for comparison: the colour light / alpha, clamped, over the card by alpha
 const straightOver = (light, alpha, behind) =>
   alpha <= 0 ? behind : toSrgb(Math.min(1, light / alpha)) * alpha + behind * (1 - alpha);
 const texels = Array.from({ length: 256 }, (_, i) => toLinear(i / 255)); // every level of the 8-bit grey texture
@@ -193,7 +196,8 @@ for (const [name, fx] of rings) {
         }
     }
     assert.ok(worst.darker > -1e-9, `${name}: ${worst.darker} darker than the game`);
-    assert.ok(worst.brighter < 0.33, `${name}: ${worst.brighter} brighter than the game`); // partly lit channels only, measured 0.316
+    // partly lit channels only, measured 0.316
+    assert.ok(worst.brighter < 0.33, `${name}: ${worst.brighter} brighter than the game`);
   });
 
   test(`${name}: over black the light is the game's, and a lit channel the mask does not cover stays the game's over white`, () => {
@@ -237,13 +241,14 @@ test("the old straight-alpha canvas lost the light the game adds: its measured d
   assert.ok(gameOver(light[0], alpha, 0) > 0.999);
   assert.ok(straightOver(light[0], alpha, 0) < 0.16, "the old composite, 0.151 over black");
   assert.ok(over(layer, 0, 0) > 0.999, "the new one");
-  // blue, mask 0.031: blue is 1.00 in the game over black; 0.031 in the old composite
+  // blue, mask 0.031: blue is 1.00 in the game over black; 0.031 in the straight composite
   ({ light, alpha } = shaderOut(blue, 0.031));
   layer = frameBlend(light, alpha);
   assert.ok(
     gameOver(light[2], alpha, 0) > 0.999 && straightOver(light[2], alpha, 0) < 0.04 && over(layer, 2, 0) > 0.999,
   );
-  // over the card (white) the old composite also dimmed the zero-light channel by (1 - alpha) in sRGB values, not in linear light
+  // over the card (white) the straight composite also dims the zero-light channel by (1 - alpha) in sRGB values,
+  // not in linear light
   ({ light, alpha } = shaderOut(yellow, 0.5));
   layer = frameBlend(light, alpha);
   assert.equal(light[2], 0);

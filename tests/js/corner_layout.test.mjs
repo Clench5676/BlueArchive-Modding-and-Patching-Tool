@@ -311,7 +311,7 @@ test("immersive scene controls make room for a bar the pointer brought back (chr
   }
   for (const corner of ["bottom-left", "bottom-right"])
     near(at(corner, { top: 55, bottom: 60, offset: 0 })[1], (540 - margin - 37.5 - 60) * 2);
-  // the macOS window buttons travel with the top bar: away with it, they no longer push the top-left control aside
+  // the macOS window buttons travel with the top bar: when it is away, they do not push the top-left control aside
   const native = { active: true, bounds: { left: 12, top: 8, right: 80, bottom: 30 } };
   assert.ok(at("top-left", { top: 0, bottom: 0, offset: 0 }, native)[0] > margin * 2, "buttons at rest push it right");
   near(at("top-left", { top: 0, bottom: 0, offset: 55 }, native)[0], margin * 2);

@@ -1,4 +1,5 @@
-// Modal shells, controls and cards reuse UIPopup_Sort, UICharacterCollection and the existing switch-card renderer.
+// Modal shells, controls and cards of the Student Hall, built on UIPopup_Sort, UICharacterCollection and the
+// switch-card renderer.
 import * as NGUI from "./ngui.js";
 import * as Popup from "./popup.js";
 import * as Loading from "./loading.js";
@@ -11,9 +12,10 @@ import { spriteUrl } from "./api.js";
 import { bindScale } from "./student-hall-scale.js";
 import { POPUP, POPUP_FRAME, XS_BUTTON, CONTROL, TYPE, SPACE, captionMinimum } from "./ui-tokens.js";
 import { stack as layoutStack } from "./ui-grid.js";
-// A Hall small button is a buttonS control (docs/design-system/controls.md): its height, minimum width and caption size are the system's, the
-// caption's floor the body role's. Its fit insets are the Common_Btn_BG body's (XS_BUTTON), not a scale value.
-// the compact bodies (half an XS body high) hold one line at TYPE.micro's size, down to its floor
+// A Hall small button is a buttonS control (docs/design-system/controls.md): its height, minimum width and
+// caption size are the system's, the caption's floor the body role's. Its fit insets are the Common_Btn_BG
+// body's (XS_BUTTON), not a scale value. the compact bodies (half an XS body high) hold one line at TYPE.micro's
+// size, down to its floor
 const BUTTON = CONTROL.buttonXS,
   BUTTON_FLOOR = XS_BUTTON.fsMin,
   COMPACT_FLOOR = TYPE.micro.min;
@@ -29,6 +31,12 @@ function pictureReadiness(host, picture, view) {
     if (!decoded && !signal?.aborted) throw new Error("Hall thumbnail decode failed");
   });
 }
+/**
+ * Wait for the visible cells of a modal's layer to finish their captures. Detached IntersectionObservers cannot
+ * start a capture, so only visible cells (including nested strips) enter this barrier; the overscan neighbours
+ * keep their lazy captures.
+ * @returns {Promise<void>} Settles when it has finished.
+ */
 export async function prepareVisible(host, signal) {
   if (signal?.aborted) return;
   const own = visibleReadiness.get(host);
@@ -64,6 +72,10 @@ function settleDrag(host, signal) {
   });
 }
 
+/**
+ * Load the prefabs the Hall's modals and controls are drawn from.
+ * @returns {Promise<object>}
+ */
 export async function ready() {
   if (!assets) {
     await Promise.all([Popup.ready(), Buttons.ready()]);
@@ -77,6 +89,13 @@ export async function ready() {
   }
   return assets;
 }
+/**
+ * Open a modal on the stage, over the Hall.
+ * @param {() => void} onClose Called when the modal closes by itself (Escape, the backdrop).
+ * @param {object} [options]
+ * @param {number} [options.level] How many modals are under it; its z-index follows.
+ * @returns {object} The modal: its host, signal, live(), close() and the drawing controls.
+ */
 export function createModal(title, onClose, { level = 0 } = {}) {
   const host = document.createElement("div"),
     stage = document.getElementById("stage"),
@@ -160,8 +179,8 @@ export function createModal(title, onClose, { level = 0 } = {}) {
             Popup.hit(layer, frame, "Center/Popup/Base/BG/Btn_Close", onClose, { name: T("display.close") });
             await build(layer, live, drawSignal);
             if (retainedFooter) {
-              // The memorial editor keeps its own footer under its queue panel: XS buttons at its bottom right, their right edge on
-              // the panels' (WIDE), each as wide as its caption needs
+              // The memorial editor keeps its own footer under its queue panel: XS buttons at its bottom right, their
+              // right edge on the panels' (WIDE), each as wide as its caption needs
               const bodyH = CONTROL.buttonXS.h * S,
                 captions = actions.map((action) => action.label);
               const footerSize = retainedButtonSize(captions, XS_BUTTON.w * 2 * S, bodyH) ?? XS_BUTTON.fs;
@@ -273,6 +292,15 @@ export function createModal(title, onClose, { level = 0 } = {}) {
   Popup.opened(host, onClose);
   return api;
 }
+/**
+ * Build the frame of a Hall modal: title, close button and a footer of actions.
+ * @param {number} width The frame's width in units.
+ * @param {number} height The frame's height in units.
+ * @param {object[]} actions The footer's actions: label and primary.
+ * @param {number|null} [titleCentre] The title's centre under the frame's top.
+ * @param {"center"|"right"} [align]
+ * @returns {NguiNode} The popup's node tree.
+ */
 export function modalFrame(
   title,
   width,
@@ -300,6 +328,11 @@ export function modalFrame(
   }
   return tree;
 }
+/**
+ * The stage y of a modal's content bottom.
+ * @param {number} height The frame's height in units.
+ * @returns {number} The y in stage pixels.
+ */
 export const modalContentBottom = (height, actions = 1) =>
   540 - (Popup.footerTop(height, actions) + POPUP.clearance) * S;
 // The portrait picker's Add buttons and its Done are compact: half a buttonS body, the caption the largest
@@ -308,8 +341,8 @@ export const COMPACT_BUTTON_H = BUTTON.h / 2;
 export const COMPACT_FOOTER_W = BUTTON.minW + SPACE.xxl;
 // UIPopup_Sort's header band (Popup_Img_Deco_2 is 132 high): the title's ink is centred in it, where the prefab has it.
 const HEADER_H = 132;
-// The L frame (UIPopup_Option_PC, 2098 wide) keeps SPACE.xl at each side of the picker's panels, in place of the XL frame's
-// roughly 260 stage px of empty frame on each side.
+// The L frame (UIPopup_Option_PC, 2098 wide) keeps SPACE.xl at each side of the picker's panels, in place of the
+// XL frame's roughly 260 stage px of empty frame on each side.
 export const PORTRAIT_FRAME = Object.freeze({
   width: POPUP_FRAME.L.w,
   height: 1300,
@@ -317,7 +350,12 @@ export const PORTRAIT_FRAME = Object.freeze({
   titleCentre: HEADER_H / 2,
 });
 const frameTop = (height) => 540 - (POPUP.frameY + height / 2) * S;
-// The footer's bodies, one per width given (stage px), in a row centred on the frame.
+/**
+ * The footer's bodies, one per width given (stage px), in a row centred on the frame.
+ * @param {number} height The frame's height in units.
+ * @param {number[]} widths The bodies' widths in stage pixels.
+ * @returns {number[][]} The bodies' boxes [x, y, w, h] in stage pixels.
+ */
 export function compactFooterBoxes(height, widths) {
   const gap = SPACE.m * S,
     left = 960 - (widths.reduce((sum, w) => sum + w, 0) + (widths.length - 1) * gap) / 2;
@@ -329,8 +367,12 @@ export function compactFooterBoxes(height, widths) {
     return box;
   });
 }
-// Under the header band the picker is a column with SPACE.l between its parts: the header, the head panel (the toolbar's bar and,
-// when it is open, the search field, one panel with no gap between them), the list and the footer's Done.
+/**
+ * The portrait picker's layout: under the header band it is a column with SPACE.l between its parts: the
+ * header, the head panel (the toolbar's bar and, when it is open, the search field, one panel with no gap
+ * between them), the list and the footer's Done.
+ * @returns {object} The boxes of the parts.
+ */
 export function portraitPickerLayout(view, searching) {
   const width = (PORTRAIT_FRAME.width - 2 * SPACE.xl) * S,
     left = 960 - width / 2,
@@ -361,20 +403,29 @@ export const WIDE = Object.freeze({
   left: 960 - (POPUP_FRAME.L.w * S) / 2 + SPACE.xl * S,
   width: (POPUP_FRAME.L.w - 2 * SPACE.xl) * S,
 });
-// The background picker: the preview and its caption on the left, as wide as the room the list
-// leaves after SPACE.l, centred down the list's height; the list on the right (two cards a row, .32 of their size, 296 px
+// The background picker: the preview and its caption on the left, as wide as the room the list leaves after
+// SPACE.l, centred down the list's height; the list on the right (two cards a row, .32 of their size, 296 px
 // apart, rows 186 px: SPACE.xl px between them).
 export const BACKGROUND = Object.freeze({ list: 600, scale: 0.32, pitch: [296, 186], first: [152, 88], caption: 46 });
 // the list from SPACE.l under the header band down to SPACE.xl over the footer (the footer's clearance); the
 // preview level with its top
 const backgroundTop = () => frameTop(POPUP_FRAME.panelH) + HEADER_H * S + SPACE.l * S;
 const backgroundBottom = () => 540 - (Popup.footerTop(POPUP_FRAME.panelH, 2) + SPACE.xl) * S;
+/**
+ * The box of the background picker's list.
+ * @returns {number[]} [x, y, w, h] in stage pixels.
+ */
 export const backgroundPickerBox = () => [
   WIDE.left + WIDE.width - BACKGROUND.list,
   backgroundTop(),
   BACKGROUND.list,
   backgroundBottom() - backgroundTop(),
 ];
+/**
+ * The box of the background picker's preview.
+ * @returns {{left: number, top: number, width: number, height: number, scale: number}} The box in stage pixels
+ *     and the scale of the 1920 x 1080 scene in it.
+ */
 export function backgroundPreviewBox() {
   const left = WIDE.left,
     width = WIDE.width - BACKGROUND.list - SPACE.l * S,
@@ -384,9 +435,14 @@ export function backgroundPreviewBox() {
     top = backgroundTop() + (backgroundBottom() - backgroundTop() - block) / 2;
   return { left, top, width, scale: width / 1920, height };
 }
-// the preview's rhombus (the memorial lobby card's 10 degree incline): the clip of the 1920 x 1080 scene it shows, and the
-// card body and line drawn round it (Popup.listCard's), in stage px
+// the preview's rhombus (the memorial lobby card's 10 degree incline): the clip of the 1920 x 1080 scene it
+// shows, and the card body and line drawn round it (Popup.listCard's), in stage px
 export const PREVIEW_SLANT = 1080 * Math.tan(Math.PI / 18);
+/**
+ * Draw the preview's rhombus frame (the memorial lobby card's 10 degree incline) into an element.
+ * @returns {Promise<RenderView>}
+ * @param {{left: number, top: number, width: number, height: number}} box
+ */
 export async function previewFrame(host, { left, top, width, height }) {
   await ready();
   const k = width / 1920,
@@ -420,14 +476,19 @@ export const MEMORIAL = Object.freeze({
   cardX: 145,
   toolbar: 0.8,
 });
+/**
+ * The layout of a portrait row in the picker: the artwork, the action's body and the scrollbar's band, as a
+ * stack.
+ * @returns {object} The boxes of the parts.
+ */
 export function portraitRowLayout() {
   const name = Popup.LIST_CARD_NAME,
     bar = Math.max(88, name.padY + name.lines * name.fs * name.pitch);
-  // Use the row's 16 free pixels above the artwork before growing it; reserve the native horizontal scrollbar's
-  // painted 20-unit band (SPACE.m, scrollbarTrack) below the button. Its viewport gains the card's existing 12px hit outset
-  // on the left, keeping the artwork and action's stage x unchanged while admitting the wider body.
-  // The row is a stack: the artwork down to the foot of its name strip, 8 px (the card's gap) and the action's body (a compact
-  // button), then the scrollbar's band.
+  // The row uses its 16 free pixels above the artwork before growing; the native horizontal scrollbar's painted
+  // 20-unit band (SPACE.m, scrollbarTrack) is reserved below the button. Its viewport gains the card's 12px hit
+  // outset on the left, keeping the artwork and action's stage x unchanged while admitting the wider body.
+  // The row is a stack: the artwork down to the foot of its name strip, 8 px (the card's gap) and the action's
+  // body (a compact button), then the scrollbar's band.
   const cardY = (600 * 0.46) / 2;
   const column = layoutStack(
     [
@@ -439,8 +500,8 @@ export function portraitRowLayout() {
   const height = column.h + SPACE.m * S,
     cardX = 105 + 12,
     stripX = 240 - 12;
-  // The student's name starts SPACE.xxl (a card's padding) in from the plate's inclined left edge, 32 px at its foot and the
-  // incline's overhang more at its top, and ends SPACE.m before the first card's edge.
+  // The student's name starts SPACE.xxl (a card's padding) in from the plate's inclined left edge, 32 px at its
+  // foot and the incline's overhang more at its top, and ends SPACE.m before the first card's edge.
   const edge = (y) => 32 + height * Math.tan(Math.PI / 18) * (1 - y / height),
     nameY = 170,
     nameX = edge(nameY) + SPACE.xxl * S;
@@ -455,35 +516,76 @@ export function portraitRowLayout() {
     name: [nameX, nameY, cardX + stripX - (320 * 0.46) / 2 - SPACE.m * S - nameX],
   };
 }
-// Keep a caller's centre and width; only the minimum width and the shared small-button height constrain its body.
-// bodyHeight: a site whose neighbour sets the height (the portrait toolbar's Reset beside its slider).
+/**
+ * Fit a button's body into a box: the caller's centre and width are kept; only the minimum width and the shared
+ * small-button height constrain the body.
+ * @param {number[]} box [x, y, w, h] of the box in stage pixels.
+ * @param {number} [bodyHeight] The body height, for a site whose neighbour sets it (the portrait toolbar's
+ *     Reset beside its slider).
+ * @returns {number[]} The body's box [x, y, w, h].
+ */
 export function buttonBox([x, y, width, height], bodyHeight = BUTTON.h * S) {
   const w = Math.max(BUTTON.minW * S, width),
     h = bodyHeight;
   return [x + (width - w) / 2, y + (height - h) / 2, w, h];
 }
+/**
+ * The shared caption size and body width of a row of buttons.
+ * @param {number} width The room for the widest body in stage pixels.
+ * @param {number} [bodyHeight] The body height in units.
+ * @returns {object[]} The fit of each caption, as fitGroup gives it.
+ */
 export const buttonSize = (captions, width, bodyHeight = BUTTON.h, floor = BUTTON_FLOOR) =>
   NGUI.fitGroup(captions, BUTTON.fs, floor, Math.max(BUTTON.minW, width / S) - XS_BUTTON.fitInset, 2, {
     maxH: bodyHeight - XS_BUTTON.boxInsetH,
   })[0]?.fs;
+/**
+ * The shared caption size of a row of compact buttons (half a buttonS body high).
+ * @returns {object[]} The fit of each caption.
+ */
 export const compactButtonSize = (captions, width) => buttonSize(captions, width, COMPACT_BUTTON_H, COMPACT_FLOOR);
-// The footer's bodies share one width: COMPACT_FOOTER_W, or what the widest caption needs on its one line at the body role's
-// floor (a caption of a longer language widens its body, never shrinks below the floor).
+/**
+ * The width every body of the compact footer shares: COMPACT_FOOTER_W, or what the widest caption needs on its
+ * one line at the body role's floor (a caption of a longer language widens its body, never shrinks below the
+ * floor).
+ * @param {string[]} captions
+ * @returns {number} The width in stage pixels.
+ */
 export const compactFooterWidth = (captions) =>
   Math.max(
     COMPACT_FOOTER_W,
     ...captions.map((caption) => NGUI.glyphWidth(caption, COMPACT_FLOOR) + XS_BUTTON.fitInset),
   ) * S;
 
-// The memorial editor's footer, candidate Add and queue Remove still hit the full-row stop rule.
-// Their existing bodies/captions stay until their containing layout can change.
+/**
+ * The caption fit of a button that keeps the full-row body: the memorial editor's footer, candidate Add and
+ * queue Remove hit the full-row stop rule, so their bodies and captions stay until their containing layout can
+ * change.
+ * @param {number} width The body's width in stage pixels.
+ * @param {number} height The body's height in stage pixels.
+ * @returns {object[]} The fit of each caption.
+ */
 export const retainedButtonSize = (captions, width, height) =>
   NGUI.fitGroup(captions, 40, 26, width / S - 60, 2, { maxH: height / S - 20 })[0]?.fs;
+/**
+ * Draw a button that keeps the full-row body.
+ * @param {number[]} box The body's box [x, y, w, h].
+ * @param {object} [opts] As for button().
+ */
 export const retainedButton = (host, name, caption, box, action, opts = {}) =>
   drawButton(host, name, caption, box, action, { ...opts, fs: opts.size ?? 40, min: opts.size ?? 26, retained: true });
 
-// size: a row's shared caption size (buttonSize). Fit first with the body's height as well as its width.
-// height: the body height in stage pixels where the site sets it (buttonBox); the token's otherwise.
+/**
+ * Draw a Hall button. size: a row's shared caption size (buttonSize). Fit first with the body's height as well
+ * as its width. height: the body height in stage pixels where the site sets it (buttonBox); the token's
+ * otherwise.
+ * @param {number[]} box The body's box [x, y, w, h].
+ * @param {object} [opts]
+ * @param {string} [opts.captionSite] The wording site, which makes a caption that cannot fit throw.
+ * @param {number} [opts.height] The body height in stage pixels where the site sets it (buttonBox); the token's
+ *     otherwise.
+ * @param {number} [opts.size] A row's shared caption size (buttonSize).
+ */
 export async function button(host, name, caption, box, action, opts = {}) {
   await ready();
   const floor = opts.floor ?? BUTTON_FLOOR;
@@ -524,6 +626,13 @@ async function drawButton(
   }
   return hit;
 }
+/**
+ * Draw a caption.
+ * @param {string|object} value The text, or a prepared caption.
+ * @param {number[]} box [x, y, w] of the caption in stage pixels.
+ * @param {object} [options]
+ * @returns {Promise<RenderView>}
+ */
 export async function caption(host, value, [x, y, width], { size = 40, align = 1 } = {}) {
   await ready();
   const template = clone(NGUI.find(assets.sort, "Center/Popup/Base/BG/Label_Title_Locale"));
@@ -543,12 +652,27 @@ export async function caption(host, value, [x, y, width], { size = 40, align = 1
   });
   return NGUI.render(template, host, { scale: S, origin: [x, y] });
 }
+/**
+ * Add a scrolling area.
+ * @param {number[]} box The area's box [x, y, w, h].
+ * @param {string} key A key that keeps the scroll position between drawings.
+ * @param {object} [options]
+ * @returns {HTMLElement} The inner element to draw into.
+ */
 export function area(host, box, height, key, { width = box[2], horizontal = false } = {}) {
   const inner = Popup.scrollArea(host, box, height, { horizontal, contentW: width });
   inner.parentElement.dataset.scroll = key;
   return inner;
 }
-// onEscape: Escape in the box closes the search first, as the roster's does (not the key that ends a conversion)
+/**
+ * Draw the search box and wire it. onEscape: Escape in the box closes the search first, as the roster's does
+ * (not the key that ends a conversion)
+ * @param {(query: string) => void} onChange
+ * @param {number[]} [box] [x, y, w] of the box in stage pixels.
+ * @param {object} [options]
+ * @param {(() => void)|null} [options.onEscape] Called on Escape in the box, which closes the search first as
+ *     the roster's does (not the key that ends a conversion).
+ */
 export async function search(host, query, onChange, [x, y, width] = [130, 172, 560], { onEscape = null } = {}) {
   await ready();
   const tree = searchTree(assets.collection);
@@ -597,13 +721,29 @@ export async function search(host, query, onChange, [x, y, width] = [130, 172, 5
   host.append(input);
   return input;
 }
+/**
+ * Draw a checkbox.
+ * @param {(checked: boolean) => void} change
+ * @param {number[]} box [x, y, w] of the checkbox in stage pixels.
+ * @returns {Promise<void>} Settles when it has finished.
+ */
 export async function checkbox(host, caption, checked, change, [x, y, width]) {
   await ready();
   const item = Popup.checkbox("Merged", 0, 0, caption, checked, width / S);
   const view = await NGUI.render(item.tree, host, { scale: S, origin: [x, y + 30] });
   Popup.wireCheck(host, view, "Merged", { checked, label: caption }, change);
 }
-// UILobby's inclined rounded button contains UIPopup_Option_PC's native sound slider.
+/**
+ * Draw the scale slider control. UILobby's inclined rounded button contains UIPopup_Option_PC's native sound
+ * slider.
+ * @param {(value: number) => void} change
+ * @param {object} [options]
+ * @param {() => boolean} [options.enabled]
+ * @param {number[]} [options.box] [x, y, w] of the control in stage pixels.
+ * @param {{min: number, max: number, default: number}} [options.limits]
+ * @param {string} [options.focusKey] A key that gives the focus back after a redraw.
+ * @returns {Promise<object>} The control: the scale's bindings.
+ */
 export async function scaleControl(
   host,
   value,
@@ -695,6 +835,19 @@ function observePicture(element, picture) {
   observer.observe(element);
   picture.signal?.addEventListener("abort", () => observer.disconnect(), { once: true });
 }
+/**
+ * Draw a candidate card of the picker.
+ * @param {object} options
+ * @param {string} [options.kind] The kind of card, "lobby" by default.
+ * @param {(item: object) => void} [options.onPreview]
+ * @param {(item: object) => void} [options.onAdd]
+ * @param {string} [options.addLabel] The Add button's caption.
+ * @param {object} [options.addSize] The Add button's caption fit, when a row shares one.
+ * @param {boolean} [options.fitAdd] Fit the Add button's caption to its body.
+ * @returns
+ *     {Promise<{view: RenderView, visual: HTMLElement, hit: HTMLElement, width: number, height: number, actionBox: number[]}>}
+ *     The drawn card.
+ */
 export async function card(
   host,
   item,
@@ -767,16 +920,26 @@ export async function card(
 // the queue's cards (no Remove button under them): .32 of the card, centred in the 175 px row, SPACE.l apart
 export const QUEUE = Object.freeze({ scale: 0.32, y: 84 });
 export const MEMORIAL_QUEUE_PITCH = (720 + 405 * Math.tan(Math.PI / 18)) * QUEUE.scale + SPACE.l;
-// the trash button over a queue card's top right corner (a 40 px square inside the inclined art)
+/**
+ * The box of the trash button over a queue card's top right corner (a 40 px square inside the inclined art).
+ * @param {number} pitch The distance between two queue cards.
+ * @returns {number[]} [x, y, w, h].
+ */
 export const queueTrashBox = (pitch) => [
   pitch / 2 + 360 * QUEUE.scale + (405 * QUEUE.scale * Math.tan(Math.PI / 18)) / 2 - 52,
   QUEUE.y - (405 * QUEUE.scale) / 2 + 8,
   40,
   40,
 ];
-// A trash button: shown while the pointer is over its host, grey, red while the pointer is over it; a click asks the caller
-//. The icon is the Hall's own Remove (CCG_Icon_Dump), its shape a mask over the colour.
+// A trash button: shown while the pointer is over its host, grey, red while the pointer is over it; a click asks
+// the caller . The icon is the Hall's own Remove (CCG_Icon_Dump), its shape a mask over the colour.
 export const TRASH = Object.freeze({ grey: "#8a96a3", red: "#e0474c", atlas: "CardGame", sprite: "CCG_Icon_Dump" });
+/**
+ * Draw a trash button. A trash button is shown while the pointer is over its host: grey, red while the pointer
+ * is over it; a click asks the caller to remove the item. The icon is the Hall's own Remove (CCG_Icon_Dump),
+ * its shape a mask over the colour.
+ * @param {number[]} box [x, y, w, h] of the button.
+ */
 export async function trashButton(host, name, label, [x, y, width, height], action) {
   const hit = hitButton(host, [x, y, width, height], action, label, 96);
   hit.dataset.action = "hall-trash";
@@ -814,6 +977,11 @@ export async function trashButton(host, name, label, [x, y, width, height], acti
   hit.addEventListener("blur", () => show(false));
   return hit;
 }
+/**
+ * Draw the queue's panel.
+ * @param {number[]} box The panel's box [x, y, w, h].
+ * @returns {Promise<RenderView>}
+ */
 export async function queuePanel(host, [x, y, width, height]) {
   await ready();
   const tree = clone(NGUI.find(assets.collection, "ListBG/PaperBG"));
@@ -826,6 +994,10 @@ export async function queuePanel(host, [x, y, width, height]) {
   );
   return NGUI.render(tree, host, { scale: S, origin: [x + width / 2, y + height / 2] });
 }
+/**
+ * Draw the marker that shows where a dragged queue card would land.
+ * @param {number} pitch The distance between two queue cards.
+ */
 export async function queueMarker(host, pitch) {
   await ready();
   const tree = clone(NGUI.find(assets.formation, "Center/Popup/BG/Label_Title/DecoLine"));
@@ -837,7 +1009,7 @@ export async function queueMarker(host, pitch) {
   tree.active = true;
   tree.pos = [0, 0];
   tree.children = [];
-  // Retain the game's solid line artwork and formation-selection blue palette.
+  // The game's solid line artwork and the formation-selection blue palette.
   Object.assign(
     tree.widgets.find((widget) => "sprite" in widget),
     { sprite: "Common_Line_Dot", type: 0, w_: 2 / S, h_: 155 / S, incline: 0, color: blue },
@@ -858,6 +1030,11 @@ export async function queueMarker(host, pitch) {
   await NGUI.render(tree, marker, { scale: S, origin: [1, 82.5] });
   return marker;
 }
+/**
+ * The tree of a student card, as the formation screen draws it.
+ * @param {{key: string, name: string, portrait?: string, thumb?: string}} item
+ * @returns {NguiNode}
+ */
 export function formationCardTree(formation, item, selected) {
   const tree = clone(
     NGUI.find(
@@ -901,6 +1078,12 @@ export function formationCardTree(formation, item, selected) {
   mark.children = [];
   return tree;
 }
+/**
+ * Draw a student card.
+ * @param {{key: string, name: string, thumb?: string}} item
+ * @param {number[]} box [x, y] of the card.
+ * @returns {Promise<HTMLButtonElement>} The card's hit element.
+ */
 export async function studentCard(host, item, [x, y], selected, click) {
   await ready();
   const tree = formationCardTree(assets.formation, item, selected);
@@ -916,7 +1099,11 @@ export async function studentCard(host, item, [x, y], selected, click) {
   return hit;
 }
 
-// UIPopup_Formation_CharEdit's panel and its own tab label retain the header's bounds.
+/**
+ * Draw a panel with a title tab. UIPopup_Formation_CharEdit's panel and its tab label keep the header's bounds.
+ * @param {number[]} box [x, y, w, h] of the panel.
+ * @returns {Promise<void>} Settles when it has finished.
+ */
 export async function panel(host, name, [x, y, width, height], title) {
   await ready();
   const tree = clone(NGUI.find(assets.formation, "Center/Popup/RightBg"));
@@ -941,7 +1128,14 @@ export async function panel(host, name, [x, y, width, height], title) {
   await NGUI.render(tree, host, { scale: S, origin: [x + width / 2, y + height / 2] });
 }
 
-// scale: the toolbar's size under the width's fit (the memorial editor's one size down)
+/**
+ * Draw the roster toolbar over a list: segment filters, search, sort and order.
+ * @param {{change: Function, display: Function, search: Function}} actions
+ * @param {object} [options]
+ * @param {number} [options.x] The toolbar's left edge.
+ * @param {number} [options.scale] The toolbar's size under the width's fit (the memorial editor's one size
+ *     down).
+ */
 export async function rosterToolbar(
   host,
   view,
@@ -1022,7 +1216,12 @@ export async function rosterToolbar(
   );
 }
 
-// The collection sort plate supplies its white sliced body, native incline and shadow.
+/**
+ * The tree of a row's plate: the collection sort plate supplies its white sliced body, native incline and
+ * shadow.
+ * @param {number[]} box [w, h] of the plate.
+ * @returns {NguiNode}
+ */
 export function rowPlateTree(collection, [width, height], margin = 32) {
   const tree = clone(NGUI.find(collection, "SeletControl/TopMenu/SortBtn/Btn_Normal"));
   tree.name = "PortraitRow";
@@ -1033,6 +1232,11 @@ export function rowPlateTree(collection, [width, height], margin = 32) {
   Object.assign(body, { w_: (width - margin * 2 - overhang) / S, h_: height / S, depth: 1 });
   return tree;
 }
+/**
+ * Draw a row's plate.
+ * @param {number[]} box [w, h] of the plate.
+ * @returns {Promise<RenderView>}
+ */
 export async function rowPlate(host, [width, height]) {
   await ready();
   return NGUI.render(rowPlateTree(assets.collection, [width, height]), host, {
@@ -1041,7 +1245,19 @@ export async function rowPlate(host, [width, height]) {
   });
 }
 
-// Construct only visible rows/columns and one overscan neighbour. Nested portrait strips keep their own offsets.
+/**
+ * Make a virtual list: it constructs only the visible rows or columns and one overscan neighbour. virtualArea
+ * builds only visible rows or columns and one overscan neighbour; nested portrait strips keep their own
+ * offsets.
+ * @param {number[]} box
+ * @param {number} pitch The distance between two items.
+ * @param {(index: number, signal: AbortSignal) => Promise<void>|void} render Draws item `index`.
+ * @param {object} [options]
+ * @param {string} [options.key] A key that keeps the scroll position between drawings.
+ * @param {Map<string, number>} [options.positions]
+ * @param {(error: Error) => void} [options.onError]
+ * @returns {Promise<void>[]}
+ */
 export function virtualArea(
   host,
   box,
@@ -1161,6 +1377,11 @@ export function virtualArea(
   return { inner, ready: Promise.all([inner.ready, ...update()]), dispose };
 }
 
+/**
+ * Draw the order button of a toolbar.
+ * @param {boolean} ascending Whether the order is ascending (the up arrow shows).
+ * @param {number[]} box [x, y, w, h] of the button.
+ */
 export async function orderButton(host, ascending, action, [x, y, width, height]) {
   await ready();
   const tree = orderBody(assets.collection, ascending);
@@ -1177,6 +1398,10 @@ export async function orderButton(host, ascending, action, [x, y, width, height]
   });
 }
 
+/**
+ * Update a modal's footer action: its label, handler and whether it is enabled.
+ * @returns {Promise<void>} Settles when it has finished.
+ */
 export async function updateAction(host, name, label, action, enabled) {
   const hit = [...host.querySelectorAll("button[data-action]")].find((button) => button.dataset.action === name);
   if (!hit) return;

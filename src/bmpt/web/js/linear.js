@@ -1,42 +1,20 @@
 // Linear-light drawing for a spine-player, the way the game draws its memorial lobbies. Blue Archive renders in
-// Unity's linear colour space (PlayerSettings m_ActiveColorSpace 1) and its Spine atlas textures are sRGB, so every
-// blend happens in linear light: an additive glow over a bright scene adds little, a soft white veil over a dark one
-// adds more. Drawn in sRGB values instead, the same glow washes the scene out (Kurumi's photo booth light turned her
-// face white).
-// Here the atlas pages are sampled as sRGB (decoded before filtering, as the GPU does in the game), the skeleton is
-// blended into an sRGB framebuffer (blending in linear light) and one pass copies the result to the canvas, encoded
-// again. Additive slots add colour only, never coverage, like the game's premultiplied vertex colours with alpha 0.
-// That pass is also the game camera's post-processing (setPost): the lobby prefab's URP volumes (lobby.json "post")
-// with URP 12's Panini projection, chromatic aberration and LDR colour grading, in that order and in linear light.
-// Without WebGL2 the player keeps drawing as before.
+// Unity's linear colour space and its Spine atlas textures are sRGB, so every blend happens in linear light: an
+// additive glow over a bright scene adds little, drawn in sRGB values the same glow washes the scene out. Here
+// the atlas pages are sampled as sRGB (decoded before filtering), the skeleton is blended into an sRGB
+// framebuffer and one pass copies the result to the canvas, encoded again; that pass is also the game camera's
+// post-processing (setPost). Without WebGL2 the player keeps drawing in sRGB values.
 
 const VS = `#version 300 es
 in vec2 p;
 void main() { gl_Position = vec4(p, 0.0, 1.0); }`;
-// the framebuffer holds linear, premultiplied colour; the canvas gets sRGB, premultiplied (the page composites the
-// layers' canvases). Light beyond the coverage (additive over a transparent part of an upper layer) is passed on as
-// it is, so it still brightens the layer below.
-// The post-processing as URP 12 runs it for the lobby's camera (Unity 2021.3, colour grading in LDR mode):
-// - Panini projection, its own pass (PaniniProjection.shader): the picture bent onto a cylinder, cropped to fit.
-// - chromatic aberration in the uber pass (UberPost.shader, the fast three-sample version): red at the pixel, green
-//   and blue a third and two thirds of the way to uv - coords * |coords|^2 * intensity * 0.05.
-// - colour grading (ApplyColorGrading, LutBuilderLdr.shader): post exposure, clamped to 0..1, then what the LUT holds:
-//   contrast in LogC around ACEScc mid grey, the colour filter, lift / gamma / gain, the hue shift, saturation.
-//   The other LUT stages (white balance, split toning, channel mixer, shadows / midtones / highlights, curves) are at
-//   their defaults in every lobby and leave the colour as it is. The LUT's 32-step interpolation is not modelled.
-// A lobby's skeletons all draw into the bottom player's framebuffer (lobby-stage.js), post-processed once as the game's
-// camera target is. Only where they cannot (one canvas per layer) is a layer above another one post-processed on its
-// own; the colour steps are affine but for gamma, and the shifts are sub-pixel where characters stand, so that
-// composite is the game's within a hair.
-// Panini and the aberration are placed in the game's screen, the camera's 16:9 view G (screen: G on the canvas, in
-// canvas uv), never in the canvas's own: the left view and a zoomed or panned fullscreen view show the game's picture
-// with its shifts where the game puts them on the art, magnified with it. Past G's edge (a view zoomed out beyond it)
-// the game shows nothing to match, so both shifts are held at those of the nearest point of G's edge instead of
-// growing with the distance. With crop to fit (every lobby's Panini) neither reads past G from inside it, as in the
-// game, whose camera target ends there.
-// The bottom layer (clear) is drawn over the camera's clear colour, black, before the colour steps, as the game's
-// camera target holds it: where the art leaves the target clear, and at its alpha edges, the grade runs over black too
-// (lift shows there). The layers above stay transparent where they draw nothing.
+// The framebuffer holds linear, premultiplied colour; the canvas gets sRGB, premultiplied (the page composites the
+// layers' canvases). Light beyond the coverage (additive over a transparent part of an upper layer) is passed on as it
+// is, so it still brightens the layer below. The final pass is the post-processing as URP 12 runs it for the lobby's
+// camera: the Panini projection, the chromatic aberration and the LDR colour grading, in that order and in linear light,
+// once for all skeletons of a lobby (lobby-stage.js). Panini and the aberration are placed in the game's screen, the
+// camera's 16:9 view G (setScreen), never in the canvas's own. The bottom layer (setClear) is drawn over the camera's
+// clear colour, black, before the colour steps.
 const FS = `#version 300 es
 precision highp float;
 uniform sampler2D t;
@@ -186,11 +164,16 @@ function pagesOf(player) {
   return out;
 }
 
-// switch a loaded player to linear light; false (and nothing changed) without WebGL2. host: the player whose context
-// and framebuffer it draws into (lobby-stage.js: every skeleton of a lobby in the bottom player's), which does the
-// pass; such a guest only gets its pages decoded and its blending, and a frame of its own clears into the host's
-// framebuffer (which the host clears again before drawing), never the host's canvas. A guest goes into linear light
-// only with its host in it: drawn into a plain canvas, its sRGB pages and decoded colours would come out too dark.
+/**
+ * Switch a loaded player to linear light. A guest drawn into the bottom player's framebuffer (lobby-stage.js:
+ * every skeleton of a lobby) only gets its pages decoded and its blending, and a frame of its own clears into
+ * the host's framebuffer, never the host's canvas; it goes into linear light only with its host in it, because
+ * drawn into a plain canvas its sRGB pages and decoded colours would come out too dark.
+ * @param {object} player The spine-player.
+ * @param {object|null} [host] The player whose context and framebuffer it draws into, which does the pass; null
+ *     when it draws on its own.
+ * @returns {boolean} False, with nothing changed, without WebGL2.
+ */
 export function attach(player, host = null) {
   // Callers create this player only after their preview entry awaits ensureSpine().
   const gl = player?.context?.gl;
@@ -257,9 +240,12 @@ export function attach(player, host = null) {
   return true;
 }
 
-// before the player is disposed: free the framebuffer, its drawing-buffer-sized texture and the program at once, and
-// give the pages and the batcher their own methods back. spine-player's dispose frees only what spine made, and a
-// context that is never lost keeps the rest on the GPU until the browser happens to collect it.
+/**
+ * Switch a player back to its own drawing, before it is disposed: free the framebuffer, its
+ * drawing-buffer-sized texture and the program at once, and give the pages and the batcher their own methods
+ * back. spine-player's dispose frees only what spine made, and a context that is never lost keeps the rest on
+ * the GPU until the browser happens to collect it.
+ */
 export function detach(player) {
   const st = states.get(player);
   if (!st) return;
@@ -280,7 +266,9 @@ export function detach(player) {
   st.res = null;
 }
 
-// in the player's frame hook, before it clears and draws: draw into the linear framebuffer
+/**
+ * In the player's frame hook, before it clears and draws: draw into the linear framebuffer.
+ */
 export function begin(player) {
   const st = states.get(player);
   if (!st?.on) return;
@@ -330,24 +318,35 @@ export function begin(player) {
   st.bound = true;
 }
 
-// the slot colours as the game's shader sees them: spine-unity hands its shader premultiplied vertex colours and,
-// in linear colour space, spine-unity's own shaders convert them from gamma to linear (PMAGammaToTargetSpace). A tint
-// is decoded; an additive slot carries alpha 0 there, so its colour times its alpha is decoded as a whole: a glow at
-// alpha 0.42 adds 0.15 of its texture, not 0.42. Each page's shader decodes with its own curve, or not at all
-// (slot-colours.js: setCurves). In the player's update hook (after the animation, before drawing); end() puts them
-// back.
+// The slot colours as the game's shader sees them: spine-unity hands its shader premultiplied vertex colours
+// and, in linear colour space, converts them from gamma to linear (PMAGammaToTargetSpace). A tint is decoded; an
+// additive slot carries alpha 0 there, so its colour times its alpha is decoded as a whole: a glow at alpha 0.42
+// adds 0.15 of its texture, not 0.42. Each page's shader decodes with its own curve, or not at all
+// (slot-colours.js: setCurves). It runs in the player's update hook (after the animation, before drawing); end()
+// puts the colours back.
 const dec = (c) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
 export let vertexColours = true; // for checks
+/**
+ * Switch the game's slot colour decoding on or off.
+ * @param {boolean} on Whether slot colours are decoded as the game's shader does.
+ */
 export const setVertexColours = (on) => {
   vertexColours = !!on;
 };
-// curveOf(attachment) -> the decoding curve of the shader that draws it (null: every slot decoded with the sRGB curve)
+/**
+ * Set the decoding curve each page's shader uses for slot colours.
+ * @param {object} player The spine-player.
+ * @param {(attachment: object) => (Function|null)|null} curveOf Gives the decoding curve of the shader that
+ *     draws an attachment; null decodes every slot with the sRGB curve.
+ */
 export function setCurves(player, curveOf) {
   const st = states.get(player);
   if (st) st.curveOf = curveOf || null;
 }
-// A player drawn by another one (lobby-stage.js) is tinted around that draw and given its colours back with untint().
-// Tinted already (not given them back yet): nothing more.
+/**
+ * Tint a player drawn by another one (lobby-stage.js) around that draw; untint() gives it its colours back. A
+ * player already tinted is left as it is.
+ */
 export function tint(player) {
   const st = states.get(player);
   if (!st?.on || !vertexColours || !player.skeleton || st.saved) return;
@@ -380,7 +379,9 @@ function restoreTint(st) {
   }
   st.saved = null;
 }
-// the slot colours tint() changed, back as they were
+/**
+ * Give a player the slot colours tint() changed back.
+ */
 export function untint(player) {
   const st = states.get(player);
   if (st?.saved) restoreTint(st);
@@ -405,9 +406,14 @@ const IDENTITY = Object.freeze({
   gamma: [1, 1, 1],
   gain: [1, 1, 1],
 });
-// What the shader gets for a lobby's post-processing (lobby.json "post", lobby.py post_processing) on a target of the
-// given aspect, as URP 12's PostProcessPass, ColorGradingLutPass and ColorUtils.PrepareLiftGammaGain work it out;
-// null when there is nothing to do.
+/**
+ * What the shader gets for a lobby's post-processing (lobby.json "post", lobby.py post_processing) on a target
+ * of an aspect, as URP 12's PostProcessPass, ColorGradingLutPass and ColorUtils.PrepareLiftGammaGain work it
+ * out.
+ * @param {object|null} post The lobby's post-processing.
+ * @param {number} [aspect] The target's width over its height.
+ * @returns {object|null} The shader's parameters; null when there is nothing to do.
+ */
 export function postParams(post, aspect = 16 / 9) {
   if (!post) return null;
   const out = { ...IDENTITY };
@@ -446,10 +452,15 @@ export function postParams(post, aspect = 16 / 9) {
   return out.ca > 0 || out.panini[2] > 0 || out.grade ? out : null;
 }
 export let postOn = true; // for checks: false draws every lobby without its post-processing
+/**
+ * Turn the lobby's post-processing on or off for every player (the game's PP option).
+ */
 export const setPostEnabled = (on) => {
   postOn = !!on;
 };
-// the lobby's post-processing for an attached player (lobby.json "post"; null: none)
+/**
+ * Set the lobby's post-processing for an attached player (lobby.json "post"; null: none).
+ */
 export function setPost(player, post) {
   const st = states.get(player);
   if (st) {
@@ -457,27 +468,44 @@ export function setPost(player, post) {
     st.params = null;
   }
 }
-// the game camera's view (G) in the player's skeleton units, as a spine-player viewport {x, y, width, height}: the
-// screen the post-processing is placed in (null: the canvas is the screen)
+/**
+ * Set the game camera's view (G) in the player's skeleton units, the screen the post-processing is placed in.
+ * @param {object} player The spine-player.
+ * @param {{x: number, y: number, width: number, height: number}|null} view A spine-player viewport; null makes
+ *     the canvas the screen.
+ */
 export function setScreen(player, view) {
   const st = states.get(player);
   if (st)
     st.screen = view?.width > 0 && view?.height > 0 ? { x: view.x, y: view.y, w: view.width, h: view.height } : null;
 }
-// a pass over the frame in linear light before the post-processing's colour steps: fn(gl, texture, width, height,
-// screen) returns the texture to grade instead (falsy: the frame as it is); null removes it (lobby-dof.js)
+/**
+ * Set a pass over the frame in linear light before the post-processing's colour steps (lobby-dof.js).
+ * @param {object} player The spine-player.
+ * @param
+ *     {((gl: WebGL2RenderingContext, texture: WebGLTexture, width: number, height: number, screen: number[]) => (WebGLTexture|null|undefined))|null}
+ *     fn Returns the texture to grade instead (falsy: the frame as it is); null removes the pass.
+ */
 export function setPrepass(player, fn) {
   const st = states.get(player);
   if (st) st.prepass = fn || null;
 }
-// true for the bottom layer: drawn over the camera's clear colour (black, graded with the rest), opaque
+/**
+ * Mark the bottom layer: it is drawn over the camera's clear colour (black, graded with the rest) and is
+ * opaque.
+ */
 export function setClear(player, on) {
   const st = states.get(player);
   if (st) st.clear = !!on;
 }
 const CANVAS = Object.freeze([0, 0, 1, 1]);
-// the screen on the canvas this frame, [x, y, w, h] in canvas uv (y up), from the camera the skeleton was just drawn
-// with; the canvas itself (exactly) when they are the same within a millionth
+/**
+ * Where the screen is on the canvas this frame, from the camera the skeleton was just drawn with.
+ * @param {{x: number, y: number, w: number, h: number}|null} screen The screen in skeleton units.
+ * @param {object} camera The camera of the draw.
+ * @returns {number[]} [x, y, w, h] in canvas uv (y up); the canvas itself (exactly) when they are the same
+ *     within a millionth.
+ */
 export function screenOnCanvas(screen, camera) {
   const vw = camera?.zoom * camera?.viewportWidth,
     vh = camera?.zoom * camera?.viewportHeight;
@@ -488,7 +516,9 @@ export function screenOnCanvas(screen, camera) {
   return out.every((v, i) => Math.abs(v - CANVAS[i]) < 1e-6) ? CANVAS : out;
 }
 
-// in the player's draw hook, after the skeleton: the linear framebuffer, encoded, onto the canvas
+/**
+ * In the player's draw hook, after the skeleton: the linear framebuffer, encoded, onto the canvas.
+ */
 export function end(player) {
   const st = states.get(player);
   if (st?.saved) restoreTint(st);
@@ -531,10 +561,16 @@ export function end(player) {
   gl.bindVertexArray(null); // blending stays off, as spine's batcher leaves it after a frame
 }
 
+/**
+ * Whether a player is drawn in linear light.
+ */
 export const active = (player) => !!states.get(player)?.on;
 
-// Inspect the ungraded target once the lobby has settled. The camera's opaque clear colour is added by the final
-// pass, so it cannot disguise a transparent atlas, a shader that discards everything, or an empty render plan.
+/**
+ * Inspect the ungraded target once the lobby has settled: whether anything was drawn. The camera's opaque clear
+ * colour is added by the final pass, so it cannot disguise a transparent atlas, a shader that discards
+ * everything, or an empty render plan.
+ */
 export function hasPixels(player) {
   const st = states.get(player),
     gl = player.context?.gl;
@@ -554,7 +590,9 @@ export function hasPixels(player) {
   }
 }
 
-// for checks: draw an attached player in linear light (true) or in plain sRGB values as before (false)
+/**
+ * For checks: draw an attached player in linear light (true) or in plain sRGB values (false).
+ */
 export function set(player, on) {
   const st = states.get(player);
   if (!st || st.on === !!on) return;

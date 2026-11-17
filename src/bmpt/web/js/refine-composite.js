@@ -9,6 +9,12 @@ function load(S, atlasText, skeletonData) {
   return { atlas, data };
 }
 
+/**
+ * The geometry of a skeleton in its setup pose, with some attachments replaced.
+ * @param {object} S The spine runtime's namespace.
+ * @param {string} atlasText The atlas file's text.
+ * @param {object} [replacements] Replacement attachments by slot.
+ */
 export function poseSetup(S, atlasText, skeletonData, replacements = {}) {
   const { atlas, data } = load(S, atlasText, skeletonData);
   const skeleton = new S.Skeleton(data);
@@ -25,7 +31,11 @@ function idleAnimation(data) {
   return data.findAnimation("Idle_01") ?? data.animations.find((a) => /^idle/i.test(a.name));
 }
 
-// Times are per-track seconds, including non-looping blink endpoints.
+/**
+ * The geometry of a skeleton with animations on tracks. Times are per-track seconds, including non-looping
+ * blink endpoints.
+ * @param {object|null} [tracks] The animation and time of each track.
+ */
 export function poseTracks(S, atlasText, skeletonData, tracks = null) {
   const { atlas, data } = load(S, atlasText, skeletonData);
   const skeleton = new S.Skeleton(data);
@@ -53,6 +63,12 @@ function defaultTracks(data, expression = "00", idleTime = 0) {
   return tracks;
 }
 
+/**
+ * List the poses to refine: idle frames and blink frames.
+ * @param {object} [options]
+ * @param {number} [options.idleFrames] How many frames of the idle.
+ * @param {number} [options.blinkFrames] How many frames of the blink.
+ */
 export function listPoses(S, atlasText, skeletonData, { idleFrames = 8, blinkFrames = 3 } = {}) {
   for (const n of [idleFrames, blinkFrames]) {
     if (!Number.isInteger(n) || n < 0) throw new Error("Frame counts must be nonnegative integers");

@@ -1,8 +1,8 @@
-// Every row of buttons, group of tabs or segments and pair of popup buttons, in every shipped language: one caption size for
-// the whole group, every caption inside its widget (the prefab's size), nothing wider than its body, no pictures needed.
-// The captions are the locale files' own; the widths and heights are the prefabs' numbers the screens use. Text is measured on
-// a stand-in canvas (a CJK character one em wide, anything else half an em), so what is asserted is the logic, not a font.
-// Run by tests/test_ngui_fit.py.
+// Every row of buttons, group of tabs or segments and pair of popup buttons, in every shipped language: one caption
+// size for the whole group, every caption inside its widget and no wider than its body, no pictures needed. The
+// captions are the locale files' own, the widths and heights the prefabs' numbers. Text is measured on a stand-in
+// canvas (a CJK character one em wide, anything else half an em): the logic is asserted, not a font. Run by
+// tests/test_ngui_fit.py.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFile } from "node:fs/promises";
@@ -81,8 +81,8 @@ test("the picker's constants are the ones asserted here", async () => {
   );
 });
 
-// the list popup's details: four and a half columns of the L class's grid; the actions' captions 34 down to 24 with the XS
-// button's padding each side
+// the list popup's details: four and a half columns of the L class's grid; the actions' captions 34 down to 24
+// with the XS button's padding each side
 const PANEL = ((2098 - 80 + 40) / 12) * 4.5 - 40,
   GAP = 20,
   CLEAR = 68,
@@ -196,7 +196,7 @@ for (const locale of LOCALES)
 
 // --- popup buttons: the default footer is XS, 104 high, captions 40 down to 28 in a box 12 less high; its bodies
 // are as wide as the captions need (200 at least, 551 at most), so the room is the body less its padding each side ---
-const { CONTROL, SPACE, TYPE } = await import("../../src/bmpt/web/js/ui-tokens.js");
+const { CONTROL, SPACE } = await import("../../src/bmpt/web/js/ui-tokens.js");
 const PAIRS = [
   ["picker.ok", "popup.cancel"],
   ["popup.save", "popup.cancel"],
@@ -207,7 +207,8 @@ const PAIRS = [
   ["update.later", "update.notes", "update.page"],
 ];
 const M_CAPTION = { fs: CONTROL.buttonXS.fs, fsMin: 28, lines: 2, h: CONTROL.buttonXS.h - SPACE.s }; // XS_BUTTON.fsMin
-// popup.js footerWidth: the group fitted in the widest body's room, then its widest line and the padding, within 200 and 551
+// popup.js footerWidth: the group fitted in the widest body's room, then its widest line and the padding, within
+// 200 and 551
 function footerBody(captions) {
   const room = CONTROL.buttonL.minW - 2 * CONTROL.buttonL.pad;
   const fits = fitGroup(captions, M_CAPTION.fs, M_CAPTION.fsMin, room, M_CAPTION.lines, { maxH: M_CAPTION.h });
@@ -334,8 +335,9 @@ for (const locale of LOCALES)
       );
   });
 
-// --- Settings: tabs (300 wide), the buttons of a value row (402 x 136, the prefab's small button), the export pair (680 x 136) ---
-const { XS_BUTTON, SMALL_BUTTON } = await import("../../src/bmpt/web/js/ui-tokens.js");
+// --- Settings: tabs (300 wide), the buttons of a value row (402 x 136, the prefab's small button), the export
+// pair (680 x 136) ---
+const { XS_BUTTON } = await import("../../src/bmpt/web/js/ui-tokens.js");
 const S = 1920 / 2960;
 for (const locale of LOCALES)
   test(`Settings tabs and button pairs share one size and fit in ${locale}`, async () => {
@@ -390,8 +392,8 @@ for (const locale of LOCALES)
     }
   });
 
-// --- Batch Import: the list's seven tools (their shares 174 190 126 140 150 224 156 of the list's 1220, SPACE.m apart, at scale 0.34)
-// and the row under the list ---
+// --- Batch Import: the list's seven tools (their shares 174 190 126 140 150 224 156 of the list's 1220, SPACE.m
+// apart, at scale 0.34) and the row under the list ---
 for (const locale of LOCALES)
   test(`the import list's tools and the row under the list share one size and fit their bodies in ${locale}`, async () => {
     const page = await source("batch-import.js"),
@@ -411,7 +413,8 @@ for (const locale of LOCALES)
       /ui\.fitGroup\(captions, max \?\? w\.fontSize, min \?\? w\.fontSize \* 0\.7, widths\.map\(\(width\) => width - XS_BUTTON\.fitInset\), 2,\s*\{ maxH: t\.widgets\.find\(\(x\) => "sprite" in x\)\.h_ - XS_BUTTON\.boxInsetH \}/,
     );
     document.documentElement.lang = locale;
-    // Btn_Receive: caption 60 units, body 162 high, the label box 20 less; the tools share the list's width less six gaps
+    // Btn_Receive: caption 60 units, body 162 high, the label box 20 less; the tools share the list's width less six
+    // gaps
     const shares = [
       ["addFiles", 174],
       ["addFolder", 190],
@@ -426,7 +429,8 @@ for (const locale of LOCALES)
     const widths = shares.map(([, share]) => (share * pixels) / 0.34 - 60),
       captions = shares.map(([key]) => text(locale, `import.${key}`));
     assertGroup(fitGroup(captions, 60, 42, widths, 2, { maxH: 162 - 20 }), captions, widths, 142, `${locale} tools`);
-    // the row: buttonXS (104 high, caption 40 down to XS_BUTTON.fsMin), on the prefabs' 162-high bodies, Import's caption in every form
+    // the row: buttonXS (104 high, caption 40 down to XS_BUTTON.fsMin), on the prefabs' 162-high bodies, Import's
+    // caption in every form
     const k = (CONTROL.buttonXS.h * S) / 162,
       range = [(CONTROL.buttonXS.fs * 162) / CONTROL.buttonXS.h, (XS_BUTTON.fsMin * 162) / CONTROL.buttonXS.h];
     const rowWidths = [330, XS_BUTTON.w * S, XS_BUTTON.w * S].map((width) => width / k - 60);
@@ -443,7 +447,7 @@ for (const locale of LOCALES)
   });
 
 // --- the Hall modal's retained footer ---
-const { row } = await import("../../src/bmpt/web/js/ui-grid.js");
+await import("../../src/bmpt/web/js/ui-grid.js");
 for (const locale of LOCALES)
   test(`the Hall modal's footer captions fit in ${locale}`, async () => {
     const ui = await source("student-hall-ui.js");
@@ -502,9 +506,9 @@ for (const locale of LOCALES)
     assertGroup([fit], [caption], [room], height, `${locale} portrait choice`);
   });
 
-// --- the compatibility result's three repair choices (mod-compatibility.js repairButtons): the XS footer every popup has
-//, bodies as wide as the captions need and sharing the frame's width (popup.js footerScale), in each frame the
-// result popup can take ---
+// --- the compatibility result's three repair choices (mod-compatibility.js repairButtons): the XS footer every
+// popup has , bodies as wide as the captions need and sharing the frame's width (popup.js footerScale), in each
+// frame the result popup can take ---
 const { POPUP_FRAME } = await import("../../src/bmpt/web/js/ui-tokens.js");
 for (const locale of LOCALES)
   test(`the three repair choices share one size and fit their small button bodies in ${locale}`, async () => {
@@ -539,8 +543,9 @@ for (const locale of LOCALES)
     }
   });
 
-// --- the 3D model tab's action cards (detail.js stripCard): a 242-wide Common_Btn_BG card, its caption 56 down to 28 in
-// 50 less than the card's width, up to two lines; every action model.js plays has its caption in every locale ---
+// --- the 3D model tab's action cards (detail.js stripCard): a 242-wide Common_Btn_BG card, its caption 56 down
+// to 28 in 50 less than the card's width, up to two lines; every action model.js plays has its caption in every
+// locale ---
 for (const locale of LOCALES)
   test(`the 3D model's action captions fit their cards in ${locale}`, async () => {
     const detail = await source("detail.js"),

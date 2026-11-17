@@ -686,7 +686,7 @@ test("a portrait the game drew anew is named by the check and offers no remap", 
   assert.equal(checked.assessment.remap, false);
   assert.equal(h.mod.canRemap("old-mod", { kind: "spr" }), false);
   assert.equal(h.strings.compatibility.redrawn, "官方原版立绘已重绘");
-  // drawn as before: the remap posts the whole geometry
+  // drawn as shipped: the remap posts the whole geometry
   h.use(portrait());
   h.redraw({ redrawn: false, overlap: 0.99 });
   const fine = await h.mod.inspect("old-mod");
@@ -748,7 +748,7 @@ test("a portrait the game drew anew keeps the rig its textures were drawn for, u
       locale,
     );
     assert.ok(popup.lines.at(-1).marker, locale);
-    // nothing a user does not act on (owner): the author and CRC hints are gone
+    // nothing a user cannot act on: the author and CRC hints are absent
     assert.equal(h.strings.compatibility.authorHint, undefined, locale);
     assert.equal(h.strings.compatibility.crcHint, undefined, locale);
     assert.equal(popup.ok, h.strings.remap.action, locale);
@@ -794,7 +794,7 @@ test("a portrait the game drew anew keeps the rig its textures were drawn for, u
     // nothing to update: the list of changes alone, no rule
     assert.ok(!g.popups[0].lines.some((line) => line.rule), locale);
     assert.equal(g.popups[0].lines.at(-1), listed, locale);
-    // drawn anew without a recorded rig: named as before, nothing offered
+    // drawn anew without a recorded rig: named, and nothing offered
     const n = await harness(locale, "ok");
     n.use(portrait({ atlases: [], animations: {}, available: false }));
     n.redraw({ redrawn: true, overlap: 0.52 });
@@ -940,7 +940,7 @@ test("a mod with its own skeleton the official one outgrew is offered the graft 
       ],
       locale,
     );
-    // what the graft refused: the converter's route, which ends this review
+    // what the graft refused: the converter's route, which ends this comparison
     assert.deepEqual(
       options.lines.at(-1).button,
       { label: h.strings.compatibility.converterAction, close: "convert" },
@@ -955,7 +955,7 @@ test("a mod with its own skeleton the official one outgrew is offered the graft 
 
 test("what the graft refused goes through the converter once it is fetched with the user's consent", async () => {
   for (const locale of ["zh-CN", "en-US"]) {
-    // the first review ends with the converter's route, the second is accepted
+    // the first comparison ends with the converter's route, the second is accepted
     const h = await harness(locale, "ok", (n) => (n === 1 ? "convert" : true));
     h.use({
       ...mixedReport(),
@@ -1049,7 +1049,7 @@ test("what the graft refused goes through the converter once it is fetched with 
       ],
       locale,
     );
-    // the converter's review offers no converter again
+    // the converter's comparison offers no converter again
     const [, , , options] = h.comparisons[1];
     assert.ok(!options.lines.some((line) => line.button?.close), locale);
   }

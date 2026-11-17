@@ -1,6 +1,7 @@
-// The button size tag of developer previews: which preset (XS, S, M, L) a Common_Btn_BG pill is by its height in the
-// app's units, the pills that are none of them, the bodies that are no buttons, and the dot that replaces a tag that would
-// cover the caption. Run by tests/test_ngui_fit.py's runner with the other JS tests: node --test tests/js/button_tiers.test.mjs
+// The button size tag of developer previews: which preset (XS, S, M, L) a Common_Btn_BG pill is by its height in
+// the app's units, the pills that are none of them, the bodies that are no buttons, and the dot that replaces a
+// tag that would cover the caption. Run by tests/test_ngui_fit.py's runner with the other JS tests: node --test
+// tests/js/button_tiers.test.mjs
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
@@ -209,7 +210,8 @@ test("a stable build tags nothing, nor does a body that is no button", async (t)
 });
 
 test("a caption that reaches the corner turns the tag into a dot that keeps the label", async (t) => {
-  // the measuring stand-in gives every caption 100 units: it clears the corner of a wide, tall body and covers that of a small one
+  // the measuring stand-in gives every caption 100 units: it clears the corner of a wide, tall body and covers
+  // that of a small one
   const clear = await render(t, pill(308, 104, "OK"), { tags: true });
   assert.equal(clear[0].textContent, "XS");
   assert.doesNotMatch(clear[0].className, /dot/);

@@ -26,6 +26,13 @@ const BALLOON_BODY = {
   borderBottom: 60,
 };
 
+/**
+ * Make a bounded in-memory cache of results by key, shared by calls in flight.
+ * @param {number} [maxBytes] The most bytes kept.
+ * @returns
+ *     {{get: (key: string, read: (signal?: AbortSignal) => Promise<*>, size?: (value: *) => number, signal?: AbortSignal|null) => Promise<*>}}
+ *     get reads a value once per key, or gives the cached one.
+ */
 export function memoryMemo(maxBytes = 32 * 1024 * 1024, maxEntries = 128) {
   const values = new Map(),
     flights = new Map();
@@ -95,6 +102,12 @@ export function memoryMemo(maxBytes = 32 * 1024 * 1024, maxEntries = 128) {
   };
 }
 
+/**
+ * Break a dialogue's text into lines that fit a width.
+ * @param {(line: string, fontSize: number) => number} measure
+ * @param {string} [lang] The language tag, for the break rules.
+ * @returns {string[]}
+ */
 export function wrapDialogue(text, fontSize, maxWidth, measure, lang = "en") {
   const segmenter = typeof Intl.Segmenter === "function" ? new Intl.Segmenter(lang, { granularity: "word" }) : null;
   const graphemes = typeof Intl.Segmenter === "function" ? new Intl.Segmenter(lang, { granularity: "grapheme" }) : null;
@@ -125,6 +138,13 @@ export function wrapDialogue(text, fontSize, maxWidth, measure, lang = "en") {
   return lines;
 }
 
+/**
+ * Place a Talk balloon beside a portrait's rect, inside the bounds.
+ * @param {{x: number, y: number, width: number, height: number}} rect The portrait's rect on the stage.
+ * @param {{width: number, height: number}} size
+ * @param {{left: number, top: number, right: number, bottom: number}} [bounds] The room the balloon may take.
+ * @returns {{x: number, y: number, side: string}} The balloon's position and the side of the portrait it is on.
+ */
 export function balloonPosition(rect, size, bounds = { left: 24, top: 36, right: 1896, bottom: 1044 }) {
   const right = bounds.right - rect.x - rect.width,
     left = rect.x - bounds.left;
@@ -136,6 +156,11 @@ export function balloonPosition(rect, size, bounds = { left: 24, top: 36, right:
   };
 }
 
+/**
+ * The size and flip of a balloon's body sprite.
+ * @param {{w_: number, h_: number, flip?: number}} sprite
+ * @param {{width: number, height: number}} [meta] The atlas sprite's size.
+ */
 export function balloonBody(sprite, meta = BALLOON_BODY) {
   const [top, right, bottom, left] = spriteBorders(meta);
   const x = sliceAxis(meta.width, left, right, sprite.w_ * S, S);
@@ -151,6 +176,13 @@ export function balloonBody(sprite, meta = BALLOON_BODY) {
   return box;
 }
 
+/**
+ * Build a Talk balloon's tree for a text, placed beside a rect.
+ * @param {{x: number, y: number, width: number, height: number}} rect
+ * @param {object} [options]
+ * @param {object} [options.ui] The NGUI module, for the tests.
+ * @param {object} [options.bounds] The room the balloon may take.
+ */
 export function prepareBalloon(template, text, rect, { ui = NGUI, lang = "en", bounds, at } = {}) {
   const tree = structuredClone(template),
     spriteNode = ui.find(tree, "Sprite"),
@@ -199,6 +231,26 @@ export function prepareBalloon(template, text, rect, { ui = NGUI, lang = "en", b
   return { tree, ...size, ...position };
 }
 
+/**
+ * Make the Hall's dialogue player: the talk caption, voice and balloon for a placed portrait.
+ * @param {object} [options]
+ * @param {HTMLElement} options.host The Hall's element the balloons go into.
+ * @param {(entry: object) => object|null} options.actorOf Gives a placed portrait's player.
+ * @param {(entry: object) => object|null} [options.choiceOf] Gives a portrait's source choice.
+ * @param {() => object} [options.info] Gives the Hall's information.
+ * @param {() => object} [options.prefs]
+ * @param {(error: Error) => void} [options.onError]
+ * @param {(method: string, params: object) => Promise<*>} [options.call] The RPC call, for the tests.
+ * @param {object} [options.ui] The NGUI module, for the tests.
+ * @param {(url: string) => HTMLAudioElement} [options.audioFactory] Makes an audio element, for the tests.
+ * @param {Function} [options.expressions] Picks the face a talk plays, for the tests.
+ * @param {() => string} [options.currentLanguage]
+ * @param {object} [options.bounds] The room the balloons may take.
+ * @param {(error: Error, entry: object) => void} [options.onDiagnostic]
+ * @returns
+ *     {{play: Function, stop: Function, dispose: Function, reposition: Function, relabel: () => Promise<void>}}
+ *     The controls.
+ */
 export function createDialogue({
   host,
   actorOf,
@@ -653,11 +705,23 @@ export function createDialogue({
   };
 }
 
-// Lobby points and the pat rectangles are prefab-root coordinates (gameassets/lobby.py's single transform walk).
+/**
+ * Convert a lobby point from prefab-root coordinates (gameassets/lobby.py's single transform walk) to the
+ * stage.
+ * @param {{x: number, y: number}} point The point in lobby units.
+ * @param {{x: number, y: number, w: number, h: number}} view
+ * @returns {{x: number, y: number}} The point in stage pixels, y down.
+ */
 export const lobbyPoint = (point, view) => ({
   x: ((point.x - view.x) * 1920) / view.w,
   y: ((view.y + view.h - point.y) * 1080) / view.h,
 });
+/**
+ * Keep a balloon inside bounds.
+ * @param {{x: number, y: number}} at
+ * @param {{width: number, height: number}} size
+ * @param {{left: number, top: number, right: number, bottom: number}} bounds
+ */
 export function clampBalloon(at, size, bounds) {
   return {
     x: clamp(at.x, bounds.left, bounds.right - size.width),
@@ -666,7 +730,15 @@ export function clampBalloon(at, size, bounds) {
   };
 }
 const FULL_STAGE = Object.freeze({ left: 0, top: 0, right: 1920, bottom: 1080 });
-// Fullscreen keeps the Talk balloon by the head: the detail panel has gone, so the whole stage bounds it.
+/**
+ * Build a Talk balloon for a memorial lobby. Fullscreen keeps it by the head: the detail panel is gone, so the
+ * whole stage bounds it.
+ * @param {object} options
+ * @param {object} options.bounds The room the balloon may take.
+ * @param {object} [options2]
+ * @param {object} [options2.ui] The NGUI module, for the tests.
+ * @returns {object} The balloon: tree, size and position.
+ */
 export function lobbyBalloon(
   template,
   text,
@@ -692,7 +764,18 @@ export function lobbyBalloon(
   };
 }
 
-// The memorial's existing leave/enter sequence, rendering the same Talk helper as the Hall in every view.
+/**
+ * Make the memorial lobby's dialogue player: the memorial's leave and enter sequence, rendering the same Talk
+ * helper as the Hall in every view.
+ * @param {object} [options]
+ * @param {HTMLElement} options.host The element the balloon goes into.
+ * @param {() => object} options.geometry Gives the lobby's geometry (info, meta, view, framing, full, bounds).
+ * @param {(method: string, params: object) => Promise<*>} [options.call] The RPC call, for the tests.
+ * @param {object} [options.ui] The NGUI module, for the tests.
+ * @param {Function} [options.later] setTimeout, for the tests.
+ * @param {Function} [options.cancel] clearTimeout, for the tests.
+ * @param {Function} [options.raf] requestAnimationFrame, for the tests.
+ */
 export function createLobbyDialogue({
   host,
   geometry,

@@ -34,7 +34,8 @@ export function displayLayouts(filter) {
       put(`Center/Popup/Tab/${widget}/${id}/${state}/Label_Locale`, n("Label_Locale", [0, 0], [lbl()]));
   }
   put("Center/Popup/Filter/BG_List", n("BG_List", [212, 0], [spr("Common_Square_Bg", 2244, 781)]));
-  // the filter panel's header (pivot top) and its triangle pattern, from the header's right end outwards as in the prefab
+  // the filter panel's header (pivot top) and its triangle pattern, from the header's right end outwards as in the
+  // prefab
   put(
     "Center/Popup/Filter/BG_Tag",
     n(

@@ -36,7 +36,8 @@ const chromium = (notches) => ({
 });
 
 test("one event: notches, trackpad steps and the ones that could be either", () => {
-  // a slow notch is a tenth of a line, rounded or cut to 16.16 fixed point: 4.000244 or 3.99963 px, wheelDeltaY 12 or 11
+  // a slow notch is a tenth of a line, rounded or cut to 16.16 fixed point: 4.000244 or 3.99963 px, wheelDeltaY 12
+  // or 11
   for (const tenths of [1, -1, 2, 3, 7, 12, 23, 41, 127]) {
     assert.equal(Touch.wheelStep(webkitWheel(tenths)), "notch", `tenths ${tenths}`);
     assert.equal(Touch.wheelStep(webkitWheel(tenths, { round: Math.floor })), "notch", `tenths ${tenths}, cut`);

@@ -142,7 +142,8 @@ test("every clip the lobby plays is sampled over the idle, with its sync clip, t
 });
 
 test("the clips the idle starts are sampled over it on their own tracks, on every layer", () => {
-  // Shigure's train on track 3 of the character; Hoshino's whale on track 1 of her background, then the clip it chains to
+  // Shigure's train on track 3 of the character; Hoshino's whale on track 1 of her background, then the clip it
+  // chains to
   const main = { name: "Shigure_home", main: true, idle: "Idle_01", data: data({ Idle_01: 4, Train_00_R: 0.25 }) };
   const bg = {
     name: "Hoshino_bg",
@@ -284,7 +285,7 @@ test("every layer's post-processing is placed in the game's view, whatever view 
     { x: 0, y: -962, scale: 1 },
     { x: 37.5, y: -880, scale: 0.72 },
   ]) {
-    // the fullscreen game view: the canvas itself, so the pass reads exactly as before
+    // the fullscreen game view: the canvas itself, so the pass reads the whole canvas
     assert.deepEqual(Linear.screenOnCanvas(screen(l), camera(Lobby.layerViewport(G, l))), [0, 0, 1, 1]);
     // the left view, a zoom panned into a corner, a view zoomed out past the game's: the game's view on the stage
     for (const v of [

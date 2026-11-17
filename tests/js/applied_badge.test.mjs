@@ -1,5 +1,6 @@
 // UIPopup_Mulligan badges expand only their byte-identical middle columns. Text measurement uses a stand-in
-// canvas (CJK one em, Thai bases .55 em and combining marks zero, Latin .5 em); native font appearance is checked by hand.
+// canvas (CJK one em, Thai bases .55 em and combining marks zero, Latin .5 em); native font appearance is
+// checked by hand.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
@@ -26,8 +27,8 @@ const { BADGE_FONT_MIN, badgeCaptionBox, fitBadgeCaptions, selectedFrame, SELECT
   await import("../../src/bmpt/web/js/selected-frames.js");
 
 const LOCALES = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"];
-// The game's own word for "Selected": the Global client's text for it in English, Traditional Chinese, Japanese, Korean and
-// Thai; Simplified Chinese follows the agreed wording.
+// The game's own word for "Selected": the Global client's text for it in English, Traditional Chinese, Japanese,
+// Korean and Thai; Simplified Chinese follows the agreed wording.
 const WORDS = {
   "en-US": "Selected",
   "zh-CN": "已选择",
@@ -137,7 +138,8 @@ for (const locale of LOCALES)
           (cuts.borderLeft + cuts.borderRight) * bw.sliceScale[0];
         if (caption.fontSize < box.fontSize) assert.ok(desired > card.w, "shrink only at the card width limit");
         else assert.equal(caption.fontSize, 42);
-        // The official Python test verifies fully opaque fill rows [3, 61). Test the entire line box, not only glyph width.
+        // The official Python test verifies fully opaque fill rows [3, 61). Test the entire line box, not only glyph
+        // width.
         const innerTop = badge.pos[1] + 37 - 3 * bw.sliceScale[1],
           innerBottom = badge.pos[1] + 37 - 61 * bw.sliceScale[1];
         const lineHeight = fontSizeFor(text, caption.fontSize) * LINE_PITCH;

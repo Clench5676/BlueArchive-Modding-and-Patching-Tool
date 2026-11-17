@@ -7,7 +7,7 @@ const dialogue = source
   .slice(source.indexOf("export function play(anim"), source.indexOf("export const playingAll"))
   .replaceAll("export function", "function");
 const linesSetter = source
-  .slice(source.indexOf("export function setLines("), source.indexOf("// the voice volume"))
+  .slice(source.indexOf("export function setLines("), source.indexOf("export function setVolume("))
   .replaceAll("export function", "function");
 const detail = readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8");
 const toggle = detail.slice(detail.indexOf("function togglePlayAll()"), detail.indexOf("// a dialogue started"));

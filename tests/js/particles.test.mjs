@@ -354,8 +354,9 @@ test("ring buffer: particles held at their end or looping their lifetime until m
 });
 
 test("a particle that dies is replaced in the same frame; one emitted within a frame moves for the rest of it", () => {
-  // hibiki_home's River_surface and BackGround_*: one particle at most, 60 a second, living 1 and 5 s. Emitted before
-  // the old one was gone, the new one waited a frame and the bottom-left corner blinked dark once a second
+  // hibiki_home's River_surface and BackGround_*: one particle at most, 60 a second, living 1 and 5 s. A new
+  // particle is emitted before the previous one is gone and must not wait a frame, or the bottom-left corner
+  // blinks dark once a second
   const frames = {
     "60 Hz": () => 1 / 60,
     "75 Hz": () => 1 / 75,
@@ -1427,7 +1428,8 @@ test("the effects draw in their layer's context with the game's blend and free e
   const ours = gl.calls.slice(from);
   Linear.end(p);
   assert.equal(ours.filter(([name]) => name === "drawArrays").length, 2);
-  // the alpha-blended system (queue 2800) under the skeleton, the additive one (3100) over it: colour adds, coverage not
+  // the alpha-blended system (queue 2800) under the skeleton, the additive one (3100) over it: colour adds,
+  // coverage not
   const blends = ours.filter(([name]) => name === "blendFuncSeparate").map((c) => c.slice(1));
   assert.deepEqual(blends, [
     ["SRC_ALPHA", "ONE_MINUS_SRC_ALPHA", "ONE", "ONE_MINUS_SRC_ALPHA"],
@@ -1761,7 +1763,7 @@ test("a system's trails draw with their own material where its queue sorts them"
   Linear.detach(p);
 });
 
-// --- skeleton-parts.js: a skeleton drawn one render queue at a time ---------------------------------------------------
+// --- skeleton-parts.js: a skeleton drawn one render queue at a time ---
 
 const Parts = await import("../../src/bmpt/web/js/skeleton-parts.js");
 

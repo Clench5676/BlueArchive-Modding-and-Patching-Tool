@@ -37,8 +37,10 @@ const FRAMES = {
 // the frame a card's other use shows: the list card and the big picture of the same skeleton are drawn in one load
 const COMPANION = { card: "bust", bust: "card" };
 
-// the looping idle of a portrait skeleton: Idle_01, else its first idle-like animation; null when it has none (a few
-// NPC portraits only carry the "00" face), which leaves the setup pose under the face
+/**
+ * The looping idle of a portrait skeleton: Idle_01, else its first idle-like animation; null when it has none
+ * (a few NPC portraits only carry the "00" face), which leaves the setup pose under the face.
+ */
 export function idleAnimation(data) {
   if (data.findAnimation("Idle_01")) return "Idle_01";
   return data.animations.find((a) => /^idle/i.test(a.name))?.name || null;
@@ -75,19 +77,25 @@ function hostEl() {
   return host;
 }
 
-// the expression overlay slots (eyes, "0N_" attachments) mark the face on Blue Archive portraits; halos are named
-// like them on some ("01_halo" on Hina) and are left out
+/**
+ * Whether a slot's attachment is part of the face: the expression overlay slots (eyes, "0N_" attachments) mark
+ * the face on Blue Archive portraits; halos are named like them on some ("01_halo" on Hina) and are left out.
+ */
 export const isFacePart = (slot, attachment) => {
   const names = `${slot} ${attachment}`;
   return /eye|face|^0\d_|default/i.test(names) && !/halo/i.test(names);
 };
 const isHalo = (part) => /halo/i.test(`${part.slot} ${part.attachment}`);
 
-// faceOf(parts) -> the face box {x0, y0, x1, y1} or null. parts: the skeleton's shown attachments in its idle,
-// { slot, attachment, box, expr }, expr when an expression animation ("00", "01", ...) switches the slot. The parts
-// named like a face, else the parts the expressions switch (many NPC portraits name their face slot "0", "00" or
-// "defalt"), each no larger than a face can be and halos left out: a whole body some NPCs (citizen_animal1) swap per
-// expression is no face.
+/**
+ * The face box of a portrait: the parts named like a face, else the parts the expressions switch (many NPC
+ * portraits name their face slot "0", "00" or "defalt"), each no larger than a face can be and halos left out:
+ * a whole body some NPCs (citizen_animal1) swap per expression is no face.
+ * @param {{slot: string, attachment: string, box: object, expr?: boolean}[]} parts The skeleton's shown
+ *     attachments in its idle; expr is set when an expression animation ("00", "01", ...) switches the slot.
+ * @returns {{x0: number, y0: number, x1: number, y1: number}|null} The face box in skeleton units; null when
+ *     there is none.
+ */
 export function faceOf(parts) {
   const union = (list) =>
     list.reduce(
@@ -143,11 +151,17 @@ function faceBox(skeleton) {
 export const FACE_W = [170, 400];
 export const NOT_FACE = 600;
 
-// thumbFrame(found, bounds, frame, aspect) -> the skeleton rect {x, y, width, height} a thumbnail shows. found: the
-// face box {x0, y0, x1, y1} or null; bounds: the skeleton's {x, y, w, h}. Every frame is sized on the face, never on the
-// bounds, so a weapon, wings or a prop beside the character never shrink her; the bounds only stand in without a face.
-// face: the whole head (face and hair), the face a little below the centre; bust and roster: head down to the waist;
-// card: the head.
+/**
+ * The skeleton rect a thumbnail shows. Every frame is sized on the face, never on the bounds, so a weapon,
+ * wings or a prop beside the character never shrink her; the bounds only stand in without a face. The "face"
+ * frame is the whole head (face and hair), the face a little below the centre; "bust" and "roster" are head
+ * down to the waist; "card" is the head.
+ * @param {{x0: number, y0: number, x1: number, y1: number}|null} found The face box.
+ * @param {{x: number, y: number, w: number, h: number}} bounds The skeleton's bounds.
+ * @param {"face"|"bust"|"roster"|"card"} frame Which frame.
+ * @param {number} aspect The thumbnail's width over its height.
+ * @returns {{x: number, y: number, width: number, height: number}} The rect in skeleton units.
+ */
 export function thumbFrame(found, bounds, frame, aspect) {
   const face = found && found.x1 - found.x0 <= NOT_FACE ? found : null;
   const faceW = face ? Math.min(Math.max(face.x1 - face.x0, FACE_W[0]), FACE_W[1]) : bounds.w * 0.17;
@@ -280,14 +294,19 @@ async function capture(player, el, frame, expr, lobby, framing, background, sign
   return new Promise((resolve) => canvas.toBlob((b) => resolve(b && !signal.aborted ? URL.createObjectURL(b) : null)));
 }
 
-// The capture buffer is cleared transparent before drawing. Uniform opaque pixels may be a solid-colour Mod;
-// colour variation is not evidence of a valid source. Validate before compositing any collection background.
+/**
+ * Whether the capture has pixels that can be a portrait. The buffer is cleared transparent before drawing;
+ * uniform opaque pixels may be a solid-colour Mod, and colour variation is not evidence of a valid source.
+ * Validate before compositing any collection background.
+ */
 export function hasThumbnailInk(pixels) {
   for (let i = 3; i < pixels.length; i += 4) if (pixels[i] > 0) return true;
   return false;
 }
 
-// Collection portraits fill their texture with the variant background before the transparent Spine still.
+/**
+ * A collection portrait: the variant background fills the texture before the transparent Spine still.
+ */
 export async function collectionStill(
   portrait,
   background,
@@ -329,7 +348,10 @@ const persistentDependencies = (base, lobby, framing, background) => [
   ...(lobby && !framing ? [`${base.slice(0, base.lastIndexOf("/"))}/framing.json`] : []),
 ];
 
-// A fallback retains queue priority and cancellation: an abandoned view must never publish a late image.
+/**
+ * Give a thumbnail a fallback that keeps its queue priority and cancellation: an abandoned view must never
+ * publish a late image.
+ */
 export function withThumbnailFallback(picture, fallback) {
   const result = Promise.resolve(picture)
     .catch(() => null)
@@ -563,8 +585,13 @@ async function companions(player, el, base, batch, signal) {
   }
 }
 
-// A detail generation shares each manifest answer until it changes. Re-entering the page revalidates the source;
-// cancelling also stops manifest deadlines, queued renders and the active player when nobody else needs it.
+/**
+ * Make a scope for one detail generation's thumbnails: it shares each manifest answer until it changes
+ * (re-entering the page revalidates the source); cancelling also stops manifest deadlines, queued renders and
+ * the active player when nobody else needs it.
+ * @param {object} [options]
+ * @param {string} [options.priority] "background" by default, or "popup".
+ */
 export function thumbnailScope({ priority = "background" } = {}) {
   const controller = new AbortController(),
     manifests = new Map();
@@ -583,8 +610,17 @@ export function thumbnailScope({ priority = "background" } = {}) {
   };
 }
 
-// thumb(base, frame) -> Promise<blob url | null>; expr selects a face, lobby selects its idle, framing a special fit.
-// bump() puts a visible card before queued work. Scopes add cancellation and share the source's manifest.
+/**
+ * Render a thumbnail of a skeleton.
+ * @param {string} base The skeleton's base path.
+ * @param {"face"|"bust"|"roster"|"card"} [frame] Which frame.
+ * @param {string|null} [expr] A face to show.
+ * @param {boolean} [lobby] Show the lobby's idle.
+ * @param {string|null} [framing] A special slot's framing.
+ * @param {object|null} [background] The collection background to fill under it.
+ * @returns {Promise<string|null>} A blob URL, or null. The promise carries bump(), which puts a visible card
+ *     before queued work; scopes add cancellation and share the source's manifest.
+ */
 export function thumb(base, frame = "bust", expr = null, lobby = false, framing = null, background = null) {
   return request(base, frame, expr, lobby, framing, background);
 }
@@ -713,13 +749,17 @@ function bump(item) {
   if (at > 0) queue.unshift(...queue.splice(at, 1));
 }
 
-// Remember the preference before asynchronous manifests have populated the queue.
+/**
+ * Remember the preference for a source before asynchronous manifests have populated the queue.
+ */
 export function prioritise(base) {
   preferred = base ? `${base.slice(0, base.lastIndexOf("/"))}/` : "";
   queue.sort((a, b) => b.base.startsWith(preferred) - a.base.startsWith(preferred));
 }
 
-// Drop cached pictures of changed files; comparisons ignore the catalog's core spelling.
+/**
+ * Drop the cached pictures of changed files under a prefix; comparisons ignore the catalog's core spelling.
+ */
 export function forget(prefix = "") {
   forgetSpineAssets(prefix);
   const want = prefix.toLowerCase();

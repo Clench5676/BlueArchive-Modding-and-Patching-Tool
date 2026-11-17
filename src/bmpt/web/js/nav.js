@@ -1,9 +1,9 @@
 import { topActionLayout, nativeRightClearance } from "./top-action-layout.js";
 import { CORNER_MARGIN } from "./corner-layout.js";
 import { watchTopBar } from "./top-bar.js";
-// The lobby-style bottom navigation and the top bar. The entries are nav-items.js: one without a web screen is greyed
-// out with the game's disabled tint and hands over to the classic GUI on its tab, through the hand-off prompt
-// (on every click, with Don't Ask Again, until the pref classicPrompt is turned off).
+// The lobby-style bottom navigation and the top bar. The entries are nav-items.js: one without a web screen is
+// greyed out with the game's disabled tint and hands over to the classic GUI on its tab, through the hand-off
+// prompt (on every click, with Don't Ask Again, until the pref classicPrompt is turned off).
 import { notify } from "./popup.js";
 import * as Loading from "./loading.js";
 import * as NGUI from "./ngui.js";
@@ -57,9 +57,14 @@ async function click(item) {
   }
 }
 
-// renderNav(active, {game, prefs, setPrefs}): game, whether a game folder is found (the greyed look's source);
-// prefs(), the settings as last read (settings.get); setPrefs(prefs), after the prompt turned itself off
+// renderNav's options: game, whether a game folder is found (the greyed look's source); prefs(), the settings as
+// last read (settings.get); setPrefs(prefs), after the prompt turned itself off.
 let navRevision = 0;
+/**
+ * Draw the bottom navigation.
+ * @param {number} [active] The index of the entry for the shown screen.
+ * @returns {Promise<void>} Settles when the bar is drawn.
+ */
 export async function renderNav(active = 0, opts = {}) {
   options = { ...options, ...opts };
   const host = $("nav"),
@@ -111,6 +116,10 @@ const topBoxes = {
   option: [CORNER_MARGIN + 114, 7, 50, 50],
   line: [CORNER_MARGIN + 76, 12, 3, 32],
 };
+/**
+ * Show the top bar for the Student Hall (hall) or for the other screens.
+ * @param {boolean} hall Whether the Student Hall is shown: the home and back buttons are hidden then.
+ */
 export function setTopActions(hall, available = true) {
   topHall = hall;
   topAvailable = available;
@@ -119,6 +128,7 @@ export function setTopActions(hall, available = true) {
   if (back) back.hidden = hall || !back.onclick;
   reflowTopActions();
 }
+/** Place the top bar's home, option and divider controls against the native window controls. */
 export function reflowTopActions() {
   document.querySelector(".topbar")?.style.setProperty("--corner-margin", `${CORNER_MARGIN}px`);
   const bar = document.querySelector(".topbar")?.getBoundingClientRect?.(),
@@ -199,6 +209,10 @@ function skinTop() {
     }));
 }
 
+/**
+ * Set the top bar's label and back action.
+ * @param {(() => void)|null} onBack What the back button does; none hides it.
+ */
 export function setTitle(text, onBack) {
   document.querySelector(".topbar").setAttribute("aria-label", text);
   const back = document.querySelector(".topbar .back");

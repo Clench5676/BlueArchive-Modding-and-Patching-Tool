@@ -1,5 +1,5 @@
-// Authored stand-in for the measured UIPopup_Mulligan selected-card paths; no game mesh or pixels. The material colours and
-// the number label's numbers are the prefab's own values (data, not assets).
+// Authored stand-in for the measured UIPopup_Mulligan selected-card paths; no game mesh or pixels. The material
+// colours and the number label's numbers are the prefab's own values (data, not assets).
 const n = (name, pos = [0, 0], widgets = [], children = []) => ({
   name,
   pos,

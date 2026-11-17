@@ -1,39 +1,51 @@
-// Shared UIPopup_Option_PC / UIPopup_Option_Toggle rows, used by Settings, Batch Import and the Export popup.
-// A row is a card laid out in a container (ui-grid.js): the card less its padding is the content box, and the title, the
-// options and the value rows' text and buttons take their boxes from it with row and stack. The prefab's own values stay (the
-// card's width 1552 and padding 58, its title 17 from the top, the radio groups 508 apart, the cards 12 apart, the small buttons
-// 20 apart); the other numbers of the card's anatomy (240, 109, the dotted line's size and place, 100, 19, 5) are kept as the rows
-// had them, and everything the App adds comes from the scales (ui-tokens.js).
+// Shared UIPopup_Option_PC / UIPopup_Option_Toggle rows, used by Settings, Batch Import and the Export popup. A
+// row is a card laid out in a container (ui-grid.js): the card less its padding is the content box, and the
+// title, the options and the value rows' text and buttons take their boxes from it with row and stack. The
+// prefab's own values stay (the card's width 1552 and padding 58, its title 17 from the top, the radio groups
+// 508 apart, the cards 12 apart, the small buttons 20 apart); the other numbers of the card's anatomy (240, 109,
+// the dotted line's size and place, 100, 19, 5) are kept as they are, and everything the App adds comes from the
+// scales (ui-tokens.js).
 import { node, sprite, label, fitText, fitGroup } from "./ngui.js";
 import { PANEL, SPACE, CONTROL, XS_BUTTON, TYPE, COLOUR } from "./ui-tokens.js";
 import { container, grid, row as layoutRow, stack as layoutStack, toNode } from "./ui-grid.js";
 
-// UIPopup_Option_PC's card: 1552 wide (PANEL.padCard 58 each side), 240 high with one line of options, its dotted line (Common_Dotline,
-// 1523 x 4) 109 under its top and 16.3 in from its left edge (the line is not centred on the card), the title 76 high 17 under the
-// top (PANEL.cardTitleTop)
+// UIPopup_Option_PC's card: 1552 wide (PANEL.padCard 58 each side), 240 high with one line of options, its
+// dotted line (Common_Dotline, 1523 x 4) 109 under its top and 16.3 in from its left edge (the line is not
+// centred on the card), the title 76 high 17 under the top (PANEL.cardTitleTop)
 export const ROW_W = 1552;
 export const CARD = Object.freeze({ w: ROW_W, h: 240, line: 109, lineX: 16.3, lineW: 1523, lineH: 4, titleH: 76 });
-// UIPopup_Option_Toggle: the options of a radio group 508 apart (the prefab's pitch; a group too long for it shares the content box),
-// a further line of options 100 under the last, the radio's label 19 clear of the radio (the label's node 49 from the radio's centre)
-// and 5 under its centre
+// UIPopup_Option_Toggle: the options of a radio group 508 apart (the prefab's pitch; a group too long for it
+// shares the content box), a further line of options 100 under the last, the radio's label 19 clear of the radio
+// (the label's node 49 from the radio's centre) and 5 under its centre
 const OPTION = Object.freeze({ pitch: 508, rowPitch: 100, labelGap: 19, labelDrop: 5, size: CONTROL.icon.h });
-// the lines of an option stay in the band under the row's dotted line: 123 high round the option's centre in a one-line row,
-// and where the options wrap onto more rows (100 apart) no taller than the pitch less a margin
+// the lines of an option stay in the band under the row's dotted line: 123 high round the option's centre in a
+// one-line row, and where the options wrap onto more rows (100 apart) no taller than the pitch less a margin
 export const OPTION_TEXT_H = 96,
   OPTION_TEXT_H_ONE_ROW = 120;
 
-// The card's frame in NGUI space (centre origin, y up): where a box in the card's own frame (x right, y down from its top left)
-// goes. The card's content box is the card less its padding: PANEL.padCard each side, SPACE.m under the dotted line, SPACE.l above
-// the foot (the value rows' gaps, see valueGeometry).
+// The card's frame in NGUI space (centre origin, y up): where a box in the card's own frame (x right, y down
+// from its top left) goes. The card's content box is the card less its padding: PANEL.padCard each side, SPACE.m
+// under the dotted line, SPACE.l above the foot (the value rows' gaps, see valueGeometry).
 const frameOf = (h) => ({ cx: 0, cy: 0, w: ROW_W, h });
+/**
+ * The container of a row's card of height h: the card less its padding is the content box.
+ */
 export const cardContent = (h) =>
   container({ w: ROW_W, h, padding: [CARD.line + SPACE.m, PANEL.padCard, SPACE.l, PANEL.padCard] });
-// UIPopup_Option_PC's Label_Locale_Info: an option's note under the dotted line (SkillCutIn, CVLabel), in the caption role
-// (TYPE.caption, the prefab's 36), pivot top left, its top SPACE.l under the line (the prefab's 27.9), across the content box,
-// up to two lines; what the card holds follows it SPACE.m below. An alert note takes the red part of SkillCutIn's note.
+// UIPopup_Option_PC's Label_Locale_Info: an option's note under the dotted line (SkillCutIn, CVLabel), in the
+// caption role (TYPE.caption, the prefab's 36), pivot top left, its top SPACE.l under the line (the prefab's
+// 27.9), across the content box, up to two lines; what the card holds follows it SPACE.m below. An alert note
+// takes the red part of SkillCutIn's note.
 export const NOTE = Object.freeze({ top: SPACE.l, gap: SPACE.m, lines: 2 });
+/**
+ * Fit an option's note under the dotted line to the card's content width, at most two lines.
+ */
 export const noteFit = (text) => fitText(text, TYPE.caption.fs, TYPE.caption.min, cardContent(0).inner.w, NOTE.lines);
-// the note's label at `pos` (valueGeometry's note), `h` its lines' height
+/**
+ * Make the label node of an option's note, at `pos` (valueGeometry's note).
+ * @param {{text: string, fs: number}} fit The fitted note (noteFit).
+ * @param {number} h The height of the note's lines.
+ */
 export function noteNode(fit, pos, w, h, { colour = COLOUR.noteAlert } = {}) {
   return node("Note", pos, [label(fit.text, fit.fs, `${colour}/1.00`, w, h + 10, { pivot: 0, depth: 8 })]);
 }
@@ -58,8 +70,11 @@ function titleNode(text, h, type = CARD_TYPE) {
   );
 }
 
-// Where something that follows the title on its line stands (the Enable Mods "?"): the box of a `width` x `height` item SPACE.xl
-// after a title text of `textW`, centred on the title's line, in the card's frame, and its NGUI position (pivot centre).
+/**
+ * Where something that follows the title on its line stands (the Enable Mods "?"): the box of a `width` x
+ * `height` item SPACE.xl after a title text of `textW`, centred on the title's line, in the card's frame, and
+ * its NGUI position (pivot centre).
+ */
 export function afterTitle(h, textW, { width, height }) {
   const box = titleBox();
   const line = layoutRow(
@@ -72,8 +87,10 @@ export function afterTitle(h, textW, { width, height }) {
   return { box: line.boxes[1], pos: toNode(line.boxes[1], 4, frameOf(h)) };
 }
 
-// a row: the white body with the title and its dotted line; returns [tree, height, hits]
-// type: CARD_TYPE, or a popup's POPUP_TYPE.card
+/**
+ * Make a row: the white body with the title and its dotted line.
+ * @param {object} [type] CARD_TYPE, or a popup's POPUP_TYPE.card, which sets the title's size.
+ */
 export function rowBase(name, y, h, title, type = CARD_TYPE) {
   return node(
     name,
@@ -90,7 +107,12 @@ export function rowBase(name, y, h, title, type = CARD_TYPE) {
   );
 }
 
-// the card's options: how many lines the options take, the row's height, and where each option's box stands (the card's frame)
+/**
+ * The card's options: how many lines the options take, the row's height, and where each option's box stands (in
+ * the card's frame).
+ * @param {number} count The number of options.
+ * @param {number} [columns] How many options stand on one line.
+ */
 export function optionLayout(count, columns = count) {
   const lines = Math.ceil(count / columns),
     h = CARD.h + (lines - 1) * OPTION.rowPitch;
@@ -106,14 +128,19 @@ export function optionLayout(count, columns = count) {
     ...across[i % columns],
     y: centre + Math.floor(i / columns) * OPTION.rowPitch - OPTION.size / 2,
   }));
-  // an option: the radio, then its label (the label's room is the option's less the radio, its gap, a SPACE.s clear of the next
-  // option and a SPACE.m slack the fit keeps)
+  // an option: the radio, then its label (the label's room is the option's less the radio, its gap, a SPACE.s
+  // clear of the next option and a SPACE.m slack the fit keeps)
   const labelBox = pitch - OPTION.size - OPTION.labelGap - SPACE.s;
   return { h, pitch, boxes, labelBox, room: labelBox - SPACE.m };
 }
 
-// radio options in a row (the game's On / Off toggles, as many as needed): [value, text, the text's language if it is
-// not the page's]; dim: the options drawn faded (a switch that is busy or unavailable; a click still answers why)
+/**
+ * Make a row of radio options (the game's On / Off toggles, as many as needed).
+ * @param {Array<[string, string, string?]>} options The options: value, text and the text's language when it is
+ *     not the page's.
+ * @param {{dim?: boolean}} [options2] dim: draw the options faded, for a switch that is busy or unavailable; a
+ *     click still answers why.
+ */
 export function radioRow(
   name,
   y,
@@ -128,8 +155,8 @@ export function radioRow(
     row = rowBase(name, y, h, title, type),
     hits = [];
   const { pitch } = lay;
-  // the options are one kind of control side by side: one size for all of them (each text measured in its own language),
-  // its lines inside the band under the row's dotted line
+  // the options are one kind of control side by side: one size for all of them (each text measured in its own
+  // language), its lines inside the band under the row's dotted line
   const fits = fitGroup(
     options.map(([, text]) => text),
     type.option.fs,
@@ -191,16 +218,20 @@ export function radioRow(
   return { tree: row, h, hits };
 }
 
-// --- a value with buttons on the right (folders, version, cache); long values wrap, never cut ---
-// The value takes the content box's left; the light-blue buttons (XS_BUTTON: 402 x 136, SPACE.m apart) stand right-aligned
-// on its right edge. Beside the value they leave it the content box less their pitches, and no fewer than four grid columns
-// (the least a path is read in); buttons that do not fit wrap to a second line, right-aligned as the first. Under the value
-// (below) the whole line is theirs. A value alone is at least TEXT_MIN high.
+// --- a value with buttons on the right (folders, version, cache); long values wrap, never cut --- The value
+// takes the content box's left; the light-blue buttons (XS_BUTTON: 402 x 136, SPACE.m apart) stand right-aligned
+// on its right edge. Beside the value they leave it the content box less their pitches, and no fewer than four
+// grid columns (the least a path is read in); buttons that do not fit wrap to a second line, right-aligned as
+// the first. Under the value (below) the whole line is theirs. A value alone is at least TEXT_MIN high.
 const TEXT_MIN = SPACE.xxxl;
 const buttonPitch = XS_BUTTON.w + SPACE.m;
 const valueMin = () => grid(cardContent(0).inner).span(4).w;
 
-// how many buttons each line holds: [first line, second line, ...]
+/**
+ * How many buttons each line holds: [first line, second line, ...].
+ * @param {number} count The number of buttons.
+ * @param {boolean} [below] The buttons are under the value, so the whole line is theirs.
+ */
 export function buttonLines(count, below = false) {
   const { w } = cardContent(0).inner;
   const perLine = Math.max(
@@ -211,12 +242,20 @@ export function buttonLines(count, below = false) {
   for (let i = 0; i < count; i += perLine) lines.push(Math.min(perLine, count - i));
   return lines;
 }
+/**
+ * The width the value has beside `count` buttons (or under them, with `below`).
+ */
 export const valueRoom = (count, below = false) =>
   below ? cardContent(0).inner.w : cardContent(0).inner.w - (buttonLines(count)[0] || 0) * buttonPitch;
 
-// the row's height and where its parts stand (NGUI space, y up from the card's centre): textH is the value's height. Beside the
-// value the first line of buttons is centred on it; under it the lines of buttons follow the value, SPACE.l below. noteH: a note
-// (NOTE) of that height under the dotted line, the value and the buttons NOTE.gap under it.
+/**
+ * Lay out a value row: its height and where its parts stand (NGUI space, y up from the card's centre).
+ * Beside the value the first line of buttons is centred on it; under it the lines of buttons follow the value,
+ * SPACE.l below. `noteH`: a note (NOTE) of that height under the dotted line, the value and the buttons
+ * NOTE.gap under it.
+ * @param {number} count The number of buttons.
+ * @param {number} textH The value's height.
+ */
 export function valueGeometry(count, textH, { below = false, noteH = 0 } = {}) {
   const inner = cardContent(0).inner,
     lines = buttonLines(count, below),
@@ -300,8 +339,10 @@ export function valueGeometry(count, textH, { below = false, noteH = 0 } = {}) {
   };
 }
 
-// A row of `count` buttons `width` wide under the dotted line (the Export pair), SPACE.xxl apart and centred in the content box:
-// the card's height, the buttons' centres across (xs, NGUI space) and their line (y).
+/**
+ * A row of `count` buttons `width` wide under the dotted line (the Export pair), SPACE.xxl apart and centred in
+ * the content box: the card's height, the buttons' centres across (xs, NGUI space) and their line (y).
+ */
 export function buttonRowGeometry(count, width) {
   const inner = cardContent(0).inner,
     bh = CONTROL.buttonXS.h,
@@ -314,8 +355,13 @@ export function buttonRowGeometry(count, width) {
   return { h, xs: boxes.map((box) => toNode(box, 4, frame)[0]), y: toNode(boxes[0], 4, frame)[1], boxes };
 }
 
-// The cards of a panel (the area w x h, padded by PANEL.padList), one under the other PANEL.stackGap apart and centred: each card's
-// box, its centre below the area's top (negative, NGUI y) and the height the panel scrolls over.
+/**
+ * The cards of a panel (the area w x h, padded by PANEL.padList), one under the other PANEL.stackGap apart and
+ * centred: each card's box, its centre below the area's top (negative, NGUI y) and the height the panel scrolls
+ * over.
+ * @param {number[]} heights The cards' heights.
+ * @param {{w: number, h: number}} area The panel's area.
+ */
 export function stackCards(heights, area) {
   const panel = container({ ...area, padding: PANEL.padList });
   const laid = layoutStack(

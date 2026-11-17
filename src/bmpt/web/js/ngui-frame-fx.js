@@ -1,11 +1,17 @@
-// The stationary UV particle in FX_UI_Mulligan_03 / FX_UI_Mulligan_Sub_03.
-// Its actual mesh and material come from UIPopup_Mulligan. The mask shader scrolls FX_TEX_Bulletline_03;
-// no TweenAlpha, UISpriteAnimation or CSS animation is involved.
+// The stationary UV particle in FX_UI_Mulligan_03 / FX_UI_Mulligan_Sub_03: its mesh and material come from
+// UIPopup_Mulligan and the mask shader scrolls FX_TEX_Bulletline_03; no TweenAlpha, UISpriteAnimation or CSS
+// animation is involved.
 import { fragmentSource } from "./particles-gl.js";
 import { toLinear, toSrgb } from "./touch-fx.js";
 import { uiExportUrl } from "./api.js";
 import { applyDir, euler } from "./particles.js";
 
+/**
+ * Build the vertex data of the frame effect's mesh, stretched like the frame's sliced sprite.
+ * @param {object} effect The effect read from the prefab: its mesh, particle system, UV scale, widget and
+ *     source sizes and incline.
+ * @returns {Float32Array} Eight floats per vertex: x, y, u, v and the colour r, g, b, a.
+ */
 export function frameMesh(effect) {
   const { mesh, system, uvScale, width, height, sourceWidth, sourceHeight, incline } = effect;
   const size = system.main.size[0],
@@ -26,16 +32,15 @@ export function frameMesh(effect) {
   return new Float32Array(data);
 }
 
-// The material's blend is One / OneMinusSrcAlpha in linear light: result = light + behind * (1 - alpha). The effect's light
-// is HDR (the material colour is 5.6 and 24 in sRGB, 44 and 1084 in linear light), so it saturates long before its alpha,
-// which is only the mask. The page composites the canvas over the card in sRGB values, as a premultiplied layer
-// (result = colour + behind * (1 - alpha), the colour is allowed to exceed the alpha, as linear.js relies on for the
-// lobby): the layer carries the light in sRGB values and, as its alpha, what the game's blend leaves of what is behind,
-// sRGB-encoded. The result is exact over black, exact over white where a channel has no light or is saturated, and never
-// darker than the game's blend (a partly lit channel can come out up to 0.32 brighter). A canvas that wrote the straight
-// colour light / alpha instead weighted the light by the mask, up to 0.97 darker than the game's. The canvas draws nothing
-// where the mask is zero (no colour, no alpha), so the card keeps its own pixels there.
-// frameBlend is the JavaScript twin of FRAME_OUTPUT: emission is the shader's linear colour, alpha its coverage.
+/**
+ * Turn the shader's linear light and coverage into the premultiplied sRGB layer the page composites over the
+ * card.
+ * The game's blend (One / OneMinusSrcAlpha in linear light) cannot be done on sRGB values directly. The layer
+ * carries the light and, as its alpha, what the blend leaves of what is behind; the canvas draws nothing where
+ * the mask is zero, so the card keeps its own pixels there.
+ * @param {number[]} emission The shader's linear colour [r, g, b].
+ * @returns {{color: number[], alpha: number}} The layer's sRGB colour and alpha.
+ */
 export function frameBlend(emission, alpha) {
   const clamp = (v) => Math.min(1, Math.max(0, v));
   return { color: emission.map((c) => toSrgb(clamp(c))), alpha: 1 - toSrgb(1 - clamp(alpha)) };
@@ -43,7 +48,12 @@ export function frameBlend(emission, alpha) {
 export const FRAME_OUTPUT = `
 vec3 displayColor(vec3 c){return mix(12.92*c,1.055*pow(max(c,vec3(0.)),vec3(1./2.4))-.055,step(vec3(.0031308),c));}
 void main(){frameMain();vec3 light=displayColor(clamp(o.rgb,vec3(0.),vec3(1.)));float cover=1.-displayColor(vec3(1.-clamp(o.a,0.,1.))).x;o=vec4(light,cover);}`;
-// What the page makes of one channel: the premultiplied layer over what is behind it, in sRGB values.
+/**
+ * What the page makes of one channel: the premultiplied layer over what is behind it, in sRGB values.
+ * @param {{color: number, alpha: number}} layer The layer's value for the channel, as frameBlend gives it.
+ * @param {number} behind What is behind, 0 to 1.
+ * @returns {number} The result, at most 1.
+ */
 export const frameOver = (layer, behind) => Math.min(1, layer.color + behind * (1 - layer.alpha));
 
 const live = new Set();
@@ -94,6 +104,23 @@ reduced?.addEventListener?.("change", () => {
   refresh();
 });
 
+/**
+ * Where renderFrameEffect puts its canvas.
+ * @typedef {object} FramePlacement
+ * @property {number} x The centre's x in stage pixels.
+ * @property {number} y The centre's y in stage pixels.
+ * @property {number} sx The horizontal scale of the node's frame in stage pixels per unit.
+ * @property {number} sy The vertical scale.
+ * @property {number} z The base z-index.
+ * @property {(url: string) => Promise<HTMLImageElement>} load The image loader.
+ */
+
+/**
+ * Draw the frame effect of a card into a canvas and keep it animated while it is on screen.
+ * @param {object} effect The effect read from the prefab: mesh, material and particle system.
+ * @param {FramePlacement} placement
+ * @returns {Promise<void>} Settles once the textures are in and the canvas is in the host.
+ */
 export async function renderFrameEffect(effect, host, { x, y, sx, sy, z, load }) {
   const canvas = document.createElement("canvas");
   // Include the mesh's actual extents, rather than clipping its glow to the UISprite dimensions.

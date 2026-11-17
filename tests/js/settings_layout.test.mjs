@@ -1,8 +1,8 @@
-// Settings (UIPopup_Option_PC) lays its cards out in the card's container
-// (settings-rows.js): the content box is the 1552-wide card less its padding, and the title, the options, the values and the
-// buttons take their boxes from it with row and stack. The prefab's own values stay (the card, the title 17 from the top, the dotted
-// line 109 down, radio groups 508 apart). Checked on the real rows of every tab in en-US and zh-CN, in prefab units: the default
-// 1920 x 1080 window draws them at S = 1920 / 2960 whatever the language.
+// Settings (UIPopup_Option_PC) lays its cards out in the card's container (settings-rows.js): the content box is the
+// 1552-wide card less its padding, and the title, the options, the values and the buttons take their boxes from it
+// with row and stack. The prefab's own values stay (the card, the title 17 from the top, the dotted line 109 down,
+// radio groups 508 apart). Checked on the real rows of every tab in en-US and zh-CN, in prefab units: the default 1920
+// x 1080 window draws them at S = 1920 / 2960 whatever the language.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -279,8 +279,9 @@ test("Settings keeps no hand-placed value geometry of its own", () => {
 });
 
 // The Log card's note that error reports are anonymized, as UIPopup_Option_PC's Label_Locale_Info (SkillCutIn,
-// CVLabel): the caption role, pivot top left, its top SPACE.l under the dotted line from the content box's left, in the red
-// of SkillCutIn's note; the path and the buttons follow it SPACE.m below and the card grows by what it adds. Every language.
+// CVLabel): the caption role, pivot top left, its top SPACE.l under the dotted line from the content box's left,
+// in the red of SkillCutIn's note; the path and the buttons follow it SPACE.m below and the card grows by what
+// it adds. Every language.
 const { COLOUR } = await import(new URL("ui-tokens.js", web));
 for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
   test(`${locale} general: the Log card's anonymized note stands under the dotted line, above its path and buttons`, () => {

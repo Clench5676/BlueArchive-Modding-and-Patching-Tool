@@ -12,11 +12,25 @@ export const PORTRAIT_ANCHOR = Object.freeze({
   y: 540 + (886 * 1920) / LOBBY_UI_WIDTH,
 });
 export const HALL_SCALE = Object.freeze({ min: 0.25, max: 1.5, default: 1 });
+/**
+ * The Hall's scale, kept within its limits.
+ * @returns {number} The scale between HALL_SCALE.min and HALL_SCALE.max; the default for a non-number.
+ */
 export const hallScale = (value) =>
   Number.isFinite(value) ? Math.max(HALL_SCALE.min, Math.min(HALL_SCALE.max, value)) : HALL_SCALE.default;
+/**
+ * The scale a placed portrait is drawn at.
+ * @param {{scale: number}} entry
+ */
 export const portraitScale = (entry, globalScale = HALL_SCALE.default) =>
   PORTRAIT_BASE_SCALE * entry.scale * hallScale(globalScale);
 
+/**
+ * The stage rect of a placed portrait.
+ * @param {{x: number, y: number, mirror?: boolean}} entry
+ * @param {object|null} [bounds] The portrait's skeleton bounds; the nominal box by default.
+ * @returns {{x: number, y: number, width: number, height: number}} The rect on the stage.
+ */
 export function portraitRect(entry, bounds = null, globalScale = HALL_SCALE.default) {
   const source = bounds || { x: -195, y: 0, width: 390, height: 850 },
     scale = portraitScale(entry, globalScale);
@@ -56,6 +70,13 @@ function readAlpha(texture, source, width, height) {
   pages.set(texture, page);
   return page;
 }
+/**
+ * Read an atlas page's alpha coarsely, for picking: a page is read at most ALPHA_SIDE texels on its longer
+ * side, so a large Mod atlas costs milliseconds, not seconds, and its canvas is released at once. A page that
+ * reads as wholly transparent is a failed read (WebKit refuses canvases past its memory budget): it counts as
+ * opaque rather than hiding the portrait.
+ * @returns {Promise<object|null>} The page's alpha; null when it cannot be read.
+ */
 export function pageAlpha(texture) {
   if (pages.has(texture)) return pages.get(texture);
   const image = texture.getImage();
@@ -91,9 +112,18 @@ async function loadPageAlpha(texture, load) {
     bitmap?.close?.();
   }
 }
-// Pages read so far; null means not read yet or unreadable, and picking then treats the attachment as opaque.
+/**
+ * The pages read so far; null means not read yet or unreadable, and picking then treats the attachment as
+ * opaque.
+ * @returns {object|null}
+ */
 export const readyAlpha = (texture) => pages.get(texture) || null;
-// Read the pages of skeleton data one per task, so entering layout editing never blocks on them.
+/**
+ * Read the pages of skeleton data one per task, so entering layout editing never blocks on them.
+ * @param {(task: () => void) => void} [schedule]
+ * @param {(url: string) => Promise<Response>} [load]
+ * @returns {Promise<void>} Settles when the pages are read.
+ */
 export function preparePickPages(data, schedule = (task) => setTimeout(task), load = globalThis.fetch) {
   const textures = new Set();
   for (const skin of data.skins || [])
@@ -116,7 +146,12 @@ export function preparePickPages(data, schedule = (task) => setTimeout(task), lo
     Promise.resolve(),
   );
 }
-// Atlas UVs already include trim and rotation. Match the page's linear filtering and clamp at its edges.
+/**
+ * Sample a page's alpha at an atlas UV: the UVs already include trim and rotation; the page's linear filtering
+ * and clamp at its edges are matched.
+ * @param {{alpha: Uint8Array, width: number, height: number}} page
+ * @returns {number} The alpha, 0 to 1.
+ */
 export function sampleAlpha(page, u, v) {
   const x = u * page.width - 0.5,
     y = v * page.height - 0.5,
@@ -132,9 +167,22 @@ export function sampleAlpha(page, u, v) {
     (at(ix, iy + 1) * (1 - fx) + at(ix + 1, iy + 1) * fx) * fy
   );
 }
+/**
+ * Whether a slot counts for picking: its bone is active and it draws with the normal blend.
+ * @returns {boolean} True when it does.
+ */
 export function visibleSlot(slot) {
   return slot.bone.active && slot.data.blendMode === 0;
 }
+/**
+ * Whether a point hits a posed skeleton: the alpha under it is at least VISIBLE_ALPHA. This maps one point to
+ * atlas alpha through the runtime's posed attachment geometry; it never rasterizes a mesh.
+ * @param {number} x The point's x in world units.
+ * @param {number} y The point's y in world units.
+ * @param {object} S The spine runtime's namespace.
+ * @param {(texture: object) => object|null} [alphaOf] Gives a page's alpha.
+ * @returns {boolean} True when the point is on the portrait.
+ */
 export function skeletonContains(skeleton, x, y, S, alphaOf = readyAlpha) {
   for (const slot of skeleton.drawOrder || []) {
     if (!visibleSlot(slot)) continue;
@@ -158,10 +206,16 @@ export function skeletonContains(skeleton, x, y, S, alphaOf = readyAlpha) {
   }
   return false;
 }
-// The visible head of a posed skeleton, by the picker's own rule (Normal-blend active slots, effective alpha at least
-// VISIBLE_ALPHA): the topmost visible point and the horizontal centre of the visible band below it (the top tenth of
-// the visible height). Spine's bounds also count transparent and off-body parts, so they can sit to either side of
-// the character. World units, y up; null when nothing is visible.
+/**
+ * The visible head of a posed skeleton, by the picker's own rule (Normal-blend active slots, effective alpha at
+ * least VISIBLE_ALPHA): the topmost visible point and the horizontal centre of the visible band below it (the
+ * top tenth of the visible height). Spine's bounds also count transparent and off-body parts, so they can sit
+ * to either side of the character.
+ * @param {object} S The spine runtime's namespace.
+ * @param {(texture: object) => object|null} [alphaOf] Gives a page's alpha.
+ * @param {number} [step] The sampling step in world units.
+ * @returns {{x: number, y: number}|null} The head in world units, y up; null when nothing is visible.
+ */
 export function visibleHead(skeleton, S, alphaOf = readyAlpha, step = 8) {
   const parts = [];
   for (const slot of skeleton.drawOrder || []) {
@@ -257,6 +311,15 @@ function trianglesAlpha(world, triangles, uv, page, opacity, x, y) {
   }
   return false;
 }
+/**
+ * Find the topmost portrait under a stage point.
+ * @param {{values: () => Iterable<object>}} actors
+ * @param {number} x The point's x in stage pixels.
+ * @param {number} stageY The point's y in stage pixels.
+ * @param {object} S The spine runtime's namespace.
+ * @param {(texture: object) => object|null} [alphaOf] Gives a page's alpha.
+ * @returns {string|null} The portrait's id; null when none is hit.
+ */
 export function pickPortrait(actors, x, stageY, S, alphaOf = readyAlpha) {
   const ordered = [...actors.values()];
   for (let i = ordered.length - 1; i >= 0; i--) {
@@ -264,10 +327,22 @@ export function pickPortrait(actors, x, stageY, S, alphaOf = readyAlpha) {
   }
   return null;
 }
-// One surface owns pointer input; the named DOM buttons remain focusable for keyboard/AT activation.
-// WebKit (the macOS app's WKWebView) may end a captured press with only a click, without pointerup or
-// lostpointercapture. A press therefore ends on whichever comes first: pointerup, click, lost capture or a move with no
-// button down, at the last known point. Only pointercancel ends it without a release point.
+/**
+ * Bind one surface's pointer input for the portraits. The named DOM buttons stay focusable for keyboard and
+ * assistive technology. WebKit (the macOS app's WKWebView) may end a captured press with only a click, without
+ * pointerup or lostpointercapture, so a press ends on whichever comes first: pointerup, click, lost capture or
+ * a move with no button down, at the last known point; only pointercancel ends it without a release point.
+ * @param {object} options
+ * @param {HTMLElement} options.root The stage's element, for the coordinates.
+ * @param {(point: {x: number, y: number}) => string|null} options.pick Gives the portrait under a point.
+ * @param {(id: string|null) => void} options.hover Called when the pointer moves over a portrait or off it.
+ * @param {(id: string, point: {x: number, y: number}) => void} options.down
+ * @param {(id: string, point: {x: number, y: number}) => void} options.move
+ * @param {(id: string, point: {x: number, y: number}|null) => void} options.end Called when it ends; null
+ *     without a release point.
+ * @param {() => boolean} [options.enabled]
+ * @returns {() => void} Unbinds the input.
+ */
 export function bindPortraitPointer(surface, { root, pick, hover, down, move, end, enabled = () => true }) {
   let held = null;
   const point = (event) => {
@@ -324,16 +399,23 @@ export function bindPortraitPointer(surface, { root, pick, hover, down, move, en
 }
 
 export const PORTRAIT_SIZE = Object.freeze({ min: 0.5, max: 2, default: 1 });
-// App-owned packing around the existing 62px icon buttons and the UILobby 104-unit slider body. The two rows never overlap.
-// Centred directly above the portrait's visible head (`head`, stage units) and touching it, so the pointer can travel
-// from the portrait into the toolbar; without a head, above the portrait's box. Where that would leave the stage or cover
-// a control (the top bar, the Hall's top-right buttons and slider), it goes under the portrait's feet instead, or to the
-// stage's bottom when they are off-stage. Horizontally it moves inwards only at the stage's edges.
+// The gap between a portrait and its toolbar.
 export const PORTRAIT_TOOLBAR_MARGIN = 16;
 // The second row is the slider body's height (UILobby Btn_RotateSpine/ConditionRoot/Able_Count/Bg, 156 x 104 units);
 // Reset beside it takes the same height.
 export const PORTRAIT_TOOLBAR_ROW = (CONTROL.toolbar.h * 1920) / LOBBY_UI_WIDTH;
 export const PORTRAIT_TOOLBAR_HEIGHT = 62 + (SPACE.l * 1920) / LOBBY_UI_WIDTH + PORTRAIT_TOOLBAR_ROW;
+/**
+ * Lay out a portrait's toolbar: App-owned packing around the 62px icon buttons and the UILobby 104-unit slider
+ * body; the two rows never overlap. The toolbar is centred directly above the portrait's visible head (`head`)
+ * and touches it, so the pointer can travel from the portrait into the toolbar; without a head, above the
+ * portrait's box. Where that would leave the stage or cover a control (the top bar, the Hall's top-right
+ * buttons and slider), it goes under the portrait's feet instead, or to the stage's bottom when they are
+ * off-stage. Horizontally it moves inwards only at the stage's edges.
+ * @param {{x: number, y: number, width: number, height: number}} rect The portrait's rect on the stage.
+ * @param {object[]} [obstacles] The rects of controls the toolbar must not cover.
+ * @param {{x: number, y: number}|null} [head] The portrait's visible head in stage units.
+ */
 export function portraitToolbarLayout(rect, count, obstacles = [], head = null) {
   const scale = 1920 / LOBBY_UI_WIDTH,
     icon = 62,

@@ -2,8 +2,9 @@
 // missing from the loaded atlases the count falls back to a short word (locale keys band.portrait, band.lobby).
 import { label, node, sprite, textWidth } from "./ngui.js";
 
-// The game sprites drawn as the count icons, both already drawn elsewhere in the UI: the Students entry of the bottom
-// navigation (nav-items.js) and the play button of the lobby tab (detail.js). Change a name here to swap an icon.
+// The game sprites drawn as the count icons, both already drawn elsewhere in the UI: the Students entry of the
+// bottom navigation (nav-items.js) and the play button of the lobby tab (detail.js). Change a name here to swap
+// an icon.
 export const COUNT_ICONS = Object.freeze({
   spr: "Common_Icon_Student",
   lobby: "Common_Icon_Play",
@@ -14,7 +15,10 @@ export const COUNT_ICONS = Object.freeze({
 const KINDS = ["spr", "lobby", "model", "other"];
 const WORD = { spr: "band.portrait", lobby: "band.lobby", model: "tab.model", other: "import.other" };
 
-// kind -> { atlas, name, ratio } for the sprites the loaded atlas index has; a kind without its sprite is left out
+/**
+ * The count icons the loaded atlas index has, by kind: { atlas, name, ratio }; a kind without its sprite is
+ * left out.
+ */
 export function iconsOf(index = {}) {
   const icons = {};
   for (const kind of KINDS) {
@@ -29,10 +33,15 @@ export function iconsOf(index = {}) {
   return icons;
 }
 
+/**
+ * The accessible text of a card's mod counts.
+ */
 export const countText = (counts, T) =>
   T("band.modCounts", { portraits: counts?.spr || 0, lobbies: counts?.lobby || 0 });
 
-// The portrait band: one half per kind, both always shown (zero too); long text shrinks in place
+/**
+ * The portrait band's count nodes: one half per kind, both always shown (zero too); long text shrinks in place.
+ */
 export function countNodes(
   counts,
   icons = {},

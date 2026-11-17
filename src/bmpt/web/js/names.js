@@ -1,15 +1,24 @@
-// The first saved variant alias is the display name; all saved aliases remain searchable and editable.
+/**
+ * The saved aliases of a variant: the first is the display name; all remain searchable and editable.
+ */
 export const customAliases = (variant) =>
   Array.isArray(variant?.custom) ? variant.custom.filter((a) => typeof a === "string" && a) : [];
+/**
+ * The display name of a variant: its first alias, else the original name.
+ */
 export const studentName = (variant, original) => customAliases(variant)[0] || original;
-// Another student's costume: "Student (Costume)" in the language's brackets, the rule job progress names a
-// variant by (progress.subject). The student is the family's base name, or the user's alias of the variant; the
-// costume is always named, the original one too.
+/**
+ * Another student's costume: "Student (Costume)" in the language's brackets, the rule job progress names a
+ * variant by (progress.subject). The student is the family's base name, or the user's alias of the variant; the
+ * costume is always named, the original one too.
+ */
 export const crossName = (variant, student, costume, translate) =>
   translate("progress.subject", { name: studentName(variant, student), parts: costume });
 
-// The backend's label is presentation text in the language of its last read.
-// Rebuild repair suffixes from stable names so a locale change needs no reread.
+/**
+ * A mod's name. The backend's label is presentation text in the language of its last read, so the repair
+ * suffixes are rebuilt from stable names and a locale change needs no reread.
+ */
 export function modName(mod, entries, translate, seen = new Set()) {
   if (!mod) return "";
   if (mod.alias) return mod.alias;
@@ -31,6 +40,9 @@ export function modName(mod, entries, translate, seen = new Set()) {
   return mod.label_base || mod.label || mod.file?.split(/[\\/]/).pop() || mod.id;
 }
 
-// A mod's label may already be its alias. Its core and file name still identify the original game resource.
+/**
+ * The name of the game resource a mod replaces: a mod's label may already be its alias, but its core and file
+ * name still identify the original.
+ */
 export const modOriginalName = (mod) =>
   mod?.core || mod?.file?.split(/[\\/]/).pop() || (mod?.label !== mod?.alias ? mod?.label : "") || "";

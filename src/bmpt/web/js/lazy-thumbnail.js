@@ -1,5 +1,9 @@
-// A switch card starts capture on entering the viewport, or when its details are shown.
-// Both consumers share the same still and the popup's cancellation scope.
+/**
+ * Make a switch card's still lazy: it starts when the card enters the viewport or when its details are shown,
+ * and both consumers share the same still and the popup's cancellation scope.
+ * @param {() => Promise<*>} capture Takes the still.
+ * @param {AbortSignal} signal The popup's cancellation.
+ */
 export function lazyThumbnail(capture, signal) {
   let picture,
     started = false,

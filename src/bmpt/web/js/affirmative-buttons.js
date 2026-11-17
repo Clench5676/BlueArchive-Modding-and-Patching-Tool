@@ -2,9 +2,15 @@
 import { resizeButton } from "./button-layout.js";
 const affirmative = new Set(["confirm", "save", "apply", "import", "install", "finish"]);
 const isAffirmative = (tree) => tree.affirmative === true || affirmative.has(tree.actionSemantic);
+/** Whether a prefab tree holds an affirmative (confirm) button that takes the gold skin. */
 export function hasAffirmative(tree) {
   return isAffirmative(tree) || (tree.children || []).some(hasAffirmative);
 }
+/**
+ * Give a prefab tree's affirmative buttons the gold skin from a template.
+ * @param {object} template The gold button template (goldTemplate).
+ * @returns {NguiNode} A copy of the tree with the skin applied.
+ */
 export function skinAffirmatives(tree, template) {
   const findBody = (n) =>
     n.widgets?.some((w) => w.sprite === "Common_Btn_BG") ? n : (n.children || []).map(findBody).find(Boolean);

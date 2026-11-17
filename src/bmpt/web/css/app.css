@@ -175,7 +175,7 @@ textarea {
 .import-row-badge {
   z-index: 41;
 }
-/* the native bars are hidden: batch-import.js draws the game list's scrollbar (UICharacterCollection) over these areas */
+/* the native bars are hidden: batch-import.js draws the game list's scrollbar (UICharacterCollection) over them */
 .import-list {
   overflow-y: auto;
   overflow-x: hidden;
@@ -280,7 +280,7 @@ textarea {
   font-feature-settings: "halt";
 }
 
-/* UICharacterCollection/BG_W/Bg: one raster of Common_Top_Menu_Bg, retaining its caps and shadow. */
+/* UICharacterCollection/BG_W/Bg: one raster of Common_Top_Menu_Bg, keeping its caps and shadow. */
 .topbar {
   position: absolute;
   left: 0;
@@ -296,8 +296,9 @@ textarea {
   background-origin: border-box;
   background-size: 100% 100%;
   background-repeat: no-repeat;
-  /* content is centred on the fill (rows 0-96 of the sprite's 105: its dark lip and shadow below are not the bar), not on
-     the whole height; top-bar.js sets --bar-padding from the sprite and moves each element's ink onto that centre */
+  /* content is centred on the fill (rows 0-96 of the sprite's 105: its dark lip and shadow below are not the bar),
+     not on the whole height; top-bar.js sets --bar-padding from the sprite and moves each element's ink onto that
+     centre */
   padding-bottom: var(--bar-padding, 4.88px);
 }
 .back {
@@ -548,9 +549,9 @@ textarea {
 .roster-search.pending {
   opacity: 0;
 }
-/* keyboard focus (never shown for the pointer): one ring everywhere, 4 px in the app's focus blue, 2 px off the control, on the
-   game's Raius10px corner (6.49 px at the stage's scale: ui-tokens.js FOCUS, which the token tests keep equal). A roster
-   card's ring sits inside its portrait frame, because the list clips. */
+/* keyboard focus (never shown for the pointer): one ring everywhere, 4 px in the app's focus blue, 2 px off the
+   control, on the game's Raius10px corner (6.49 px at the stage's scale: ui-tokens.js FOCUS, which the token tests
+   keep equal). A roster card's ring sits inside its portrait frame, because the list clips. */
 .hit:focus-visible,
 .card-hit:focus-visible,
 .nav-item:focus-visible,
@@ -609,8 +610,9 @@ textarea {
 .settings-rows-inner {
   position: relative;
 }
-/* the sliders' range inputs lie unseen over the game's slider (settings.js wireSlider): the game's thumb shows the value and,
-   on keyboard focus, a ring. The native thumb is 40 px wide (SLIDER_THUMB) so its centre travels the drawn thumb's range */
+/* the sliders' range inputs lie unseen over the game's slider (settings.js wireSlider): the game's thumb shows the
+   value and, on keyboard focus, a ring. The native thumb is 40 px wide (SLIDER_THUMB) so its centre travels the drawn
+   thumb's range */
 .hit.slider-range {
   margin: 0;
   opacity: 0;
@@ -731,7 +733,8 @@ textarea {
   z-index: 0;
   outline: none;
 }
-/* the shared focus trap (popup.js) focuses a popup's host when nothing in it can take the focus: no ring round the stage */
+/* the shared focus trap (popup.js) focuses a popup's host when nothing in it can take the focus: no ring round the
+   stage */
 .popup-host,
 .consent-host {
   outline: none;
@@ -773,8 +776,9 @@ textarea {
   overflow-y: auto;
   overflow-x: hidden;
 }
-/* the fallback button, one look for the no-game screens (here, fallback.css's .message-button and the recovery panel's): the light-blue
-   button flat, #8de4ff with #314665 ink on the game's Raius10px corner, no skew and no shadow */
+/* the fallback button, one look for the no-game screens (here, fallback.css's .message-button and the recovery
+   panel's): the light-blue button flat, #8de4ff with #314665 ink on the game's Raius10px corner, no skew and no
+   shadow */
 .plain-line-button {
   margin-left: 20px;
   padding: 8px 22px;
@@ -927,7 +931,7 @@ textarea {
 .stage.fullscreen .lobby-frost {
   opacity: 0;
 }
-/* Hall hides its chrome independently while retaining its portrait and memorial players. */
+/* Hall hides its chrome independently of its portrait and memorial players, which stay. */
 #student-hall.hall-immersive > .hall-chrome,
 #student-hall.hall-immersive [data-actor-toolbar] {
   visibility: hidden;
@@ -986,7 +990,7 @@ textarea {
 .lobby-extend[hidden] {
   display: none;
 }
-/* the previous framing, faded out over the new one when switching between the left view and fullscreen */
+/* the framing being left, faded out over the new one when switching between the left view and fullscreen */
 .lobby-fade {
   position: absolute;
   inset: 0;
@@ -1221,10 +1225,10 @@ textarea {
   display: none;
 }
 
-/* the game's clip "UIAni_Repeat 1" (legacy, 60 fps, loop of 140 frames = two equal halves of 70): the dots hop
-   20 units (12.97 px) one after another; Arona and her halo squeeze to nothing and back, the halos swapping at the
-   turn; "Now Loading" breathes between 100 % and 80 % every 50 frames. The individual translate / scale properties
-   leave ngui.js's inline transform alone. */
+/* the game's clip "UIAni_Repeat 1" (a legacy Animation clip, 60 fps, loop of 140 frames = two equal halves of 70):
+   the dots hop 20 units (12.97 px) one after another; Arona and her halo squeeze to nothing and back, the halos
+   swapping at the turn; "Now Loading" breathes between 100 % and 80 % every 50 frames. The individual translate /
+   scale properties leave ngui.js's inline transform alone. */
 @keyframes ld-dot0 {
   0%,
   7.14% {
@@ -1405,7 +1409,7 @@ textarea {
 .loading-ind [data-path*="/Loading/"] {
   animation: ld-text 0.8333s ease-in-out infinite;
 }
-/* Once UI assets are ready, the corner keeps its style while a new repeater is rendered. */
+/* once UI assets are ready, the corner keeps its style while its repeater is rendered again */
 .loading-fallback {
   position: absolute;
   right: 84px;
