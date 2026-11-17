@@ -671,7 +671,7 @@ const OUTSIDE_STAGE = {
   "cursor.js": ["c"], // touch effects, pointer-events: none
   "thumbs.js": ["host"], // off-screen thumbnail renderer, pointer-events: none
   "settings.js": ["input"], // a clipboard fallback, removed in the same task
-  "ngui.js": ["probe"], // a font measuring probe, removed in the same call
+  "ngui-text.js": ["probe"], // a font measuring probe, removed in the same call
 };
 test("nothing else is attached outside the stage", () => {
   const dir = new URL("../../src/bmpt/web/js/", import.meta.url);

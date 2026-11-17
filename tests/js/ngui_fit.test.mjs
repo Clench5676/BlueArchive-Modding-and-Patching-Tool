@@ -1,4 +1,4 @@
-// Tests for the text fitting in web/js/ui/ngui.js (fitText, fitLabel): the CJK line-breaking rules in every UI
+// Tests for the text fitting in web/js/ui/ngui-text.js (fitText, fitLabel): the CJK line-breaking rules in every UI
 // language. Run by tests/test_ngui_fit.py with Node's test runner: node --test tests/js/ngui_fit.test.mjs
 import assert from "node:assert/strict";
 import { test } from "node:test";
