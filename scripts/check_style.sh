@@ -32,7 +32,7 @@ case "${1:-}" in
             # shellcheck disable=SC2086
             ruff check --force-exclude $py || status=1
         fi
-        biome ci --staged --no-errors-on-unmatched || status=1
+        biome check --staged --no-errors-on-unmatched || status=1
         ;;
     '')
         ruff format --check || status=1
