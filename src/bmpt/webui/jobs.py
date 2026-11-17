@@ -29,12 +29,16 @@ _STOP = 99  # the shutdown marker, after every queued job: queued writers still 
 
 
 class Cancelled(Exception):
-    """Raised by a cancellable job (``submit(..., cancellable=True)``) at a step boundary once it was cancelled
-    (``JobRunner.cancel``): the job ends in the "cancelled" state, with no result."""
+    """Raised by a cancellable job at a step boundary once ``JobRunner.cancel`` stopped it.
+
+    Only jobs submitted with ``cancellable=True`` raise it. The job ends in the "cancelled" state, with no result.
+    """
 
 
 @dataclass
 class Job:
+    """One operation of the runner: what was asked, how far it is and what it ended with."""
+
     id: str
     kind: str
     params: dict[str, Any]
@@ -51,6 +55,7 @@ class Job:
     stop: threading.Event = field(default_factory=threading.Event)
 
     def to_json(self) -> dict[str, Any]:
+        """Return the job's id, kind, state, result, error and last progress, as the page sees it."""
         return {
             "id": self.id,
             "kind": self.kind,
@@ -62,6 +67,7 @@ class Job:
 
     @property
     def pending(self) -> bool:
+        """Whether the job is queued or running."""
         return self.state in ("queued", "running")
 
 
@@ -73,6 +79,13 @@ class JobRunner:
     """
 
     def __init__(self, events: EventBus, keep: int = 50):
+        """Start the worker thread.
+
+        Args:
+            events: The bus that receives the ``job.*`` events.
+            keep: How many jobs the runner remembers for ``get``; the oldest finished ones go first, and a job
+                still to run is never forgotten.
+        """
         self.on_exception = None
         self.translate: Callable[[BaseException], ServiceError | None] | None = None  # see RpcRegistry.translate
         self._events = events
@@ -100,10 +113,26 @@ class JobRunner:
         cancellable: bool = False,
         **params: Any,
     ) -> str:
-        """Queue ``fn(log=..., progress=..., **params)``; returns the job id. ``writes`` marks a writer job; ``rank``
-        is its class (``USER`` unless start-up or maintenance work). ``cancellable`` (read-only jobs only): ``cancel``
-        may stop it, and ``fn`` also gets ``cancelled``, a callable that says whether it was; the job checks it between
-        its steps and raises ``Cancelled``."""
+        """Queue a job for the worker.
+
+        Args:
+            kind: The job's kind, such as ``mods.apply``; it names the job in events and in ``cancel``'s whitelist.
+            fn: The job's work, called on the worker as ``fn(log=..., progress=..., **params)``. ``log(line)`` adds
+                a line to the job's log. ``progress`` takes a report dict, or ``(current, total, label)``. Its
+                return value becomes the job's result.
+            writes: ``"game"`` or ``"library"`` for a writer job (what it writes), None for a read-only job.
+            rank: The job's class in the queue: ``USER``, ``START`` or ``MAINTENANCE``.
+            cancellable: ``cancel`` may stop the job; read-only jobs only. ``fn`` then also gets ``cancelled``, a
+                callable that says whether it was; the job checks it between its steps and raises ``Cancelled``.
+            **params: The keyword arguments of ``fn``.
+
+        Returns:
+            The job's id.
+
+        Raises:
+            ValueError: ``writes`` or ``rank`` is not a known value, or a writer job is cancellable.
+            ServiceError: ``busy``, a writer job was submitted while a quit is reserved.
+        """
         if writes is not None and writes not in WRITES:
             raise ValueError(f"unknown writes {writes!r}")
         if rank not in (USER, START, MAINTENANCE):
@@ -130,10 +159,22 @@ class JobRunner:
         return job.id
 
     def listen(self, fn: Callable[[Job], Any]) -> None:
-        """Call ``fn(job)`` on the worker after each job finished (its state is done or failed by then)."""
+        """Call a function on the worker after each job that ran, once its state is final.
+
+        Args:
+            fn: ``fn(job)``; an exception it raises is logged.
+        """
         self._listeners.append(fn)
 
     def get(self, job_id: str) -> Job:
+        """Return a job.
+
+        Args:
+            job_id: The id ``submit`` returned.
+
+        Raises:
+            ServiceError: ``job_not_found``, the job never existed or is forgotten.
+        """
         with self._lock:
             job = self._jobs.get(job_id)
         if job is None:
@@ -141,10 +182,22 @@ class JobRunner:
         return job
 
     def cancel(self, job_id: str, kinds: tuple[str, ...]) -> str:
-        """Stop a cancellable job of one of ``kinds`` that is no longer wanted; its state afterwards. A queued one
-        never runs and ends "cancelled" at once; a running one is told to stop at its next step (it ends "cancelled",
-        or as it would have when it was past its last check); one that ended is left as it is.
-        ``bad_params`` for any other job."""
+        """Stop a cancellable job the caller has given up on.
+
+        A queued job never runs and ends "cancelled" at once. A running one is told to stop at its next step: it
+        ends "cancelled", or as it would have when it was past its last check. A job that ended is left as it is.
+
+        Args:
+            job_id: The id ``submit`` returned.
+            kinds: The job kinds the caller may stop.
+
+        Returns:
+            The job's state afterwards.
+
+        Raises:
+            ServiceError: ``job_not_found`` for an unknown job; ``bad_params`` for a job that is not cancellable
+                or not of one of ``kinds``.
+        """
         with self._idle:
             job = self._jobs.get(job_id)
             if job is None:
@@ -167,28 +220,41 @@ class JobRunner:
             logger.exception("job event %s failed", event)
 
     def busy(self, writes: str | None = None) -> bool:
-        """Whether a writer job (one writing ``writes``, when given) is queued or running."""
+        """Return whether a writer job is queued or running.
+
+        Args:
+            writes: ``"game"`` or ``"library"`` to look only at jobs writing that; None for any writer job.
+        """
         with self._lock:
             return any(j.writes and (writes is None or j.writes == writes) and j.pending for j in self._jobs.values())
 
     def reserve_quit(self) -> None:
-        """Refuse new writers atomically with checking that no writer is pending."""
+        """Refuse new writer jobs, in one step with checking that none is pending.
+
+        Raises:
+            ServiceError: ``busy``, a quit is reserved already or a writer job is queued or running.
+        """
         with self._lock:
             if self._quit_reserved or any(j.writes and j.pending for j in self._jobs.values()):
                 raise ServiceError("busy")
             self._quit_reserved = True
 
     def cancel_quit(self) -> None:
-        """Allow writers again after a refused update quit."""
+        """Allow writer jobs again after a quit that did not happen."""
         with self._lock:
             self._quit_reserved = False
 
     def active(self, *kinds: str) -> bool:
-        """Whether a job of one of these kinds is queued or running."""
+        """Return whether a job of one of these kinds is queued or running.
+
+        Args:
+            *kinds: The job kinds to look for.
+        """
         with self._lock:
             return any(j.kind in kinds and j.pending for j in self._jobs.values())
 
     def running(self) -> Job | None:
+        """Return the job that runs now, or None."""
         with self._lock:
             return next((j for j in self._jobs.values() if j.state == "running"), None)
 
@@ -199,16 +265,29 @@ class JobRunner:
             return self._closing
 
     def wait(self, job_id: str, timeout: float | None = None) -> bool:
-        """Wait until a job ran (done, failed or dropped) and the listeners heard its end; whether it did in time. An
-        unknown job counts as done."""
+        """Wait until a job ran (done, failed, cancelled or dropped) and the listeners heard its end.
+
+        Args:
+            job_id: The id ``submit`` returned; an unknown job counts as done.
+            timeout: Seconds to wait at most; None waits without limit.
+
+        Returns:
+            Whether the job ended in time.
+        """
         with self._idle:
             return self._idle.wait_for(lambda: job_id not in self._jobs or self._jobs[job_id].finished, timeout)
 
     def shutdown(self, wait: float | None = None) -> None:
-        """Stop: queued read-only jobs are dropped, queued writer jobs still run (quitting is refused while one is
-        queued, so a normal quit drops none). With ``wait``, block up to that many seconds while a writer job is
-        queued or running (a job writing into the game folder must not be cut off by the app exiting); a running
-        read-only job is not waited for (the worker is a daemon thread)."""
+        """Stop the worker after the jobs queued so far.
+
+        Queued read-only jobs are dropped; queued writer jobs still run (quitting is refused while one is queued,
+        so a normal quit drops none).
+
+        Args:
+            wait: Seconds to block while a writer job is queued or running, since a job writing into the game
+                folder must not be cut off by the App exiting; None does not block. A running read-only job is
+                never waited for: the worker is a daemon thread.
+        """
         with self._lock:
             self._closing = True
             self._queue.put((_STOP, next(self._seq), None))

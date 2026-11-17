@@ -20,6 +20,17 @@ class CloseCoordinator:
     """
 
     def __init__(self, services, close, *, prompt_wait=120, close_wait=3, page_loaded=True):
+        """Attach the coordinator to the services and to the call that closes the window.
+
+        Args:
+            services: The Services: its jobs, classic windows, events and the pywebview window are used.
+            close: Closes the native window; the default ``final`` step of ``request``.
+            prompt_wait: Seconds to wait for the page to answer each question; long enough for the user to decide
+                on a draft.
+            close_wait: Seconds to wait for ``closed`` after ``final`` ran, before the close counts as refused.
+            page_loaded: Whether the page can be asked. False while it loads, as then there is no draft to keep;
+                set it to True once it has.
+        """
         self.services, self.close = services, close
         self.prompt_wait, self.close_wait = prompt_wait, close_wait
         self._lock = threading.RLock()
@@ -29,6 +40,22 @@ class CloseCoordinator:
         self.page_loaded = page_loaded
 
     def request(self, final=None, *, reserve=True, cancelled=lambda: None):
+        """Start the preflight of a close unless one is pending.
+
+        The page is asked to prepare and then to validate the close (its draft is saved or left, or it refuses);
+        in between the writers are reserved. Then ``final`` runs and the native close is awaited.
+
+        Args:
+            final: Closes the window or starts what ends in closing it; None uses ``close``.
+            reserve: Reserve admission against writer jobs and classic windows for the quit. False when the caller
+                holds that already, as an update install does.
+            cancelled: Called when the close does not happen: the page refused or the window did not close.
+
+        Returns:
+            The pending preflight, shared with a request already running. Its result is True when the window
+            closed and False when the close was cancelled; ``ServiceError`` ``busy`` when a writer job runs
+            (``app.busy`` is published).
+        """
         with self._lock:
             if self._pending is not None:
                 return self._pending
@@ -114,6 +141,10 @@ class CloseCoordinator:
                     future.set_result(success)
 
     def native_closing(self):
+        """Answer the window's own closing event: True once a preflight approved it.
+
+        Any other close attempt, such as the window's close button, starts a preflight and is held back (False).
+        """
         with self._lock:
             if self.permitted:
                 return True
@@ -121,4 +152,5 @@ class CloseCoordinator:
         return False
 
     def closed(self):
+        """Note that the native window has closed, which ends the wait of a running preflight."""
         self._closed.set()

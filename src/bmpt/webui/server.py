@@ -1,5 +1,8 @@
-"""The local HTTP server: the static front end, /api/rpc, /api/events, /asset/..., the classic window's channel
-(/api/classic/*) and a second start's raise (/api/instance/raise); see docs/webui/README.md."""
+"""The local HTTP server of the web UI.
+
+It serves the static front end, /api/rpc, /api/events, /asset/..., the classic window's channel (/api/classic/*)
+and a second start's raise (/api/instance/raise); see docs/webui/README.md.
+"""
 
 from __future__ import annotations
 
@@ -51,6 +54,8 @@ MIME = {
 
 @dataclass
 class AssetResponse:
+    """What an asset handler returns for one ``/asset/...`` request."""
+
     body: bytes
     mime: str
     light: bool  # light assets may be cached by the web view once the user agreed; heavy ones never
@@ -60,9 +65,12 @@ AssetHandler = Callable[[str, dict[str, str]], AssetResponse]
 
 
 class WebApp:
-    """The WSGI application. Every request needs a loopback Host header, and the session token except the classic
-    window's channel (``/api/classic/*``, the child's own one-time token) and a second start's raise
-    (``/api/instance/raise``, the raise token of ``instance.json``)."""
+    """The WSGI application of the web UI.
+
+    Every request needs a loopback Host header, and the session token except the classic window's channel
+    (``/api/classic/*``, the child's own one-time token) and a second start's raise (``/api/instance/raise``, the
+    raise token of ``instance.json``).
+    """
 
     def __init__(
         self,
@@ -79,6 +87,26 @@ class WebApp:
         recovery: Callable[[], dict] = lambda: {},
         on_exception: Callable | None = None,
     ):
+        """Create the application.
+
+        Args:
+            rpc: The methods behind ``/api/rpc``.
+            events: The bus behind ``/api/events``.
+            assets: Answers ``/asset/<path>?<query>`` with an ``AssetResponse`` or raises ``KeyError``,
+                ``FileNotFoundError`` or ``ServiceError`` for a 404; None serves no assets.
+            static_dir: The folder of the static front end.
+            token: The session token; None picks a random one.
+            consent: Whether the user agreed that the web view may cache light assets; None or False means no
+                caching.
+            classic: The WSGI handler of ``/api/classic/*``; None answers 404 there.
+            raise_window: Brings the window to the front for a second start; None only answers it.
+            raise_token: The token a second start sends in ``X-BAMT-Raise``; None picks a random one.
+            ui_cached: Whether the page is served without the plain placeholder of its start cover.
+            recovery: Returns the configuration the recovery script of ``index.html`` embeds (see
+                ``main.recovery_config``).
+            on_exception: Called as ``(type, value, traceback)`` for an exception no handler caught; the request
+                answers 500.
+        """
         self.rpc = rpc
         self.events = events
         self.assets = assets
@@ -96,6 +124,15 @@ class WebApp:
     # --- entry ---
 
     def __call__(self, environ: dict, start_response: Callable) -> Iterable[bytes]:
+        """Answer one request, as WSGI calls it.
+
+        Args:
+            environ: The WSGI environment of the request.
+            start_response: The WSGI callback that takes the status and the headers.
+
+        Returns:
+            The response body.
+        """
         method = environ.get("REQUEST_METHOD", "GET")
         path = unquote(environ.get("PATH_INFO", "") or "/")
         query = {k: v[0] for k, v in parse_qs(environ.get("QUERY_STRING", "")).items()}
@@ -311,9 +348,18 @@ class _QuietHandler(WSGIRequestHandler):
 
 
 class Server:
-    """Runs a WebApp on 127.0.0.1 in a background thread."""
+    """Run a WebApp on 127.0.0.1 in a background thread."""
 
     def __init__(self, app: WebApp, port: int = 0):
+        """Bind the port; ``start`` begins serving.
+
+        Args:
+            app: The application to serve; it learns the port the server got.
+            port: The port to bind; 0 takes a free one.
+
+        Raises:
+            OSError: The port is in use.
+        """
         self.app = app
         self.httpd = make_server("127.0.0.1", port, app, server_class=_ThreadingServer, handler_class=_QuietHandler)
         self.port = self.httpd.server_port
@@ -322,13 +368,16 @@ class Server:
 
     @property
     def url(self) -> str:
+        """The address that opens the page; the session token in it moves into a cookie at the first load."""
         return f"http://127.0.0.1:{self.port}/?t={self.app.token}"
 
     def start(self) -> "Server":
+        """Start serving on a daemon thread and return the server."""
         self._thread.start()
         return self
 
     def stop(self) -> None:
+        """Close the event streams, stop serving and release the port."""
         self.app.events.close()
         if self._thread.is_alive():
             self.httpd.shutdown()

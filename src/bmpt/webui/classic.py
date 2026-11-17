@@ -59,18 +59,34 @@ _TAB_NAME = re.compile(r"[a-z][a-z0-9_]{0,31}")
 
 
 def tab_line(tab: str) -> str:
-    """The control line that shows a tab (``"settings"`` opens the classic settings)."""
+    """Return the control line that shows a tab.
+
+    Args:
+        tab: A classic tab name, or ``"settings"`` for the classic settings.
+    """
     return "settings" if tab == "settings" else f"tab {tab}"
 
 
 def place_line(rect: "Rect") -> str:
+    """Return the control line that places the child's window.
+
+    Args:
+        rect: Where the window goes, in Tk's coordinates; the values are rounded.
+    """
     r = rect.rounded()
     return f"place {int(r.x)} {int(r.y)} {int(r.w)} {int(r.h)}"
 
 
 def parse_control(line: Any) -> tuple | None:
-    """A control line as a command tuple: ``("tab", name)``, ``("settings",)``, ``("place", x, y, w, h)`` or
-    ``("raise",)``; ``None`` for anything else, which the child ignores."""
+    """Parse a control line into a command.
+
+    Args:
+        line: One line the child received; anything but a string is junk.
+
+    Returns:
+        ``("tab", name)``, ``("settings",)``, ``("place", x, y, w, h)`` or ``("raise",)``; None for anything else,
+        which the child ignores.
+    """
     if not isinstance(line, str):
         return None
     parts = line.split()
@@ -91,7 +107,14 @@ def parse_control(line: Any) -> tuple | None:
 
 
 def iter_lines(lines: Iterable[Any]) -> Iterator[tuple]:
-    """The commands of a batch of control lines, junk left out."""
+    """Parse a batch of control lines, leaving junk out.
+
+    Args:
+        lines: The lines received.
+
+    Yields:
+        The commands, as ``parse_control`` returns them.
+    """
     for line in lines:
         cmd = parse_control(line)
         if cmd is None:
@@ -114,17 +137,29 @@ class Rect:
 
     @property
     def centre(self) -> tuple[float, float]:
+        """The rectangle's centre point."""
         return (self.x + self.w / 2, self.y + self.h / 2)
 
     def contains(self, px: float, py: float) -> bool:
+        """Whether a point is inside; the left and top edges count, the right and bottom ones do not."""
         return self.x <= px < self.x + self.w and self.y <= py < self.y + self.h
 
     def rounded(self) -> "Rect":
+        """Return the rectangle with every value rounded to a whole number."""
         return Rect(round(self.x), round(self.y), round(self.w), round(self.h))
 
 
 def centre_rect(parent: Rect, work: Rect, size: tuple[float, float]) -> Rect:
-    """A window of ``size`` centred on ``parent``, shrunk to fit ``work`` (the screen's work area) and moved inside it."""
+    """Centre a window on another, keeping it inside the screen's work area.
+
+    Args:
+        parent: The rectangle to centre on.
+        work: The screen's work area; the window is shrunk to fit it and moved inside it.
+        size: The wanted width and height.
+
+    Returns:
+        The window's rectangle, rounded.
+    """
     w, h = min(size[0], work.w), min(size[1], work.h)
     x = parent.x + (parent.w - w) / 2
     y = parent.y + (parent.h - h) / 2
@@ -134,7 +169,15 @@ def centre_rect(parent: Rect, work: Rect, size: tuple[float, float]) -> Rect:
 
 
 def screen_for(point: tuple[float, float], screens: Sequence[tuple[Rect, Rect]]) -> Rect:
-    """The work area of the screen (``(frame, work area)`` pairs) that holds ``point``, else of the nearest one."""
+    """Find the work area of the screen that holds a point.
+
+    Args:
+        point: The point, in the screens' coordinates.
+        screens: ``(frame, work area)`` pairs, one per screen.
+
+    Returns:
+        The work area of the screen that holds ``point``, else of the nearest one.
+    """
     for frame, work in screens:
         if frame.contains(*point):
             return work
@@ -148,8 +191,12 @@ def screen_for(point: tuple[float, float], screens: Sequence[tuple[Rect, Rect]])
 
 
 def cocoa_to_tk(rect: Rect, primary_height: float) -> Rect:
-    """A Cocoa rectangle (origin at the bottom left of the primary screen, y up) in Tk's coordinates (top left of the
-    primary screen, y down). The primary screen is ``NSScreen.screens()[0]``, not the window's own screen."""
+    """Convert a Cocoa rectangle to Tk's coordinates (origin at the top left of the primary screen, y down).
+
+    Args:
+        rect: The rectangle, with its origin at the bottom left of the primary screen and y up.
+        primary_height: The height of the primary screen, ``NSScreen.screens()[0]``, not the window's own screen.
+    """
     return Rect(rect.x, primary_height - (rect.y + rect.h), rect.w, rect.h)
 
 
@@ -159,9 +206,18 @@ def mac_placement(
     size: tuple[int, int] = CLASSIC_SIZE,
     title_bar: int = MAC_TITLE_BAR,
 ) -> Rect:
-    """Where the classic window goes on macOS, in Tk's coordinates: ``window`` is the BAMT window's frame and
-    ``screens`` each screen's frame and visible frame, all in Cocoa coordinates, the primary screen first. The result's
-    position is the frame's top left and its size the content's (``wm geometry``); the title bar fits on the screen."""
+    """Decide where the classic window goes on macOS.
+
+    Args:
+        window: The BAMT window's frame, in Cocoa coordinates.
+        screens: Each screen's frame and visible frame, in Cocoa coordinates, the primary screen first.
+        size: The classic window's content size, in logical pixels.
+        title_bar: The height of the title bar above the content, in points; it fits on the screen too.
+
+    Returns:
+        The rectangle in Tk's coordinates: its position is the frame's top left and its size the content's
+        (``wm geometry``).
+    """
     primary = screens[0][0].h
     frame = cocoa_to_tk(window, primary)
     work = screen_for(frame.centre, [(cocoa_to_tk(f, primary), cocoa_to_tk(v, primary)) for f, v in screens])
@@ -170,9 +226,20 @@ def mac_placement(
 
 
 def win_placement(window: Rect, work: Rect, dpi: int, size: tuple[int, int] = CLASSIC_SIZE) -> Rect:
-    """Where the classic window goes on Windows, in physical pixels: ``window`` is the BAMT window's bounds and
-    ``work`` the work area of its monitor (``rcWork``), both physical, as pywebview makes the web UI DPI aware. The Tk
-    child is not DPI aware, so its logical ``size`` is scaled by the monitor's DPI before it is fitted."""
+    """Decide where the classic window goes on Windows.
+
+    Both rectangles are in physical pixels, as pywebview makes the web UI DPI aware. The Tk child is not, so its
+    logical size is scaled by the monitor's DPI before it is fitted.
+
+    Args:
+        window: The BAMT window's bounds.
+        work: The work area of its monitor (``rcWork``).
+        dpi: The monitor's DPI; 0 counts as 96.
+        size: The classic window's logical size.
+
+    Returns:
+        The window's rectangle in physical pixels.
+    """
     scale = (dpi or 96) / 96
     return centre_rect(window, work, (round(size[0] * scale), round(size[1] * scale)))
 
@@ -182,8 +249,11 @@ def win_placement(window: Rect, work: Rect, dpi: int, size: tuple[int, int] = CL
 
 @dataclass(frozen=True)
 class ClassicProcess:
-    """A classic window as ``classic.json`` names it. ``created`` is the creation time the system reports, as an
-    integer (Windows: FILETIME in 100 ns units; macOS: whole seconds since the epoch; Linux: clock ticks since boot)."""
+    """A classic window as ``classic.json`` names it.
+
+    ``created`` is the creation time the system reports, as an integer (Windows: FILETIME in 100 ns units; macOS:
+    whole seconds since the epoch; Linux: clock ticks since boot).
+    """
 
     pid: int
     exe: str
@@ -191,10 +261,19 @@ class ClassicProcess:
     created: int
 
     def to_json(self) -> dict[str, Any]:
+        """Return the fields as ``classic.json`` stores them."""
         return asdict(self)
 
     @classmethod
     def from_json(cls, data: Any) -> "ClassicProcess | None":
+        """Read the contents of ``classic.json``.
+
+        Args:
+            data: The parsed JSON.
+
+        Returns:
+            The process; None when ``data`` is not an object with a valid ``pid``, ``created``, ``hwnd`` and ``exe``.
+        """
         if not isinstance(data, dict):
             return None
         pid, exe, hwnd, created = data.get("pid"), data.get("exe", ""), data.get("hwnd", 0), data.get("created")
@@ -214,8 +293,17 @@ _MONTHS = {
 
 
 def parse_lstart(text: str) -> int | None:
-    """``ps -o lstart=`` under ``LC_ALL=C TZ=UTC0`` ("Mon Oct 19 10:23:45 2026") as seconds since the epoch. The names
-    go through a fixed English table, never ``time.strptime``, which reads them in this process's ``LC_TIME``."""
+    """Read the output of ``ps -o lstart=`` under ``LC_ALL=C TZ=UTC0`` as seconds since the epoch.
+
+    The day and month names go through a fixed English table, never ``time.strptime``, which reads them in this
+    process's ``LC_TIME``.
+
+    Args:
+        text: The output, such as "Mon Oct 19 10:23:45 2026".
+
+    Returns:
+        The seconds; None when ``text`` is not in that form.
+    """
     parts = text.split()
     if len(parts) != 5 or parts[0] not in _DAYS or parts[1] not in _MONTHS:
         return None
@@ -228,8 +316,10 @@ def parse_lstart(text: str) -> int | None:
 
 
 def ps_env() -> dict[str, str]:
-    """The environment ``ps`` runs in: C locale and UTC, whatever this process's own, so every instance reads the same
-    creation time (BSD ``ps`` prints ``lstart`` with ``%c`` in local time)."""
+    """Return the environment ``ps`` runs in: C locale and UTC, whatever this process's own.
+
+    Every instance then reads the same creation time (BSD ``ps`` prints ``lstart`` with ``%c`` in local time).
+    """
     env = dict(os.environ)
     env["LC_ALL"] = "C"
     env["TZ"] = "UTC0"
@@ -246,6 +336,15 @@ def _run_ps(args: list[str], run: Callable[..., Any]) -> str | None:
 
 
 def ps_created(pid: int, *, run: Callable[..., Any] = subprocess.run) -> int | None:
+    """Read a process's start from ``ps``, in seconds since the epoch.
+
+    Args:
+        pid: The process id.
+        run: Runs the command; tests replace ``subprocess.run``.
+
+    Returns:
+        The seconds; None when ``ps`` fails.
+    """
     out = _run_ps(["-o", "lstart=", "-p", str(pid)], run)
     return parse_lstart(out) if out else None
 
@@ -294,8 +393,19 @@ def _libproc_pidinfo() -> Callable[..., int]:
 def mac_created(
     pid: int, *, pidinfo: Callable[..., int] | None = None, run: Callable[..., Any] = subprocess.run
 ) -> int | None:
-    """A process's start in whole seconds since the epoch: ``proc_pidinfo``'s ``pbi_start_tvsec``, else ``ps`` in the C
-    locale and UTC, which gives the same number."""
+    """Read a process's start in whole seconds since the epoch on macOS.
+
+    The source is ``proc_pidinfo``'s ``pbi_start_tvsec``, else ``ps`` in the C locale and UTC, which gives the same
+    number.
+
+    Args:
+        pid: The process id.
+        pidinfo: Replaces ``proc_pidinfo``; tests inject one.
+        run: Runs ``ps``; tests replace ``subprocess.run``.
+
+    Returns:
+        The seconds; None when neither source answers.
+    """
     try:
         fn = pidinfo or _libproc_pidinfo()
         info = _BsdInfo()
@@ -334,6 +444,7 @@ def _kernel32() -> Any:
 
 
 def win_alive(pid: int) -> bool:
+    """Return whether a process is running on Windows; one that refuses access to its handle counts as running."""
     from ctypes import wintypes
 
     k32 = _kernel32()
@@ -348,6 +459,7 @@ def win_alive(pid: int) -> bool:
 
 
 def win_created(pid: int) -> int | None:
+    """Read a process's creation time on Windows as a FILETIME (100 ns units); None when it cannot be read."""
     from ctypes import wintypes
 
     k32 = _kernel32()
@@ -364,7 +476,7 @@ def win_created(pid: int) -> int | None:
 
 
 def win_exe_name(pid: int) -> str | None:
-    """The executable's file name of a process, from a Toolhelp snapshot."""
+    """Read a process's executable file name from a Toolhelp snapshot; None when the process is not listed."""
     from ctypes import wintypes
 
     class ProcessEntry(ctypes.Structure):
@@ -434,11 +546,13 @@ class Processes:
         return {os.getpid(), os.getppid()}
 
     def alive(self, pid: int) -> bool:
+        """Return whether a process with this id is running."""
         if pid <= 0:
             return False
         return win_alive(pid) if sys.platform == "win32" else _posix_alive(pid)
 
     def created(self, pid: int) -> int | None:
+        """Return a process's creation time in the unit of ``ClassicProcess.created``; None when unreadable."""
         if sys.platform == "win32":
             return win_created(pid)
         if sys.platform == "darwin":
@@ -464,10 +578,17 @@ SYSTEM_PROCESSES = Processes()
 
 
 def classic_json(data_dir: Path) -> Path:
+    """Return the path of ``classic.json`` in a data directory."""
     return Path(data_dir) / CLASSIC_JSON
 
 
 def write_classic_json(data_dir: Path, proc: ClassicProcess) -> None:
+    """Name a classic window in ``classic.json``, replacing the file in one step; a failure is logged.
+
+    Args:
+        data_dir: The data directory.
+        proc: The window to name.
+    """
     path = classic_json(data_dir)
     tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
     try:
@@ -479,7 +600,14 @@ def write_classic_json(data_dir: Path, proc: ClassicProcess) -> None:
 
 
 def read_classic_json(data_dir: Path) -> tuple[str, ClassicProcess | None] | None:
-    """The raw text of ``classic.json`` and what it names (``None`` when malformed); ``None`` without the file."""
+    """Read ``classic.json``.
+
+    Args:
+        data_dir: The data directory.
+
+    Returns:
+        The raw text and the process it names (None when malformed); None without a readable file.
+    """
     path = classic_json(data_dir)
     try:
         raw = path.read_text(encoding="utf-8")
@@ -495,7 +623,12 @@ def read_classic_json(data_dir: Path) -> tuple[str, ClassicProcess | None] | Non
 
 
 def remove_classic_json(data_dir: Path, pid: int | None = None) -> None:
-    """Remove ``classic.json``; with ``pid``, only while it names that process."""
+    """Remove ``classic.json``.
+
+    Args:
+        data_dir: The data directory.
+        pid: When given, the file is removed only while it names that process.
+    """
     path = classic_json(data_dir)
     if pid is not None:
         found = read_classic_json(data_dir)
@@ -508,9 +641,19 @@ def remove_classic_json(data_dir: Path, pid: int | None = None) -> None:
 
 
 def find_classic(data_dir: Path, processes: Processes | None = None) -> ClassicProcess | None:
-    """The classic window ``classic.json`` names, while it runs. The pid counts only when it is alive with the creation
-    time the file records (a pid the system reused has a later one), runs this program's classic GUI, and is neither
-    this process nor its parent. Otherwise the file is stale and removed, so it never blocks writes."""
+    """Find the classic window ``classic.json`` names, while it runs.
+
+    The pid counts only when it is alive with the creation time the file records (a pid the system reused has a
+    later one), runs this program's classic GUI, and is neither this process nor its parent. Otherwise the file is
+    stale and removed, so it never blocks writes.
+
+    Args:
+        data_dir: The data directory.
+        processes: The process table; None reads the system's.
+
+    Returns:
+        The window; None when there is no file or it is stale.
+    """
     procs = processes or SYSTEM_PROCESSES
     found = read_classic_json(data_dir)
     if found is None:
@@ -543,27 +686,54 @@ def find_classic(data_dir: Path, processes: Processes | None = None) -> ClassicP
 
 
 class NativeOps:
-    """What the web UI's window does for the hand-off; this base does nothing (no window: ``--browser``, ``--serve``)."""
+    """What the web UI's window does for the hand-off.
+
+    This base does nothing, as when there is no window (``--browser``, ``--serve``).
+    """
 
     def place(self, pid: int | None, hwnd: int, size: tuple[int, int]) -> str | None:
-        """Place the child's window over the BAMT window: a ``place`` line for the child to apply, or ``None`` when
-        the window was placed natively or cannot be."""
+        """Place the child's window over the BAMT window.
+
+        Args:
+            pid: The child's process id, if reported.
+            hwnd: The child's window handle (Windows), if reported; 0 when none.
+            size: The classic window's logical size.
+
+        Returns:
+            A ``place`` line for the child to apply; None when the window was placed natively or cannot be.
+        """
         return None
 
     def before_raise(self, pid: int | None) -> None:
-        """Hand the foreground over to the child, just before ``raise`` is sent."""
+        """Hand the foreground over to the child, just before ``raise`` is sent.
+
+        Args:
+            pid: The child's process id, if reported.
+        """
 
     def raise_process(self, proc: ClassicProcess) -> None:
-        """Bring a classic window found through ``classic.json`` (no control channel) to the front."""
+        """Bring a classic window found through ``classic.json`` (no control channel) to the front.
+
+        Args:
+            proc: The window ``classic.json`` names.
+        """
 
 
 class CocoaOps(NativeOps):
-    """macOS: pywebview's ``window.native`` is the ``NSWindow``. AppKit is called on the main thread only, and the
-    answer is waited for only from another thread (the RPC's request thread), never on the main thread itself."""
+    """The window operations on macOS, where pywebview's ``window.native`` is the ``NSWindow``.
+
+    AppKit is called on the main thread only, and the answer is waited for only from another thread (the RPC's
+    request thread), never on the main thread itself.
+    """
 
     WAIT = 2.0
 
     def __init__(self, window: Any):
+        """Wrap the window.
+
+        Args:
+            window: The pywebview window.
+        """
         self.window = window
 
     def _on_main(self, fn: Callable[[], Any], wait: float = WAIT) -> Any:
@@ -588,6 +758,8 @@ class CocoaOps(NativeOps):
         return box.get("value")
 
     def place(self, pid: int | None, hwnd: int, size: tuple[int, int]) -> str | None:
+        """Compute the ``place`` line from the BAMT window's frame and the screens; None without a window."""
+
         def read() -> tuple[Rect, list[tuple[Rect, Rect]]] | None:
             import AppKit
 
@@ -606,8 +778,11 @@ class CocoaOps(NativeOps):
 
     @staticmethod
     def _hand_over(pid: int) -> None:
-        """Make the process ``pid`` the active app (main thread). From macOS 14 an app activates another only by
-        yielding its own activation to it first; earlier, by ignoring the other apps."""
+        """Make the process ``pid`` the active app (main thread).
+
+        From macOS 14 an app activates another only by yielding its own activation to it first; earlier, by
+        ignoring the other apps.
+        """
         import AppKit
 
         target = AppKit.NSRunningApplication.runningApplicationWithProcessIdentifier_(pid)
@@ -623,10 +798,12 @@ class CocoaOps(NativeOps):
             )
 
     def before_raise(self, pid: int | None) -> None:
+        """Make the child the active app, before the raise line is sent."""
         if pid:
             self._on_main(lambda: self._hand_over(pid), wait=1.0)  # done before the child reads its raise
 
     def raise_process(self, proc: ClassicProcess) -> None:
+        """Make the window's process the active app."""
         self._on_main(lambda: self._hand_over(proc.pid), wait=1.0)
 
 
@@ -639,11 +816,19 @@ class _MONITORINFO(ctypes.Structure):
 
 
 class WinOps(NativeOps):
-    """Windows: pywebview's ``window.native`` is the WinForms form. The web UI is DPI aware (pywebview calls
-    ``SetProcessDPIAware``), so its bounds and the monitors' work areas are physical pixels; the parent places the
-    child's window itself with ``SetWindowPos`` on the ``hwnd`` the child reported."""
+    """The window operations on Windows, where pywebview's ``window.native`` is the WinForms form.
+
+    The web UI is DPI aware (pywebview calls ``SetProcessDPIAware``), so its bounds and the monitors' work areas
+    are physical pixels. The parent places the child's window itself with ``SetWindowPos`` on the ``hwnd`` the
+    child reported.
+    """
 
     def __init__(self, window: Any):
+        """Wrap the window.
+
+        Args:
+            window: The pywebview window.
+        """
         self.window = window
 
     @staticmethod
@@ -699,6 +884,11 @@ class WinOps(NativeOps):
         return 96
 
     def place(self, pid: int | None, hwnd: int, size: tuple[int, int]) -> str | None:
+        """Move the child's window over the BAMT window with ``SetWindowPos``.
+
+        Returns:
+            Always None: nothing is left for the child to apply.
+        """
         if not hwnd:
             return None
         u32 = self._user32()
@@ -718,10 +908,12 @@ class WinOps(NativeOps):
         return None
 
     def before_raise(self, pid: int | None) -> None:
+        """Allow any process to take the foreground, before the raise line is sent."""
         # ASFW_ANY: the child's own pid would be the onefile launcher's, not the process that owns the Tk window
         self._user32().AllowSetForegroundWindow(ASFW_ANY & 0xFFFFFFFF)
 
     def raise_process(self, proc: ClassicProcess) -> None:
+        """Restore the window if it is minimized and bring it to the foreground."""
         u32 = self._user32()
         u32.AllowSetForegroundWindow(ASFW_ANY & 0xFFFFFFFF)
         if proc.hwnd:
@@ -731,7 +923,11 @@ class WinOps(NativeOps):
 
 
 def native_ops(window: Any) -> NativeOps:
-    """The native operations for pywebview's window (``None``: no window)."""
+    """Return the native window operations of this system.
+
+    Args:
+        window: The pywebview window; None gives operations that do nothing.
+    """
     if window is None:
         return NativeOps()
     if sys.platform == "darwin":
@@ -767,12 +963,10 @@ class _Child:
 
 
 class ClassicWindow:
-    """The one classic window of this data directory: started by this instance, or left by an earlier one and found
-    through ``classic.json`` (an *orphan*, raised by pid but without a control channel).
+    """The one classic window of this data directory.
 
-    ``origin`` is the web UI server's origin (a string or a callable), ``publish`` the event bus's ``publish``,
-    ``native`` the window operations (``native_ops(window)``). ``on_change`` runs after every change of ``status()``
-    and ``on_closed(code)`` after ``classic.closed``, outside the state lock.
+    It was started by this instance, or left by an earlier one and found through ``classic.json`` (an *orphan*,
+    raised by pid but without a control channel).
     """
 
     def __init__(
@@ -792,6 +986,24 @@ class ClassicWindow:
         silent_exit: float = SILENT_EXIT,
         watch_interval: float = 1.0,
     ):
+        """Create the manager; no window is started.
+
+        Args:
+            data_dir: The data directory, which holds ``classic.json`` and ``classic.log``.
+            origin: The web UI server's origin, or a function that returns it once the server listens.
+            publish: The event bus's ``publish``; None publishes nothing.
+            native: The window operations (``native_ops(window)``); None does nothing natively.
+            command: Builds the child's command line for a tab; None starts the classic GUI with its control
+                channel.
+            popen: Starts the child; tests replace ``subprocess.Popen``.
+            processes: The process table; None reads the system's.
+            on_change: Called after every change of ``status()``, outside the state lock.
+            on_closed: Called with the child's exit code after ``classic.closed``, outside the state lock.
+            ready_timeout: Seconds ``open`` waits for the new window to be ready.
+            poll_timeout: Seconds a control long-poll waits for a line.
+            silent_exit: Seconds without a poll after which a child whose launcher returned early counts as ended.
+            watch_interval: Seconds between two checks of the child's process.
+        """
         self.data_dir = Path(data_dir)
         self._origin = origin if callable(origin) else (lambda: origin)
         self._publish = publish or (lambda event, data=None: None)
@@ -818,7 +1030,7 @@ class ClassicWindow:
             return child if child is not None and not child.exited else None
 
     def orphan(self) -> ClassicProcess | None:
-        """A classic window this instance did not start, found through ``classic.json`` (GameWatch's reader)."""
+        """Find a classic window this instance did not start, through ``classic.json`` (GameWatch's reader)."""
         if self._live() is not None:
             return None
         return find_classic(self.data_dir, self._procs)
@@ -828,7 +1040,10 @@ class ClassicWindow:
         return self._live() is not None or self.orphan() is not None
 
     def status(self) -> dict[str, Any]:
-        """``{open, ready, busy, pid, orphan}`` (``app.classic`` adds the queue's count)."""
+        """Describe the classic window as ``{open, ready, busy, pid, orphan}``.
+
+        ``app.classic`` adds the queue's count.
+        """
         child = self._live()
         if child is not None:
             with self._cond:
@@ -860,10 +1075,23 @@ class ClassicWindow:
             yield
 
     def open(self, tab: str | None = None, may_start: Callable[[], None] | None = None) -> dict[str, bool]:
-        """``app.openClassic``: start the classic window on ``tab`` (``"settings"``: its settings), or bring the open
-        one to the front, on that tab unless a classic task runs. Waits for the new window's ``ready`` (at most
-        ``READY_TIMEOUT``); ``classic_failed {exit_code}`` when it exits or stays silent before. ``may_start`` can
-        refuse a new child under ``starting()``, before it is registered; an open window is still raised."""
+        """Start the classic window, or bring the open one to the front (``app.openClassic``).
+
+        An open window is raised on the tab asked for unless a classic task runs. A new window is waited for until
+        its ``ready``, at most ``ready_timeout``.
+
+        Args:
+            tab: The tab to show, ``"settings"`` for the classic settings, or None for the default tab.
+            may_start: Called under ``starting()`` before a new child is registered; it can refuse by raising. An
+                open window is still raised.
+
+        Returns:
+            ``{"started": bool}``, whether this call started a new window.
+
+        Raises:
+            ServiceError: ``bad_params`` for an unknown tab; ``classic_failed`` (with ``exit_code``) when the child
+                cannot be started, exits or stays silent before it is ready.
+        """
         check_classic_tab(tab)
         with self._start_lock:
             child = self._live()
@@ -886,7 +1114,11 @@ class ClassicWindow:
         return {"started": True}
 
     def bring_to_front(self) -> bool:
-        """The classic modal's Bring to Front: raise the open classic window; ``False`` when none is open."""
+        """Raise the open classic window, for the classic modal's Bring to Front.
+
+        Returns:
+            False when no classic window is open.
+        """
         child = self._live()
         if child is not None:
             self._show(child, None)
@@ -1003,8 +1235,16 @@ class ClassicWindow:
         return child
 
     def control(self, token: str, timeout: float | None = None) -> list[str] | None:
-        """``GET /api/classic/control``: the lines waiting for the child, once there are some or after ``timeout``;
-        ``None`` for an unknown token."""
+        """Serve ``GET /api/classic/control``: wait for lines for the child and return them.
+
+        Args:
+            token: The child's one-time token.
+            timeout: Seconds to wait for a line; None uses ``poll_timeout``.
+
+        Returns:
+            The lines, once there are some or when the time is up; None for an unknown token or while the manager
+            is closed, which makes the child stop polling.
+        """
         wait = self._poll_timeout if timeout is None else timeout
         with self._cond:
             child = self._match(token)
@@ -1029,8 +1269,15 @@ class ClassicWindow:
                 child.last_poll = time.monotonic()
 
     def report(self, token: str, data: Any) -> bool | None:
-        """``POST /api/classic/report``: ``ready {pid, hwnd, exe}``, ``shown {tab}`` or ``busy {n}`` as
-        ``{"type": ..., ...}``. ``None`` for an unknown token, ``False`` for a malformed report."""
+        """Take a report of the child, ``POST /api/classic/report``.
+
+        Args:
+            token: The child's one-time token.
+            data: The report, ``{"type": ..., ...}``: ``ready {pid, hwnd, exe}``, ``shown {tab}`` or ``busy {n}``.
+
+        Returns:
+            True when taken; False for a malformed report; None for an unknown token.
+        """
         child = self._match(token)
         if child is None:
             return None
@@ -1085,8 +1332,17 @@ class ClassicWindow:
         self._changed()
 
     def wsgi(self, environ: dict, start_response: Callable) -> list[bytes]:
-        """The ``/api/classic/*`` endpoints, for the web UI's WSGI app to route to after its Host check. They take the
-        child's token (``X-BAMT-Classic``), never the session token."""
+        """Answer the ``/api/classic/*`` endpoints, which the web UI's WSGI app routes to after its Host check.
+
+        They take the child's token (``X-BAMT-Classic``), never the session token.
+
+        Args:
+            environ: The WSGI environment of the request.
+            start_response: The WSGI callback that takes the status and the headers.
+
+        Returns:
+            The response body.
+        """
         path = environ.get("PATH_INFO", "")
         method = environ.get("REQUEST_METHOD", "GET")
         token = environ.get("HTTP_X_BAMT_CLASSIC", "")
@@ -1126,8 +1382,8 @@ class ClassicWindow:
 
     def _watch(self, child: _Child) -> None:
         code = child.popen.wait()
-        # the Windows onefile launcher may return before the window it unpacked (user check U6): follow the pid the
-        # child reported, until it ends or stops polling
+        # the Windows onefile launcher may return before the window it unpacked: follow the pid the child
+        # reported, until it ends or stops polling
         while not self._stop.is_set():
             with self._cond:
                 pid, created = child.pid, child.created
@@ -1165,7 +1421,10 @@ class ClassicWindow:
                 logger.exception("classic close hook failed")
 
     def close(self) -> None:
-        """The web UI quits: end the long-polls. The classic window stays open (its polls fail, it stops polling)."""
+        """End the long-polls because the web UI quits.
+
+        The classic window stays open; its polls fail and it stops polling.
+        """
         self._stop.set()
         with self._cond:
             self._cond.notify_all()
@@ -1201,8 +1460,16 @@ FileStat = tuple[int, int] | None  # (size, mtime_ns), None for a missing file
 
 
 def stat_files(paths: Iterable[str]) -> dict[str, FileStat]:
-    """Sizes and modification times, the classic queue's check of what the classic window changed. Reads no
-    contents."""
+    """Read the sizes and modification times of files; no contents are read.
+
+    The classic queue compares them to see what the classic window changed.
+
+    Args:
+        paths: The file paths.
+
+    Returns:
+        Path mapped to ``(size, mtime_ns)``, or None for a file that cannot be read.
+    """
     out: dict[str, FileStat] = {}
     for p in paths:
         try:
@@ -1234,10 +1501,19 @@ class QueuedCall:
 
     @property
     def toggle(self) -> bool:
+        """Whether the call is the mod switch's toggle."""
         return self.method == "mods.toggle"
 
     def narrowed(self, keep: Iterable[EntryKey]) -> "QueuedCall | None":
-        """This call for some of its entries only; ``None`` when none is left."""
+        """Narrow this call to some of its entries.
+
+        Args:
+            keep: The entries to keep.
+
+        Returns:
+            The call for those entries only, with its params, pins and files narrowed too; this call itself when
+            all are kept; None when none is left.
+        """
         wanted = set(keep)
         keep = [e for e in self.entries if e in wanted]
         if not keep:
@@ -1258,25 +1534,32 @@ class QueuedCall:
         )
 
     def to_json(self) -> dict[str, Any]:
+        """Return the call's method, params and entries for the page."""
         return {"method": self.method, "params": dict(self.params), "entries": [list(e) for e in self.entries]}
 
 
 @dataclass(frozen=True)
 class Dropped:
+    """A queued call that was not submitted, with the error that says why."""
+
     call: QueuedCall
     code: str
     params: Mapping[str, Any] = field(default_factory=dict)
 
     def to_json(self) -> dict[str, Any]:
+        """Return the call and its error for the page."""
         return {**self.call.to_json(), "error": ServiceError(self.code, **self.params).to_json()}
 
 
 @dataclass
 class QueueRun:
+    """The outcome of ``ClassicQueue.run``: what was submitted and what was dropped."""
+
     submitted: list[tuple[QueuedCall, Any]] = field(default_factory=list)  # (call, job id)
     dropped: list[Dropped] = field(default_factory=list)
 
     def to_json(self) -> dict[str, Any]:
+        """Return the submitted calls with their job ids, and the dropped ones, for the page."""
         return {
             "submitted": [{**c.to_json(), "job": j} for c, j in self.submitted],
             "dropped": [d.to_json() for d in self.dropped],
@@ -1300,26 +1583,46 @@ class QueueHost(Protocol):
 
 
 class ClassicQueue:
-    """The writes the user asked to apply once the classic window closes. It lives in memory only:
-    quitting drops it. At most one toggle, and one action per entry: a later toggle replaces the queued one, a toggle
-    back to the stored intent removes it, and for an entry the latest action wins. Its lock is a leaf lock: ``run``
-    calls the host outside it."""
+    """The writes the user asked to apply once the classic window closes.
+
+    It lives in memory only: quitting drops it. At most one toggle, and one action per entry: a later toggle
+    replaces the queued one, a toggle back to the stored intent removes it, and for an entry the latest action
+    wins. Its lock is a leaf lock: ``run`` calls the host outside it.
+    """
 
     def __init__(self, stat: Callable[[Iterable[str]], Mapping[str, FileStat]] = stat_files):
+        """Create an empty queue.
+
+        Args:
+            stat: Reads the sizes and times of files, as ``stat_files`` does; tests replace it.
+        """
         self._lock = threading.Lock()
         self._items: list[QueuedCall] = []
         self._stat = stat
 
     def __len__(self) -> int:
+        """Return how many calls are queued."""
         with self._lock:
             return len(self._items)
 
     def items(self) -> list[QueuedCall]:
+        """Return a copy of the queued calls, in order."""
         with self._lock:
             return list(self._items)
 
     def add(self, call: QueuedCall, *, intent: bool | None = None) -> int:
-        """Queue a call (``intent``: the stored intent, for a toggle); returns how many items are queued."""
+        """Queue a call, replacing what it supersedes.
+
+        Args:
+            call: The call; its method must be one of ``QUEUE_METHODS``.
+            intent: The stored intent, for a toggle: a toggle to the stored intent just removes the queued one.
+
+        Returns:
+            How many calls are queued.
+
+        Raises:
+            ServiceError: ``bad_params``, the method is not queueable.
+        """
         if call.method not in QUEUE_METHODS:
             raise ServiceError("bad_params", method=call.method)
         with self._lock:
@@ -1342,23 +1645,36 @@ class ClassicQueue:
             return len(self._items)
 
     def clear(self) -> int:
-        """Empty the queue (the classic modal closed with its box unticked); returns how many items were dropped."""
+        """Empty the queue, as when the classic modal closed with its box unticked.
+
+        Returns:
+            How many calls were dropped.
+        """
         with self._lock:
             n, self._items = len(self._items), []
             return n
 
     def take(self) -> list[QueuedCall]:
+        """Empty the queue and return what it held, in order."""
         with self._lock:
             items, self._items = self._items, []
             return items
 
     def run(self, host: QueueHost) -> QueueRun:
-        """After ``classic.closed`` and the scan that follows it: check every item again and submit the ones that
-        still hold, in order. Dropped: a toggle whose ``expect`` is not the stored intent (``state_changed``) or whose
-        pins are not the known installs (``folder_changed``); an entry whose install changed (``folder_changed``: only
-        its own install counts, and the current one for an action on the current install) or whose files changed
-        (``entry_changed``). An item the host cannot check (``profiles_unreadable`` from the stored intent) is dropped
-        with that error, like a refused submit; the others still run."""
+        """Submit the queued calls that still hold, in order; run after ``classic.closed`` and the scan after it.
+
+        Dropped: a toggle whose ``expect`` is not the stored intent (``state_changed``) or whose pins are not the
+        known installs (``folder_changed``); an entry whose install changed (``folder_changed``: only its own
+        install counts, and the current one for an action on the current install) or whose files changed
+        (``entry_changed``). An item the host cannot check (``profiles_unreadable`` from the stored intent) is
+        dropped with that error, like a refused submit; the others still run.
+
+        Args:
+            host: The web UI's intent, installs and job submission.
+
+        Returns:
+            The submitted calls with their job ids, and the dropped ones with their errors.
+        """
         out = QueueRun()
         for call in self.take():
             try:

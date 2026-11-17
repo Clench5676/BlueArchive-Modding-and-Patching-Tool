@@ -12,13 +12,32 @@ logger = logging.getLogger(__name__)
 
 
 class RpcRegistry:
+    """The named methods the front end may call, and the one place that turns every outcome into JSON."""
+
     def __init__(self, on_exception=None, translate=None) -> None:
+        """Create an empty registry.
+
+        Args:
+            on_exception: Called with ``(type, value, traceback)`` for an unexpected exception from a method, for
+                the crash report; None reports nothing.
+            translate: Maps an exception to the ``ServiceError`` it stands for (an environment fault the user can
+                act on) or to None; None as the argument translates nothing.
+        """
         self.on_exception = on_exception
         # an exception -> the ServiceError it stands for (an environment fault the user can act on), or None
         self.translate = translate
         self._methods: dict[str, Callable[..., Any]] = {}
 
     def method(self, name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+        """Return the decorator that registers a function as the RPC method ``name``.
+
+        Args:
+            name: The method's name as the page calls it, such as ``app.info``.
+
+        Raises:
+            ValueError: From the decorator, when the name is already registered.
+        """
+
         def register(fn: Callable[..., Any]) -> Callable[..., Any]:
             if name in self._methods:
                 raise ValueError(f"duplicate RPC method {name}")
@@ -28,10 +47,22 @@ class RpcRegistry:
         return register
 
     def names(self) -> list[str]:
+        """Return the registered method names, sorted."""
         return sorted(self._methods)
 
     def call(self, name: str, params: dict[str, Any] | None) -> dict[str, Any]:
-        """Run a method; returns ``{"result": ...}`` or a coded ``error``, never raises."""
+        """Run a method and wrap its outcome in a JSON-ready dict; never raises.
+
+        Args:
+            name: The method's name.
+            params: The keyword arguments from the request; None means none. Anything that is not a dict, or that
+                does not fit the method's signature, is a ``bad_params`` error.
+
+        Returns:
+            ``{"result": value}`` for the value turned plain by ``to_json``, or ``{"error": ...}`` for an unknown
+            method, bad params, a ``ServiceError`` the method raised, an exception ``translate`` knows, or any
+            other exception (``internal``, after ``on_exception`` has seen it).
+        """
 
         def failed(error: ServiceError) -> dict[str, Any]:
             log_service_error(logger, error)
@@ -63,7 +94,14 @@ class RpcRegistry:
 
 
 def to_json(value: Any) -> Any:
-    """Turn service results (dataclasses with to_json, paths, sets) into plain JSON values."""
+    """Turn a service result into plain JSON values.
+
+    Objects with a ``to_json`` method are converted through it, sets become sorted lists, and anything else that is
+    not a string, number, boolean or None (a ``Path``, for one) becomes its ``str``.
+
+    Args:
+        value: The result to convert, nested lists and dicts included.
+    """
     if hasattr(value, "to_json"):
         return to_json(value.to_json())
     if isinstance(value, dict):

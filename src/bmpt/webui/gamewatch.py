@@ -1,5 +1,6 @@
-"""Game watch: whether the game runs, Steam changes an install or a classic window left by an earlier instance is
-open, polled so the page and the tray can grey the Enable Mods switch.
+"""Poll whether the game runs, Steam changes an install or a classic window of an earlier instance is open.
+
+The page and the tray grey the Enable Mods switch from the answer.
 
 A pure poller. It reads the process list, Steam's app manifests and, through the reader it is given,
 ``classic.json``; never a game file, so it needs no scan consent. The check at write time stays the authority: the
@@ -39,6 +40,8 @@ SLOW_SECONDS = 15.0
 
 
 class ClassicProcess(Protocol):
+    """A classic window's process, as far as the watch needs it."""
+
     pid: int
 
 
@@ -52,7 +55,7 @@ class WatchState:
 
     @property
     def reason(self) -> str | None:
-        """Why the switch is unavailable, as far as the watch knows: one of ``mods.state``'s reasons, or ``None``."""
+        """Why the switch is unavailable, as far as the watch knows: a ``mods.state`` reason, or None."""
         if self.game:
             return self.game
         if self.steam_busy:
@@ -63,6 +66,8 @@ class WatchState:
 
 
 class GameWatch:
+    """The poller; the callbacks it is given wire it to the services (see the module docstring)."""
+
     def __init__(
         self,
         *,
@@ -82,12 +87,30 @@ class GameWatch:
         fast: float = FAST_SECONDS,
         slow: float = SLOW_SECONDS,
     ):
-        """``active()`` says whether to poll fast (a page connected, the tray icon shown); ``own_classic()`` gives the
-        pid of the classic window this instance started, which its own watcher thread reports, so it is never
-        watched here; ``on_classic_closed()`` runs after ``classic.closed`` is published, as for that thread's
-        exit. ``check_game`` and ``check_steam`` default to the write-time checks of ``library.safety``;
-        ``steam_allowed()`` says whether Steam's records may be read (the Check Game Files consent): without it the
-        poll leaves Steam alone, and the write-time check alone refuses writes while Steam changes an install."""
+        """Create the watch; ``start`` begins polling.
+
+        Args:
+            installs: The known installs' folders, read at each poll.
+            find_classic: The classic window an earlier instance left open, or None.
+            profiles_seen: Whether another data directory changed the library's shared intent since the last call.
+            on_change: Called with the new state on the first poll, on every change and whenever ``profiles_seen``
+                says yes.
+            publish: Called as ``publish("classic.closed", {"code": None})`` when a watched classic window ends.
+            request_scan: Called when the game stops, Steam goes idle or a watched classic window ends.
+            active: Whether to poll fast: a page is connected or the tray icon is shown.
+            own_classic: The pid of the classic window this instance started. Its own watcher thread reports its
+                end, so the watch ignores it.
+            on_classic_closed: Called after ``classic.closed`` is published, as when the own watcher thread ends.
+            on_steam_idle: Called when Steam goes idle, before ``request_scan``.
+            check_game: Raises ``ServiceError`` while the game runs; None uses the write-time check of
+                ``library.safety``.
+            check_steam: Raises ``ServiceError`` ``steam_busy`` while Steam changes the install in the folder given;
+                None uses the write-time check of ``library.safety``.
+            steam_allowed: Whether Steam's records may be read (the Check Game Files consent). Without it the poll
+                leaves Steam alone, and only the write-time check refuses writes while Steam changes an install.
+            fast: Seconds between polls while ``active``.
+            slow: Seconds between polls otherwise.
+        """
         self._installs = installs
         self._steam_allowed = steam_allowed
         self._find_classic = find_classic
@@ -119,7 +142,11 @@ class GameWatch:
             return self._state
 
     def poll(self) -> WatchState:
-        """Check once and report what changed. Runs on the watch thread; call it directly only without one."""
+        """Check once and report what changed. Runs on the watch thread; call it directly only without one.
+
+        Returns:
+            The new state.
+        """
         with self._poll_lock:
             previous, first = self._state, not self._polled
             state = WatchState(game=self._game(), steam_busy=self._steam(), classic=self._classic(previous.classic))
@@ -227,6 +254,11 @@ class GameWatch:
         self._wake.set()
 
     def stop(self, timeout: float | None = 5.0) -> None:
+        """Stop polling and wait for the thread to end.
+
+        Args:
+            timeout: Seconds to wait for the thread; None waits without limit.
+        """
         self._stopped.set()
         self._wake.set()
         with self._lock:

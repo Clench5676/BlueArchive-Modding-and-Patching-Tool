@@ -14,10 +14,18 @@ logger = logging.getLogger(__name__)
 
 
 class EventBus:
-    """Fan-out of events to subscribers; each subscriber has its own bounded queue. Observers on the Python side (the
-    tray) are called in ``publish`` itself and are not counted as listeners."""
+    """Fan out events to subscribers, each with its own bounded queue.
+
+    Observers on the Python side (the tray) are called in ``publish`` itself and are not counted as listeners.
+    """
 
     def __init__(self, max_queue: int = 2000):
+        """Create a bus without subscribers.
+
+        Args:
+            max_queue: Events a subscriber's queue holds; when a page falls that far behind, its oldest event is
+                dropped for each new one.
+        """
         self._lock = threading.Lock()
         self._subscribers: list[queue.Queue] = []
         self._observers: list[Callable[[str, Any], Any]] = []
@@ -25,8 +33,15 @@ class EventBus:
         self._closed = threading.Event()
 
     def observe(self, fn: Callable[[str, Any], Any]) -> Callable[[], None]:
-        """Call ``fn(event, data)`` on the publishing thread for every event; it must return at once (hand any real
-        work to another thread). Returns the function that stops it."""
+        """Call a function on the publishing thread for every event.
+
+        Args:
+            fn: ``fn(event, data)``. It must return at once; real work belongs on another thread. An exception it
+                raises is logged and does not stop other observers or subscribers.
+
+        Returns:
+            The function that stops the observation.
+        """
         with self._lock:
             self._observers.append(fn)
 
@@ -38,6 +53,12 @@ class EventBus:
         return stop
 
     def publish(self, event: str, data: Any = None) -> None:
+        """Deliver an event to the observers and queue it for every subscriber.
+
+        Args:
+            event: The event's name, such as ``mods.state``.
+            data: The event's payload, JSON-serializable; None is sent as ``{}``.
+        """
         message = (event, data if data is not None else {})
         with self._lock:
             subscribers = list(self._subscribers)
@@ -59,6 +80,7 @@ class EventBus:
                     pass
 
     def subscribe(self) -> queue.Queue:
+        """Add a subscriber and return its queue of ``(event, data)`` pairs; ``unsubscribe`` removes it."""
         q: queue.Queue = queue.Queue(self._max_queue)
         with self._lock:
             self._subscribers.append(q)
@@ -70,16 +92,29 @@ class EventBus:
             return len(self._subscribers)
 
     def unsubscribe(self, q: queue.Queue) -> None:
+        """Remove a subscriber; a queue that is not subscribed is ignored.
+
+        Args:
+            q: The queue ``subscribe`` returned.
+        """
         with self._lock:
             if q in self._subscribers:
                 self._subscribers.remove(q)
 
     def close(self) -> None:
+        """End every stream: publish ``server.closing``, after which ``stream`` returns."""
         self._closed.set()
         self.publish("server.closing")
 
     def stream(self, heartbeat: float = HEARTBEAT_SECONDS) -> Iterator[bytes]:
-        """An SSE byte stream for one client; ends when the bus closes."""
+        """Stream the events to one client as Server-Sent Events; ends when the bus closes.
+
+        Args:
+            heartbeat: Seconds of silence after which a keep-alive comment is sent, so the connection stays open.
+
+        Yields:
+            The encoded event messages and keep-alive comments.
+        """
         q = self.subscribe()
         try:
             yield b"retry: 1000\n\n"

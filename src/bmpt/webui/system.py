@@ -46,7 +46,15 @@ def _is_wsl() -> bool:
 
 
 def reveal(path: str | Path) -> None:
-    """Show a file (selected) or a folder in the system file manager."""
+    """Show a file (selected) or a folder in the system file manager.
+
+    Args:
+        path: The file or folder.
+
+    Raises:
+        ServiceError: ``path_not_found`` when it does not exist; ``reveal_failed`` when the file manager cannot be
+            started.
+    """
     p = Path(path).resolve()
     if not p.exists():
         raise ServiceError("path_not_found", path=str(p))
@@ -69,8 +77,11 @@ def reveal(path: str | Path) -> None:
 
 
 def program_command() -> list[str]:
-    """How to start this program again: a compiled build runs its own executable (argv[0]: sys.executable names a
-    "python" that does not exist inside a Nuitka app bundle, and on Windows argv[0] is the onefile launcher)."""
+    """Return the command line that starts this program again.
+
+    A compiled build runs its own executable from ``argv[0]``: ``sys.executable`` names a "python" that does not
+    exist inside a Nuitka app bundle, and on Windows ``argv[0]`` is the onefile launcher.
+    """
     if "__compiled__" in globals() or getattr(sys, "frozen", False):
         argv0 = Path(sys.argv[0])
         if argv0.is_file():
@@ -80,10 +91,16 @@ def program_command() -> list[str]:
 
 
 def can_restart_safe() -> bool:
+    """Return whether the App can restart itself in safe mode: a compiled build outside dev mode."""
     return updater.is_compiled() and not devmode.active()
 
 
 def safe_restart_command() -> list[str]:
+    """Return the command line for a restart in safe mode, without the safe-mode flag.
+
+    Raises:
+        ServiceError: ``safe_restart_unavailable``, see ``can_restart_safe``.
+    """
     if not can_restart_safe():
         raise ServiceError("safe_restart_unavailable")
     return program_command()
@@ -102,14 +119,28 @@ CLASSIC_TABS = (
 
 
 def check_classic_tab(tab: str | None) -> None:
-    """``bad_params`` unless ``tab`` is a classic tab, ``"settings"`` (the classic settings) or ``None``."""
+    """Check a classic GUI tab name.
+
+    Args:
+        tab: A name from ``CLASSIC_TABS``, ``"settings"`` (the classic settings) or None for the default tab.
+
+    Raises:
+        ServiceError: ``bad_params``, the name is none of these.
+    """
     if tab is not None and tab not in CLASSIC_TABS and tab != "settings":
         raise ServiceError("bad_params", tab=tab)
 
 
 def classic_command(tab: str | None = None, *, control: bool = False) -> list[str]:
-    """The command line of the classic Tk GUI, optionally on a tab or (``"settings"``) in its settings; ``control``
-    for a window the web UI places and raises over its control channel (``webui/classic.py``)."""
+    """Return the command line of the classic Tk GUI.
+
+    Args:
+        tab: The tab to open, or ``"settings"`` for the classic settings; None for the default tab.
+        control: Add the control channel, for a window the web UI places and raises (``webui/classic.py``).
+
+    Raises:
+        ServiceError: ``bad_params``, ``tab`` is not a valid name.
+    """
     check_classic_tab(tab)
     # without --classic the launcher starts the web UI again
     cmd = program_command() + ["--classic"]

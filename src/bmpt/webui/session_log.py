@@ -23,6 +23,17 @@ _USERINFO = re.compile(r"(https?://)[^/\s:@]+:[^/\s@]+@", re.I)
 
 
 def redact(text: str, secrets: set[str]) -> str:
+    """Hide credentials in log text.
+
+    Args:
+        text: The log text.
+        secrets: Secret values the App holds (a session token, for one). A value shorter than 8 characters is
+            ignored; each is also hidden in its URL-quoted forms.
+
+    Returns:
+        The text with those secrets, access tokens in query strings, Bearer and Basic credentials, credential
+        fields (token, secret, password, API key, cookie) and the user info of URLs replaced by ``[redacted]``.
+    """
     for secret in sorted((s for s in secrets if len(s) >= 8), key=len, reverse=True):
         for value in {secret, secret.replace(" ", "+"), quote(secret, safe=""), quote_plus(secret)}:
             text = re.sub(r"(?<![\w./%+~-])" + re.escape(value) + r"(?![\w./%+~-])", REDACTED, text)
@@ -33,7 +44,20 @@ def redact(text: str, secrets: set[str]) -> str:
 
 
 def tail(path: Path, secrets: set[str]) -> str:
-    """Read at most 500 lines, with a byte limit too. Drop a partial first line rather than disclose a cut secret."""
+    """Read the end of a log file, redacted, within 500 lines and 2 MiB.
+
+    A first line cut by the byte limit is dropped, as a cut secret would escape redaction.
+
+    Args:
+        path: The log file.
+        secrets: Secret values to hide, as ``redact`` takes them.
+
+    Returns:
+        The last lines of the file; an empty string when the file does not exist.
+
+    Raises:
+        ServiceError: ``library_io_error``, the file could not be read.
+    """
     try:
         with path.open("rb") as stream:
             stream.seek(0, 2)
@@ -51,16 +75,36 @@ def tail(path: Path, secrets: set[str]) -> str:
 
 
 class RedactingFormatter(logging.Formatter):
+    """A log formatter that redacts secrets from every record it formats."""
+
     def __init__(self, secrets: set[str]):
+        """Set the log line layout.
+
+        Args:
+            secrets: Secret values to hide, as ``redact`` takes them. The set is read at each record, so values
+                added to it later are hidden too.
+        """
         super().__init__("%(asctime)s %(levelname)s %(name)s: %(message)s")
         self.secrets = secrets
 
     def format(self, record: logging.LogRecord) -> str:
+        """Format a record and redact the result."""
         return redact(super().format(record), self.secrets)
 
 
 def open_run_log(path: Path, secrets: set[str], *, safe_mode: bool = False) -> logging.StreamHandler:
-    """Rotate once per launch and write the environment before any other records."""
+    """Open this run's log: rotate the earlier logs and write the environment before any other record.
+
+    The log falls back to a temporary file, then to the standard error stream, when the folder cannot be written.
+
+    Args:
+        path: The log file; the two logs before it are kept as ``webui.1.log`` and ``webui.2.log`` beside it.
+        secrets: Secret values to hide, as ``redact`` takes them.
+        safe_mode: Whether the App runs in safe mode, which the environment header records.
+
+    Returns:
+        The handler to attach to the root logger, formatted with ``RedactingFormatter``.
+    """
     from .diagnostics import COLLECTION_TIMEOUT, Reports, clean, configured_language, environment, private_text
     import time
     import json
