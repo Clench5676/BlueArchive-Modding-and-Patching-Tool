@@ -1,4 +1,4 @@
-"""The classic GUI's side of the control channel to the web UI that started it (see docs/webui/desktop.md, "Classic window").
+"""Connect the classic GUI to its launching web UI (see docs/webui/desktop.md, "Classic window").
 
 Started with ``--control`` and the variables ``BAMT_CLASSIC_URL`` and ``BAMT_CLASSIC_TOKEN``, the classic window starts
 transparent, reports ``ready`` once mapped, and follows the web UI's control lines: ``place``, then ``raise``, and
@@ -39,32 +39,56 @@ POLL_FAILURES = 3  # consecutive failed polls before the channel counts as gone
 
 
 def take_channel(environ: MutableMapping[str, str] | None = None) -> tuple[str, str] | None:
-    """The web UI's origin and this window's token, removed from the environment so that the classic GUI's own
-    subprocesses never inherit them; ``None`` when the web UI did not start this window."""
+    """Consume the web UI's origin and window token so subprocesses cannot inherit them.
+
+    Args:
+        environ: Environment mapping to remove channel variables from; None uses os.environ.
+
+    Returns:
+        Origin without a trailing slash and token, or None when either variable is absent.
+    """
     env = os.environ if environ is None else environ
     url, token = env.pop(ENV_URL, None), env.pop(ENV_TOKEN, None)
     return (url.rstrip("/"), token) if url and token else None
 
 
 class BusyCounter:
-    """The number of running classic tasks: threads started by ``TabFrame.run_in_thread`` and dialogs between
-    ``set_task_running(True)`` and ``(False)``. Listeners hear every new count, on the thread that changed it."""
+    """Count running classic tasks and notify listeners on the thread changing the count.
+
+    Tasks include threads started by TabFrame.run_in_thread and dialogs between
+    set_task_running(True) and set_task_running(False).
+    """
 
     def __init__(self) -> None:
+        """Start with no running tasks or listeners."""
         self._lock = threading.Lock()
         self._n = 0
         self._listeners: list[Callable[[int], None]] = []
 
     @property
     def value(self) -> int:
+        """Return the running task count under the counter lock."""
         with self._lock:
             return self._n
 
     def listen(self, fn: Callable[[int], None]) -> None:
+        """Subscribe to future count changes on whichever thread changes the count.
+
+        Args:
+            fn: Callback receiving each new nonnegative task count; exceptions are logged and suppressed.
+        """
         with self._lock:
             self._listeners.append(fn)
 
     def add(self, delta: int) -> int:
+        """Adjust the count, clamp it at zero, and notify listeners outside the lock.
+
+        Args:
+            delta: Number of tasks started, or a negative number for tasks that ended.
+
+        Returns:
+            The count immediately after this adjustment.
+        """
         with self._lock:
             self._n = max(self._n + delta, 0)
             n, listeners = self._n, list(self._listeners)
@@ -76,7 +100,15 @@ class BusyCounter:
         return n
 
     def start_thread(self, target: Callable[..., Any], *args: Any) -> threading.Thread:
-        """Start ``target(*args)`` on a daemon thread, counted from before it starts until it ends."""
+        """Start a daemon task counted from before thread startup until it ends.
+
+        Args:
+            target: Work to run with the supplied positional arguments.
+            *args: Arguments passed unchanged to target on the new thread.
+
+        Returns:
+            The started thread; the count is restored even if startup or the task fails.
+        """
 
         def run() -> None:
             try:
@@ -98,8 +130,10 @@ busy = BusyCounter()
 
 
 class ControlClient:
-    """The HTTP side: a long-poll thread for the control lines and a sender thread for the reports. Never through a
-    proxy: the web UI listens on 127.0.0.1."""
+    """Exchange control lines and reports through separate HTTP worker threads.
+
+    The default opener bypasses proxies because the web UI listens on 127.0.0.1.
+    """
 
     def __init__(
         self,
@@ -110,6 +144,15 @@ class ControlClient:
         poll_timeout: float = CONTROL_POLL + 10,
         retry_wait: float = 1.0,
     ):
+        """Prepare queues and workers for an authenticated local control channel.
+
+        Args:
+            url: Web UI origin; trailing slashes are removed before endpoint paths are appended.
+            token: Window token sent in the control authentication header.
+            opener: HTTP opener with an open method; None builds one with proxies disabled.
+            poll_timeout: HTTP timeout in seconds for polls and reports.
+            retry_wait: Seconds between failed polls before the channel is declared closed.
+        """
         self.url = url.rstrip("/")
         self.token = token
         self._opener = opener or urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -121,16 +164,18 @@ class ControlClient:
         self.closed = threading.Event()  # set once the poll thread gave up: the web UI is gone
 
     def start(self) -> "ControlClient":
+        """Start polling and report-sending daemon threads and return this client."""
         threading.Thread(target=self._poll_loop, name="bamt-control", daemon=True).start()
         threading.Thread(target=self._send_loop, name="bamt-report", daemon=True).start()
         return self
 
     def stop(self) -> None:
+        """Signal polling to stop and queue the report sender's shutdown marker."""
         self._stop.set()
         self._reports.put(None)
 
     def lines(self) -> list[str]:
-        """The control lines received since the last call."""
+        """Drain and return control lines received since the last call."""
         out: list[str] = []
         while True:
             try:
@@ -139,7 +184,12 @@ class ControlClient:
                 return out
 
     def report(self, kind: str, **data: Any) -> None:
-        """Send ``{"type": kind, ...data}`` from any thread, without waiting."""
+        """Queue a report from any thread without waiting for HTTP delivery.
+
+        Args:
+            kind: Report type, such as ready, busy, or shown.
+            **data: JSON fields merged into the report; a type field overrides kind.
+        """
         if not self._stop.is_set():
             self._reports.put({"type": kind, **data})
 
@@ -192,9 +242,7 @@ class ControlClient:
 
 
 class ControlBridge:
-    """The Tk side: reports ``ready`` once the root is mapped, applies the control lines on the Tk thread, and reports
-    the busy count. ``app`` is the classic ``App`` (``tabs``, ``show_tab``, ``open_settings_dialog``, ``place_window``,
-    ``raise_window``)."""
+    """Apply control lines on the Tk thread and report window readiness and task counts."""
 
     def __init__(
         self,
@@ -206,6 +254,16 @@ class ControlBridge:
         pump_ms: int = PUMP_MS,
         show_after_ms: int = int(SHOW_FALLBACK * 1000),
     ):
+        """Bind a classic window and its task counter to the HTTP channel.
+
+        Args:
+            root: Tk root supplying event binding, timers, mapping state, and window attributes.
+            app: Classic App with tabs, show_tab, open_settings_dialog, place_window, and raise_window.
+            client: Channel receiving commands and queuing readiness, task, and shown reports.
+            counter: Task counter preventing navigation while work is running.
+            pump_ms: Milliseconds between command-queue drains on the Tk thread.
+            show_after_ms: Milliseconds after readiness before showing the window if no raise arrives.
+        """
         self.root = root
         self.app = app
         self.client = client
@@ -216,6 +274,7 @@ class ControlBridge:
         self.raised = False
 
     def start(self) -> "ControlBridge":
+        """Start the channel, readiness reporting, and Tk command pump; return this bridge."""
         self.counter.listen(lambda n: self.client.report("busy", n=n))
         self.client.start()
         self.root.bind("<Map>", self._on_map, add="+")
@@ -249,6 +308,7 @@ class ControlBridge:
             self.root.attributes("-alpha", 1.0)
 
     def pump(self) -> None:
+        """Reschedule the Tk pump and apply queued commands, logging individual failures."""
         self.root.after(self.pump_ms, self.pump)  # first, so a nested event loop (a dialog) keeps it running
         for cmd in iter_lines(self.client.lines()):
             try:
@@ -257,6 +317,11 @@ class ControlBridge:
                 logger.exception("control line %s failed", cmd)
 
     def apply(self, cmd: tuple) -> None:
+        """Apply a parsed control command, allowing navigation only while idle.
+
+        Args:
+            cmd: iter_lines tuple: tab and its name, settings, place and its geometry, or raise.
+        """
         kind = cmd[0]
         if kind == "tab":
             tab = getattr(self.app.tabs, cmd[1], None)

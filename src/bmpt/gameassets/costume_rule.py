@@ -1,6 +1,8 @@
-"""The version of the costume build rule (Switch 3D Model): what keys the saved verdicts and preview builds of costume
-pairs, so a new program build reuses them unless the rule itself changed. Bump it with any change to what the costume
-build writes, refuses or measures; ``tests/test_costume_rule.py`` pins the rule's sources to it."""
+"""Key saved costume verdicts and preview builds by the Switch 3D Model rule revision.
+
+Program builds reuse them when the rule is unchanged. Bump the revision for changes to
+what the build writes, refuses, or measures; tests/test_costume_rule.py pins its sources.
+"""
 
 COSTUME_RULE = 30
 

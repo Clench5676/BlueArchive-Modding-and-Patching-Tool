@@ -22,12 +22,16 @@ FLOAT_CODES = {0: "f", 1: "e"}
 
 @dataclass
 class Plain:
+    """Locate writable plain vertex channels by byte offset, stride, struct code, and dimension."""
+
     count: int
     channels: dict[int, tuple[int, int, str, int]]  # channel -> (first byte, stride, struct code, dimension)
 
 
 @dataclass
 class Packed:
+    """Record the vertex count of writable compressed geometry."""
+
     count: int
 
 
@@ -91,8 +95,7 @@ def _packed(mesh: Mapping[str, Any]) -> Packed | None:
 
 
 def geometry_of(mesh: Mapping[str, Any]) -> Plain | Packed | None:
-    """Where a Mesh typetree keeps its positions, normals and tangents, when this module can rewrite them (no
-    streamed data); None otherwise."""
+    """Locate writable positions, normals, and tangents in a Mesh typetree, or None for unsupported/streamed data."""
     if (mesh.get("m_StreamData") or {}).get("size"):
         return None
     if int(((mesh.get("m_CompressedMesh") or {}).get("m_Vertices") or {}).get("m_NumItems") or 0):
@@ -176,9 +179,19 @@ def _aabb(positions: np.ndarray) -> dict:
 
 
 def write_geometry(mesh: dict, layout: Plain | Packed, positions: np.ndarray, linear: np.ndarray) -> None:
-    """New ``positions`` (mesh space, one per vertex); each normal and tangent turned by its vertex's ``linear``
-    (3 x 3, mesh space), a tangent's handedness flipped where that mirrors. The local bounds follow; so do blend
-    shape deltas, turned by their vertex's ``linear``."""
+    """Rewrite positions, turned normals/tangents, bounds, and blend-shape deltas in place.
+
+    Tangent handedness flips where the per-vertex transform mirrors.
+
+    Args:
+        mesh: Mutable Mesh typetree whose other vertex bytes remain unchanged.
+        layout: Writable plain or packed layout returned by geometry_of for this mesh.
+        positions: New mesh-space positions, shaped as vertices by 3.
+        linear: Per-vertex mesh-space 3 by 3 transforms turning normals, tangents, and blend-shape deltas.
+
+    Raises:
+        ValueError: Position or transform counts differ from the layout's vertex count.
+    """
     if len(positions) != layout.count or len(linear) != layout.count:
         raise ValueError("vertex count")
     mirrored = np.linalg.det(linear) < 0

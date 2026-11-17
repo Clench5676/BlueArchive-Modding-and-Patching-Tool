@@ -1,6 +1,5 @@
 """Contact-aware arm clearance for a costume bound to another slot.
 
-The measure and projected arm solver follow the numeric costume-retarget prototype.
 All distances are metres. Only the torso core counts as cover; contacts and the
 clip gate keep intentional poses, secondary cloth and small differences intact.
 """
@@ -34,13 +33,27 @@ LOWER = slice(2, 9)  # elbow to fingertips
 
 
 def chain_name(sk, n):
+    """Find the nearest Biped-chain ancestor's name, or an empty string without one.
+
+    Args:
+        sk: Model hierarchy supplying node names and parents.
+        n: Starting skeleton node index; None has no ancestor.
+    """
     while n is not None and not ma.BIPED_CHAIN.match(sk.nodes[n].name):
         n = sk.nodes[n].parent
     return sk.nodes[n].name if n is not None else ""
 
 
 def region(sk, n):
-    """0 body, 1 head, 2.. an arm segment: 2 + 3 * side + (0 upper arm, 1 forearm, 2 hand and fingers)."""
+    """Classify a node's Biped region: body 0, head 1, or arm 2 + 3 * side + segment.
+
+    Args:
+        sk: Skeleton used to find the nearest Biped-chain ancestor.
+        n: Node index whose dominant influence is classified; None belongs to the body.
+
+    Returns:
+        Region code with left/right sides 0/1 and upper-arm/forearm/hand-finger segments 0/1/2.
+    """
     name = chain_name(sk, n)
     m = ARM.match(name)
     if m:
@@ -53,6 +66,17 @@ class Drawn:
     """A costume on a skeleton: posed vertices by frame, triangles, and each vertex's region."""
 
     def __init__(self, vertices, joints, weights, triangles, regions, matrices, loose=None):
+        """Prepare costume skinning and region-specific triangle views.
+
+        Args:
+            vertices: Rest positions in metres, shaped as vertices by 3.
+            joints: Matrix-column indices for each vertex influence.
+            weights: Influence weights in the same shape as joints.
+            triangles: Triples indexing vertices across costume parts.
+            regions: Per-vertex body/head/arm codes from region, based on dominant influences.
+            matrices: Pose callback returning skin matrices for the influence columns.
+            loose: Per-vertex secondary-bone flags excluded from torso core; None marks none loose.
+        """
         self.h = np.c_[vertices, np.ones(len(vertices))]
         self.loose = np.zeros(len(vertices), bool) if loose is None else loose
         self.joints, self.weights, self.triangles, self.regions, self.matrices = (
@@ -75,6 +99,12 @@ class Drawn:
         self._bound = None
 
     def posed(self, pose, rows=None):
+        """Skin a costume or selected vertices under one skeleton pose.
+
+        Args:
+            pose: Node world matrices consumed by the skin-matrix callback or prepared bindings.
+            rows: Optional vertex indices; None skins the full mesh.
+        """
         m = (
             pose[self.pose_bones] @ self.bindings
             if hasattr(self, "bindings") and isinstance(pose, np.ndarray)
@@ -93,7 +123,12 @@ class Drawn:
         return out
 
     def posed_batch(self, poses, rows):
-        """Bounded frame batches share sparse influence gathers and skinning."""
+        """Skin selected rows across a frame batch using shared sparse influence gathers.
+
+        Args:
+            poses: Frame-by-node world matrices.
+            rows: Vertex indices to return in each frame, in their requested order.
+        """
         if not hasattr(self, "bindings"):
             return np.array([self.posed(w, rows) for w in poses])
         matrices = np.asarray(poses)[:, self.pose_bones] @ self.bindings
@@ -109,7 +144,15 @@ class Drawn:
         return vertices
 
     def measure_mesh(self, core, arms):
-        """Compact skinning views exclude hair, face and unused arm vertices."""
+        """Build compact torso/arm triangle views excluding hair, face, and unused vertices.
+
+        Args:
+            core: Whether torso triangles dominated by secondary bones are excluded.
+            arms: Whether arm vertices are included in the compact vertex set.
+
+        Returns:
+            Original vertex rows, remapped torso triangles, and arm triangles by side/segment.
+        """
         key = core, arms
         if key not in self._views:
             body = self.body[self.body_core] if core else self.body
@@ -126,6 +169,12 @@ class Drawn:
         Skinning is a weighted sum of these transformed boxes. Including the
         measured weight-sum range also covers quantized, unnormalized weights.
         No posed vertices or triangle intersections are needed for this test.
+
+        Args:
+            pose: Slot-node world matrices used to transform influencing bones' vertex boxes.
+
+        Returns:
+            Conservative lower and upper torso-core bounds in metres.
         """
         if self._bound is None:
             rows = self.measure_mesh(True, False)[0]
@@ -147,7 +196,7 @@ class Drawn:
 
 
 def own_drawn(costume):
-    """The slot's own costume, skinned by its own bindposes."""
+    """Build a Drawn view of a costume using its skeleton, part skins, and original bindposes."""
     sk = costume.skeleton
     g = sk.graph
     verts, joints, weights, tris, regs, bones_all, bps, off_v, off_m = [], [], [], [], [], [], [], 0, 0
@@ -187,8 +236,13 @@ def own_drawn(costume):
 
 
 def adapted_drawn(target, source, plan):
-    """The source's costume as the plan binds it to the slot's skeleton (its bound shape and bone mapping; the hem
-    rules' and the stiffening's later weight changes around the legs are left out)."""
+    """Build the source costume as bound to the slot before hem/stiffening weight adjustments.
+
+    Args:
+        target: Slot costume supplying destination rest matrices and skeleton nodes.
+        source: Incoming costume supplying topology, influences, and body-region labels.
+        plan: Adaptation mapping and fitted vertex positions defining the bound shape.
+    """
     ss, ts = source.skeleton, target.skeleton
     flat = ma.flatten(source, ss.world())
     sj, sw = flat.joints, flat.weights
@@ -220,6 +274,7 @@ class Rig:
     """The slot's arms and body axis."""
 
     def __init__(self, sk):
+        """Find a slot skeleton's arm chains, spine, feet, weapon mount, and hand sample landmarks."""
         f = sk.first
         self.sk = sk
         self.arm = [[f(f"Bip001 {s} {b}") for b in ("Clavicle", "UpperArm", "Forearm", "Hand")] for s in "LR"]
@@ -260,10 +315,11 @@ class Rig:
             self.tip.append(inv @ np.r_[tip, 1.0])
 
     def joints(self, pose, s):
+        """Return upper-arm, elbow, and wrist positions for side 0 (left) or 1 (right) in a world-matrix pose."""
         return [pose[n][:3, 3] for n in self.arm[s][1:]]
 
     def samples(self, pose):
-        """(2, 9, 3): U50 U75 E F25 F50 F75 W P T per arm."""
+        """Sample a world-matrix pose as 2 by 9 by 3 arm positions: U50, U75, E, F25, F50, F75, W, P, T."""
         out = np.zeros((2, len(SAMPLES), 3))
         for s in range(2):
             u, e, w = self.joints(pose, s)
@@ -282,7 +338,7 @@ class Rig:
         return out
 
     def samples_many(self, poses):
-        """``samples`` of every pose: (frames, 2, 9, 3), with the same arithmetic per frame."""
+        """Sample frame-by-node world matrices as frames by 2 by 9 by 3 using samples' per-frame arithmetic."""
         poses = np.asarray(poses)
         out = np.zeros((len(poses), 2, len(SAMPLES), 3))
         for s in range(2):
@@ -305,6 +361,7 @@ class Rig:
         return out
 
     def axis(self, pose):
+        """Return the posed spine-to-head axis polyline, prepending the feet's center when available."""
         pts = [pose[n][:3, 3] for n in self.spine]
         if self.feet:
             pts = [np.mean([pose[n][:3, 3] for n in self.feet], axis=0)] + pts
@@ -312,7 +369,12 @@ class Rig:
 
 
 def radial(axis, points):
-    """Per point: its nearest point on the polyline ``axis``, the unit direction away from it and the distance."""
+    """Find each point's closest axis position, outward unit direction, and distance.
+
+    Args:
+        axis: Ordered 3D body-axis polyline with at least two joints.
+        points: Test positions in the same metre-based coordinate space.
+    """
     a, b = axis[:-1], axis[1:]
     ab = b - a
     t = np.clip(((points[:, None] - a[None]) * ab[None]).sum(-1) / np.maximum((ab * ab).sum(-1), 1e-12)[None], 0, 1)
@@ -326,7 +388,14 @@ def radial(axis, points):
 
 
 def cast(orig, dirs, tri, low=None):
-    """Line-triangle intersections: t (rays x triangles) with nan where the line p + t d misses; tri (T, 3, 3)."""
+    """Intersect lines with culled triangles, returning ray-by-triangle t values and NaN misses.
+
+    Args:
+        orig: Ray origins shaped as rays by 3, in metres.
+        dirs: Corresponding unit ray directions for p + t * d.
+        tri: Triangle corner positions shaped as triangles by 3 by 3.
+        low: Optional per-ray lower t bounds for broad-phase culling against the CAP upper bound.
+    """
     if not len(tri):
         return np.full((len(orig), 0), np.nan, np.float32)
     if low is not None:
@@ -360,7 +429,14 @@ def cast(orig, dirs, tri, low=None):
 
 
 def outer(t, low, high, none):
-    """Per ray the largest t within (low, high]; ``none`` where no hit."""
+    """Select each ray's farthest hit within (low, high], or the supplied miss value.
+
+    Args:
+        t: Ray-by-triangle intersection distances with NaN misses.
+        low: Scalar or per-ray exclusive lower bound.
+        high: Inclusive upper distance bound.
+        none: Scalar or per-ray result for no eligible hit.
+    """
     low = np.broadcast_to(np.asarray(low, np.float32), (t.shape[0],))
     ok = (t > low[:, None]) & (t <= high)
     best = np.where(ok, t, -np.inf).max(axis=1, initial=-np.inf)
@@ -368,8 +444,22 @@ def outer(t, low, high, none):
 
 
 def measure(drawn, rig, pose, verts=None, points=None, other=True, core=False, radii=True, sample_indices=None):
-    """S_body, S_arm and rho per arm sample: three (2, 9) arrays (metres). With ``other`` the other arm counts as
-    body for an arm's samples (a hand resting on the other sleeve)."""
+    """Measure torso depth, sleeve radius, and body-axis distance at arm samples in metres.
+
+    Args:
+        drawn: Skinned costume with body and arm triangle partitions.
+        rig: Slot arm landmarks and body-axis provider.
+        pose: Slot-node world matrices for this frame.
+        verts: Optional full posed costume vertices; None skins only the compact measurement view.
+        points: Optional arm sample positions; None uses rig.samples(pose).
+        other: Whether the opposite sleeve also counts as cover, as when a hand rests on it.
+        core: Whether to exclude secondary cloth from torso cover.
+        radii: Whether to cast sleeve radii in the torso-only path.
+        sample_indices: Optional sample subset for the path with other=False; None measures all nine.
+
+    Returns:
+        S_body, S_arm, and rho arrays shaped as two arms by selected samples.
+    """
     if verts is None:
         rows, torso, arm = drawn.measure_mesh(core, other or radii)
         v = drawn.posed(pose, rows)
@@ -409,17 +499,33 @@ def measure(drawn, rig, pose, verts=None, points=None, other=True, core=False, r
 
 
 def push_of(d_own, d_new, r_new, clear=1.0):
-    """The outward move that brings a bone back to its depth on the slot's own costume: D is S_body, the depth of the
+    """Compute the outward move restoring a bone's original costume-relative depth.
+
+    D is S_body, the depth of the
     bone below the outermost surface that covers it (negative outside). Where the bone stood clear of its own costume
     by more than ``clear`` times the new sleeve's radius, the bone only has to come that far out (1: the new sleeve
-    clears the surface; 0.5: three quarters of it show)."""
+    clears the surface; 0.5: three quarters of it show).
+
+    Args:
+        d_own: Slot costume's original S_body depth in metres, negative outside its surface.
+        d_new: Incoming costume's S_body depth at the same arm samples.
+        r_new: Incoming sleeve radii in metres.
+        clear: Required exposed-radius multiplier for bones already clear of the original costume.
+    """
     return np.maximum(0.0, d_new - np.maximum(d_own, -clear * r_new))
 
 
 def girth(drawn, rig):
-    """Rest bulk of a costume on the slot: the sleeve radius around the forearm and upper arm bones (median distance
+    """Measure a slot costume's rest sleeve and chest bulk in millimetres.
+
+    Report sleeve radius around the forearm and upper arm bones (median distance
     of the segment's vertices from the bone, both arms, mm) and the chest front (the largest forward reach of the body
-    vertices within 4 cm of the middle, from Spine1 up 8 cm, before Spine1; mm). Forward is the root's +z."""
+    vertices within 4 cm of the middle, from Spine1 up 8 cm, before Spine1; mm). Forward is the root's +z.
+
+    Args:
+        drawn: Costume skinning and per-vertex region labels to measure.
+        rig: Slot rest pose, arm chains, and Spine1 lookup.
+    """
     rest = rig.rest
     v = drawn.posed(rest)
     out = {}
@@ -467,7 +573,7 @@ GUARD_TOLERANCE = 0.001  # all nine samples, penetration max(core depth, 0)
 
 
 def min_rotation(a, b):
-    """The smallest rotation taking direction a to direction b."""
+    """Return the smallest 3 by 3 rotation taking direction a to b, normalizing both inputs."""
     a, b = a / max(np.linalg.norm(a), 1e-12), b / max(np.linalg.norm(b), 1e-12)
     v = np.cross(a, b)
     c = float(a @ b)
@@ -487,7 +593,7 @@ def _half_turn(a):
 
 
 def min_rotations(a, b):
-    """``min_rotation`` for rows of directions, with the same arithmetic per row."""
+    """Apply min_rotation to corresponding rows of direction arrays with the same per-row arithmetic."""
     a = a / np.maximum(np.linalg.norm(a, axis=1), 1e-12)[:, None]
     b = b / np.maximum(np.linalg.norm(b, axis=1), 1e-12)[:, None]
     v = np.cross(a, b)
@@ -508,12 +614,26 @@ def _pad(values, k, loop):
 
 
 def maximum_filter1d(values, size, loop):
+    """Take a temporal maximum over each sample channel.
+
+    Args:
+        values: Frame-by-channel measurements.
+        size: Window width in frames, centered using size // 2 padding.
+        loop: Whether endpoints wrap; False repeats endpoint values.
+    """
     k = size // 2
     p = _pad(values, k, loop)
     return np.max([p[i : i + len(values)] for i in range(size)], axis=0)
 
 
 def gaussian_filter1d(values, sigma, loop):
+    """Smooth each sample channel over time with a normalized Gaussian window.
+
+    Args:
+        values: Nonempty frame-by-channel measurements.
+        sigma: Gaussian standard deviation in frames; the window extends about three sigma.
+        loop: Whether endpoints wrap; False repeats endpoint values.
+    """
     k = max(1, int(round(3 * sigma)))
     k = min(k, len(values))
     x = np.arange(-k, k + 1)
@@ -524,8 +644,12 @@ def gaussian_filter1d(values, sigma, loop):
 
 
 def blend(values, loop):
-    """Needs over a clip's frames (frames x ...) held DILATE frames each side and blended (never below what a light
-    smoothing of the need leaves)."""
+    """Hold correction needs DILATE frames each side and smooth without falling below a light smoothing.
+
+    Args:
+        values: Frame-first correction needs with any trailing sample dimensions.
+        loop: Whether temporal filtering wraps across the clip seam.
+    """
     shape = values.shape
     flat = values.reshape(shape[0], -1)
     held = maximum_filter1d(flat, 2 * DILATE + 1, loop)
@@ -534,7 +658,10 @@ def blend(values, loop):
 
 
 class Arms:
+    """Apply minimal arm-chain turns while preserving hand orientation and descendant locals."""
+
     def __init__(self, rig):
+        """Partition each valid slot Rig arm into upper-arm, forearm, and hand subtrees."""
         self.rig = rig
         self.sub, self.groups = [], []
         for arm in rig.arm:
@@ -552,12 +679,19 @@ class Arms:
             )
 
     def repose(self, poses, source, side, rows, elbow, wrist):
-        """Least bone turns of one arm on the frames ``rows``: ``poses`` (frames x bones x 4 x 4) is changed in place
-        from the unturned ``source``; hand orientation and every lower local stay exact.
+        """Apply one arm's least bone turns while retaining hand orientation and lower locals.
 
         Each unchanged subtree receives one rigid world transform. A hand that
         keeps its world orientation translates its entire subtree, so no per-
         descendant inverse matrices or hierarchy recomposition are necessary.
+
+        Args:
+            poses: Mutable frame-by-node 4 by 4 world matrices receiving the corrected subtree transforms.
+            source: Unturned world matrices for the same frames and skeleton.
+            side: Arm index, zero for left or one for right.
+            rows: Frame indices to update, aligned with elbow and wrist targets.
+            elbow: Target elbow world positions in metres for the selected frames.
+            wrist: Target wrist world positions in metres for the selected frames.
         """
         _, upper, fore, hand = self.rig.arm[side]
         source = source[rows]
@@ -580,8 +714,7 @@ class Arms:
 
 
 def head_core(costume):
-    """Per costume part the rows of the vertices the head bone itself dominates (the face and skull, not the hair's
-    chains), as rows of ``own_drawn``'s vertices."""
+    """Find own_drawn vertex rows dominated by the costume's head bone, excluding hair chains."""
     sk = costume.skeleton
     head = sk.first("Bip001 Head")
     rows, off = [], 0
@@ -595,8 +728,15 @@ def head_core(costume):
 
 
 def head_pins(rig, own, poses, rows, loop):
-    """Per frame and hand how firmly the hand is pinned (0..1): by the distance of its wrist, palm and fingertips to
-    the head's own surface on the slot's own costume, blended in time."""
+    """Measure time-blended head-contact pin strength from zero to one per frame and hand.
+
+    Args:
+        rig: Slot landmarks supplying wrist, palm, and fingertip positions.
+        own: Slot's original costume skinning view.
+        poses: Frame-by-node world matrices used to skin the head and sample hands.
+        rows: Head-dominated vertex rows from head_core; empty rows yield no pins.
+        loop: Whether temporal blending wraps over the clip seam.
+    """
     out = np.zeros((len(poses), 2))
     if not len(rows):
         return out
@@ -631,7 +771,7 @@ class _Progress:
 
 
 def gated(need):
-    """At least a fifth of sampled frames have an arm needing more than 20 mm."""
+    """Check whether at least a fifth of frame-by-arm-by-sample needs exceed 20 mm at gate samples."""
     return bool(len(need) and np.mean(np.max(need[:, :, GATE_SAMPLES], axis=(1, 2)) > GATE_DEPTH) >= GATE_FRACTION)
 
 
@@ -639,7 +779,12 @@ def weapon_holds(relative, distance, loop=False):
     """An 11-frame stable grip in mount space, within 5 cm of the shown mesh.
 
     A hidden mount is represented by NaNs; it invalidates the whole window.
-    At non-loop endpoints the window is clipped, as in the prototype.
+    At non-loop endpoints the window is clipped.
+
+    Args:
+        relative: Frame-by-hand palm positions in weapon-mount space, with NaNs for hidden mounts.
+        distance: Frame-by-hand distances to the shown weapon mesh, in metres.
+        loop: Whether the 11-frame stability window wraps across the clip seam.
     """
     out = np.zeros(distance.shape, bool)
     for f in range(len(relative)):
@@ -652,6 +797,20 @@ def weapon_holds(relative, distance, loop=False):
 
 
 def contacts(rig, own, weapons, poses, rows, loop, shown=None):
+    """Measure stable weapon grips and head-contact pins across a clip.
+
+    Args:
+        rig: Slot landmarks including the weapon mount and hand sample positions.
+        own: Original costume view supplying the head surface.
+        weapons: Skinning views of the slot's weapon parts.
+        poses: Frame-by-node world matrices for contact sampling.
+        rows: Head-dominated vertex indices in own.
+        loop: Whether grip windows and pin blending wrap across the clip seam.
+        shown: Optional frame-by-weapon visibility mask; None treats all weapons as visible.
+
+    Returns:
+        Frame-by-hand grip booleans and head-pin strengths from zero to one.
+    """
     relative = np.full((len(poses), 2, 3), np.nan)
     distance = np.full((len(poses), 2), np.inf)
     if weapons and rig.weapon is not None and len(poses):
@@ -675,7 +834,14 @@ def contacts(rig, own, weapons, poses, rows, loop, shown=None):
 
 
 def weapon_visibility(rig, tree, parts, poses):
-    """Weapon renderers enabled on active GameObjects, including clip switches."""
+    """Evaluate weapon renderer visibility including animated ancestor and renderer switches.
+
+    Args:
+        rig: Slot hierarchy supplying rest activity and binding-path hashes.
+        tree: AnimationClip typetree supplying switch curves.
+        parts: Weapon renderer parts, one column in the returned mask per part.
+        poses: Sampled clip poses whose count sets the frame dimension.
+    """
     from .model import bind_toggles, TOGGLE_TYPES
     from .model_arm_clips import sample_curves
 
@@ -710,6 +876,13 @@ def weapon_visibility(rig, tree, parts, poses):
 
 
 def push_directions(rig, w, pts):
+    """Find outward arm directions projected perpendicular to chest up when spine landmarks exist.
+
+    Args:
+        rig: Slot body-axis and spine/neck landmark provider.
+        w: Current slot-node world matrices.
+        pts: Two-arm sample positions shaped as arms by samples by 3.
+    """
     d = radial(rig.axis(w), pts.reshape(-1, 3))[1].reshape(2, -1, 3)
     # Biped bone coordinates do not have a universal up axis. Read the upper
     # chest's up direction from the spine to the neck instead.
@@ -724,7 +897,21 @@ def push_directions(rig, w, pts):
 
 
 def solve_many(rig, poses, needs, hold, pins, sleeves, guard=None, initial=None):
-    """The prototype's coupled projected gradient, vectorized over sparse frames."""
+    """Solve coupled elbow/wrist offsets with projected gradients over sparse frames.
+
+    Args:
+        rig: Slot arm landmarks and bone lengths.
+        poses: Original world-matrix poses for the selected frames.
+        needs: Frame-by-arm-by-sample outward distances in metres, capped by NEED_CAP.
+        hold: Frame-by-arm grip flags preventing any correction.
+        pins: Frame-by-arm head-contact strengths penalizing wrist motion.
+        sleeves: Original forearm diameter and incoming diameter growth in metres for sleeve separation.
+        guard: Optional outward directions and target distances preserving existing sample clearance.
+        initial: Optional preceding elbow/wrist offsets, scaled down to seed the solve.
+
+    Returns:
+        Frame-by-arm-by-joint XYZ offsets, with elbow then wrist joints.
+    """
     idx = [k for k, _, _ in DRIVEN]
     tw = np.array([x for _, x, _ in DRIVEN])[None, None, :, None]
     te = 1 - tw
@@ -789,7 +976,7 @@ def solve_many(rig, poses, needs, hold, pins, sleeves, guard=None, initial=None)
             ge += MOVE_COST * de
         # Optimize the two unit bone directions. The upper-arm derivative
         # includes both joint gradients because turning it moves the wrist too.
-        # Sequentially projecting elbow then wrist biased the other samples in.
+        # Joint optimization avoids biasing other samples inward during projection.
         v1, v2 = e + de - u, wr + dw - e - de
         a1, a2 = v1 / l1, v2 / l2
         gu = ge + gw
@@ -807,6 +994,12 @@ def rate_limit(values, peak, hold, loop):
 
     Reserve 30% of the original peak speed for the correction. Contact frames
     are zero anchors. Forward/backward passes also propagate across loop seams.
+
+    Args:
+        values: Frame-by-arm-by-sample needs in metres, copied before limiting.
+        peak: Original maximum wrist displacement per frame for each arm, in metres.
+        hold: Frame-by-arm contact flags forcing needs to zero.
+        loop: Whether forward/backward limits propagate across the clip seam.
     """
     out = values.copy()
     out[hold] = 0
@@ -865,6 +1058,13 @@ def _repose(rig, poses, deltas, hold):
 
 
 def wrist_peak(rig, poses, loop):
+    """Measure each wrist's largest frame-to-frame displacement in metres.
+
+    Args:
+        rig: Arm landmarks supplying wrist positions.
+        poses: Ordered slot-node world-matrix frames.
+        loop: Whether the last-to-first displacement contributes to the peak.
+    """
     wrists = np.array([[rig.joints(w, s)[2] for s in range(2)] for w in poses])
     delta = np.diff(wrists, axis=0)
     if loop:
@@ -873,7 +1073,15 @@ def wrist_peak(rig, poses, loop):
 
 
 def limit_motion(deltas, peak, hold, loop, pins=None):
-    """Project correction differences into the wrist's remaining speed budget."""
+    """Project correction differences into the wrist's remaining speed budget.
+
+    Args:
+        deltas: Frame-by-arm-by-elbow/wrist XYZ offsets in metres.
+        peak: Original maximum wrist displacement per frame for each arm.
+        hold: Frame-by-arm grip flags fixing both corrections to zero.
+        loop: Whether smoothing and speed projection wrap across the clip seam.
+        pins: Optional head-contact strengths reducing wrist motion and anchoring fully pinned wrists.
+    """
     shape = deltas.shape
     out = gaussian_filter1d(deltas.reshape(len(deltas), -1), 2.5, loop).reshape(shape)
     anchors = np.repeat(hold[..., None], 2, axis=2)
@@ -902,7 +1110,25 @@ def limit_motion(deltas, peak, hold, loop, pins=None):
 
 
 def solve_clip(rig, own, new, poses, loop, own_depth, before, frames, hold, pins, sleeves, tick=lambda: None):
-    """Four measure/solve rounds, sparse spatial solves and full-frame blending."""
+    """Correct a clip with four sparse measure/solve rounds, blending, and full-frame guards.
+
+    Args:
+        rig: Slot arm/body landmarks and original bone lengths.
+        own: Original costume view retained by the solve interface.
+        new: Incoming costume view used for torso depths and sleeve radii.
+        poses: Original slot-node world matrices for every clip frame.
+        loop: Whether temporal blending and speed checks wrap over the seam.
+        own_depth: Original-costume depths aligned with the sparse frames.
+        before: Optional premeasured depth/radius pairs for sparse frames; None measures them.
+        frames: Frame indices selected for spatial solves, including the final frame.
+        hold: Full-frame arm grip flags excluding held arms from correction.
+        pins: Full-frame head-contact strengths limiting wrist movement.
+        sleeves: Original forearm diameter and incoming diameter growth in metres.
+        tick: No-argument cancellation/yield callback between solve rounds and body batches.
+
+    Returns:
+        Corrected world-matrix frames, falling back to original frames when guards fail.
+    """
     n = len(poses)
     measured = [poses[f] for f in frames]
     bodies = BodyFrames(new, rig, poses, tick)
@@ -963,12 +1189,24 @@ def solve_clip(rig, own, new, poses, loop, own_depth, before, frames, hold, pins
 
 
 def guard_clip(rig, drawn, poses, deltas, hold, loop, peak, bodies=None, tick=lambda: None, frames=None):
-    """Guard max(D, 0) on all nine samples after every temporal/spatial step.
+    """Guard positive torso depth at all nine samples after temporal and spatial corrections.
 
     Both arms share a frame gain: one arm must not worsen the other's cover.
     Gains only decrease; smoothing is followed by another spatial check because
     a smaller turn is not necessarily safe across a ray silhouette. The final
     fallback is the original clip, which satisfies both spatial and speed bounds.
+
+    Args:
+        rig: Slot arm landmarks used to apply corrections and measure wrist speed.
+        drawn: Incoming costume view used when body frames have not been prepared.
+        poses: Original full-frame world matrices forming the clearance baseline.
+        deltas: Proposed frame-by-arm-by-elbow/wrist XYZ offsets in metres.
+        hold: Frame-by-arm contact flags fixing held arms.
+        loop: Whether gain smoothing and speed checks include the clip seam.
+        peak: Original per-arm maximum wrist displacement per frame.
+        bodies: Optional prepared torso frames; None prepares them from drawn and poses.
+        tick: No-argument cancellation/yield callback before each guard attempt.
+        frames: Optional initial sparse check indices; acceptance still requires all frames.
     """
     bodies = bodies or [BodyFrame(drawn, rig, w) for w in poses]
     baseline = {}
@@ -1030,6 +1268,8 @@ def guard_clip(rig, drawn, poses, deltas, hold, loop, peak, bodies=None, tick=la
 
 @dataclass
 class ArmClip:
+    """Carry an edited arm clip, expected rotations, gate share, and grip/head-contact measurements."""
+
     clip: object
     tree: dict
     rotations: dict
@@ -1095,7 +1335,7 @@ class _Solve:
 
 
 def retarget(target, source, plan, clips, parts, *, step=None, progress=None):
-    """Changed clips only; an empty result leaves the existing build byte-identical.
+    """Retarget only clips needing arm clearance, returning no edits for unchanged builds.
 
     Runs in the caller's class 1 preview / class 2 check, outside the library
     lock. Gate five forearm/hand samples every third frame; solve gated clips every third frame;
@@ -1108,6 +1348,21 @@ def retarget(target, source, plan, clips, parts, *, step=None, progress=None):
     their next round and the exception is passed on. Every result is the one a
     single thread computes: solves share no mutable state, and the lazily built
     sleeve partitions are built first from the pose the first solve would use.
+
+    Args:
+        target: Original slot costume defining the baseline surface and hierarchy.
+        source: Incoming costume whose fitted shape may require arm clearance.
+        plan: Adaptation mapping and fitted geometry used to bind source onto target.
+        clips: Slot AnimationClip readers processed and encoded in their existing order.
+        parts: Slot renderer parts, including weapons needed for contact detection.
+        step: Optional no-argument caller-thread yield/cancellation callback; raising stops pending solves.
+        progress: Optional callback receiving completed and total clip counts.
+
+    Returns:
+        Original clip graph keys mapped to ArmClip edits; an empty mapping leaves build bytes unchanged.
+
+    Raises:
+        ServiceError: Encoded arm curves fail read-back verification.
     """
     from .model_arm_clips import clone_tree, encode_rotations, edit_error
 
@@ -1170,7 +1425,7 @@ def retarget(target, source, plan, clips, parts, *, step=None, progress=None):
             tick()
             finish(False)
             report()
-            done += 1  # counted now; a submitted solve takes the count back until it is encoded
+            done += 1  # submitted solves defer this count until encoding finishes
             tree = rig.sk.graph.tree(clip)
             if not any(
                 b["typeID"] == 4 and b["path"] in hashes for b in tree["m_ClipBindingConstant"]["genericBindings"]
@@ -1226,7 +1481,12 @@ def retarget(target, source, plan, clips, parts, *, step=None, progress=None):
 
 
 def bounds_poses(skeleton, changes):
-    """Corrected arm probes also belong in the renderer's culling bounds."""
+    """Sample corrected clips' start, midpoint, and end for renderer culling bounds.
+
+    Args:
+        skeleton: Slot hierarchy used to compose world transforms from edited clips.
+        changes: Original clip keys mapped to ArmClip edits.
+    """
     out = []
     for change in changes.values():
         times, pose, _ = skeleton.clip_frames(change.tree)
@@ -1235,7 +1495,7 @@ def bounds_poses(skeleton, changes):
 
 
 class ClipFrames:
-    """Vectorized Transform sampling; shader/material curves need no decoding.
+    """Sample Transform curves in batches without decoding shader or material curves.
 
     This samples the same cubics and dense grid as ``model.decode_clip``, with
     its endpoint epsilon, and composes a frame batch one hierarchy level at a
@@ -1243,6 +1503,13 @@ class ClipFrames:
     """
 
     def __init__(self, skeleton, tree, nodes=None):
+        """Decode only Transform curves needed by selected nodes and their ancestors.
+
+        Args:
+            skeleton: Slot hierarchy supplying local rest transforms and binding paths.
+            tree: AnimationClip typetree to sample on its own time grid.
+            nodes: Optional node indices needed for a gate; None includes the entire hierarchy.
+        """
         self.sk = skeleton
         self.nodes = set(range(len(skeleton.nodes))) if nodes is None else set(nodes)
         for n in list(self.nodes):
@@ -1265,6 +1532,11 @@ class ClipFrames:
         self.local = np.array([ma.trs(*n.local) for n in skeleton.nodes])
 
     def world(self, frames):
+        """Compose selected sample frames into world matrices, leaving unrequested nodes at local rest.
+
+        Args:
+            frames: Integer indices into this sampler's second-based times array.
+        """
         frames = np.asarray(frames, int)
         local = np.repeat(self.local[None], len(frames), axis=0)
         for node, attrs in self.tracks.items():
@@ -1297,7 +1569,13 @@ GATE_SAMPLES = (3, 4, 5, 6, 7)
 
 
 def near_core(drawn, rig, pose):
-    """Can any driven sample need >20 mm even with the largest sleeve radius?"""
+    """Check whether conservative torso bounds allow any driven sample to need over 20 mm.
+
+    Args:
+        drawn: Incoming costume whose core bounds are tested without posing all vertices.
+        rig: Slot arm samples and body-axis provider.
+        pose: Slot-node world matrices for the candidate frame.
+    """
     points = rig.samples(pose)[:, GATE_SAMPLES].reshape(-1, 3)
     _, dirs, rho = radial(rig.axis(pose), points)
     lo, hi = drawn.core_bounds(pose)
@@ -1308,11 +1586,24 @@ def near_core(drawn, rig, pose):
 
 
 def clip_gate(target, rig, own, new, clip, sampler, tick=lambda: None):
-    """Conservative gate bounds first, exact sleeve radii only for candidates.
+    """Gate clips with conservative bounds before casting exact candidate sleeve radii.
 
     A clip exits as soon as the fifth is reached or cannot be reached. Only
     forearm/wrist/palm rays participate; upper arm and tip samples belong
     to the final guard and cannot start an arm correction by themselves.
+
+    Args:
+        target: Slot costume identifying the revision-scoped original-depth cache.
+        rig: Slot landmarks used for the five forearm/wrist/palm gate samples.
+        own: Original costume skinning view supplying baseline depths.
+        new: Fitted incoming costume supplying candidate depths and sleeve radii.
+        clip: Slot AnimationClip reader identifying cached original measurements.
+        sampler: ClipFrames sampler capable of composing gate-node poses.
+        tick: No-argument yield/cancellation callback between candidate batches.
+
+    Returns:
+        Gate decision, sampled poses, original depths, and a lower-bound hit share;
+        an early rejection returns empty maps and zero share.
     """
     frames = np.arange(0, len(sampler.times), GATE_EVERY)
     required = int(np.ceil(GATE_FRACTION * len(frames)))
@@ -1355,14 +1646,24 @@ class BodyFrames:
     """Lazy torso poses: sparse trials do not skin intermediate frames."""
 
     def __init__(self, drawn, rig, poses, tick):
+        """Prepare lazy torso skinning for a sequence of original clip poses.
+
+        Args:
+            drawn: Incoming costume view supplying compact torso-core vertices.
+            rig: Slot landmarks used by each BodyFrame.
+            poses: Full-frame world matrices indexed by requested sample frames.
+            tick: No-argument yield/cancellation callback between eight-frame skinning batches.
+        """
         self.drawn, self.rig, self.poses, self.tick = drawn, rig, poses, tick
         self.frames = {}
         self.rows = drawn.measure_mesh(True, False)[0]
 
     def __len__(self):
+        """Return the number of clip poses, including frames not yet skinned."""
         return len(self.poses)
 
     def ensure(self, frames):
+        """Prepare missing frame indices in bounded batches, sharing triangle geometry and leaf partitions."""
         missing = [f for f in frames if f not in self.frames]
         for begin in range(0, len(missing), 8):
             self.tick()
@@ -1384,12 +1685,13 @@ class BodyFrames:
                 )
 
     def __getitem__(self, frame):
+        """Return the torso BodyFrame at a clip-frame index, preparing it on demand."""
         self.ensure([frame])
         return self.frames[frame]
 
 
 class TriangleIndex:
-    """Fixed spatial leaves; only their conservative bounds change with skinning.
+    """Partition triangles into fixed spatial leaves with pose-dependent conservative bounds.
 
     Partition once per costume. A query expands overlapping leaves into sparse
     ray/triangle pairs, then tests the individual boxes and exact triangles.
@@ -1398,6 +1700,7 @@ class TriangleIndex:
     """
 
     def __init__(self, triangles):
+        """Partition triangle corner positions into leaves of at most sixteen entries."""
         centers = np.asarray(triangles).mean(axis=1)
         leaves = []
 
@@ -1418,6 +1721,13 @@ class TriangleIndex:
         self.leaf_of[self.rows.ravel()] = np.repeat(np.arange(len(self.rows)), 16)
 
     def bounds(self, prepared, previous=None, leaves=None):
+        """Compute conservative leaf boxes, optionally updating only changed leaves.
+
+        Args:
+            prepared: BodyFrame.prepare arrays whose fourth/fifth entries are triangle lower/upper bounds.
+            previous: Optional (index, lower, upper) tuple to copy before partial updates.
+            leaves: Leaf indices to refresh when previous is supplied; unused for a full calculation.
+        """
         lo, hi = prepared[3:5]
         if previous is not None:
             leaf_lo, leaf_hi = previous[1].copy(), previous[2].copy()
@@ -1437,6 +1747,15 @@ class BodyFrame:
     """
 
     def __init__(self, drawn, rig, pose, vertices=None, prepared=None):
+        """Prepare torso intersections and track the triangles affected by arm turns.
+
+        Args:
+            drawn: Incoming costume view sharing torso layout and spatial partition caches.
+            rig: Slot landmarks defining arm samples, descendants, and the body axis.
+            pose: Original frame's slot-node world matrices.
+            vertices: Optional already-skinned compact core vertices; None skins them from pose.
+            prepared: Optional triangle arrays and leaf bounds; None derives them from vertices.
+        """
         self.drawn, self.rig, self.pose = drawn, rig, pose
         self.rows, self.tris, _ = drawn.measure_mesh(True, False)
         self.vertices = drawn.posed(pose, self.rows) if vertices is None else vertices
@@ -1463,11 +1782,13 @@ class BodyFrame:
 
     @staticmethod
     def prepare(triangles):
+        """Prepare float32 origins, two edges, and bounds for triangle corners with optional frame dimensions."""
         t = np.asarray(triangles, np.float32)
         a, b, c = t[..., 0, :], t[..., 1, :], t[..., 2, :]
         return [a, b - a, c - a, np.minimum(np.minimum(a, b), c), np.maximum(np.maximum(a, b), c)]
 
     def geometry(self, pose):
+        """Return prepared torso geometry, re-skinning arm-influenced vertices for a changed world-matrix pose."""
         prepared = self.prepared
         if len(self.changed) and pose is not self.pose:
             vertices = self.vertices.copy()
@@ -1480,6 +1801,12 @@ class BodyFrame:
         return prepared
 
     def depth(self, pose, indices=None):
+        """Measure signed torso depth in metres at arm samples, caching the unchanged full baseline.
+
+        Args:
+            pose: Slot-node world matrices, optionally with corrected arm subtrees.
+            indices: Optional sample indices from SAMPLES; None measures all nine.
+        """
         if pose is self.pose and indices is None and self.baseline is not None:
             return self.baseline
         points = self.rig.samples(pose)
@@ -1493,6 +1820,7 @@ class BodyFrame:
         return result
 
     def depth_gradient(self, pose):
+        """Return signed depths (2 by 9) and XYZ sample-position gradients (2 by 9 by 3) for a world-matrix pose."""
         points = self.rig.samples(pose).reshape(-1, 3)
         q, dirs, rho = radial(self.axis, points)
         depth, normals = self.query(points, dirs, rho, self.geometry(pose), normals=True)
@@ -1514,6 +1842,7 @@ class BodyFrame:
         return depth.reshape(2, 9), grad.reshape(2, 9, 3)
 
     def penetration(self, pose):
+        """Return positive torso depths in metres at all arm samples for a world-matrix pose."""
         # The guard only needs positive depth. Rays start at each arm sample,
         # omitting the axis-to-sample segment and all exterior-clearance hits.
         if pose is self.pose and self.baseline is not None:
@@ -1524,6 +1853,19 @@ class BodyFrame:
 
     @staticmethod
     def query(points, dirs, rho, prepared, normals=False, high=CAP):
+        """Cast finite outward sample rays through prepared torso triangles.
+
+        Args:
+            points: Arm sample positions shaped as rays by 3, in metres.
+            dirs: Corresponding outward unit directions from the body axis.
+            rho: Axis-to-sample distances, setting each ray's lower bound to -rho.
+            prepared: Triangle origins, edges, bounds, and optional spatial-index leaf boxes.
+            normals: Whether to return hit normals alongside signed depths.
+            high: Maximum outward hit distance in metres.
+
+        Returns:
+            Farthest hit distances (or -rho on misses), optionally paired with hit normals.
+        """
         v0, e1, e2, lo, hi = prepared[:5]
         if not len(v0):
             return (-rho, np.zeros_like(points)) if normals else -rho
@@ -1581,11 +1923,18 @@ def _narrow(points, dirs, rho, v0, e1, e2, ray, at, normals, high):
 
 
 def query_many(points, dirs, rho, prepared, normals=False, high=CAP):
-    """``BodyFrame.query`` for several frames at once: points and dirs (frames, rays, 3), rho (frames, rays), the
-    prepared triangle arrays (frames, triangles, 3) and the leaf bounds (frames, leaves, 3) of one partition.
+    """Apply BodyFrame.query across frames with bit-identical per-frame depths and normals.
 
     A ray meets only its own frame's triangles, visited in the order the single-frame query visits them, with
     the same arithmetic: the depths and normals are bit for bit those of one frame at a time.
+
+    Args:
+        points: Frame-by-ray-by-3 arm sample positions in metres.
+        dirs: Corresponding outward unit directions in the same shape as points.
+        rho: Frame-by-ray axis distances setting lower ray bounds to -rho.
+        prepared: Frame-by-triangle origins/edges/bounds plus one partition's frame-by-leaf boxes.
+        normals: Whether to return hit normals with the depths.
+        high: Maximum outward hit distance in metres.
     """
     count, rays = rho.shape
     triangles = prepared[0].shape[1]
@@ -1620,12 +1969,23 @@ def query_many(points, dirs, rho, prepared, normals=False, high=CAP):
 
 
 def leaf_bounds(index, lo, hi):
-    """Each frame's leaf boxes: lo, hi (frames, triangles, 3)."""
+    """Compute leaf boxes for every frame in a shared triangle partition.
+
+    Args:
+        index: TriangleIndex whose leaves identify the triangle groups.
+        lo: Lower triangle bounds shaped as frames by triangles by 3.
+        hi: Corresponding upper triangle bounds.
+    """
     return index, lo[:, index.rows].min(axis=2), hi[:, index.rows].max(axis=2)
 
 
 def radial_many(axes, points):
-    """``radial`` for frames: axes (frames, joints, 3), points (frames, n, 3)."""
+    """Compute nearest axis points, outward directions, and distances across frames.
+
+    Args:
+        axes: Body-axis polylines shaped as frames by joints by 3.
+        points: Test positions shaped as frames by samples by 3, in the same metre-based space.
+    """
     a, b = axes[:, :-1], axes[:, 1:]
     ab = b - a
     t = np.clip(
@@ -1666,7 +2026,12 @@ def _samples(rig, poses):
 
 
 def depths(bodies, poses):
-    """``BodyFrame.depth`` of each (frame, pose) pair, measured together."""
+    """Measure BodyFrame.depth for frame/pose pairs together, returning frames by 2 by 9 depths.
+
+    Args:
+        bodies: Prepared torso frames sharing one costume layout and spatial partition.
+        poses: Corresponding slot-node world matrices, optionally with corrected arms.
+    """
     out = np.empty((len(bodies), 2, len(SAMPLES)))
     todo = []
     for k, (b, w) in enumerate(zip(bodies, poses)):
@@ -1687,7 +2052,12 @@ def depths(bodies, poses):
 
 
 def penetrations(bodies, poses):
-    """``BodyFrame.penetration`` of each (frame, pose) pair, measured together."""
+    """Measure positive torso depths for frame/pose pairs, returning frames by 2 by 9 values.
+
+    Args:
+        bodies: Prepared torso frames sharing one costume layout and spatial partition.
+        poses: Corresponding slot-node world matrices checked by the rollback guard.
+    """
     out = np.empty((len(bodies), 2, len(SAMPLES)))
     todo = []
     for k, (b, w) in enumerate(zip(bodies, poses)):
@@ -1706,7 +2076,12 @@ def penetrations(bodies, poses):
 
 
 def depth_gradients(bodies, poses):
-    """``BodyFrame.depth_gradient`` of each (frame, pose) pair: depths (n, 2, 9) and gradients (n, 2, 9, 3)."""
+    """Measure batched signed depths (n by 2 by 9) and XYZ gradients (n by 2 by 9 by 3).
+
+    Args:
+        bodies: Prepared torso frames sharing one costume layout and spatial partition.
+        poses: Corresponding slot-node world matrices used to locate arm samples and changed torso triangles.
+    """
     count = len(bodies)
     if not count:
         return np.empty((0, 2, len(SAMPLES))), np.empty((0, 2, len(SAMPLES), 3))
@@ -1739,7 +2114,14 @@ def depth_gradients(bodies, poses):
 
 
 def arm_radii(drawn, rig, pose, indices=None):
-    """Exact sleeve casts without re-skinning or re-casting the torso."""
+    """Cast exact sleeve radii without skinning or casting the torso.
+
+    Args:
+        drawn: Costume view with side/segment arm triangle partitions.
+        rig: Slot sample positions and body-axis provider.
+        pose: Slot-node world matrices for this frame.
+        indices: Optional sample indices; None measures all nine per arm.
+    """
     indices = np.arange(9) if indices is None else np.asarray(indices)
     points = rig.samples(pose)[:, indices]
     _, directions, _ = radial(rig.axis(pose), points.reshape(-1, 3))
@@ -1768,7 +2150,14 @@ def arm_radii(drawn, rig, pose, indices=None):
 
 
 def arm_radii_many(drawn, rig, poses, indices=None):
-    """``arm_radii`` of several poses (frames x 2 x samples), each sleeve segment cast for all of them at once."""
+    """Cast each sleeve segment across frames, returning frames by 2 by samples radii in metres.
+
+    Args:
+        drawn: Costume view sharing sleeve partitions and sparse skinning views across frames.
+        rig: Slot arm samples and body-axis provider.
+        poses: Frame-by-node world matrices; an empty sequence yields an empty radius array.
+        indices: Optional sample indices; None measures all nine per arm.
+    """
     indices = np.arange(9) if indices is None else np.asarray(indices)
     radii = np.zeros((len(poses), 2, len(indices)))
     if not len(poses):
@@ -1801,12 +2190,21 @@ def arm_radii_many(drawn, rig, poses, indices=None):
 
 
 def repair_clearance(rig, poses, deltas, hold, pins, bodies, tick=lambda: None):
-    """A small shared bone turn resolves the non-driven sample constraints.
+    """Apply small shared bone turns to resolve non-driven sample constraints.
 
     Corrections are rotations of the actual bone directions. Projecting an XYZ
-    elbow offset back onto its reach circle used to undo the clearance repair.
+    elbow offset onto its reach circle can undo clearance repair.
     Shared turns preserve smoothness; contacts and unreachable cases are left
     to the per-frame rollback guard. Repair displacement is capped at 30 mm.
+
+    Args:
+        rig: Slot arm landmarks and bone lengths.
+        poses: Original world-matrix frames used as the clearance baseline.
+        deltas: Elbow/wrist XYZ offsets, updated in place during repair attempts.
+        hold: Frame-by-arm grip flags; any hold bypasses repair.
+        pins: Head-contact strengths; strengths above 0.01 bypass repair.
+        bodies: Prepared torso frames corresponding to poses.
+        tick: No-argument yield/cancellation callback between repair rounds.
     """
     if hold.any() or (pins > 0.01).any():
         return deltas
@@ -1867,10 +2265,19 @@ def repair_clearance(rig, poses, deltas, hold, pins, bodies, tick=lambda: None):
 
 
 def depth_batch(drawn, rig, poses, indices):
-    """Eight-frame gate batches amortize skinning and triangle preparation.
+    """Batch gate-depth skinning and triangle preparation, typically over eight frames.
 
     Only core vertices are read. Ray/triangle work is still culled separately
     for each frame, so a wider batch never widens the torso casting region.
+
+    Args:
+        drawn: Incoming costume view whose rigid torso core supplies cover.
+        rig: Slot samples and body-axis provider.
+        poses: Frame-by-node world matrices for a bounded gate batch.
+        indices: Gate sample indices to measure for both arms.
+
+    Returns:
+        Signed depths in metres shaped as frames by 2 by selected samples.
     """
     if not len(poses):
         return np.empty((0, 2, len(indices)))

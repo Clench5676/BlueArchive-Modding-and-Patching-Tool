@@ -47,6 +47,17 @@ class AssetCache:
         max_bytes: int = 512 * 1024 * 1024,
         root: Path | None = None,
     ):
+        """Create empty memory accounting and configure optional light-asset disk storage.
+
+        Args:
+            resource_version: Default namespace for get and put calls without an explicit version.
+            allowed: Whether disk reads and writes have user consent.
+            max_bytes: Nonnegative memory budget in bytes, including decoded image pixels.
+            root: Disk cache folder; None uses config.user_cache_dir without creating it yet.
+
+        Raises:
+            ValueError: The memory budget is negative.
+        """
         if max_bytes < 0:
             raise ValueError("max_bytes must be nonnegative")
         self.resource_version = resource_version
@@ -64,24 +75,25 @@ class AssetCache:
 
     @property
     def generation(self) -> int:
-        """A clear invalidates work that started before it."""
+        """Return the generation used to reject work started before a clear."""
         with self._lock:
             return self._generation
 
     @property
     def allowed(self) -> bool:
-        """Whether light assets may currently be read from or written to disk."""
+        """Report whether light assets may be read from or written to disk."""
         with self._lock:
             return self._allowed
 
     @allowed.setter
     def allowed(self, value: bool) -> None:
+        """Set disk-read and disk-write consent synchronously with cache I/O."""
         with self._lock:
             self._allowed = bool(value)
 
     @property
     def memory_bytes(self) -> int:
-        """The accounted size of entries in the memory LRU."""
+        """Return the accounted size in bytes of entries in the memory LRU."""
         with self._lock:
             return self._bytes
 
@@ -93,7 +105,11 @@ class AssetCache:
         return self.root / safe_version / (hashlib.sha256(key.encode()).hexdigest() + ".cache")
 
     def has_disk_entries(self, version: str) -> bool:
-        """Whether this resource version has any consented light assets on disk."""
+        """Check whether a resource version has consented light assets on disk.
+
+        Args:
+            version: Resource namespace whose hashed cache folder is checked.
+        """
         with self._lock:
             if not self._allowed:
                 return False
@@ -103,7 +119,13 @@ class AssetCache:
                 return False
 
     def get(self, key: str, *, version: str | None = None, disk: bool = True) -> Any | None:
-        """Return an entry, promoting it to most recently used, or ``None``."""
+        """Return an entry, promoting it to most recently used, or None on a miss.
+
+        Args:
+            key: Asset identity within the resource namespace and disk/memory partition.
+            version: Resource namespace; None uses this cache's resource_version.
+            disk: Whether to use the disk-capable partition; False keeps heavy assets memory-only.
+        """
         version = self.resource_version if version is None else version
         token = (version, key, disk)
         with self._lock:
@@ -190,6 +212,18 @@ class AssetCache:
 
         Non-byte values need an explicit byte size, except Pillow images whose
         decoded pixel storage is counted automatically.
+
+        Args:
+            key: Asset identity within the resource namespace and disk/memory partition.
+            value: Bytes for optional persistence, or a decoded object retained only in memory.
+            version: Resource namespace; None uses this cache's resource_version.
+            disk: Whether bytes may also be persisted when consent permits; False keeps heavy assets memory-only.
+            size: Memory cost in bytes; None derives it for bytes and Pillow images.
+            generation: Generation captured before building; None skips the stale-work check.
+
+        Raises:
+            TypeError: A non-byte, non-image value has no explicit size.
+            ValueError: The supplied size is negative.
         """
         version = self.resource_version if version is None else version
         if size is None:
@@ -235,6 +269,7 @@ class AssetCache:
                 shutil.rmtree(self.root)
 
     def clear_memory(self) -> None:
+        """Drop decoded entries and accounting, invalidating in-flight writes without deleting disk files."""
         with self._lock:
             self._generation += 1
             self._items.clear()
@@ -259,6 +294,16 @@ class PreviewCache:
     """
 
     def __init__(self, root: Path, *, allowed: bool = False, max_bytes: int = 2 * 1024**3):
+        """Configure consent-controlled preview storage without creating its folder.
+
+        Args:
+            root: Folder holding checksummed preview entries.
+            allowed: Whether preview persistence has user consent.
+            max_bytes: Nonnegative total disk budget in bytes, enforced by LRU eviction.
+
+        Raises:
+            ValueError: The disk budget is negative.
+        """
         self.root = Path(root)
         devmode.check_read(self.root)
         if max_bytes < 0:
@@ -289,22 +334,25 @@ class PreviewCache:
 
     @property
     def generation(self) -> str:
+        """Return the write token, refreshing it when another process replaces the cache folder."""
         with self._lock:
             self._sync_generation()
             return self._generation
 
     def invalidate_pending(self) -> None:
-        """Reject exports from a previous resource context without discarding saved previews."""
+        """Reject pending exports from other resource contexts while retaining saved previews."""
         with self._lock:
             self._generation = secrets.token_hex(16)
 
     @property
     def allowed(self) -> bool:
+        """Report whether preview disk reads and writes have consent."""
         with self._lock:
             return self._allowed
 
     @allowed.setter
     def allowed(self, value: bool) -> None:
+        """Set preview disk consent and invalidate pending writes when consent changes."""
         with self._lock:
             if self._allowed != bool(value):
                 self._generation = secrets.token_hex(16)
@@ -315,6 +363,14 @@ class PreviewCache:
         return self.root / (digest + ".preview")
 
     def get(self, key: str) -> bytes | None:
+        """Read and validate an entry, touching it for LRU eviction.
+
+        Args:
+            key: Complete installation and source-revision identity used when the export was saved.
+
+        Returns:
+            Unchanged export bytes, or None for absent, corrupt, unreadable, or unconsented entries.
+        """
         with spans.held("preview-cache-lock", self._lock):
             if not self._allowed:
                 return None
@@ -350,6 +406,16 @@ class PreviewCache:
                 return None
 
     def put(self, key: str, value: bytes, *, generation: str) -> bool:
+        """Persist a checksummed export atomically if consent, size, and generation permit.
+
+        Args:
+            key: Complete installation and source-revision identity for the export.
+            value: Export bytes bounded by both the cache budget and PREVIEW_ENTRY_LIMIT.
+            generation: Write token captured before generating the export.
+
+        Returns:
+            Whether the entry remains stored after eviction; False also covers I/O failures.
+        """
         if not isinstance(value, bytes) or len(value) > min(self.max_bytes, PREVIEW_ENTRY_LIMIT):
             return False
         with spans.held("preview-cache-lock", self._lock):
@@ -384,6 +450,11 @@ class PreviewCache:
                         pass
 
     def discard(self, key: str) -> None:
+        """Remove a single export, suppressing disk errors.
+
+        Args:
+            key: Export identity whose hashed entry is removed even when disk consent is disabled.
+        """
         with self._lock:
             try:
                 self._sync_inventory()
@@ -458,18 +529,28 @@ class PreviewCache:
         self._root_id = None
 
     def clear(self) -> None:
+        """Invalidate pending writes and delete the preview folder and its inventory."""
         with self._lock:
             self._generation = secrets.token_hex(16)
             self._clear_files()
 
     def clear_with(self, clear: Any) -> None:
-        """Clear the parent UI cache under the same lock as preview writes."""
+        """Clear previews and the parent UI cache under the preview write lock.
+
+        Args:
+            clear: No-argument callback clearing the parent UI cache after previews are removed.
+        """
         with self._lock:
             self.clear()
             clear()
 
     def relocate(self, root: Path, clear: Any) -> None:
-        """Move the cache boundary atomically with respect to pending exports."""
+        """Move the cache boundary atomically with respect to pending exports.
+
+        Args:
+            root: New preview folder, checked against development-mode read restrictions.
+            clear: No-argument callback clearing the old parent cache before the root changes.
+        """
         root = Path(root)
         devmode.check_read(root)
         with self._lock:
@@ -479,7 +560,14 @@ class PreviewCache:
 
 
 def pack_preview_files(files: dict[str, bytes]) -> bytes:
-    """Pack unchanged bytes with a bounded JSON directory; no executable serialization."""
+    """Pack unchanged bytes with a JSON directory and share identical byte objects.
+
+    Args:
+        files: Export filenames mapped to bytes; aliases referencing the same object share one stored range.
+
+    Returns:
+        A private container with a length-prefixed JSON directory and no executable serialization.
+    """
     directory, chunks, offset = [], [], 0
     # Atlas aliases often share the same PNG object. Keep one byte copy on disk.
     seen: dict[int, tuple[int, int]] = {}
@@ -494,7 +582,14 @@ def pack_preview_files(files: dict[str, bytes]) -> bytes:
 
 
 def unpack_preview_files(data: bytes) -> dict[str, bytes]:
-    """Read the private container without extracting any path to the filesystem."""
+    """Read the private container without extracting any path to the filesystem.
+
+    Args:
+        data: Packed preview container with a directory of at most 1 MiB and 8192 files.
+
+    Raises:
+        ValueError: The directory, names, bounds, or non-alias ranges are invalid.
+    """
     if len(data) < 4:
         raise ValueError("Invalid preview container")
     (size,) = struct.unpack_from("<I", data)

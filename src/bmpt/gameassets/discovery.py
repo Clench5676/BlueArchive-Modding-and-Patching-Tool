@@ -11,7 +11,14 @@ from bmpt.engine import parse_filename
 
 
 def bundle_paths(resource_dirs: list[Path]) -> list[Path]:
-    """List bundle files once, preserving resource directory precedence."""
+    """List bundle files once, preserving resource directory precedence.
+
+    Args:
+        resource_dirs: Directories scanned nonrecursively; the first copy of each basename wins.
+
+    Returns:
+        Paths sorted by bundle basename.
+    """
     found: dict[str, Path] = {}
     for directory in resource_dirs:
         with os.scandir(directory) as entries:
@@ -22,7 +29,14 @@ def bundle_paths(resource_dirs: list[Path]) -> list[Path]:
 
 
 def resource_version(resource_dirs: list[Path]) -> str:
-    """Hash the Windows catalog, falling back to sorted file names and sizes."""
+    """Hash the Windows catalog, falling back to sorted file names and sizes.
+
+    Args:
+        resource_dirs: Resource folders whose ancestors are searched for Catalog/Windows/catalog_Windows.hash.
+
+    Returns:
+        SHA-1 of the first catalog hash found, or of all immediate file names and sizes.
+    """
     checked: set[Path] = set()
     for directory in resource_dirs:
         for parent in (directory, *directory.parents):
@@ -40,7 +54,12 @@ def resource_version(resource_dirs: list[Path]) -> str:
 
 
 def group_bundles(paths: list[Path], category: str) -> dict[str, list[Path]]:
-    """Group all dated bundle parts by parsed category and lower-case core."""
+    """Group all dated bundle parts by parsed category and lower-case core.
+
+    Args:
+        paths: Bundle paths to sort and group, retaining coexisting dates and parts.
+        category: Exact parse_filename category to include, such as spr or lobby.
+    """
     groups: dict[str, list[Path]] = {}
     for path in sorted(paths):
         parsed = parse_filename(path.name)
@@ -50,12 +69,12 @@ def group_bundles(paths: list[Path], category: str) -> dict[str, list[Path]]:
 
 
 def is_atlas(path: Path) -> bool:
-    """Whether a bundle belongs to the UI atlas family."""
+    """Check whether a bundle belongs to the UI atlas family."""
     return "uis-atlas-" in path.name
 
 
 def is_texture(path: Path) -> bool:
-    """Whether a bundle belongs to the shared UI texture families."""
+    """Check whether a bundle belongs to the shared UI texture families."""
     name = path.name
     return (
         "addressableasset-uis-_mxprolog-" in name
@@ -67,8 +86,14 @@ def is_texture(path: Path) -> bool:
 
 
 def is_pointer_texture(path: Path) -> bool:
-    """Whether a bundle can hold the PC client's mouse cursor (UIs/GLPC_Cursor, also in the shared UI textures) or
-    the textures of the touch effect (Resources/UI/FX_Touch: the EffectsFreezed texture families)."""
+    """Check whether a bundle can hold mouse cursor or touch effect textures.
+
+    The PC cursor is in UIs/GLPC_Cursor and the shared UI textures; Resources/UI/FX_Touch
+    uses the EffectsFreezed texture families.
+
+    Args:
+        path: Bundle filename to screen for cursor/shared-dependency/touch-effect family markers without loading it.
+    """
     name = path.name
     return (
         "-uis-glpc_cursor-" in name
@@ -78,8 +103,13 @@ def is_pointer_texture(path: Path) -> bool:
 
 
 def is_prefab(path: Path) -> bool:
-    """Whether a bundle can contain a UI prefab root (Resources/UI holds the loading screen, UILoading; the tooltip
-    bundles the description tooltip, UIDescriptionTooltip)."""
+    """Check whether a bundle can contain a UI prefab root.
+
+    Resources/UI holds the loading screen UILoading; tooltip bundles hold UIDescriptionTooltip.
+
+    Args:
+        path: Bundle filename to screen for prefab, tooltip, or prologue UI families without loading it.
+    """
     return (
         path.name.startswith(("ui-_mxload-prefabs-", "ui-uiassetobject-", "ui-tooltip-_mxload-prefabs-"))
         or (path.name.startswith("prologdepengroup-") and "-addressableasset-ui-" in path.name)
@@ -88,14 +118,18 @@ def is_prefab(path: Path) -> bool:
 
 
 def cab_names(path: Path) -> list[str]:
-    """Read lower-case internal names, preserving corrupt-directory errors."""
+    """Read lower-case internal names, preserving corrupt-directory errors.
+
+    Args:
+        path: UnityFS bundle whose directory is inspected without decoding asset blocks.
+    """
     from ..unityfs import read_cab_names
 
     return [name.lower() for name in read_cab_names(path) or ()]
 
 
 def is_model_dependency(path: Path) -> bool:
-    """Families that hold 3D chibi prefabs, meshes, materials, textures, shaders and shared animators."""
+    """Check for families holding chibi prefabs, meshes, materials, textures, shaders, or shared animators."""
     name = path.name
     return (
         "characters" in name
@@ -111,28 +145,40 @@ _NO_ROOT_PARTS = ("-textures-", "-materials-", "-audio-", "-textassets-", "-shad
 
 
 def own_bundle(name: str, dev: str) -> bool:
-    """Whether a bundle belongs to a character's or NPC's own dependency bundles
-    (``assets-_mx-npcs|characters-<dev>-_mxdependency-*``)."""
+    """Check for a character's or NPC's own dependency bundles.
+
+    Args:
+        name: Bundle filename in the assets-_mx-npcs|characters-<dev>-_mxdependency-* families.
+        dev: Character or NPC dev name to match without case sensitivity.
+    """
     parsed = parse_filename(name)
     return parsed.category in ("npcs", "characters") and parsed.core.lower() == dev.lower()
 
 
 def may_hold_model_root(name: str) -> bool:
-    """Whether a part of those bundles can hold a model's root: any but those named for textures, materials, audio,
-    text or shaders."""
+    """Check whether a dependency part can hold a model root.
+
+    Parts named for textures, materials, audio, text, or shaders are excluded.
+
+    Args:
+        name: Character/NPC dependency filename whose asset-type marker determines whether to inspect its containers.
+    """
     return not any(part in name for part in _NO_ROOT_PARTS)
 
 
 def is_lobby_prefab(path: Path) -> bool:
-    """Whether a bundle holds memorial lobby prefabs (UILobbyElement/Lobby<Name>.prefab)."""
+    """Check for memorial lobby prefab bundles containing UILobbyElement/Lobby<Name>.prefab."""
     return path.name.startswith("ui-uilobbyelement-")
 
 
 def is_layout_texture(path: Path) -> bool:
-    """Texture-only families additionally referenced by the detail prefab.
+    """Check for texture-only families additionally referenced by the detail prefab.
 
     These supply names for embedded campaign widgets and UI effects, rather
     than expanding the shared UITexture index to character or gameplay art.
+
+    Args:
+        path: Bundle filename to screen for campaign, skill-icon, or effect texture families.
     """
     return (
         path.name.startswith(("uis-01_common-25_campaign-", "uis-02_tactics-02_skillicon-"))

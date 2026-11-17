@@ -17,7 +17,17 @@ from .unity import open_bundle
 
 
 def spine_stamps(bundles: list[Path]) -> list[tuple[str, int, int, int]]:
-    """Ordered file versions, including replacements that preserve size and mtime."""
+    """Read ordered file versions, detecting replacements that preserve size and mtime.
+
+    Args:
+        bundles: Bundle paths resolved and deduplicated in merge order.
+
+    Returns:
+        Resolved path, byte size, mtime, and ctime in nanoseconds for each bundle.
+
+    Raises:
+        AssetNotFound: The list is empty or a bundle is missing.
+    """
     stamps = []
     for path in dict.fromkeys(Path(path).resolve() for path in bundles):
         try:
@@ -35,21 +45,33 @@ PREVIEW_TYPES = frozenset({"TextAsset", "Texture2D"})
 
 
 class Composition(list):
-    """Bundles in merge order, and the asset types a preview leaves out of some of them (``skip``): an import that
-    transfers assets leaves the types its options do not name official, so its preview does too."""
+    """Carry bundles in merge order with asset types to omit from selected bundles.
+
+    An asset-transfer import leaves types outside its options official, so its preview does too.
+    """
 
     def __init__(self, bundles: Iterable[Path] = (), skip: Mapping[Path, Iterable[str]] | None = None):
+        """Record a merge order and normalize per-bundle exclusions.
+
+        Args:
+            bundles: Source bundles in merge order, with later assets overriding earlier ones.
+            skip: Asset type names to omit by bundle path; None reads all preview types.
+        """
         super().__init__(bundles)
         self.skip = {Path(path).resolve(): frozenset(types) for path, types in (skip or {}).items() if types}
 
 
 def skipped(bundles: list[Path]) -> dict[Path, frozenset[str]]:
-    """The asset types a composition's preview leaves out, per bundle (none for a plain list)."""
+    """Return a composition's per-bundle type exclusions, or an empty map for a plain list."""
     return dict(getattr(bundles, "skip", None) or {})
 
 
 def spine_revision(bundles: list[Path]) -> str:
-    """A URL segment identifying one ordered composition of bundle versions (and the types it leaves out)."""
+    """Hash ordered bundle revisions and type exclusions into a URL segment.
+
+    Args:
+        bundles: Merge-ordered paths, optionally a Composition carrying per-bundle type exclusions.
+    """
     skip = sorted([str(path), sorted(types)] for path, types in skipped(bundles).items())
     return hashlib.sha256(
         json.dumps([spine_stamps(bundles), skip] if skip else spine_stamps(bundles)).encode()
@@ -57,7 +79,12 @@ def spine_revision(bundles: list[Path]) -> str:
 
 
 def png_bytes(image: Image.Image, level: int | None = None) -> bytes:
-    """Encode an image as PNG bytes without creating a file. ``level``: zlib level (default Pillow's 6)."""
+    """Encode an image as PNG bytes without creating a file.
+
+    Args:
+        image: Pillow image to encode in its current mode.
+        level: zlib compression level from 0 to 9; None uses Pillow's default of 6.
+    """
     buffer = BytesIO()
     image.save(buffer, format="PNG", **({} if level is None else {"compress_level": level}))
     return buffer.getvalue()
@@ -68,6 +95,9 @@ def atlas_pages(data: bytes) -> list[str]:
 
     A page starts after a blank line (or at the start); header properties contain
     colons. Region names may also end in .png and must not be treated as pages.
+
+    Args:
+        data: UTF-8 atlas text, optionally prefixed with a BOM.
     """
     pages = []
     page_start = True
@@ -84,8 +114,18 @@ def atlas_pages(data: bytes) -> list[str]:
 
 
 def extract_spine(bundles: list[Path], skip: Mapping[Path, frozenset[str]] | None = None) -> dict[str, bytes]:
-    """Extract every skeleton, atlas and texture, retaining atlas page filenames; ``skip`` leaves the given asset types
-    of some bundles out."""
+    """Extract skeletons, atlases, and PNG textures while retaining atlas page filenames.
+
+    Args:
+        bundles: Bundles in merge order; later assets with the same name take precedence.
+        skip: Asset types to omit by resolved bundle path; None reads all relevant types.
+
+    Returns:
+        File bytes by exported filename, including aliases matching atlas page spelling.
+
+    Raises:
+        AssetNotFound: An atlas references a page absent from the extracted textures.
+    """
     result, textures = {}, {}
     for path in bundles:
         left = (skip or {}).get(Path(path).resolve(), frozenset())

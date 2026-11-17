@@ -24,6 +24,7 @@ _MAX_ORDERS = 8
 
 
 def revision(path: Path) -> tuple[int, ...] | None:
+    """Return device, inode, size, and nanosecond modification/change times, or None if stat fails."""
     try:
         value = path.stat()
         return value.st_dev, value.st_ino, value.st_size, value.st_mtime_ns, value.st_ctime_ns
@@ -47,6 +48,14 @@ class CabIndex:
         namespace: str = "",
         reader: Callable = cab_names,
     ):
+        """Configure lazy CAB discovery within ordered resource directories.
+
+        Args:
+            directories: Resource folders to search, with earlier folders preferred for duplicate names.
+            cache: Optional bounded preview store for revision-checked CAB metadata.
+            namespace: Installation/resource identity separating persisted discoveries.
+            reader: Reads a bundle's CAB directory without decoding assets; names are normalized to lower case.
+        """
         self.directories = tuple(Path(path).resolve() for path in directories)
         self.cache, self.reader = cache, reader
         self.key = (
@@ -172,6 +181,7 @@ class CabIndex:
 
     @contextmanager
     def batch(self):
+        """Share validated metadata during traversal and persist it when the outermost context exits."""
         with self._lock:
             self._sync()
             if self._depth == 0:
@@ -241,6 +251,16 @@ class CabIndex:
     def resolve(
         self, wanted: set[str], hint_path: Path | None = None, *, exclude: Iterable[Path] = ()
     ) -> dict[str, str]:
+        """Locate requested CABs, rechecking returned files against their current revisions.
+
+        Args:
+            wanted: CAB names to resolve without case sensitivity.
+            hint_path: Referencing bundle whose prefix/core prioritizes likely dependencies; None uses preload order.
+            exclude: Bundle paths to omit from both remembered matches and discovery.
+
+        Returns:
+            Lower-case CAB names mapped to bundle path strings; unresolved names are omitted.
+        """
         with self._lock, self.batch():
             self._sync()
             remaining = {name.lower() for name in wanted}
@@ -296,7 +316,11 @@ class CabIndex:
             return found
 
     def all(self, predicate: Callable[[Path], bool] = lambda path: True) -> dict[str, str]:
-        """Compatibility/full-index operation, reusing the same file metadata."""
+        """Build a full CAB index, reusing revision-checked file metadata.
+
+        Args:
+            predicate: Selects bundles from the inventory; the default includes every bundle.
+        """
         with self._lock, self.batch():
             self._sync()
             result = {}

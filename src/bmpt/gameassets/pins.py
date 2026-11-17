@@ -1,4 +1,4 @@
-"""The bones a memorial lobby prefab pins, for web/js/skeleton-pins.js.
+"""Describe bones pinned by memorial lobby prefabs for web/js/skeleton-pins.js.
 
 A SkeletonUtilityBone in Override mode (mode 1) sets its bone from its GameObject every frame, after the animation
 and before the world transform (spine-unity's SkeletonUtility.UpdateLocal: the bone's local x / y from the
@@ -30,8 +30,14 @@ def pins(
     data_scale: Callable[[str], float],
     dragged: Iterable[tuple[str, str]],
 ) -> list[dict]:
-    """The Override SkeletonUtilityBones of a prefab walk (lobby.read_prefab nodes) that no drag moves (dragged:
-    (skeleton, bone) of the SpineDragIK targets), on active GameObjects and enabled."""
+    """Export enabled Override SkeletonUtilityBones on active nodes, excluding drag targets.
+
+    Args:
+        nodes: Prefab walk from lobby.read_prefab with transforms and first components per class.
+        skeleton_of_go: Maps a SkeletonAnimation GameObject path ID to its skeleton name, or None.
+        data_scale: Returns Unity units per skeleton unit for a skeleton name.
+        dragged: Skeleton/bone pairs controlled by SpineDragIK and therefore excluded from fixed pins.
+    """
     by_go = {n["go"]: n for n in nodes}
     skip = set(dragged)
     out = []

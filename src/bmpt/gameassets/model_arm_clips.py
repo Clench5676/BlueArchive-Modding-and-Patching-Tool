@@ -15,8 +15,7 @@ ARM_TOLERANCE = 2e-5
 
 
 def clone_tree(tree):
-    """An independent copy of a type tree (plain containers and scalars, shared parts kept shared), equal to a deep
-    copy and several times faster on clips with long curve arrays."""
+    """Copy a typetree of plain containers/scalars, preserving internal sharing efficiently for long clip arrays."""
     return pickle.loads(pickle.dumps(tree, pickle.HIGHEST_PROTOCOL))
 
 
@@ -38,6 +37,11 @@ def _arm(binding, rotations):
 
 
 def encode_streamed(frames):
+    """Encode streamed frames as unsigned 32-bit words.
+
+    Args:
+        frames: Time/key pairs, with each key holding curve index and four cubic coefficients.
+    """
     data = bytearray()
     for time, keys in frames:
         data.extend(struct.pack("<fi", time, len(keys)))
@@ -52,6 +56,13 @@ def encode_rotations(tree, rotations):
     Other streamed cubics, dense samples and constants are copied, only their
     indices move. Bindings, deltas, reference values and muscle size move with
     them. Euler arm bindings become quaternions. Missing hand curves are added.
+
+    Args:
+        tree: Mutable AnimationClip typetree to rewrite in place.
+        rotations: Arm-path CRC32 values mapped to frame-by-4 local quaternion samples on clip_times.
+
+    Raises:
+        ValueError: Sample shapes, binding/storage boundaries, deltas, reference values, or clip size are incompatible.
     """
     data, ns, nd = _layout(tree)
     times = np.asarray(clip_times(tree), np.float32)
@@ -144,7 +155,16 @@ def encode_rotations(tree, rotations):
 
 
 def edit_error(before, after, rotations):
-    """Read-back check: non-arm curves value-for-value, arms within 20 ppm."""
+    """Check stored non-arm curves exactly and arm quaternion components within 20 ppm.
+
+    Args:
+        before: Original AnimationClip typetree retaining all unedited curve records.
+        after: Serialized/read-back typetree after arm replacement and optional added dense curves.
+        rotations: Arm-path CRC32 values mapped to expected quaternion sample arrays.
+
+    Returns:
+        A validation failure description, or None when curve content and layout checks pass.
+    """
     if clip_times(before) != clip_times(after):
         return "sample times changed"
     original = stored_curves(before)
@@ -200,7 +220,13 @@ def edit_error(before, after, rotations):
 
 
 def receivers(graph, skeleton, prefabs):
-    """Only the slot's own override controllers and field clip lists."""
+    """Find the slot's own override controllers and field clip-list behaviours.
+
+    Args:
+        graph: Dependency graph resolving prefab Animators, controllers, and script classes.
+        skeleton: Slot hierarchy reused when a prefab root matches its root GameObject.
+        prefabs: Slot prefab stems mapped to root pointers, including alternative modes of the same slot.
+    """
     found = {}
     for prefab in prefabs.values():
         animator = graph.component(prefab.deref(), "Animator")
@@ -219,7 +245,17 @@ def receivers(graph, skeleton, prefabs):
 
 
 def repoint(tree, owner, copies, writer):
-    """Repoint effective overrides, preserving base-controller and original refs."""
+    """Repoint effective clip overrides while preserving base-controller and original references.
+
+    Args:
+        tree: Mutable override-controller or field clip-list typetree.
+        owner: Reader supplying the typetree's class and serialized-file external table.
+        copies: Original (CAB, path ID) keys mapped to copied clip (CAB, path ID) locations.
+        writer: Asset writer registering required external CAB references.
+
+    Returns:
+        Whether any effective clip pointer was replaced.
+    """
     changed = False
     if owner.type.name == "AnimatorOverrideController":
         for pair in tree["m_Clips"]:
@@ -244,10 +280,25 @@ def repoint(tree, owner, copies, writer):
 
 
 def write_copies(writer, changes, destinations, holders, skeleton, clip_skirts, *, step=lambda: None):
-    """Bake added curves into the same copies, verify serialized bytes, repoint.
+    """Bake arm and chain curves into slot-local copies, verify bytes, and repoint receivers.
 
     Retain the caller's preview/build class; yield between copies and sampled
     frames without adding locks or workers.
+
+    Args:
+        writer: Asset writer for destination serialized files, copied clip types, and external references.
+        changes: Original clip graph keys mapped to solved ArmClip records.
+        destinations: Original clip keys mapped to destination CAB names.
+        holders: Slot override controllers and field lists whose effective pointers may be changed.
+        skeleton: Slot hierarchy used to resample chain curves against corrected arm motion.
+        clip_skirts: Original clip keys mapped to skirt/hair chains baked into each copy.
+        step: No-argument yield/cancellation callback between copies and sampled frames.
+
+    Returns:
+        Original graph keys mapped to copied clip CAB/path-ID pairs.
+
+    Raises:
+        ServiceError: A receiver is missing or a curve edit fails serialized read-back verification.
     """
     from . import model_adapt as ma
 
@@ -275,7 +326,6 @@ def write_copies(writer, changes, destinations, holders, skeleton, clip_skirts, 
         step()
         tree = clone_tree(change.tree)
         before_arms = ma.clip_snapshot(tree)
-        # the chains the clip's original would get (swinging roots, or hair carrying the slot's own lock keys)
         skirts = [s for s in clip_skirts.get(key, []) if s.solver.roots or getattr(s.solver, "carry", None) is not None]
         for skirt in skirts:
             # Cached hem probes sampled the uncorrected arms. Recompute added
@@ -313,7 +363,7 @@ def write_copies(writer, changes, destinations, holders, skeleton, clip_skirts, 
         if repoint(tree, obj, copies, writer):
             obj.save_typetree(tree)
     # Keep the originals in preload ranges for timelines and other consumers,
-    # and load each copy wherever a slot asset previously loaded its original.
+    # and include copies wherever a slot asset loads the original.
     for _, sf in writer.files.values():
         for obj in list(sf.objects.values()):
             if obj.type.name != "AssetBundle":
@@ -337,6 +387,7 @@ def write_copies(writer, changes, destinations, holders, skeleton, clip_skirts, 
 
 
 def clip_times(tree):
+    """Return sample times in seconds from muscle start/stop, using 30 Hz when the clip rate is absent."""
     muscle = tree["m_MuscleClip"]
     start, stop = muscle["m_StartTime"], muscle["m_StopTime"]
     rate = tree.get("m_SampleRate") or 30.0
@@ -370,7 +421,16 @@ def _streamed_keys(words):
 
 
 def sample_curves(tree, wanted, *, hold_before=False):
-    """Sample selected scalar curves with the runtime decoder's cubic semantics."""
+    """Sample selected scalar curves with the runtime decoder's cubic semantics.
+
+    Args:
+        tree: AnimationClip typetree with streamed, dense, and constant curve storage.
+        wanted: Scalar curve indices across streamed, then dense, then constant storage.
+        hold_before: Whether to take c3 directly before the first streamed key, preserving signed/nonfinite values.
+
+    Returns:
+        Sample times in seconds and arrays by selected curve index; unread stored curves are omitted.
+    """
     times = np.array(clip_times(tree))
     data = tree["m_MuscleClip"]["m_Clip"]["data"]
     streamed, dense = data["m_StreamedClip"], data["m_DenseClip"]
@@ -432,12 +492,18 @@ def _streamed_records(words):
 
 
 def stored_curves(tree):
-    """Lossless signatures for every unedited curve, independent of its index.
+    """Build lossless signatures for every stored curve, independent of its index.
 
     Streamed records include helper keys, duplicate-key order and every cubic
     coefficient; dense signatures include their time grid. Equality is stronger
     than sampling every frame and costs only the stored keys, not all curves
     times all frames. Added dense curves cannot mask a changed original key.
+
+    Args:
+        tree: AnimationClip typetree whose original stored keys, samples, and constants are compared.
+
+    Returns:
+        Storage-indexed arrays suitable for exact comparison after matching generic bindings.
     """
     data, ns, nd = _layout(tree)
     out = _streamed_records(data["m_StreamedClip"]["data"])

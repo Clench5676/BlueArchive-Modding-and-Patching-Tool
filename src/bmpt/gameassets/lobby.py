@@ -31,8 +31,8 @@ _DATA_SCALE = 0.01
 _TRANSFORMS = ("Transform", "RectTransform")
 
 
-# The game scales every memorial lobby by its screen's aspect ratio with the prefab root's MX.Utils.UIManualScaleByAspect:
-# the standard aspect is the UI's 2960 x 1440, the narrowest 4:3 and the widest 2.1666667;
+# The prefab root's MX.Utils.UIManualScaleByAspect scales the lobby for its screen aspect ratio.
+# The standard aspect is the UI's 2960 x 1440, the narrowest 4:3 and the widest 2.1666667;
 # at 16:9 the lobby is on the narrow side of the standard
 ASPECT_STANDARD = 2960 / 1440
 ASPECT_NARROW = 4 / 3
@@ -51,11 +51,19 @@ def _r(value: float, digits: int = 2) -> float:
 
 
 def aspect_rule(component: dict, aspect: float = ASPECT_VIEW) -> tuple[float, dict[int, tuple[int, int, int]]]:
-    """What a UIManualScaleByAspect does to its lobby on a screen of the given width / height: the factor each of its
-    scaleTransforms' local scale is multiplied by, and the whole-unit offset each offsetSettings Transform's local
-    position moves by ({transform path id: (x, y, z)}, rounded half to even like C# Math.Round). Below the standard
+    """Compute a lobby's aspect-dependent scale factor and whole-unit position offsets.
+
+    Offsets map Transform path IDs to (x, y, z), rounded half to even like C# Math.Round. Below the standard
     aspect the narrow values blend in by how far the screen is towards 4:3 (t, clamped to 1), above it the wide
-    ones towards 2.1666667; at the standard aspect nothing changes. component: the MonoBehaviour typetree."""
+    ones towards 2.1666667; at the standard aspect nothing changes.
+
+    Args:
+        component: UIManualScaleByAspect typetree with narrow/wide scales and transform offset settings.
+        aspect: Screen width divided by height; the default is the exported 16:9 view.
+
+    Returns:
+        Local-scale multiplier and local-position additions by same-file Transform path ID.
+    """
     # in single precision, step by step as the game computes it, so a .5 offset rounds the way the game's does
     a, std = _f32(aspect), _f32(_f32(2960.0) / _f32(1440.0))
     if a < std:
@@ -77,15 +85,22 @@ def aspect_rule(component: dict, aspect: float = ASPECT_VIEW) -> tuple[float, di
 
 
 def aspect_targets(component: dict) -> list[int]:
-    """The path ids of a UIManualScaleByAspect's scaleTransforms (same-file Transforms)."""
+    """Return same-file Transform path IDs from a UIManualScaleByAspect's scaleTransforms."""
     return [
         p["m_PathID"] for p in component.get("scaleTransforms") or [] if p.get("m_PathID") and not p.get("m_FileID")
     ]
 
 
 def prefab_candidates(core: str, skeletons: Iterable[str]) -> list[str]:
-    """Prefab names (lower case) to try for a lobby core, best first: ch0187_home -> lobbych0187, then the same rule
-    on each skeleton name (two cores share Airi_home) and the skeleton name itself (LobbyHoshino_multi)."""
+    """List lower-case prefab names to try for a lobby core, best first.
+
+    Try ch0187_home -> lobbych0187, then each skeleton name by the same rule (two cores
+    share Airi_home), the name itself (LobbyHoshino_multi), and its lobby-prefixed form.
+
+    Args:
+        core: Memorial lobby bundle core whose first _home is removed for the primary candidate.
+        skeletons: Internal skeleton names providing additional candidates in their existing order.
+    """
     out = ["lobby" + core.lower().replace("_home", "", 1)]
     for name in skeletons:
         low = name.lower()
@@ -101,7 +116,7 @@ def _short(name: str | None) -> str | None:
 def clip_entry(
     tree: dict, default_mix: float, names: dict[int, str], sound: Callable[[dict], str | None] | None = None
 ) -> dict:
-    """One clip asset: where and how its animation plays, the mixes resolved against the skeleton's default.
+    """Describe where and how a clip plays, resolving mixes against the skeleton's default.
 
     As the game's SpineClip assets use them: mode is the PlayMode (0 the base track,
     1 masked, 2 masked at random times, 3 a random idle clip), finish the FinishMode (0 nothing, 1 the idle, 2 the
@@ -109,7 +124,14 @@ def clip_entry(
     (RandomTimingIntroDelayMode: 0 none, 1 min to max, 2 preDelay plus min to max), then min to max after each
     play, and "loops" the extra plays queued after the first. outroAt is when the clip's own outro starts,
     seconds after its end (null: the outro ends with the clip). sounds are its SoundKeys, [time, event id], with
-    sound(pointer) giving an event's id."""
+    sound(pointer) giving an event's id.
+
+    Args:
+        tree: Spine clip MonoBehaviour typetree with playback, interaction, and sound-key settings.
+        default_mix: SkeletonDataAsset's default mix duration in seconds.
+        names: Clip-asset path IDs mapped to names for next-clip and synchronized-clip references.
+        sound: Resolves an event pointer to its sound ID; None omits sound keys.
+    """
     nxt = tree.get("NextClipObject", {}).get("m_PathID", 0)
     mode = tree.get("PlayMode", 1)
     random = None
@@ -145,10 +167,20 @@ def clip_entry(
 
 
 def sound_event(tree: dict, clip_id: Callable[[dict], str | None]) -> dict | None:
-    """A sound key's AnimationAudioEvent as the game plays it:
-    one of its clips picked at random, at its volume, and at its pitch when that is above 0 (as
-    a playback rate; a pitch of 0 or below keeps the source's 1). clip_id(pointer) gives an AudioClip's id. None for
-    other events (an AmbientAudioEvent, which no lobby clip's sound key uses) or without clips."""
+    """Describe a sound key's AnimationAudioEvent as the game plays it.
+
+    The game picks one clip at
+    random, using its volume and positive pitch as playback rate. Nonpositive pitch
+    keeps the source's rate of one.
+
+    Args:
+        tree: Audio-event typetree with AudioData containing clips, volume, and pitch.
+        clip_id: Resolves an AudioClip pointer to its served ID, or None when unavailable.
+
+    Returns:
+        Event name, volume, pitch, and clip IDs, or None without clips or for other
+        event types, such as AmbientAudioEvent, which no lobby clip sound key uses.
+    """
     data = tree.get("AudioData")
     if not isinstance(data, dict):
         return None
@@ -165,7 +197,7 @@ def sound_event(tree: dict, clip_id: Callable[[dict], str | None]) -> dict | Non
 
 
 class Clips:
-    """The clip assets and skeleton data assets of a lobby core, from its MonoBehaviour typetrees."""
+    """Index a lobby core's clip and skeleton data assets from MonoBehaviour typetrees."""
 
     def __init__(
         self,
@@ -173,7 +205,13 @@ class Clips:
         skeletons: Iterable[str] = (),
         sound: Callable[[int, dict], str | None] | None = None,
     ):
-        # sound(clip asset path id, event pointer) gives a sound key event's id (clip_entry)
+        """Resolve clip playback settings against each skeleton's data asset.
+
+        Args:
+            behaviours: MonoBehaviour path-ID/typetree pairs from the lobby core's bundles.
+            skeletons: Preferred spelling of known skeleton names, matched without case sensitivity.
+            sound: Resolves a clip asset path ID and sound-event pointer to an ID; None omits sounds.
+        """
         named = {s.lower(): s for s in skeletons}
         raw, names = [], {}
         self.mixes: dict[str, float] = {}  # skeleton -> SkeletonDataAsset.defaultMix
@@ -202,13 +240,13 @@ class Clips:
             self.by_pid[pid] = (skel, anim)
 
     def sound_events(self) -> list[str]:
-        """The ids of the events the clips' sound keys play, sorted."""
+        """Return sorted unique event IDs played by the clips' sound keys."""
         return sorted(
             {event for anims in self.clips.values() for c in anims.values() for _, event in c.get("sounds", [])}
         )
 
     def anim(self, pointer: dict | None) -> str | None:
-        """The animation a clip pointer plays (pointers into the core bundles match by path id)."""
+        """Resolve a core-bundle clip pointer by path ID to its animation name, or None."""
         return self.by_pid.get((pointer or {}).get("m_PathID", 0), (None, None))[1]
 
 
@@ -304,14 +342,13 @@ _POST_KEYS = {
     "ColorAdjustments": "colorAdjustments",
 }
 # The lobby is drawn by the PC client's main Camera (level1 Persistent/Camera, whose culling mask has the lobby's layer
-# 12), and URP blends only the volumes on the layers of that camera's volume mask (UniversalAdditionalCameraData
-# m_VolumeLayerMask 0x40020000). Every lobby keeps its volumes on 30, but for three (Yoshimi, Shimiko and CH0356;
-# Erika too before the 2026-11 update) on the UI layer 5, which the camera never blends.
+# 12), and URP blends only volumes in its mask (UniversalAdditionalCameraData m_VolumeLayerMask 0x40020000).
+# Volumes on UI layer 5, including Yoshimi's, Shimiko's, and CH0356's, are outside that mask.
 CAMERA_VOLUME_LAYERS = frozenset({17, 30})
 
 
 def is_volume(tree: dict) -> bool:
-    """A URP Volume (its MonoScript lives in the render pipeline's assembly, outside the prefab bundle)."""
+    """Recognize a URP Volume whose MonoScript lives outside the prefab bundle in the render-pipeline assembly."""
     return "sharedProfile" in tree and "weight" in tree and "m_IsGlobal" in tree
 
 
@@ -327,20 +364,25 @@ def _lerp(a: Any, b: Any, t: float) -> Any:
 
 
 def counts(volume: dict) -> bool:
-    """Whether a volume takes part in the blend: enabled on an active GameObject in the camera's volume layers (when
-    the layer is known), global, with a weight above 0."""
+    """Check whether a volume is active, global, positively weighted, and in the camera mask if its layer is known."""
     seen = volume.get("layer") is None or volume["layer"] in CAMERA_VOLUME_LAYERS
     return seen and bool(volume.get("active")) and bool(volume.get("global")) and float(volume.get("weight", 0.0)) > 0
 
 
 def post_processing(volumes: Iterable[dict]) -> dict:
-    """What the lobby's post-processing volumes leave on screen, blended the way URP's VolumeManager does it: the
+    """Blend lobby post-processing volumes as URP's VolumeManager does.
+
+    Use the
     enabled global volumes on the camera's volume layers with a weight above 0, by priority (equal ones in hierarchy
     order), each active component lerping its overridden parameters from the stack's value by the volume's weight.
     Only effects that end up doing something are kept (URP's IsActive): {"chromaticAberration": intensity, "panini":
     {distance, cropToFit}, "liftGammaGain": {lift, gamma, gain}, "colorAdjustments": {postExposure, contrast,
-    colorFilter, hueShift, saturation}}. volumes: {"weight", "priority", "global", "active", "layer" (optional),
-    "components"} (the profile's component typetrees)."""
+    colorFilter, hueShift, saturation}}.
+
+    Args:
+        volumes: Hierarchy-ordered records with weight, priority, global, active, optional layer,
+            and profile component typetrees under components.
+    """
     stack = {
         kind: {k: list(v) if isinstance(v, list) else v for k, v in params.items()}
         for kind, params in VOLUME_DEFAULTS.items()
@@ -387,13 +429,22 @@ def read_prefab(
     profile: Callable[[int, dict], list[dict] | None] | None = None,
     resolve: Callable[[str, int, dict], tuple[str, Any] | None] | None = None,
 ) -> dict | None:
-    """The lobby's layout, touch boxes, post-processing, particle and mesh effects, the materials its skeletons are
-    drawn with and the bones it pins, from one prefab bundle: kinds maps path ids to object types, tree reads a
-    typetree, scripts maps MonoScript path ids to class names, profile(volume path id, sharedProfile pointer) gives a
-    volume profile's component typetrees, resolve(kind, owner path id, pointer) reads a material ("material"), mesh
-    ("mesh"), animator controller ("animator") or skeleton data asset ("skeleton", "pages") in another bundle as (id,
-    data) (particles.build, meshfx.build, spine_materials.layer). None when the root is missing or places none of the
-    skeletons."""
+    """Read a lobby prefab's layout, interaction, post-processing, effects, materials, and pins.
+
+    Args:
+        kinds: Prefab object path IDs mapped to Unity object type names.
+        tree: Reads an object's typetree by same-bundle path ID.
+        scripts: MonoScript path IDs mapped to component class names.
+        root: Top-level GameObject name to match without case sensitivity.
+        skeletons: Available internal skeleton names to match against SkeletonAnimation data assets.
+        clips: Core clip index supplying animations, skeleton names, mixes, and data scales.
+        profile: Reads a Volume's sharedProfile pointer by owner path ID; None omits profile components.
+        resolve: Reads material, mesh, animator, skeleton/pages, or intro assets by kind, owner ID, and pointer,
+            returning (id, data) for particles.build, meshfx.build, and spine_materials.layer; None omits reads.
+
+    Returns:
+        Exported prefab data, or None when the root is absent or places no available skeleton.
+    """
     wanted = {s.lower(): s for s in skeletons}
     top = next(
         (
@@ -439,7 +490,6 @@ def read_prefab(
             scaled = dict.fromkeys(aspect_targets(comp), factor)
             break
 
-    # one walk from the root: world transform, activity and components of every GameObject, in hierarchy order
     nodes: list[dict] = []
 
     def walk(tf: int, m: tuple[float, ...], m3: list[float], active: bool, parent: int, path: str) -> None:
@@ -485,7 +535,6 @@ def read_prefab(
     by_go = {n["go"]: n for n in nodes}
     plan = _intro_plan(nodes, kinds, resolve)
 
-    # skeletons: SkeletonAnimation GameObjects named (by their data asset, else by themselves) after a core skeleton
     layers, skeleton_of_sa, layer_nodes = [], {}, {}
     for n in nodes:
         for cls, pid, sa in n["all"]:
@@ -524,7 +573,6 @@ def read_prefab(
         return None
 
     def skeleton_of(character: dict | None) -> str | None:
-        # a SpineCharacter pointer -> the skeleton its SkeletonAnimation draws
         pid = (character or {}).get("m_PathID", 0)
         if kinds.get(pid) != "MonoBehaviour":
             return None
@@ -567,7 +615,6 @@ def read_prefab(
                 if profile is not None and (counts(vol) or (plan is not None and plan.touches(n, pid))):
                     vol["components"] = profile(pid, t["sharedProfile"]) or []
                 volumes.append(vol)
-                # for the intro (intro.build): the volume's own switch and node
                 vol.update(
                     _pid=pid,
                     _node=n,
@@ -635,7 +682,6 @@ def read_prefab(
     sa_go = {n["go"]: skeleton_of_sa.get(n["pids"].get("SkeletonAnimation", 0)) for n in nodes}
     scale_of = lambda skel: clips.scales.get(skel, _DATA_SCALE)  # noqa: E731
     fx = particles.build(nodes, lambda go: sa_go.get(go), scale_of, resolve, gates=plan.gates if plan else ())
-    # the plain mesh renderers and their Animators, drawn and sorted with the particle systems (meshfx.py)
     meshes = meshfx.build(nodes, lambda go: sa_go.get(go), scale_of, resolve)
     for key in ("materials", "textures", "meshes"):
         fx[key].update(meshes[key])
@@ -659,7 +705,6 @@ def read_prefab(
             nodes, lambda go: sa_go.get(go), scale_of, [(d["skeleton"], d["bone"]) for d in drags if d["enabled"]]
         ),
     }
-    # the intro's flash and fade sprites are effects too; then the intro itself (intro.py)
     sprites = []
     for n in nodes:
         for cls, pid, t in n["all"]:
@@ -701,9 +746,17 @@ def _intro_plan(
 
 
 def lobby_info(skeletons: Iterable[str], clips: Clips, prefab: dict | None, sounds: dict | None = None) -> dict:
-    """Everything the web UI's lobby needs. Without a prefab (e.g. a mod with other skeleton names) every skeleton
-    sits at the standard place; the front end then finds the touch boxes from the bones. sounds: the sound key
-    events by id (sound_event)."""
+    """Assemble stage, clips, and sounds for the web UI's lobby player.
+
+    Without a prefab, such as a mod with different skeleton names, every skeleton sits
+    at the standard place and the front end derives touch boxes from its bones.
+
+    Args:
+        skeletons: Available skeleton names, deduplicated in order for fallback layers.
+        clips: Core clip index supplying default mixes and per-skeleton playback settings.
+        prefab: read_prefab result; None uses standard placement. Its intro events are consumed into sounds.
+        sounds: Sound-key event descriptions indexed by ID; None supplies no clip sounds.
+    """
     if prefab is None:
         prefab = {
             "prefab": None,
@@ -735,7 +788,6 @@ def lobby_info(skeletons: Iterable[str], clips: Clips, prefab: dict | None, soun
             ],
             "fx": {"systems": [], "materials": {}, "textures": {}, "meshes": {}, "toggles": []},
         }
-    # the intro's sounds are sound events like the clips' (served the same way)
     events = (prefab.get("intro") or {}).pop("events", {})
     return {
         "view": dict(GAME_VIEW),
