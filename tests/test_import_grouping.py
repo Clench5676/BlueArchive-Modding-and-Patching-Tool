@@ -74,7 +74,7 @@ def test_sets_are_judged_apart_and_the_same_part_under_one_date_is_not_a_repeat(
     assert mod_versions(entries) == ["2025-01-01", "", TEXTURE_DATE, "", ""]
 
 
-# The review's reproduction, through the batch import
+# Differently dated parts, through the batch import
 
 
 def test_batch_import_analyzes_differently_dated_parts_as_one_row_and_applies_all_of_them(env):

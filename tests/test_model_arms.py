@@ -1008,7 +1008,7 @@ def test_trimmed_solver_steps_are_bit_identical_with_and_without_guard_and_start
 
 
 def _contacts_reference(rig, own, weapons, poses, rows, loop, shown=None):
-    """Weapon holds and head pins frame by frame, as before they were batched."""
+    """Weapon holds and head pins frame by frame: the reference for the batched solve."""
     relative = np.full((len(poses), 2, 3), np.nan)
     distance = np.full((len(poses), 2), np.inf)
     if weapons and rig.weapon is not None:

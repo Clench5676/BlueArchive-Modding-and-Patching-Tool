@@ -2320,7 +2320,7 @@ def test_both_review_features_share_the_running_version_gate(app, services, monk
     from ba_modding_toolkit.i18n import i18n_manager
     from bmpt.webui import tours
 
-    # the gate itself, on a tour still under review
+    # the gate itself, on a tour approved only for pre-releases
     monkeypatch.setattr(
         tours, "PUBLISHED_TOURS", tuple({**tour, "approved": "prerelease"} for tour in tours.PUBLISHED_TOURS)
     )

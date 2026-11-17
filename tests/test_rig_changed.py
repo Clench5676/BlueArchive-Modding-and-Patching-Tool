@@ -561,6 +561,6 @@ def test_the_archive_needs_the_scan_consent_and_keeps_only_verified_official_fil
     assert env.library.archive_rigs() == 0 and env.library.rigs.rigs("test_spr") == []  # no consent
     env.library._scan_allowed = lambda: True
     text_part = next(path for path in env.game_dir.glob("*.bundle") if "textassets" in path.name)
-    text_part.write_bytes(text_part.read_bytes() + b"modded")  # no longer the file its name's CRC tells
+    text_part.write_bytes(text_part.read_bytes() + b"modded")  # not the file its name's CRC tells
     assert env.library.archive_rigs() == 0 and env.library.rigs.rigs("test_spr") == []
     assert current.is_file()

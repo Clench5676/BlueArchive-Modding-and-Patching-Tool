@@ -1,4 +1,4 @@
-"""Keep the App/engine boundary tied to the accepted upstream ownership inventory."""
+"""Keep the App/engine boundary tied to the recorded upstream ownership inventory."""
 
 import ast
 import hashlib

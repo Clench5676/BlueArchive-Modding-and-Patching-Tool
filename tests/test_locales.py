@@ -18,7 +18,7 @@ TRANSLATIONS = sorted(p.stem for p in LOCALES.glob("*.json") if p.stem != REFERE
 # {path}, which the caller passes (extra arguments are ignored), and asks for {count}, which the caller passes too.
 KNOWN_PLACEHOLDER_DIFFERENCES: set[tuple[str, str]] = set()
 
-# Classic UI strings upstream ships in en-US and zh-CN only (the render backend settings of v2.12.0). The classic UI is
+# Classic UI strings upstream ships in en-US and zh-CN only (its render backend settings). The classic UI is
 # kept as upstream has it, so the other languages fall back to English for these keys.
 CLASSIC_ONLY_KEYS = {
     "file_type.spine2dump",
@@ -34,8 +34,8 @@ CLASSIC_ONLY_KEYS = {
 }
 
 # Classic UI strings upstream ships in zh-CN only (the bleed threshold and the install dialog's texture similarity), and
-# the classic string upstream dropped from zh-CN only, unused since its planner stopped filtering by date. Kept as
-# upstream has them; their zh-CN text uses upstream's own separators.
+# the classic string upstream dropped from zh-CN only, which its planner leaves unused (it does not filter by date).
+# Kept as upstream has them; their zh-CN text uses upstream's own separators.
 CLASSIC_ZH_CN_ONLY_KEYS = {
     "option.bleed_alpha_threshold",
     "option.bleed_alpha_threshold_info",

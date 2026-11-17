@@ -1520,7 +1520,7 @@ def _split_old_mod(env, monkeypatch):
 
 
 def test_update_keeps_the_official_part_that_takes_nothing_from_the_mod(setup_library, monkeypatch):
-    # A rebuilt part holding none of the replaced types (materials only) no longer fails the whole update
+    # A rebuilt part holding none of the replaced types (materials only) does not fail the whole update
     env = setup_library
     entry, (materials, textures) = _split_old_mod(env, monkeypatch)
     official = materials.read_bytes()
@@ -1992,7 +1992,7 @@ def test_a_moved_install_releases_its_copy_once_restored(setup_library):
     shutil.move(env.original, moved)
     use_install(env, moved)
     env.library.restore("test")
-    # the old folder's record no longer describes a file: nothing there needs the copy
+    # the old folder's record does not describe a file: nothing there needs the copy
     assert moved.read_bytes() == official and not backup.exists()
     assert [m.id for m in env.library.mods()] == [entry.id]  # the moved mod is in the library already
 
@@ -2184,7 +2184,7 @@ def test_switching_keeps_an_applied_mod_missing_from_the_library(setup_library):
     (env.root / "state.json").write_text(json.dumps(data))
     shutil.rmtree(env.root / "mods" / entry.id)
     library = reload_library(env)
-    # the bytes of a mod the library no longer has are offered for adoption
+    # the bytes of a mod the library does not have are offered for adoption
     assert library.state("test").applied == "unknown"
     library.restore("test")
     (kept,) = library.mods()
@@ -2810,7 +2810,7 @@ def test_recovery_repeats_game_and_caller_checks_before_restoring_missing_file(s
     recovered = reload_library(env)
 
     def write():
-        # A read no longer fails on a pending journal; a write attempts the recovery again and is refused with its
+        # A read does not fail on a pending journal; a write attempts the recovery again and is refused with its
         # real failure.
         recovered.set_favorite("test", True)
 
@@ -2888,7 +2888,7 @@ def test_recovery_keeps_an_external_change_and_the_only_official_original(setup_
     external = header_bundle(b"outside change after interruption")
     env.original.write_bytes(external)
     recovered = reload_library(env)
-    recovered.state("test")  # no longer a failure of the whole library: the outside change is left as it is
+    recovered.state("test")  # not a failure of the whole library: the outside change is left as it is
     assert env.original.read_bytes() == external
     assert env.library._original_path(env.original).read_bytes() == official  # the only official copy stays
     assert not list((env.root / "transactions").glob("*/journal.json"))  # the rollback finished and retired it

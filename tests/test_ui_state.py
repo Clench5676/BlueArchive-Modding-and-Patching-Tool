@@ -449,7 +449,7 @@ def test_legacy_file_check_modes_migrate_without_granting_automatic_consent(tmp_
     assert path.stat().st_mtime_ns == before
 
 
-# --- a damaged webui.json (FUN-9): the profiles.json convention ---
+# --- a damaged webui.json: the profiles.json convention ---
 
 
 def _siblings(path: Path) -> tuple[Path, Path]:

@@ -230,7 +230,7 @@ def test_the_manifest_becomes_usable_again_when_it_is_fixed(gallery):
 
 
 def catalog_with_dropped_alt(services):
-    # an alt the catalog no longer lists resolves to itself (Catalog.assignment_variant on an unknown key)
+    # an alt the catalog does not list resolves to itself (Catalog.assignment_variant on an unknown key)
     services.catalog.assignment_variant = lambda key: SimpleNamespace(family=key)
 
 

@@ -221,7 +221,7 @@ def test_loop_return_with_pending_registration_does_not_hold_up_shutdown(desktop
             assert "Native drop registration: complete" not in caplog.text
             assert desktop.callbacks == (["commands disposed"] if desktop.platform == "darwin" else [])
         finally:
-            # Release only for test cleanup, after proving shutdown no longer needs the GUI result.
+            # Release only for test cleanup, after proving that shutdown does not need the GUI result.
             desktop.resume.set()
             loaded.join(3)
             for worker in desktop.workers:

@@ -63,7 +63,7 @@ def test_missing_resources_have_an_actionable_hall_error(app, services, monkeypa
 
 
 def test_absent_catalog_model_record_has_complete_names_for_display(tmp_path):
-    # Before this fix this exact fallback produced a SimpleNamespace.names error.
+    # An absent catalog record still gives a Variant with complete names, never a bare namespace without names.
     catalog = Catalog(None, None, server="japan")
     library = ModLibrary(tmp_path / "library", catalog)
     key = "unlisted_npc"

@@ -196,7 +196,7 @@ def test_apply_checks_references_after_restoring_omitted_official_parts(
         assert not env.library.toggle(False, True).failed
     previous = shared(env.tmp / "previous" / env.original.name, [(5, SHADER), (6, SHADER)])
     (previous_mod,) = env.library.add_files(kind, [previous])
-    # Reproduce a partial write left by an earlier build, with its library record intact. An unrecorded outside
+    # Reproduce a partial write with its library record intact. An unrecorded outside
     # change is deliberately skipped by Mods on before it ever plans or writes this entry.
     env.library._commit(
         {env.original: previous_mod.file},

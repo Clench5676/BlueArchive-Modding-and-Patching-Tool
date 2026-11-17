@@ -1127,7 +1127,7 @@ def test_a_queued_apply_survives_a_change_to_the_other_install(tmp_path):
     host = Host(pins={A: PINS[A], B: ("pin", B, 2)})  # the Japan folder changed
     run = q.run(host)
     assert [m for m, _ in host.submitted] == ["actions.apply"] and not run.dropped
-    # its own install changed, or is no longer the current one: folder_changed
+    # its own install changed, or is not the current one: folder_changed
     for host in (Host(pins={A: ("pin", A, 2), B: PINS[B]}), Host(current=B), Host(pins={B: PINS[B]})):
         q.add(apply_call((A, "hoshino_spr"), f))
         run = q.run(host)
