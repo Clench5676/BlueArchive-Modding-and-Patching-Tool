@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from bmpt import globallines
+from bmpt.lines import global_lines as globallines
 from bmpt.host.config import Settings
 from bmpt.core.errors import ServiceError
 from bmpt.webui import api as webui_api

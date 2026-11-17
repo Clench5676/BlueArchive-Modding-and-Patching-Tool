@@ -2,7 +2,7 @@
 
 import pytest
 
-from bmpt import kivo
+from bmpt.lines import kivo
 from bmpt.core.errors import ServiceError
 
 PAGE = {

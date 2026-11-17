@@ -16,12 +16,12 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from ..core.errors import ServiceError
-from .. import globallines
+from ..lines import global_lines as globallines
 from ..gameassets.errors import AssetNotFound
 from ..gameassets.layouts import export_layout, subtree
 from ..gameassets.unity import open_bundle, object_record
 from ..gameassets.spine import spine_stamps
-from ..kivo import API, AUDIO_HOST, Kivo, _one_line, clip_id
+from ..lines.kivo import API, AUDIO_HOST, Kivo, _one_line, clip_id
 
 logger = logging.getLogger(__name__)
 

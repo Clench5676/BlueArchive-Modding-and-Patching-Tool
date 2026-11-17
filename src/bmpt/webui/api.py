@@ -22,14 +22,14 @@ from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import unquote
 
-from .. import globallines
+from ..lines import global_lines as globallines
 from ..host import updater
 from ..core import devmode
 from ..catalog.special import SPECIAL_PREFIX
 from ..core.errors import ServiceError
 from bmpt.engine import get_version_info, i18n_manager, offered_languages, parse_filename, t
 from .strings import get_locale_dir
-from ..kivo import clip_id
+from ..lines.kivo import clip_id
 from ..library.storage import trailing_bytes
 from . import strings
 from .jobs import Cancelled

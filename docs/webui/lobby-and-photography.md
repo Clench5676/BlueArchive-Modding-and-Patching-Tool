@@ -71,8 +71,8 @@ own module:
 
 Online data, fetched on demand and kept in memory only (never written to disk):
 
-- Kivo (`kivo.py`): one student page per variant (zh-CN, ja and the voices, by voice clip name).
-- The Global server's CharacterDialog table (`globallines.py`), as ba-data publishes it (one bounded download per
+- Kivo (`lines/kivo.py`): one student page per variant (zh-CN, ja and the voices, by voice clip name).
+- The Global server's CharacterDialog table (`lines/global_lines.py`), as ba-data publishes it (one bounded download per
   session, only when the UI language is not zh-CN; `lobby.lines` waits up to 3 s for it, then answers with Kivo's
   lines alone). A dialogue's rows go on the talk animation's voice clips in order.
 

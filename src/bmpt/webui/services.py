@@ -21,8 +21,8 @@ from ..host import steam_records, updater
 from ..core import devmode, preview_gate, spans
 from ..host.config import APP_DIR_NAME, Settings, managed_cache_dir
 from ..host.data_paths import OLD_APP_DIR_NAME
-from ..globallines import GlobalLines
-from ..kivo import Kivo
+from ..lines.global_lines import GlobalLines
+from ..lines.kivo import Kivo
 from ..core.errors import ServiceError
 from bmpt.engine import EXE_DIR, i18n_manager, parse_filename
 from ..core.logging_utils import log_failure
