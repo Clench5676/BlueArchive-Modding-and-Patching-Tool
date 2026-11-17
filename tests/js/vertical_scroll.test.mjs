@@ -344,7 +344,7 @@ test("pointer, keyboard, blur, visibility and motion preference changes cancel n
 });
 
 test("the roster uses the shared controller for its virtual position and cancels it on hide or rebuild", () => {
-  const source = readFileSync(new URL("../../src/bmpt/web/js/roster.js", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../../src/bmpt/web/js/roster/roster.js", import.meta.url), "utf8");
   assert.match(flat(source), /wheelScroller\(\{ read: \(\) => view.scroll/);
   assert.match(flat(source), /view.scroll = top; applyScroll\(\)/);
   assert.match(flat(source), /if \(motion.wheel\(ev\)\) return;/);

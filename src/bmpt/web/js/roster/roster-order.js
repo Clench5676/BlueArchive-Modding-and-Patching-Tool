@@ -2,7 +2,7 @@
 // sort, the search), shared by the roster and the detail screen's arrows. No DOM: the tests run it in Node.
 // arrange gives the cards as the roster shows them, order the same cards in one list, neighbour the card before
 // or after the shown variant (or family, merged), visit the recently viewed order after a visit.
-import { studentName } from "./core/names.js";
+import { studentName } from "../core/names.js";
 
 export const SORTS = ["recent", "added", "name", "mods", "default"];
 // the direction each sort reads in by default; the order button flips it

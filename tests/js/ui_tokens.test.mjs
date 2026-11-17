@@ -427,8 +427,8 @@ test("Hall modal footers use the default XS for one, two and three actions", () 
     assert.equal(footerHelpers.footerBottom(), Tokens.POPUP_FOOTER.bottom, "the prefab's 102 under 176, scaled to 104");
   }
 });
-const { SORTS } = await import("../../src/bmpt/web/js/roster-order.js");
-const toolbarSource = read("js/roster-widgets.js");
+const { SORTS } = await import("../../src/bmpt/web/js/roster/roster-order.js");
+const toolbarSource = read("js/roster/roster-widgets.js");
 const toolbarFor = (web) =>
   new Function(
     "NGUI",

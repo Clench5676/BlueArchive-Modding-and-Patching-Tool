@@ -93,7 +93,7 @@ import {
   sourceOf,
   switchKindOf,
 } from "./switch-sources.js";
-import { pickerItems } from "./roster-widgets.js";
+import { pickerItems } from "./roster/roster-widgets.js";
 import {
   $,
   DOT,

@@ -7,7 +7,7 @@ import { resizeButton } from "../ui/button-layout.js";
 import { scrollbar } from "../ui/scrollbar.js";
 import * as NGUI from "../ui/ngui.js";
 import { T } from "../core/i18n.js";
-import { FILTERS, NATURAL, SORTS } from "../roster-order.js";
+import { FILTERS, NATURAL, SORTS } from "../roster/roster-order.js";
 import { BACKDROP, POPUP_FRAME, POPUP_TYPE } from "../ui/ui-tokens.js";
 import { $, S, clone, glyphsOf, hitButton } from "../core/util.js";
 

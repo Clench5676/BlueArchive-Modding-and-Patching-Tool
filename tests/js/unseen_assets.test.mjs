@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { clearUnseen, hasUnseen, shownUnseen, switchUnseen } from "../../src/bmpt/web/js/unseen-assets.js";
-import { DEFAULT_VIEW, normalizeView, order } from "../../src/bmpt/web/js/roster-order.js";
+import { DEFAULT_VIEW, normalizeView, order } from "../../src/bmpt/web/js/roster/roster-order.js";
 
 const mod = (id, target, kind) => ({ id, target, kind, fresh: true });
 const variant = (key, mods = []) => ({

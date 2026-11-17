@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { clipRosterBand } from "../../src/bmpt/web/js/roster-card.js";
+import { clipRosterBand } from "../../src/bmpt/web/js/roster/roster-card.js";
 import { collectionStill } from "../../src/bmpt/web/js/thumbs.js";
 import { maskCanvas } from "./sprite_mask_fixture.mjs";
 
 const source = (file) => readFileSync(new URL(`../../src/bmpt/web/js/${file}.js`, import.meta.url), "utf8");
 
 test("the native tag and portrait share the card's painted surface after deferred frame completion", async () => {
-  assert.doesNotMatch(source("roster"), /w_ = 406/);
+  assert.doesNotMatch(source("roster/roster"), /w_ = 406/);
   const previous = globalThis.document,
     fake = maskCanvas();
   globalThis.document = fake.document;

@@ -1,4 +1,4 @@
-import { maskWithSprite } from "./ui/sprite-mask.js";
+import { maskWithSprite } from "../ui/sprite-mask.js";
 
 /**
  * Clip a roster card's band and portrait to the game's filled card surface. Its bevel and shadow are outside

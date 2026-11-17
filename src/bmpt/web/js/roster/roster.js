@@ -6,10 +6,10 @@
 // pins) come first in each group. The view is kept across launches (settings key "roster"), the search for the session.
 // Only the rows near the view are rendered.
 import { clipRosterBand } from "./roster-card.js";
-import { specialFraming } from "./special-view.js";
-import * as NGUI from "./ui/ngui.js";
-import * as Display from "./app/display.js";
-import * as Loading from "./app/loading.js";
+import { specialFraming } from "../special-view.js";
+import * as NGUI from "../ui/ngui.js";
+import * as Display from "../app/display.js";
+import * as Loading from "../app/loading.js";
 import {
   emptyListY,
   searchTree as rosterSearchTree,
@@ -17,15 +17,15 @@ import {
   toolbarLayout,
   toolbarTree,
 } from "./roster-widgets.js";
-import { countNodes, countText, iconsOf } from "./mod-counts.js";
-import { rpc, spineBase } from "./core/api.js";
-import { L, T, language } from "./core/i18n.js";
-import { scrollbar } from "./ui/scrollbar.js";
-import { wheelScroller } from "./ui/horizontal-scroll.js";
-import { prioritise, thumbnailScope } from "./thumbs.js";
-import { spineAllowed } from "./spine-runtime.js";
-import { configuredKey, hasAsset, previewBase, primaryKind } from "./switch-sources.js";
-import { $, RECRUIT, S, advanceOf, clone, glyphsOf } from "./core/util.js";
+import { countNodes, countText, iconsOf } from "../mod-counts.js";
+import { rpc, spineBase } from "../core/api.js";
+import { L, T, language } from "../core/i18n.js";
+import { scrollbar } from "../ui/scrollbar.js";
+import { wheelScroller } from "../ui/horizontal-scroll.js";
+import { prioritise, thumbnailScope } from "../thumbs.js";
+import { spineAllowed } from "../spine-runtime.js";
+import { configuredKey, hasAsset, previewBase, primaryKind } from "../switch-sources.js";
+import { $, RECRUIT, S, advanceOf, clone, glyphsOf } from "../core/util.js";
 import { DEFAULT_VIEW, arrange, normalizeView, order as orderOf } from "./roster-order.js";
 
 const { node, sprite, find } = NGUI;

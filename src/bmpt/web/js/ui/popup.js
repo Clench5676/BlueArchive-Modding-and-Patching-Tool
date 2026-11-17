@@ -13,7 +13,7 @@ import { switchGrid, placeSwitchCards } from "../switch-layout.js";
 import { scrollbar, scrollbarTrack } from "./scrollbar.js";
 import { horizontalScroll } from "./horizontal-scroll.js";
 import * as Buttons from "./game-buttons.js";
-import { searchTree, pickerItems, toolbarFit, toolbarTree, TOOLBAR_CENTRE_Y } from "../roster-widgets.js";
+import { searchTree, pickerItems, toolbarFit, toolbarTree, TOOLBAR_CENTRE_Y } from "../roster/roster-widgets.js";
 import { resizeButton } from "./button-layout.js";
 import {
   fitBadgeCaptions,

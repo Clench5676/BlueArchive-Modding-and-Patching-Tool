@@ -1,4 +1,4 @@
-// Tests for web/js/roster-order.js (the student list's cards and their order), run by tests/test_roster_order.py
+// Tests for web/js/roster/roster-order.js (the student list's cards and their order), run by tests/test_roster_order.py
 // with Node's test runner: node --test tests/js/roster_order.test.mjs
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -16,7 +16,7 @@ import {
   normalizeView,
   order,
   visit,
-} from "../../src/bmpt/web/js/roster-order.js";
+} from "../../src/bmpt/web/js/roster/roster-order.js";
 
 const v = (key, extra = {}) => ({
   key,

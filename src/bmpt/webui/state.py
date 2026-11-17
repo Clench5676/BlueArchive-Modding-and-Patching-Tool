@@ -90,8 +90,8 @@ def custom_aliases(value: Any) -> list[str]:
     return out[:ALIAS_MAX]
 
 
-# The student list's view (web/js/roster-order.js keeps the same rules): merge toggle, the two segment filters, the
-# display settings' sort, order and filter groups.
+# The student list's view (web/js/roster/roster-order.js keeps the same rules): merge toggle, the two segment filters,
+# the display settings' sort, order and filter groups.
 ROSTER_SORTS = ("recent", "added", "name", "mods", "default")
 ROSTER_NATURAL = {"recent": "desc", "added": "desc", "name": "asc", "mods": "desc", "default": "asc"}
 ROSTER_FILTERS = {

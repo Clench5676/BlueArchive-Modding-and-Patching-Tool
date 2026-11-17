@@ -1,9 +1,9 @@
 // UICharacterCollection's search field and list tools, shared with Batch Import.
-import * as NGUI from "./ui/ngui.js";
-import { S, clone, advanceOf, glyphsOf } from "./core/util.js";
-import { emptyBlock } from "./ui/empty-block.js";
-import { CONTROL, SPACE } from "./ui/ui-tokens.js";
-import { row } from "./ui/ui-grid.js";
+import * as NGUI from "../ui/ngui.js";
+import { S, clone, advanceOf, glyphsOf } from "../core/util.js";
+import { emptyBlock } from "../ui/empty-block.js";
+import { CONTROL, SPACE } from "../ui/ui-tokens.js";
+import { row } from "../ui/ui-grid.js";
 
 /**
  * The game's search field, emptied.
@@ -78,7 +78,7 @@ export function pickerItems(items, { query = "", sort = "default", ascending = t
   return ascending ? list : list.reverse();
 }
 
-import { T } from "./core/i18n.js";
+import { T } from "../core/i18n.js";
 import { SORTS, filtering } from "./roster-order.js";
 const { find, node, label, fitText } = NGUI;
 

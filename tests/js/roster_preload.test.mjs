@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 const main = readFileSync(new URL("../../src/bmpt/web/js/app/main.js", import.meta.url), "utf8");
-const roster = readFileSync(new URL("../../src/bmpt/web/js/roster.js", import.meta.url), "utf8");
+const roster = readFileSync(new URL("../../src/bmpt/web/js/roster/roster.js", import.meta.url), "utf8");
 const startCode = main.slice(main.indexOf("async function start()"), main.indexOf("\nboot()"));
 const prefabCode = roster.slice(roster.indexOf("const PREFABS ="), roster.indexOf("export async function show("));
 const flush = async () => {

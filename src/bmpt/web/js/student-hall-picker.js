@@ -3,7 +3,7 @@ import * as UI from "./student-hall-ui.js";
 import * as Display from "./app/display.js";
 import * as Popup from "./ui/popup.js";
 import { bindReorder, dragFeedback } from "./student-hall-reorder.js";
-import { normalizeView } from "./roster-order.js";
+import { normalizeView } from "./roster/roster-order.js";
 import { portraitRows, studentChoices, memorialChoices, sourceKey } from "./student-hall-model.js";
 import { thumbnailScope } from "./thumbs.js";
 import { lazyThumbnail } from "./ui/lazy-thumbnail.js";

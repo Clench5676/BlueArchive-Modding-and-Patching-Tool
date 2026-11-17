@@ -53,7 +53,7 @@ import {
   noteRoom,
   sourceFolder,
 } from "./import-state.js";
-import { characterPicker } from "./character-picker.js";
+import { characterPicker } from "./roster/character-picker.js";
 import { scrollbar as gameScrollbar, scrollbarTrack } from "./ui/scrollbar.js";
 
 // The list's top in the panel: 12 under Items' grey Inbox (its top edge is at 98). The search field, open, takes

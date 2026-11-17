@@ -8,7 +8,7 @@ import {
   memorialChoices,
   contentBounds,
 } from "../../src/bmpt/web/js/student-hall-model.js";
-import { normalizeView } from "../../src/bmpt/web/js/roster-order.js";
+import { normalizeView } from "../../src/bmpt/web/js/roster/roster-order.js";
 const saved = () => ({
   revision: 0,
   mode: "portraits",

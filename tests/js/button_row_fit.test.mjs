@@ -282,7 +282,7 @@ for (const locale of LOCALES)
 // --- segments: the roster's six and the list popup's three ---
 for (const locale of LOCALES)
   test(`the roster's six segments and the popup's three share one size in ${locale}`, async () => {
-    const roster = await source("roster-widgets.js"),
+    const roster = await source("roster/roster-widgets.js"),
       popup = await source("ui/popup.js");
     // the roster's two filters' six captions go through toolbarFit, which fits every filter's captions as one group
     assert.match(

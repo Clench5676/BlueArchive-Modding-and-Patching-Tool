@@ -5,7 +5,7 @@ import * as Popup from "./ui/popup.js";
 import * as Loading from "./app/loading.js";
 import { withTimeout } from "./core/async.js";
 import * as Buttons from "./ui/game-buttons.js";
-import { searchTree, orderBody, toolbarLayout, toolbarTree } from "./roster-widgets.js";
+import { searchTree, orderBody, toolbarLayout, toolbarTree } from "./roster/roster-widgets.js";
 import { clone, S, hitButton } from "./core/util.js";
 import { T } from "./core/i18n.js";
 import { spriteUrl } from "./core/api.js";

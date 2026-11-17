@@ -8,7 +8,7 @@ import * as Sources from "../../src/bmpt/web/js/switch-sources.js";
 import { LOCALES, installFitPage } from "./helpers/fit_canvas.mjs";
 
 installFitPage();
-const { pickerItems } = await import("../../src/bmpt/web/js/roster-widgets.js");
+const { pickerItems } = await import("../../src/bmpt/web/js/roster/roster-widgets.js");
 const source = readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8");
 const functionSource = (name) => {
   const at = source.indexOf(`function ${name}(`);
