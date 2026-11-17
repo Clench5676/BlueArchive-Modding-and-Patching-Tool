@@ -117,7 +117,7 @@ test("stopped memorial sites explicitly retain their existing button boxes and c
   assert.match(hall, /kind === "spr" \? button : retainedButton/);
   // the queue's Remove is a trash button over the card
   assert.match(src("js/hall/student-hall-picker.js"), /UI\.trashButton\(box, `Remove/);
-  assert.match(src("js/hall/student-hall.js"), /UI\.button\(destination, "HallPortraitScaleReset"/);
+  assert.match(src("js/hall/student-hall-portrait-toolbar.js"), /UI\.button\(destination, "HallPortraitScaleReset"/);
 });
 
 // --- item F: colours from the game's own prefabs, each in one place ---
@@ -978,5 +978,5 @@ for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"])
     assert.equal(host.origin[1], 74 + row / 2, "centred on the slider's row");
     assert.ok(label.fontSize >= Tokens.XS_BUTTON.fsMin, "the small button's floor, no allowance needed any more");
     assert.equal(label.text.replace(/\s/g, ""), web.hall.scaleReset.replace(/\s/g, ""));
-    assert.match(src("js/hall/student-hall.js"), /captionSite: "hall.scaleReset"/);
+    assert.match(src("js/hall/student-hall-portrait-toolbar.js"), /captionSite: "hall.scaleReset"/);
   });

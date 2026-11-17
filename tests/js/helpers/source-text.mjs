@@ -95,6 +95,15 @@ export const compact = (text) =>
     .replace(/,([)\]}])/g, "$1")
     .replace(/(^|[^\w$.])\(([\w$]+)\)=>/g, "$1$2=>");
 
+// A module and the sibling modules split from it as one module body, for tests that evaluate the code with stubs of
+// their own: the import statements and the `export { ... }` lists that link the pieces are dropped, and so is the
+// `export` keyword of the siblings' declarations (the first module keeps its own exported declarations).
+export const joinedModules = (main, ...siblings) =>
+  [main, ...siblings.map((text) => text.replace(/^export (?=(async )?function\b|const |let |class )/gm, ""))]
+    .join("\n")
+    .replace(/^import [^;]*;$/gm, "")
+    .replace(/^export \{[^}]*\};$/gm, "");
+
 // The relative specifier a web UI module writes to import another, as a regular expression source matching only that
 // specifier: `from` and `to` are paths under web/js (e.g. "app/main.js", "core/i18n.js").
 export function importOf(from, to) {

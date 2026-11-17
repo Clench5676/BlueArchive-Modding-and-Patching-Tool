@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFile } from "node:fs/promises";
+import { joinedModules } from "./helpers/source-text.mjs";
 
 import { CONTROL, XS_BUTTON, SPACE } from "../../src/bmpt/web/js/ui/ui-tokens.js";
 const S = 1920 / 2960;
@@ -109,8 +110,8 @@ globalThis.hallControlsHarness = {
   },
   lobby,
 };
-let source = await readFile(new URL("../../src/bmpt/web/js/hall/student-hall.js", import.meta.url), "utf8");
-source = source.replace(/^import [^;]*;$/gm, "");
+const hallFile = (name) => readFile(new URL(`../../src/bmpt/web/js/hall/${name}`, import.meta.url), "utf8");
+let source = joinedModules(await hallFile("student-hall.js"), await hallFile("student-hall-portrait-toolbar.js"));
 source =
   `import { CONTROL, XS_BUTTON, SPACE } from "${new URL("../../src/bmpt/web/js/ui/ui-tokens.js", import.meta.url).href}";\nimport { row } from "${new URL("../../src/bmpt/web/js/ui/ui-grid.js", import.meta.url).href}";\n` +
   source;
