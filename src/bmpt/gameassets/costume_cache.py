@@ -283,7 +283,7 @@ def decode_clip(tree: Mapping):
     Returns:
         A DecodedClip with second-based duration and times, sampled curves, and single-value constants.
     """
-    from .model import DecodedClip
+    from .model_glb import DecodedClip
     from .model_arm_clips import sample_curves
 
     muscle = tree["m_MuscleClip"]

@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from bmpt.gameassets import model_arm_clips as ac, model_skirts as ms
-from bmpt.gameassets.model import decode_clip, read_streamed
+from bmpt.gameassets.model_glb import decode_clip, read_streamed
 
 
 def _binding(path, attr=1, type_id=4):

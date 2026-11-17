@@ -1739,7 +1739,7 @@ class _FxResolver:
             or None for an absent, incompatible, or unreadable object.
         """
         from . import particles
-        from .model import read_mesh
+        from .model_glb import read_mesh
 
         g = self.graph
         own = self.objects.get(owner)
@@ -1949,7 +1949,7 @@ class _FxResolver:
         The lobbies' controllers have one state, looping one clip. The clip is decoded (model.decode_clip) with its
         bindings.
         """
-        from .model import decode_clip
+        from .model_glb import decode_clip
 
         g = self.graph
         tree = g.tree(controller)

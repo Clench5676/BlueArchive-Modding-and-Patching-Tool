@@ -586,7 +586,8 @@ def test_official_the_sources_bottles_stay_in_her_bag(view, tmp_path):
 def test_official_a_mixed_renderer_draws_a_copy_without_its_worn_item(view, tmp_path):
     """Kasumi <- Mari: Kasumi's remote is worn, her drill in the same mesh is not: her drill renderer draws a new mesh,
     the remote's triangles drawing nothing and every other triangle as before; the official mesh stays."""
-    from bmpt.gameassets.model import _key, read_mesh
+    from bmpt.gameassets.model import _key
+    from bmpt.gameassets.model_glb import read_mesh
 
     result, slot, sources, written, official_graph, graph = _switch(view, tmp_path, "ch0089", "mari_original")
     assert result.dropped == ["CH0089_Drill_Mesh"]
@@ -608,7 +609,7 @@ def test_official_a_mixed_renderer_draws_a_copy_without_its_worn_item(view, tmp_
 def test_official_a_carried_item_leaves_the_rest_of_its_renderer_behind(view, tmp_path):
     """Mari <- Saki (Swimsuit): her bag (body and strap) is worn, the other things of its renderer are not: the
     carried mesh draws the bag's triangles only."""
-    from bmpt.gameassets.model import read_mesh
+    from bmpt.gameassets.model_glb import read_mesh
 
     result, slot, sources, written, official_graph, graph = _switch(view, tmp_path, "mari_original", "ch0217")
     assert result.carried == ["CH0217_SkillProp"]

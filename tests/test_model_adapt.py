@@ -1412,7 +1412,8 @@ def test_official_cross_costume_carries_the_source_halo(view, tmp_path):
     files, Azusa's halo renderer in every prefab of the slot draws them where Yukino's draws her own (her extra level
     folded into its node), and the follower takes Yukino's offset. Azusa's own halo objects stay as they were; the slot
     exports, the halo with it."""
-    from bmpt.gameassets.model import _key, _prefabs, export_chibi, model_root, mpos, read_mesh
+    from bmpt.gameassets.model import _key, _prefabs, export_chibi, model_root
+    from bmpt.gameassets.model_glb import mpos, read_mesh
 
     slot, sources, written, adapted, official, graph = _cross_build(view, tmp_path, "ch0171_enemy")
     new = _official_objects_kept(
@@ -1692,7 +1693,8 @@ def test_official_cross_costume_carries_a_skinned_halo(view, tmp_path):
     Miyu's halo renderer draws it, unskinned, where Ayame's bone draws it against the head (the follower moves the
     followed node there), moved along with the head where the bound costume's head sits off Miyu's head joint;
     Miyu's own halo mesh is gone from the export."""
-    from bmpt.gameassets.model import _key, _prefabs, export_chibi, model_root, read_mesh
+    from bmpt.gameassets.model import _key, _prefabs, export_chibi, model_root
+    from bmpt.gameassets.model_glb import read_mesh
 
     results = []
     slot, sources, written, adapted, official, graph = _cross_build(view, tmp_path, "np0229", "ch0145", results)

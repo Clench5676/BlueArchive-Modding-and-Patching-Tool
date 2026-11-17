@@ -16,6 +16,7 @@ import pytest
 from bmpt.host.config import Settings
 from bmpt.gameassets import AssetCache, AssetNotFound, GameAssets
 from bmpt.gameassets import model
+from bmpt.gameassets import model_glb
 from bmpt.webui.services import Services
 from bmpt.webui.state import UiState
 from ba_modding_toolkit.searching import get_search_dirs
@@ -60,7 +61,7 @@ def test_a_clips_toggles_name_the_renderers_gameobject_and_bring_what_the_model_
             ]
         },
     }
-    decoded = model.DecodedClip(1.0, [0.0, 0.5, 1.0], {0: [1.0, 0.0, 0.0], 1: [0.0, 1.0, 1.0], 2: [1.0]})
+    decoded = model_glb.DecodedClip(1.0, [0.0, 0.5, 1.0], {0: [1.0, 0.0, 0.0], 1: [0.0, 1.0, 1.0], 2: [1.0]})
     toggles = exporter.toggles(tt, decoded, by_hash)
     assert toggles == [
         {"node": nodes["Face"], "keys": [[0.0, 1], [0.5, 0]]},

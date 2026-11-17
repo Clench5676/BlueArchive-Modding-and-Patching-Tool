@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 from bmpt.gameassets import model_skirts as ms
-from bmpt.gameassets.model import bind_tracks, decode_clip
+from bmpt.gameassets.model_glb import bind_tracks, decode_clip
 from bmpt.gameassets import model_adapt as ma
 from bmpt.gameassets.model_adapt import trs
 

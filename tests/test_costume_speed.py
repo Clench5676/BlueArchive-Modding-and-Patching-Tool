@@ -105,7 +105,7 @@ def test_pose_cache_concurrent_builds_get_whole_independent_results(tmp_path):
 @pytest.mark.parametrize("begin,stop,rate", [(0.0, 1.0, 3.0), (-0.3, 1.4, 13.0), (0.0, 0.0, 30.0)])
 def test_vectorized_decoder_is_exact_for_streamed_dense_and_constant_curves(begin, stop, rate):
     from test_model_arm_clips import _clip
-    from bmpt.gameassets.model import decode_clip
+    from bmpt.gameassets.model_glb import decode_clip
 
     tree = copy.deepcopy(_clip())
     tree["m_MuscleClip"].update(m_StartTime=begin, m_StopTime=stop)
@@ -275,7 +275,7 @@ def test_selected_pose_nodes_keep_the_full_hierarchy_path_collision_order():
 
 def test_vectorized_decoder_preserves_the_bits_of_a_hold_before_the_first_key():
     from test_model_arm_clips import _clip
-    from bmpt.gameassets.model import decode_clip
+    from bmpt.gameassets.model_glb import decode_clip
     from bmpt.gameassets.model_arm_clips import encode_streamed
 
     tree = _clip()
@@ -289,7 +289,7 @@ def test_vectorized_decoder_preserves_the_bits_of_a_hold_before_the_first_key():
 def test_clip_samples_cache_hits_and_invalidates_on_in_place_curve_or_grid_changes(monkeypatch):
     from test_model_arm_clips import _clip
     from bmpt.gameassets import model_arm_clips as ac
-    from bmpt.gameassets.model import decode_clip
+    from bmpt.gameassets.model_glb import decode_clip
 
     monkeypatch.setattr(cc, "_clips", cc.ArrayLRU())
     tree = _clip()

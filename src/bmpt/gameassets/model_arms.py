@@ -842,7 +842,7 @@ def weapon_visibility(rig, tree, parts, poses):
         parts: Weapon renderer parts, one column in the returned mask per part.
         poses: Sampled clip poses whose count sets the frame dimension.
     """
-    from .model import bind_toggles, TOGGLE_TYPES
+    from .model_glb import bind_toggles, TOGGLE_TYPES
     from .model_arm_clips import sample_curves
 
     by_hash = {zlib.crc32(n.path.encode()): i for i, n in enumerate(rig.sk.nodes)}

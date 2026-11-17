@@ -81,15 +81,11 @@ from .model import (
     _external_cab,
     _key,
     _prefabs,
-    bind_tracks,
-    euler_orders,
-    euler_to_quat,
     ex_only_renderers,
     model_root,
-    read_mesh,
     shader_kind,
-    UNITY_ORDER,
 )
+from .model_glb import bind_tracks, euler_orders, euler_to_quat, read_mesh, UNITY_ORDER
 
 if TYPE_CHECKING:
     from .model_props import WornStore
