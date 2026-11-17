@@ -717,7 +717,7 @@ register(
   return result;
 }
 export async function resolve(spec, ctx, next) {
-  if ((spec === "../model.js" && ctx.parentURL?.endsWith("/detail.js")) ||
+  if ((spec === "../model/model.js" && ctx.parentURL?.endsWith("/detail.js")) ||
       (spec === "./model.js" && ctx.parentURL?.endsWith("/model-still.js")))
     return { url: ${JSON.stringify(modelStub)}, shortCircuit: true };
   return next(spec, ctx);

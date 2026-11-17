@@ -36,7 +36,7 @@ import { anyOpen as popupOpen } from "../ui/popup.js";
 import { rpc, spineBase, spinePrefix, loadSpineAssets, waitJob } from "../core/api.js";
 import { L, T, errorText, language, platform } from "../core/i18n.js";
 import { forget, idleAnimation, prioritise, thumbnailScope } from "./thumbs.js";
-import { modelThumbnail, modelStillVersion } from "../model-still.js";
+import { modelThumbnail, modelStillVersion } from "../model/model-still.js";
 import { lazyThumbnail } from "../ui/lazy-thumbnail.js";
 import { portraitViewport } from "./portrait-view.js";
 import { colourSwitchCard } from "../mods/switch-card.js";
@@ -168,7 +168,7 @@ let modelMenu = null;
 let actionLoad = null;
 // three.js and the model viewer load with the first 3D model
 let modelLib = null;
-const ModelLib = () => (modelLib ||= import("../model.js"));
+const ModelLib = () => (modelLib ||= import("../model/model.js"));
 let renderToken = 0,
   exprToken = 0,
   chipToken = 0,

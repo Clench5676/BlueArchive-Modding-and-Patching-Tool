@@ -14,7 +14,7 @@ import { customAliases, studentName } from "../core/names.js";
 import { specialFraming } from "../detail/special-view.js";
 import { spineAllowed } from "../spine/spine-runtime.js";
 import { thumbnailScope, forget } from "../detail/thumbs.js";
-import { modelThumbnail } from "../model-still.js";
+import { modelThumbnail } from "../model/model-still.js";
 import { S } from "../core/util.js";
 import { XS_BUTTON, SPACE, CONTROL, POPUP_FRAME, POPUP_TYPE } from "../ui/ui-tokens.js";
 import { row as layoutRow, stack as layoutStack, container } from "../ui/ui-grid.js";

@@ -100,7 +100,7 @@ metadata, confined to the installation and checked by device, inode, size, mtime
 `unity/unityfs.py` parser reads only header/block info and uses the declared bundle length to ignore CRC-correction
 tails. The GLB
 carries what the game's shaders need (materials, constants, keywords, outline, blend state, samplers, clip toggles);
-`web/js/chibi-materials.js` ports the game's shaders from their compiled programs, and `model.js` opens at the
+`web/js/model/chibi-materials.js` ports the game's shaders from their compiled programs, and `model.js` opens at the
 formation screen's view with the formation screen's light, both read from the game's own data and checked against
 in-game screenshots. Input is wheel/pinch zoom, pan and orbit with eased framing (`attachInput`).
 

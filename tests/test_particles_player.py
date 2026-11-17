@@ -20,7 +20,7 @@ def test_particle_player_in_node():
 
 @pytest.mark.skipif(NODE is None, reason="Node.js is not installed")
 def test_model_halo_particles_in_node():
-    """The halo's particles in the 3D model view (web/js/model-fx.js)."""
+    """The halo's particles in the 3D model view (web/js/model/model-fx.js)."""
     tests = Path(__file__).parent / "js" / "model_fx.test.mjs"
     result = subprocess.run([NODE, "--test", str(tests)], capture_output=True, text=True, timeout=120)
     assert result.returncode == 0, result.stdout + result.stderr

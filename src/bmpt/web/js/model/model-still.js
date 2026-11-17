@@ -1,11 +1,11 @@
 // One extra 3D context at a time. Stills share the detail renderer but never its live camera or lifecycle.
 // Source, model files and library metadata identify in-memory results; failed attempts are retryable.
-import { withTimeout } from "./core/async.js";
-import { modelUrl, partsOf } from "./mods/switch-sources.js";
-import { previewError } from "./detail/preview-error.js";
-import { captureRetries } from "./core/capture-retries.js";
-import { previewCache } from "./detail/preview-cache.js";
-import { onCapturePriorityChange, popupCapturesOpen, popupItem, captureEligible } from "./core/capture-priority.js";
+import { withTimeout } from "../core/async.js";
+import { modelUrl, partsOf } from "../mods/switch-sources.js";
+import { previewError } from "../detail/preview-error.js";
+import { captureRetries } from "../core/capture-retries.js";
+import { previewCache } from "../detail/preview-cache.js";
+import { onCapturePriorityChange, popupCapturesOpen, popupItem, captureEligible } from "../core/capture-priority.js";
 
 /**
  * The version of a variant's 3D stills: it changes when the model's files or any model mod of the family

@@ -68,8 +68,8 @@ def test_the_vendor_runtimes_in_use_are_the_listed_ones():
     root = re.search(r'const ROOT = "([^"]+)"', (WEB / "js/spine/spine-runtime.js").read_text()).group(1)
     assert root + "spine-player.min.js" in stills.RENDERERS["spine"]
     # the still entry points: the 3D still loads model.js, the Spine stills live in thumbs.js
-    assert 'import("./model.js")' in (WEB / "js/model-still.js").read_text()
-    assert {"js/model-still.js", "js/model.js"} <= set(stills.RENDERERS["model"])
+    assert 'import("./model.js")' in (WEB / "js/model/model-still.js").read_text()
+    assert {"js/model/model-still.js", "js/model/model.js"} <= set(stills.RENDERERS["model"])
     assert "js/detail/thumbs.js" in stills.RENDERERS["spine"]
 
 

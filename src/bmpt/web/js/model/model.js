@@ -7,13 +7,13 @@
 // lobby reads them (attachInput). One view at a time; hide() frees its WebGL context at once.
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { straightTextureLoader } from "./core/png-decode.js";
+import { straightTextureLoader } from "../core/png-decode.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { chibiMaterial, disposeDefaults, outlineMaterial, setOutlineScale } from "./chibi-materials.js";
 import { createModelFx } from "./model-fx.js";
-import { wheelKind, wheelStep } from "./lobby/lobby-touch.js";
-import { modelUrl } from "./mods/switch-sources.js";
-import { freezeWhileLoading, onScreen } from "./detail/preview-lifecycle.js";
+import { wheelKind, wheelStep } from "../lobby/lobby-touch.js";
+import { modelUrl } from "../mods/switch-sources.js";
+import { freezeWhileLoading, onScreen } from "../detail/preview-lifecycle.js";
 
 const ease = (t) => 1 - Math.pow(1 - t, 3);
 const clamp = THREE.MathUtils.clamp;

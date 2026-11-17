@@ -549,7 +549,7 @@ for (const locale of LOCALES)
 for (const locale of LOCALES)
   test(`the 3D model's action captions fit their cards in ${locale}`, async () => {
     const detail = await source("detail/detail.js"),
-      model = await raw("model.js");
+      model = await raw("model/model.js");
     assert.match(detail, /const CARD = \{ w: 242, h: 209 \};/);
     // (the action bar's group cards bring their own fit: action_list.test.mjs)
     assert.match(detail, /const f = captionFit \|\| fitText\(caption, 56, 28, w - 50\)[,;]/);

@@ -20,12 +20,12 @@ WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 RENDERERS: dict[str, tuple[str, ...]] = {
     # the square 3D still of a Switch 3D Model card (model-still.js) and the viewer that draws it
     "model": (
-        "js/model-still.js",
-        "js/model.js",
+        "js/model/model-still.js",
+        "js/model/model.js",
         "js/core/png-decode.js",
-        "js/chibi-materials.js",
+        "js/model/chibi-materials.js",
         # the halo's particle effects (model-fx.js) with the lobby simulation and programs they run on
-        "js/model-fx.js",
+        "js/model/model-fx.js",
         "js/lobby/particles.js",
         "js/lobby/particles-gl.js",
         "js/app/touch-fx.js",
