@@ -2,17 +2,17 @@ import assert from "node:assert/strict";
 import vm from "node:vm";
 import * as Sync from "../../src/bmpt/web/js/lobby/lobby-sync.js";
 import { readFile } from "node:fs/promises";
-import { joinedModules } from "./helpers/source-text.mjs";
+import { LOBBY_MODULES, joinedModules } from "./helpers/source-text.mjs";
 import { test } from "node:test";
 import { latestLoad } from "../../src/bmpt/web/js/spine/spine-load.js";
 import * as Intro from "../../src/bmpt/web/js/lobby/lobby-intro.js";
 import { withTimeout } from "../../src/bmpt/web/js/core/async.js";
 
 const lobbyFile = (name) => readFile(new URL(`../../src/bmpt/web/js/lobby/${name}`, import.meta.url), "utf8");
-const source = joinedModules(await lobbyFile("lobby.js"), await lobbyFile("lobby-measure.js")).replace(
-  /^export /gm,
-  "",
-);
+// lobby.js and every part of its instances, as one body; createContext() gives a test instance's state S and
+// functions L
+const [lobbyMain, ...lobbyParts] = await Promise.all(LOBBY_MODULES.map(lobbyFile));
+const source = joinedModules(lobbyMain, ...lobbyParts).replace(/^export /gm, "");
 const deferred = () => {
   let resolve, reject;
   const promise = new Promise((yes, no) => {
@@ -141,30 +141,32 @@ function environment() {
 }
 function instance(h, id) {
   const code = `${source}
-    feather = () => {}; playClip = (p, name) => { p.clip = name; }; returnToIdle = () => {}; clearClip = () => {};
+    const { S, L } = createContext();
+    L.feather = () => {}; L.playClip = (p, name) => { p.clip = name; }; L.returnToIdle = () => {}; L.clearClip = () => {};
     function seed() {
       const controller = new AbortController(), host = { id: ${JSON.stringify(id)}, classList: { remove() {} }, querySelector() { return null; } };
       const p = { bamtLayer: {name:'main'}, paused:false, disposed:false, starts:0, draws:0, stopRequestAnimationFrame:true,
         canvas:{width:1920,height:1080}, animationState:{tracks:[]}, trackTime:7, effectTime:3,
         stopRendering(){this.stopRequestAnimationFrame=true;}, startRendering(){this.stopRequestAnimationFrame=false;this.starts++;},
         time:{ last:performance.now(),delta:0,totalTime:7,update(){this.delta=(performance.now()-this.last)/1000;this.last=performance.now();this.totalTime+=this.delta;}},
-        drawFrame(){this.time.update();this.draws++;current.intro.frame(this,this.time.delta);this.trackTime+=this.time.delta;this.effectTime+=this.time.delta;current.drawnAt=performance.now();} };
-      const c = current = {core:'fixture',variant:'fixture',host,signal:controller.signal,deferPlayback:true,suspended:true,
+        drawFrame(){this.time.update();this.draws++;S.current.intro.frame(this,this.time.delta);this.trackTime+=this.time.delta;this.effectTime+=this.time.delta;S.current.drawnAt=performance.now();} };
+      const c = S.current = {core:'fixture',variant:'fixture',host,signal:controller.signal,deferPlayback:true,suspended:true,
         backgroundPaused:false,visualLoads:new Map(),resumeAudio:new Set(),pendingSounds:[],view:{x:0,y:0,w:1920,h:1080},
         meta:{main:'main',sequences:[{anim:'Talk_01_M',duration:10,cues:[{clip:'one',t:0},{clip:'two',t:3}]}]},
         info:{sounds:{start:{clips:['start'],volume:1,pitch:1}}},touch:{id:${JSON.stringify(id)}},
-        intro:{t:0,started:false,skip(){},pending:()=>false,dispose(){},frame(p,dt){if(!this.started){this.started=true;Sfx.play('start');}else this.t+=dt;}}};
-      c.ready=Promise.resolve(c.meta);players=[p];mode='full';wantTouch=true;
-      playerLoads.set(p,{active:()=>true,dispose(){p.disposed=true;}});clocked(p);freezePlayer(p,c);
+        intro:{t:0,started:false,skip(){},pending:()=>false,dispose(){},frame(p,dt){if(!this.started){this.started=true;S.Sfx.play('start');}else this.t+=dt;}}};
+      c.ready=Promise.resolve(c.meta);S.players=[p];S.mode='full';S.wantTouch=true;
+      S.playerLoads.set(p,{active:()=>true,dispose(){p.disposed=true;}});L.clocked(p);L.freezePlayer(p,c);
       return {c,p,controller};
     }
-    return {seed,suspend,resume,prepareFrame,hide,play,setLines,setVolume,interactive,frame,
-      capturePlayer(){return makePlayer({appendChild(){}},{name:'main',x:0,y:0,scale:1,spine:'native'},null,null,current.signal);},
-      adoptPlayer(player){players=[player];current.pauseFlags=new Map();playerLoads.set(player,{active:()=>true,dispose(){player.disposed=true;}});},
-      background(value){const c=current;c.backgroundPaused=value;if(value)freezeScene(c);else if(!c.suspended)resumeScene(c);},
-      loadingFreeze(value){const c=current;c.loadingPaused=value;if(value)freezeScene(c);else resumeScene(c);},
-      realIntro(definition){const c=current;c.intro=Intro.create(definition,{layers:[],visible:()=>c.preparingFrame||!paused()&&c.revealed,now:()=>performance.now(),sfx:(id,set)=>Sfx.play(id,set)});return c.intro;},
-      sound:(id)=>Sfx.play(id),later:(fn,ms)=>setTimeout(fn,ms),current:()=>current};`;
+    return {seed,suspend:L.suspend,resume:L.resume,prepareFrame:L.prepareFrame,hide:L.hide,play:L.play,setLines:L.setLines,
+      setVolume:L.setVolume,interactive:L.interactive,frame:L.frame,
+      capturePlayer(){return L.makePlayer({appendChild(){}},{name:'main',x:0,y:0,scale:1,spine:'native'},null,null,S.current.signal);},
+      adoptPlayer(player){S.players=[player];S.current.pauseFlags=new Map();S.playerLoads.set(player,{active:()=>true,dispose(){player.disposed=true;}});},
+      background(value){const c=S.current;c.backgroundPaused=value;if(value)L.freezeScene(c);else if(!c.suspended)L.resumeScene(c);},
+      loadingFreeze(value){const c=S.current;c.loadingPaused=value;if(value)L.freezeScene(c);else L.resumeScene(c);},
+      realIntro(definition){const c=S.current;c.intro=Intro.create(definition,{layers:[],visible:()=>c.preparingFrame||!L.paused()&&c.revealed,now:()=>performance.now(),sfx:(id,set)=>S.Sfx.play(id,set)});return c.intro;},
+      sound:(id)=>S.Sfx.play(id),later:(fn,ms)=>L.setTimeout(fn,ms),current:()=>S.current};`;
   return new Function(...Object.keys(h.env), code)(...Object.values(h.env));
 }
 

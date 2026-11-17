@@ -567,8 +567,8 @@ test("Multiply and Screen slots without replacement materials draw as Normal", (
 });
 
 test("only Aoi's NPC keeps its declared glow blends through the real lobby material setup", () => {
-  const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby.js", import.meta.url), "utf8");
-  const code = source.slice(source.indexOf("function lightUp("), source.indexOf("// --- fallback only"));
+  const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby-players.js", import.meta.url), "utf8");
+  const code = source.slice(source.indexOf("function lightUp("), source.indexOf("// --- show(core, host)"));
   for (const core of [
     "np0032_npc",
     "NP0032_NPC",
@@ -595,12 +595,12 @@ test("only Aoi's NPC keeps its declared glow blends through the real lobby mater
       layer,
     );
     const env = {
-      current: { core, base: "/art/" },
+      S: { current: { core, base: "/art/" } },
       Linear: { ...Linear, attach: attachLinear },
       Materials: M,
       Stage: { hostOf: () => null },
       SlotColours: { curvesOf: () => null },
-      game: () => ({}),
+      L: { game: () => ({}) },
       layerViewport: () => ({}),
     };
     const lightUp = new Function("env", `const { ${Object.keys(env).join(", ")} } = env; ${code}; return lightUp;`)(
@@ -653,8 +653,8 @@ test("only Aoi's NPC keeps its declared glow blends through the real lobby mater
 });
 
 test("a library-only Mod without an official core still attaches and renders its lobby materials", () => {
-  const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby.js", import.meta.url), "utf8");
-  const code = source.slice(source.indexOf("function lightUp("), source.indexOf("// --- fallback only"));
+  const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby-players.js", import.meta.url), "utf8");
+  const code = source.slice(source.indexOf("function lightUp("), source.indexOf("// --- show(core, host)"));
   const gl = fakeGL(),
     layer = { name: "custom_home", materials: { pages: {}, blend: {}, tintBlack: false } };
   const p = player(
@@ -666,12 +666,12 @@ test("a library-only Mod without an official core still attaches and renders its
     layer,
   );
   const env = {
-    current: { core: null, mod: "library-only", base: null },
+    S: { current: { core: null, mod: "library-only", base: null } },
     Linear: { ...Linear, attach: attachLinear },
     Materials: M,
     Stage: { hostOf: () => null },
     SlotColours: { curvesOf: () => null },
-    game: () => ({}),
+    L: { game: () => ({}) },
     layerViewport: () => ({}),
   };
   const lightUp = new Function("env", `const { ${Object.keys(env).join(", ")} } = env; ${code}; return lightUp;`)(env);

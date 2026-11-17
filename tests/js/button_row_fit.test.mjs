@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFile } from "node:fs/promises";
-import { flat, POPUP_MODULES } from "./helpers/source-text.mjs";
+import { flat, IMPORT_PAGE_MODULES, POPUP_MODULES } from "./helpers/source-text.mjs";
 
 const WIDE = /[⺀-鿿　-ヿ＀-￯가-힯฀-๿]/;
 const ctx = {
@@ -398,7 +398,7 @@ for (const locale of LOCALES)
 // apart, at scale 0.34) and the row under the list ---
 for (const locale of LOCALES)
   test(`the import list's tools and the row under the list share one size and fit their bodies in ${locale}`, async () => {
-    const page = await source("mods/batch-import.js"),
+    const page = (await Promise.all(IMPORT_PAGE_MODULES.map((file) => source(`mods/${file}`)))).join(" "),
       layout = await source("mods/import-layout.js");
     assert.match(
       page,

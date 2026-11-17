@@ -60,7 +60,8 @@ is read its attachments count as opaque); dragging moves, hover controls remove,
 pins the toolbar (a gold outline from the game's `SelectLine`). Each portrait toolbar has its own size slider and
 Reset; a global size slider (25–150 %) edits the draft. The Add Portraits modal lists library portraits with roster
 semantics. Layout changes stay drafts until Save. Memorial mode has an ordered playlist with pointer-capture
-reordering (touch holds, edge scrolling, cancellation) and runs each source through the existing lobby renderer.
+reordering (touch holds, edge scrolling, cancellation) and runs each source through the existing lobby renderer, in one
+lobby instance per slot (`createLobby()`: the current scene and a hidden replacement).
 `student_hall.py` validates state stored under `student_hall` in UI preferences; revision checks prevent a stale
 window from overwriting another's arrangement, and dirty exits prompt. `student-hall-dialogue.js` draws the game's
 `ChatDialog/Talk` balloon for portrait dialogue, with a Hall-wide turn lock, bounded caches and per-click aborts; no

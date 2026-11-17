@@ -4,7 +4,7 @@
 // bottom player's WebGL context (the host): the other players (guests) are made with that context and their canvases
 // stay empty; the host draws every skeleton part (skeleton-parts.js) and the effects between them (particles-gl.js) into
 // its linear framebuffer, post-processed once (linear.js). A lobby whose bottom skeleton fails to load keeps one context
-// per skeleton, stacked (lobby.js).
+// per skeleton, stacked (lobby-players.js).
 import * as Linear from "../core/linear.js";
 import * as Parts from "../spine/skeleton-parts.js";
 import { compareKeys, queuesOf, sortKey } from "./particles.js";

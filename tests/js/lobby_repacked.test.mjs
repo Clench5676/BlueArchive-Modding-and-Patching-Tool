@@ -124,20 +124,19 @@ test("repacked bounds and prefab scale frame posed vertices, independent of the 
 });
 
 test("the full lobby measurement frames renamed idle art beyond the official camera and clamps a stale touch bone", () => {
-  const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby.js", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby-geometry.js", import.meta.url), "utf8");
   const measureSource = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby-measure.js", import.meta.url), "utf8");
   const code =
     `${measureSource.slice(measureSource.indexOf("export const CELL ="), measureSource.indexOf("export const rectOf ="))}
-    ${source.slice(source.indexOf("const paintedRects ="), source.indexOf("export function frame("))}`
+    ${source.slice(source.indexOf("// voice clip names"), source.indexOf("/**\n * The measuring functions"))}
+    ${source.slice(source.indexOf("// --- painted rect P"), source.indexOf("  return { measureClips"))}`
       .replaceAll("export function", "function")
       .replaceAll("export const", "const");
   const G = { x: -1480, y: -832.5, w: 2960, h: 1665 };
   const env = {
-    GAME: G,
-    game: () => ({ ...G }),
+    L: { game: () => ({ ...G }), idleOf: Lobby.idleOf },
     spine,
     Pins,
-    idleOf: Lobby.idleOf,
     artBounds,
     containingView,
     overlaps,
@@ -155,7 +154,7 @@ test("the full lobby measurement frames renamed idle art beyond the official cam
   const measure = new Function(
     "env",
     `const { ${Object.keys(env).join(", ")} } = env;
-    const current = { info: {} }; let mode = "left";
+    const S = { current: { info: {} }, paintedRects: rectCache(), safeRects: rectCache(), framingCache: new Map() };
     ${code}
     return measure;`,
   )(env);
@@ -173,24 +172,25 @@ test("the full lobby measurement frames renamed idle art beyond the official cam
 });
 
 test("revisited revision geometry matches cold painting exactly and cannot be mutated by callers", () => {
-  const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby.js", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby-geometry.js", import.meta.url), "utf8");
   const measureSource = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby-measure.js", import.meta.url), "utf8");
   const code =
     `${measureSource.slice(measureSource.indexOf("export const CELL ="), measureSource.indexOf("// --- the zoom-out limit"))}
-    ${source.slice(source.indexOf("const paintedRects ="), source.indexOf("// --- the zoom-out limit"))}`
+    ${source.slice(source.indexOf("function geometryKey("), source.indexOf("// --- the zoom-out limit"))}`
       .replaceAll("export function", "function")
       .replaceAll("export const", "const");
   const G = { x: -1480, y: -832.5, w: 2960, h: 1665 },
     revision = "a".repeat(64);
-  const env = { spine, Pins, idleOf: Lobby.idleOf };
+  const env = { spine, Pins, L: { idleOf: Lobby.idleOf } };
   const h = new Function(
     "env",
     `const { ${Object.keys(env).join(", ")} } = env;
-    let current = { artBase: "/art/${revision}/", base: "/layout/${revision}/", info: {} }, calls = 0;
+    const S = { current: { artBase: "/art/${revision}/", base: "/layout/${revision}/", info: {} }, paintedRects: rectCache() };
+    let calls = 0;
     ${code}
     const original = paintedRect;
     paintedRect = (...args) => { calls++; return original(...args); };
-    return { paint: cachedPaintedRect, count: () => calls, set: (value) => { current = value; } };`,
+    return { paint: cachedPaintedRect, count: () => calls, set: (value) => { S.current = value; } };`,
   )(env);
   const p = player("official"),
     l = layer();
@@ -209,13 +209,13 @@ test("revisited revision geometry matches cold painting exactly and cannot be mu
 });
 
 test("geometry identity covers revisions, transforms, skins, rest poses, pins, framing and camera", () => {
-  const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby.js", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby-geometry.js", import.meta.url), "utf8");
   const measureSource = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby-measure.js", import.meta.url), "utf8");
   const helpers = `${measureSource.slice(measureSource.indexOf("function rectCache("), measureSource.indexOf("// the grid: three game views"))}
-    ${source.slice(source.indexOf("const paintedRects ="), source.indexOf("// a reusable skeleton of a layer"))}`;
-  const h = new Function(`let current;
+    ${source.slice(source.indexOf("function geometryKey("), source.indexOf("// a reusable skeleton of a layer"))}`;
+  const h = new Function(`const S = { current: undefined };
     ${helpers}
-    return (context, loaded, view) => { current = context; return geometryKey(loaded, view); };`)();
+    return (context, loaded, view) => { S.current = context; return geometryKey(loaded, view); };`)();
   const revision = "a".repeat(64),
     next = "b".repeat(64);
   const context = {

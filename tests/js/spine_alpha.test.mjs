@@ -49,7 +49,7 @@ test("portrait and lobby loads retain 0.2.0 straight blending even when atlas pa
 });
 
 test("the memorial lobby caller selects the 0.2.0 PMA flag", () => {
-  const source = read("../../src/bmpt/web/js/lobby/lobby.js");
+  const source = read("../../src/bmpt/web/js/lobby/lobby-players.js");
   const code = source.slice(
     source.indexOf("function makePlayer("),
     source.indexOf("// A loaded player in linear light"),
@@ -64,8 +64,8 @@ test("the memorial lobby caller selects the 0.2.0 PMA flag", () => {
         }
       },
     },
-    current: null,
-    game: () => ({}),
+    S: { current: null },
+    L: { game: () => ({}) },
     layerViewport: () => ({}),
     loadPlayer: (create, config) => create(config),
   };

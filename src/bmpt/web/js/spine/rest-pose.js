@@ -1,4 +1,4 @@
-// The animation a memorial lobby skeleton rests in, shared by the lobby player (lobby.js) and the thumbnails
+// The animation a memorial lobby skeleton rests in, shared by the lobby player (lobby-clips.js) and the thumbnails
 // (thumbs.js).
 
 /**

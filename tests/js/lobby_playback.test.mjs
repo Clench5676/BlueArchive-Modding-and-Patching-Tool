@@ -2,13 +2,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby.js", import.meta.url), "utf8");
-const dialogue = source
-  .slice(source.indexOf("export function play(anim"), source.indexOf("export const playingAll"))
-  .replaceAll("export function", "function");
-const linesSetter = source
-  .slice(source.indexOf("export function setLines("), source.indexOf("export function setVolume("))
-  .replaceAll("export function", "function");
+const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby-talk.js", import.meta.url), "utf8");
+const dialogue = source.slice(source.indexOf("function play(anim"), source.indexOf("const playingAll"));
+const linesSetter = source.slice(source.indexOf("function setLines("), source.indexOf("function setVolume("));
 const detail = readFileSync(new URL("../../src/bmpt/web/js/detail/detail-strip.js", import.meta.url), "utf8");
 const toggle = detail.slice(
   detail.indexOf("function togglePlayAll()"),
@@ -24,12 +20,27 @@ function player(cues = []) {
     intro: { skip() {} },
   };
   const env = {
-    current,
-    mainPlayer: () => ({ animationState: {} }),
-    Idle: { interrupt() {} },
-    returnToIdle() {},
-    playClip: (_player, anim) => starts.push(anim),
-    clearClip() {},
+    S: {
+      current,
+      Idle: { interrupt() {} },
+      talk: null,
+      chain: null,
+      talkIndex: 0,
+      cueTimers: [],
+      lines: {},
+      muted: false,
+      audios: [],
+      volume: 0.8,
+      lineOf: (line) => line?.["en-US"] || "",
+    },
+    L: {
+      mainPlayer: () => ({ animationState: {} }),
+      returnToIdle() {},
+      playClip: (_player, anim) => starts.push(anim),
+      clearClip() {},
+      setTimeout: (fn, ms) => setTimeout(fn, ms),
+      clearTimeout: (timer) => clearTimeout(timer),
+    },
     emit() {},
     silence() {},
     subtitle: (text, immediate) => subtitles.push({ text, immediate }),
@@ -45,11 +56,9 @@ function player(cues = []) {
   const controls = new Function(
     ...Object.keys(env),
     `
-    let talk = null, chain = null, talkIndex = 0, cueTimers = [], lines = {}, muted = false, audios = [], volume = 0.8;
-    let lineOf = (line) => line?.["en-US"] || "";
     ${dialogue}
     ${linesSetter}
-    return { play, playAll, stop, setLines, playingAll: () => !!chain, selected: () => talk?.seq.anim || null };
+    return { play, playAll, stop, setLines, playingAll: () => !!S.chain, selected: () => S.talk?.seq.anim || null };
   `,
   )(...Object.values(env));
   const clickPlay = (selected = controls.selected()) =>
@@ -193,14 +202,11 @@ test("subtitle forwards the actual selected fallback language to the shared ball
   const shown = [],
     current = { caption: { show: (...args) => shown.push(args) } };
   const start = source.indexOf("function subtitle("),
-    end = source.indexOf("// A camera", start);
-  const subtitle = new Function(
-    "current",
-    "language",
-    "talk",
-    "lines",
-    `${source.slice(start, end)}; return subtitle;`,
-  )(current, () => "th-TH", { cues: ["one"] }, { one: { ja: "Fallback", th: "Translation" } });
+    end = source.indexOf("\n  return {", start);
+  const subtitle = new Function("S", "language", `${source.slice(start, end)}; return subtitle;`)(
+    { current, talk: { cues: ["one"] }, lines: { one: { ja: "Fallback", th: "Translation" } } },
+    () => "th-TH",
+  );
   subtitle("Fallback");
   subtitle("Translation", true);
   assert.deepEqual(shown, [
