@@ -8,7 +8,7 @@ import { LOCALES, installFitPage, text } from "./helpers/fit_canvas.mjs";
 const page = installFitPage();
 const { glyphWidth, fontSizeFor, LINE_PITCH } = await import("../../src/bmpt/web/js/ui/ngui.js");
 const { ACTION_DEFS, actionLabel, actionsOf, groupLabel, menuOf, parseClip, sectionLabel } = await import(
-  "../../src/bmpt/web/js/clip-names.js"
+  "../../src/bmpt/web/js/detail/clip-names.js"
 );
 const L = await import("../../src/bmpt/web/js/ui/action-list-layout.js");
 // the clip names of three official chibis' controllers (names only), as their GLB lists them (extras.clips)

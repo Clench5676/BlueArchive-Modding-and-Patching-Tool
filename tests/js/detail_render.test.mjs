@@ -530,7 +530,7 @@ const atlas = {
     [
       ...new Set([
         ...[
-          ...readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8").matchAll(
+          ...readFileSync(new URL("../../src/bmpt/web/js/detail/detail.js", import.meta.url), "utf8").matchAll(
             /"(Common_[A-Za-z0-9_]+)"/g,
           ),
         ].map((m) => m[1]),
@@ -710,19 +710,21 @@ const modelStub = `data:text/javascript,${encodeURIComponent(
 register(
   `data:text/javascript,${encodeURIComponent(`export async function load(url, ctx, next) {
   const result = await next(url, ctx);
-  if (url.endsWith("/web/js/detail.js")) {
+  if (url.endsWith("/web/js/detail/detail.js")) {
     const source = typeof result.source === "string" ? result.source : new TextDecoder().decode(result.source);
     return { ...result, source: source + "\\nexport { screenTree, nameplateRow, chipBoxes, expressionBoxes, pileBoxes, switchTextLayout, detailsBody };" };
   }
   return result;
 }
 export async function resolve(spec, ctx, next) {
-  if (spec === "./model.js" && (ctx.parentURL?.endsWith("/detail.js") || ctx.parentURL?.endsWith("/model-still.js"))) return { url: ${JSON.stringify(modelStub)}, shortCircuit: true };
+  if ((spec === "../model.js" && ctx.parentURL?.endsWith("/detail.js")) ||
+      (spec === "./model.js" && ctx.parentURL?.endsWith("/model-still.js")))
+    return { url: ${JSON.stringify(modelStub)}, shortCircuit: true };
   return next(spec, ctx);
 }`)}`,
 );
 await import(modelStub);
-const Detail = await import("../../src/bmpt/web/js/detail.js");
+const Detail = await import("../../src/bmpt/web/js/detail/detail.js");
 const localeTable = (lang) =>
   flat(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url), "utf8")));
 
@@ -3404,7 +3406,7 @@ test("Escape while a fullscreen switch is loading cannot reopen fullscreen with 
 
 for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
   test(`fullscreen prefab corners and native switch buttons preserve geometry in ${lang}`, async () => {
-    const Visual = await import("../../src/bmpt/web/js/visual-mode.js");
+    const Visual = await import("../../src/bmpt/web/js/detail/visual-mode.js");
     const strings = localeTable(lang),
       scale = 1920 / 2960,
       layout = visualPrefab();
@@ -4059,7 +4061,7 @@ test("variant chips are 272 x 72 with the caption at 40 down to 28, the second c
       Math.abs(parseFloat(caption.style.fontSize) - NGUI.fontSizeFor(caption.textContent, CHIP.fs) * S) < 0.02,
       "caption size 40",
     );
-    const source = readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8").replace(
+    const source = readFileSync(new URL("../../src/bmpt/web/js/detail/detail.js", import.meta.url), "utf8").replace(
       /\s+/g,
       " ",
     );

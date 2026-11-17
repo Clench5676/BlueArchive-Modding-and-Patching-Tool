@@ -220,7 +220,14 @@ test("the sites the review lists draw their error text through the shared errorT
 test("the other copies of that expression use the shared errorText too", async () => {
   const { readFileSync } = await import("node:fs");
   const read = (name) => readFileSync(new URL(`../../src/bmpt/web/js/${name}`, import.meta.url), "utf8");
-  for (const name of ["detail.js", "app/nav.js", "mod-alias.js", "mod-export.js", "student-hall.js", "app/main.js"]) {
+  for (const name of [
+    "detail/detail.js",
+    "app/nav.js",
+    "mod-alias.js",
+    "mod-export.js",
+    "student-hall.js",
+    "app/main.js",
+  ]) {
     const source = read(name);
     assert.doesNotMatch(
       source,

@@ -1,5 +1,5 @@
-"""The detail screen's portrait framing (web/js/portrait-view.js) is front-end code: its tests run with Node's test
-runner, skipped where Node is not installed."""
+"""The detail screen's portrait framing (web/js/detail/portrait-view.js) is front-end code: its tests run with Node's
+test runner, skipped where Node is not installed."""
 
 import shutil
 import subprocess

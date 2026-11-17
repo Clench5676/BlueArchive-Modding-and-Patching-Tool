@@ -17,7 +17,7 @@ test("a cold student pencil waits visibly for the popup frame before using it", 
   const gate = deferred();
   let waiting = false,
     built = false;
-  const text = source("detail"),
+  const text = source("detail/detail"),
     code = text.slice(
       text.indexOf("async function openAliases("),
       text.indexOf('  const popup = find(t, "Popup");', text.indexOf("async function openAliases(")),

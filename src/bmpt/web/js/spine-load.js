@@ -1,4 +1,4 @@
-import { onScreen, previewLifecycle, previewTimer } from "./preview-lifecycle.js";
+import { onScreen, previewLifecycle, previewTimer } from "./detail/preview-lifecycle.js";
 
 /**
  * Make a loader that runs one view load at a time: a newer request cancels the old one and waits for its

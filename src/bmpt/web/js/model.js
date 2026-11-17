@@ -13,7 +13,7 @@ import { chibiMaterial, disposeDefaults, outlineMaterial, setOutlineScale } from
 import { createModelFx } from "./model-fx.js";
 import { wheelKind, wheelStep } from "./lobby-touch.js";
 import { modelUrl } from "./switch-sources.js";
-import { freezeWhileLoading, onScreen } from "./preview-lifecycle.js";
+import { freezeWhileLoading, onScreen } from "./detail/preview-lifecycle.js";
 
 const ease = (t) => 1 - Math.pow(1 - t, 3);
 const clamp = THREE.MathUtils.clamp;

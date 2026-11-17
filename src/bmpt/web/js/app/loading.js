@@ -14,7 +14,7 @@ import * as Popup from "../ui/popup.js";
 import { T } from "../core/i18n.js";
 import { fitLine, modLine } from "../core/job-progress.js";
 import { S } from "../core/util.js";
-import { freezeShown } from "../preview-lifecycle.js";
+import { freezeShown } from "../detail/preview-lifecycle.js";
 
 const STAGE_UNITS_H = 1080 / S; // 1665 units: the stage is taller than the prefabs' 2960 x 1440 frame
 const FADE_BLACK = 150; // a scene first fades to black; work done by then fades straight back

@@ -5,7 +5,7 @@ import vm from "node:vm";
 import { test } from "node:test";
 import { bindCorner, CORNER_MARGIN } from "../../src/bmpt/web/js/window/corner-layout.js";
 import { headerGeometry } from "../../src/bmpt/web/js/window/window-layout.js";
-import { anchoredCentre } from "../../src/bmpt/web/js/visual-view.js";
+import { anchoredCentre } from "../../src/bmpt/web/js/detail/visual-view.js";
 import {
   FRAME,
   OCCLUSION_BUTTON,
@@ -21,7 +21,7 @@ import { row } from "../../src/bmpt/web/js/ui/ui-grid.js";
 const S = 1920 / 2960,
   near = (a, b) => assert.ok(Math.abs(a - b) < 1e-7, `${a} != ${b}`);
 const source = readFileSync(new URL("../../src/bmpt/web/js/photography/controller.js", import.meta.url), "utf8");
-const visualSource = readFileSync(new URL("../../src/bmpt/web/js/visual-mode.js", import.meta.url), "utf8");
+const visualSource = readFileSync(new URL("../../src/bmpt/web/js/detail/visual-mode.js", import.meta.url), "utf8");
 // Run the shared fullscreen renderer too; only asset loading and the DOM are stand-ins.
 const backCode =
   statementOf(visualSource, "const CENTRE =") +

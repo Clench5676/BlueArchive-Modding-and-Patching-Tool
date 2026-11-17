@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-const source = readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../src/bmpt/web/js/detail/detail.js", import.meta.url), "utf8");
 const removeSource = source.slice(source.indexOf("async function removeMod("), source.indexOf("// the Add First"));
 function harness({ locale = "en-US", used = true, button = "ok", error = null } = {}) {
   const strings = JSON.parse(

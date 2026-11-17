@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { latestLoad, loadPlayer } from "../../src/bmpt/web/js/spine-load.js";
 import { withTimeout } from "../../src/bmpt/web/js/core/async.js";
-import { atStep } from "../../src/bmpt/web/js/preview-error.js";
+import { atStep } from "../../src/bmpt/web/js/detail/preview-error.js";
 import { validRect } from "../../src/bmpt/web/js/lobby-health.js";
 
 const source = readFileSync(new URL("../../src/bmpt/web/js/lobby.js", import.meta.url), "utf8");

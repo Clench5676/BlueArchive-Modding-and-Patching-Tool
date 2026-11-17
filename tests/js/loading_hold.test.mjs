@@ -88,7 +88,7 @@ globalThis.fetch = async () => {
 };
 const Loading = await import("../../src/bmpt/web/js/app/loading.js");
 const Popup = await import("../../src/bmpt/web/js/ui/popup.js");
-const { freezeWhileLoading } = await import("../../src/bmpt/web/js/preview-lifecycle.js");
+const { freezeWhileLoading } = await import("../../src/bmpt/web/js/detail/preview-lifecycle.js");
 const event = (target = new El(), key) => ({
   target,
   key,
@@ -270,7 +270,7 @@ test("a repair cover blocks Back, popup clicks and Escape until success or failu
   }
 });
 
-const detailSource = readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8");
+const detailSource = readFileSync(new URL("../../src/bmpt/web/js/detail/detail.js", import.meta.url), "utf8");
 const detailJob = detailSource.slice(
   detailSource.indexOf("async function job("),
   detailSource.indexOf("function shownMod()"),

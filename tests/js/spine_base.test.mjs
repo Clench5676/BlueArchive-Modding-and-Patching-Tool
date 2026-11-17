@@ -46,7 +46,7 @@ test("forget drops the thumbnails under a prefix in any case (library.changed na
   const el = () => ({ style: {}, className: "", appendChild() {}, remove() {} });
   globalThis.document = { body: el(), createElement: el };
   globalThis.URL.revokeObjectURL = () => {};
-  const Thumbs = await import("../../src/bmpt/web/js/thumbs.js");
+  const Thumbs = await import("../../src/bmpt/web/js/detail/thumbs.js");
   // a thumbnail being rendered (here a player that never loads) is kept: asking again gives the same promise
   globalThis.spine = {
     SpinePlayer: class {

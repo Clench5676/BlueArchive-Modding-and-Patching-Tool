@@ -7,7 +7,7 @@ import {
   portraitScale,
   portraitRect,
 } from "../../src/bmpt/web/js/student-hall-framing.js";
-import { portraitViewport, stagePoint } from "../../src/bmpt/web/js/portrait-view.js";
+import { portraitViewport, stagePoint } from "../../src/bmpt/web/js/detail/portrait-view.js";
 import { createDraft } from "../../src/bmpt/web/js/student-hall-model.js";
 const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-7, `${actual} != ${expected}`);
 const box = { left: 0, top: 0, width: 1920, height: 1080 };

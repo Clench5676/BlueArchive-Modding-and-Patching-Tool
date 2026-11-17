@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import { afterEach, test } from "node:test";
-import { thumb, thumbnailScope, THUMB_LOAD_TIMEOUT } from "../../src/bmpt/web/js/thumbs.js";
+import { thumb, thumbnailScope, THUMB_LOAD_TIMEOUT } from "../../src/bmpt/web/js/detail/thumbs.js";
 import { setSpineConsent } from "../../src/bmpt/web/js/spine-runtime.js";
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

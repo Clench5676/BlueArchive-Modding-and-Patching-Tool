@@ -5,7 +5,7 @@ import * as Popup from "./ui/popup.js";
 import { bindReorder, dragFeedback } from "./student-hall-reorder.js";
 import { normalizeView } from "./roster/roster-order.js";
 import { portraitRows, studentChoices, memorialChoices, sourceKey } from "./student-hall-model.js";
-import { thumbnailScope } from "./thumbs.js";
+import { thumbnailScope } from "./detail/thumbs.js";
 import { lazyThumbnail } from "./ui/lazy-thumbnail.js";
 import { spineBase } from "./core/api.js";
 import { L, T, language } from "./core/i18n.js";

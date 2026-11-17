@@ -19,13 +19,13 @@ import { alignIcon } from "./student-hall-icons.js";
 import { createMemorialPool } from "./student-hall-memorial.js";
 import { createFullscreen } from "./student-hall-fullscreen.js";
 import { createSceneCamera, sceneRect, sceneViewport } from "./student-hall-camera.js";
-import { dialogueText } from "./dialogue-text.js";
+import { dialogueText } from "./detail/dialogue-text.js";
 import { bindPortraitPointer, portraitRect, portraitToolbarLayout, PORTRAIT_SIZE } from "./student-hall-framing.js";
 import { rpc } from "./core/api.js";
 import { T, L, errorText, language } from "./core/i18n.js";
 import { clone, S, hitButton, text } from "./core/util.js";
 import { lazyThumbnail } from "./ui/lazy-thumbnail.js";
-import { thumbnailScope } from "./thumbs.js";
+import { thumbnailScope } from "./detail/thumbs.js";
 import { CONTROL, XS_BUTTON, SPACE } from "./ui/ui-tokens.js";
 import { row } from "./ui/ui-grid.js";
 

@@ -15,10 +15,10 @@ import { CONTROL, XS_BUTTON, SPACE, FULLSCREEN_BUTTON } from "../ui/ui-tokens.js
 import { row } from "../ui/ui-grid.js";
 import { switchGrid } from "../switch-layout.js";
 import { alignIcon, buttonCenter } from "../student-hall-icons.js";
-import { anchoredCentre } from "../visual-view.js";
+import { anchoredCentre } from "../detail/visual-view.js";
 import { wheelKind, wheelStep } from "../lobby-touch.js";
 import { bindCorner, bindEdge } from "../window/corner-layout.js";
-import { prepareBack } from "../visual-mode.js";
+import { prepareBack } from "../detail/visual-mode.js";
 export { FRAME };
 /**
  * Make the white button of the visual mode's toolbar, for the lobby's camera framing (lobby-camera.js).

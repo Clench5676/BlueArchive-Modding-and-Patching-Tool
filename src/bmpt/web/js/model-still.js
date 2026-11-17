@@ -2,9 +2,9 @@
 // Source, model files and library metadata identify in-memory results; failed attempts are retryable.
 import { withTimeout } from "./core/async.js";
 import { modelUrl, partsOf } from "./switch-sources.js";
-import { previewError } from "./preview-error.js";
+import { previewError } from "./detail/preview-error.js";
 import { captureRetries } from "./core/capture-retries.js";
-import { previewCache } from "./preview-cache.js";
+import { previewCache } from "./detail/preview-cache.js";
 import { onCapturePriorityChange, popupCapturesOpen, popupItem, captureEligible } from "./core/capture-priority.js";
 
 /**

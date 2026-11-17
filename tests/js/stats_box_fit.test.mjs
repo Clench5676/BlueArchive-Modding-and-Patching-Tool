@@ -43,7 +43,7 @@ globalThis.fetch = async (url) => {
   return { ok: !!body, status: body ? 200 : 404, json: async () => body };
 };
 // detail.js keeps detailsBody private: this loader hook exposes it to this test only
-const DETAIL = new URL("../../src/bmpt/web/js/detail.js", import.meta.url).href;
+const DETAIL = new URL("../../src/bmpt/web/js/detail/detail.js", import.meta.url).href;
 register(
   `data:text/javascript,${encodeURIComponent(`
 export async function load(url, ctx, next) {

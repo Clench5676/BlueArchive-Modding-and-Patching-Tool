@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { clipRosterBand } from "../../src/bmpt/web/js/roster/roster-card.js";
-import { collectionStill } from "../../src/bmpt/web/js/thumbs.js";
+import { collectionStill } from "../../src/bmpt/web/js/detail/thumbs.js";
 import { maskCanvas } from "./sprite_mask_fixture.mjs";
 
 const source = (file) => readFileSync(new URL(`../../src/bmpt/web/js/${file}.js`, import.meta.url), "utf8");
@@ -103,7 +103,9 @@ test("an expression cancels blinking immediately, stale blinks cannot replace it
       clearTrack: (track) => clears.push(track),
     },
   };
-  const code = source("detail").split("function scheduleBlink(player) {")[1].split("function disposePortrait()")[0];
+  const code = source("detail/detail")
+    .split("function scheduleBlink(player) {")[1]
+    .split("function disposePortrait()")[0];
   const run = new Function(
     "player",
     "setTimeout",

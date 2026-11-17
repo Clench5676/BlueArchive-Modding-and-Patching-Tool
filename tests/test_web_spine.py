@@ -1,4 +1,5 @@
-"""The front end's choice of a portrait skeleton's idle (web/js/thumbs.js), run with Node.js when it is installed.
+"""The front end's choice of a portrait skeleton's idle (web/js/detail/thumbs.js), run with Node.js when it is
+installed.
 
 Every Spine portrait load (the detail screen's portrait and the thumbnails) loops this animation on track 0; a few
 NPC skeletons have no Idle_01 (the capitalist robot only carries the "00" face), and asking spine-player for a
@@ -12,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-THUMBS = Path(__file__).resolve().parents[1] / "src" / "bmpt" / "web" / "js" / "thumbs.js"
+THUMBS = Path(__file__).resolve().parents[1] / "src" / "bmpt" / "web" / "js" / "detail" / "thumbs.js"
 NODE = shutil.which("node")
 
 

@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { flat } from "./helpers/source-text.mjs";
 import { test } from "node:test";
 import { readFile } from "node:fs/promises";
-import { dialogueText } from "../../src/bmpt/web/js/dialogue-text.js";
+import { dialogueText } from "../../src/bmpt/web/js/detail/dialogue-text.js";
 import { spriteBorders, sliceAxis, slicePoint } from "../../src/bmpt/web/js/ui/sprite-slices.js";
-import { freezeShown, freezeWhileLoading } from "../../src/bmpt/web/js/preview-lifecycle.js";
+import { freezeShown, freezeWhileLoading } from "../../src/bmpt/web/js/detail/preview-lifecycle.js";
 
 class Element {
   constructor() {

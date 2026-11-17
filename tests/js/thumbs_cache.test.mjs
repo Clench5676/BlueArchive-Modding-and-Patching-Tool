@@ -10,9 +10,9 @@ import {
   withThumbnailFallback,
   THUMB_LOAD_TIMEOUT,
   THUMB_CAPTURE_TIMEOUT,
-} from "../../src/bmpt/web/js/thumbs.js";
+} from "../../src/bmpt/web/js/detail/thumbs.js";
 import { setSpineConsent } from "../../src/bmpt/web/js/spine-runtime.js";
-import { previewCache } from "../../src/bmpt/web/js/preview-cache.js";
+import { previewCache } from "../../src/bmpt/web/js/detail/preview-cache.js";
 
 setSpineConsent(true);
 

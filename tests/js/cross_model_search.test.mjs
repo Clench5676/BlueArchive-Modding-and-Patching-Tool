@@ -9,7 +9,7 @@ import { LOCALES, installFitPage } from "./helpers/fit_canvas.mjs";
 
 installFitPage();
 const { pickerItems } = await import("../../src/bmpt/web/js/roster/roster-widgets.js");
-const source = readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../src/bmpt/web/js/detail/detail.js", import.meta.url), "utf8");
 const functionSource = (name) => {
   const at = source.indexOf(`function ${name}(`);
   return source.slice(source.lastIndexOf("\n", at) + 1, source.indexOf("\n}\n", at) + 2);
@@ -776,7 +776,7 @@ test("in-view cards are read in calls of at most 64 keys, then checked one pair 
 
 test("another student's card is drawn like any card: no grey filter anywhere in the switch or the list", () => {
   const read = (name) => readFileSync(new URL(`../../src/bmpt/web/js/${name}`, import.meta.url), "utf8");
-  assert.ok(!/shade:\s*true|\bSHADE\b|\.shade\b/.test(read("detail.js")), "detail.js");
+  assert.ok(!/shade:\s*true|\bSHADE\b|\.shade\b/.test(read("detail/detail.js")), "detail/detail.js");
   assert.ok(!/shade:\s*true|\bSHADE\b|\.shade\b/.test(read("ui/popup.js")), "ui/popup.js");
 });
 

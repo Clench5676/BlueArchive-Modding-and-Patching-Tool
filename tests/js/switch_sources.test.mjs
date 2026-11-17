@@ -637,7 +637,7 @@ test("Show other students is off at every start and is kept only in memory", asy
   setShowOthers(false);
   assert.equal(showOthers(), false);
   // nothing writes it down: no storage, no settings, no library call mentions it
-  for (const file of ["switch-sources.js", "detail.js"]) {
+  for (const file of ["switch-sources.js", "detail/detail.js"]) {
     const lines = readFileSync(new URL(`../../src/bmpt/web/js/${file}`, import.meta.url), "utf8").split("\n");
     for (const line of lines.filter((l) => /showOthers|ShowOthers/.test(l)))
       assert.ok(!/localStorage|sessionStorage|settings|rpc\(|fetch\(/.test(line), `${file}: ${line}`);

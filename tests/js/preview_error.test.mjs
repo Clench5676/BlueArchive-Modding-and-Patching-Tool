@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { atStep, previewError } from "../../src/bmpt/web/js/preview-error.js";
+import { atStep, previewError } from "../../src/bmpt/web/js/detail/preview-error.js";
 
 test("preview causes go to the console and session RPC with their URL and step exactly once", async () => {
   const previousFetch = globalThis.fetch,

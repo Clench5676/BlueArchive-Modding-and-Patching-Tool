@@ -1,4 +1,4 @@
-import { portraitMinimum } from "./photography/camera.js";
+import { portraitMinimum } from "../photography/camera.js";
 // The portrait's fullscreen view: the game's visual mode (UICharacterVisualMode), which UICharacterDetail opens from its
 // ZoomButton. It is drawn from the prefab's PC group: the student's collection background under two pulsing light
 // patterns, the portrait's own player (detail.js; framed by visual-view.js: the whole art, the body in the middle), the
@@ -6,13 +6,13 @@ import { portraitMinimum } from "./photography/camera.js";
 // (switches to this skin's memorial lobby when available) and Btn_RefreshPos (back to the whole art; greyed out while
 // there). The phone's gyroscope and the button sounds are not reproduced. Press and drag moves the art; the wheel zooms
 // at the pointer; a trackpad pinches and swipes; two fingers pinch.
-import * as NGUI from "./ui/ngui.js";
-import { anyOpen as popupOpen } from "./ui/popup.js";
-import { bindCorner } from "./window/corner-layout.js";
-import { ensureSpine } from "./spine-runtime.js";
-import { wheelKind, wheelStep } from "./lobby-touch.js";
-import { S, clone, hitButton } from "./core/util.js";
-import { FULLSCREEN_BUTTON } from "./ui/ui-tokens.js";
+import * as NGUI from "../ui/ngui.js";
+import { anyOpen as popupOpen } from "../ui/popup.js";
+import { bindCorner } from "../window/corner-layout.js";
+import { ensureSpine } from "../spine-runtime.js";
+import { wheelKind, wheelStep } from "../lobby-touch.js";
+import { S, clone, hitButton } from "../core/util.js";
+import { FULLSCREEN_BUTTON } from "../ui/ui-tokens.js";
 import {
   SLIDE,
   SLIDE_S,

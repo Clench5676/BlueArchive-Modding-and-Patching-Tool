@@ -1,4 +1,4 @@
-import { validRect } from "./lobby-health.js";
+import { validRect } from "../lobby-health.js";
 
 /**
  * Whether a variant is a special slot (a spine category, or a key starting with "special:").

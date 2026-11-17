@@ -9,7 +9,7 @@ import {
   portraitReplacements,
 } from "../../src/bmpt/web/js/student-hall-model.js";
 import { createMemorialPool } from "../../src/bmpt/web/js/student-hall-memorial.js";
-import { dialogueText } from "../../src/bmpt/web/js/dialogue-text.js";
+import { dialogueText } from "../../src/bmpt/web/js/detail/dialogue-text.js";
 import { sceneRect, sceneViewport } from "../../src/bmpt/web/js/student-hall-camera.js";
 import { portraitRect } from "../../src/bmpt/web/js/student-hall-framing.js";
 

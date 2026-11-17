@@ -13,7 +13,7 @@ import { modJob } from "../core/job-progress.js";
 import * as Popup from "../ui/popup.js";
 import { notify } from "../ui/popup.js";
 import { on, rpc, spineBase, waitJob } from "../core/api.js";
-import { thumb } from "../thumbs.js";
+import { thumb } from "../detail/thumbs.js";
 import { T, errorText } from "../core/i18n.js";
 import * as ModSwitch from "../mod-switch.js";
 import { entryLabel } from "../mod-switch.js";

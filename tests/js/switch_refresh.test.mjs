@@ -5,7 +5,7 @@ import vm from "node:vm";
 import { coreOf, previewChanged } from "../../src/bmpt/web/js/switch-sources.js";
 
 // Exercise the actual detail-screen apply callback without loading its renderers.
-const source = readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../src/bmpt/web/js/detail/detail.js", import.meta.url), "utf8");
 function functionSource(name) {
   const start = source.indexOf(`${name}(`);
   return source.slice(source.lastIndexOf("\n", start) + 1, source.indexOf("\n}\n", start) + 2);

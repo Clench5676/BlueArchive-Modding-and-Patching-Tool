@@ -1,4 +1,4 @@
-import { portraitCaptureView } from "./photography/camera.js";
+import { portraitCaptureView } from "../photography/camera.js";
 // The portrait's visual mode framing and the numbers of its prefab (visual-mode.js draws it). No DOM: the tests run
 // it in Node.
 // A view is the skeleton point at the stage's centre (cx, cy, skeleton units) and the stage px per skeleton unit (k);

@@ -14,8 +14,8 @@ import { visualButton as whiteButton, galleryBox } from "./photography/controlle
 import { cameraFeedback } from "./photography/feedback.js";
 import * as Loading from "./app/loading.js";
 import { modJob } from "./core/job-progress.js";
-import { prepareBack } from "./visual-mode.js";
-import { anchoredCentre } from "./visual-view.js";
+import { prepareBack } from "./detail/visual-mode.js";
+import { anchoredCentre } from "./detail/visual-view.js";
 import { buttonCenter } from "./student-hall-icons.js";
 import { FULLSCREEN_BUTTON, SPACE } from "./ui/ui-tokens.js";
 

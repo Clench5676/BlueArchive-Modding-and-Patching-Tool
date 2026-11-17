@@ -19,7 +19,7 @@ for (const [name, stage, root] of scenes)
 test("camera preparation is immersive even before the shared detail fullscreen flag arrives", () => {
   assert.ok(isImmersive([], ["photo-active"]));
   assert.equal(isImmersive([], ["photo-lobby"]), false);
-  assert.match(flat(source("web/js/detail.js")), /stage\(\)\.classList\.toggle\("fullscreen", on\)/);
+  assert.match(flat(source("web/js/detail/detail.js")), /stage\(\)\.classList\.toggle\("fullscreen", on\)/);
   assert.match(
     flat(source("web/js/photography/controller.js")),
     /document\.documentElement\.classList\.add\(["']photo-active["']\)/,

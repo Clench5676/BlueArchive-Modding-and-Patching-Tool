@@ -125,7 +125,7 @@ test("a script without the runtime namespace cleans up before retry", async () =
 
 test("thumbnails declined before loading use their callers' static images without requests or players", async () => {
   const { setSpineConsent } = await import("../../src/bmpt/web/js/spine-runtime.js");
-  const { thumb, thumbnailScope } = await import("../../src/bmpt/web/js/thumbs.js");
+  const { thumb, thumbnailScope } = await import("../../src/bmpt/web/js/detail/thumbs.js");
   setSpineConsent(false);
   globalThis.fetch = () => assert.fail("declined thumbnails need no manifest");
   globalThis.document.createElement = () => assert.fail("declined thumbnails need no player host");

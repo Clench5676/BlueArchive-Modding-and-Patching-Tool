@@ -1921,8 +1921,8 @@ test("portrait and memorial lobby mods share the localized Mod chip under the na
 
 // Exercise the detail actions with the real RPC/job and popup code. The loader exposes its private actions only
 // to this test and replaces thumbnail rendering; panel/player drawing is observed through the setup callback.
-const DETAIL = new URL("../../src/bmpt/web/js/detail.js", import.meta.url).href;
-const THUMBS = new URL("../../src/bmpt/web/js/thumbs.js", import.meta.url).href;
+const DETAIL = new URL("../../src/bmpt/web/js/detail/detail.js", import.meta.url).href;
+const THUMBS = new URL("../../src/bmpt/web/js/detail/thumbs.js", import.meta.url).href;
 const detailTest = `
 export { baseOf, detailsBody, renderPopup, runUpdate, runCompatibility, copyName };
 export function setupPreviewTest(data, kind, onLeft = async () => {}) {
@@ -6996,7 +6996,7 @@ test("the startup Spine notice wraps inside UIPopup_Sort at message sizes in eve
 
 // Every preview entry stays quiet while the startup acknowledgement is pending.
 test("preview, comparison and compatibility modules contain no licence notice or confirmation button", () => {
-  for (const name of ["lobby", "detail", "student-hall", "mod-compare", "mod-compatibility"]) {
+  for (const name of ["lobby", "detail/detail", "student-hall", "mod-compare", "mod-compatibility"]) {
     const source = readFileSync(new URL(`../../src/bmpt/web/js/${name}.js`, import.meta.url), "utf8");
     assert.doesNotMatch(
       source,

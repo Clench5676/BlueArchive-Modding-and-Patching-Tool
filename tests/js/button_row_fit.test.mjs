@@ -166,7 +166,7 @@ test("with the Chinese wording the five-button row keeps equal bodies at a full 
 // --- the detail page's action cards and tabs (detail.js screenTree) ---
 for (const locale of LOCALES)
   test(`the four action cards and the three tabs share one size each in ${locale}`, async () => {
-    const detail = await source("detail.js");
+    const detail = await source("detail/detail.js");
     assert.match(detail, /const ROW_L = 58 \+ 37, ROW_R = 1320 - 37, GAP = 6, CW = \(ROW_R - ROW_L - 3 \* GAP\) \/ 4;/);
     assert.match(detail, /fitGroup\(actions\.map\(\(\[, key\]\) => T\(key\)\), 40, 28, CW - 60, 2, \{ maxH: 90 \}\)/);
     assert.match(detail, /fitGroup\(tabLabels, 52, 36, 360, 1\)/);
@@ -548,7 +548,7 @@ for (const locale of LOCALES)
 // locale ---
 for (const locale of LOCALES)
   test(`the 3D model's action captions fit their cards in ${locale}`, async () => {
-    const detail = await source("detail.js"),
+    const detail = await source("detail/detail.js"),
       model = await raw("model.js");
     assert.match(detail, /const CARD = \{ w: 242, h: 209 \};/);
     // (the action bar's group cards bring their own fit: action_list.test.mjs)

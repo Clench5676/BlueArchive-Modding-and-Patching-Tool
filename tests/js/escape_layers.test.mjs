@@ -107,7 +107,7 @@ function message() {
   return { host, closes };
 }
 
-const detail = readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8");
+const detail = readFileSync(new URL("../../src/bmpt/web/js/detail/detail.js", import.meta.url), "utf8");
 const detailKeys = detail.slice(
   detail.indexOf("// Escape leaves fullscreen only when"),
   detail.indexOf('addEventListener("keyup"'),

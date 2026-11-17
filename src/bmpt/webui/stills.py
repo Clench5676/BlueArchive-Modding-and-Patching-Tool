@@ -35,11 +35,11 @@ RENDERERS: dict[str, tuple[str, ...]] = {
     ),
     # portrait, lobby and collection stills drawn with the Spine player (thumbs.js)
     "spine": (
-        "js/thumbs.js",
+        "js/detail/thumbs.js",
         "js/lobby-still.js",
         "js/lobby-health.js",
         "js/rest-pose.js",
-        "js/special-view.js",
+        "js/detail/special-view.js",
         "js/spine-load.js",
         "js/spine-runtime.js",
         "vendor/spine-player-4.2.120/spine-player.min.js",
@@ -55,9 +55,9 @@ NOT_PIXELS = frozenset(
         "js/core/capture-retries.js",
         "js/lobby-touch.js",
         "js/ui/ngui.js",
-        "js/preview-cache.js",
-        "js/preview-error.js",
-        "js/preview-lifecycle.js",
+        "js/detail/preview-cache.js",
+        "js/detail/preview-error.js",
+        "js/detail/preview-lifecycle.js",
         "js/switch-sources.js",
         "vendor/three-0.160.0/examples/jsm/controls/OrbitControls.js",
         # particles-gl.js's lobby drawing only (create()): the 3D model view uses its shader sources alone

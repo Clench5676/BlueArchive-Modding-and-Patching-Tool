@@ -1,5 +1,5 @@
 // Preview failures also reach the session log in release builds.
-import { rpc } from "./core/api.js";
+import { rpc } from "../core/api.js";
 
 /**
  * Report a failed preview step once, to the console and to the session log (preview.failed in release builds

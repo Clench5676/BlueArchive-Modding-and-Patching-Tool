@@ -14,7 +14,7 @@ import { COLOUR } from "../ui/ui-tokens.js";
 import { on, rpc, spineBase, waitJob } from "../core/api.js";
 import { T } from "../core/i18n.js";
 import { addFirstLines, overwrittenLines } from "./repairs.js";
-import { thumb } from "../thumbs.js";
+import { thumb } from "../detail/thumbs.js";
 import * as Impact from "./update-impact.js";
 
 // --- pure parts ---

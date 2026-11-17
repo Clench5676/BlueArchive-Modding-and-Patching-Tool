@@ -9,7 +9,7 @@ const dialogue = source
 const linesSetter = source
   .slice(source.indexOf("export function setLines("), source.indexOf("export function setVolume("))
   .replaceAll("export function", "function");
-const detail = readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8");
+const detail = readFileSync(new URL("../../src/bmpt/web/js/detail/detail.js", import.meta.url), "utf8");
 const toggle = detail.slice(detail.indexOf("function togglePlayAll()"), detail.indexOf("// a dialogue started"));
 
 function player(cues = []) {

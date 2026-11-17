@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 import { test } from "node:test";
 import { n, spr, insert } from "./control_prefabs.mjs";
-const detail = await readFile(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8");
+const detail = await readFile(new URL("../../src/bmpt/web/js/detail/detail.js", import.meta.url), "utf8");
 const code = detail.slice(detail.indexOf("// Student photography retains"));
 const playbackFixture = n("Inventory_ListControl");
 insert(

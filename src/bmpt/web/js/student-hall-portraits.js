@@ -2,7 +2,7 @@
 import { loadSpineAssets, spineBase } from "./core/api.js";
 import { loadPlayer } from "./spine-load.js";
 import { ensureSpine } from "./spine-runtime.js";
-import { idleAnimation } from "./thumbs.js";
+import { idleAnimation } from "./detail/thumbs.js";
 import * as Stage from "./lobby-stage.js";
 import { APPLIED_SELECTION_GOLD } from "./ui/ui-tokens.js";
 import {

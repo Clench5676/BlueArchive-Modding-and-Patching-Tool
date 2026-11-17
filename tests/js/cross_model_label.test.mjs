@@ -10,7 +10,7 @@ import { LOCALES, installFitPage, text } from "./helpers/fit_canvas.mjs";
 const page = installFitPage();
 const { crossName, studentName } = await import("../../src/bmpt/web/js/core/names.js");
 const { glyphsOf, markedLabel } = await import("../../src/bmpt/web/js/core/util.js");
-const source = readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../src/bmpt/web/js/detail/detail.js", import.meta.url), "utf8");
 const lineOf = (prefix) => statementOf(source, prefix);
 const blockOf = lineOf;
 const functionSource = (name) => {

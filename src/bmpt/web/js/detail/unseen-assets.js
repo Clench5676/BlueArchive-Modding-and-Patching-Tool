@@ -1,5 +1,5 @@
 // A mod stays new until its configured preview or its switch-popup card has been shown.
-import { candidates, previewKey } from "./switch-sources.js";
+import { candidates, previewKey } from "../switch-sources.js";
 
 /** Whether a variant has a mod that is still new (`fresh`), of a kind or of any kind. */
 export const hasUnseen = (variant, kind = null) =>
