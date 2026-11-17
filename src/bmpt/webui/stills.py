@@ -27,6 +27,7 @@ RENDERERS: dict[str, tuple[str, ...]] = {
         # the halo's particle effects (model-fx.js) with the lobby simulation and programs they run on
         "js/model/model-fx.js",
         "js/lobby/particles.js",
+        "js/lobby/particles-geometry.js",
         "js/lobby/particles-gl.js",
         "js/app/touch-fx.js",
         "vendor/three-0.160.0/build/three.module.min.js",
