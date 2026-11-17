@@ -2,14 +2,17 @@ import assert from "node:assert/strict";
 import vm from "node:vm";
 import * as Sync from "../../src/bmpt/web/js/lobby/lobby-sync.js";
 import { readFile } from "node:fs/promises";
+import { joinedModules } from "./helpers/source-text.mjs";
 import { test } from "node:test";
 import { latestLoad } from "../../src/bmpt/web/js/spine/spine-load.js";
 import * as Intro from "../../src/bmpt/web/js/lobby/lobby-intro.js";
 import { withTimeout } from "../../src/bmpt/web/js/core/async.js";
 
-const source = (await readFile(new URL("../../src/bmpt/web/js/lobby/lobby.js", import.meta.url), "utf8"))
-  .replace(/^import [^;]*;$/gm, "")
-  .replace(/^export /gm, "");
+const lobbyFile = (name) => readFile(new URL(`../../src/bmpt/web/js/lobby/${name}`, import.meta.url), "utf8");
+const source = joinedModules(await lobbyFile("lobby.js"), await lobbyFile("lobby-measure.js")).replace(
+  /^export /gm,
+  "",
+);
 const deferred = () => {
   let resolve, reject;
   const promise = new Promise((yes, no) => {

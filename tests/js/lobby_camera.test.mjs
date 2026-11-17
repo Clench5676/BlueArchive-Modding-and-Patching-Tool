@@ -1,6 +1,6 @@
-// Tests for the memorial lobby's camera framing: the views it allows (web/js/lobby/lobby.js framingView: centred
-// across, no cell past the art that some pose leaves bare), what the shutter keeps (cameraParams) and where the intro
-// has its skeletons at a time (web/js/lobby/lobby-intro.js sampler). Run with Node's test runner.
+// Tests for the memorial lobby's camera framing: the views it allows (web/js/lobby/lobby-measure.js framingView:
+// centred across, no cell past the art that some pose leaves bare), what the shutter keeps (cameraParams) and where the
+// intro has its skeletons at a time (web/js/lobby/lobby-intro.js sampler). Run with Node's test runner.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 

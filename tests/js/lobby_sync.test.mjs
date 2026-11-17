@@ -1,6 +1,6 @@
 // Tests for the memorial lobby's random-timing clips and sound keys (web/js/lobby/lobby-sync.js) and the clips a
-// skeleton's idle starts (web/js/lobby/lobby.js idleClips), against a stand-in for spine's AnimationState. Run by
-// tests/test_lobby_view.py with Node's test runner.
+// skeleton's idle starts (web/js/lobby/lobby-measure.js idleClips), against a stand-in for spine's AnimationState. Run
+// by tests/test_lobby_view.py with Node's test runner.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 

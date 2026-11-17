@@ -1,5 +1,5 @@
-// Tests for the memorial lobby's zoom-out limit (web/js/lobby/lobby.js): the poses it checks (every clip the lobby
-// plays, over the idle) and the painted rect shrunk until none of them uncovers its edge. Run by
+// Tests for the memorial lobby's zoom-out limit (web/js/lobby/lobby-measure.js): the poses it checks (every clip the
+// lobby plays, over the idle) and the painted rect shrunk until none of them uncovers its edge. Run by
 // tests/test_lobby_view.py with Node's test runner.
 import assert from "node:assert/strict";
 import { test } from "node:test";

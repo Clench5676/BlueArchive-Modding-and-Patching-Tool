@@ -125,10 +125,12 @@ test("repacked bounds and prefab scale frame posed vertices, independent of the 
 
 test("the full lobby measurement frames renamed idle art beyond the official camera and clamps a stale touch bone", () => {
   const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby.js", import.meta.url), "utf8");
-  const code = source
-    .slice(source.indexOf("const CELL ="), source.indexOf("export function frame("))
-    .replaceAll("export function", "function")
-    .replaceAll("export const", "const");
+  const measureSource = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby-measure.js", import.meta.url), "utf8");
+  const code =
+    `${measureSource.slice(measureSource.indexOf("export const CELL ="), measureSource.indexOf("export const rectOf ="))}
+    ${source.slice(source.indexOf("const paintedRects ="), source.indexOf("export function frame("))}`
+      .replaceAll("export function", "function")
+      .replaceAll("export const", "const");
   const G = { x: -1480, y: -832.5, w: 2960, h: 1665 };
   const env = {
     GAME: G,
@@ -172,9 +174,12 @@ test("the full lobby measurement frames renamed idle art beyond the official cam
 
 test("revisited revision geometry matches cold painting exactly and cannot be mutated by callers", () => {
   const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby.js", import.meta.url), "utf8");
-  const code = source
-    .slice(source.indexOf("const CELL ="), source.indexOf("// --- the zoom-out limit"))
-    .replaceAll("export function", "function");
+  const measureSource = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby-measure.js", import.meta.url), "utf8");
+  const code =
+    `${measureSource.slice(measureSource.indexOf("export const CELL ="), measureSource.indexOf("// --- the zoom-out limit"))}
+    ${source.slice(source.indexOf("const paintedRects ="), source.indexOf("// --- the zoom-out limit"))}`
+      .replaceAll("export function", "function")
+      .replaceAll("export const", "const");
   const G = { x: -1480, y: -832.5, w: 2960, h: 1665 },
     revision = "a".repeat(64);
   const env = { spine, Pins, idleOf: Lobby.idleOf };
@@ -205,7 +210,9 @@ test("revisited revision geometry matches cold painting exactly and cannot be mu
 
 test("geometry identity covers revisions, transforms, skins, rest poses, pins, framing and camera", () => {
   const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby.js", import.meta.url), "utf8");
-  const helpers = source.slice(source.indexOf("function rectCache("), source.indexOf("// the grid: three game views"));
+  const measureSource = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby-measure.js", import.meta.url), "utf8");
+  const helpers = `${measureSource.slice(measureSource.indexOf("function rectCache("), measureSource.indexOf("// the grid: three game views"))}
+    ${source.slice(source.indexOf("const paintedRects ="), source.indexOf("// a reusable skeleton of a layer"))}`;
   const h = new Function(`let current;
     ${helpers}
     return (context, loaded, view) => { current = context; return geometryKey(loaded, view); };`)();
@@ -261,9 +268,9 @@ test("geometry identity covers revisions, transforms, skins, rest poses, pins, f
 });
 
 test("geometry caches bound memory, evict least recently used entries and clone typed masks", () => {
-  const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby.js", import.meta.url), "utf8");
+  const measureSource = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby-measure.js", import.meta.url), "utf8");
   const rectCache =
-    new Function(`${source.slice(source.indexOf("function rectCache("), source.indexOf("const paintedRects ="))}
+    new Function(`${measureSource.slice(measureSource.indexOf("function rectCache("), measureSource.indexOf("// the grid: three game views"))}
     return rectCache;`)();
   const value = { any: new Uint8Array(16).fill(1), cells: { i0: 1 }, whole: { cells: { i0: 2 } } };
   const cache = rectCache(4096, 2);
