@@ -3,14 +3,10 @@
 // once is reused for the rest of the session, so a passing shortage would hide that picture until the next launch.
 import { previewError } from "./preview-error.js";
 
-/**
- * Whether data is a PNG or other image data URL with a body: "data:," (an empty canvas's encoding) is none.
- */
+/** Whether data is a PNG or other image data URL with a body: "data:," (an empty canvas's encoding) is none. */
 export const encodedPicture = (data) => typeof data === "string" && /^data:image\/[\w.+-]+(;[^,]*)?,./.test(data);
 
-/**
- * Whether any pixel of RGBA data is not fully transparent.
- */
+/** Whether any pixel of RGBA data is not fully transparent. */
 export function hasAlpha(data) {
   for (let i = 3; i < data.length; i += 4) if (data[i]) return true;
   return false;
@@ -33,10 +29,9 @@ const reported = new Map();
 /**
  * Record that a canvas step failed (a shortage fails every picture asked for meanwhile, so the session log
  * hears of a failing step at most once every REPORT_EVERY ms).
- * @param {Error} error The failure.
  * @param {string} url The picture's URL.
  * @param {string} step The step that failed.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {number} [options.now] The time in milliseconds, for the tests.
  * @param {Function} [options.report] Reports it, for the tests.
  * @returns {boolean} Whether it was reported.

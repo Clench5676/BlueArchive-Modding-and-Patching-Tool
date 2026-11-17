@@ -4,7 +4,6 @@ import { rpc } from "./api.js";
 /**
  * Report a failed preview step once, to the console and to the session log (preview.failed in release builds
  * too), and give the failure back as an Error.
- * @param {Error} error The failure.
  * @param {string} url The preview's URL.
  * @param {string} step The step that failed.
  */
@@ -21,9 +20,7 @@ export function previewError(error, url, step) {
   return cause;
 }
 
-/**
- * Make a failure an Error that carries the URL and step it happened at, unless it has them already.
- */
+/** Make a failure an Error that carries the URL and step it happened at, unless it has them already. */
 export function atStep(error, url, step) {
   const cause = error instanceof Error ? error : new Error(String(error));
   cause.url ||= url;

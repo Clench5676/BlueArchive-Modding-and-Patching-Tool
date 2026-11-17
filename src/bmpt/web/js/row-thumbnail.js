@@ -174,7 +174,6 @@ function smoothContour(points, bounds, scale) {
 /**
  * The window inside a frame: coordinates are in the same flattened NGUI space as the frame widget, and pixel
  * cuts use the frame's actual rendering scale, including nine-slice rounding.
- * @param {object} w The frame widget.
  * @param {object} meta The sprite's metadata.
  * @param {object} outline The frame's outline (frameOutline).
  * @param {object} [options] Where the frame stands.

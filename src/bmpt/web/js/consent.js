@@ -230,7 +230,7 @@ async function draw(host, cacheDir, native, resolve) {
  * Show the Spine licence notice, the same at startup and from Settings. Reading it in Settings never changes
  * state or loads Spine.
  * @param {HTMLElement} host The popup's host.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {boolean} [options.over] Draw it over the settings and the message popups.
  * @param {boolean} [options.readOnly] Read it only: no choice is saved.
  */
@@ -376,7 +376,7 @@ function section(name, top, titleText, items, tone, w = POPUP_FRAME.L.w - 2 * SP
  * declining keeps those checks off (Settings changes it). Allow saves consent and requests a scan; Don't Allow
  * saves the refusal and does not quit. It must be answered: Escape and the backdrop do nothing.
  * @param {HTMLElement} host The popup's host.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {boolean} [options.over] Draw it over the settings and the message popups (opened from Settings' Check
  *     Game Files).
  * @returns {Promise<boolean>} The choice, once a button is pressed.

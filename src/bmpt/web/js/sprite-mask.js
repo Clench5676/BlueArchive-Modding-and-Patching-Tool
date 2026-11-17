@@ -79,7 +79,7 @@ export function spriteSurface({ data, width, height }) {
  * @param {HTMLElement} source The element whose sprite gives the shape.
  * @param {HTMLElement} target The element to mask.
  * @param {(url: string) => Promise<HTMLImageElement>} load Loads the sprite's image.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {boolean} [options.surface] Mask by the painted surface (spriteSurface), without the bevel and shadow.
  * @param {Function} [options.report] Reports a canvas failure, for the tests.
  * @returns {Promise<boolean>} Whether the mask was applied.

@@ -30,7 +30,6 @@ function visibility(element, root) {
  * Compose a PNG of the capture frame from the scene's media (canvases, images and NGUI layers that are visible
  * in it); UI, guide, cursor and subtitle layers are never inputs.
  * @param {HTMLElement[]} roots The elements that hold the scene's media.
- * @param {HTMLElement} stage The stage.
  * @returns {Promise<{png: Blob, width: number, height: number}>} The picture. Rejects with code
  *     capture_not_ready when nothing is drawn yet.
  */

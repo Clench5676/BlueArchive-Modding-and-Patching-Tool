@@ -15,7 +15,6 @@ const { node, label, find } = NGUI;
  * the message popups): a message over it draws above it, Escape closes the topmost layer, and closing it leaves
  * any other layer of the host alone.
  * @param {object} result The comparison: assets, drawings and pages.
- * @param {string} [title] The title.
  * @param {string} [hostId] The id of the host element.
  * @param {object|null} [review] A repair review: its Accept and Discard labels, lines, marks, steps and
  *     verdict.

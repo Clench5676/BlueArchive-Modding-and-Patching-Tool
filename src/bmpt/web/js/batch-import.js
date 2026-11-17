@@ -151,7 +151,7 @@ export function entryIdentity(entry, catalog) {
 /**
  * Make the batch import page: the file list, the options, the progress and the result popups. Every other
  * option replaces a service, for the tests.
- * @param {object} [options] What it uses.
+ * @param {object} [options]
  * @param {HTMLElement} options.host The element the page is drawn into.
  * @returns {object} The page's controls: show, hide, drop, invalidate and relabel.
  */

@@ -46,7 +46,7 @@ export function freezeShown(on) {
 }
 /**
  * Register a preview that Now Loading freezes.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {() => boolean} [options.shown] Whether the preview is on screen now.
  * @param {() => void} [options.freeze] Stops the preview.
  * @param {() => void} [options.thaw] Restarts it.

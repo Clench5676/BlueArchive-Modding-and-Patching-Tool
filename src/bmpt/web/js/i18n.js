@@ -24,15 +24,13 @@ export function setStrings(appLang, table) {
   document.documentElement.lang = lang;
 }
 
-/**
- * The UI language tag.
- */
+/** The UI language tag. */
 export const language = () => lang;
 
 /**
  * Make the function that changes the language: locale tables are small and immutable for this page, concurrent
  * requests share a read, and a late reply cannot replace a newer choice or restart the media pipeline.
- * @param {object} options What it calls.
+ * @param {object} options
  * @param {(lang: string) => Promise<object>} options.load Reads a locale's strings.
  * @param {(lang: string) => void} options.refresh Redraws the page in the language.
  */
@@ -59,9 +57,7 @@ export function languageRefresh({ load, refresh }) {
   };
 }
 
-/**
- * Translate a key, filling {name} placeholders from vars (a missing one becomes empty).
- */
+/** Translate a key, filling {name} placeholders from vars (a missing one becomes empty). */
 export function T(key, vars = {}) {
   const s = strings[`webui.${key}`] ?? key;
   return s.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "");
@@ -71,7 +67,6 @@ export function T(key, vars = {}) {
  * An error's text: its code's string with its params, error.internal without a code. error.internal shows what
  * the error says of itself (its params' error, else its message); with nothing to say it ends where that detail
  * would start, so no raw key (error.undefined) and no empty detail is shown.
- * @param {object} err The error.
  * @param {typeof T} [t] A caller's own translate function (quit.js).
  */
 export function errorText(err, t = T) {
@@ -95,9 +90,7 @@ export function nameKeys(appLang) {
   return [...new Set([own, simplified ? "zh-CN" : "en", "en", "zh-CN"])];
 }
 
-/**
- * The value of a {lang: value} object for the UI language (see nameKeys).
- */
+/** The value of a {lang: value} object for the UI language (see nameKeys). */
 export function L(value) {
   if (!value || typeof value !== "object") return value;
   for (const key of nameKeys(lang)) if (value[key] != null) return value[key];

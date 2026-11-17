@@ -9,7 +9,7 @@ function notify(callback, ...args) {
 /**
  * Take one picture: pause the scene, draw it until a complete real frame can be captured (up to 60 attempts,
  * each waiting a little longer), restore playback and save the picture without a review modal.
- * @param {object} options What the shot uses.
+ * @param {object} options
  * @param {object} options.bridge The detail screen's hooks: pause, expression, action, info and redraw.
  * @param {"portrait"|"lobby"} options.mode What is photographed.
  * @param {boolean} options.paused Whether the scene was paused before; the pause is put back to this.

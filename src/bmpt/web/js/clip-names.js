@@ -256,22 +256,16 @@ export function menuOf(actions) {
 /**
  * The label of an action: the battle form with it on row 4's cards; the list's keys leave it to their section's
  * title.
- * @param {object} a The action.
- * @param {(key: string, params?: object) => string} T The page's translator.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {boolean} [options.withForm] False leaves the battle form out.
  */
 export function actionLabel(a, T, { withForm = true } = {}) {
   const name = a.number ? T(`model.action.${a.id}N`, { n: a.number }) : T(`model.action.${a.id}`);
   return a.form && withForm ? T("model.menu.form", { name, n: a.form }) : name;
 }
-/**
- * The label of an action group.
- */
+/** The label of an action group. */
 export const groupLabel = (id, T) => T(`model.menu.group.${id}`);
-/**
- * The label of a section; a section of a group without sections is named like the group.
- */
+/** The label of a section; a section of a group without sections is named like the group. */
 export function sectionLabel(section, T) {
   const name = GROUPS.includes(section.id) ? groupLabel(section.id, T) : T(`model.menu.section.${section.id}`);
   return section.form ? T("model.menu.form", { name, n: section.form }) : name;

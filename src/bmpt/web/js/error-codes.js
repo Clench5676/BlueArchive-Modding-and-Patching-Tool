@@ -15,21 +15,12 @@ try {
  * import reasons; a missing one leaves the UI usable).
  */
 export const codeOf = (name) => registry[name]?.code;
-/**
- * Whether an error name is an ordinary refusal that reads as a notice, not a failure.
- */
+/** Whether an error name is an ordinary refusal that reads as a notice, not a failure. */
 export const isNotice = (name) => registry[name]?.level === "notice";
-/**
- * The error names that read as notices.
- */
+/** The error names that read as notices. */
 export const noticeNames = () => Object.keys(registry).filter(isNotice);
 
-/**
- * Add an error's reference code to its message.
- * @param {string} message The message.
- * @param {{code?: string, ref?: string}|null} error The error.
- * @param {(key: string, params?: object) => string} T The translate function.
- */
+/** Add an error's reference code to its message. */
 export function withCode(message, error, T) {
   const code = error?.ref || codeOf(error?.code);
   return code ? T("popup.withCode", { message, code }) : message;

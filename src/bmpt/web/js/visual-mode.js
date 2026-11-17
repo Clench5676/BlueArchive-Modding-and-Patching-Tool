@@ -64,14 +64,12 @@ let st = null;
 const clamp01 = (t) => Math.max(0, Math.min(1, t));
 const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
-/**
- * Whether the visual mode is open and not closing.
- */
+/** Whether the visual mode is open and not closing. */
 export const isOpen = () => !!st && !st.closing;
 
 /**
  * Render the prefab's background and buttons off screen, for one open().
- * @param {object} options What to draw.
+ * @param {object} options
  * @param {NguiNode} options.layout The UICharacterVisualMode layout.
  * @param {object} options.bg The student's collection background.
  * @param {{reset: string, back: string, switch?: string}} options.strings The captions; omit `switch` for skins
@@ -89,9 +87,8 @@ export async function prepare({ layout, bg, strings }) {
  * Prepare the switch button: the memorial lobby reuses the exact portrait switch widget, without a portrait
  * touch area or reset control. It is returned detached so the detail screen can discard a superseded request
  * before publishing it.
- * @param {object} options What to draw.
+ * @param {object} options
  * @param {NguiNode} options.layout The UICharacterVisualMode layout.
- * @param {string} options.label The button's caption.
  * @param {() => void} options.onSwitch Called when it is pressed.
  * @returns {Promise<HTMLElement|null>} The button; null without the prefab.
  */
@@ -105,9 +102,8 @@ export async function prepareSwitch({ layout, label, onSwitch }) {
 /**
  * Prepare the Back button: cameras reuse the fullscreen Back's complete body, icon and BoxCollider, with their
  * own leave action.
- * @param {object} options What to draw.
+ * @param {object} options
  * @param {NguiNode} options.layout The UICharacterVisualMode layout.
- * @param {string} options.label The button's caption.
  * @param {() => void} options.onBack Called when it is pressed.
  * @returns {Promise<HTMLElement|null>} The button; null without the prefab.
  */
@@ -211,7 +207,7 @@ export async function open(o) {
 /**
  * Close: the buttons slide out, the background fades and the portrait glides back to the detail screen's
  * framing.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {boolean} [options.instant] Close at once (the screen is being left).
  * @param {boolean} [options.restore] Give the detail screen's framing back.
  */
@@ -274,7 +270,7 @@ export function uiOut(parts) {
  * meanwhile must not leave its full-screen touch area over the screen), and the control that had the focus gets
  * it back.
  * @param {object[]} parts The parts uiOut made inert.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {boolean} [options.refocus] False while the screen is being left.
  * @param {() => (HTMLElement|null)} [options.fallback] Resolves the control's replacement when a fullscreen
  *     view switch rebuilt the detail controls.
@@ -608,9 +604,7 @@ function onKey(e) {
   st.o.onBack();
 }
 
-/**
- * For checks: the view, the home view and the limits.
- */
+/** For checks: the view, the home view and the limits. */
 export const state = () =>
   st
     ? {
@@ -627,7 +621,6 @@ export const state = () =>
 /**
  * Photography constrains only the framing guide while the native portrait player stays.
  * @param {boolean} on Whether photography is on.
- * @param {object|null} frame The capture frame.
  */
 export function photography(on, frame) {
   if (!st) return;
@@ -641,9 +634,7 @@ export function photography(on, frame) {
     Math.max(full.y + full.height, st.lim.box[3]),
   ];
 }
-/**
- * Whether the portrait is ready to be captured.
- */
+/** Whether the portrait is ready to be captured. */
 export function captureReady() {
   if (st) {
     st.glide = null;
@@ -651,15 +642,11 @@ export function captureReady() {
     syncReset(st);
   }
 }
-/**
- * Pan the portrait by the camera's drag.
- */
+/** Pan the portrait by the camera's drag. */
 export function panCapture(dx, dy) {
   if (ready(st)) pan(st, dx, dy);
 }
-/**
- * Zoom the portrait by the camera's wheel or pinch at a stage point.
- */
+/** Zoom the portrait by the camera's wheel or pinch at a stage point. */
 export function zoomCapture(factor, x, y) {
   if (ready(st)) zoomTo(st, factor, x, y);
 }

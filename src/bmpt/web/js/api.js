@@ -13,9 +13,7 @@ export class RpcError extends Error {
 /**
  * Call a method of the Python side (POST /api/rpc). The timeout is opt-in: a read can wait on a writer's
  * library lock for as long as an apply runs.
- * @param {string} method The method name.
- * @param {object} [params] The method's parameters.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {number} [options.timeout] The longest wait in milliseconds; 0 waits as long as it takes.
  * @param {AbortSignal} [options.signal] Cancels the call.
  * @returns {Promise<*>} The method's result. Rejects with an RpcError.
@@ -53,7 +51,6 @@ let source = null;
 
 /**
  * Subscribe to a server event (Server-Sent Events from /api/events): on("job.done", (data) => ...).
- * @param {string} event The event name.
  * @param {(data: object) => void} fn Called with the event's data.
  * @returns {() => void} Unsubscribes.
  */
@@ -99,9 +96,8 @@ function connect() {
  * stopped, jobs.cancel). Events can arrive before this subscribes, or be lost while the event stream
  * reconnects, so the job's state is also polled. Runtime is unbounded by default: sleeping or preparing a large
  * batch does not mean the backend job failed. Each status read is bounded.
- * @param {string} id The job's id.
  * @param {(progress: object) => void} [onProgress] Called with the job's progress.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {number} [options.pollEvery] The polling interval in milliseconds.
  * @param {number} [options.maxErrors] The most failed status reads in a row before the wait fails.
  * @param {number} [options.timeout] The longest wait in milliseconds; 0 waits as long as it takes.
@@ -254,9 +250,7 @@ export function setAssetContext(value) {
   assetContext = value || "";
   forgetSpineAssets();
 }
-/**
- * The URL of a UI export, kept to its path and query so it works behind any origin.
- */
+/** The URL of a UI export, kept to its path and query so it works behind any origin. */
 export function uiExportUrl(url) {
   const epoch = globalThis.document?.querySelector?.('meta[name="bamt-ui-exports"]')?.content;
   if ((!epoch && !assetContext) || !url.startsWith("/asset/ui/")) return url;
@@ -265,14 +259,10 @@ export function uiExportUrl(url) {
   if (assetContext) parsed.searchParams.set("resource", assetContext);
   return `${parsed.pathname}${parsed.search}`;
 }
-/**
- * The URL of an atlas sprite's image.
- */
+/** The URL of an atlas sprite's image. */
 export const spriteUrl = (atlas, name) =>
   uiExportUrl(`/asset/ui/sprite/${encodeURIComponent(atlas)}/${encodeURIComponent(name)}.png`);
-/**
- * The URL of a UI texture's image.
- */
+/** The URL of a UI texture's image. */
 export const textureUrl = (name) => uiExportUrl(`/asset/ui/texture/${encodeURIComponent(name)}.png`);
 /**
  * What every skeleton URL of a core starts with, whatever the file: the library.changed handler forgets the
@@ -296,9 +286,7 @@ export const spineBase = (kind, key, install = null) =>
 // that overlap (a card and its big picture, the same skeleton asked for twice) share one answer; a request after
 // it settled asks again.
 const resolving = new Map();
-/**
- * Forget the resolved skeleton directories under a prefix (all of them by default).
- */
+/** Forget the resolved skeleton directories under a prefix (all of them by default). */
 export function forgetSpineAssets(prefix = "") {
   const want = prefix.toLowerCase();
   for (const dir of resolving.keys()) if (dir.toLowerCase().startsWith(want)) resolving.delete(dir);
@@ -307,7 +295,7 @@ export function forgetSpineAssets(prefix = "") {
 /**
  * Resolve a skeleton's base to its current revision's directory.
  * @param {string} base A skeleton's base path (spineBase).
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {AbortSignal} [options.signal] Cancels the caller's wait; it does not cancel an unrelated reader of
  *     the same directory.
  */
@@ -361,7 +349,7 @@ export function spineAssetBase(base, { signal } = {}) {
  * attempt still belongs to one revision.
  * @param {string} base A skeleton's base path.
  * @param {(resolved: string) => Promise<*>} load Loads the files under the resolved directory.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {AbortSignal} [options.signal] Cancels the load.
  */
 export async function loadSpineAssets(base, load, { signal } = {}) {

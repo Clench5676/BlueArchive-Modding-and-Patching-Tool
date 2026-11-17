@@ -589,7 +589,7 @@ async function companions(player, el, base, batch, signal) {
  * Make a scope for one detail generation's thumbnails: it shares each manifest answer until it changes
  * (re-entering the page revalidates the source); cancelling also stops manifest deadlines, queued renders and
  * the active player when nobody else needs it.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {string} [options.priority] "background" by default, or "popup".
  */
 export function thumbnailScope({ priority = "background" } = {}) {

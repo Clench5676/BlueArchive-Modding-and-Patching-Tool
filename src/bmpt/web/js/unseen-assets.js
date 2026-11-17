@@ -1,9 +1,7 @@
 // A mod stays new until its configured preview or its switch-popup card has been shown.
 import { candidates, previewKey } from "./switch-sources.js";
 
-/**
- * Whether a variant has a mod that is still new (`fresh`), of a kind or of any kind.
- */
+/** Whether a variant has a mod that is still new (`fresh`), of a kind or of any kind. */
 export const hasUnseen = (variant, kind = null) =>
   (variant?.modList || []).some((mod) => mod.fresh && (!kind || mod.kind === kind));
 
@@ -28,9 +26,7 @@ export function shownUnseen(family, variant, kind, enabled = true) {
     : [];
 }
 
-/**
- * Whether the switch popup lists a new mod whose asset is not the one shown now.
- */
+/** Whether the switch popup lists a new mod whose asset is not the one shown now. */
 export function switchUnseen(family, variant, kind, enabled = true) {
   const shown = shownAsset(family, variant, kind, enabled);
   return candidates(family, variant, kind).some(
@@ -40,7 +36,6 @@ export function switchUnseen(family, variant, kind, enabled = true) {
 
 /**
  * Mark mods as seen: clear their new flag and the variants'.
- * @param {object} family The family.
  * @param {string[]} ids The mod ids.
  */
 export function clearUnseen(family, ids) {

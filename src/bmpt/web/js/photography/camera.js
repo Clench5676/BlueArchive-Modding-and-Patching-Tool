@@ -15,7 +15,6 @@ const bounded = (value, low, high) => (low <= high ? Math.max(low, Math.min(high
  * units) still fills the frame's height, but never above the home scale.
  * @param {number[]} box The portrait's box [left, top, right, bottom].
  * @param {number} homeScale The zoom the portrait starts at.
- * @param {CaptureFrame} [frame] The capture frame.
  */
 export const portraitMinimum = (box, homeScale, frame = FRAME) =>
   Math.min(homeScale, (frame.height || frame.size) / Math.max(1, box[3] - box[1]));
@@ -24,7 +23,6 @@ export const portraitMinimum = (box, homeScale, frame = FRAME) =>
  * never narrower than the normal view.
  * @param {{y0: number, y1: number}} bounds The art's vertical bounds in lobby units.
  * @param {number} normalWidth The width of the lobby's normal view.
- * @param {CaptureFrame} [frame] The capture frame.
  */
 export const lobbyMaximumWidth = (bounds, normalWidth, frame = FRAME) =>
   Math.max(normalWidth, ((bounds.y1 - bounds.y0) * 1920) / (frame.height || frame.size));
@@ -57,7 +55,6 @@ export function choiceLayout(kind, count) {
  * Keep a portrait's view inside what the frame may show of its bounds.
  * @param {{cx: number, cy: number, k: number}} view The view: the centre and the zoom.
  * @param {number[]} bounds The portrait's bounds [x0, y0, x1, y1].
- * @param {CaptureFrame} [frame] The capture frame.
  */
 export function portraitCaptureView(view, bounds, frame = FRAME) {
   const [x0, y0, x1, y1] = bounds,
@@ -72,7 +69,6 @@ export function portraitCaptureView(view, bounds, frame = FRAME) {
  * Keep a lobby's view inside what the frame may show of the art's bounds.
  * @param {{x: number, y: number, w: number, h: number}} view The view in lobby units.
  * @param {{x0: number, y0: number, x1: number, y1: number}} bounds The art's bounds in lobby units.
- * @param {CaptureFrame} [frame] The capture frame.
  */
 export function lobbyCaptureView(view, bounds, frame = FRAME) {
   const left = frame.x / 1920,
@@ -101,7 +97,6 @@ export const otherMode = (mode, info) => {
  * the detail screen names it; any other clip (an idle pose) keeps its clip name until it has a label of its
  * own.
  * @param {{anim: string, n?: number}} entry The list entry.
- * @param {(key: string, params?: object) => string} T The translate function.
  */
 export const actionCaption = (entry, T) =>
   Number.isFinite(entry?.n) ? T("lobby.dialogue", { n: entry.n }) : entry?.anim;

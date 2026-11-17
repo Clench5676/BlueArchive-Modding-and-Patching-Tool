@@ -120,7 +120,6 @@ async function pointerValue() {
 /**
  * Run an attempt until it succeeds, waiting `delays` ms between tries; every failure is reported, the last one
  * rethrown.
- * @param {() => Promise<*>} attempt The attempt.
  * @param {number[]} delays The waits between tries in milliseconds.
  * @param {object} [options] Replaceable parts, for the tests.
  */

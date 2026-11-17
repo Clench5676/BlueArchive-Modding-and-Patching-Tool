@@ -81,7 +81,6 @@ export function switchGrid(kind, width = GRID_WIDTH) {
  * The outer bounds of a card's drawing. NGUI inclines each widget around its own centre and children are
  * positioned separately, so the outer corners are measured, not the total overhang split equally about the body
  * centre.
- * @param {NguiNode} tree The card's tree.
  */
 export function cardInkBounds(tree) {
   const bounds = { left: Infinity, right: -Infinity, top: -Infinity, bottom: Infinity };
@@ -112,7 +111,6 @@ export function cardInkBounds(tree) {
 
 /**
  * Place the cards of a list in rows on the paper.
- * @param {NguiNode[]} trees The cards.
  * @param {object} grid The grid (switchGrid).
  * @param {{left: number, right: number, top: number}} paper The paper's box.
  * @returns {object[]} The cards' boxes.
@@ -159,7 +157,6 @@ export const portraitPanel = { left: -1340, right: -550, top: 490, bottom: -530,
 
 /**
  * Split a detail panel's tree into the portrait panel's left and right halves.
- * @param {NguiNode} tree The panel's tree.
  * @param {(tree: NguiNode, path: string) => NguiNode|null} find Finds a node.
  * @param {(nodes: NguiNode[]) => NguiNode} wrap Wraps nodes in a group.
  */

@@ -76,7 +76,7 @@ export function modName(mod, nameOf = (e) => e?.variant || e?.core || "") {
  * after it; then what changed in its official parts.
  * @param {object} mod The mod as mods.impact lists it.
  * @param {(entry: object) => string} nameOf Names the mod's variant.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {number} [options.indent] The indent of the change line.
  * @param {boolean} [options.marker] Hang a bullet before the line.
  * @param {boolean} [options.fix] Add the Fix button.
@@ -716,7 +716,7 @@ export async function check() {
 
 /**
  * The mods to update from the last check, without checking (mods.impactLast), as the list.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {boolean} [options.always] True (Settings' View Mods to Update): open it even with none; false (the
  *     tray's Back to Official, Settings' Check after a game update's entries): only with mods to update.
  * @returns {Promise<boolean>} True when a Go To left for a student page.

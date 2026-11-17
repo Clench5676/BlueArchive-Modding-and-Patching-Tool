@@ -85,7 +85,6 @@ export function easeScroll(from, to, elapsed, duration = DURATION) {
  * Whether a wheel event is a plain vertical mouse-wheel notch on Windows (no modifier, no horizontal part,
  * nothing took it yet): wheel notches need explicit easing in the virtual roster and WebView2's native overflow
  * lists, while touchpad pixels, touch gestures and macOS keep their own scrolling and momentum.
- * @param {WheelEvent} event The event.
  * @param {string} platform navigator.platform.
  */
 export function windowsWheel(event, platform) {
@@ -104,7 +103,7 @@ export function windowsWheel(event, platform) {
 /**
  * Make the wheel handler of a scrolling list: it eases notches. read and write use the list's logical pixels;
  * scale converts viewport wheel pixels after the stage transform.
- * @param {object} options The list.
+ * @param {object} options
  * @param {() => number} options.read The scroll position.
  * @param {(position: number) => void} options.write Sets it.
  * @param {() => number} options.max The furthest position.

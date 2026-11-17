@@ -37,9 +37,7 @@ export function viewport(view, box = STAGE) {
     padBottom: 0,
   };
 }
-/**
- * The view a spine-player viewport shows in a box (the inverse of viewport).
- */
+/** The view a spine-player viewport shows in a box (the inverse of viewport). */
 export function viewOf(vp, box = STAGE) {
   return { cx: vp.x + vp.width / 2, cy: vp.y + vp.height / 2, k: box.width / vp.width };
 }
@@ -47,7 +45,6 @@ export function viewOf(vp, box = STAGE) {
 /**
  * The art's box in skeleton units [x0, y0, x1, y1]: the skeleton's own bounds (SkeletonData x, y, width,
  * height, as the Spine editor exported them), else the setup pose's.
- * @param {object} data The skeleton data.
  * @param {number[]|null} [measured] The setup pose's bounds [x, y, width, height].
  */
 export function artBox(data, measured = null) {
@@ -63,7 +60,7 @@ export function artBox(data, measured = null) {
  * portrait puts on the character (a weapon or a prop beside her only widens the bounds), and down the middle of
  * the art.
  * @param {number[]} box The art's box.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {number} [options.s] The coordinate table's entry.
  * @param {number} [options.scale] The zoom of the whole art.
  */
@@ -72,15 +69,11 @@ export function homeView(box, { s, scale = FULL_SCALE } = {}) {
   return { cx: clamp(0, x0, x1), cy: (y0 + y1) / 2, k: (scale > 0 ? scale : FULL_SCALE) * SKELETON_SCALE * s };
 }
 
-/**
- * How far a view may go: from the whole art to ZOOM_MAX times closer; the stage's centre stays on the art.
- */
+/** How far a view may go: from the whole art to ZOOM_MAX times closer; the stage's centre stays on the art. */
 export function limits(box, home) {
   return { box, kMin: home.k, kMax: home.k * ZOOM_MAX };
 }
-/**
- * Bring a view inside the limits.
- */
+/** Bring a view inside the limits. */
 export function clampView(v, lim) {
   if (lim.photoFrame)
     return portraitCaptureView({ ...v, k: clamp(v.k, lim.kMin, lim.kMax) }, lim.photoBounds, lim.photoFrame);
@@ -120,9 +113,7 @@ export function panBy(v, dx, dy, lim) {
 export function mix(a, b, t) {
   return { cx: a.cx + (b.cx - a.cx) * t, cy: a.cy + (b.cy - a.cy) * t, k: a.k * Math.pow(b.k / a.k, t) };
 }
-/**
- * Whether the view is the whole art (the reset button greys out): within a hundredth of a stage px.
- */
+/** Whether the view is the whole art (the reset button greys out): within a hundredth of a stage px. */
 export function atHome(v, home) {
   return (
     Math.abs(v.k / home.k - 1) < 1e-4 &&
@@ -168,9 +159,7 @@ export const SLIDE = Object.freeze({
 });
 export const SLIDE_S = 0.31666666;
 
-/**
- * A Unity animation curve's value at t (Hermite between keys, held before the first and after the last).
- */
+/** A Unity animation curve's value at t (Hermite between keys, held before the first and after the last). */
 export function hermite(keys, t) {
   if (t <= keys[0][0]) return keys[0][1];
   const last = keys[keys.length - 1];

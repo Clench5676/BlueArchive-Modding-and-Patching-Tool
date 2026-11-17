@@ -103,7 +103,6 @@ function pose(S, data, missing, idle, overlay) {
  * track time 0) and one pose per other animation by its name (the idle on track 0, the animation on track 1).
  * @param {object} S The spine runtime's namespace.
  * @param {string} atlasText The atlas file's text.
- * @param {object} skeletonData The skeleton data.
  */
 export function poses(S, atlasText, skeletonData) {
   const { data, missing } = load(S, atlasText, skeletonData);
@@ -152,9 +151,7 @@ export function forRemap(report, S = globalThis.spine) {
   return result;
 }
 
-/**
- * The geometry with its rest poses only: what the redrawn check needs.
- */
+/** The geometry with its rest poses only: what the redrawn check needs. */
 export function restOnly(geometry) {
   return Object.fromEntries(
     Object.entries(geometry).map(([name, { source, target }]) => [

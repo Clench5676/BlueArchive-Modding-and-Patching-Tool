@@ -89,12 +89,10 @@ function rowsTree(L, rows, fits, cw, selected) {
 
 /**
  * Open the list of a group card.
- * @param {object} options The list.
+ * @param {object} options
  * @param {HTMLElement} options.host The layer the list goes in (over the bar).
- * @param {string} options.group The group's id.
  * @param {() => {left: number, right: number, top: number}} options.anchor Gives the card's visible body now,
  *     in units.
- * @param {object[]} options.sections The group's sections.
  * @param {string|null} options.selected The playing action's key.
  * @param {(key: string) => void} options.onPick Called when a key is picked.
  */
@@ -185,9 +183,7 @@ export async function open({ host, group, anchor, sections, selected, onPick }) 
   };
 }
 
-/**
- * Close the list.
- */
+/** Close the list. */
 export function close() {
   token++;
   if (!shown) return;
@@ -232,9 +228,7 @@ export function warm() {
     });
   return warming;
 }
-/**
- * Move the list to its card after the bar scrolled.
- */
+/** Move the list to its card after the bar scrolled. */
 export function follow() {
   shown?.place();
 }

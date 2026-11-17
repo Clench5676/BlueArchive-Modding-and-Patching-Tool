@@ -32,7 +32,7 @@ export function imageUrls(elements) {
  * still rechecks decode readiness when requested again: WebKit may discard decoded pixels while a view is
  * hidden. No assets are written out.
  * @param {() => HTMLImageElement} create Makes an image element.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {number} [options.maxBytes] The most bytes of images kept.
  * @param {number} [options.maxEntries] The most images kept.
  * @returns {(url: string, options?: object) => Promise<boolean>} Decodes the picture at a URL.
@@ -88,7 +88,7 @@ export function imageDecoder(create, { maxBytes = 32 * 1024 * 1024, maxEntries =
  * @param {string[]} urls The pictures.
  * @param {(url: string, options?: object) => Promise<boolean>} decode The decoder (imageDecoder).
  * @param {number} [cap] The longest wait in milliseconds.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {AbortSignal} [options.signal] Stops the wait.
  * @returns {Promise<boolean>} True only when every picture decoded successfully.
  */

@@ -31,8 +31,6 @@ export function flightTransform(frame, target) {
 }
 /**
  * Make the camera's feedback layer (shutter flash and the picture flying to the album) over the stage.
- * @param {HTMLElement} stage The stage.
- * @param {CaptureFrame} frame The capture frame.
  * @param {() => (HTMLElement|null)} album Gives the album's icon, which the saved picture flies to.
  * @returns {object} The layer's controls.
  */

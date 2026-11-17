@@ -1057,7 +1057,7 @@ let scratch = new Float32Array(0);
  * particle, for a mesh particle its mesh's indices.
  * @param {object} fxs The lobby's effects.
  * @param {object} s The system's state.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {Object<string, object>} [options.meshes] The loaded meshes by id.
  * @param {boolean} [options.linear] Whether the lobby draws in linear light.
  * @returns {{data: Float32Array, count: number}} The vertices and their number.
@@ -1429,7 +1429,7 @@ let trailScratch = new Float32Array(0);
  * colorOverTrail times colorOverLifetime times the particle's colour.
  * @param {object} fxs The lobby's effects.
  * @param {object} s The system's state.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {boolean} [options.linear] Whether the lobby draws in linear light.
  */
 export function trailGeometry(fxs, s, { linear = true } = {}) {

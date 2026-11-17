@@ -35,9 +35,7 @@ export function isImmersive(stageClasses, rootClasses) {
 /**
  * The regions of the header row that drag the window: the row less the native controls and the exclusions, none
  * while the page is blocked.
- * @param {object} options The row.
- * @param {number} [options.width] The row's width.
- * @param {number} [options.height] The row's height.
+ * @param {object} options
  * @param {object|null} [options.bounds] The native controls' rect.
  * @param {boolean} [options.immersive] Whether an immersive scene is shown.
  * @param {boolean} [options.blocked] Whether input is held.
@@ -49,9 +47,7 @@ export function dragRegions({ width, height, bounds, immersive = false, blocked 
   return subtractRegions(background, [...exclusions, ...(bounds ? [expandRect(bounds, 8)] : [])]);
 }
 
-/**
- * Lay out the header row's parts: the mods switch and the caption, against the native controls.
- */
+/** Lay out the header row's parts: the mods switch and the caption, against the native controls. */
 export function rowLayout({
   scale,
   nativeLeft = 0,

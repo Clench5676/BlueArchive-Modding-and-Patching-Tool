@@ -13,7 +13,7 @@ export const CHARACTER_POS = Object.freeze({ pos: [-738, -746], scale: [101, 101
  * one zoom for both axes and fits the viewport into its canvas: a viewport of the canvas's own aspect fills it
  * exactly, so a skeleton unit is the same number of px across and down.
  * @param {{pos: number[], scale: number[]}} node The layout node, in prefab units.
- * @param {object} options Where it is.
+ * @param {object} options
  * @param {number[]} options.origin The prefab centre on the stage (detail.js toStage).
  * @param {number} options.s Stage px per prefab unit.
  * @param {{left: number, top: number, width: number, height: number}} options.box The player's box on the

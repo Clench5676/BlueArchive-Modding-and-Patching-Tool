@@ -12,9 +12,7 @@ import { $, S } from "./util.js";
 
 let token = 0,
   dismiss = null;
-/**
- * Close the mod alias editor.
- */
+/** Close the mod alias editor. */
 export function close() {
   token += 1;
   dismiss?.();
@@ -22,7 +20,6 @@ export function close() {
 /**
  * Open the editor of a mod's alias.
  * @param {object} options The mod.
- * @param {object} options.mod The mod.
  * @param {(mod: object) => void} options.onSaved Called after the alias was saved.
  */
 export async function open({ mod, onSaved }) {

@@ -47,7 +47,6 @@ export const CARD_TEXT = {
 /**
  * The list's rows from the top of its content (y down is negative) and the content's height. A group of one
  * section has no title bar: its card names it.
- * @param {{actions: object[]}[]} sections The group's sections.
  * @param {boolean} [titled] Whether sections get title bars.
  * @returns {{rows: {kind: "head"|"key", y: number, section?: object, action?: object}[], height: number}} The
  *     rows and the content's height.
@@ -87,8 +86,6 @@ export function contentWidth(keyWidths, headWidths) {
  * shifted only as far as the stage (less EDGE) needs; as tall as the content, at most up to the stage's top
  * bar.
  * @param {{left: number, right: number, top: number}} button The card's visible body in units.
- * @param {number} contentW The content's width.
- * @param {number} contentH The content's height.
  * @returns {object} The box's sprite rect {left, top, w, h} in units, the content's visible height (view) and
  *     whether it scrolls.
  */

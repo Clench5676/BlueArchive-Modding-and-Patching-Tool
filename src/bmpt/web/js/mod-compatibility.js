@@ -61,21 +61,17 @@ function progressTask(action, subject, run) {
     });
   return Loading.task((update) => run((p) => update({ label: text(p) })), { label: text() });
 }
-/**
- * Whether a mod can be repaired: not a 3D model and not itself a repaired copy.
- */
+/** Whether a mod can be repaired: not a 3D model and not itself a repaired copy. */
 export const eligible = (mod) => mod?.kind !== "model" && !mod?.repaired_from && !mod?.repaired_id;
 /**
  * Whether the mod is a portrait whose textures were drawn on a rig the App no longer has: nothing repairs it,
  * and a plain update would leave it as it is (report.rig.unknown).
- * @param {string} id The mod's id.
  */
 export const rigUnknown = (id) => reports.get(id)?.assessment?.issues?.some(({ key }) => key === "rigUnknown") === true;
 /**
  * Whether a mod can be updated by a remap, from its report. The remap, the old rig kept as a whole for a
  * portrait the game drew anew (assessment.oldRig) and the graft of the official rig's new animations into the
  * mod's own rig (assessment.graft) are all Update.
- * @param {string} id The mod's id.
  * @param {object|null} [mod] The mod, when known.
  */
 export const canRemap = (id, mod = null) =>
@@ -371,7 +367,7 @@ const chosen = (response, choices) =>
 /**
  * Show a compatibility report.
  * @param {object} report The library's report.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {(choice: string) => void} [options.onRemap] Called when the user picks a repair.
  */
 export async function show(report, { onRemap } = {}) {
@@ -397,7 +393,7 @@ export async function show(report, { onRemap } = {}) {
  * The repair review's lines: one per kind of region with its count, the names behind a Details button. Regions
  * are named "<atlas> - <region>"; the atlas is left out when every region of the report is in the same one.
  * @param {object} report The repair's report.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {boolean} [options.convert] Offer the converter for what a graft refused.
  */
 export function reviewLines(report, { convert = false } = {}) {
@@ -623,10 +619,7 @@ async function grafted(id, subject) {
  * Prepare the repair's preview, no review: the compatibility check if none is in hand, the repair (the choice
  * given; "default": the first of repairs(), no question; null: asked when there are more), its job under the
  * loading screen. The caller accepts (accept) or discards it.
- * @param {string} id The mod's id.
- * @param {string} [label] The mod's label.
  * @param {string} [subject] What the dialogs call the mod.
- * @param {string} [kind] The mod's kind.
  * @param {"default"|"graft"|"remap"|"oldRig"|null} [choice] The repair.
  * @returns {Promise<object|null>} The job's result ({preview, report, compare, pages, drawings}, or
  *     {unchanged}); null when nothing was made (no repair chosen).
@@ -683,7 +676,6 @@ export async function prepare(id, label = "", subject = label, kind = "", choice
 
 /**
  * Store a prepared repair (actions.acceptRemap). The preview is the caller's to discard (discard) either way.
- * @param {string} id The mod's id.
  * @param {object} result The prepared repair.
  * @param {(saved: object) => void} [onRemapped] Called with the saved copy.
  * @param {string} [subject] What the dialogs call the mod.
@@ -707,19 +699,15 @@ export async function accept(id, result, onRemapped = () => {}, subject = "") {
   );
 }
 
-/**
- * Discard a prepared repair's preview.
- */
+/** Discard a prepared repair's preview. */
 export const discard = (result) =>
   result?.preview ? rpc("actions.discardRemap", { preview: result.preview }).catch(() => {}) : Promise.resolve();
 
 /**
  * Show the repair review: both pictures, the report's lines and marks.
- * @param {string} id The mod's id.
  * @param {object} result The prepared repair.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {string} [options.label] The review's title.
- * @param {string} [options.kind] The mod's kind.
  * @param {string} [options.accept] The Accept button's label.
  * @param {string} [options.discard] The Discard button's label.
  * @param {boolean} [options.convert] A graft's review may end with "convert" (the converter route for what it
@@ -813,9 +801,7 @@ export function rigNotice(result) {
   return names.size ? T("compatibility.rigChanged", { n: names.size }) : "";
 }
 
-/**
- * Check a mod's compatibility against the official files.
- */
+/** Check a mod's compatibility against the official files. */
 export async function inspect(id, label = "", stamp = null, subject = label) {
   stamp ??= await rpc("actions.compatibilityStamp", { mod: id });
   const report = await progressTask("Compatibility", subject, async (update) =>
@@ -859,9 +845,7 @@ export async function forUpdate(id, label = "", subject = label) {
   return checked;
 }
 
-/**
- * Check a mod's compatibility and show the report, with the repair offered.
- */
+/** Check a mod's compatibility and show the report, with the repair offered. */
 export async function check(id, label = "", onRemapped = () => {}, mod = null, subject = label) {
   if (mod?.kind !== "model" && !(await ensureSpine())) return;
   const report = await Loading.hold(() => inspect(id, label, null, subject), { all: true });

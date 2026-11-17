@@ -45,7 +45,7 @@ export function notesLines(markdown, lang = language()) {
 /**
  * Show a release's notes.
  * @param {object} info The release's information: version, notes and page.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {boolean} [options.simulation] The notes of a simulated release.
  * @param {Function} [options.onSimulatedPage] Called instead of opening the release page.
  * @param {boolean} [options.releasePage] False leaves out the release page button (a local build's tag may not
@@ -74,7 +74,7 @@ export async function releaseNotes(info, { simulation = false, onSimulatedPage, 
  * Show the first launch after an upgrade, pre-releases included: the running version's own notes once, when no
  * popup is open and blocked() is false. The server records the launch (app.upgradeNotes), so it is asked before
  * the feature tours; the offer stays pending until the popup has closed.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {() => boolean} [options.blocked] Whether the notes must wait.
  */
 export async function afterUpgrade({ blocked = () => false } = {}) {
@@ -114,7 +114,7 @@ export async function simulate(host, prefs, notes = true) {
  * the app on success.
  * @param {HTMLElement} host The popup's host.
  * @param {object} info The update information; Settings may pass its check's result.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {(info: object) => void} [options.onCheck] Called with the check's answer.
  * @param {(error: Error) => void} [options.onError] Called when the check fails.
  * @param {() => Promise<void>} [options.beforeShow] Automatic checks wait for it without holding a screen.
@@ -183,7 +183,7 @@ export function frameFor(boxH) {
  * How far the content group moves down from its top place: it is centred in the room the frame keeps under the
  * title, the version box alone while the offer waits, with Status once there is a line, with the Progress bar
  * too while downloading (no empty band under the box).
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {boolean} [options.status] A status line shows.
  * @param {boolean} [options.progress] The progress bar shows.
  */

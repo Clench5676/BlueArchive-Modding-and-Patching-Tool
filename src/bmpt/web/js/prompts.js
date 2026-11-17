@@ -19,9 +19,7 @@ import * as Impact from "./update-impact.js";
 
 // --- pure parts ---
 
-/**
- * The key of a scan entry: its install and its core.
- */
+/** The key of a scan entry: its install and its core. */
 export const entryKey = (e) => `${e?.install}|${e?.core}`;
 
 /**
@@ -33,9 +31,7 @@ export function lobbySuffix(core) {
   return m ? m[1].toLowerCase() : "";
 }
 
-/**
- * The kind chip: Portrait, Memorial Lobby, or the memorial lobby of an alternate core with its suffix.
- */
+/** The kind chip: Portrait, Memorial Lobby, or the memorial lobby of an alternate core with its suffix. */
 export function kindLabel(entry) {
   const kind = entry?.kind || (/_spr$/i.test(entry?.core || "") ? "spr" : "lobby");
   if (kind === "other") return T("settings.mods.other");
@@ -44,9 +40,7 @@ export function kindLabel(entry) {
   return suffix ? `${T("tab.lobby")} ${suffix}` : T("tab.lobby");
 }
 
-/**
- * The install an entry is in, from mods.state.installs.
- */
+/** The install an entry is in, from mods.state.installs. */
 export const installOf = (state, key) => (state?.installs || []).find((i) => i.key === key) || null;
 
 /**
@@ -73,8 +67,7 @@ export const entryBase = (entry, state) =>
  * which no repair brought back, apart ("apart"). For "untracked": the untracked entries and the configured
  * changed ones ("listed"), the damaged ones apart.
  * @param {object[]} entries The scan's entries.
- * @param {"drift"|"untracked"} which The prompt.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {boolean} [options.dismissed] Include the dismissed entries.
  * @param {boolean} [options.enabled] Whether mods are on.
  * @returns {{listed: object[], apart: object[]}} The entries.
@@ -130,9 +123,7 @@ export function crcText(entry) {
   return T("crc.original");
 }
 
-/**
- * A size as the prompts show it.
- */
+/** A size as the prompts show it. */
 export const sizeText = (bytes) => ModSwitch.sizeText(bytes);
 
 /**
@@ -141,7 +132,7 @@ export const sizeText = (bytes) => ModSwitch.sizeText(bytes);
  * when more than one is known), "No Official Copy" on an overwritten entry; damaged and stuck entries cannot be
  * ticked and are drawn dim with their state.
  * @param {object} entry The scan entry.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {object|null} [options.state] mods.state.
  * @param {(entry: object) => string} [options.nameOf] Names the entry's variant.
  * @param {string} [options.which] The prompt, "untracked" or "drift".
@@ -183,7 +174,7 @@ export function card(entry, { state = null, nameOf = (e) => e?.variant || e?.cor
  * The panel on the left of a prompt: File, Size, CRC state and Official Copy; a damaged or stuck entry's
  * Details button opens its repair lines.
  * @param {object} entry The scan entry.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {string} [options.which] The prompt, "untracked" or "drift".
  */
 export function details(entry, { which = "untracked" } = {}) {
@@ -206,10 +197,8 @@ export function details(entry, { which = "untracked" } = {}) {
 
 /**
  * The footer of a prompt: the ticked cards and, for what Add to Library copies, their total size.
- * @param {object[]} items The cards.
  * @param {Set<string>} selection The ticked keys.
- * @param {object} [options] Options.
- * @param {string} [options.sep] The list separator.
+ * @param {object} [options]
  * @param {boolean} [options.size] Show the total size (Add to Library copies; the drift prompt does not).
  */
 export function footer(items, selection, { sep = ModSwitch.listSep(), size = true } = {}) {
@@ -222,8 +211,6 @@ export function footer(items, selection, { sep = ModSwitch.listSep(), size = tru
  * What the untracked prompt's buttons do: add the ticked cards (and, with Add and Turn On Mods, turn mods on
  * after); with Don't Ask Again ticked, the cards not added are dismissed (by their files' names, sizes and
  * dates). Later adds nothing, and with the box ticked dismisses every card.
- * @param {string} button The button pressed.
- * @param {object[]} items The cards.
  * @param {Set<string>} selection The ticked keys.
  * @param {boolean} [dontAsk] Whether Don't Ask Again is ticked.
  * @returns {{adopt: object[], dismiss: object[], turnOn: boolean}} What to do.
@@ -278,9 +265,7 @@ let names = async () => (e) => e?.variant || e?.core || "";
 const shown = { drift: new Set(), untracked: new Set() }; // entry|state shown by each prompt in this page
 let busy = false; // a prompt is open (or its action runs)
 let started = false; // the start sequence reached its prompts: later scans may show them
-/**
- * Whether a prompt's job is running.
- */
+/** Whether a prompt's job is running. */
 export const isBusy = () => busy; // includes async card preparation before the popup joins the stack
 
 /**
@@ -342,9 +327,7 @@ export async function reconcile(entries, s) {
   }
 }
 
-/**
- * Show the start prompt a name asks for, if it has something to show.
- */
+/** Show the start prompt a name asks for, if it has something to show. */
 export async function start(which, info) {
   try {
     const s = await ModSwitch.refresh();
@@ -381,8 +364,7 @@ async function later() {
 
 /**
  * Show a prompt over the current screen. An empty list needs no popup.
- * @param {"drift"|"untracked"} which The prompt.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {object[]|null} [options.entries] The entries; the last scan's by default.
  * @param {boolean} [options.dismissed] Include the dismissed entries.
  * @param {boolean} [options.force] From Settings' Check or the tray: show it whatever was shown before.
@@ -638,7 +620,6 @@ export async function adopt(entries) {
  * The message for an overwritten entry of the current install (the switch popup's greyed cards, an
  * original_unavailable refusal): Add First, whose Add to Library adopts this entry, or the Overwritten message
  * with the repair lines of its install.
- * @param {{name: string, core: string, files: object[]}} entry The entry.
  * @returns {Promise<boolean>} Resolves once it closes: true when the entry was added.
  */
 export async function overwritten({ name, core, files }) {

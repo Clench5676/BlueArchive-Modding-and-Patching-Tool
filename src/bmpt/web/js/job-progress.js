@@ -6,7 +6,6 @@ import { customAliases, studentName } from "./names.js";
  * The name a job's progress gives a student: the student's name (the user's alias, else the family's base
  * name), then in the language's brackets the costume's short name (omitted for the family's own variant or a
  * variant with aliases) and the kind of file.
- * @param {object} variant The variant.
  * @param {string} kind The kind of file, as the job names it.
  * @param {string} [fallback] The name when the data has none.
  * @param {object} [family] The variant's family.
@@ -29,9 +28,7 @@ export function percentText(fraction) {
   if (typeof fraction !== "number" || !Number.isFinite(fraction) || fraction <= 0) return "";
   return T("progress.percent", { percent: Math.min(99, Math.floor(fraction * 100)) });
 }
-/**
- * Add the percentage to a job's line.
- */
+/** Add the percentage to a job's line. */
 export const withPercent = (text, fraction) => {
   const percent = percentText(fraction);
   return percent ? `${text} ${percent}` : text;
@@ -121,7 +118,7 @@ const plainName = (entry) => entry?.variant || entry?.core || "";
  * A job's progress as a line over mods.
  * @param {object} [p] A job's progress: {current, total, action, variant, kind, core, name, source, step,
  *     fraction}.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {(entry: {variant?: string, core?: string}) => string} [options.nameOf] Names a variant as the roster
  *     does.
  * @param {string} [options.action] A string key that overrides the job's verb.
@@ -162,7 +159,7 @@ export function modLine(p = {}, { nameOf = plainName, action = "" } = {}) {
  * their own count) keeps the step and share shown.
  * @param {{variant: string, kind: string, core?: string, name?: string, source?: string}} identity Who the job
  *     is for.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {(entry: object) => string} [options.nameOf] Names a variant.
  * @param {string} [options.action] The verb's string key.
  * @returns {(progress?: object) => object|null} Gives the line for each progress snapshot.
@@ -185,9 +182,7 @@ export function modJob(identity, { nameOf = plainName, action = "progress.action
     );
   };
 }
-/**
- * Whether a progress subject is a mod's identity object, not a list.
- */
+/** Whether a progress subject is a mod's identity object, not a list. */
 export const isIdentity = (subject) => !!subject && typeof subject === "object" && !Array.isArray(subject);
 
 /**
@@ -197,7 +192,6 @@ export const isIdentity = (subject) => !!subject && typeof subject === "object" 
  * @param {Array<[string, number]>} parts The line's parts, from modLine.
  * @param {(text: string) => number} width Measures a text.
  * @param {number} max The widest the line may be.
- * @param {string} [ellipsis] What marks a cut.
  */
 export function fitLine(parts, width, max, ellipsis = "…") {
   const texts = parts.map(([text]) => text);

@@ -134,7 +134,6 @@ export function pageTree(page, index, count, size = pageSize([page])) {
 
 /**
  * Show a tour.
- * @param {object[]} pages The pages.
  * @param {string[]} versions The versions the tour covers, recorded as seen when it closes.
  * @returns {Promise<boolean>} Whether it was shown.
  */
@@ -287,7 +286,7 @@ function view(pages, versions) {
 /**
  * Offer the automatic tour, after first-screen reveal and the startup sequence: existing dialogs and jobs keep
  * priority, and no network is used.
- * @param {object} options What it uses.
+ * @param {object} options
  * @param {object} options.info The app's information.
  * @param {Promise<void>} options.ready Resolves once the first screen is in.
  * @param {() => boolean} [options.blocked] Whether another dialog or job holds priority.
@@ -306,9 +305,7 @@ export async function start({ info, ready, blocked = () => false }) {
   return show(automatic.pages, automatic.versions);
 }
 
-/**
- * Open the list of the tours, to read any of them again.
- */
+/** Open the list of the tours, to read any of them again. */
 export async function browse() {
   const result = await rpc("app.tours");
   const tours = result?.tours || [];

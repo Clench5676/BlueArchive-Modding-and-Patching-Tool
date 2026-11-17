@@ -8,7 +8,6 @@
  * never an intro (Hasumi_home's prefab starts "Start_Idle", which must not loop). A skeleton with intros only
  * gets none: Shigure's Shigure_00 and Shigure_01, the scenes of her lobby's intro timeline, rest in their setup
  * pose as spine-unity leaves them when the timeline's clip ends.
- * @param {object} data The skeleton data.
  * @param {object} [options] What the prefab says; a thumbnail has only the skeleton, which is Idle_01 on every
  *     lobby of the game.
  * @param {string|null} [options.idle] The prefab's idle clip for the skeleton (lobby.json idle).

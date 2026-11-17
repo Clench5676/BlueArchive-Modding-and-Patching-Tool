@@ -35,9 +35,7 @@ const BOLD_WIDTH = 1.06;
  */
 export const boxWidth = (holder, width) => width - B.inset[holder];
 
-/**
- * The width the captions take: the widest one and the gap to the values (none without captions).
- */
+/** The width the captions take: the widest one and the gap to the values (none without captions). */
 export const captionWidth = (captions, size = B.caption) => {
   const shown = captions.filter(Boolean);
   return shown.length ? Math.max(...shown.map((caption) => NGUI.textWidth(caption, size))) + B.captionGap : 0;
@@ -108,12 +106,9 @@ function cutTo(fitted, cut, room = Infinity) {
 /**
  * Lay out a stats box. The nodes are the box (fill and line) first, then each row's caption, value, secondary
  * line, slot nodes and the divider under it (none under the last row).
- * @param {object} options The box.
+ * @param {object} options
  * @param {"frame"|"panel"|"table"} options.holder What holds it.
- * @param {number} options.width The holder's width.
  * @param {number[]} [options.at] The box's top centre in the caller's frame.
- * @param {StatsRow[]} options.rows The rows.
- * @param {string} [options.name] The box node's name.
  * @param {{caption?: string, value?: string, divider?: string}} [options.names] The rows' node name prefixes
  *     ({caption: "F", value: "V", divider: "L"} by default).
  * @param {{caption: number, value: {fs: number, fsMin: number, lines: number}, rowMin: number}|null}

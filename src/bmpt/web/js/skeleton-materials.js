@@ -304,7 +304,7 @@ export function materialOf(materials, page, mode) {
  * Switch a loaded player (linear.js attached) to its layer's materials.
  * @param {object} player The spine-player.
  * @param {object} layer The lobby's layer; its materials come from lobby.json.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {() => (object|null)} [options.screen] Gives the game's view in the layer's skeleton units (lobby.js
  *     layerViewport).
  * @param {string} [options.base] The lobby's route, for the materials' own textures.

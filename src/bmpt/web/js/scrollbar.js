@@ -19,9 +19,8 @@ export function scrollbarTrack([left, top, width, height], scale, horizontal = f
  * Add the game list's scrollbar beside a scrolling area.
  * @param {HTMLElement} host The element to add it to.
  * @param {number[]} box The track's box, as scrollbarTrack gives it.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {object|null} [options.collection] The UICharacterCollection layout, when already loaded.
- * @param {number} [options.z] The z-index.
  * @param {string} [options.className] A class for the bar.
  * @param {boolean} [options.horizontal] The bar is along the x axis.
  * @returns {Promise<{sync: (viewport: number, content: number, offset: number) => void}>} sync moves the thumb

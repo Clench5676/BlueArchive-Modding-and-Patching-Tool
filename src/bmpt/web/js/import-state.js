@@ -11,26 +11,18 @@ export const STATES = Object.freeze([
   "done",
 ]);
 export const RESOURCE_TYPES = Object.freeze(["ALL", "Texture2D", "TextAsset", "Mesh", "AnimationClip"]);
-/**
- * Whether an import entry can be imported: ready, to convert or to update.
- */
+/** Whether an import entry can be imported: ready, to convert or to update. */
 export const eligible = (entry) => ["ready", "convert", "update"].includes(entry?.state);
-/**
- * The distinct file paths of entries.
- */
+/** The distinct file paths of entries. */
 export const pathsOf = (entries) => [...new Set(entries.flatMap((entry) => entry.paths || []))];
-/**
- * The folder of a path, with its root kept ("C:\\", "/").
- */
+/** The folder of a path, with its root kept ("C:\\", "/"). */
 export function sourceFolder(path) {
   const end = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
   return end < 0 ? "" : path.slice(0, end + (end === 0 || (end === 2 && path[1] === ":") ? 1 : 0));
 }
 const snapshot = (options) => ({ ...options, types: [...options.types] });
 
-/**
- * The number of entries in each state (STATES).
- */
+/** The number of entries in each state (STATES). */
 export function countsOf(entries) {
   const counts = Object.fromEntries(STATES.map((state) => [state, 0]));
   for (const entry of entries) if (entry.state in counts) counts[entry.state]++;
@@ -40,7 +32,7 @@ export function countsOf(entries) {
 /**
  * Make the batch import's session state and its RPC contract, independent of the screen and its artwork: the
  * entries, what is checked, the phase, the progress and the results.
- * @param {object} options What it calls.
+ * @param {object} options
  * @param {Function} options.rpc The RPC call.
  * @param {Function} options.waitJob Waits for a job's end.
  * @param {() => void} [options.changed] Called when the library changed.
@@ -474,41 +466,25 @@ export function createImportState({ rpc, waitJob, changed = () => {}, suggest = 
 
 // Import Mod's missing-file prompts and feedback, over the real import session model.
 
-/**
- * The string of what a missing-files prompt says.
- */
+/** The string of what a missing-files prompt says. */
 export const missingText = (key, params = {}) => T(`import.missing.${key}`, params);
-/**
- * Whether an entry is incomplete (it lacks files of its group).
- */
+/** Whether an entry is incomplete (it lacks files of its group). */
 export const isIncomplete = (entry) => entry?.state === "incomplete";
-/**
- * Whether an incomplete entry has candidate files found for what it lacks.
- */
+/** Whether an incomplete entry has candidate files found for what it lacks. */
 export const hasFound = (entry) => isIncomplete(entry) && !!entry.missing?.found.length;
-/**
- * Whether an incomplete entry has nothing found, so the user has to choose files.
- */
+/** Whether an incomplete entry has nothing found, so the user has to choose files. */
 export const needsChoose = (entry) => isIncomplete(entry) && !entry.missing?.found.length;
-/**
- * The status line of an incomplete entry: how many files were found, or how many are not found.
- */
+/** The status line of an incomplete entry: how many files were found, or how many are not found. */
 export const statusText = (missing, text = missingText) =>
   missing.found.length ? text("count", { n: missing.found.length }) : text("notFound", { n: missing.unresolved });
-/**
- * How many groups of files are incomplete.
- */
+/** How many groups of files are incomplete. */
 export const groupsText = (n, text = missingText) => text(n === 1 ? "groupsOne" : "groups", { n });
 export const CHOOSE = Object.freeze({ scale: 0.34 });
-/**
- * The size of the Choose button of an incomplete entry's row.
- */
+/** The size of the Choose button of an incomplete entry's row. */
 export const chooseSize = (art) => art.controlSize(missingText("choose"), CHOOSE.scale);
 export const NOTE_LEFT = 46,
   NOTE_GAP = 24;
-/**
- * The room the note of a row has: what the footer leaves to its left.
- */
+/** The room the note of a row has: what the footer leaves to its left. */
 export const noteRoom = (footer) => footer.left - footer.gap - footer.wide - NOTE_GAP - NOTE_LEFT;
 /**
  * The lines of the prompt that asks to add the files found for an incomplete entry.

@@ -6,7 +6,6 @@ export const KEYS = Object.freeze({ ArrowLeft: -1, ArrowRight: 1 });
 
 /**
  * The step a key press asks for.
- * @param {KeyboardEvent} ev The key event.
  * @returns {-1|0|1} -1 or 1 for a step key pressed alone; 0 for another key, a modifier held, an input method
  *     composing, or a press another handler took.
  */
@@ -17,9 +16,7 @@ export function deltaOf(ev) {
   return KEYS[ev.key] || 0;
 }
 
-/**
- * Whether an element takes typed text or arrow keys itself (inputs, text areas, selects, editable text).
- */
+/** Whether an element takes typed text or arrow keys itself (inputs, text areas, selects, editable text). */
 export const typing = (el) =>
   !!el && (el.isContentEditable === true || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName || ""));
 

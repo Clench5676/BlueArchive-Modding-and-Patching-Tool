@@ -224,7 +224,7 @@ export function press(x, y, now, rand = Math.random) {
  * emits along the way (rate over distance).
  * @param {object} fx The effect, from press().
  * @param {number} now The time in seconds.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {boolean} [options.trail] False under reduced motion: no trail point.
  * @param {boolean} [options.sparks] False under reduced motion: no sparks.
  */

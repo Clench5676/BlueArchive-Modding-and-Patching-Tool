@@ -641,7 +641,7 @@ function mat4(a, b) {
  * anything) and above() in its draw hook (after the skeleton, before linear.js copies the frame out). dispose()
  * frees it all.
  * @param {object} fx The lobby's "fx" data from lobby.json.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {string} [options.base] The URL the lobby's textures are read from.
  * @param {(skeleton: object, bone: object) => (object|null)} [options.bone] Reads a bone's world transform
  *     every frame.

@@ -24,9 +24,7 @@ export const PROMPT_BLOCKERS = ["game_running", "steam_busy", "classic_open"];
 // the calls the classic modal can keep for when the classic window closes (webui/classic.py QUEUE_METHODS)
 export const QUEUEABLE = ["actions.apply", "actions.restore", "mods.toggle", "mods.restoreDrift"];
 
-/**
- * The language's list separator: 、 in Chinese and Japanese, a comma elsewhere.
- */
+/** The language's list separator: 、 in Chinese and Japanese, a comma elsewhere. */
 export const listSep = (lang = language()) => (/^(zh|ja)/i.test(lang) ? "、" : ", ");
 
 /**
@@ -41,11 +39,7 @@ export function sizeText(bytes) {
   return `${(b / 1073741824).toFixed(2)} GB`;
 }
 
-/**
- * An error's string; the free-space refusal names sizes.
- * @param {string} code The error code.
- * @param {object} [params] The error's parameters.
- */
+/** An error's string; the free-space refusal names sizes. */
 export function errorText(code, params = {}) {
   const p = { ...(params || {}) };
   if (code === "not_enough_space")
@@ -60,7 +54,7 @@ export function errorText(code, params = {}) {
  * switched or left as is: the services count them from the last scan with the scan consent, from the unfinished
  * list without it).
  * @param {object} state mods.state.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {"top"|"settings"} [options.place] "top" (the top bar) hides the switch without a current install (the
  *     roster and the detail screen are not available then); "settings" always shows it.
  */
@@ -102,7 +96,6 @@ export function clickAction(state, explained = false, want = null) {
 
 /**
  * The state a click on the top bar's switch names: its ON or OFF segment.
- * @param {Element} target The clicked element.
  * @param {Element|null} [root] The switch's element.
  * @returns {boolean|null} True for ON, false for OFF; null when the click names neither (Enter or Space on the
  *     focused switch).
@@ -120,24 +113,16 @@ export function clickedState(target, root = null) {
  * is now).
  */
 export const toggleParams = (state) => ({ enabled: state?.enabled === false, expect: state?.enabled !== false });
-/**
- * The Retry of the help: the same intent as the current state asks again.
- */
+/** The Retry of the help: the same intent as the current state asks again. */
 export const retryParams = (state) => ({ enabled: state?.enabled !== false, expect: state?.enabled !== false });
 
-/**
- * The reason a greyed switch shows.
- */
+/** The reason a greyed switch shows. */
 export const reasonText = (state) => (state?.reason ? errorText(state.reason, state.reasonParams) : "");
 
-/**
- * The help's opening text, which the first toggle's explanation repeats.
- */
+/** The help's opening text, which the first toggle's explanation repeats. */
 export const basics = () => [T("mods.helpOn"), T("mods.helpOff")];
 
-/**
- * The first toggle's explanation: {title, lines, ok}; the box closes with Cancel too, and only ok toggles.
- */
+/** The first toggle's explanation: {title, lines, ok}; the box closes with Cancel too, and only ok toggles. */
 export function explanation(state) {
   const action = T(state?.enabled === false ? "mods.onTitle" : "mods.offTitle");
   return { title: action, lines: [...basics(), T("mods.explainOnce")], ok: action };
@@ -180,7 +165,6 @@ export function helpLines(state, { sep = listSep() } = {}) {
 /**
  * An entry as the result and the messages name it: the variant's name and the kind.
  * @param {(entry: object) => string} [nameOf] Names the entry's variant.
- * @param {string} [sep] The list separator.
  */
 export function entryLabel(entry, nameOf = (e) => e?.variant || e?.core || "", sep = listSep()) {
   if (entry?.kind === "other") {
@@ -285,16 +269,12 @@ export function startDue(name, { info = {}, state = null, entries = [] } = {}) {
   }
 }
 
-/**
- * The untracked prompt's buttons: Add and Turn On Mods only while mods are off.
- */
+/** The untracked prompt's buttons: Add and Turn On Mods only while mods are off. */
 export const untrackedButtons = (state) => ["add", ...(state?.enabled === false ? ["addTurnOn"] : []), "later"];
 
 /**
  * The outcome of the drift prompt's two buttons: Apply Mod Configuration sends the selected cards and keeps the
  * rest as they are (dismissed); Keep as Is dismisses every card.
- * @param {"apply"|"keep"} button The button pressed.
- * @param {object[]} entries The cards.
  * @param {string[]} selected The keys of the selected cards.
  * @returns {{restore: object[], dismiss: object[]}} The entries to restore and to dismiss.
  */
@@ -319,13 +299,9 @@ let host = null,
 const listeners = new Set();
 let lastSignature = "";
 
-/**
- * The state of mods.state as last read.
- */
+/** The state of mods.state as last read. */
 export const current = () => state;
-/**
- * Draw the switch again after a locale change.
- */
+/** Draw the switch again after a locale change. */
 export function relabel() {
   if (!els) return;
   els.label.textContent = T("mods.switch");
@@ -402,7 +378,7 @@ export async function refresh() {
 
 /**
  * Set up the top bar's switch and the events it follows.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {() => ((entry: object) => string)} [options.names] Gives the function that names an entry's variant.
  * @param {() => Promise<void>} [options.refreshPage] Resolves once the visible page has refreshed and drawn.
  */
@@ -419,9 +395,7 @@ export async function init(options = {}) {
 
 // the tray's events (webui/tray.py), also on the no-game screen: the tray switches the known installs without one
 let trayHeard = false;
-/**
- * Follow the tray's events (tray.open, tray.toggle).
- */
+/** Follow the tray's events (tray.open, tray.toggle). */
 export function listenTray() {
   if (trayHeard) return;
   trayHeard = true;
@@ -436,9 +410,7 @@ export function listenTray() {
 
 // the drift prompt (prompts.js), which the tray's Back to Official opens
 let driftPrompt = null;
-/**
- * Set the function that opens the drift prompt.
- */
+/** Set the function that opens the drift prompt. */
 export function setDriftPrompt(fn) {
   driftPrompt = fn;
 }
@@ -851,9 +823,7 @@ async function queueDone({ submitted = [], dropped = [] } = {}) {
 
 // --- the help ---
 
-/**
- * Open the "?" help on the message popup (title Enable Mods); a line's button acts, most of them closing it.
- */
+/** Open the "?" help on the message popup (title Enable Mods); a line's button acts, most of them closing it. */
 export async function openHelp() {
   const s = state || (await refresh());
   if (!s) return;

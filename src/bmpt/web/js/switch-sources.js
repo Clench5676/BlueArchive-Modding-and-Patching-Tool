@@ -10,9 +10,7 @@ import { spineBase } from "./api.js";
  */
 export const switchKindOf = (tab) => ({ portrait: "spr", lobby: "lobby", model: "model" })[tab] || null;
 
-/**
- * The core of a variant's skeleton of a kind: its portrait or its memorial lobby (or its 3D model's).
- */
+/** The core of a variant's skeleton of a kind: its portrait or its memorial lobby (or its 3D model's). */
 export const coreOf = (v, kind = "spr") => (kind === "model" ? v.model : kind === "lobby" ? v.lobby : v.spr) || null;
 /**
  * Whether a variant has a kind to show: a variant with only a field-mode model (fieldModel: an event or story
@@ -21,18 +19,12 @@ export const coreOf = (v, kind = "spr") => (kind === "model" ? v.model : kind ==
 export const hasKind = (v, kind) =>
   ["spr", "lobby", "model"].includes(kind) &&
   (!!coreOf(v, kind) || (kind === "model" && !!v?.fieldModel) || !!v?.storedKinds?.includes(kind));
-/**
- * Whether a variant has any kind to show.
- */
+/** Whether a variant has any kind to show. */
 export const hasAsset = (v) => hasKind(v, "spr") || hasKind(v, "lobby") || hasKind(v, "model");
-/**
- * The first kind a variant has: the portrait, else the lobby, else the model.
- */
+/** The first kind a variant has: the portrait, else the lobby, else the model. */
 export const primaryKind = (v) =>
   hasKind(v, "spr") ? "spr" : hasKind(v, "lobby") ? "lobby" : hasKind(v, "model") ? "model" : "lobby";
-/**
- * The tab to show for a variant: the wanted one when the variant has its kind, else the first it has.
- */
+/** The tab to show for a variant: the wanted one when the variant has its kind, else the first it has. */
 export function availableTab(v, tab) {
   if (hasKind(v, switchKindOf(tab))) return tab;
   return hasKind(v, "spr") ? "portrait" : hasKind(v, "lobby") ? "lobby" : hasKind(v, "model") ? "model" : "lobby";
@@ -80,9 +72,7 @@ export function appliedKey(v, kind = "spr") {
   return "unknown";
 }
 
-/**
- * A candidate key as an actions.apply source.
- */
+/** A candidate key as an actions.apply source. */
 export const sourceOf = (key) =>
   key === "self" ? "official" : key.startsWith("m:") ? `mod:${key.slice(2)}` : `variant:${key.slice(2)}`;
 
@@ -102,9 +92,7 @@ const cautionsOf = (costumes, key) => {
   const found = costumes?.[CAUTIONS]?.[key];
   return Array.isArray(found) && found.some((c) => c in CAUTION_TEXT) ? { cautions: found } : {};
 };
-/**
- * The locale key of a card's caution on hover: the first it has, in CAUTION_TEXT's order; null for none.
- */
+/** The locale key of a card's caution on hover: the first it has, in CAUTION_TEXT's order; null for none. */
 export const cautionKey = (c) => {
   const found = Object.keys(CAUTION_TEXT).find((code) => c?.cautions?.includes(code));
   return found ? CAUTION_TEXT[found] : null;
@@ -123,7 +111,6 @@ export const cautionKey = (c) => {
  * student's model (`families`: roster.list's) is offered through the popup's search, or all at once with "Show
  * other students" (crossCandidates), save the one already chosen, listed last (`cross`).
  * @param {object} fam The family, as family.get gives it.
- * @param {object} v The variant.
  * @param {"spr"|"lobby"|"model"} [kind] The kind to switch.
  * @param {object|null} [costumes] The 3D model's verdicts by variant.
  * @param {object[]|null} [families] roster.list's families, for other students' models.
@@ -203,13 +190,9 @@ export const CROSS_LIMIT = 64;
 // the search's hits. Off at every App start and never saved: kept for as long as the page lives, across students
 // and popups.
 const others = { shown: false };
-/**
- * Whether the 3D popup lists all other students' models ("Show other students").
- */
+/** Whether the 3D popup lists all other students' models ("Show other students"). */
 export const showOthers = () => others.shown;
-/**
- * Set "Show other students".
- */
+/** Set "Show other students". */
 export const setShowOthers = (on) => {
   others.shown = !!on;
 };
@@ -251,9 +234,8 @@ export const crossCard = (o, costumes = null) => {
  * out, in `compare`'s order (the roster's name order), the first `limit` (CROSS_LIMIT: what one RPC call takes;
  * "Show other students" lists them all).
  * @param {object[]} families roster.list's families.
- * @param {object} v The variant.
  * @param {object|null} [costumes] The 3D model's verdicts.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {(model: object) => boolean} [options.match] Whether a model matches the search.
  * @param {((a: object, b: object) => number)|null} [options.compare] The order of the hits.
  * @param {string[]} [options.exclude] The keys of the popup's own cards.
@@ -319,9 +301,7 @@ export const previewKey = (v, kind = "spr", enabled = true) => {
   return configuredKey(v, kind) || (v?.configured || !enabled ? "self" : appliedKey(v, kind));
 };
 
-/**
- * The candidate key the game should use, including while Mods are off: the manifest's.
- */
+/** The candidate key the game should use, including while Mods are off: the manifest's. */
 export const intendedKey = (v, kind = "spr") => configuredKey(v, kind) || "self";
 export const isApplied = (v, kind, key = previewKey(v, kind)) => key === intendedKey(v, kind);
 

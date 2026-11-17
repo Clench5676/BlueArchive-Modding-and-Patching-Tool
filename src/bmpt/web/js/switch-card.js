@@ -89,11 +89,9 @@ export function cardColours(rows, edge = 0.4) {
 
 /**
  * Colour a switch card's text and backing after its picture.
- * @param {HTMLElement} picture The picture's element.
- * @param {HTMLElement} text The text's element.
  * @param {object} widget The card's picture widget.
  * @param {(url: string) => Promise<HTMLImageElement>} load Loads an image.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {AbortSignal} [options.signal] Cancels the work.
  * @param {string} [options.kind] "lobby" by default.
  * @param {object} [options.background] The background under a portrait.

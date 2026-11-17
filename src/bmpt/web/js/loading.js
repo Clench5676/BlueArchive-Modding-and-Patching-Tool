@@ -51,9 +51,7 @@ const initialCover = document.getElementById("loading-boot");
 let styled = !!initialCover && !initialCover.classList.contains("neutral"),
   assetsAllowed = styled;
 let firstLoading = null;
-/**
- * The timings of the first loading screen, for the start-up report.
- */
+/** The timings of the first loading screen, for the start-up report. */
 export const timings = () => firstLoading || {};
 
 // --- setup ---
@@ -78,9 +76,7 @@ export function init(info) {
     .catch(() => {});
 }
 
-/**
- * Redraw the overlay's label and the fallback indicator's text once the strings are in.
- */
+/** Redraw the overlay's label and the fallback indicator's text once the strings are in. */
 export function relabel() {
   for (const o of [overlay, writerOverlay]) {
     if (!o) continue;
@@ -91,17 +87,11 @@ export function relabel() {
   }
 }
 
-/**
- * Whether a page overlay is up.
- */
+/** Whether a page overlay is up. */
 export const active = () => !!overlay && !overlay.closing;
-/**
- * Whether a full cover is up.
- */
+/** Whether a full cover is up. */
 export const covering = () => active() && overlay.mode === "full";
-/**
- * Whether automatic popups must wait: for page work, input holds and independent writer progress.
- */
+/** Whether automatic popups must wait: for page work, input holds and independent writer progress. */
 export const busy = () => pending.size > 0 || active() || held() || (!!writerOverlay && !writerOverlay.closing);
 
 // How a job over mods names a variant ({variant, core}) in its progress line (job-progress.js modLine): the roster's
@@ -114,9 +104,7 @@ let nameOf = (entry) => entry?.variant || entry?.core || "";
 export function setNames(fn) {
   if (typeof fn === "function") nameOf = fn;
 }
-/**
- * How a job over mods names a variant ({variant, core}) in its progress line (job-progress.js modLine).
- */
+/** How a job over mods names a variant ({variant, core}) in its progress line (job-progress.js modLine). */
 export const variantName = (entry) => nameOf(entry);
 
 /**
@@ -154,7 +142,7 @@ export function progressText(
  * only, so a late callback cannot change a newer task's indicator.
  * @param {(update: (progress: object) => void) => Promise<*>} run The task; it reports its progress through
  *     update.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {string|false|null} [options.label] The line to show while the job has not reported one; false for
  *     none.
  * @returns {Promise<*>} What the task returned.
@@ -272,9 +260,7 @@ function open(mode, opaque = false, writer = false) {
   return o;
 }
 
-/**
- * Draw the overlays again, after the screen changed under them.
- */
+/** Draw the overlays again, after the screen changed under them. */
 export function refresh() {
   for (const o of [overlay, writerOverlay]) o?.relabelProgress?.();
   if (overlay)
@@ -660,8 +646,7 @@ function decorate(o) {
  * Run the work that prepares a complete destination under the loading screen: only an opaque boot waits for
  * black; other scenes keep the current frame while callers build hidden content and publish it after their
  * readiness barrier.
- * @param {(...args: *[]) => Promise<*>} fn The work.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {boolean} [options.opaque] Wait for black first (the boot).
  * @param {Promise<*>|null} [options.until] Ends the scene early when it settles.
  */
@@ -701,8 +686,7 @@ export async function scene(fn, { opaque = false, until = null } = {}) {
 /**
  * Show the indicator over the current screen once the wait passes WAIT_AFTER, and resolve with the result of
  * the promise.
- * @param {Promise<*>} promise The wait.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {string|null} [options.label] What the indicator says to assistive technology (the page's "loading" by
  *     default).
  * @param {number} [options.cap] How long the indicator stays at most in milliseconds (a wait known to take
@@ -759,14 +743,11 @@ export async function wait(promise, { label: text = null, cap = HARD_CAP, immedi
 // A write holds input from submission through the final reload. Default holds leave popups available; all blocks
 // them too. Leaving the page releases its hold while the job keeps reporting its end.
 const holds = new Set();
-/**
- * Whether an input hold is on.
- */
+/** Whether an input hold is on. */
 export const held = () => holds.size > 0;
 /**
  * Run work while the screen's input is held under Now Loading.
- * @param {(update?: (progress: object) => void) => Promise<*>} work The work.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {Promise<*>|null} [options.until] Ends the hold early when it settles.
  * @param {boolean} [options.all] A strict hold: open popups are locked too, and automatic popups wait for it to
  *     end.
@@ -802,8 +783,6 @@ export async function hold(work, { until = null, all = false, progress = null } 
 /**
  * Hold the screen for a read-only preview: it keeps its frame-swap guard but allows existing popups to cancel
  * or supersede the wait. Writers keep their explicit strict hold.
- * @param {(...args: *[]) => Promise<*>} fn The work.
- * @param {object} [options] As for hold().
  */
 export function page(fn, options = {}) {
   return hold(() => fn(Promise.resolve()), options);

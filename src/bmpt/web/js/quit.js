@@ -12,8 +12,7 @@ export const HOSTS = Object.freeze(["consent", "display", "settings", "dialog", 
  * Never when another handler took the key (the search box, the display settings), while an input method
  * composes (keyCode 229 is WebKit's key that ends a conversion), for a held key's repeat, with a modifier,
  * while a popup is open, or behind the loading screen.
- * @param {KeyboardEvent} ev The key event.
- * @param {object} options The page.
+ * @param {object} options
  * @param {(id: string) => (HTMLElement|null)} options.byId The page's element of an id
  *     (document.getElementById).
  * @param {boolean} [options.covering] The loading screen covers the stage (Loading.covering()).
@@ -46,7 +45,7 @@ export const CONFIRM_KEYS = Object.freeze(["Enter", " "]);
 let asking = false;
 /**
  * Ask whether to quit and quit.
- * @param {object} options What it uses.
+ * @param {object} options
  * @param {(opts: object) => Promise<{button: string}>} options.message The shared message popup (popup.js).
  * @param {Function} options.rpc The page's RPC call.
  * @param {Function} options.T The page's translate function.

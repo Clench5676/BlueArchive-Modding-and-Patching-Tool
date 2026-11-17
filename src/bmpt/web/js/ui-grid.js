@@ -89,7 +89,6 @@ export const centreOf = (item) => item.mid ?? (item.ink ? (item.ink[0] + item.in
  * @param {object} [options] The row's frame and layout.
  * @param {number|null} [options.w] The width, or the items' own.
  * @param {number|null} [options.h] The height, or what the items need.
- * @param {number} [options.gap] The space between items.
  * @param {"start"|"end"|"center"} [options.align] Across the row; centre means the visual centre: a text's ink,
  *     a widget's box (the game's rule: every element's visual centre on the bar's centre line).
  * @param {"start"|"end"|"center"|"between"} [options.justify]
@@ -134,7 +133,6 @@ export function row(items, { x = 0, y = 0, w = null, h = null, gap = 0, align = 
  * @param {object} [options] The stack's frame and layout.
  * @param {number|null} [options.w] The width, or the widest item's.
  * @param {number|null} [options.h] The height, or the items' together.
- * @param {number} [options.gap] The space between items.
  * @param {"start"|"center"|"end"|"stretch"} [options.align] Across the stack; stretch makes each item as wide
  *     as the stack.
  * @param {"start"|"center"|"end"} [options.justify] Along the stack, within h.

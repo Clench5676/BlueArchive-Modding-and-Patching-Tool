@@ -13,7 +13,6 @@ function load(S, atlasText, skeletonData) {
  * The geometry of a skeleton in its setup pose, with some attachments replaced.
  * @param {object} S The spine runtime's namespace.
  * @param {string} atlasText The atlas file's text.
- * @param {object} skeletonData The skeleton data.
  * @param {object} [replacements] Replacement attachments by slot.
  */
 export function poseSetup(S, atlasText, skeletonData, replacements = {}) {
@@ -66,7 +65,7 @@ function defaultTracks(data, expression = "00", idleTime = 0) {
 
 /**
  * List the poses to refine: idle frames and blink frames.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {number} [options.idleFrames] How many frames of the idle.
  * @param {number} [options.blinkFrames] How many frames of the blink.
  */

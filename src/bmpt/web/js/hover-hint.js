@@ -34,7 +34,6 @@ export function hintStyle(prefab) {
  * Where the hint goes for a button in a host: the text's size and lines (two at most, down to 30 units), the
  * box in units, its centre (the render origin, stage px) and the side ("top": above the control, "bottom":
  * below it).
- * @param {string} text The hint.
  * @param {number[]} button [left, top, width, height] in stage px.
  * @param {number} hostW The host's width in px.
  * @param {number} hostH The host's height in px.
@@ -67,9 +66,7 @@ export function hintLayout(text, button, hostW, hostH, style) {
   };
 }
 
-/**
- * The tree of a hint for a layout.
- */
+/** The tree of a hint for a layout. */
 export function hintTree(layout, style) {
   const { box, color } = style;
   return NGUI.node(
@@ -115,8 +112,7 @@ export function hintHost(button) {
  * Show a text by a button while the pointer is over it (the button keeps the pointer: aria-disabled, not
  * disabled). Nothing shows when the game's tooltip prefab cannot be read.
  * @param {HTMLElement} button The control.
- * @param {string} text The hint.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {() => Promise<NguiNode>} [options.load] Loads the tooltip prefab, for the tests.
  * @returns {() => void} Hides the hint.
  */
