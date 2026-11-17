@@ -32,8 +32,8 @@ _TRANSFORMS = ("Transform", "RectTransform")
 
 
 # The prefab root's MX.Utils.UIManualScaleByAspect scales the lobby for its screen aspect ratio.
-# The standard aspect is the UI's 2960 x 1440, the narrowest 4:3 and the widest 2.1666667;
-# at 16:9 the lobby is on the narrow side of the standard
+# The standard aspect is the UI's 2960 x 1440, the narrowest 4:3 and the widest 2.1666667; at 16:9 the lobby is on
+# the narrow side of the standard
 ASPECT_STANDARD = 2960 / 1440
 ASPECT_NARROW = 4 / 3
 ASPECT_WIDE = 2.1666667
