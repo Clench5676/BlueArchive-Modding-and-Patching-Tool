@@ -1,4 +1,5 @@
-// The design system's layout primitives (web/js/ui-grid.js) and how its scales hang together (web/js/ui-tokens.js).
+// The design system's layout primitives (web/js/ui/ui-grid.js) and how its scales hang together
+// (web/js/ui/ui-tokens.js).
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
@@ -12,7 +13,7 @@ import {
   controlWidth,
   centreOf,
   toNode,
-} from "../../src/bmpt/web/js/ui-grid.js";
+} from "../../src/bmpt/web/js/ui/ui-grid.js";
 import {
   SPACE,
   TYPE,
@@ -24,7 +25,7 @@ import {
   XS_BUTTON,
   CHIP,
   SETTINGS,
-} from "../../src/bmpt/web/js/ui-tokens.js";
+} from "../../src/bmpt/web/js/ui/ui-tokens.js";
 
 const near = (a, b, eps = 1e-9) => Math.abs(a - b) <= eps;
 

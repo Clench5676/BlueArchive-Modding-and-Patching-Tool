@@ -3,8 +3,8 @@
 // a row of equal columns and a stack of rows (ui-grid.js). The cards are the App's own sizes (250 to 790 wide,
 // their incline adds up to 144), not spans of the 12-column grid, so the columns are spread between the content
 // box's edges instead of snapped to it.
-import { CHIP, POPUP, SPACE, STATS_BOX } from "./ui-tokens.js";
-import { container, row as layoutRow, stack as layoutStack } from "./ui-grid.js";
+import { CHIP, POPUP, SPACE, STATS_BOX } from "./ui/ui-tokens.js";
+import { container, row as layoutRow, stack as layoutStack } from "./ui/ui-grid.js";
 const GRID_WIDTH = 1818;
 // the paper's inset on every side: SPACE.xl, as it always was
 const INSET = SPACE.xl;

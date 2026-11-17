@@ -1,5 +1,5 @@
-// Tests for the text fitting in web/js/ngui.js (fitText, fitLabel): the CJK line-breaking rules in every UI language.
-// Run by tests/test_ngui_fit.py with Node's test runner: node --test tests/js/ngui_fit.test.mjs
+// Tests for the text fitting in web/js/ui/ngui.js (fitText, fitLabel): the CJK line-breaking rules in every UI
+// language. Run by tests/test_ngui_fit.py with Node's test runner: node --test tests/js/ngui_fit.test.mjs
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFile } from "node:fs/promises";
@@ -44,7 +44,7 @@ const {
   inkReference,
   inkShift,
   textWidth,
-} = await import("../../src/bmpt/web/js/ngui.js");
+} = await import("../../src/bmpt/web/js/ui/ngui.js");
 
 const BAD_START = /^[、。，．：；！？）」』】〉》…‥ーぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ〜～,.!?)]/;
 const BAD_END = /[（「『【〈《(]$/;

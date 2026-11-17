@@ -205,7 +205,7 @@ test("the gallery's cards and picture are 3D Model's squares, each photo filling
   const { switchGrid, MIN_COLUMNS } = await import("../../src/bmpt/web/js/switch-layout.js");
   for (const width of [1200, 1500, 1818]) assert.deepEqual(switchGrid("photo", width), switchGrid("model", width));
   assert.equal(MIN_COLUMNS.photo, MIN_COLUMNS.model);
-  const popup = readFileSync(new URL("../../src/bmpt/web/js/popup.js", import.meta.url), "utf8");
+  const popup = readFileSync(new URL("../../src/bmpt/web/js/ui/popup.js", import.meta.url), "utf8");
   // only a model's still is shown whole (contain); a photo, like the other kinds, covers the card's and the
   // picture's window
   assert.equal(popup.match(/imgSize: kind === "model" \? "contain" : "cover"/g)?.length, 2);

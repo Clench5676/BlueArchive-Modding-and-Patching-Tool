@@ -54,7 +54,7 @@ NOT_PIXELS = frozenset(
         "js/core/capture-priority.js",
         "js/core/capture-retries.js",
         "js/lobby-touch.js",
-        "js/ngui.js",
+        "js/ui/ngui.js",
         "js/preview-cache.js",
         "js/preview-error.js",
         "js/preview-lifecycle.js",

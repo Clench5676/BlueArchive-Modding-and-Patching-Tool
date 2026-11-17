@@ -9,11 +9,11 @@
 import * as NGUI from "./ngui.js";
 import { attachHint } from "./hover-hint.js";
 import { installScrollFades } from "./scroll-fade.js";
-import { switchGrid, placeSwitchCards } from "./switch-layout.js";
+import { switchGrid, placeSwitchCards } from "../switch-layout.js";
 import { scrollbar, scrollbarTrack } from "./scrollbar.js";
 import { horizontalScroll } from "./horizontal-scroll.js";
 import * as Buttons from "./game-buttons.js";
-import { searchTree, pickerItems, toolbarFit, toolbarTree, TOOLBAR_CENTRE_Y } from "./roster-widgets.js";
+import { searchTree, pickerItems, toolbarFit, toolbarTree, TOOLBAR_CENTRE_Y } from "../roster-widgets.js";
 import { resizeButton } from "./button-layout.js";
 import {
   fitBadgeCaptions,
@@ -23,9 +23,9 @@ import {
   SELECTION_SLOT,
 } from "./selected-frames.js";
 import { frameOutline } from "./row-thumbnail.js";
-import { T } from "./core/i18n.js";
-import { codeOf, noticeNames, withCode } from "./app/error-codes.js";
-import { withTimeout } from "./core/async.js";
+import { T } from "../core/i18n.js";
+import { codeOf, noticeNames, withCode } from "../app/error-codes.js";
+import { withTimeout } from "../core/async.js";
 import { TEXT_VIEWER, frameClass, frameGeometry, popupContent } from "./popup-frames.js";
 import { STATS_BOX_S, boxHeight, statsBox, valueRoom } from "./stats-box.js";
 import {
@@ -44,7 +44,7 @@ import {
   STATS_BOX,
   captionMinimum,
 } from "./ui-tokens.js";
-import { DOT, RECRUIT, S, TAN10, clone, glyphsOf, hitButton, markedLabel, wrapPath } from "./core/util.js";
+import { DOT, RECRUIT, S, TAN10, clone, glyphsOf, hitButton, markedLabel, wrapPath } from "../core/util.js";
 
 import { container, grid, row, stack as layoutStack, textItem, toNode } from "./ui-grid.js";
 
@@ -2280,7 +2280,7 @@ export async function listPopup(options) {
       tv,
       "Toolbar/SortBtn/Btn_Normal",
       async () => {
-        const Display = await import("./app/display.js");
+        const Display = await import("../app/display.js");
         await Display.open({
           view: { sort: toolState.sort, order: toolState.ascending ? "asc" : "desc", filters: {} },
           count: () => items.length,

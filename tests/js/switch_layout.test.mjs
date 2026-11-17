@@ -3,7 +3,7 @@
 // so the checks hold in every language; they run at the standard width (1818) and at a narrow and a wide one.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { SPACE } from "../../src/bmpt/web/js/ui-tokens.js";
+import { SPACE } from "../../src/bmpt/web/js/ui/ui-tokens.js";
 import {
   cardInkBounds,
   switchGrid,

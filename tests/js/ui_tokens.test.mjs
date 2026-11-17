@@ -1,13 +1,13 @@
-// The design tokens (web/js/ui-tokens.js): one place for the numbers and colours that popups, buttons, chips and
+// The design tokens (web/js/ui/ui-tokens.js): one place for the numbers and colours that popups, buttons, chips and
 // the style sheets share. The prefab values behind them are checked by tests/test_ui_tokens.py against the
 // development view.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { flat } from "./helpers/source-text.mjs";
 import { test } from "node:test";
-import { row, toNode } from "../../src/bmpt/web/js/ui-grid.js";
-import * as Tokens from "../../src/bmpt/web/js/ui-tokens.js";
-import { stack as layoutStack } from "../../src/bmpt/web/js/ui-grid.js";
+import { row, toNode } from "../../src/bmpt/web/js/ui/ui-grid.js";
+import * as Tokens from "../../src/bmpt/web/js/ui/ui-tokens.js";
+import { stack as layoutStack } from "../../src/bmpt/web/js/ui/ui-grid.js";
 const near = (a, b, eps = 1e-9) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b}`);
 
 const WEB = new URL("../../src/bmpt/web/", import.meta.url);
@@ -19,7 +19,7 @@ const frozenDeep = (value) =>
 
 test("every token is frozen and the module imports no other UI module", () => {
   for (const [name, value] of Object.entries(Tokens)) assert.ok(frozenDeep(value), `${name} is frozen`);
-  assert.doesNotMatch(src("js/ui-tokens.js"), /^\s*import\b/m);
+  assert.doesNotMatch(src("js/ui/ui-tokens.js"), /^\s*import\b/m);
 });
 
 test("the footer's centre follows from the prefab's frame and button rows", () => {
@@ -60,8 +60,8 @@ globalThis.document = {
   documentElement: { lang: "en-US", appendChild() {} },
 };
 globalThis.getComputedStyle = () => ({ getPropertyValue: () => "" });
-const NGUI = await import("../../src/bmpt/web/js/ngui.js");
-const ButtonsModule = await import("../../src/bmpt/web/js/game-buttons.js");
+const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
+const ButtonsModule = await import("../../src/bmpt/web/js/ui/game-buttons.js");
 const { controls } = await import("./control_prefabs.mjs");
 
 const { option, filter } = controls();
@@ -179,8 +179,8 @@ test("no site outside ui-tokens.js carries a retired backdrop or colour literal"
     /#6b7d92/i,
     /#545454/i,
   ];
-  const files = [...sources("js/", ".js"), ...sources("css/", ".css")].filter((file) => file !== "js/ui-tokens.js");
-  assert.ok(files.length > 100 && files.includes("js/popup.js") && files.includes("css/app.css"));
+  const files = [...sources("js/", ".js"), ...sources("css/", ".css")].filter((file) => file !== "js/ui/ui-tokens.js");
+  assert.ok(files.length > 100 && files.includes("js/ui/popup.js") && files.includes("css/app.css"));
   for (const file of files) {
     const text = read(file);
     for (const pattern of retired) assert.doesNotMatch(text, pattern, `${file} still holds ${pattern}`);
@@ -193,7 +193,7 @@ test("the call sites take the status colours from the tokens, the style sheet re
     "js/detail.js": ["COLOUR.success", "COLOUR.warning", "COLOUR.greyed"],
     "js/mod-compare.js": ["COLOUR.warning", "COLOUR.success", "COLOUR.error"],
     "js/app/prompts.js": ["COLOUR.greyed"],
-    "js/popup.js": ["COLOUR.inUse", "COLOUR.inUseInk"],
+    "js/ui/popup.js": ["COLOUR.inUse", "COLOUR.inUseInk"],
     "js/app/consent.js": ["COLOUR.neverBar", "COLOUR.note"],
   };
   for (const [file, names] of Object.entries(uses))
@@ -375,7 +375,7 @@ for (const locale of locales)
   });
 
 // Hall modals use the shared footer; the memorial editor hits its full-row stop rule.
-const popupSource = read("js/popup.js");
+const popupSource = read("js/ui/popup.js");
 const footerHelpers = new Function(
   "CONTROL",
   "POPUP_FOOTER",

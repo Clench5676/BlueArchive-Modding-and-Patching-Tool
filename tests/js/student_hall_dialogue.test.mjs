@@ -3,7 +3,7 @@ import { flat } from "./helpers/source-text.mjs";
 import { test } from "node:test";
 import { readFile } from "node:fs/promises";
 import { dialogueText } from "../../src/bmpt/web/js/dialogue-text.js";
-import { spriteBorders, sliceAxis, slicePoint } from "../../src/bmpt/web/js/sprite-slices.js";
+import { spriteBorders, sliceAxis, slicePoint } from "../../src/bmpt/web/js/ui/sprite-slices.js";
 import { freezeShown, freezeWhileLoading } from "../../src/bmpt/web/js/preview-lifecycle.js";
 
 class Element {

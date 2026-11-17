@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 globalThis.document = { createElement: () => ({ getContext: () => ({}) }) };
 globalThis.addEventListener = () => {};
-const { init, layout } = await import("../../src/bmpt/web/js/ngui.js");
+const { init, layout } = await import("../../src/bmpt/web/js/ui/ngui.js");
 const deferred = () => {
   let resolve;
   const promise = new Promise((r) => {

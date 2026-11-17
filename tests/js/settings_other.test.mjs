@@ -215,14 +215,14 @@ test("generic Settings rows render names, every target file, status and actions 
     json: async () => (url.endsWith("atlases.json") ? { Common: { Test: { width: 1, height: 1 } } } : {}),
   }));
   try {
-    const NGUI = await import(new URL("ngui.js", web));
+    const NGUI = await import(new URL("ui/ngui.js", web));
     const { wrapPath } = await import(new URL("core/util.js", web));
     const h = harness();
     const Rows = await import(new URL("settings-rows.js", web));
-    const ButtonsModule = await import(new URL("game-buttons.js", web));
+    const ButtonsModule = await import(new URL("ui/game-buttons.js", web));
     const { option, filter } = controls();
     const Buttons = { smallButton: (...args) => ButtonsModule.optionButton(option, filter, ...args) };
-    const { BACKDROP, XS_BUTTON, TYPE } = await import(new URL("ui-tokens.js", web));
+    const { BACKDROP, XS_BUTTON, TYPE } = await import(new URL("ui/ui-tokens.js", web));
     const deps = { NGUI, T: h.T, wrapPath, ...Rows, Buttons, BACKDROP, XS_BUTTON, TYPE };
     const valueRow = new Function("deps", `const {${Object.keys(deps)}} = deps; ${strip(settings)}; return valueRow;`)(
       deps,

@@ -1,5 +1,5 @@
 // Text fit of the Batch Import header and name plate, the option rows, the roster's cards and the Show in
-// Explorer button, in every shipped language: the real locale strings through the fit logic of web/js/ngui.js
+// Explorer button, in every shipped language: the real locale strings through the fit logic of web/js/ui/ngui.js
 // against the prefabs' numbers (a stand-in canvas, see helpers/fit_canvas.mjs: what is asserted is the logic,
 // not a font).
 import assert from "node:assert/strict";
@@ -9,7 +9,7 @@ import { LOCALES, installFitPage, text } from "./helpers/fit_canvas.mjs";
 import { makeImportLayouts } from "./import_prefabs.mjs";
 
 const page = installFitPage();
-const NGUI = await import("../../src/bmpt/web/js/ngui.js");
+const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
 const { importArtwork } = await import("../../src/bmpt/web/js/import-layout.js");
 const { S } = await import("../../src/bmpt/web/js/core/util.js");
 
@@ -339,7 +339,7 @@ const namesOf = (locale) =>
 const separator = (locale) => (/^(zh|ja)/.test(locale) ? "、" : ", ");
 
 // the Show in Finder / Explorer button: Btn_Up's body is 200 x 180 (inclined), its caption 32 down to 26 in 140
-const { explorerLayout, BODY, ICON, CAPTION } = await import("../../src/bmpt/web/js/explorer-button.js");
+const { explorerLayout, BODY, ICON, CAPTION } = await import("../../src/bmpt/web/js/ui/explorer-button.js");
 const { TAN10 } = await import("../../src/bmpt/web/js/core/util.js");
 for (const locale of LOCALES)
   test(`the Show in Finder / Explorer caption wraps onto up to three lines inside the button at 26 or more in ${locale}`, () => {
@@ -416,7 +416,7 @@ test("a Japanese word wider than the button breaks between characters rather tha
 // the prompt cards' labels (prompts.js card, popup.js listCard: 34 down to 24, two lines, 250 - 56 wide)
 const { markedLabel } = await import("../../src/bmpt/web/js/core/util.js");
 test("the prompt cards draw the pieces this test measures", () => {
-  const popup = readFileSync(new URL("../../src/bmpt/web/js/popup.js", import.meta.url), "utf8");
+  const popup = readFileSync(new URL("../../src/bmpt/web/js/ui/popup.js", import.meta.url), "utf8");
   assert.match(
     flat(popup),
     /LIST_CARD_NAME = Object\.freeze\(\{ fs: 34, fsMin: 24, lines: 2, padY: 22, pitch: 1\.2 \}\)/,
@@ -458,8 +458,8 @@ for (const locale of LOCALES)
 // the Hall's student cards (student-hall-ui.js formationCardTree: 36 down to 24, two lines, 190 wide)
 const hall = await (async () => {
   let source = readFileSync(new URL("../../src/bmpt/web/js/student-hall-ui.js", import.meta.url), "utf8");
-  const { POPUP, POPUP_FRAME, CONTROL, TYPE, SPACE, XS_BUTTON } = await import("../../src/bmpt/web/js/ui-tokens.js");
-  const { stack: layoutStack } = await import("../../src/bmpt/web/js/ui-grid.js");
+  const { POPUP, POPUP_FRAME, CONTROL, TYPE, SPACE, XS_BUTTON } = await import("../../src/bmpt/web/js/ui/ui-tokens.js");
+  const { stack: layoutStack } = await import("../../src/bmpt/web/js/ui/ui-grid.js");
   globalThis.hallHarness = {
     NGUI,
     Popup: {},

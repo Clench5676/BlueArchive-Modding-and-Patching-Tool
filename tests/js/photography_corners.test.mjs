@@ -16,8 +16,8 @@ import {
 import { visualPrefab } from "./visual_prefabs.mjs";
 import { n, spr } from "./control_prefabs.mjs";
 
-import { CONTROL, XS_BUTTON, SPACE, FULLSCREEN_BUTTON } from "../../src/bmpt/web/js/ui-tokens.js";
-import { row } from "../../src/bmpt/web/js/ui-grid.js";
+import { CONTROL, XS_BUTTON, SPACE, FULLSCREEN_BUTTON } from "../../src/bmpt/web/js/ui/ui-tokens.js";
+import { row } from "../../src/bmpt/web/js/ui/ui-grid.js";
 const S = 1920 / 2960,
   near = (a, b) => assert.ok(Math.abs(a - b) < 1e-7, `${a} != ${b}`);
 const source = readFileSync(new URL("../../src/bmpt/web/js/photography/controller.js", import.meta.url), "utf8");
@@ -144,7 +144,7 @@ const layouts = {
 };
 globalThis.document = { createElement: () => new Element(), documentElement: { lang: "en-US" } };
 globalThis.getComputedStyle = () => ({ getPropertyValue: () => "" });
-const NGUI = await import("../../src/bmpt/web/js/ngui.js");
+const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
 
 for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
   for (const mode of ["portrait", "lobby"]) {

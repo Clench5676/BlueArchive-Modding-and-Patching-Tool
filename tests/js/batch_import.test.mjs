@@ -190,13 +190,13 @@ const {
   emptyBlock,
 } = await import("../../src/bmpt/web/js/import-layout.js");
 const { DIALOG_H } = await import("../../src/bmpt/web/js/batch-import.js");
-const { frameOutline } = await import("../../src/bmpt/web/js/row-thumbnail.js");
+const { frameOutline } = await import("../../src/bmpt/web/js/ui/row-thumbnail.js");
 const { ROW_W: OPTION_WIDTH, rowBase, radioRow } = await import("../../src/bmpt/web/js/settings-rows.js");
 const { S } = await import("../../src/bmpt/web/js/core/util.js");
 const { SPACE, TYPE, LINE, CONTROL, POPUP_FOOTER, POPUP_FRAME, POPUP_TYPE } = await import(
-  "../../src/bmpt/web/js/ui-tokens.js"
+  "../../src/bmpt/web/js/ui/ui-tokens.js"
 );
-const { container } = await import("../../src/bmpt/web/js/ui-grid.js");
+const { container } = await import("../../src/bmpt/web/js/ui/ui-grid.js");
 // separate lines of a row stack LINE.stack of the row's one size apart (List_01's meta lines)
 const PITCH = LINE.stack * TYPE.dense.fs;
 // run a page test in en-US and zh-CN (the design system's geometry is checked in both), restoring en-US after
@@ -1656,7 +1656,7 @@ test("resized real button patterns are clipped to the inclined body at every pag
         }
 });
 
-const { XS_BUTTON } = await import("../../src/bmpt/web/js/ui-tokens.js");
+const { XS_BUTTON } = await import("../../src/bmpt/web/js/ui/ui-tokens.js");
 // the list's tools: the Items prefab's 162-high bodies at the page's tool scale, which went down with the small button
 const TOOL_SCALE = (0.34 * CONTROL.buttonXS.h) / CONTROL.buttonS.h;
 const { BUTTON_BODY_H } = await import("../../src/bmpt/web/js/import-layout.js");
@@ -4142,7 +4142,7 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
 }
 
 // --- the game's scrollbar on every scrolling area (UICharacterCollection/SeletControl/List/Scroll Bar) ---
-const { scrollbarTrack } = await import("../../src/bmpt/web/js/scrollbar.js");
+const { scrollbarTrack } = await import("../../src/bmpt/web/js/ui/scrollbar.js");
 const { DIALOG_AREA } = await import("../../src/bmpt/web/js/batch-import.js");
 const importCss = readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
 const cssRule = (selector) =>

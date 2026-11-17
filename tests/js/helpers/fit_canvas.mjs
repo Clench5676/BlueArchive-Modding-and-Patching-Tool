@@ -1,4 +1,4 @@
-// A stand-in canvas and page for the fit tests (the layout and fit logic of web/js/ngui.js against the locale files'
+// A stand-in canvas and page for the fit tests (the layout and fit logic of web/js/ui/ngui.js against the locale files'
 // own strings): proportional glyph advances, so a wrapped label measures about as it does in the page font. CJK, kana,
 // Hangul and full-width forms are 1 em wide, a Thai base letter half an em and its vowel and tone marks none, Latin by
 // class. ngui.js draws Latin 12 % larger (fontSizeFor), which reaches this measure as a larger px in the font string.

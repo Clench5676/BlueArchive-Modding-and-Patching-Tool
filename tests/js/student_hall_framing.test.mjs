@@ -496,7 +496,7 @@ test("the visible head ignores Spine's bounds: transparent props, additive halos
 });
 
 import { portraitToolbarLayout, PORTRAIT_TOOLBAR_HEIGHT } from "../../src/bmpt/web/js/student-hall-framing.js";
-import { CONTROL, SPACE } from "../../src/bmpt/web/js/ui-tokens.js";
+import { CONTROL, SPACE } from "../../src/bmpt/web/js/ui/ui-tokens.js";
 for (const locale of ["en-US", "zh-CN"])
   test(`portrait toolbar centres equal icons with scaled gaps in ${locale}`, () => {
     const S = 1920 / 2960,

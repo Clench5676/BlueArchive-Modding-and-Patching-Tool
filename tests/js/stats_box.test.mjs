@@ -1,11 +1,11 @@
-// The light stats box component (web/js/stats-box.js): pure layout from a width and rows to nodes and a height.
+// The light stats box component (web/js/ui/stats-box.js): pure layout from a width and rows to nodes and a height.
 // The sites that draw through it are checked in popup.test.mjs (the details panel, the file details, the
 // messages, the update dialog); the tokens against the prefab in tests/test_ui_tokens.py.
 import assert from "node:assert/strict";
 import { flat, importOf } from "./helpers/source-text.mjs";
 import { readFileSync, readdirSync } from "node:fs";
 import { test } from "node:test";
-import { STATS_BOX as B } from "../../src/bmpt/web/js/ui-tokens.js";
+import { STATS_BOX as B } from "../../src/bmpt/web/js/ui/ui-tokens.js";
 
 // the measuring stand-in shared with the other fit tests: a CJK or Thai code point one em, anything else half
 const WIDE = /[\u2e80-\u9fff\u3000-\u30ff\uff00-\uffef\uac00-\ud7af\u0e00-\u0e7f]/;
@@ -21,8 +21,8 @@ globalThis.document = {
   documentElement: { lang: "en-US", appendChild() {} },
 };
 globalThis.getComputedStyle = () => ({ getPropertyValue: () => "" });
-const NGUI = await import("../../src/bmpt/web/js/ngui.js");
-const Box = await import("../../src/bmpt/web/js/stats-box.js");
+const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
+const Box = await import("../../src/bmpt/web/js/ui/stats-box.js");
 
 const WEB = new URL("../../src/bmpt/web/", import.meta.url);
 const read = (path) => readFileSync(new URL(path, WEB), "utf8");
@@ -220,11 +220,11 @@ test("the room a value gets is the box less 30 each side, the captions, what the
 });
 
 test("the module touches no page: it uses the text measure, the path wrap and the tokens, nothing else", () => {
-  const source = read("js/stats-box.js");
+  const source = read("js/ui/stats-box.js");
   assert.doesNotMatch(flat(source), /document\.|window\.|innerWidth|getElementById/);
   assert.deepEqual(
     [...source.matchAll(/^import [^;]* from "(.+)";$/gm)].map((m) => m[1]),
-    ["./ngui.js", "./ui-tokens.js", "./core/util.js"],
+    ["./ngui.js", "./ui-tokens.js", "../core/util.js"],
   );
 });
 
@@ -241,29 +241,29 @@ const sources = (dir, ext) =>
 
 test("the stats box's fill and line colours are written in ui-tokens.js only (and the tour's image slot reuses the fill)", () => {
   const files = sources("js/", ".js");
-  assert.ok(files.length > 100 && files.includes("js/popup.js") && files.includes("js/app/update.js"));
+  assert.ok(files.length > 100 && files.includes("js/ui/popup.js") && files.includes("js/app/update.js"));
   const holders = (literal) => files.filter((file) => read(file).toLowerCase().includes(literal)).sort();
-  assert.deepEqual(holders("#ecf5f9"), ["js/app/tours.js", "js/ui-tokens.js"]);
+  assert.deepEqual(holders("#ecf5f9"), ["js/app/tours.js", "js/ui/ui-tokens.js"]);
   // the line's colour is also the progress bar's, the chips' outline and the dotted dividers of the file table
   for (const file of holders("#c0c9d4"))
-    assert.ok(["js/detail.js", "js/popup.js", "js/ui-tokens.js", "js/app/update.js"].includes(file), file);
+    assert.ok(["js/detail.js", "js/ui/popup.js", "js/ui/ui-tokens.js", "js/app/update.js"].includes(file), file);
 });
 
 test("the four sites build their box with statsBox()", () => {
   for (const [file, calls] of [
-    ["js/popup.js", 2],
+    ["js/ui/popup.js", 2],
     ["js/detail.js", 1],
     ["js/app/update.js", 2],
   ]) {
     const source = read(file);
     assert.match(
       flat(source),
-      new RegExp(`import \\{[^}]*\\bstatsBox\\b[^}]*\\} from "${importOf(file.slice(3), "stats-box.js")}";`),
+      new RegExp(`import \\{[^}]*\\bstatsBox\\b[^}]*\\} from "${importOf(file.slice(3), "ui/stats-box.js")}";`),
       file,
     );
     assert.equal(source.match(/\bstatsBox\(/g).length, calls, `${file}: its calls to statsBox()`);
   }
-  assert.match(read("js/popup.js"), /name: "Fields"/);
-  assert.match(flat(read("js/popup.js")), /name: "Box", names: \{ value: "Row", divider: "Dot" \}/);
+  assert.match(read("js/ui/popup.js"), /name: "Fields"/);
+  assert.match(flat(read("js/ui/popup.js")), /name: "Box", names: \{ value: "Row", divider: "Dot" \}/);
   assert.match(read("js/detail.js"), /name: "Summary"/);
 });

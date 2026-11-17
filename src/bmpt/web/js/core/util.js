@@ -1,5 +1,5 @@
 // Shared constants and small helpers for the screens.
-import * as NGUI from "../ngui.js";
+import * as NGUI from "../ui/ngui.js";
 import { stageCoverBleed } from "../window/window-layout.js";
 import { reflowCorners } from "../window/corner-layout.js";
 

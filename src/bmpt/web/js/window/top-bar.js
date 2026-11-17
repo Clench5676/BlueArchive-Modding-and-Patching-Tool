@@ -2,7 +2,7 @@
 // by the ink of its script's reference glyph, drawn pictures (the switch, the "?" badge, Settings, Home, the
 // divider) by the ink of the bitmaps NGUI drew, so every element's visual centre lies on the same line whatever
 // its box, pivot or padding is.
-import * as NGUI from "../ngui.js";
+import * as NGUI from "../ui/ngui.js";
 import { inkBounds } from "../student-hall-icons.js";
 import { barCentre, barPadding, extent, inkRect, moveBy } from "./top-bar-layout.js";
 

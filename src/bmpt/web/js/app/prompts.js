@@ -6,11 +6,11 @@
 // scan consent; the messages need none (the detail screen judges its files cheaply). The pure parts (which
 // entries a prompt lists, its cards and details, what its buttons do, the drift result) are tested in Node
 // (tests/js/prompts.test.mjs).
-import { notify } from "../popup.js";
+import { notify } from "../ui/popup.js";
 import * as Loading from "./loading.js";
 import * as ModSwitch from "../mod-switch.js";
-import * as Popup from "../popup.js";
-import { COLOUR } from "../ui-tokens.js";
+import * as Popup from "../ui/popup.js";
+import { COLOUR } from "../ui/ui-tokens.js";
 import { on, rpc, spineBase, waitJob } from "../core/api.js";
 import { T } from "../core/i18n.js";
 import { addFirstLines, overwrittenLines } from "./repairs.js";

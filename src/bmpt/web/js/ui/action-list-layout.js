@@ -6,9 +6,9 @@
 // for action-list.js, detail.js and the tests.
 import * as NGUI from "./ngui.js";
 import { BOX_INSET } from "./hover-hint.js";
-import { BAR_HEIGHT } from "./window/top-bar-layout.js";
+import { BAR_HEIGHT } from "../window/top-bar-layout.js";
 import { POPUP_TYPE } from "./ui-tokens.js";
-import { S, TAN10 } from "./core/util.js";
+import { S, TAN10 } from "../core/util.js";
 
 // the stage in the detail screen's units: 1920 x 1080 px around the prefab's centre at [960, 515] px; the top bar's
 // BAR_HEIGHT px over its top. The list keeps EDGE inside it.

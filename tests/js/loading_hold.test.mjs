@@ -87,7 +87,7 @@ globalThis.fetch = async () => {
   throw new Error("no game assets in this test");
 };
 const Loading = await import("../../src/bmpt/web/js/app/loading.js");
-const Popup = await import("../../src/bmpt/web/js/popup.js");
+const Popup = await import("../../src/bmpt/web/js/ui/popup.js");
 const { freezeWhileLoading } = await import("../../src/bmpt/web/js/preview-lifecycle.js");
 const event = (target = new El(), key) => ({
   target,

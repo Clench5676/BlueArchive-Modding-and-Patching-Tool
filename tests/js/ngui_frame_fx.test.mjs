@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { selectedFrame, SELECTION_SLOT } from "../../src/bmpt/web/js/selected-frames.js";
+import { selectedFrame, SELECTION_SLOT } from "../../src/bmpt/web/js/ui/selected-frames.js";
 import { selectionPrefab } from "./selection_prefabs.mjs";
 const media = {
   matches: false,
@@ -25,7 +25,7 @@ globalThis.MutationObserver = class {
   observe() {}
 };
 const { FRAME_OUTPUT, frameBlend, frameMesh, frameOver, renderFrameEffect } = await import(
-  "../../src/bmpt/web/js/ngui-frame-fx.js"
+  "../../src/bmpt/web/js/ui/ngui-frame-fx.js"
 );
 const { toLinear, toSrgb } = await import("../../src/bmpt/web/js/app/touch-fx.js");
 const slot = SELECTION_SLOT.split("/").reduce((n, part) => n.children.find((c) => c.name === part), selectionPrefab());

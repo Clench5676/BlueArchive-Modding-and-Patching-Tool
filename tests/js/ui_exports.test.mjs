@@ -19,7 +19,7 @@ globalThis.fetch = async (url, options) => {
   };
 };
 const { uiExportUrl } = await import("../../src/bmpt/web/js/core/api.js");
-const NGUI = await import("../../src/bmpt/web/js/ngui.js");
+const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
 test("the bootstrap export epoch bypasses old fresh cache entries and is idempotent", () => {
   const first = uiExportUrl("/asset/ui/layout/Root.json?path=child");
   assert.equal(uiExportUrl(first), first);

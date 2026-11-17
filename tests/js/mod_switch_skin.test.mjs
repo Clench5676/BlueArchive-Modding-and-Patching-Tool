@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { segmentTree, segmentOrigin, segmentDensity, SEGMENT_SCALE } from "../../src/bmpt/web/js/mod-switch-skin.js";
-import { sliceAxis } from "../../src/bmpt/web/js/sprite-slices.js";
+import { sliceAxis } from "../../src/bmpt/web/js/ui/sprite-slices.js";
 for (const dpi of [1, 1.25, 1.5, 1.75, 2, 3])
   for (const scale of [0.5, 0.75, 1, 1.25, 1.5, 2])
     test(`switch tiles share exact raster edges at DPI ${dpi}, scale ${scale}`, () => {
@@ -44,7 +44,7 @@ test("both states use NGUI single-image paint, with no separately composited CSS
 });
 
 test("the shared raster accepts effective DPI without reducing smoothing or logical geometry", async () => {
-  const renderer = await readFile(new URL("../../src/bmpt/web/js/ngui.js", import.meta.url), "utf8");
+  const renderer = await readFile(new URL("../../src/bmpt/web/js/ui/ngui.js", import.meta.url), "utf8");
   assert.match(renderer, /sliceAxis\(sw, l, r, wpx, \[scales\[3\], scales\[1\]\], density\)/);
   assert.match(renderer, /sliceAxis\(sh, t, bo, hpx, \[scales\[0\], scales\[2\]\], density\)/);
   assert.match(renderer, /Number\(opts.rasterDensity\)/);
@@ -52,7 +52,7 @@ test("the shared raster accepts effective DPI without reducing smoothing or logi
 });
 
 test("the real sliced-image raster keeps exact tile boundaries and display-density resolution", async () => {
-  const source = await readFile(new URL("../../src/bmpt/web/js/ngui.js", import.meta.url), "utf8");
+  const source = await readFile(new URL("../../src/bmpt/web/js/ui/ngui.js", import.meta.url), "utf8");
   const code = source
     .slice(source.indexOf("const baked = new Map();"), source.indexOf("// halve repeatedly"))
     .replace("export function slicedImage", "function slicedImage");

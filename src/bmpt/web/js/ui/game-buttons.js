@@ -2,7 +2,7 @@
 import * as NGUI from "./ngui.js";
 import { resizeButton } from "./button-layout.js";
 import { CONTROL, SPACE, TYPE, XS_BUTTON } from "./ui-tokens.js";
-import { clone } from "./core/util.js";
+import { clone } from "../core/util.js";
 
 let layouts, loading;
 /**

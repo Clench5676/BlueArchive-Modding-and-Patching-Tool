@@ -101,7 +101,7 @@ test("the top bar and the Enable Mods switch draw no shadow of their own", () =>
   }
 });
 test("remaining switch and scrollbar paint paths do not create CSS border-image slices", () => {
-  for (const name of ["mod-switch-skin.js", "scrollbar.js"]) {
+  for (const name of ["mod-switch-skin.js", "ui/scrollbar.js"]) {
     const js = readFileSync(new URL(`../../src/bmpt/web/js/${name}`, import.meta.url), "utf8").replace(
       /^\s*\/\/.*$/gm,
       "",

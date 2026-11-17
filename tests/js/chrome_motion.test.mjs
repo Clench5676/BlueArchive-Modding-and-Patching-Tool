@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFileSync } from "node:fs";
-import { LOBBY_ENTRY } from "../../src/bmpt/web/js/ui-tokens.js";
+import { LOBBY_ENTRY } from "../../src/bmpt/web/js/ui/ui-tokens.js";
 
 const source = readFileSync(new URL("../../src/bmpt/web/js/window/chrome-motion.js", import.meta.url), "utf8")
   .replace('import { reflowCorners } from "./corner-layout.js";', "const reflowCorners = () => {};")
@@ -13,8 +13,8 @@ const source = readFileSync(new URL("../../src/bmpt/web/js/window/chrome-motion.
     "const rpc = (...call) => { globalThis.motionRpc.push(call); return Promise.resolve(); };",
   )
   .replace(
-    'import { LOBBY_ENTRY } from "../ui-tokens.js";',
-    `import { LOBBY_ENTRY } from "${new URL("../../src/bmpt/web/js/ui-tokens.js", import.meta.url).href}";`,
+    'import { LOBBY_ENTRY } from "../ui/ui-tokens.js";',
+    `import { LOBBY_ENTRY } from "${new URL("../../src/bmpt/web/js/ui/ui-tokens.js", import.meta.url).href}";`,
   );
 globalThis.motionRpc = [];
 const M = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);

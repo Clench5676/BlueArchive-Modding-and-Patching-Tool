@@ -53,7 +53,7 @@ def test_verified_loading_letters_define_progress_line(tmp_path):
         "scale": [1, 1],
         "widgets": [{"text": "", "fontSize": 32, "effect": 3, "effectColor": "#29415a/0.76", "effectDistance": [3, 3]}],
     }
-    module = Path(__file__).resolve().parents[1] / "src/bmpt/web/js/ngui-label.js"
+    module = Path(__file__).resolve().parents[1] / "src/bmpt/web/js/ui/ngui-label.js"
     script = """import { loadingLabel, labelBaselineInset } from MODULE;
 let input = ""; for await (const part of process.stdin) input += part;
 const {tree, style, ink} = JSON.parse(input), s = 1920/2960;

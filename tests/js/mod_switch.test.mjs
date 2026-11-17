@@ -1159,7 +1159,7 @@ test("Troubleshoot Mods shows only in pre-release builds, and Apply Official to 
 });
 
 test("the help fits its opening lines together in every locale, with and without action rows", async () => {
-  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
+  const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
   const { S: scale } = await import("../../src/bmpt/web/js/core/util.js");
   try {
     for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
@@ -1211,7 +1211,7 @@ test("the help fits its opening lines together in every locale, with and without
 
 test("Settings combines scan consent and automatic checks, preserving the consent popup from Off", async () => {
   const Settings = await import("../../src/bmpt/web/js/settings.js");
-  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
+  const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
   let prefs = {
     ...answers["settings.get"],
     native: true,
@@ -2338,7 +2338,7 @@ test("startup shows the Spine notice after assets until it is acknowledged, re-r
       "env",
       `const { ${Object.keys(env).join(", ")} } = env; ${source}; return startPopups();`,
     )(env);
-    await (await import("../../src/bmpt/web/js/popup.js")).sequence(steps);
+    await (await import("../../src/bmpt/web/js/ui/popup.js")).sequence(steps);
     assert.deepEqual(order, ["assets", ...(choice !== true ? ["spine", "route"] : []), "scan", "drift", "untracked"]);
     assert.equal(info.spineConsent, true);
     assert.equal(MS.startDue("spine", { info }), false);
@@ -2894,7 +2894,7 @@ test("the drift prompt asks the impacts of the mods its entries are configured w
   const items = P.heldCards([{ key: "/a|a_spr" }, { key: "/a|b_spr" }, { key: "/b|a_spr", disabled: true }], held);
   assert.equal(items[0].badge.text, "Outdated");
   // the badge keeps its whole word on the generic list's card (250 wide: popup.js listCard, 26 down to 20, 70 kept)
-  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
+  const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
   try {
     for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
       const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
@@ -2902,7 +2902,7 @@ test("the drift prompt asks the impacts of the mods its entries are configured w
       assert.equal(bf.text, ui.mods.heldBadge, `${lang}: whole`);
       assert.ok(NGUI.glyphWidth(bf.text, bf.fs) <= 250 - 70, `${lang}: inside the card`);
       // with the tick box in the corner (the update list): whole, and short of the box on every kind's card
-      const Pop = await import("../../src/bmpt/web/js/popup.js");
+      const Pop = await import("../../src/bmpt/web/js/ui/popup.js");
       const { switchGrid } = await import("../../src/bmpt/web/js/switch-layout.js");
       const { TAN10 } = await import("../../src/bmpt/web/js/core/util.js");
       for (const kind of [null, "spr", "lobby", "model"]) {

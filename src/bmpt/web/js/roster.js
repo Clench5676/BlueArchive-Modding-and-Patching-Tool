@@ -7,7 +7,7 @@
 // Only the rows near the view are rendered.
 import { clipRosterBand } from "./roster-card.js";
 import { specialFraming } from "./special-view.js";
-import * as NGUI from "./ngui.js";
+import * as NGUI from "./ui/ngui.js";
 import * as Display from "./app/display.js";
 import * as Loading from "./app/loading.js";
 import {
@@ -20,8 +20,8 @@ import {
 import { countNodes, countText, iconsOf } from "./mod-counts.js";
 import { rpc, spineBase } from "./core/api.js";
 import { L, T, language } from "./core/i18n.js";
-import { scrollbar } from "./scrollbar.js";
-import { wheelScroller } from "./horizontal-scroll.js";
+import { scrollbar } from "./ui/scrollbar.js";
+import { wheelScroller } from "./ui/horizontal-scroll.js";
 import { prioritise, thumbnailScope } from "./thumbs.js";
 import { spineAllowed } from "./spine-runtime.js";
 import { configuredKey, hasAsset, previewBase, primaryKind } from "./switch-sources.js";

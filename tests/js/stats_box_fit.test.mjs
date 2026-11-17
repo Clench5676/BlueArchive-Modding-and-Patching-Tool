@@ -56,16 +56,16 @@ export async function load(url, ctx, next) {
 }`)}`,
 );
 const JS = "../../src/bmpt/web/js/";
-const NGUI = await import(`${JS}ngui.js`);
-const Tokens = await import(`${JS}ui-tokens.js`);
-const Popup = await import(`${JS}popup.js`);
+const NGUI = await import(`${JS}ui/ngui.js`);
+const Tokens = await import(`${JS}ui/ui-tokens.js`);
+const Popup = await import(`${JS}ui/popup.js`);
 const Detail = await import(DETAIL);
-const Buttons = await import(`${JS}game-buttons.js`);
+const Buttons = await import(`${JS}ui/game-buttons.js`);
 await Buttons.ready();
 const Update = await import(`${JS}app/update.js`);
-const Box = await import(`${JS}stats-box.js`);
+const Box = await import(`${JS}ui/stats-box.js`);
 const { setStrings } = await import(`${JS}core/i18n.js`);
-const { DETAILS, frameGeometry } = await import(`${JS}popup-frames.js`);
+const { DETAILS, frameGeometry } = await import(`${JS}ui/popup-frames.js`);
 const { STATS_BOX: B, POPUP } = Tokens;
 
 // longest first

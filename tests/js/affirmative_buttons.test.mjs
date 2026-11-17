@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import { compact, flat } from "./helpers/source-text.mjs";
 import assert from "node:assert/strict";
-import { hasAffirmative, skinAffirmatives } from "../../src/bmpt/web/js/affirmative-buttons.js";
+import { hasAffirmative, skinAffirmatives } from "../../src/bmpt/web/js/ui/affirmative-buttons.js";
 test("affirmative styling preserves secondary and disabled semantics", () => {
   const make = (name, color = "#77deff/1.00") => ({
     name,
@@ -49,7 +49,7 @@ test("names and translated captions cannot imply an affirmative action", () => {
 
 test("the source picker, gallery and Settings use explicit treatment in all locales", async () => {
   const { readFile } = await import("node:fs/promises");
-  const popup = flat(await readFile(new URL("../../src/bmpt/web/js/popup.js", import.meta.url), "utf8"));
+  const popup = flat(await readFile(new URL("../../src/bmpt/web/js/ui/popup.js", import.meta.url), "utf8"));
   assert.match(popup, /child.actionSemantic = action.semantic \|\| \(action.primary \? "confirm" : "secondary"\)/);
   assert.match(popup, /buttons: buttons.map/);
   assert.ok(!popup.includes('[T("popup.apply"),T("act.update")'));
@@ -72,7 +72,7 @@ test("the source picker, gallery and Settings use explicit treatment in all loca
 });
 
 test("the gold template's patterns are drawn: the renderer skips a node not marked active and a negative scale", async () => {
-  const { goldTemplate } = await import("../../src/bmpt/web/js/affirmative-buttons.js");
+  const { goldTemplate } = await import("../../src/bmpt/web/js/ui/affirmative-buttons.js");
   const patterns = goldTemplate.children.filter((child) => child.widgets?.some((w) => /_Pt$/.test(w.sprite || "")));
   assert.equal(patterns.length, 2);
   for (const pattern of patterns) {

@@ -1,8 +1,8 @@
 // Student Hall: UILobby controls, independent drafts, and modal resource editors built from native game prefabs.
-import * as NGUI from "./ngui.js";
+import * as NGUI from "./ui/ngui.js";
 import { bindCorner } from "./window/corner-layout.js";
 import * as Loading from "./app/loading.js";
-import * as Popup from "./popup.js";
+import * as Popup from "./ui/popup.js";
 import * as UI from "./student-hall-ui.js";
 import * as Backgrounds from "./student-hall-backgrounds.js";
 import {
@@ -24,10 +24,10 @@ import { bindPortraitPointer, portraitRect, portraitToolbarLayout, PORTRAIT_SIZE
 import { rpc } from "./core/api.js";
 import { T, L, errorText, language } from "./core/i18n.js";
 import { clone, S, hitButton, text } from "./core/util.js";
-import { lazyThumbnail } from "./lazy-thumbnail.js";
+import { lazyThumbnail } from "./ui/lazy-thumbnail.js";
 import { thumbnailScope } from "./thumbs.js";
-import { CONTROL, XS_BUTTON, SPACE } from "./ui-tokens.js";
-import { row } from "./ui-grid.js";
+import { CONTROL, XS_BUTTON, SPACE } from "./ui/ui-tokens.js";
+import { row } from "./ui/ui-grid.js";
 
 let ctx, store, options, root, art, chrome, hits, subtitle, layouts, dialogue, fullscreen, sceneCamera;
 let page = 0,

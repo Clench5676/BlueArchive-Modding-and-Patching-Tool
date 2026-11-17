@@ -1,10 +1,10 @@
 // The stationary UV particle in FX_UI_Mulligan_03 / FX_UI_Mulligan_Sub_03: its mesh and material come from
 // UIPopup_Mulligan and the mask shader scrolls FX_TEX_Bulletline_03; no TweenAlpha, UISpriteAnimation or CSS
 // animation is involved.
-import { fragmentSource } from "./particles-gl.js";
-import { toLinear, toSrgb } from "./app/touch-fx.js";
-import { uiExportUrl } from "./core/api.js";
-import { applyDir, euler } from "./particles.js";
+import { fragmentSource } from "../particles-gl.js";
+import { toLinear, toSrgb } from "../app/touch-fx.js";
+import { uiExportUrl } from "../core/api.js";
+import { applyDir, euler } from "../particles.js";
 
 /**
  * Build the vertex data of the frame effect's mesh, stretched like the frame's sliced sprite.

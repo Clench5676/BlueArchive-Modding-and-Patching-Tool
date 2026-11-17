@@ -1,5 +1,5 @@
-"""The shared popups (web/js/popup.js) and the update popup (web/js/app/update.js) are front-end code: their tests run
-with Node's test runner on a stand-in DOM, skipped where Node is not installed."""
+"""The shared popups (web/js/ui/popup.js) and the update popup (web/js/app/update.js) are front-end code: their tests
+run with Node's test runner on a stand-in DOM, skipped where Node is not installed."""
 
 import json
 import shutil
@@ -139,10 +139,10 @@ for (const key of ['S', 'M', 'L', 'XL']) for (const requested of [0, 1, 374, 786
 """
     )
     for marker, filename in (
-        ("POPUP_URL", "popup.js"),
-        ("NGUI_URL", "ngui.js"),
-        ("TOKENS_URL", "ui-tokens.js"),
-        ("GRID_URL", "ui-grid.js"),
+        ("POPUP_URL", "ui/popup.js"),
+        ("NGUI_URL", "ui/ngui.js"),
+        ("TOKENS_URL", "ui/ui-tokens.js"),
+        ("GRID_URL", "ui/ui-grid.js"),
     ):
         script = script.replace(marker, json.dumps((web / filename).as_uri()))
     result = subprocess.run(

@@ -6,11 +6,11 @@
 // prepared; wait(promise) shades an in-page wait. There is one page overlay at a time: a newer call takes over
 // the one on screen instead of flashing a new one. Writer progress has its own indicator and lifetime,
 // independent of page changes.
-import { loadingLabel, loadingLetterSprites, loadingInkLine, alphaBounds } from "../ngui-label.js";
+import { loadingLabel, loadingLetterSprites, loadingInkLine, alphaBounds } from "../ui/ngui-label.js";
 import { alignBaseline, domBaseline, publishAligned } from "./loading-baseline.js";
 import { spriteUrl } from "../core/api.js";
-import * as NGUI from "../ngui.js";
-import * as Popup from "../popup.js";
+import * as NGUI from "../ui/ngui.js";
+import * as Popup from "../ui/popup.js";
 import { T } from "../core/i18n.js";
 import { fitLine, modLine } from "../core/job-progress.js";
 import { S } from "../core/util.js";

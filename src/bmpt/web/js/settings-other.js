@@ -1,9 +1,9 @@
 // Generic library sources in Settings, using the same rows and writer jobs as the other controls.
-import { notify } from "./popup.js";
+import { notify } from "./ui/popup.js";
 import * as Loading from "./app/loading.js";
 import { modJob } from "./core/job-progress.js";
 import * as ModSwitch from "./mod-switch.js";
-import * as Popup from "./popup.js";
+import * as Popup from "./ui/popup.js";
 import { rpc, waitJob } from "./core/api.js";
 import { T } from "./core/i18n.js";
 import { overwrittenLines } from "./app/repairs.js";

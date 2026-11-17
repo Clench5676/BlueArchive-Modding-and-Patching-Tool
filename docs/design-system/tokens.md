@@ -14,7 +14,7 @@ prefab node it comes from (`tests/test_ui_tokens.py` pins them to the developmen
 - **`CHIP`** (`UICharacterDetail` type chip): 272 x 72 inclined 10 degrees, caption 40 down to 28, 290 apart; drawn
   by the nameplate's variant chips and the list popup's details panel.
 - **`STATS_BOX`** (`UICharacterDetail`'s light stats box: `Bg` `#ecf5f9`, `Deco` line `#c0c9d4`): drawn by
-  `statsBox()` in `web/js/stats-box.js` for details panels, file details, messages with a line button and the update
+  `statsBox()` in `web/js/ui/stats-box.js` for details panels, file details, messages with a line button and the update
   dialog; captions 38, values 38 down to 26, rows 64 high at least, dotted dividers between rows only.
 - **`COLOUR`**, each from the game: success `#0a6f2d`, warning `#f14f00`, error `#bb3421`, greyed `#828282`, the
   page's ink `#2c4564`, the In Use badge `#ffb700` on `#4b2116`, a note's ink `#6a7b8f`. The style sheets repeat the

@@ -6,12 +6,12 @@ import {
   selectionArtWindow,
   sourceCardState,
   SELECTION_SLOT,
-} from "../../src/bmpt/web/js/selected-frames.js";
-import { frameMesh } from "../../src/bmpt/web/js/ngui-frame-fx.js";
-import { frameOutline } from "../../src/bmpt/web/js/row-thumbnail.js";
-import { sliceAxis, slicePoint } from "../../src/bmpt/web/js/sprite-slices.js";
+} from "../../src/bmpt/web/js/ui/selected-frames.js";
+import { frameMesh } from "../../src/bmpt/web/js/ui/ngui-frame-fx.js";
+import { frameOutline } from "../../src/bmpt/web/js/ui/row-thumbnail.js";
+import { sliceAxis, slicePoint } from "../../src/bmpt/web/js/ui/sprite-slices.js";
 import { selectionPrefab, selectionSprite, selectionFramePixels } from "./selection_prefabs.mjs";
-import { APPLIED_SELECTION_GOLD } from "../../src/bmpt/web/js/ui-tokens.js";
+import { APPLIED_SELECTION_GOLD } from "../../src/bmpt/web/js/ui/ui-tokens.js";
 const at = (tree, path) => path.split("/").reduce((n, part) => n.children.find((c) => c.name === part), tree);
 const slot = () => at(selectionPrefab(), SELECTION_SLOT);
 const walk = (n) => [n, ...(n.children || []).flatMap(walk)];

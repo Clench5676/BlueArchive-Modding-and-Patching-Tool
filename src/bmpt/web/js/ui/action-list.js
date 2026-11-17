@@ -6,10 +6,10 @@
 // outside the list (other than on a group card, which switches the list) or Escape closes it.
 import * as NGUI from "./ngui.js";
 import { HINT_PREFAB, hintStyle } from "./hover-hint.js";
-import { T } from "./core/i18n.js";
-import { S, clone, hitButton } from "./core/util.js";
+import { T } from "../core/i18n.js";
+import { S, clone, hitButton } from "../core/util.js";
 import { BOX, HEAD, ROW, contentWidth, fitList, keyLabelWidth, placeList, stackList } from "./action-list-layout.js";
-import { actionLabel, sectionLabel } from "./clip-names.js";
+import { actionLabel, sectionLabel } from "../clip-names.js";
 
 const { node, find } = NGUI;
 const ORIGIN = [960, 515]; // the detail screen's prefab centre on the stage (detail.js)

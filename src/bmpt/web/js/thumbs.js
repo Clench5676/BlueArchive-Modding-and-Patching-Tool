@@ -311,7 +311,7 @@ export async function collectionStill(
   portrait,
   background,
   signal,
-  load = (url, options) => import("./ngui.js").then((ui) => ui.load(url, options)),
+  load = (url, options) => import("./ui/ngui.js").then((ui) => ui.load(url, options)),
 ) {
   if (!background) return portrait;
   const image = await load(background, { signal });

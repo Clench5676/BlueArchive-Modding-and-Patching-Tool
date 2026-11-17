@@ -71,7 +71,7 @@ PREFAB_HINTS = {
     "UIPopup_GachaCharList": "ui-_mxload-prefabs-2025-07-02_assets_all_3329130623.bundle",
     "UIPopup_Sort": "ui-_mxload-prefabs-2025-07-02_assets_all_1596625361.bundle",
     "UIPopup_Mulligan": "ui-_mxload-prefabs-2025-07-02_assets_all_267995722.bundle",
-    # the description tooltip: a greyed control's reason on hover (web/js/hover-hint.js)
+    # the description tooltip: a greyed control's reason on hover (web/js/ui/hover-hint.js)
     "UIDescriptionTooltip": "ui-tooltip-_mxload-prefabs-2026-04-06_assets_all_413832495.bundle",
     # the student list's display settings popup (filter and sort tabs) and its filter group template
     "UIPopup_FilterSort": "ui-_mxload-prefabs-2025-07-02_assets_all_2229874793.bundle",

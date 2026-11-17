@@ -23,7 +23,7 @@ globalThis.document = {
   documentElement: { lang: "en-US", appendChild() {} },
 };
 globalThis.getComputedStyle = () => ({ getPropertyValue: () => "" });
-const NGUI = await import("../../src/bmpt/web/js/ngui.js");
+const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
 const Layout = await import("../../src/bmpt/web/js/window/top-bar-layout.js");
 const S = 1920 / 2960;
 const LOCALES = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"];

@@ -2,9 +2,9 @@
 
 The web UI's screens are built from the game's own prefabs (NGUI layouts). Where the App composes a screen of its own
 (Import Mod's rows, Settings, popups, the tools), it takes every size, gap and alignment from this system instead of
-placing widgets by hand. The numbers live in `src/bmpt/web/js/ui-tokens.js`; the layout primitives that use them in
-`src/bmpt/web/js/ui-grid.js`. `tests/test_ui_tokens.py` pins the numbers to the prefab nodes they come from in the official
-game files; `tests/js/ui_grid.test.mjs` tests the primitives and how the scales hang together.
+placing widgets by hand. The numbers live in `src/bmpt/web/js/ui/ui-tokens.js`; the layout primitives that use them in
+`src/bmpt/web/js/ui/ui-grid.js`. `tests/test_ui_tokens.py` pins the numbers to the prefab nodes they come from in the
+official game files; `tests/js/ui_grid.test.mjs` tests the primitives and how the scales hang together.
 
 All values are prefab units: the stage is 2960 units across and 1665 high, drawn at `S = 1920 / 2960` CSS pixels per
 unit at a 1920-pixel-wide window.

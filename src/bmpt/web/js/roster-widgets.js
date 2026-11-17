@@ -1,9 +1,9 @@
 // UICharacterCollection's search field and list tools, shared with Batch Import.
-import * as NGUI from "./ngui.js";
+import * as NGUI from "./ui/ngui.js";
 import { S, clone, advanceOf, glyphsOf } from "./core/util.js";
-import { emptyBlock } from "./empty-block.js";
-import { CONTROL, SPACE } from "./ui-tokens.js";
-import { row } from "./ui-grid.js";
+import { emptyBlock } from "./ui/empty-block.js";
+import { CONTROL, SPACE } from "./ui/ui-tokens.js";
+import { row } from "./ui/ui-grid.js";
 
 /**
  * The game's search field, emptied.

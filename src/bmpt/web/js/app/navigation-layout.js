@@ -1,5 +1,5 @@
 // UILobby's plate and entry states, with app destinations substituted into its grid.
-import * as NGUI from "../ngui.js";
+import * as NGUI from "../ui/ngui.js";
 import { clone } from "../core/util.js";
 
 /**

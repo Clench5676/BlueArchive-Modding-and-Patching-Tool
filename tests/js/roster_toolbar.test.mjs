@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFile } from "node:fs/promises";
 import { readFileSync } from "node:fs";
-import { emptyBlock } from "../../src/bmpt/web/js/empty-block.js";
-import { CONTROL, SPACE } from "../../src/bmpt/web/js/ui-tokens.js";
-import { row } from "../../src/bmpt/web/js/ui-grid.js";
+import { emptyBlock } from "../../src/bmpt/web/js/ui/empty-block.js";
+import { CONTROL, SPACE } from "../../src/bmpt/web/js/ui/ui-tokens.js";
+import { row } from "../../src/bmpt/web/js/ui/ui-grid.js";
 const text = {
   "roster.title": "Student List",
   "roster.merge": "Group Alts",
@@ -314,7 +314,7 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
       documentElement: { lang: locale, appendChild() {} },
     };
     globalThis.getComputedStyle = () => ({ getPropertyValue: () => "" });
-    const real = await import("../../src/bmpt/web/js/ngui.js"),
+    const real = await import("../../src/bmpt/web/js/ui/ngui.js"),
       fixture = globalThis.toolbarFixture,
       previous = fixture.NGUI.fitGroup;
     const ui = JSON.parse(

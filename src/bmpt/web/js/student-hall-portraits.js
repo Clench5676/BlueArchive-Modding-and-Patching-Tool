@@ -4,7 +4,7 @@ import { loadPlayer } from "./spine-load.js";
 import { ensureSpine } from "./spine-runtime.js";
 import { idleAnimation } from "./thumbs.js";
 import * as Stage from "./lobby-stage.js";
-import { APPLIED_SELECTION_GOLD } from "./ui-tokens.js";
+import { APPLIED_SELECTION_GOLD } from "./ui/ui-tokens.js";
 import {
   pickPortrait,
   portraitScale,

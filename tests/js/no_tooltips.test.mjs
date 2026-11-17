@@ -28,7 +28,7 @@ test("hit targets and NGUI labels retain accessible names without hover titles o
   const original = globalThis.document;
   globalThis.document = { createElement: () => new El(), documentElement: { lang: "en-US" } };
   try {
-    const NGUI = await import("../../src/bmpt/web/js/ngui.js");
+    const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
     const { hitButton } = await import("../../src/bmpt/web/js/core/util.js");
     const host = new El();
     const button = hitButton(host, [0, 0, 10, 10], () => {}, "Open Details");
@@ -98,8 +98,8 @@ test("NGUI renders the measured rounded frame contour and an upright cover image
   const previous = globalThis.document;
   globalThis.document = { createElement: () => new El(), documentElement: { lang: "en-US" } };
   try {
-    const NGUI = await import("../../src/bmpt/web/js/ngui.js");
-    const { frameOutline, innerFrame } = await import("../../src/bmpt/web/js/row-thumbnail.js");
+    const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
+    const { frameOutline, innerFrame } = await import("../../src/bmpt/web/js/ui/row-thumbnail.js");
     const { framePixels, FRAME_META } = await import("./import_prefabs.mjs");
     const window = innerFrame(
       { w_: 240, h_: 220, type: 1, incline: 10, pivot: 4 },

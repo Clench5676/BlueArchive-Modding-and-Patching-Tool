@@ -99,13 +99,13 @@ globalThis.fetch = async (url) => ({
     throw new Error(url);
   },
 });
-const NGUI = await import("../../src/bmpt/web/js/ngui.js");
-const Buttons = await import("../../src/bmpt/web/js/game-buttons.js");
-const { resizeButton } = await import("../../src/bmpt/web/js/button-layout.js");
+const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
+const Buttons = await import("../../src/bmpt/web/js/ui/game-buttons.js");
+const { resizeButton } = await import("../../src/bmpt/web/js/ui/button-layout.js");
 const { navigationEntry } = await import("../../src/bmpt/web/js/app/navigation-layout.js");
 const { pickerItems, orderBody } = await import("../../src/bmpt/web/js/roster-widgets.js");
-const { scrollbar } = await import("../../src/bmpt/web/js/scrollbar.js");
-const Popup = await import("../../src/bmpt/web/js/popup.js");
+const { scrollbar } = await import("../../src/bmpt/web/js/ui/scrollbar.js");
+const Popup = await import("../../src/bmpt/web/js/ui/popup.js");
 const find = NGUI.find;
 const flush = async () => {
   for (let i = 0; i < 50; i++) await Promise.resolve();
@@ -141,7 +141,7 @@ test("narrow Cancel patterns keep opposite edges and clip to the inclined body",
   resizeButton(body, 184);
   assert.equal(find(body, "Right").pos[0], -31);
   assert.ok(Math.abs(find(body, "Left").pos[0] - 32.3) < 1e-8);
-  const { clipButtonPatterns } = await import("../../src/bmpt/web/js/button-layout.js");
+  const { clipButtonPatterns } = await import("../../src/bmpt/web/js/ui/button-layout.js");
   const element = (l, t, w, h) => ({ style: { left: `${l}px`, top: `${t}px`, width: `${w}px`, height: `${h}px` } });
   const view = {
     nodes: new Map([

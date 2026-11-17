@@ -30,12 +30,12 @@ class El {
   }
 }
 globalThis.document = { documentElement: new El(), createElement: () => new El() };
-const NGUI = await import(new URL("ngui.js", web));
+const NGUI = await import(new URL("ui/ngui.js", web));
 const { wrapPath, S, glyphsOf } = await import(new URL("core/util.js", web));
 const Rows = await import(new URL("settings-rows.js", web));
-const ButtonsModule = await import(new URL("game-buttons.js", web));
+const ButtonsModule = await import(new URL("ui/game-buttons.js", web));
 const { errorText } = await import(new URL("core/i18n.js", web));
-const { BACKDROP, XS_BUTTON, TYPE, SPACE, PANEL, CONTROL } = await import(new URL("ui-tokens.js", web));
+const { BACKDROP, XS_BUTTON, TYPE, SPACE, PANEL, CONTROL } = await import(new URL("ui/ui-tokens.js", web));
 const { option, filter } = controls();
 const Buttons = { smallButton: (...args) => ButtonsModule.optionButton(option, filter, ...args) };
 
@@ -282,7 +282,7 @@ test("Settings keeps no hand-placed value geometry of its own", () => {
 // CVLabel): the caption role, pivot top left, its top SPACE.l under the dotted line from the content box's left,
 // in the red of SkillCutIn's note; the path and the buttons follow it SPACE.m below and the card grows by what
 // it adds. Every language.
-const { COLOUR } = await import(new URL("ui-tokens.js", web));
+const { COLOUR } = await import(new URL("ui/ui-tokens.js", web));
 for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
   test(`${locale} general: the Log card's anonymized note stands under the dotted line, above its path and buttons`, () => {
     const { rows, T } = harness(locale, "general");

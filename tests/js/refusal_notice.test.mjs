@@ -1,5 +1,5 @@
 // Ordinary refusals read as the game's neutral notice (title Notice, Confirm only); real failures keep Failed and the
-// Error Report button. web/js/popup.js runs for real on a stand-in DOM without a game folder (every prefab is
+// Error Report button. web/js/ui/popup.js runs for real on a stand-in DOM without a game folder (every prefab is
 // missing), so the messages are drawn plain, which carries the same buttons.
 import assert from "node:assert/strict";
 import { flat } from "./helpers/source-text.mjs";
@@ -108,7 +108,7 @@ console.warn = (...args) => {
   if (!/popup layout|message popup without/.test(String(args[0]))) warn(...args);
 };
 
-const Popup = await import("../../src/bmpt/web/js/popup.js");
+const Popup = await import("../../src/bmpt/web/js/ui/popup.js");
 const { setStrings } = await import("../../src/bmpt/web/js/core/i18n.js");
 const locales = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"];
 const webui = (locale) =>

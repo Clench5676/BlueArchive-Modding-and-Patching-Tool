@@ -1,7 +1,7 @@
 // The picture view of the repair review: zoom at a point, pan, fill, always inside the picture.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { MAX_ZOOM, REST, clamp, cover, panBy, style, zoomAt } from "../../src/bmpt/web/js/pan-zoom.js";
+import { MAX_ZOOM, REST, clamp, cover, panBy, style, zoomAt } from "../../src/bmpt/web/js/ui/pan-zoom.js";
 
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} is not ${b}`);
 
@@ -56,7 +56,7 @@ test("the view is the picture's box in frame sizes", () => {
 });
 
 test("a ring stands a little wider than its part and is never a dot", async () => {
-  const { ring, ringStyle } = await import("../../src/bmpt/web/js/pan-zoom.js");
+  const { ring, ringStyle } = await import("../../src/bmpt/web/js/ui/pan-zoom.js");
   const around = ring([0.2, 0.4, 0.6, 0.5]);
   near(around.cx, 0.4);
   near(around.cy, 0.45);

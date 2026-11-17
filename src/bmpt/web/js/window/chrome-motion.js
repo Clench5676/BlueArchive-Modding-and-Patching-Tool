@@ -6,7 +6,7 @@
 // controls make room (corner-layout.js, bamtChromeInsets). The macOS window buttons travel with the top bar: the
 // same offsets go to the native side (window.motion). Offsets are viewport CSS pixels away from the screen: up
 // for the top bar, down for the bottom menu.
-import { LOBBY_ENTRY } from "../ui-tokens.js";
+import { LOBBY_ENTRY } from "../ui/ui-tokens.js";
 import { reflowCorners } from "./corner-layout.js";
 import { rpc } from "../core/api.js";
 

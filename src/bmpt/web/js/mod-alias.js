@@ -1,12 +1,12 @@
 // A library-only name on the game's input row, above the source picker or detail panel. It is a layer of its own in
 // #dialog (as the message popups), so a message opened from it, a failed save's, draws over it and Escape closes the
 // topmost layer; closing it leaves any other layer of the host alone.
-import { notify } from "./popup.js";
-import * as NGUI from "./ngui.js";
+import { notify } from "./ui/popup.js";
+import * as NGUI from "./ui/ngui.js";
 import { rpc } from "./core/api.js";
 import { T, errorText } from "./core/i18n.js";
-import { closed, closable, frameReady, hit, popupFrame } from "./popup.js";
-import { MOD_ALIAS } from "./popup-frames.js";
+import { closed, closable, frameReady, hit, popupFrame } from "./ui/popup.js";
+import { MOD_ALIAS } from "./ui/popup-frames.js";
 import * as Loading from "./app/loading.js";
 import { $, S } from "./core/util.js";
 

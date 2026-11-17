@@ -7,7 +7,7 @@ import {
   installVerticalWheel,
   wheelScroller,
   windowsWheel,
-} from "../../src/bmpt/web/js/horizontal-scroll.js";
+} from "../../src/bmpt/web/js/ui/horizontal-scroll.js";
 
 const near = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-8, `${actual} != ${expected}`);
 const notch = (extra = {}) => ({

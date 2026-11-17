@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFile } from "node:fs/promises";
-import { sliceAxis } from "../../src/bmpt/web/js/sprite-slices.js";
+import { sliceAxis } from "../../src/bmpt/web/js/ui/sprite-slices.js";
 let rendered,
   nodes,
   slices = [];
@@ -44,7 +44,7 @@ globalThis.scrollFixture = {
   },
 };
 globalThis.document = { createElement: () => ({ style: {} }), getElementById: () => null };
-let source = await readFile(new URL("../../src/bmpt/web/js/scrollbar.js", import.meta.url), "utf8");
+let source = await readFile(new URL("../../src/bmpt/web/js/ui/scrollbar.js", import.meta.url), "utf8");
 source = source.replace(/^import [^;]*;$/gm, "");
 const { scrollbar, scrollbarTrack } = await import(
   `data:text/javascript;base64,${Buffer.from("const {clone,NGUI}=globalThis.scrollFixture;\n" + source).toString("base64")}`

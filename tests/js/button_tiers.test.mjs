@@ -16,8 +16,8 @@ import {
   overlaps,
   tagBox,
   tagOf,
-} from "../../src/bmpt/web/js/button-layout.js";
-import { CHIP_TIERS, CONTROL, SMALL_BUTTON, XS_BUTTON } from "../../src/bmpt/web/js/ui-tokens.js";
+} from "../../src/bmpt/web/js/ui/button-layout.js";
+import { CHIP_TIERS, CONTROL, SMALL_BUTTON, XS_BUTTON } from "../../src/bmpt/web/js/ui/ui-tokens.js";
 
 test("the presets are the controls' heights, XS under S under M under L", () => {
   assert.deepEqual(
@@ -130,7 +130,7 @@ async function render(t, tree, { tags, scale } = {}) {
   const original = globalThis.document;
   globalThis.document = { createElement: () => new El(), documentElement: { lang: "en-US" } };
   try {
-    const NGUI = await import("../../src/bmpt/web/js/ngui.js");
+    const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
     NGUI.setTierTags(tags);
     const host = new El();
     await NGUI.render(tree, host, scale ? { scale } : {});

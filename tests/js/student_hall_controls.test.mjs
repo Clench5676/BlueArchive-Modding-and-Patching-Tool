@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFile } from "node:fs/promises";
 
-import { CONTROL, XS_BUTTON, SPACE } from "../../src/bmpt/web/js/ui-tokens.js";
+import { CONTROL, XS_BUTTON, SPACE } from "../../src/bmpt/web/js/ui/ui-tokens.js";
 const S = 1920 / 2960;
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} != ${b}`);
 const node = (name, children = [], widgets = [], more = {}) => ({
@@ -112,7 +112,7 @@ globalThis.hallControlsHarness = {
 let source = await readFile(new URL("../../src/bmpt/web/js/student-hall.js", import.meta.url), "utf8");
 source = source.replace(/^import [^;]*;$/gm, "");
 source =
-  `import { CONTROL, XS_BUTTON, SPACE } from "${new URL("../../src/bmpt/web/js/ui-tokens.js", import.meta.url).href}";\nimport { row } from "${new URL("../../src/bmpt/web/js/ui-grid.js", import.meta.url).href}";\n` +
+  `import { CONTROL, XS_BUTTON, SPACE } from "${new URL("../../src/bmpt/web/js/ui/ui-tokens.js", import.meta.url).href}";\nimport { row } from "${new URL("../../src/bmpt/web/js/ui/ui-grid.js", import.meta.url).href}";\n` +
   source;
 source =
   `import { portraitReplacements } from "${new URL("../../src/bmpt/web/js/student-hall-model.js", import.meta.url).href}";\nimport { portraitRect, portraitToolbarLayout, PORTRAIT_SIZE } from "${new URL("../../src/bmpt/web/js/student-hall-framing.js", import.meta.url).href}";\nimport { bindCorner } from "${new URL("../../src/bmpt/web/js/window/corner-layout.js", import.meta.url).href}";\n` +
@@ -422,7 +422,7 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
       createElement: () => ({ getContext: () => ctx, remove() {} }),
     };
     globalThis.getComputedStyle = () => ({ getPropertyValue: () => "" });
-    const real = await import("../../src/bmpt/web/js/ngui.js"),
+    const real = await import("../../src/bmpt/web/js/ui/ngui.js"),
       fixture = globalThis.hallControlsHarness,
       previous = fixture.NGUI.fitGroup;
     fixture.NGUI.fitGroup = real.fitGroup;

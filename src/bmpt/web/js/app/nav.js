@@ -4,10 +4,10 @@ import { watchTopBar } from "../window/top-bar.js";
 // The lobby-style bottom navigation and the top bar. The entries are nav-items.js: one without a web screen is
 // greyed out with the game's disabled tint and hands over to the classic GUI on its tab, through the hand-off
 // prompt (on every click, with Don't Ask Again, until the pref classicPrompt is turned off).
-import { notify } from "../popup.js";
+import { notify } from "../ui/popup.js";
 import * as Loading from "./loading.js";
-import * as NGUI from "../ngui.js";
-import * as Popup from "../popup.js";
+import * as NGUI from "../ui/ngui.js";
+import * as Popup from "../ui/popup.js";
 import { navigationEntry, navigationOrigin } from "./navigation-layout.js";
 import { rpc } from "../core/api.js";
 import { T, errorText } from "../core/i18n.js";

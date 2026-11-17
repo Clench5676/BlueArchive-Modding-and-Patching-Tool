@@ -2,13 +2,13 @@
 // tabs on the left; on the right the filter groups (UIFilterObjectList: title with its tag, dotted line, check boxes)
 // under the list header with Reset All, or the sort keys as the game's radio buttons (UISortObjectListUnit); Cancel
 // and Confirm below. It edits a draft of the view; Confirm hands the draft back.
-import { opened, closed, FOOTER as FOOTERS, FOOTER_DEFAULT, footerWidth } from "../popup.js";
-import { resizeButton } from "../button-layout.js";
-import { scrollbar } from "../scrollbar.js";
-import * as NGUI from "../ngui.js";
+import { opened, closed, FOOTER as FOOTERS, FOOTER_DEFAULT, footerWidth } from "../ui/popup.js";
+import { resizeButton } from "../ui/button-layout.js";
+import { scrollbar } from "../ui/scrollbar.js";
+import * as NGUI from "../ui/ngui.js";
 import { T } from "../core/i18n.js";
 import { FILTERS, NATURAL, SORTS } from "../roster-order.js";
-import { BACKDROP, POPUP_FRAME, POPUP_TYPE } from "../ui-tokens.js";
+import { BACKDROP, POPUP_FRAME, POPUP_TYPE } from "../ui/ui-tokens.js";
 import { $, S, clone, glyphsOf, hitButton } from "../core/util.js";
 
 const { node, find } = NGUI;

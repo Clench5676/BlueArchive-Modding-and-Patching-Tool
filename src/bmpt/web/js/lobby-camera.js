@@ -7,7 +7,7 @@
 // the bottom left, which opens the student's Switch Memorial Lobby (detail.js) over the framing.
 import { rpc, waitJob } from "./core/api.js";
 import { T } from "./core/i18n.js";
-import * as NGUI from "./ngui.js";
+import * as NGUI from "./ui/ngui.js";
 import * as Lobby from "./lobby.js";
 import { S, hitButton } from "./core/util.js";
 import { visualButton as whiteButton, galleryBox } from "./photography/controller.js";
@@ -17,7 +17,7 @@ import { modJob } from "./core/job-progress.js";
 import { prepareBack } from "./visual-mode.js";
 import { anchoredCentre } from "./visual-view.js";
 import { buttonCenter } from "./student-hall-icons.js";
-import { FULLSCREEN_BUTTON, SPACE } from "./ui-tokens.js";
+import { FULLSCREEN_BUTTON, SPACE } from "./ui/ui-tokens.js";
 
 const STAGE = { w: 1920, h: 1080 };
 // how long the flight waits for the saved choice's still before it takes the view on screen instead

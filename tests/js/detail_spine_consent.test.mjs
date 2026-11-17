@@ -167,8 +167,8 @@ test("detail thumbnail fallbacks use collection portraits only for the matching 
   assert.equal(read("unknown"), null);
 });
 
-import { ALIAS, MOD_ALIAS, aliasFrame, detailsFrame } from "../../src/bmpt/web/js/popup-frames.js";
-import { POPUP_FOOTER, POPUP_FRAME, SPACE } from "../../src/bmpt/web/js/ui-tokens.js";
+import { ALIAS, MOD_ALIAS, aliasFrame, detailsFrame } from "../../src/bmpt/web/js/ui/popup-frames.js";
+import { POPUP_FOOTER, POPUP_FRAME, SPACE } from "../../src/bmpt/web/js/ui/ui-tokens.js";
 test("detail caller frames preserve their rows and scroll bounds with the shared anatomy", () => {
   for (const height of [0, 300, 800, 2000, 20000]) {
     const f = detailsFrame(height);

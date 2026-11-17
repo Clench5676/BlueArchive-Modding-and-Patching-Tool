@@ -232,7 +232,7 @@ test("leaving fullscreen closes the visual mode even after the tab changed under
 });
 
 test("Escape on a message over the visual mode closes the message only; the next one leaves", async () => {
-  const Popup = await import("../../src/bmpt/web/js/popup.js");
+  const Popup = await import("../../src/bmpt/web/js/ui/popup.js");
   const s = screen();
   let backs = 0;
   Visual.uiOut(s.out);

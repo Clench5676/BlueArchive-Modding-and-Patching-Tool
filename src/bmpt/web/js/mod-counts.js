@@ -1,6 +1,6 @@
 // The roster band's two library counts: portraits and memorial lobbies, each a game icon plus "x n". When an icon is
 // missing from the loaded atlases the count falls back to a short word (locale keys band.portrait, band.lobby).
-import { label, node, sprite, textWidth } from "./ngui.js";
+import { label, node, sprite, textWidth } from "./ui/ngui.js";
 
 // The game sprites drawn as the count icons, both already drawn elsewhere in the UI: the Students entry of the
 // bottom navigation (nav-items.js) and the play button of the lobby tab (detail.js). Change a name here to swap

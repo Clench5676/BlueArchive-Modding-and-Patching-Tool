@@ -5,10 +5,10 @@
 // its square "?", where the switch shows, the startup file checks, the tray icon, Settings' Check of the game
 // files, and the size and cleanup of the mod cache. Whether the classic UI asks before it opens is a General
 // row, under More Settings.
-import { notify } from "./popup.js";
+import { notify } from "./ui/popup.js";
 import * as ModSwitch from "./mod-switch.js";
-import * as NGUI from "./ngui.js";
-import * as Popup from "./popup.js";
+import * as NGUI from "./ui/ngui.js";
+import * as Popup from "./ui/popup.js";
 import * as Prompts from "./app/prompts.js";
 import * as Impact from "./app/update-impact.js";
 import * as Consent from "./app/consent.js";
@@ -17,8 +17,8 @@ import * as ModExport from "./mod-export.js";
 import * as Tours from "./app/tours.js";
 import * as Troubleshoot from "./app/troubleshoot.js";
 import * as Update from "./app/update.js";
-import * as Buttons from "./game-buttons.js";
-import { BACKDROP, XS_BUTTON, TYPE } from "./ui-tokens.js";
+import * as Buttons from "./ui/game-buttons.js";
+import { BACKDROP, XS_BUTTON, TYPE } from "./ui/ui-tokens.js";
 import {
   rowBase,
   radioRow,

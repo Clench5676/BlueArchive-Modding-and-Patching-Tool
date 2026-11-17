@@ -3,7 +3,7 @@
 // folder icon over the caption. The caption takes up to three lines inside the body at the largest size from the
 // prefab's range (32 down to 26) that fits, before it shrinks.
 import { fitGroup, fontSizeFor, LINE_PITCH } from "./ngui.js";
-import { TAN10 } from "./core/util.js";
+import { TAN10 } from "../core/util.js";
 
 // The body (BG (1)) in the button's own units, y up: centred at -6.3, 180 high.
 export const BODY = { top: 83.7, bottom: -96.3, x: -1.4 };

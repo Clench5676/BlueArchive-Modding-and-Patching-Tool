@@ -21,7 +21,7 @@ globalThis.document = {
   documentElement: { lang: "en-US", appendChild() {} },
 };
 globalThis.getComputedStyle = () => ({ getPropertyValue: () => "" });
-const NGUI = await import("../../src/bmpt/web/js/ngui.js");
+const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
 const { LINE_PITCH, fitGroup, fitLabels, fitRow, fitText, fontSizeFor, glyphWidth } = NGUI;
 
 const LOCALES = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"];
@@ -66,7 +66,7 @@ function assertGroup(fits, captions, widths, maxH, label) {
 
 // --- the source pickers' action row (popup.js detailsTree), 850 wide panel, 120 high bodies ---
 test("the picker's constants are the ones asserted here", async () => {
-  const popup = await source("popup.js");
+  const popup = await source("ui/popup.js");
   // the actions' captions 34 down to 24 on XS bodies, 30 down to 22 on XXS ones, the button's padding each side
   assert.match(
     popup,
@@ -196,7 +196,7 @@ for (const locale of LOCALES)
 
 // --- popup buttons: the default footer is XS, 104 high, captions 40 down to 28 in a box 12 less high; its bodies
 // are as wide as the captions need (200 at least, 551 at most), so the room is the body less its padding each side ---
-const { CONTROL, SPACE } = await import("../../src/bmpt/web/js/ui-tokens.js");
+const { CONTROL, SPACE } = await import("../../src/bmpt/web/js/ui/ui-tokens.js");
 const PAIRS = [
   ["picker.ok", "popup.cancel"],
   ["popup.save", "popup.cancel"],
@@ -217,7 +217,7 @@ function footerBody(captions) {
 }
 for (const locale of LOCALES)
   test(`popup footer captions share one size and fit the default XS body in ${locale}`, async () => {
-    const popup = await source("popup.js"),
+    const popup = await source("ui/popup.js"),
       consent = await source("app/consent.js"),
       update = await source("app/update.js");
     assert.match(popup, /export const BUTTON_TEXT_H = CONTROL.buttonL.h - SPACE.m;/);
@@ -283,7 +283,7 @@ for (const locale of LOCALES)
 for (const locale of LOCALES)
   test(`the roster's six segments and the popup's three share one size in ${locale}`, async () => {
     const roster = await source("roster-widgets.js"),
-      popup = await source("popup.js");
+      popup = await source("ui/popup.js");
     // the roster's two filters' six captions go through toolbarFit, which fits every filter's captions as one group
     assert.match(
       roster,
@@ -337,12 +337,12 @@ for (const locale of LOCALES)
 
 // --- Settings: tabs (300 wide), the buttons of a value row (402 x 136, the prefab's small button), the export
 // pair (680 x 136) ---
-const { XS_BUTTON } = await import("../../src/bmpt/web/js/ui-tokens.js");
+const { XS_BUTTON } = await import("../../src/bmpt/web/js/ui/ui-tokens.js");
 const S = 1920 / 2960;
 for (const locale of LOCALES)
   test(`Settings tabs and button pairs share one size and fit in ${locale}`, async () => {
     const settings = await source("settings.js"),
-      buttons = await source("game-buttons.js");
+      buttons = await source("ui/game-buttons.js");
     assert.match(settings, /fitGroup\(TABS\.map\(\(id\) => T\(`settings\.tab\.\$\{id\}`\)\), 56, 40, 300, 2\)/);
     assert.match(
       settings,
@@ -447,7 +447,7 @@ for (const locale of LOCALES)
   });
 
 // --- the Hall modal's retained footer ---
-await import("../../src/bmpt/web/js/ui-grid.js");
+await import("../../src/bmpt/web/js/ui/ui-grid.js");
 for (const locale of LOCALES)
   test(`the Hall modal's footer captions fit in ${locale}`, async () => {
     const ui = await source("student-hall-ui.js");
@@ -509,10 +509,10 @@ for (const locale of LOCALES)
 // --- the compatibility result's three repair choices (mod-compatibility.js repairButtons): the XS footer every
 // popup has , bodies as wide as the captions need and sharing the frame's width (popup.js footerScale), in each
 // frame the result popup can take ---
-const { POPUP_FRAME } = await import("../../src/bmpt/web/js/ui-tokens.js");
+const { POPUP_FRAME } = await import("../../src/bmpt/web/js/ui/ui-tokens.js");
 for (const locale of LOCALES)
   test(`the three repair choices share one size and fit their small button bodies in ${locale}`, async () => {
-    const popup = await source("popup.js"),
+    const popup = await source("ui/popup.js"),
       compatibility = await source("mod-compatibility.js");
     assert.match(
       popup,

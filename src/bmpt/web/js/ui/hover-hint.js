@@ -2,7 +2,7 @@
 // (Common_Tooltip_Bg) around the text in Label_Info's style, above the control (below it when the host has no room
 // above), without its arrow (the box alone).
 import * as NGUI from "./ngui.js";
-import { S } from "./core/util.js";
+import { S } from "../core/util.js";
 
 export const HINT_PREFAB = "UIDescriptionTooltip";
 const GAP = 12; // units between the box's visible edge and the control

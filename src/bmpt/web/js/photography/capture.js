@@ -1,5 +1,5 @@
 // Compose only actual scene media; UI, guide, cursor and subtitle layers are never inputs.
-import * as NGUI from "../ngui.js";
+import * as NGUI from "../ui/ngui.js";
 import { FRAME } from "./camera.js";
 export { FRAME };
 /**

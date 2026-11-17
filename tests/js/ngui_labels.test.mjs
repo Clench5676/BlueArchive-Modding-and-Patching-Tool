@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { flat } from "./helpers/source-text.mjs";
 import { test } from "node:test";
-import { labelEffect, labelBaselineInset, loadingLabel } from "../../src/bmpt/web/js/ngui-label.js";
+import { labelEffect, labelBaselineInset, loadingLabel } from "../../src/bmpt/web/js/ui/ngui-label.js";
 const n = (name, pos, widgets = [], children = []) => ({ name, pos, widgets, children, scale: [1, 1], active: true });
 const letter = {
   text: "Now Loading",
@@ -30,7 +30,7 @@ test("loading progress clones the prefab label effect and NGUI renders its exact
     labelEffect(w, 0.5),
     "1px -1.5px 0 rgba(18, 52, 86, 0.9), -1px 1.5px 0 rgba(18, 52, 86, 0.9), 1px 1.5px 0 rgba(18, 52, 86, 0.9), -1px -1.5px 0 rgba(18, 52, 86, 0.9)",
   );
-  const renderer = readFileSync(new URL("../../src/bmpt/web/js/ngui.js", import.meta.url), "utf8");
+  const renderer = readFileSync(new URL("../../src/bmpt/web/js/ui/ngui.js", import.meta.url), "utf8");
   assert.match(renderer, /textShadow: labelEffect\(w, sy \* S\)/);
   const css = flat(readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8"));
   assert.match(css, /\.loading-progress\.prefab-label \{ inset: 0/);
@@ -94,7 +94,7 @@ test("sprite letter ink, excluding g and Arona, defines the progress baseline", 
 });
 
 test("ellipsis glyph canvas includes font descent and outline on every side", async () => {
-  const { labelClipPadding } = await import("../../src/bmpt/web/js/ngui-label.js");
+  const { labelClipPadding } = await import("../../src/bmpt/web/js/ui/ngui-label.js");
   for (const text of [
     "Import List",
     "gjpy",
@@ -119,7 +119,7 @@ test("ellipsis glyph canvas includes font descent and outline on every side", as
 });
 
 test("Thai combining marks use the font baseline rather than moving it to the ink center", async () => {
-  const { labelClipPadding } = await import("../../src/bmpt/web/js/ngui-label.js");
+  const { labelClipPadding } = await import("../../src/bmpt/web/js/ui/ngui-label.js");
   const fs = 62,
     baseline = (fs * 1.15 + 72 - 18) / 2;
   const pad = labelClipPadding(letter, fs, {

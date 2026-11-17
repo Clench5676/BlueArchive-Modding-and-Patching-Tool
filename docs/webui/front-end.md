@@ -136,7 +136,7 @@ toolbar the motion also drives the window buttons (`window.motion`, `CocoaHost.s
 
 ## Design tokens
 
-The shared numbers and colours live in `web/js/ui-tokens.js`, each named after the prefab node it comes from; the
+The shared numbers and colours live in `web/js/ui/ui-tokens.js`, each named after the prefab node it comes from; the
 scales, controls, popup anatomy and alignment rules are documented in [`design-system/`](../design-system/README.md)
 (`tests/js/ui_tokens.test.mjs` pins the call sites, `tests/test_ui_tokens.py` the prefab values).
 

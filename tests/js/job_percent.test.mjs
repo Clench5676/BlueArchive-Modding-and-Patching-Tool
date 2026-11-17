@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { installFitPage, LOCALES } from "./helpers/fit_canvas.mjs";
 
 installFitPage();
-const NGUI = await import("../../src/bmpt/web/js/ngui.js");
+const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
 const { setStrings, T } = await import("../../src/bmpt/web/js/core/i18n.js");
 const { jobProgress, percentText, progressName, steadyFraction, withPercent } = await import(
   "../../src/bmpt/web/js/core/job-progress.js"

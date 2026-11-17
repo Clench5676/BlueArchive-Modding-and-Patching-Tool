@@ -1,6 +1,6 @@
-// The shared focus trap of the popup stack (web/js/popup.js): focus moves in when a popup opens, Tab and Shift+Tab stay
-// inside the topmost one, and the focus returns to what had it before once it closes. A stand-in DOM that follows the
-// browser's rules for tabIndex (buttons and inputs are tab stops, plain elements are not) and for focus.
+// The shared focus trap of the popup stack (web/js/ui/popup.js): focus moves in when a popup opens, Tab and Shift+Tab
+// stay inside the topmost one, and the focus returns to what had it before once it closes. A stand-in DOM that follows
+// the browser's rules for tabIndex (buttons and inputs are tab stops, plain elements are not) and for focus.
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 
@@ -128,7 +128,7 @@ const warn = console.warn;
 console.warn = (...args) => {
   if (!/popup layout|message popup without/.test(String(args[0]))) warn(...args);
 };
-const Popup = await import("../../src/bmpt/web/js/popup.js");
+const Popup = await import("../../src/bmpt/web/js/ui/popup.js");
 
 const mount = (tag = "div") => body.appendChild(new El(tag));
 const buttons = (host, n) => Array.from({ length: n }, () => host.appendChild(new El("button")));
@@ -422,11 +422,11 @@ test("popup.js keeps one trap: the Hall modal and the import dialogs no longer c
   const web = (file) => readFileSync(new URL(`../../src/bmpt/web/js/${file}`, import.meta.url), "utf8");
   assert.doesNotMatch(web("student-hall-ui.js"), /event\.key !== "Tab"/);
   assert.doesNotMatch(web("batch-import.js"), /event\.key !== "Tab"/);
-  assert.match(web("popup.js"), /addEventListener\("keydown", trapKey\)/);
+  assert.match(web("ui/popup.js"), /addEventListener\("keydown", trapKey\)/);
 });
 
 test("asset-free messages use the same class, title, close, check and footer boxes", async () => {
-  const { POPUP_FRAME: P, CONTROL: C } = await import("../../src/bmpt/web/js/ui-tokens.js");
+  const { POPUP_FRAME: P, CONTROL: C } = await import("../../src/bmpt/web/js/ui/ui-tokens.js");
   const scale = 1920 / 2960;
   const shown = Popup.message({
     title: "Title",
@@ -453,9 +453,9 @@ test("asset-free messages use the same class, title, close, check and footer box
   });
   near(parseFloat(box.style.height), layout.height * scale);
   // the title one size under the game's, centred where the game's 72 stood
-  const NGUI = await import("../../src/bmpt/web/js/ngui.js"),
-    { textItem } = await import("../../src/bmpt/web/js/ui-grid.js");
-  const { POPUP_TYPE, TYPE } = await import("../../src/bmpt/web/js/ui-tokens.js");
+  const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js"),
+    { textItem } = await import("../../src/bmpt/web/js/ui/ui-grid.js");
+  const { POPUP_TYPE, TYPE } = await import("../../src/bmpt/web/js/ui/ui-tokens.js");
   near(
     parseFloat(heading.style.top),
     (P.titleTop + (textItem(NGUI, "Title", TYPE.display).h - textItem(NGUI, "Title", POPUP_TYPE.title).h) / 2) * scale,
@@ -475,7 +475,7 @@ test("asset-free messages use the same class, title, close, check and footer box
 });
 
 test("the asset-free text viewer uses the XL content box and keeps Copy and Close usable", async () => {
-  const { TEXT_VIEWER } = await import("../../src/bmpt/web/js/popup-frames.js");
+  const { TEXT_VIEWER } = await import("../../src/bmpt/web/js/ui/popup-frames.js");
   let copies = 0;
   const shown = Popup.textViewer({
     title: "Log",

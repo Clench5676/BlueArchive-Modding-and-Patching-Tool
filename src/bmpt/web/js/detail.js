@@ -1,6 +1,6 @@
 import * as Photo from "./photography/controller.js";
 import * as Camera from "./lobby-camera.js";
-import { notify } from "./popup.js";
+import { notify } from "./ui/popup.js";
 import { modJob, progressName } from "./core/job-progress.js";
 // Detail screen, built from the game's own prefab (UICharacterDetail) by ngui.js: the prefab supplies every frame,
 // sprite, tint, incline and position; this file swaps labels and textures, hides what the tool has no use for, and adds
@@ -11,33 +11,33 @@ import { modJob, progressName } from "./core/job-progress.js";
 // Switching writes the chosen one into the game files (switch-sources.js, actions.apply). A change inside the screen
 // prepares its parts behind the loading cover and swaps them in one frame.
 import { isSpecial, specialFraming } from "./special-view.js";
-import * as NGUI from "./ngui.js";
-import { resizeButton } from "./button-layout.js";
-import { horizontalScroll } from "./horizontal-scroll.js";
-import { explorerLayout } from "./explorer-button.js";
+import * as NGUI from "./ui/ngui.js";
+import { resizeButton } from "./ui/button-layout.js";
+import { horizontalScroll } from "./ui/horizontal-scroll.js";
+import { explorerLayout } from "./ui/explorer-button.js";
 import { latestLoad, loadPlayer } from "./spine-load.js";
 import { ensureSpine, spineAllowed } from "./spine-runtime.js";
 import { decodeAll } from "./core/image-decode.js";
 import { withPreviewTimeout, withTimeout, nextFrame } from "./core/async.js";
 import { previewError } from "./preview-error.js";
-import { attachHint } from "./hover-hint.js";
+import { attachHint } from "./ui/hover-hint.js";
 import * as Loading from "./app/loading.js";
 import * as ModAlias from "./mod-alias.js";
 import * as ModExport from "./mod-export.js";
 import * as Compatibility from "./mod-compatibility.js";
-import * as ActionList from "./action-list.js";
+import * as ActionList from "./ui/action-list.js";
 import { actionLabel, actionsOf, groupLabel, menuOf } from "./clip-names.js";
-import { cardText, fitCards } from "./action-list-layout.js";
+import { cardText, fitCards } from "./ui/action-list-layout.js";
 import * as Lobby from "./lobby.js";
 import * as Visual from "./visual-mode.js";
 import { QUEUEABLE, current as modsState, entryLabel, listSep, refused } from "./mod-switch.js";
 import * as Prompts from "./app/prompts.js";
-import { anyOpen as popupOpen } from "./popup.js";
+import { anyOpen as popupOpen } from "./ui/popup.js";
 import { rpc, spineBase, spinePrefix, loadSpineAssets, waitJob } from "./core/api.js";
 import { L, T, errorText, language, platform } from "./core/i18n.js";
 import { forget, idleAnimation, prioritise, thumbnailScope } from "./thumbs.js";
 import { modelThumbnail, modelStillVersion } from "./model-still.js";
-import { lazyThumbnail } from "./lazy-thumbnail.js";
+import { lazyThumbnail } from "./ui/lazy-thumbnail.js";
 import { portraitViewport } from "./portrait-view.js";
 import { colourSwitchCard } from "./switch-card.js";
 import { clearUnseen, hasUnseen as hasFresh, shownUnseen, switchUnseen } from "./unseen-assets.js";
@@ -54,11 +54,11 @@ import {
   notice,
   popupFrame,
   scrollArea,
-} from "./popup.js";
-import { ALIAS, DETAILS, aliasFrame, detailsFrame, popupContent } from "./popup-frames.js";
-import { statsBox } from "./stats-box.js";
-import { CHIP, COLOUR, CONTROL, SPACE, TYPE } from "./ui-tokens.js";
-import { container, row, stack, textItem, toNode } from "./ui-grid.js";
+} from "./ui/popup.js";
+import { ALIAS, DETAILS, aliasFrame, detailsFrame, popupContent } from "./ui/popup-frames.js";
+import { statsBox } from "./ui/stats-box.js";
+import { CHIP, COLOUR, CONTROL, SPACE, TYPE } from "./ui/ui-tokens.js";
+import { container, row, stack, textItem, toNode } from "./ui/ui-grid.js";
 import {
   CAUTIONS,
   CROSS_LIMIT,

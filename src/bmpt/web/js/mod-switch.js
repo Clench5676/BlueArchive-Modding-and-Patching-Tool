@@ -6,11 +6,11 @@ import { segmentTree, segmentOrigin, segmentDensity, SEGMENT_SCALE } from "./mod
 // refused while the classic UI is open opens the classic modal, which can queue it until the window closes. The
 // pure parts (the view from mods.state, the click, the help's lines, the result, the start prompts, the classic
 // modal's outcome) are tested in Node (tests/js/mod_switch.test.mjs).
-import { notify } from "./popup.js";
-import * as NGUI from "./ngui.js";
+import { notify } from "./ui/popup.js";
+import * as NGUI from "./ui/ngui.js";
 import * as Consent from "./app/consent.js";
 import * as Loading from "./app/loading.js";
-import * as Popup from "./popup.js";
+import * as Popup from "./ui/popup.js";
 import { on, rpc, waitJob } from "./core/api.js";
 import { T, language } from "./core/i18n.js";
 import { overwrittenLines } from "./app/repairs.js";

@@ -759,11 +759,11 @@ test("disabled actions use the game's grey button body without changing its dono
   assert.equal(bg.widgets[0].color, template.children.find((node) => node.name === "BG (1)").widgets[0].color);
   assert.deepEqual(template, before);
 });
-const NGUI = await import("../../src/bmpt/web/js/ngui.js");
+const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
 const Loading = await import("../../src/bmpt/web/js/app/loading.js");
 const ModSwitch = await import("../../src/bmpt/web/js/mod-switch.js");
 const ModAlias = await import("../../src/bmpt/web/js/mod-alias.js");
-const Popup = await import("../../src/bmpt/web/js/popup.js");
+const Popup = await import("../../src/bmpt/web/js/ui/popup.js");
 let invalidations = 0;
 const context = {
   prefs: { voiceMuted: true, voiceVolume: 0 },
@@ -1437,7 +1437,7 @@ for (const mode of ["pending", "error", "empty", "partial", "invalid"])
     try {
       errors.length = 0;
       indexMode = mode;
-      const Renderer = await import(`../../src/bmpt/web/js/ngui.js?index=${mode}`);
+      const Renderer = await import(`../../src/bmpt/web/js/ui/ngui.js?index=${mode}`);
       const host = new El();
       const view = await Renderer.render(node("Panel"), host, { deferImages: true });
       assert.equal(view.nodes.get("Panel").els[0].style.backgroundColor, "#ffffff");
@@ -3875,7 +3875,7 @@ test("the unfolded expression strip takes the wheel and a drag picks no face", a
 // --- the Show in Finder / Explorer button is drawn from explorer-button.js's layout, in every locale ---
 test("the Show in Finder button's caption and folder icon are placed by the explorer layout in every locale", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
-  const { explorerLayout } = await import("../../src/bmpt/web/js/explorer-button.js");
+  const { explorerLayout } = await import("../../src/bmpt/web/js/ui/explorer-button.js");
   try {
     for (const lang of everyLocale) {
       const table = localeTable(lang);
@@ -3908,8 +3908,8 @@ test("the Show in Finder button's caption and folder icon are placed by the expl
 for (const lang of ["en-US", "zh-CN"])
   test(`detail keeps its prefab cards and composes the edit row, chips and expression pile in ${lang}`, async (t) => {
     t.mock.timers.enable({ apis: ["setTimeout"] });
-    const { SPACE, CONTROL, CHIP } = await import("../../src/bmpt/web/js/ui-tokens.js");
-    const { centreOf, toNode } = await import("../../src/bmpt/web/js/ui-grid.js");
+    const { SPACE, CONTROL, CHIP } = await import("../../src/bmpt/web/js/ui/ui-tokens.js");
+    const { centreOf, toNode } = await import("../../src/bmpt/web/js/ui/ui-grid.js");
     const S = 1920 / 2960,
       near = (a, b, eps = 0.025) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b}`);
     try {
@@ -4023,7 +4023,7 @@ for (const lang of ["en-US", "zh-CN"])
 // caption 40 down to 28 ---
 test("variant chips are 272 x 72 with the caption at 40 down to 28, the second column 290 on", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
-  const { CHIP } = await import("../../src/bmpt/web/js/ui-tokens.js");
+  const { CHIP } = await import("../../src/bmpt/web/js/ui/ui-tokens.js");
   const S = 1920 / 2960;
   try {
     setStrings("en-US", localeTable("en-US"));

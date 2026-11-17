@@ -1,4 +1,4 @@
-"""The text fitting (web/js/ngui.js fitText, fitLabel, fitGroup, fitRow) is front-end code: its tests run with Node's
+"""The text fitting (web/js/ui/ngui.js fitText, fitLabel, fitGroup, fitRow) is front-end code: its tests run with Node's
 test runner, skipped where Node is not installed."""
 
 import shutil

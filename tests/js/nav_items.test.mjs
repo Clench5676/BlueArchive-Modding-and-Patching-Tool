@@ -1,5 +1,5 @@
 // Tests for web/js/app/nav-items.js (the bottom navigation's entries: which are greyed, their names, the hand-off and
-// its prompt, the greyed look) and, without a game folder, the hand-off prompt drawn plain by web/js/popup.js, on a
+// its prompt, the greyed look) and, without a game folder, the hand-off prompt drawn plain by web/js/ui/popup.js, on a
 // small stand-in DOM. Run by tests/test_nav_items.py with Node's test runner: node --test tests/js/nav_items.test.mjs
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -289,7 +289,7 @@ const warn = console.warn;
 console.warn = (...args) => {
   if (!/popup layout|message popup without/.test(String(args[0]))) warn(...args);
 };
-const Popup = await import("../../src/bmpt/web/js/popup.js");
+const Popup = await import("../../src/bmpt/web/js/ui/popup.js");
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 const action = (name) => walk(dialog).find((e) => e.dataset?.action === name);

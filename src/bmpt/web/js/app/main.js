@@ -1,15 +1,15 @@
 // Boot and routing: #/roster (the student list) and #/student/<family>/<variant> (the detail screen). The game's
 // loading screen covers the start and every change of screen until the new one is ready; a change inside the detail
 // screen (a variant chip, the arrows) is covered too, through its first complete frame.
-import { notify } from "../popup.js";
+import { notify } from "../ui/popup.js";
 import * as Consent from "./consent.js";
 import * as BatchImport from "../batch-import.js";
 import * as Cursor from "./cursor.js";
 import * as Detail from "../detail.js";
 import * as Loading from "./loading.js";
 import * as ModSwitch from "../mod-switch.js";
-import * as NGUI from "../ngui.js";
-import * as Popup from "../popup.js";
+import * as NGUI from "../ui/ngui.js";
+import * as Popup from "../ui/popup.js";
 import * as Prompts from "./prompts.js";
 import * as Impact from "./update-impact.js";
 import * as Roster from "../roster.js";
@@ -33,7 +33,7 @@ import { ROOT_ROUTE, routeHistory } from "./route-history.js";
 import { setupWindowChrome } from "../window/window-chrome.js";
 import { chromeMotion } from "../window/chrome-motion.js";
 import { installCloseGuard } from "../window/window-close.js";
-import { installVerticalWheel } from "../horizontal-scroll.js";
+import { installVerticalWheel } from "../ui/horizontal-scroll.js";
 
 installCloseGuard({
   prepare: () => StudentHall.canLeave(),
