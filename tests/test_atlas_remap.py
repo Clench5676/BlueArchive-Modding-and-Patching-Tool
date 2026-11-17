@@ -21,6 +21,7 @@ from ba_modding_toolkit.utils import CRCUtils
 
 from rebake_geometry import geometry as rig_geometry
 from test_library import reload_library, setup_library
+from module_patches import patch_everywhere
 
 
 def atlas_text(pages, modern=False, pma=False):
@@ -844,7 +845,7 @@ def test_accept_keeps_alias_names_and_repair_metadata_together(repair_review, mo
 
     env, entry, current, source = repair_review
     translate = I18n(language).t
-    monkeypatch.setattr("bmpt.library.service.t", translate)
+    patch_everywhere(monkeypatch, ["bmpt.library.service"], "t", translate)
     before = {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in (entry.file, current, source)}
     env.library.rename(entry.id, "Before review")
     preview = env.library.remap(entry.id, geometry=rig_geometry(env.library, entry.id))
@@ -908,7 +909,7 @@ def test_unchanged_pages_never_build_or_store_a_mod(setup_library, monkeypatch):
     )
     (entry,) = env.library.add([source])
     before = (env.library.root / "state.json").read_bytes(), entry.file.read_bytes()
-    monkeypatch.setattr(service, "rebuild", lambda *a, **kw: pytest.fail("no build for equal pages"))
+    patch_everywhere(monkeypatch, [service], "rebuild", lambda *a, **kw: pytest.fail("no build for equal pages"))
     result = env.library.remap(entry.id, geometry=rig_geometry(env.library, entry.id))
     assert result["unchanged"]
     assert not env.library._remap_previews
@@ -964,7 +965,7 @@ def test_source_changed_during_remapping_never_becomes_an_acceptable_preview(rep
         entry.file.write_bytes(entry.file.read_bytes() + b"changed by another writer")
         return result
 
-    monkeypatch.setattr(service, "rebuild", changed)
+    patch_everywhere(monkeypatch, [service], "rebuild", changed)
     with pytest.raises(ServiceError, match="entry_changed"):
         env.library.remap(entry.id, geometry=rig_geometry(env.library, entry.id))
     assert not env.library._remap_previews
@@ -1098,7 +1099,7 @@ def test_deleting_the_repaired_copy_clears_the_link_in_the_same_state_write(repa
             writes.append(json.loads(json.dumps(data)))
         return real(path, data, *args, **kwargs)
 
-    monkeypatch.setattr(service, "atomic_json", spy)
+    patch_everywhere(monkeypatch, [service], "atomic_json", spy)
     env.library.remove(child.id, confirm=True)
     parent = lambda data: next(record for record in data["mods"] if record["id"] == entry.id)
     without_child = [data for data in writes if child.id not in {record["id"] for record in data["mods"]}]

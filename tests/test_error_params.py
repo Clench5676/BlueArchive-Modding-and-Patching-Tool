@@ -15,6 +15,7 @@ from bmpt.webui import batch_import, export_service
 
 from test_batch_import import analyze, env, finish, rpc, run
 from test_library import game_bundle, make_mod, setup_library
+from module_patches import patch_everywhere
 
 PACKAGE = Path(__file__).parents[1] / "src" / "bmpt"
 ENGINE_PACKAGE = PACKAGE.with_name("ba_modding_toolkit")
@@ -121,8 +122,11 @@ def test_compare_names_the_bundle_it_cannot_read(setup_library, monkeypatch, fai
         return SimpleNamespace(env=SimpleNamespace(objects=objects if broken else []))
 
     monkeypatch.setattr(Bundle, "load", load)
-    monkeypatch.setattr(
-        "bmpt.library.service.AssetType", SimpleNamespace(Texture2D=kind, TextAsset=kind, Mesh=kind, AnimationClip=kind)
+    patch_everywhere(
+        monkeypatch,
+        ["bmpt.library.service"],
+        "AssetType",
+        SimpleNamespace(Texture2D=kind, TextAsset=kind, Mesh=kind, AnimationClip=kind),
     )
     error = raised(lambda: env.library._compare_paths("id", [mod], [official]))
     assert (error.code, error.params) == ("bundle_invalid", {"file": mod if failing == "mod" else official})

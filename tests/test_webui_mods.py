@@ -35,6 +35,7 @@ from bmpt.webui.state import UiState, data_path
 from test_classic_handoff import FakePopen, FakeProcesses, WsgiOpener, wait_for
 from test_library import FakeCatalog, FakeVariant, game_bundle, header_bundle, make_mod
 from test_webui import call, rpc
+from module_patches import patch_everywhere
 
 OFFICIAL = header_bundle(b"official")
 
@@ -274,7 +275,7 @@ def test_mods_state_and_status_refresh_never_compute_sizes(env, monkeypatch):
     def no_sizes(directory):
         pytest.fail(f"State refresh measured storage: {directory}")
 
-    monkeypatch.setattr("bmpt.library.service._folder_size", no_sizes)
+    patch_everywhere(monkeypatch, ["bmpt.library.service"], "_folder_size", no_sizes)
     status = env.s.refresh_status()
     assert status is not None
     assert "builtSize" not in status and "originalsSize" not in status
@@ -301,7 +302,7 @@ def test_mods_sizes_counts_only_the_requested_folder_on_demand(env, monkeypatch,
         measured.append(directory)
         return folder_size(directory)
 
-    monkeypatch.setattr(service, "_folder_size", measure)
+    patch_everywhere(monkeypatch, [service], "_folder_size", measure)
     expected = 2 * len(b"generated" if kind == "built" else b"official")
     assert rpc(env.app, "mods.sizes", kind=kind)["result"] == {f"{kind}Size": expected}
     assert measured == [root / kind]
@@ -1119,13 +1120,13 @@ def test_failed_build_finishes_the_apply_and_releases_its_locks(env, monkeypatch
             raise RuntimeError("build failed")
         return [("test_spr", "mismatched bundle")]
 
-    monkeypatch.setattr(service, "install_staged", fail)
+    patch_everywhere(monkeypatch, [service], "install_staged", fail)
     monkeypatch.setattr(env.s.library, "_needs_crc_fix", lambda *args: True)
     job = env.job("actions.apply", variant="test", source=f"mod:{mod.id}")
     assert job.state == "failed"
     assert job.error["code"] in ("mod_apply_failed", "library_operation_failed")
     assert env.spr.read_bytes() == original and not env.s.jobs.busy()
-    monkeypatch.setattr(service, "install_staged", execute)
+    patch_everywhere(monkeypatch, [service], "install_staged", execute)
     monkeypatch.setattr(env.s.library, "_needs_crc_fix", needs_fix)
     assert env.job("actions.apply", variant="test", source=f"mod:{mod.id}").state == "done"
     assert env.job("actions.restore", variant="test").state == "done"

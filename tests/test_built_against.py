@@ -20,6 +20,7 @@ from bmpt.library.integrity import Contents
 from rebake_geometry import geometry as rig_geometry
 from test_atlas_remap import atlas_text, repair_review  # noqa: F401 - fixture
 from test_library import game_bundle, header_bundle, kept_copy, make_mod, reload_library, setup_library  # noqa: F401
+from module_patches import patch_everywhere
 
 GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-game")
 
@@ -369,7 +370,7 @@ def test_update_records_the_parts_it_rebuilt_the_mod_on(spine, monkeypatch):
         result.write_bytes(header_bundle(b"updated!"))
         return RebuildResult(True, "updated", [FilePair(result, targets[0])])
 
-    monkeypatch.setattr(service, "rebuild", update)
+    patch_everywhere(monkeypatch, [service], "rebuild", update)
     result = env.library.update(entry.id)
     stored = json.loads(sidecar(env, entry.id).read_text())
     assert stored["event"] == "update" and stored["parts"][0]["mod"] == "same"
@@ -387,7 +388,7 @@ def test_a_fingerprint_that_cannot_be_made_never_fails_the_import(spine, monkeyp
     def broken(*args, **kwargs):
         raise RuntimeError("synthetic")
 
-    monkeypatch.setattr(service.fingerprint, "part", broken)
+    monkeypatch.setattr(fingerprint, "part", broken)
     (entry,) = env.library.add([make_mod(env.original, env.tmp / "input")])
     assert entry.file.is_file() and not sidecar(env, entry.id).exists()
     assert env.library.built_against(entry.id) is None

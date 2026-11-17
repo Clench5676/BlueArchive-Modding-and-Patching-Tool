@@ -5,8 +5,8 @@ import pytest
 
 from ba_modding_toolkit.naming import parse_filename
 from ba_modding_toolkit.utils import CRCUtils
-from bmpt.library.service import ServiceError
 from ba_modding_toolkit.utils.common import no_log
+from bmpt.core.errors import ServiceError
 
 from test_library import expect_error, game_bundle, make_mod, setup_library  # noqa: F401
 

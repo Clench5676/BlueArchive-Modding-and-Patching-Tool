@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import errno
 import json
+import os
+import shutil
 from pathlib import Path
 
 import pytest
@@ -12,6 +14,7 @@ from bmpt.core.errors import ServiceError
 from bmpt.library import fingerprint, service, storage
 
 from test_library import game_bundle, make_mod, reload_library, setup_library
+from module_patches import patch_everywhere
 
 
 def upload(env, folder="incoming"):
@@ -64,7 +67,7 @@ def test_file_copy_failure_preserves_previously_completed_mod(setup_library, mon
         return copy(source, target)
 
     with monkeypatch.context() as patch:
-        patch.setattr(service, "atomic_copy", fail_second)
+        patch_everywhere(patch, [service], "atomic_copy", fail_second)
         with pytest.raises(ServiceError, match="library_io_error"):
             env.library.add_files("spr", paths)
     assert len(attempts) == fail_at
@@ -89,7 +92,7 @@ def test_each_staged_file_is_verified_before_group_publication(setup_library, mo
         return result
 
     with monkeypatch.context() as patch:
-        patch.setattr(service, "atomic_copy", corrupt_copy)
+        patch_everywhere(patch, [service], "atomic_copy", corrupt_copy)
         with pytest.raises((OSError, ServiceError)):
             env.library.add_files("spr", paths)
     assert count == corrupt_at
@@ -116,7 +119,7 @@ def test_metadata_failure_before_or_after_publication_rolls_back_exact_prior_sta
         return write(path, data)
 
     with monkeypatch.context() as patch:
-        patch.setattr(service, "atomic_json", fail_metadata)
+        patch_everywhere(patch, [service], "atomic_json", fail_metadata)
         with pytest.raises(ServiceError, match="library_io_error"):
             env.library.add_files("spr", paths)
     assert failed
@@ -128,7 +131,7 @@ def test_restart_recovers_interrupted_multi_file_import_at_commit_boundaries(set
     env = setup_library
     old, metadata, files = baseline(env)
     paths = upload(env)
-    copy, replace, write = service.atomic_copy, service.os.replace, service.atomic_json
+    copy, replace, write = service.atomic_copy, os.replace, service.atomic_json
     count = 0
 
     def copying(source, target):
@@ -152,9 +155,9 @@ def test_restart_recovers_interrupted_multi_file_import_at_commit_boundaries(set
         return result
 
     with monkeypatch.context() as patch:
-        patch.setattr(service, "atomic_copy", copying)
-        patch.setattr(service.os, "replace", replacing)
-        patch.setattr(service, "atomic_json", writing)
+        patch_everywhere(patch, [service], "atomic_copy", copying)
+        patch.setattr(os, "replace", replacing)
+        patch_everywhere(patch, [service], "atomic_json", writing)
         with pytest.raises(SystemExit):
             env.library.add_files("spr", paths)
     (journal,) = journals(env)
@@ -175,7 +178,7 @@ def test_rollback_failure_retains_journal_and_retries_after_lock_is_released(set
     env = setup_library
     old, metadata, files = baseline(env)
     paths = upload(env)
-    write, remove = service.atomic_json, service.shutil.rmtree
+    write, remove = service.atomic_json, shutil.rmtree
     failed = False
 
     def fail_metadata(path, data):
@@ -191,8 +194,8 @@ def test_rollback_failure_retains_journal_and_retries_after_lock_is_released(set
         return remove(path, *args, **kwargs)
 
     with monkeypatch.context() as patch:
-        patch.setattr(service, "atomic_json", fail_metadata)
-        patch.setattr(service.shutil, "rmtree", locked_directory)
+        patch_everywhere(patch, [service], "atomic_json", fail_metadata)
+        patch.setattr(shutil, "rmtree", locked_directory)
         with pytest.raises(ServiceError, match="library_recovery_pending"):
             env.library.add_files("spr", paths)
         (journal,) = journals(env)
@@ -216,7 +219,7 @@ def test_recovery_does_not_finalize_committed_group_with_changed_bytes(setup_lib
             raise SystemExit("Synthetic termination after metadata publication")
 
     with monkeypatch.context() as patch:
-        patch.setattr(service, "atomic_json", committed_crash)
+        patch_everywhere(patch, [service], "atomic_json", committed_crash)
         with pytest.raises(SystemExit):
             env.library.add_files("spr", paths)
     (journal,) = journals(env)
@@ -251,7 +254,7 @@ def test_failed_repair_restores_existing_repaired_id(setup_library, monkeypatch)
         return result
 
     with monkeypatch.context() as patch:
-        patch.setattr(service, "atomic_json", fail_metadata)
+        patch_everywhere(patch, [service], "atomic_json", fail_metadata)
         with env.library._transaction_lock():
             with pytest.raises(OSError):
                 env.library._store({path.name: path for path in paths}, "repair", "test", "spr", repaired_from=old.id)
@@ -320,7 +323,7 @@ def test_import_recovery_rejects_symlinked_mods_parent_before_outside_io(setup_l
             }
         )
     )
-    verify, remove = service.verify_file, service.shutil.rmtree
+    verify, remove = service.verify_file, shutil.rmtree
     outside_attempts = []
 
     def guarded_verify(path, *args, **kwargs):
@@ -335,8 +338,8 @@ def test_import_recovery_rejects_symlinked_mods_parent_before_outside_io(setup_l
         assert not Path(path).resolve().is_relative_to(outside), "Recovery deleted outside the library"
         return remove(path, *args, **kwargs)
 
-    monkeypatch.setattr(service, "verify_file", guarded_verify)
-    monkeypatch.setattr(service.shutil, "rmtree", guarded_remove)
+    patch_everywhere(monkeypatch, [service], "verify_file", guarded_verify)
+    monkeypatch.setattr(shutil, "rmtree", guarded_remove)
     with pytest.raises(ServiceError, match="library_recovery_pending"):
         env.library._recover_pending()
     assert sentinel.read_bytes() == b"unrelated complete files"
@@ -365,9 +368,9 @@ def test_rollback_retry_syncs_already_removed_metadata_before_deleting_files(set
         return sync(path)
 
     with monkeypatch.context() as patch:
-        patch.setattr(service, "atomic_json", writing)
+        patch_everywhere(patch, [service], "atomic_json", writing)
         patch.setattr(storage, "sync_directory", failed_state_sync)
-        patch.setattr(service, "sync_directory", failed_state_sync)
+        patch_everywhere(patch, [service], "sync_directory", failed_state_sync)
         with pytest.raises(ServiceError, match="library_recovery_pending"):
             env.library.add_files("spr", paths)
         (journal,) = journals(env)
@@ -408,9 +411,9 @@ def test_committed_recovery_retains_journal_until_metadata_sync_succeeds(setup_l
         return sync(path)
 
     with monkeypatch.context() as patch:
-        patch.setattr(service, "atomic_json", writing)
+        patch_everywhere(patch, [service], "atomic_json", writing)
         patch.setattr(storage, "sync_directory", failed_state_sync)
-        patch.setattr(service, "sync_directory", failed_state_sync)
+        patch_everywhere(patch, [service], "sync_directory", failed_state_sync)
         with pytest.raises(ServiceError, match="library_recovery_pending"):
             env.library.add_files("spr", paths)
     (journal,) = journals(env)
@@ -419,7 +422,7 @@ def test_committed_recovery_retains_journal_until_metadata_sync_succeeds(setup_l
     assert data["phase"] == "publishing"
     assert new_id in {record["id"] for record in json.loads((env.root / "state.json").read_text())["mods"]}
     with monkeypatch.context() as patch:
-        patch.setattr(service, "sync_directory", failed_state_sync)
+        patch_everywhere(patch, [service], "sync_directory", failed_state_sync)
         patch.setattr(storage, "sync_directory", failed_state_sync)
         recovered = reload_library(env)
         recovered.mods()  # reads go on while the journal is pending

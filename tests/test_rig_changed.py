@@ -27,6 +27,7 @@ from test_atlas_remap import (
 )
 from test_built_against import animation, binary_skeleton, sidecar, spine  # noqa: F401 - fixture
 from test_library import header_bundle, make_mod, reload_library, setup_library  # noqa: F401 - fixture
+from module_patches import patch_everywhere
 
 OLD = [("page.png", (16, 16), [("part", -1, (1, 1), (4, 4), (4, 4), (0, 0), 0)])]
 # the same page size: the part moved and an expression's region came with it
@@ -314,12 +315,14 @@ def test_update_tells_what_the_official_rig_gained_and_keeps_the_layout_of_the_t
         result.write_bytes(header_bundle(b"updated!"))
         return RebuildResult(True, "updated", [FilePair(result, targets[0])])
 
-    monkeypatch.setattr(service, "rebuild", update)
+    patch_everywhere(monkeypatch, [service], "rebuild", update)
     result = env.library.update(entry.id)
     assert result.rig == {"animations": {"Test.skel": ["00"]}}
     assert result.to_json()["rig"] == {"animations": {"Test.skel": ["00"]}}
     # an update that changes nothing says it too
-    monkeypatch.setattr(service, "rebuild", lambda *args, **kwargs: RebuildResult(True, "", [], all_unchanged=True))
+    patch_everywhere(
+        monkeypatch, [service], "rebuild", lambda *args, **kwargs: RebuildResult(True, "", [], all_unchanged=True)
+    )
     again = env.library.update(entry.id)
     assert again.unchanged and again.rig == {"animations": {"Test.skel": ["00"]}}
 
@@ -338,7 +341,7 @@ def test_update_carries_the_layout_texture_only_files_follow(spine, monkeypatch)
         result.write_bytes(header_bundle(b"rebuilt!"))
         return RebuildResult(True, "updated", [FilePair(result, targets[0])])
 
-    monkeypatch.setattr(service, "rebuild", update)
+    patch_everywhere(monkeypatch, [service], "rebuild", update)
     assert env.library.update(entry.id).rig == {}
     stored = json.loads(sidecar(env, entry.id).read_text())
     assert stored["event"] == "update" and stored["painted"] == data["painted"]

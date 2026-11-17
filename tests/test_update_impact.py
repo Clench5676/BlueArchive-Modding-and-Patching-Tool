@@ -13,6 +13,7 @@ from bmpt.library import fingerprint
 from test_atlas_remap import atlas_text  # noqa: F401
 from test_built_against import MOVED, OLD, animation, binary_skeleton, part_of, spine  # noqa: F401
 from test_library import game_bundle, header_bundle, make_mod, reload_library, setup_library  # noqa: F401
+from module_patches import patch_everywhere
 
 
 # --- the classification ---
@@ -270,7 +271,7 @@ def test_an_update_that_changes_nothing_ends_the_hold(spine, monkeypatch):
     class Same:
         success, all_unchanged, file_pairs, no_match = True, True, [], False
 
-    monkeypatch.setattr(service_module, "rebuild", lambda *args, **kwargs: Same())
+    patch_everywhere(monkeypatch, [service_module], "rebuild", lambda *args, **kwargs: Same())
     result = library.update(entry.id)
     assert result.unchanged
     assert library.impacts([entry.id]) == [{"id": entry.id, "impact": "unchanged"}]

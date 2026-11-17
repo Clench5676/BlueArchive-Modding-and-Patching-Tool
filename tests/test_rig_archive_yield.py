@@ -6,6 +6,7 @@ import threading
 import time
 
 from bmpt.library import service
+from module_patches import patch_everywhere
 
 
 def _library() -> service.ModLibrary:
@@ -32,7 +33,7 @@ def test_the_library_lock_notes_foreground_use_only():
 
 
 def test_the_archive_waits_until_nothing_else_used_the_library_for_a_while(monkeypatch):
-    monkeypatch.setattr(service, "RIG_ARCHIVE_QUIET", 0.3)
+    patch_everywhere(monkeypatch, [service], "RIG_ARCHIVE_QUIET", 0.3)
     library = _library()
     busy = 0.6
 
@@ -53,7 +54,7 @@ def test_the_archive_waits_until_nothing_else_used_the_library_for_a_while(monke
 
 
 def test_the_archive_goes_on_at_once_on_a_quiet_library_and_stops_when_cancelled(monkeypatch):
-    monkeypatch.setattr(service, "RIG_ARCHIVE_QUIET", 5.0)
+    patch_everywhere(monkeypatch, [service], "RIG_ARCHIVE_QUIET", 5.0)
     library = _library()
     assert library._yield_to_foreground(None) < 0.05  # never used
     with library._lock:
@@ -64,7 +65,7 @@ def test_the_archive_goes_on_at_once_on_a_quiet_library_and_stops_when_cancelled
 
 
 def test_background_work_does_not_hold_back_its_own_next_step(monkeypatch):
-    monkeypatch.setattr(service, "RIG_ARCHIVE_QUIET", 5.0)
+    patch_everywhere(monkeypatch, [service], "RIG_ARCHIVE_QUIET", 5.0)
     library = _library()
     service._background.on = True
     try:
@@ -93,7 +94,7 @@ def test_a_paced_job_does_not_count_as_use_it_steps_aside_for():
 
 
 def test_a_paced_job_goes_on_at_once_when_nobody_else_uses_the_library(monkeypatch):
-    monkeypatch.setattr(service, "TOGGLE_YIELD", (0.3, 2.0))
+    patch_everywhere(monkeypatch, [service], "TOGGLE_YIELD", (0.3, 2.0))
     library = _library()
     assert library._let_others_in() < 0.05  # never used
     service._background.paced = True
@@ -106,7 +107,7 @@ def test_a_paced_job_goes_on_at_once_when_nobody_else_uses_the_library(monkeypat
 
 
 def test_a_paced_job_waits_for_the_others_but_no_longer_than_its_bound(monkeypatch):
-    monkeypatch.setattr(service, "TOGGLE_YIELD", (0.2, 0.5))
+    patch_everywhere(monkeypatch, [service], "TOGGLE_YIELD", (0.2, 0.5))
     library = _library()
     with library._lock:
         pass
@@ -134,7 +135,7 @@ def test_a_paced_job_waits_for_the_others_but_no_longer_than_its_bound(monkeypat
 def test_a_reader_is_not_held_to_one_library_call_per_toggle_step(monkeypatch):
     """A preview file request makes several library calls in a row; while a toggle reaches its entries (each under
     the lock for a while), all of them get in between two entries."""
-    monkeypatch.setattr(service, "TOGGLE_YIELD", (0.05, 0.5))
+    patch_everywhere(monkeypatch, [service], "TOGGLE_YIELD", (0.05, 0.5))
     library = _library()
     step, calls, gap = 0.1, 20, 0.01
     done = threading.Event()
@@ -166,7 +167,7 @@ def test_a_reader_is_not_held_to_one_library_call_per_toggle_step(monkeypatch):
 
 
 def test_a_paced_job_steps_aside_for_a_caller_blocked_on_the_lock(monkeypatch):
-    monkeypatch.setattr(service, "TOGGLE_YIELD", (0.01, 0.3))
+    patch_everywhere(monkeypatch, [service], "TOGGLE_YIELD", (0.01, 0.3))
     library = _library()
     held, got = threading.Event(), threading.Event()
 

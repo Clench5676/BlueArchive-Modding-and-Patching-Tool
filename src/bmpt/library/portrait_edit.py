@@ -546,7 +546,7 @@ def apply(
             library._defer(pin, saved["target"], {core: core}, source)
             result = PhotographApplyResult(variant, source, [], unchanged=True, deferred=True, cores=[core])
         else:
-            from .service import _ChoiceChange
+            from .service.base import _ChoiceChange
 
             change = _ChoiceChange(library, pin, saved["target"], source)
             try:

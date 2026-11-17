@@ -17,10 +17,12 @@ from bmpt.gameassets.cabs import CabIndex
 from bmpt.library.identity import identify
 from bmpt.library.judge import mod_versions
 from ba_modding_toolkit.naming import parse_filename
+from bmpt.library.install import Action
 from test_batch_import import analyze, env
 from bmpt.library.integrity import inspect as inspect_bundle
 
 from test_library import game_bundle, make_mod, setup_library
+from module_patches import patch_everywhere
 
 FIXTURES = Path(__file__).parent / "assets" / "integrity"
 
@@ -602,7 +604,7 @@ def checks(env, monkeypatch):
     monkeypatch.setattr(integrity, "inspect", read)
     monkeypatch.setattr(integrity, "metadata", read)
     monkeypatch.setattr(integrity, "cab_names", cabs)
-    monkeypatch.setattr(service, "CabIndex", index)
+    patch_everywhere(monkeypatch, [service], "CabIndex", index)
     register(env.original)
     env.register, env.reads, env.indexes = register, reads, indexes
     return env
@@ -864,7 +866,7 @@ def test_pre_split_older_bundle_keeps_all_update_targets_in_add_and_batch(checks
     (mod,) = e.library.add_files(kind, [old])
     assert e.library.compatibility(mod.id, pin)["outdated"]
     (group,) = e.library._plan(e.library._record(mod.id), lambda text: None, pin)
-    assert all(file.action == service.Action.UPDATE for file in group.files)
+    assert all(file.action == Action.UPDATE for file in group.files)
     assert set(group.target_paths) == set(targets)
 
 

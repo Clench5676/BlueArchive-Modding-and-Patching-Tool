@@ -14,9 +14,11 @@ from bmpt.library.identity import content_cores, identify
 from bmpt.library.integrity import Contents
 from bmpt.library.judge import kind_of_file
 from ba_modding_toolkit.naming import parse_filename
+from bmpt.library import safety
 
 from test_library import game_bundle, header_bundle, make_mod, setup_library
 from test_mod_identity import objects
+from module_patches import patch_everywhere
 
 # the real-install tests run only on an official game folder named by BAMT_TEST_GAME_DIR
 GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-game")
@@ -566,7 +568,7 @@ def test_split_model_journal_rolls_back_prefab_and_dependency_together(split_mod
                 raise PermissionError("synthetic failed second slot part")
         return copy(source, target)
 
-    monkeypatch.setattr(service, "atomic_copy", fail_second)
+    patch_everywhere(monkeypatch, [service], "atomic_copy", fail_second)
     with pytest.raises(ServiceError, match="game_file_denied"):
         env.library.apply("ch0258", f"mod:{mod.id}", kind="model")
     assert len(written) == 2
@@ -1406,12 +1408,12 @@ def test_costume_builds_of_an_older_rule_are_built_again_at_the_start(model_env,
     def running(dirs):
         raise ServiceError("game_running")
 
-    real = service.safety.check_game_for
-    monkeypatch.setattr(service.safety, "check_game_for", running)
+    real = safety.check_game_for
+    monkeypatch.setattr(safety, "check_game_for", running)
     built.clear()
     assert library.refresh_costumes() == {"done": [], "kept": [], "left": [copy]}
     assert built == [] and library.update_due()["outdated"] is True  # neither built nor written: the next start
-    monkeypatch.setattr(service.safety, "check_game_for", real)
+    monkeypatch.setattr(safety, "check_game_for", real)
     assert library.refresh_costumes() == {"done": [copy], "kept": [], "left": []}
     assert library.selection("hoshino")["model"] == {"source": f"mod:{made}", "installed": True, "error": None}
     assert library.update_due()["outdated"] is False
@@ -1590,7 +1592,7 @@ def test_costume_verdicts_are_kept_per_build_signature(model_env, monkeypatch):
         )["ok"]
         is False
     )
-    monkeypatch.setattr(service, "_build_version", lambda: "next:build")
+    patch_everywhere(monkeypatch, [service], "_build_version", lambda: "next:build")
     assert library.costume_verdict("hoshino", "hoshino_swimsuit")["ok"] is False
     from bmpt.gameassets import costume_rule
 
@@ -1599,7 +1601,7 @@ def test_costume_verdicts_are_kept_per_build_signature(model_env, monkeypatch):
     assert library.record_costume_verdict("hoshino", "hoshino_swimsuit", True)["ok"] is True
     assert library.costume_verdict("hoshino", "hoshino_swimsuit")["ok"] is True
     # bounded, newest kept; an unreadable file reads as none
-    monkeypatch.setattr(service, "COSTUME_VERDICTS", 2)
+    patch_everywhere(monkeypatch, [service], "COSTUME_VERDICTS", 2)
     for i in range(3):
         library._save_verdict(f"signature-{i}", False, "rest pose")
     assert sorted(library._verdicts()) == ["signature-1", "signature-2"]

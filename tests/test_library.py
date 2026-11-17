@@ -32,6 +32,8 @@ from bmpt.library.rebuild import RebuildResult
 from ba_modding_toolkit.naming import parse_filename
 from ba_modding_toolkit.searching import get_search_dirs
 from ba_modding_toolkit.utils import CRCUtils
+from bmpt.library import integrity
+from module_patches import patch_everywhere
 
 
 @dataclass
@@ -133,7 +135,7 @@ def expect_error(code, action):
 def test_add_apply_and_restore_progress_name_the_phase(setup_library, monkeypatch, language):
     env = setup_library
     translate = I18n(language).t
-    monkeypatch.setattr(service, "t", translate)
+    patch_everywhere(monkeypatch, [service], "t", translate)
     progress = []
     source = make_mod(env.original, env.tmp / "upload", fixed=True)
     monkeypatch.setattr(env.settings, "crc_needed", lambda path: True)
@@ -149,7 +151,7 @@ def test_add_apply_and_restore_progress_name_the_phase(setup_library, monkeypatc
 def test_direct_install_build_progress_names_processing(setup_library, monkeypatch):
     env = setup_library
     translate = I18n("en-US").t
-    monkeypatch.setattr(service, "t", translate)
+    patch_everywhere(monkeypatch, [service], "t", translate)
     source = make_mod(env.original, env.tmp / "upload")
     (entry,) = env.library.add([source])
     execute = service.install_staged
@@ -158,7 +160,7 @@ def test_direct_install_build_progress_names_processing(setup_library, monkeypat
         kwargs["progress"](0, 1, "test_spr")
         return execute(*args, **kwargs)
 
-    monkeypatch.setattr(service, "install_staged", report)
+    patch_everywhere(monkeypatch, [service], "install_staged", report)
     progress = []
     env.library.apply("test", f"mod:{entry.id}", progress=lambda *args: progress.append(args))
     assert (0, 1, "Processing: test_spr") in progress
@@ -179,8 +181,8 @@ def test_apply_already_crc_fixed_mod_copies_without_unity_rebuild(setup_library,
     # The write's reference check reads the file; nothing may be rebuilt or saved from it.
     monkeypatch.setattr(Bundle, "compress", no_rebuild)
     monkeypatch.setattr(Bundle, "save", no_rebuild)
-    monkeypatch.setattr("bmpt.library.service.install_staged", no_rebuild)
-    monkeypatch.setattr("bmpt.library.service.rebuild", no_rebuild)
+    patch_everywhere(monkeypatch, ["bmpt.library.service"], "install_staged", no_rebuild)
+    patch_everywhere(monkeypatch, ["bmpt.library.service"], "rebuild", no_rebuild)
     result = env.library.apply("test", f"mod:{entry.id}", kind=kind)
     assert result.files == [target]
     assert target.read_bytes() == mod.read_bytes()
@@ -280,7 +282,7 @@ def test_add_rolls_back_incomplete_pack(setup_library, monkeypatch):
             raise PermissionError(13, "Read failure", str(source))
         original_copy(source, target)
 
-    monkeypatch.setattr(service, "atomic_copy", copy)
+    patch_everywhere(monkeypatch, [service], "atomic_copy", copy)
     expect_error("library_io_error", lambda: env.library.add(sources))
     assert env.library.mods() == reload_library(env).mods() == []
     assert not list((env.root / "mods").glob("*/*.bundle"))
@@ -621,7 +623,7 @@ def test_repaired_default_name_tracks_original_alias_and_has_its_own_override(se
 
     env = setup_library
     translate = I18n(language).t
-    monkeypatch.setattr("bmpt.library.service.t", translate)
+    patch_everywhere(monkeypatch, ["bmpt.library.service"], "t", translate)
     (entry,) = env.library.add([make_mod(env.original, env.tmp / "input")])
     env.library.rename(entry.id, "Original alias")
     source = make_mod(env.original, env.tmp / "repaired", payload=b"repaired")
@@ -845,9 +847,9 @@ def test_multi_part_install_rolls_back_every_part_on_write_failure(setup_library
         if target in targets:
             written.append(target)
 
-    monkeypatch.setattr(service, "atomic_copy", copy)
-    monkeypatch.setattr(service, "atomic_clone", clone)
-    monkeypatch.setattr(service, "verified_move", move)
+    patch_everywhere(monkeypatch, [service], "atomic_copy", copy)
+    patch_everywhere(monkeypatch, [service], "atomic_clone", clone)
+    patch_everywhere(monkeypatch, [service], "verified_move", move)
     expect_error("game_file_denied", lambda: env.library.apply("test", f"mod:{entry.id}"))
     assert written == ([atlas, atlas] if cloning else [atlas, env.original, atlas])
     assert {path: path.read_bytes() for path in targets} == before
@@ -950,7 +952,7 @@ def test_failed_apply_without_official_rolls_back_the_outside_bytes(setup_librar
                 raise PermissionError("synthetic failed write")
         return copy(source, target)
 
-    monkeypatch.setattr(service, "atomic_copy", fail_second)
+    patch_everywhere(monkeypatch, [service], "atomic_copy", fail_second)
     expect_error("game_file_denied", lambda: env.library.apply("test", f"mod:{mod.id}"))
     assert failed and {path: path.read_bytes() for path in targets} == before
     assert [entry.id for entry in env.library.mods()] == [mod.id]
@@ -1051,7 +1053,7 @@ def test_failed_game_write_logs_os_error(setup_library, monkeypatch, caplog):
             raise OSError(errno.ENOSPC, "No space left on device", str(target))
         original_copy(source, target)
 
-    monkeypatch.setattr(service, "atomic_copy", copy)
+    patch_everywhere(monkeypatch, [service], "atomic_copy", copy)
     with caplog.at_level(logging.WARNING, logger="bmpt.library.service"):
         expect_error("game_disk_full", lambda: env.library.apply("test", f"mod:{entry.id}"))
     assert env.original.read_bytes() == before
@@ -1150,10 +1152,11 @@ def test_failed_backup_into_the_library_is_a_library_error(setup_library, monkey
 
         return write
 
-    monkeypatch.setattr(service, "atomic_clone", refuse(clone))
-    monkeypatch.setattr(service, "atomic_copy", refuse(copy))
-    monkeypatch.setattr(
-        service,
+    patch_everywhere(monkeypatch, [service], "atomic_clone", refuse(clone))
+    patch_everywhere(monkeypatch, [service], "atomic_copy", refuse(copy))
+    patch_everywhere(
+        monkeypatch,
+        [service],
         "verified_move",
         lambda source, target, sha1: (_ for _ in ()).throw(
             PermissionError(errno.EACCES, "Permission denied", str(target))
@@ -1249,7 +1252,7 @@ def test_variant_apply_and_restore_select_kinds(setup_library, monkeypatch, kind
         (entry,) = env.library.add([make_mod(path, env.tmp / "input", payload=current.encode())])
         env.library.apply("test", f"mod:{entry.id}", kind=current)
     before = {path: path.read_bytes() for path in originals}
-    monkeypatch.setattr("bmpt.library.service.adapt_variant_sources", lambda sources, *args: sources)
+    patch_everywhere(monkeypatch, ["bmpt.library.service"], "adapt_variant_sources", lambda sources, *args: sources)
     calls = []
 
     def update(sources, targets, output, *args, **kwargs):
@@ -1262,7 +1265,7 @@ def test_variant_apply_and_restore_select_kinds(setup_library, monkeypatch, kind
             pairs.append(FilePair(result, target))
         return RebuildResult(True, "updated", pairs)
 
-    monkeypatch.setattr(service, "rebuild", update)
+    patch_everywhere(monkeypatch, [service], "rebuild", update)
     selected = {path for path in originals if kind is None or (path == env.original) == (kind == "spr")}
     result = env.library.apply("test", "variant:other", kind=kind)
     assert set(result.files) == selected
@@ -1292,14 +1295,14 @@ def test_default_portrait_choices_ignore_unavailable_lobby_originals(setup_libra
     env.library.apply("test", f"mod:{entry.id}")
     env.library.apply("test", "official")
     assert env.original.read_bytes() == original
-    monkeypatch.setattr("bmpt.library.service.adapt_variant_sources", lambda sources, *args: sources)
+    patch_everywhere(monkeypatch, ["bmpt.library.service"], "adapt_variant_sources", lambda sources, *args: sources)
 
     def update(sources, targets, output, *args, **kwargs):
         result = output / targets[0].name
         result.write_bytes(header_bundle(b"adapted portrait"))
         return RebuildResult(True, "updated", [FilePair(result, targets[0])])
 
-    monkeypatch.setattr(service, "rebuild", update)
+    patch_everywhere(monkeypatch, [service], "rebuild", update)
     env.library.apply("test", "variant:other")
     assert {path: path.read_bytes() for path in untouched} == untouched
     expect_error("original_unavailable", lambda: env.library.restore("test", kind=None))
@@ -1336,8 +1339,8 @@ def test_cross_variant_mod_uses_mod_parts_official_baselines_and_tracks_source(s
         result.write_bytes(header_bundle(b"adapted selected mod"))
         return RebuildResult(True, "updated", [FilePair(result, target)])
 
-    monkeypatch.setattr("bmpt.library.service.adapt_variant_sources", adapt)
-    monkeypatch.setattr(service, "rebuild", update)
+    patch_everywhere(monkeypatch, ["bmpt.library.service"], "adapt_variant_sources", adapt)
+    patch_everywhere(monkeypatch, [service], "rebuild", update)
     result = env.library.apply("test", f"mod:{source_mod.id}")
     assert set(result.files) == {target_atlas, env.original}
     assert target_atlas.read_bytes() == official[target_atlas]
@@ -1364,7 +1367,7 @@ def test_variant_swap_uses_official_source_and_keeps_target_original(setup_libra
     entry = env.library.add([make_mod(other, env.tmp / "input")])[0]
     env.library.apply("other", f"mod:{entry.id}")
     calls = []
-    monkeypatch.setattr("bmpt.library.service.adapt_variant_sources", lambda sources, *args: sources)
+    patch_everywhere(monkeypatch, ["bmpt.library.service"], "adapt_variant_sources", lambda sources, *args: sources)
 
     def update(sources, targets, output, *args, **kwargs):
         calls.append((sources, targets, kwargs))
@@ -1372,7 +1375,7 @@ def test_variant_swap_uses_official_source_and_keeps_target_original(setup_libra
         result.write_bytes(header_bundle(b"variant!"))
         return RebuildResult(True, "updated", [FilePair(result, targets[0])])
 
-    monkeypatch.setattr(service, "rebuild", update)
+    patch_everywhere(monkeypatch, [service], "rebuild", update)
     original_bytes = env.original.read_bytes()
     result = env.library.apply("test", "variant:other")
     assert result.files == [env.original]
@@ -1443,7 +1446,7 @@ def test_update_uses_official_baseline_preserves_previous_and_reports_unchanged(
         result.write_bytes(header_bundle(b"updated!"))
         return RebuildResult(True, "updated", [FilePair(result, targets[0])])
 
-    monkeypatch.setattr(service, "rebuild", update)
+    patch_everywhere(monkeypatch, [service], "rebuild", update)
     progress = []
     result = env.library.update(entry.id, progress=lambda *args: progress.append(args))
     assert progress == [
@@ -1458,7 +1461,9 @@ def test_update_uses_official_baseline_preserves_previous_and_reports_unchanged(
     assert calls == [[env.root / "originals" / env.original.name]]
     assert reload_library(env).mods()[0] == result.mod
     assert env.library.update(entry.id).unchanged
-    monkeypatch.setattr(service, "rebuild", lambda *args, **kwargs: RebuildResult(True, "", [], all_unchanged=True))
+    patch_everywhere(
+        monkeypatch, [service], "rebuild", lambda *args, **kwargs: RebuildResult(True, "", [], all_unchanged=True)
+    )
     assert env.library.update(entry.id).unchanged
     json.dumps(result.to_json())
 
@@ -1482,7 +1487,7 @@ def test_update_can_split_an_old_mod_into_current_bundle_parts(setup_library, mo
         result.write_bytes(header_bundle(b"split mod " + parse_filename(current[0].name).res_type.encode()))
         return RebuildResult(True, "updated", [FilePair(result, current[0])])
 
-    monkeypatch.setattr(service, "rebuild", update)
+    patch_everywhere(monkeypatch, [service], "rebuild", update)
     result = env.library.update(entry.id)
     assert len(result.files) == 2 and len(result.previous) == 1
     assert result.previous[0].read_bytes() == old_bytes
@@ -1499,7 +1504,7 @@ def test_failed_rebuild_keeps_mod_and_game_bytes(setup_library, monkeypatch):
     env = setup_library
     entry = env.library.add([make_mod(env.original, env.tmp / "input")])[0]
     mod_bytes, game_bytes = entry.file.read_bytes(), env.original.read_bytes()
-    monkeypatch.setattr(service, "rebuild", lambda *args, **kwargs: RebuildResult(False, "failed", []))
+    patch_everywhere(monkeypatch, [service], "rebuild", lambda *args, **kwargs: RebuildResult(False, "failed", []))
     expect_error("mod_update_failed", lambda: env.library.update(entry.id))
     assert entry.file.read_bytes() == mod_bytes
     assert env.original.read_bytes() == game_bytes
@@ -1533,7 +1538,7 @@ def test_update_keeps_the_official_part_that_takes_nothing_from_the_mod(setup_li
         result.write_bytes(header_bundle(b"textures of the mod"))
         return RebuildResult(True, "updated", [FilePair(result, current[0])])
 
-    monkeypatch.setattr(service, "rebuild", update)
+    patch_everywhere(monkeypatch, [service], "rebuild", update)
     lines = []
     result = env.library.update(entry.id, log=lines.append)
     assert not result.unchanged
@@ -1549,7 +1554,9 @@ def test_update_fails_with_the_reason_when_no_part_takes_anything(setup_library,
     entry, _ = _split_old_mod(env, monkeypatch)
     mod_bytes = entry.file.read_bytes()
     message = "No assets were extracted from source files"
-    monkeypatch.setattr(service, "rebuild", lambda *args, **kwargs: RebuildResult(False, message, no_match=True))
+    patch_everywhere(
+        monkeypatch, [service], "rebuild", lambda *args, **kwargs: RebuildResult(False, message, no_match=True)
+    )
     lines = []
     error = expect_error("mod_update_failed", lambda: env.library.update(entry.id, log=lines.append))
     assert error.params["reason"] == message
@@ -1561,7 +1568,7 @@ def test_update_fails_with_the_reason_when_no_part_takes_anything(setup_library,
 def test_failed_rebuild_names_its_reason(setup_library, monkeypatch):
     env = setup_library
     entry = env.library.add([make_mod(env.original, env.tmp / "input")])[0]
-    monkeypatch.setattr(service, "rebuild", lambda *args, **kwargs: RebuildResult(False, "load failed", []))
+    patch_everywhere(monkeypatch, [service], "rebuild", lambda *args, **kwargs: RebuildResult(False, "load failed", []))
     assert expect_error("mod_update_failed", lambda: env.library.update(entry.id)).params["reason"] == "load failed"
 
 
@@ -1571,7 +1578,7 @@ def test_apply_keeps_the_official_part_that_takes_nothing_from_an_old_release(se
     env = setup_library
     (entry,) = env.library.add([_old_release(env, env.tmp / "old")])
     monkeypatch.setattr(
-        service.integrity.Inspection,
+        integrity.Inspection,
         "structure",
         lambda self, path: frozenset({"rebuilt" if env.game_dir in path.parents else "old"}),
     )
@@ -1596,7 +1603,7 @@ def test_failed_install_preparation_keeps_game_and_originals(setup_library, monk
     entry = env.library.add([make_mod(env.original, env.tmp / "input")])[0]
     game_bytes = env.original.read_bytes()
     monkeypatch.setattr(env.library, "_needs_crc_fix", lambda *args: True)
-    monkeypatch.setattr(service, "install_staged", lambda *args, **kwargs: [("test_spr", "failed")])
+    patch_everywhere(monkeypatch, [service], "install_staged", lambda *args, **kwargs: [("test_spr", "failed")])
     expect_error("mod_apply_failed", lambda: env.library.apply("test", f"mod:{entry.id}"))
     assert env.original.read_bytes() == game_bytes
     assert not (env.root / "originals").exists()
@@ -1694,7 +1701,7 @@ def test_extract_refuses_core_outside_output_folder(setup_library, monkeypatch, 
     out_dir = env.tmp / "extracted"
     out_dir.mkdir()
     (out_dir / "keep.txt").write_bytes(b"keep")
-    monkeypatch.setattr(service, "parse_filename", lambda name: SimpleNamespace(core=core_name))
+    patch_everywhere(monkeypatch, [service], "parse_filename", lambda name: SimpleNamespace(core=core_name))
     monkeypatch.setattr(
         core, "process_asset_extraction", lambda *args, **kwargs: pytest.fail("extraction must not run")
     )
@@ -1757,8 +1764,11 @@ def test_compare_detects_changes_in_streamed_payloads(setup_library, monkeypatch
         return SimpleNamespace(env=SimpleNamespace(objects=[obj]))
 
     monkeypatch.setattr(Bundle, "load", load)
-    monkeypatch.setattr(
-        "bmpt.library.service.get_resource_data", lambda _, path, *args: b"new" if path == entry.file else b"old"
+    patch_everywhere(
+        monkeypatch,
+        ["bmpt.library.service"],
+        "get_resource_data",
+        lambda _, path, *args: b"new" if path == entry.file else b"old",
     )
     result = env.library.compare(entry.id)
     assert len(result.assets) == 1 and result.assets[0].status == "changed"
@@ -1783,14 +1793,14 @@ def kept_copy(env, path):
 
 def swap_by_copying(monkeypatch, payload=b"adapted"):
     """Variant swaps and cross-variant mods without UnityPy: the adapted result is a fixed payload."""
-    monkeypatch.setattr("bmpt.library.service.adapt_variant_sources", lambda sources, *args: sources)
+    patch_everywhere(monkeypatch, ["bmpt.library.service"], "adapt_variant_sources", lambda sources, *args: sources)
 
     def update(sources, targets, output, *args, **kwargs):
         result = output / targets[0].name
         result.write_bytes(header_bundle(payload))
         return RebuildResult(True, "updated", [FilePair(result, targets[0])])
 
-    monkeypatch.setattr(service, "rebuild", update)
+    patch_everywhere(monkeypatch, [service], "rebuild", update)
 
 
 @pytest.mark.parametrize("kind", ["spr", "lobby"])
@@ -2221,7 +2231,7 @@ def test_kept_mods_are_dropped_when_the_switch_is_rolled_back(setup_library, mon
             raise PermissionError(13, "Write failure", str(target))
         original_copy(source, target)
 
-    monkeypatch.setattr(service, "atomic_copy", copy)
+    patch_everywhere(monkeypatch, [service], "atomic_copy", copy)
     expect_error("game_file_denied", lambda: env.library.apply("test", f"mod:{second.id}"))
     assert env.original.read_bytes() == external
     assert [m.id for m in env.library.mods()] == [first.id, second.id]
@@ -2566,7 +2576,7 @@ def test_original_moves_or_clones_and_restores_without_a_byte_copy(setup_library
         assert not (source == original and target == env.original)
         return copy(source, target)
 
-    monkeypatch.setattr(service, "atomic_copy", no_original_copy)
+    patch_everywhere(monkeypatch, [service], "atomic_copy", no_original_copy)
     env.library.apply("test", f"mod:{entry.id}")
     assert original.read_bytes() == official
     if not cloning:
@@ -2633,9 +2643,9 @@ def test_crash_recovers_every_part_and_the_previous_records(setup_library, monke
         if point == "copied" and path.parent == env.root / "originals":
             crash()
 
-    monkeypatch.setattr(service, "verified_move", moving)
-    monkeypatch.setattr(service, "atomic_copy", copying)
-    monkeypatch.setattr(service, "atomic_json", saving)
+    patch_everywhere(monkeypatch, [service], "verified_move", moving)
+    patch_everywhere(monkeypatch, [service], "atomic_copy", copying)
+    patch_everywhere(monkeypatch, [service], "atomic_json", saving)
     monkeypatch.setattr(storage.os, "replace", replacing)
     monkeypatch.setattr(storage, "verify_file", verifying)
     with pytest.raises(InterruptedWrite):
@@ -2670,11 +2680,11 @@ def test_commit_marker_failure_keeps_recoverable_files_and_state(setup_library, 
             raise OSError(5, "Commit flush failed", str(path))
         save(path, data)
 
-    monkeypatch.setattr(service, "atomic_json", saving)
+    patch_everywhere(monkeypatch, [service], "atomic_json", saving)
     expect_error("library_io_error", lambda: env.library.apply("test", f"mod:{entry.id}"))
     assert env.original.read_bytes() == entry.file.read_bytes()
     assert env.library._original_path(env.original).read_bytes() == official
-    monkeypatch.setattr(service, "atomic_json", save)
+    patch_everywhere(monkeypatch, [service], "atomic_json", save)
     recovered = reload_library(env)
     assert recovered.state("test").applied == (f"mod:{entry.id}" if published else "official")
     assert env.original.read_bytes() == (entry.file.read_bytes() if published else official)
@@ -2697,7 +2707,7 @@ def test_a_state_flush_failure_after_publication_rolls_back_its_records(setup_li
             failed = True
             raise OSError(5, "State flush failed", str(path))
 
-    monkeypatch.setattr(service, "atomic_json", saving)
+    patch_everywhere(monkeypatch, [service], "atomic_json", saving)
     expect_error("library_io_error", lambda: env.library.apply("test", f"mod:{entry.id}"))
     assert env.original.read_bytes() == official
     assert json.loads((env.root / "state.json").read_text())["applied"] == {}
@@ -2717,12 +2727,12 @@ def test_recovery_follows_a_relocated_library(setup_library, monkeypatch):
         move(source, target, sha1)
         raise InterruptedWrite()
 
-    monkeypatch.setattr(service, "verified_move", moving)
+    patch_everywhere(monkeypatch, [service], "verified_move", moving)
     with pytest.raises(InterruptedWrite):
         env.library.apply("test", f"mod:{entry.id}")
     destination = env.tmp / "relocated-library"
     env.root.rename(destination)
-    monkeypatch.setattr(service, "verified_move", move)
+    patch_everywhere(monkeypatch, [service], "verified_move", move)
     recovered = ModLibrary(destination, env.catalog, object(), env.settings)
     assert env.original.read_bytes() == official
     assert recovered.state("test").applied == "official"
@@ -2755,7 +2765,7 @@ def test_crash_during_restore_returns_original_to_library_before_rolling_back_mo
             interruptions += 1
             raise InterruptedWrite()
 
-    monkeypatch.setattr(service, "verified_move", moving)
+    patch_everywhere(monkeypatch, [service], "verified_move", moving)
     with pytest.raises(InterruptedWrite):
         env.library.restore("test")
     assert not original.exists() and env.original.read_bytes() == official
@@ -2792,10 +2802,10 @@ def test_recovery_repeats_game_and_caller_checks_before_restoring_missing_file(s
         move(source, target, sha1)
         raise InterruptedWrite()
 
-    monkeypatch.setattr(service, "verified_move", moving)
+    patch_everywhere(monkeypatch, [service], "verified_move", moving)
     with pytest.raises(InterruptedWrite):
         env.library.apply("test", f"mod:{entry.id}")
-    monkeypatch.setattr(service, "verified_move", move)
+    patch_everywhere(monkeypatch, [service], "verified_move", move)
 
     def running():
         raise ServiceError("game_running")
@@ -2863,7 +2873,7 @@ def test_prune_waits_for_the_shared_transaction_lock(setup_library, monkeypatch)
         with lock(path, **kwargs):
             yield
 
-    monkeypatch.setattr(service, "file_lock", tracked)
+    patch_everywhere(monkeypatch, [service], "file_lock", tracked)
     with ThreadPoolExecutor(max_workers=1) as pool:
         with lock(env.root / "transactions.lock"):
             result = pool.submit(env.library.prune)
@@ -2909,10 +2919,10 @@ def test_recovery_does_not_recreate_a_file_a_game_update_superseded(setup_librar
         if target.parent == env.root / "originals":
             raise InterruptedWrite()
 
-    monkeypatch.setattr(service, "verified_move", moving)
+    patch_everywhere(monkeypatch, [service], "verified_move", moving)
     with pytest.raises(InterruptedWrite):
         env.library.apply("test", f"mod:{entry.id}")
-    monkeypatch.setattr(service, "verified_move", move)
+    patch_everywhere(monkeypatch, [service], "verified_move", move)
     assert not env.original.exists() and original.read_bytes() == official
     # the game update: a later-dated file of the same part appears, the old name stays gone
     newer = game_bundle(env.game_dir, date="2026-02-01", payload=b"updated")
@@ -2944,10 +2954,10 @@ def test_recovery_of_a_superseded_file_drops_only_its_own_record(setup_library, 
         if source == original and target == env.original:
             raise InterruptedWrite()  # the original is back in the game folder, the restore not finished
 
-    monkeypatch.setattr(service, "verified_move", moving)
+    patch_everywhere(monkeypatch, [service], "verified_move", moving)
     with pytest.raises(InterruptedWrite):
         env.library.restore("test")
-    monkeypatch.setattr(service, "verified_move", move)
+    patch_everywhere(monkeypatch, [service], "verified_move", move)
     # Steam removes the file and adds a newer one of its part; the other part is unrelated
     env.original.unlink()
     newer = game_bundle(env.game_dir, date="2026-02-01", payload=b"updated")
@@ -2973,10 +2983,10 @@ def test_recovery_restores_a_missing_file_that_has_no_successor(setup_library, m
         if target.parent == env.root / "originals":
             raise InterruptedWrite()
 
-    monkeypatch.setattr(service, "verified_move", moving)
+    patch_everywhere(monkeypatch, [service], "verified_move", moving)
     with pytest.raises(InterruptedWrite):
         env.library.apply("test", f"mod:{entry.id}")
-    monkeypatch.setattr(service, "verified_move", move)
+    patch_everywhere(monkeypatch, [service], "verified_move", move)
     # an older-dated file of the part is no successor
     game_bundle(env.game_dir, date="2025-12-01", payload=b"older")
     recovered = reload_library(env)
@@ -3018,12 +3028,12 @@ def test_missing_official_journal_recovers_outside_bytes_after_interrupted_rollb
     def interrupted(*args):
         raise OSError("synthetic interrupted rollback")
 
-    monkeypatch.setattr(service, "atomic_copy", fail_second)
+    patch_everywhere(monkeypatch, [service], "atomic_copy", fail_second)
     monkeypatch.setattr(env.library, "_rollback_write", interrupted)
     expect_error("game_file_denied", lambda: env.library.apply("test", f"mod:{mod.id}"))
     assert list((env.root / "transactions").glob("*/journal.json"))
     assert len(env.library.mods()) == 2
-    monkeypatch.setattr(service, "atomic_copy", copy)
+    patch_everywhere(monkeypatch, [service], "atomic_copy", copy)
     recovered = reload_library(env)
     assert {path: path.read_bytes() for path in targets} == before
     assert [entry.id for entry in recovered.mods()] == [mod.id]
@@ -3072,7 +3082,7 @@ def test_a_rebuilt_parts_older_release_is_planned_as_an_asset_update(setup_libra
     (entry,) = env.library.add([_old_release(env, env.tmp / "old")])
     # the game update rebuilt the part: the game's file has another structure than the mod's
     monkeypatch.setattr(
-        service.integrity.Inspection,
+        integrity.Inspection,
         "structure",
         lambda self, path: frozenset({"rebuilt" if env.game_dir in path.parents else "old"}),
     )
@@ -3084,13 +3094,13 @@ def test_a_rebuilt_parts_older_release_is_planned_as_an_asset_update(setup_libra
 def test_a_file_built_on_the_part_as_it_is_replaces_it_whole_after_a_format_check(setup_library, monkeypatch):
     env = setup_library
     (entry,) = env.library.add([_old_release(env, env.tmp / "old")])
-    monkeypatch.setattr(service.integrity.Inspection, "structure", lambda self, path: frozenset({"same"}))
+    monkeypatch.setattr(integrity.Inspection, "structure", lambda self, path: frozenset({"same"}))
     assert _plan_actions(env, entry) == [(Action.DIRECT_REPLACE, env.original, [])]
     # another Unity version than the part's: never written whole
     monkeypatch.setattr(
-        service.integrity,
+        integrity,
         "metadata",
-        lambda path, **kwargs: service.integrity.Contents(
+        lambda path, **kwargs: integrity.Contents(
             platforms={"StandaloneWindows64"}, versions={"2021.3" if env.game_dir in path.parents else "2022.3"}
         ),
     )
@@ -3104,5 +3114,5 @@ def test_a_file_whose_structure_cannot_be_read_keeps_the_name_rule(setup_library
     def unreadable(self, path):
         raise ServiceError("bundle_invalid", file=path.name)
 
-    monkeypatch.setattr(service.integrity.Inspection, "structure", unreadable)
+    monkeypatch.setattr(integrity.Inspection, "structure", unreadable)
     assert _plan_actions(env, entry) == [(Action.DIRECT_REPLACE, env.original, [])]

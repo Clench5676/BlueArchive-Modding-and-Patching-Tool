@@ -12,13 +12,14 @@ from pathlib import Path
 
 import pytest
 
+import shutil
 import test_webui_mods
 from ba_modding_toolkit import i18n
 from bmpt.host import data_paths
 from ba_modding_toolkit.bundle import Bundle
 from bmpt.core.errors import ServiceError
 from bmpt.library import ModLibrary, safety, service
-from bmpt.library.service import LEGACY_REMAP
+from bmpt.library.migrations import LEGACY_REMAP
 from bmpt.webui.services import LIBRARY_ITEMS
 
 from test_library import FakeCatalog as LibraryCatalog
@@ -26,6 +27,7 @@ from test_library import game_bundle, header_bundle, make_mod
 from test_library_profiles import OFFICIAL, World, expect_error, world  # noqa: F401 - the world fixture
 from test_webui import FakeFamily, FakeGame, FakeVariant
 from test_webui_mods import Env, rpc
+from module_patches import patch_everywhere
 
 LOCALES = Path(__file__).resolve().parents[1] / "src" / "bmpt" / "locales"
 
@@ -612,14 +614,14 @@ def test_replacing_the_bytes_of_a_held_source_keeps_them_as_a_mod(world):
 def test_removing_a_mod_saves_before_it_deletes_the_folder(world, monkeypatch):
     mod = world.add(world.spr)
     seen = []
-    real = service.shutil.rmtree
+    real = shutil.rmtree
 
     def rmtree(path, *args, **kwargs):
         if Path(path) == mod_dir(world, mod):
             seen.append(mod.id in [r["id"] for r in read_state(world)["mods"] if isinstance(r, dict)])
         return real(path, *args, **kwargs)
 
-    monkeypatch.setattr(service.shutil, "rmtree", rmtree)
+    monkeypatch.setattr(shutil, "rmtree", rmtree)
     assert not world.library.remove(mod.id, confirm=True).failed
     assert seen == [False]  # saved before the folder went
     assert world.reload().mods() == [] and mod.id not in json.dumps(read_state(world))
@@ -1021,7 +1023,7 @@ def test_every_write_is_refused_with_the_real_error_and_goes_through_once_recove
 def test_a_successful_recovery_clears_the_remembered_failure_for_reads_too(world, monkeypatch):
     library, mods = pending(world)
     allow_recovery(library)
-    monkeypatch.setattr(service, "RECOVERY_RETRY", 0.0)
+    patch_everywhere(monkeypatch, [service], "RECOVERY_RETRY", 0.0)
     library.mods()
     assert library._recovery_error is None and not journals_of(world)
     library.set_favorite("test", True)
@@ -1046,14 +1048,14 @@ def test_reads_try_a_failed_recovery_again_only_when_the_journals_change_or_the_
     library.mods()
     library.mods()
     assert len(attempts) == 1
-    monkeypatch.setattr(service, "RECOVERY_RETRY", 0.0)  # the limit has passed
+    patch_everywhere(monkeypatch, [service], "RECOVERY_RETRY", 0.0)  # the limit has passed
     library.mods()
     assert len(attempts) == 2
 
 
 def test_a_failure_is_logged_once_not_at_every_attempt(world, caplog, monkeypatch):
     library, mods = pending(world)
-    monkeypatch.setattr(service, "RECOVERY_RETRY", 0.0)
+    patch_everywhere(monkeypatch, [service], "RECOVERY_RETRY", 0.0)
     with caplog.at_level(logging.WARNING, logger="bmpt.library.service"):
         caplog.clear()
         for _ in range(5):
@@ -1076,7 +1078,7 @@ def test_the_migration_save_of_a_read_skips_instead_of_raising(world):
 def test_a_remembered_failure_is_cleared_when_the_journals_are_gone(world, monkeypatch):
     library, mods = pending(world)
     for journal in journals_of(world):
-        service.shutil.rmtree(journal.parent)  # the user removes it by hand
+        shutil.rmtree(journal.parent)  # the user removes it by hand
     library.mods()
     assert library._recovery_error is None
     library.set_favorite("test", True)
@@ -1150,7 +1152,7 @@ def test_a_journal_of_an_install_that_is_not_known_waits_while_other_installs_ar
     for _ in range(3):
         library.mods()
     assert attempts == []  # a retry that raises nothing follows the same limit as a failed one
-    monkeypatch.setattr(service, "RECOVERY_RETRY", 0.0)
+    patch_everywhere(monkeypatch, [service], "RECOVERY_RETRY", 0.0)
     library.mods()
     assert len(attempts) == 1 and journal.exists()
     moved.rename(folder)  # the install is back: the next write rolls its journal back, restoring only its own keys
@@ -1314,7 +1316,7 @@ def test_reads_answer_and_writes_refuse_through_the_rpc_registry_while_a_recover
 
 def test_a_mod_update_is_refused_before_the_rebuild_while_a_recovery_has_failed(world, monkeypatch):
     library, mods = pending(world)
-    monkeypatch.setattr(service, "rebuild", lambda *a, **k: pytest.fail("the rebuild started"))
+    patch_everywhere(monkeypatch, [service], "rebuild", lambda *a, **k: pytest.fail("the rebuild started"))
     expect_error("classic_open", lambda: library.update(mods[0].id))
 
 
@@ -1543,7 +1545,7 @@ def test_a_read_survives_any_exception_of_a_recovery(world, monkeypatch):
 
     monkeypatch.setattr(ModLibrary, "_recover_transactions", boom)
     library = build(world)
-    monkeypatch.setattr(service, "RECOVERY_RETRY", 0.0)
+    patch_everywhere(monkeypatch, [service], "RECOVERY_RETRY", 0.0)
     assert [m.id for m in library.mods()] == [first.id, second.id]  # a read goes on
     assert library._recovery_error.code == "library_operation_failed"
     expect_error("library_operation_failed", lambda: library.set_favorite("test", True))  # a write is refused
@@ -1562,9 +1564,9 @@ def test_a_read_survives_an_oserror_of_the_migration_save(world, monkeypatch):
         raise OSError(errno.EROFS, "Synthetic read-only library")
 
     real = service.atomic_json
-    monkeypatch.setattr(service, "atomic_json", fail)
+    patch_everywhere(monkeypatch, [service], "atomic_json", fail)
     assert [m.id for m in library.mods()] == [mod.id]  # no raise
     assert library._migration_pending
-    monkeypatch.setattr(service, "atomic_json", real)
+    patch_everywhere(monkeypatch, [service], "atomic_json", real)
     library.mods()
     assert not library._migration_pending and read_state(world)["migrations"] == [LEGACY_REMAP]

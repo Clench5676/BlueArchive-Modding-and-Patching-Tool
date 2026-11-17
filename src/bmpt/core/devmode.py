@@ -42,7 +42,7 @@ DATA_DIR = "BAMT_DATA_DIR"
 GAME_DIRS = {"global": "BAMT_GAME_DIRS_GLOBAL", "japan": "BAMT_GAME_DIRS_JAPAN"}
 ROOTS = "BAMT_DEV_ROOTS"
 WRITABLE = "BAMT_DEV_WRITABLE"
-# The library stages a switch in temporary folders named so (library/service.py); the mod installer writes there
+# The library stages a switch in temporary folders named so (library/service/); the mod installer writes there
 LIBRARY_STAGING_PREFIX = "bamt-library-"
 
 
