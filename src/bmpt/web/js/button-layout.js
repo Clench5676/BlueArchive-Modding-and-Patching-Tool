@@ -1,9 +1,17 @@
-// Button patterns are separate NGUI widgets: their anchors, pivot and size follow the body, not its caption.
+// Button decoration patterns are separate NGUI widgets: their anchors, pivot and size follow the body, not its
+// caption.
 import { maskWithSprite, spriteMaskTransform } from "./sprite-mask.js";
 import { CHIP_TIERS, CONTROL } from "./ui-tokens.js";
 const PIVX = [0, 0.5, 1, 0, 0.5, 1, 0, 0.5, 1];
 const PIVY = [1, 1, 1, 0.5, 0.5, 0.5, 0, 0, 0];
 
+/**
+ * Resize a button body in place, moving its decoration patterns with the body's edges.
+ * @param {NguiNode} body The button node.
+ * @param {number|null} [width] The new body width in NGUI units; unchanged when null.
+ * @param {number|null} [height] The new body height; unchanged when null.
+ * @returns {NguiNode} The same node.
+ */
 export function resizeButton(body, width = null, height = null) {
   const bg = body.widgets.find((w) => "sprite" in w && "w_" in w);
   if (!bg) return body;
@@ -45,8 +53,15 @@ export function resizeButton(body, width = null, height = null) {
   return body;
 }
 
-// The game clips button decoration to its inclined body. NGUI's DOM renderer flattens the hierarchy, so restore
-// that clipping from the *rendered prefab body*, after resizeButton has resolved the patterns' anchors.
+/**
+ * Clip a button's decoration to its inclined body, as the game does.
+ * NGUI's DOM renderer flattens the hierarchy, so the clipping is restored from the rendered prefab body, after
+ * resizeButton has resolved the patterns' anchors.
+ * @param {RenderView} view What render() drew.
+ * @param {{load?: (url: string) => Promise<HTMLImageElement>}} [options] The image loader; without it only the
+ *     polygon clip is set.
+ * @returns {Promise<unknown[]>} Settles when the alpha masks are applied.
+ */
 export function clipButtonPatterns(view, { load } = {}) {
   const pending = [];
   for (const [path, entry] of view.nodes) {
@@ -87,11 +102,11 @@ export function clipButtonPatterns(view, { load } = {}) {
   return Promise.all(pending);
 }
 
-// The size tag of a button (developer previews only): which of the presets (XXS, XS, S, M, L) a button body is, by its height in
-// the app's units (what it measures on the stage: its prefab size, the nodes' scales and the render's scale). A pill that is
-// none of them (a compact body, a list's tool, a footer scaled to fit a row) is tagged with its measured height instead.
-// A pill is a body at most PILL.maxH high and PILL.ratio times as wide as high: the cards, thumbnails and square action
-// buttons that also draw Common_Btn_BG (the skill cards, the face cards) are not tagged.
+// The size tag of a button (developer previews only): which of the presets (XXS, XS, S, M, L) a button body is,
+// by its height in the app's units (what it measures on the stage: its prefab size, the nodes' scales and the
+// render's scale). A pill that is none of them (a compact body, a list's tool, a footer scaled to fit a row) is
+// tagged with its measured height instead. A pill is a body at most PILL.maxH high and PILL.ratio times as wide
+// as high: the cards, thumbnails and square action buttons that also draw Common_Btn_BG are not tagged.
 export const PILL = Object.freeze({ maxH: 200, ratio: 1.5 });
 export const BUTTON_TIERS = Object.freeze([
   ["XXS", CONTROL.buttonXXS],
@@ -100,30 +115,78 @@ export const BUTTON_TIERS = Object.freeze([
   ["M", CONTROL.buttonM],
   ["L", CONTROL.buttonL],
 ]);
+/**
+ * The button preset a body height belongs to.
+ * @param {number} height The body height in the app's units.
+ * @param {number} [tolerance] How far the height may be from the preset's.
+ * @returns {string|null} "XXS", "XS", "S", "M" or "L"; null when the height is none of them.
+ */
 export function buttonTier(height, tolerance = 0.5) {
   return BUTTON_TIERS.find(([, control]) => Math.abs(height - control.h) <= tolerance)?.[0] ?? null;
 }
+/**
+ * Whether a body is shaped like a button.
+ * @param {number} width The body width.
+ * @param {number} height The body height.
+ * @returns {boolean} True for a body at most PILL.maxH high and PILL.ratio times as wide as high.
+ */
 export const isPill = (width, height) => height <= PILL.maxH && width >= PILL.ratio * height;
 // The chips' four sizes (CHIP_TIERS), tagged the same way as the buttons.
 export const CHIP_TIER_LIST = Object.freeze(["XS", "S", "M", "L"].map((name) => [name, CHIP_TIERS[name]]));
+/**
+ * The chip preset a body height belongs to.
+ * @param {number} height The body height in the app's units.
+ * @param {number} [tolerance] How far the height may be from the preset's.
+ * @returns {string|null} "XS", "S", "M" or "L"; null when the height is none of them.
+ */
 export function chipTier(height, tolerance = 0.5) {
   return CHIP_TIER_LIST.find(([, chip]) => Math.abs(height - chip.h) <= tolerance)?.[0] ?? null;
 }
-// the tag of a body: its tier, "" for an off-preset pill (the tag shows the height) or null for a body that is no button.
-// kind: what the widget says it is (its `tier`), "button" for a button whatever its shape (a narrow body in a row of
-// actions), "chip" for a chip, measured against the chips' sizes; without it, a Common_Btn_BG pill is a button.
+/**
+ * The size tag of a body.
+ * @param {number} width The body width.
+ * @param {number} height The body height.
+ * @param {string|null} [kind] What the widget says it is (its `tier`): "button" for a button whatever its shape
+ *     (a narrow body in a row of actions), "chip" for a chip, measured against the chips' sizes; without it, a
+ *     Common_Btn_BG pill is a button.
+ * @returns {{tier: string|null, text: string}|null} The tier and the text of the tag (the height when
+ *     off-preset); null for a body that is no button.
+ */
 export function tagOf(width, height, kind = null) {
   if (kind !== "button" && kind !== "chip" && !isPill(width, height)) return null;
   const tier = kind === "chip" ? chipTier(height) : buttonTier(height);
   return { tier, text: tier ?? String(Math.round(height)) };
 }
 
-// The tag is a small label at the body's top left corner. Where it would cover the caption's ink it becomes a dot there, the
-// label shown on hover (the tag must never hide the pill's text). Boxes are [left, top, width, height] in px.
+// The tag is a small label at the body's top left corner. Where it would cover the caption's ink it becomes a
+// dot there, the label shown on hover (the tag must never hide the pill's text). Boxes are [left, top, width,
+// height] in px.
 export const TAG = Object.freeze({ h: 16, padX: 10, perChar: 8 });
+/**
+ * The box of a size tag.
+ * @param {string} text The tag's text.
+ * @param {number} left The body's left edge in px.
+ * @param {number} top The body's top edge in px.
+ * @returns {number[]} [left, top, width, height] in px.
+ */
 export const tagBox = (text, left, top) => [left, top, TAG.padX + TAG.perChar * String(text).length, TAG.h];
+/**
+ * Whether two boxes overlap.
+ * @param {number[]} a [left, top, width, height].
+ * @param {number[]} b [left, top, width, height].
+ * @returns {boolean} True when they share area.
+ */
 export const overlaps = (a, b) => a[0] < b[0] + b[2] && b[0] < a[0] + a[2] && a[1] < b[1] + b[3] && b[1] < a[1] + a[3];
-// the ink of a text widget inside its box: lines of widest `inkW` and height `inkH`, placed as the widget aligns them
+/**
+ * The ink of a text widget inside its box: lines of the widest `inkW` and the height `inkH`, placed as the
+ * widget aligns them.
+ * @param {number[]} box [left, top, width, height] of the widget's box.
+ * @param {number} inkW The widest line's width.
+ * @param {number} inkH The lines' height.
+ * @param {"left"|"right"|"center"} align The horizontal alignment.
+ * @param {"flex-start"|"flex-end"|"center"} vertical The vertical alignment.
+ * @returns {number[]} [left, top, width, height] of the ink.
+ */
 export function inkBox([left, top, width, height], inkW, inkH, align, vertical) {
   const x = align === "right" ? left + width - inkW : align === "left" ? left : left + (width - inkW) / 2;
   const y = vertical === "flex-start" ? top : vertical === "flex-end" ? top + height - inkH : top + (height - inkH) / 2;

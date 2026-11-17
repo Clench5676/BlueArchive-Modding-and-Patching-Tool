@@ -387,7 +387,7 @@ const footerHelpers = new Function(
   "SMALL_BUTTON",
   "XS_BUTTON",
   `${popupSource
-    .slice(popupSource.indexOf("export const footerBottom"), popupSource.indexOf("// the game's popup frame at a size"))
+    .slice(popupSource.indexOf("export const footerBottom"), popupSource.indexOf("const titleHeight"))
     .replaceAll(
       "export ",
       "",

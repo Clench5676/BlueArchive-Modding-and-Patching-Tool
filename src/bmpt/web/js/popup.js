@@ -1,14 +1,11 @@
-// Shared popups on the game's popup frame (UIPopup_Sort), for every screen:
-//   - the frame itself (popupFrame), with its backdrop, title, close button and Cancel / OK;
-//   - the list popup, laid out like the game's quick formation edit: a card's details on the left, a framed list with
-//     the student list's tools on the right (optional), the buttons under it; one card chosen, or several ticked;
-//   - the message popup: a title, lines (a line may carry a small button), an optional checkbox (the gacha list's
-//     Btn_Checkbox) and a footer group; it resolves when it closes, however it closes.
+// Shared popups on the game's popup frame (UIPopup_Sort): the frame (popupFrame) with its backdrop, title, close
+// button and Cancel / OK; the list popup, laid out like the game's quick formation edit (a card's details on the
+// left, a framed list with the student list's tools on the right, one card chosen or several ticked); and the
+// message popup (title, lines, an optional checkbox, a footer group; it resolves when it closes).
 // Popups draw into a host: the detail screen's own (#popup, #picker) or the stage-level ones (#prompt for lists,
-// #dialog for messages, both over the settings), so they show on any screen. Every open popup is on one stack:
-// Escape goes to the topmost one only, as the game's PopupClose closes the popup in front. A popup that must be
-// answered with a button takes Escape and does nothing with it, so nothing under it acts either.
-// The pure parts (the stack, the selection, the start sequence) are tested in Node (tests/js/popup.test.mjs).
+// #dialog for messages), so they show on any screen. Every open popup is on one stack and Escape goes to the
+// topmost only, as the game's PopupClose closes the popup in front; a popup that must be answered with a button
+// takes Escape and does nothing with it.
 import * as NGUI from "./ngui.js";
 import { attachHint } from "./hover-hint.js";
 import { installScrollFades } from "./scroll-fade.js";
@@ -53,13 +50,20 @@ import { container, grid, row, stack as layoutStack, textItem, toNode } from "./
 
 const { node, sprite, label, find, rect } = NGUI;
 const fitText = (...a) => NGUI.fitText(...a);
-// tagRow(item, w): a list card's bottom row of tags, left to right: its tag, then its marks (Updatable), on one
-// line, 8 apart, from the left corner or after the recruit icon, never under the pin (a favourite) or
-// past the card's right edge. One tag keeps its badge width (its word, at least 116); several share one size, the
-// largest at which the row fits (26 down to 18, the inset narrowing last). A row that fits at none leaves out the tag
-// (the marks tell what needs doing; the card's name still says Optimized), then whatever does not fit.
-// [{mark, x (left edge), bf (fitted text), bw}]
+// The gap between the tags and marks of a list card.
 export const TAG_GAP = 8;
+/**
+ * Lay out a list card's bottom row of tags, left to right: its tag, then its marks (Updatable), on one line,
+ * TAG_GAP apart, from the left corner or after the recruit icon, never under the pin (a favourite) or past the
+ * card's right edge.
+ * One tag keeps its badge width (its word, at least 116); several share one size, the largest at which the row
+ * fits (26 down to 18, the inset narrowing last). A row that fits at none leaves out the tag (the marks tell
+ * what needs doing; the card's name still says Optimized), then whatever does not fit.
+ * @param {{tag?: object, marks?: object[], recruit?: boolean, fav?: boolean}} it The list item.
+ * @param {number} w The card width.
+ * @returns {{mark: object, x: number, bf: {text: string, fs: number}, bw: number}[]} Each placed tag: its mark,
+ *     its left edge, its fitted text and its badge width.
+ */
 export function tagRow(it, w) {
   const start = it?.recruit ? -w / 2 + 34 + 31 / RECRUIT.ratio + TAG_GAP : -w / 2 + 12;
   const end = it?.fav ? w / 2 - 38 - 27 - TAG_GAP : w / 2 - 12;
@@ -104,6 +108,10 @@ let selectionLoading = null,
   selectionSlot = null,
   selectionSprite = null,
   selectionOutline = null;
+/**
+ * Load what the Applied and Selected frames of a card are drawn from (the starting-skill selection slot).
+ * @returns {Promise<void>} Settles when the prefab and the frame's outline are in.
+ */
 export function selectionReady() {
   if (selectionLoading) return selectionLoading;
   const pending = Promise.all([NGUI.layout(SELECTION_PREFAB), NGUI.init()])
@@ -123,12 +131,22 @@ export function selectionReady() {
     });
   return (selectionLoading = pending);
 }
-// The slot's number label holds Applied (yellow) or Selected (blue), fitted together to keep one size across source cards.
+/**
+ * The slot's number label holds Applied (yellow) or Selected (blue), fitted together to keep one size across
+ * source cards.
+ * @param {{w: number, h: number}|null} [card] The card the captions are drawn for.
+ * @param {object|null} [slot] The selection slot node; the loaded one by default.
+ * @returns {{applied: object, preview: object}|null} The fitted captions, or null before the slot is loaded.
+ */
 export function selectionCaptions(card = null, slot = selectionSlot) {
   const captions =
     slot && fitBadgeCaptions(slot, [T("status.applied"), T("status.selected")], NGUI.fitGroup, NGUI.glyphWidth, card);
   return captions && { applied: captions[0], preview: captions[1] };
 }
+/**
+ * Load the popup frame prefab, which every popup needs.
+ * @returns {Promise<void>} Settles when the frame is in; a failed load is tried again on the next call.
+ */
 export function frameReady() {
   return (frameLoading ||= withTimeout(NGUI.layout("UIPopup_Sort"), 15000, "Popup frame")
     .then((sortPopup) => {
@@ -144,6 +162,11 @@ const optional = (name) =>
     console.warn("popup layout", name, err);
     return null;
   });
+/**
+ * Load everything popups draw from: the frame (required), the student list's tools and the checkbox (each
+ * optional: a popup without them still works). Also starts the scroll fades, once, from the first popup on.
+ * @returns {Promise<void>} Settles when the prefabs are in.
+ */
 export function ready() {
   // every scrolling area fades at an edge with more past it (scroll-fade.js); once, from the first popup on
   installScrollFades();
@@ -183,6 +206,12 @@ function shown(el) {
   if (!el.getClientRects().length) return false;
   return typeof getComputedStyle !== "function" || getComputedStyle(el).visibility !== "hidden";
 }
+/**
+ * The elements Tab can stop at inside a box, in order: enabled, drawn and not inert; a hidden or inert part is
+ * skipped whole.
+ * @param {HTMLElement} box The popup's element.
+ * @returns {HTMLElement[]} The stops.
+ */
 export function tabStops(box) {
   const out = [];
   const visit = (parent) => {
@@ -215,8 +244,12 @@ function release({ host, el, before }) {
   if (above && !(above.el || above.host).contains?.(before)) return;
   before.focus?.({ preventScroll: true });
 }
-// Tab inside the topmost popup: wraps at the ends, and brings the focus back in when it is outside (on the opener,
-// or lost when a redraw replaced the focused control). A control that took the key itself keeps it (defaultPrevented).
+/**
+ * Keep Tab inside the topmost popup: it wraps at the ends and brings the focus back in when it is outside (on
+ * the opener, or lost when a redraw replaced the focused control). A control that took the key itself keeps it
+ * (defaultPrevented).
+ * @param {KeyboardEvent} ev The key event.
+ */
 export function trapKey(ev) {
   if (
     ev.key !== "Tab" ||
@@ -246,9 +279,24 @@ export function trapKey(ev) {
 }
 addEventListener("keydown", trapKey);
 
-// a popup opened in host (el: its own layer, when the host holds several); close(how) closes it, how being "escape",
-// "backdrop" or "close"; null for a popup that must be answered with one of its buttons. Drawing the same popup again
-// keeps its place on the stack.
+/**
+ * An open popup on the stack.
+ * @typedef {object} PopupEntry
+ * @property {HTMLElement} host The element the popup is drawn into.
+ * @property {HTMLElement|null} el The popup's own layer, when the host holds several popups.
+ * @property {((how: string) => void)|null} close Closes the popup; null for a popup that must be answered with one of its buttons.
+ * @property {HTMLElement|null} before What had the focus when the popup opened, to give it back.
+ */
+
+/**
+ * Put a popup on the stack, or keep its place when it is drawn again.
+ * @param {HTMLElement} host The element the popup is drawn into.
+ * @param {((how: "escape"|"backdrop"|"close") => void)|null} close Closes the popup; null for a popup that must
+ *     be answered with one of its buttons.
+ * @param {{el?: HTMLElement|null, loading?: boolean}} [options] el: the popup's own layer, when the host holds
+ *     several; loading: keep the layer hidden and inert until reveal().
+ * @returns {PopupEntry} The stack entry.
+ */
 export function opened(host, close, { el = null, loading = false } = {}) {
   if (loading && el) {
     el.style.visibility = "hidden";
@@ -265,7 +313,12 @@ export function opened(host, close, { el = null, loading = false } = {}) {
   }
   return entry;
 }
-// Reveal only after the entire layer's work and decoded pictures are ready. A closed layer stays closed.
+/**
+ * Reveal a popup layer once all its work and decoded pictures are ready. A closed layer stays closed.
+ * @param {HTMLElement} layer The popup's layer.
+ * @param {Promise<unknown>[]} [pending] The work to wait for.
+ * @returns {Promise<boolean>} False when the layer was closed meanwhile.
+ */
 export async function reveal(layer, pending = []) {
   await Promise.all(pending);
   await NGUI.decoded([layer, ...(layer.querySelectorAll?.("*") || [])], Infinity);
@@ -275,20 +328,37 @@ export async function reveal(layer, pending = []) {
   if (top()?.el === layer) focusIn(layer);
   return true;
 }
+/**
+ * Take a popup off the stack, giving the focus back.
+ * @param {HTMLElement} host The popup's host.
+ * @param {HTMLElement|null} [el] The popup's own layer.
+ */
 export function closed(host, el = null) {
   const at = stack.findIndex((e) => e.host === host && e.el === el);
   if (at >= 0) release(stack.splice(at, 1)[0]);
 }
+/**
+ * The topmost open popup.
+ * @returns {PopupEntry|null} The entry, or null when none is open.
+ */
 export function top() {
   prune();
   return stack.at(-1) || null;
 }
-// any popup open: the stack, or a host of the other popups (the consent and update popups, the settings, the display
-// settings)
+/**
+ * Whether any popup is open: on the stack, or in a host of the other popups (the consent and update popups, the
+ * settings, the display settings).
+ * @returns {boolean} True when one is.
+ */
 export const anyOpen = () =>
   !!top() || !!document.querySelector(".popup-host:not([hidden]), .consent-host:not([hidden])");
-// Holds leave every open popup usable, including stack entries with their own hosts and the consent layers.
-// Escape belongs to the popup even when focus is still on the control that opened it.
+/**
+ * Whether an input event may go on while holds are on: they leave every open popup usable, including stack
+ * entries with their own hosts and the consent layers. Escape belongs to the popup even when focus is still on
+ * the control that opened it.
+ * @param {Event} ev The event.
+ * @returns {boolean} True when the event belongs to an open popup.
+ */
 export function allowsInput(ev) {
   prune();
   return (
@@ -297,7 +367,12 @@ export function allowsInput(ev) {
     !!ev.target.closest?.(".popup-host:not([hidden]), .consent-host:not([hidden])")
   );
 }
-// resolves once no popup is open and the caller's work has finished (late prompts and update offers)
+/**
+ * Wait until no popup is open and the caller's work has finished (late prompts and update offers).
+ * @param {number} [every] The polling interval in milliseconds.
+ * @param {() => boolean} [blocked] True while the caller's work is not finished.
+ * @returns {Promise<void>} Settles when the screen is idle.
+ */
 export function whenIdle(every = 200, blocked = () => false) {
   return new Promise((resolve) => {
     const check = () => (anyOpen() || blocked() ? setTimeout(check, every) : resolve());
@@ -305,8 +380,11 @@ export function whenIdle(every = 200, blocked = () => false) {
   });
 }
 
-// Escape goes to the topmost popup; not while an input method composes (keyCode 229 is the key that ends a conversion
-// in WebKit), nor when a control in the popup took the key itself
+/**
+ * Close the topmost popup on Escape, not while an input method composes (keyCode 229 is the key that ends a
+ * conversion in WebKit), nor when a control in the popup took the key itself.
+ * @param {KeyboardEvent} ev The key event.
+ */
 export function onKey(ev) {
   if (ev.key !== "Escape" || ev.defaultPrevented || ev.isComposing || ev.keyCode === 229) return;
   const t = top();
@@ -316,8 +394,15 @@ export function onKey(ev) {
 }
 addEventListener("keydown", onKey);
 
-// --- the start sequence: popups one at a time, in order. Each step resolves once its popup has closed, at once when
-// it has nothing to show; one that fails is logged and the next one comes ---
+// --- the start sequence: popups one at a time, in order ---
+// Each step resolves once its popup has closed, at once when it has nothing to show; one that fails is logged
+// and the next one comes.
+/**
+ * Run the start popups one at a time, in order.
+ * @param {[string, () => Promise<unknown>][]} steps The steps: a name for the log and a function that resolves
+ *     once its popup has closed.
+ * @returns {Promise<void>} Settles when every step has run.
+ */
 export async function sequence(steps) {
   for (const [name, run] of steps) {
     try {
@@ -329,8 +414,19 @@ export async function sequence(steps) {
 }
 
 // --- the selection of a list popup with several cards ticked: every card that can be ticked is, to start with ---
+/**
+ * The selection of a list popup with several cards ticked, to start with: every card that can be ticked.
+ * @param {{key: string, disabled?: boolean}[]} items The cards.
+ * @returns {Set<string>} The keys.
+ */
 export const selectable = (items) => new Set(items.filter((it) => !it.disabled).map((it) => it.key));
-// the selection with key ticked or unticked; a card that cannot be ticked leaves it as it is
+/**
+ * The selection with a key ticked or unticked; a card that cannot be ticked leaves it as it is.
+ * @param {Set<string>} selection The ticked keys.
+ * @param {{key: string, disabled?: boolean}[]} items The cards.
+ * @param {string} key The card clicked.
+ * @returns {Set<string>} The new selection.
+ */
 export function toggled(selection, items, key) {
   const it = items.find((x) => x.key === key);
   const next = new Set(selection);
@@ -339,14 +435,24 @@ export function toggled(selection, items, key) {
   else next.add(key);
   return next;
 }
-// the sizes of the ticked cards, added up (bytes)
+/**
+ * The sizes of the ticked cards, added up.
+ * @param {{key: string, size?: number}[]} items The cards.
+ * @param {Set<string>} selection The ticked keys.
+ * @returns {number} The total in bytes.
+ */
 export const sizeOf = (items, selection) => items.reduce((n, it) => n + (selection.has(it.key) ? it.size || 0 : 0), 0);
 
 // --- hit areas ---
 const PIVX = [0, 0.5, 1, 0, 0.5, 1, 0, 0.5, 1],
   PIVY = [0, 0, 0, 0.5, 0.5, 0.5, 1, 1, 1];
-// a rendered node's stage rectangle: its widget's element, or, for a sprite the atlases lack, worked out from the
-// node, so its button still works
+/**
+ * A rendered node's stage rectangle: its widget's element, or, for a sprite the atlases lack, worked out from
+ * the node, so its button still works.
+ * @param {RenderView} view What render() drew.
+ * @param {string} path The node's path.
+ * @returns {number[]|null} [left, top, width, height] in stage pixels; null when the node is not in the view.
+ */
 export function nodeRect(view, path) {
   const e = view.nodes.get(path);
   if (!e) return null;
@@ -358,8 +464,16 @@ export function nodeRect(view, path) {
     p = w.pivot ?? 4;
   return [e.stage[0] - PIVX[p] * ww, e.stage[1] - PIVY[p] * hh, ww, hh];
 }
-// an invisible button over a rendered node; name: its accessible name (the caption it covers), action: what it does
-// (data-action, for checks)
+/**
+ * Put an invisible button over a rendered node.
+ * @param {HTMLElement} host The element to append the button to.
+ * @param {RenderView} view What render() drew.
+ * @param {string} path The node's path.
+ * @param {() => void} fn The click handler.
+ * @param {{name?: string, action?: string, z?: number}} [options] name: the accessible name (the caption it
+ *     covers); action: what it does (data-action, for checks); z: the z-index.
+ * @returns {HTMLButtonElement|null} The button, or null when the node is not in the view.
+ */
 export function hit(host, view, path, fn, { name = "", action = "", z = 80 } = {}) {
   const r = nodeRect(view, path);
   if (!r) return null;
@@ -374,18 +488,53 @@ export const BUTTON_TEXT_H = CONTROL.buttonL.h - SPACE.m;
 export const FRAME_Y = POPUP_FRAME.frameY;
 
 // --- the footer: one set of numbers for every popup frame (UIPopup_Sort/Center/Popup/Btn) ---
-// a footer's bodies above the frame's bottom: the prefab's 102 under its buttonL bodies, scaled to the bodies' height (60 for
-// the XS footer every popup has, POPUP_FOOTER.bottom)
+/**
+ * How far a footer's bodies stand above the frame's bottom: the prefab's 102 under its buttonL bodies, scaled
+ * to the bodies' height (60 for the XS footer every popup has, POPUP_FOOTER.bottom).
+ * @param {{h: number}} [control] The footer's button control.
+ * @returns {number} The distance in units.
+ */
 export const footerBottom = (control = POPUP_FOOTER.control) =>
   Math.round((POPUP_FRAME.footer.bottom * control.h) / CONTROL.buttonL.h);
+/**
+ * The y of a footer's centre in a popup frame.
+ * @param {number} h The frame's height.
+ * @param {{h: number}} [control] The footer's button control.
+ * @returns {number} The y in NGUI units.
+ */
 export const footerY = (h, control = POPUP_FOOTER.control) => FRAME_Y - h / 2 + footerBottom(control) + control.h / 2;
+/**
+ * The y of the top of the default footer's bodies in a popup frame.
+ * @param {number} h The frame's height.
+ * @param {number} [n] The number of buttons; unused.
+ * @returns {number} The y in NGUI units.
+ */
 export const footerTop = (h, n = 1) => footerY(h) + POPUP_FOOTER.control.h / 2;
+/**
+ * How far a footer row is scaled down to fit a width: not at all for fewer than three buttons.
+ * @param {number} n The number of buttons.
+ * @param {number} [w] The frame's width.
+ * @param {{minW: number}} [control] The footer's button control.
+ * @returns {number} The scale, at most 1.
+ */
 export function footerScale(n, w = Infinity, control = footerSize().control) {
   return n < 3
     ? 1
     : Math.min(1, (w - 2 * POPUP_FRAME.footer.side - POPUP_FRAME.footer.gap * (n - 1)) / n / control.minW);
 }
+/**
+ * The gap between a footer's buttons.
+ * @param {number} n The number of buttons; unused.
+ * @returns {number} The gap in units.
+ */
 export const footerGap = (n) => POPUP_FRAME.footer.gap;
+/**
+ * Place a footer row's buttons side by side, centred.
+ * @param {number} n The number of buttons.
+ * @param {number} w The frame's width.
+ * @param {{minW: number, h: number}} [control] The footer's button control.
+ * @returns {{scale: number, xs: number[]}} The scale applied to the bodies and the x of each centre.
+ */
 export function footerSlots(n, w, control = footerSize().control) {
   if (!n) return { scale: 1, xs: [] };
   const scale = footerScale(n, w, control);
@@ -404,10 +553,9 @@ const CAPTION_L = {
   h: BUTTON_TEXT_H,
 };
 // The footer's sizes: "XS", the app's small button (CONTROL.buttonXS), every popup's footer (// "弹窗的按钮弄成 XS", every popup of the App); "L", the buttonL control with display captions (UIPopup_RaidEnterCheck's footer); "M", one size smaller
-// (the buttonM control, its caption 60 down to TYPE.body's floor); "S", two sizes smaller (the Settings value row's small
-// button, SMALL_BUTTON, 402 x 136, its caption 48 down to TYPE.body's floor). Every button went one size down: a
-// popup's footer is "M" unless its call site says otherwise, and the compatibility result ("S") and
-// the repair review ("M") had gone down once already.
+// (the buttonM control, its caption 60 down to TYPE.body's floor); "S", two sizes smaller (the Settings value
+// row's small button, SMALL_BUTTON, 402 x 136, its caption 48 down to TYPE.body's floor). A popup's footer is
+// "XS" unless its call site names another size.
 const FOOTER_S = Object.freeze({ ...CONTROL.buttonS, minW: SMALL_BUTTON.w });
 export const FOOTER = Object.freeze({
   L: Object.freeze({ control: CONTROL.buttonL, caption: CAPTION_L }),
@@ -443,10 +591,15 @@ export const FOOTER = Object.freeze({
   }),
 });
 export const FOOTER_DEFAULT = "XS";
-// A footer's body width, units: the control's own minimum, wider where the longest caption needs it (its widest line, at the
-// size the group fits the widest body, buttonL's, with the control's padding each side), the same for every button of the
-// row. A tier is a height and a caption size; the width follows the captions, as the small button's does (glyphPad), so a
-// caption that fitted the old body still fits at its size.
+/**
+ * A footer's body width in units: the control's own minimum, wider where the longest caption needs it (its
+ * widest line, at the size the group fits the widest body, buttonL's, with the control's padding each side),
+ * the same for every button of the row.
+ * A tier is a height and a caption size; the width follows the captions, as the small button's does (glyphPad).
+ * @param {string[]} captions The captions of the row.
+ * @param {{control: object, caption: object}} [kind] The footer size, FOOTER[...].
+ * @returns {number} The width of every body.
+ */
 export function footerWidth(captions, kind = footerSize()) {
   const { control, caption } = kind,
     room = CONTROL.buttonL.minW - 2 * CONTROL.buttonL.pad;
@@ -458,9 +611,16 @@ export function footerWidth(captions, kind = footerSize()) {
   );
   return Math.min(CONTROL.buttonL.minW, Math.max(control.minW, Math.ceil(need + 2 * control.pad)));
 }
-// A footer row of these captions in a frame w wide: its size, the bodies' width and how far the row scales them down, their x
-// centres and the room a caption has inside a body. footer: the size a call site names, or null for the default's (the bodies
-// follow the captions, footerWidth).
+/**
+ * Lay out a footer row of these captions in a frame.
+ * @param {string[]} labels The captions.
+ * @param {number} w The frame's width.
+ * @param {string|null} [footer] The size a call site names, or null for the default's (the bodies follow the
+ *     captions, footerWidth).
+ * @returns {{kind: object, control: object, scale: number, xs: number[], bodyW: number, room: number}} The
+ *     size, how far the row scales the bodies down, their x centres, their width and the room a caption has
+ *     inside a body.
+ */
 export function footerLayout(labels, w, footer = null) {
   const kind = footerSize(footer),
     control = kind.control;
@@ -481,6 +641,14 @@ function checkFooterFits(
     throw new RangeError(`Popup footer cannot fit: ${site} (${locale})`);
   return fits;
 }
+/**
+ * Fit footer captions as one group.
+ * @param {string[]} captions The captions.
+ * @param {{caption?: object, width?: number|number[], site?: string|null, locale?: string}} [options] caption:
+ *     the footer's caption size; width: the room, or one per caption; site: the wording site, which makes a
+ *     caption that cannot fit throw.
+ * @returns {{text: string, fs: number, lines: number}[]} The fit of each caption.
+ */
 export const footerFit = (captions, options = {}) => {
   const caption = options.caption || CAPTION;
   return checkFooterFits(
@@ -488,6 +656,14 @@ export const footerFit = (captions, options = {}) => {
     { ...options, caption },
   );
 };
+/**
+ * Fit footer captions into their label widgets, one size for all.
+ * @param {object[]} widgets The label widgets; updated in place.
+ * @param {string[]} captions The captions.
+ * @param {{caption?: object, width?: number|number[], site?: string|null, locale?: string}} [options] As for
+ *     footerFit.
+ * @returns {{text: string, fs: number, lines: number}[]} The fit of each caption.
+ */
 export function footerLabels(widgets, captions, options = {}) {
   const caption = options.caption || CAPTION,
     width = options.width ?? caption.w;
@@ -500,17 +676,34 @@ export function footerLabels(widgets, captions, options = {}) {
 
 // the height of a title's line at the game's size (TYPE.display, one line): where a popup's smaller title is centred
 const titleHeight = (title) => textItem(NGUI, title, TYPE.display, { lines: 1 }).h;
-// the game's popup frame at a size: backdrop, title, close button and, when given, its Cancel and OK buttons with
-// these labels on centred bodies of the footer's size (FOOTER_DEFAULT unless `footer` names one), with the shared gap and bottom inset.
-//   buttons: [{label, primary, name}] instead of ok / cancel: named choices in a row (one centred, two as OK and Cancel,
-//            three or more share the available width); a node is Choice_<index> unless it names itself
-//   close: false for a popup that must be answered with a button (no close button)
-//   titleCentre: the title's ink centre this far under the frame's top, in units, in place of the shared title top (the
-//                header band's centre puts the title where UIPopup_Sort has it)
-//   footer: the buttons' size, "XS", "S", "M" or "L" (FOOTER); without it the default size, XS, its bodies as wide as the captions need
-//   align: "right" for a footer at the frame's bottom right, its last body's right edge SPACE.xl in from the frame's (the
-//          panels' edge; the list popups and the Hall's background picker); centred otherwise
-//   a button's tone: "bright" for the Settings small button's bright blue (BRIGHT_BUTTON) in place of the pale secondary
+/**
+ * Options of popupFrame().
+ * @typedef {object} PopupFrameOptions
+ * @property {string|null} [ok] The OK button's label.
+ * @property {string|null} [cancel] The Cancel button's label.
+ * @property {boolean} [close] False for a popup that must be answered with a button (no close button).
+ * @property {{label: string, primary?: boolean, name?: string, semantic?: string, tone?: string}[]|null} [buttons]
+ *     Named choices in a row instead of ok / cancel: one centred, two as OK and Cancel, three or more sharing the
+ *     available width. A node is Choice_<index> unless it names itself; tone "bright" gives a secondary button the
+ *     Settings small button's bright blue (BRIGHT_BUTTON).
+ * @property {string|null} [captionSite] The wording site, which makes a caption that cannot fit throw.
+ * @property {number|null} [titleCentre] The title's ink centre this far under the frame's top, in units, in place of
+ *     the shared title top (the header band's centre puts the title where UIPopup_Sort has it).
+ * @property {string|null} [footer] The buttons' size, "XS", "S", "M" or "L" (FOOTER); without it the default size,
+ *     XS, its bodies as wide as the captions need.
+ * @property {"center"|"right"} [align] "right" for a footer at the frame's bottom right, its last body's right edge
+ *     SPACE.xl in from the frame's (the panels' edge; the list popups and the Hall's background picker).
+ */
+
+/**
+ * Build the game's popup frame at a size: backdrop, title, close button and, when given, its Cancel and OK
+ * buttons with these labels on centred bodies of the footer's size, with the shared gap and bottom inset.
+ * @param {string} title The title.
+ * @param {number} w The frame's width in units; a class name's width or the width the content needs.
+ * @param {number} h The frame's height in units.
+ * @param {PopupFrameOptions} [options] The buttons and the footer.
+ * @returns {NguiNode} The popup's node tree.
+ */
 export function popupFrame(
   title,
   w,
@@ -635,8 +828,13 @@ function brighten(button) {
   find(button, "Label_Locale").widgets[0].color = BRIGHT_BUTTON.ink;
   button.actionSemantic = "cancel";
 }
-// popupFrame's confirm button as the game's disabled one, alone at the frame's place: a popup that can block its confirm
-// lays this over the live one while it is blocked (the list popup draws its blocked primary button the same way)
+/**
+ * Draw popupFrame's confirm button as the game's disabled one, alone at the frame's place: a popup that can
+ * block its confirm lays this over the live one while it is blocked (the list popup draws its blocked primary
+ * button the same way).
+ * @param {NguiNode} frame The tree popupFrame returned.
+ * @returns {NguiNode} The tree with only the disabled confirm button.
+ */
 export function disabledConfirm(frame) {
   const t = clone(frame),
     popup = find(t, "Popup"),
@@ -647,9 +845,16 @@ export function disabledConfirm(frame) {
   return t;
 }
 
-// a click on a popup's backdrop or Escape closes it, as the game's PopupClose does; its body takes the clicks that
-// miss its controls. close null: the popup must be answered with a button (the backdrop and Escape do nothing).
-// Puts the popup on the stack.
+/**
+ * Close a popup on a click on its backdrop or on Escape, as the game's PopupClose does; its body takes the
+ * clicks that miss its controls. Puts the popup on the stack.
+ * @param {RenderView} view What render() drew.
+ * @param {HTMLElement} host The popup's host.
+ * @param {((how: string) => void)|null} close Closes the popup; null for a popup that must be answered with a
+ *     button (the backdrop and Escape do nothing).
+ * @param {{el?: HTMLElement|null}} [options] el: the popup's own layer, when the host holds several.
+ * @returns {PopupEntry} The stack entry.
+ */
 export function closable(view, host, close, { el = null } = {}) {
   const back = view.nodes.get("Center/BlackBg/BlackBgClickArea")?.els[0];
   if (back) {
@@ -661,7 +866,15 @@ export function closable(view, host, close, { el = null } = {}) {
   return opened(host, close, { el });
 }
 
-// a scrolling card area with the game list's scrollbar colours
+/**
+ * Add a scrolling card area with the game list's scrollbar colours.
+ * @param {HTMLElement} host The element to append the area to.
+ * @param {number[]} rect [left, top, width, height] of the area in stage pixels.
+ * @param {number} contentH The content's height.
+ * @param {{horizontal?: boolean, contentW?: number}} [options] horizontal: scroll along x, over contentW.
+ * @returns {HTMLElement} The inner element to draw the content into; its `ready` promise settles when the
+ *     scrollbar is in.
+ */
 export function scrollArea(host, [l, t, w, h], contentH, { horizontal = false, contentW = w } = {}) {
   const area = document.createElement("div");
   area.className = "popup-cards";
@@ -697,10 +910,10 @@ export function scrollArea(host, [l, t, w, h], contentH, { horizontal = false, c
   return inner;
 }
 
-// the gacha list's checkbox (Btn_Checkbox: its white plate, the box and its tick, a label after it), at x (its left
-// edge), y; the tick shows when on. Without the prefab, the same pieces drawn from its numbers.
+// A checkbox row's height.
 const CHECK_H = 104;
-// Btn_Checkbox drawn from its numbers (without the prefab): the plate, and the box with its tick in Type_ON, without in Type_OFF
+// Btn_Checkbox drawn from its numbers (without the prefab): the plate, and the box with its tick in Type_ON,
+// without in Type_OFF
 function checkboxPrefab() {
   const box = (ticked) =>
     node(
@@ -723,6 +936,18 @@ function checkboxPrefab() {
     [node("Type_ON", [178, -3.2], [], [box(true)]), node("Type_OFF", [178, -3.2], [], [box(false)])],
   );
 }
+/**
+ * Draw the gacha list's checkbox (Btn_Checkbox: its white plate, the box and its tick, a label after it); the
+ * tick shows when on. Without the prefab, the same pieces are drawn from its numbers.
+ * @param {string} name The node's name.
+ * @param {number} x The left edge.
+ * @param {number} y The y of its centre.
+ * @param {string} caption The label.
+ * @param {boolean} on Whether the tick shows.
+ * @param {number} maxW The widest the whole checkbox may be.
+ * @returns {{tree: NguiNode, w: number, on: boolean, caption: object}} The node, its width, the state and the
+ *     fitted caption.
+ */
 export function checkbox(name, x, y, caption, on, maxW) {
   const fit = NGUI.fitText(caption, TYPE.body.fs, TYPE.body.min, maxW - 131 - SPACE.xl, 2, { maxH: CHECK_H });
   const f = textItem(NGUI, fit.text, { fs: fit.fs, min: fit.fs }, { maxW: maxW - 131 - SPACE.xl, lines: 2 });
@@ -754,7 +979,15 @@ export function checkbox(name, x, y, caption, on, maxW) {
   );
   return { tree: cb, w, on, caption: f };
 }
-// wires a drawn checkbox: a click flips it (state.checked) and shows or hides the tick
+/**
+ * Wire a drawn checkbox: a click flips it (state.checked) and shows or hides the tick.
+ * @param {HTMLElement} host The element to append the hit button to.
+ * @param {RenderView} view What render() drew.
+ * @param {string} path The checkbox node's path.
+ * @param {{checked: boolean, label?: string}} state The checkbox's state, flipped on a click.
+ * @param {(checked: boolean) => void} [onChange] Called with the new state.
+ * @returns {HTMLButtonElement|null} The hit button.
+ */
 export function wireCheck(host, view, path, state, onChange) {
   const tick = view.nodes.get(`${path}/Type_ON/Check/Icon`)?.els[0];
   const show = () => {
@@ -780,23 +1013,32 @@ export function wireCheck(host, view, path, state, onChange) {
   return b;
 }
 
-// --- the list popup ---
-// the details' columns of the L class's twelve (the list has the rest), and the list's paper width: its columns less the
-// panel's padding (listCardBox's)
+// --- the list popup --- the details' columns of the L class's twelve (the list has the rest), and the list's
+// paper width: its columns less the panel's padding (listCardBox's)
 const LIST_SPLIT = 4.5;
 const LIST_PAPER_W =
   grid(container({ w: POPUP_FRAME.L.w, h: 0, padding: [0, SPACE.xl] }).inner).span(12 - LIST_SPLIT, LIST_SPLIT).w -
   2 * SPACE.m;
 export const LIST_CARD_NAME = Object.freeze({ fs: 34, fsMin: 24, lines: 2, padY: 22, pitch: 1.2 });
+/**
+ * The geometry of a list popup: its frame and content box, the details panel at the left and the list panel at
+ * the right, and the card size and pitch.
+ * @param {boolean} [check] Whether a checkbox sits below the details.
+ * @param {string|null} [kind] The kind of cards the list shows.
+ * @returns
+ *     {{frame: PopupFrame, content: Box, left: {l: number, r: number, t: number, b: number}, list: {l: number, r: number, t: number, b: number}, card: {w: number, h: number, bar: number}, pitch: number[]}}
+ *     The frames, the panels' bounds and the cards' geometry.
+ */
 export function listLayout(check = false, kind = null) {
   // the card as the list's paper holds it (the L class's eight columns less the paper's padding)
   const native = switchGrid(kind, LIST_PAPER_W).card;
-  // One complete native card, its name band and the toolbar determine the minimum useful viewport. Additional cards scroll.
+  // One complete native card, its name band and the toolbar determine the minimum useful viewport. Additional
+  // cards scroll.
   const cardHeight =
     native.h +
     Math.max(native.bar, LIST_CARD_NAME.padY + LIST_CARD_NAME.lines * LIST_CARD_NAME.fs * LIST_CARD_NAME.pitch);
   const need = POPUP_FRAME.contentTop + CONTROL.buttonS.h + 5 * SPACE.m + cardHeight + POPUP_FOOTER.clearance;
-  // every list popup one height, the Hall's editors' (the three were as tall as their cards)
+  // every list popup has one height, the Hall's editors'
   const frame = frameGeometry("XL", Math.max(need, POPUP_FRAME.panelH));
   const content = popupContent(frame.w, frame.h);
   const panels = grid(content);
@@ -821,6 +1063,13 @@ export function listLayout(check = false, kind = null) {
 // The list popups' toolbar: the roster's, one size down ("太高了，弄矮一些，再弄小一档"), its 116-unit tools 93 high
 export const LIST_TOOLBAR = Object.freeze({ scale: 0.8 });
 export const LIST_BAND = Object.freeze({ tools: Math.round(116 * LIST_TOOLBAR.scale), slim: 60 });
+/**
+ * The box the list's cards are placed in, inside the drawn paper.
+ * @param {ReturnType<typeof listLayout>} layout The list's layout.
+ * @param {{searching?: boolean, horizontal?: boolean, band?: number}} [options] The band over the paper
+ *     (LIST_BAND) and the scroll direction.
+ * @returns {Box} The box.
+ */
 export function listCardBox(layout, { searching = false, horizontal = false, band = LIST_BAND.tools } = {}) {
   const b = layout.list,
     f = layout.frame;
@@ -862,8 +1111,16 @@ function toolbar(
 // the icon of a list's toggle in the toolbar (Show Other Students; one of the game's icons)
 export const TOGGLE_ICON = Object.freeze({ sprite: "Common_Charlist_Icon_ViewSmall", atlas: "Common", size: [57, 57] });
 
-// the fit of that toolbar: the checkbox's ``label``, the ``segs`` captions' keys and the sort button's ``sortKeys`` (``sortKey``:
-// the one shown), between the list's left edge and ``right``: the segments at the left, the icons at the right
+/**
+ * Fit the list toolbar with a checkbox: the checkbox's label, the captions of the segments and the sort
+ * button's keys, between the list's left edge and a right edge: the segments at the left, the icons at the
+ * right.
+ * @param {number} right The toolbar's right edge.
+ * @param
+ *     {{segs?: (string|{text: string})[], sortKey: string, sortKeys: string[], label?: string|null, left?: number, icons?: number}}
+ *     options segs: the segment captions' keys; sortKey: the one shown; sortKeys: all the sort button's keys.
+ * @returns {object} The toolbar's fit, as roster-widgets.js toolbarFit gives it.
+ */
 export function checkedToolbarFit(
   right,
   { segs, sortKey, sortKeys, label = null, left = LP.list.l + SPACE.m, icons = 0 },
@@ -879,11 +1136,11 @@ export function checkedToolbarFit(
     spread: true,
   });
 }
-// The toolbar with a checkbox (Switch 3D Model's "Show other students") is the student roster's: the checkbox
-// first, the three segments, search, sort and order, fitted by the roster's own steps (roster-widgets.js toolbarFit; the
-// sort button as wide as its longest key). Returns the tree, where the segments and the checkbox stand for the hit areas.
-// The toolbar is drawn at LIST_TOOLBAR.scale, its right edge at `right`: it is fitted to the list's width over that scale.
-// toggle: {label, checked, onChange} for an icon toggle before search (TOGGLE_ICON).
+// The toolbar with a checkbox (Switch 3D Model's "Show other students") is the student roster's: the checkbox,
+// the three segments, search, sort and order, fitted by the roster's own steps (roster-widgets.js toolbarFit;
+// the sort button as wide as its longest key). Returns the tree, where the segments and the checkbox stand for
+// the hit areas. It is drawn at LIST_TOOLBAR.scale with its right edge at `right`, fitted to the list's width
+// over that scale. toggle: {label, checked, onChange} for an icon toggle before search (TOGGLE_ICON).
 function fittedToolbar(right, y, { segs, sortKey, sortKeys, active, ascending, filtered, toggle }) {
   const k = LIST_TOOLBAR.scale,
     px = right * (1 - k),
@@ -917,10 +1174,22 @@ function fittedToolbar(right, y, { segs, sortKey, sortKeys, active, ascending, f
   };
 }
 
-// The list and details panels occupy the XL content grid; its footer uses the shared centred group.
-// The list popups' footer is the XS every popup has (it was S, one size under the other popups'
-// M, earlier the same day); footer: another size for one list.
+// The list and details panels occupy the XL content grid; its footer uses the shared centred group. The list
+// popups' footer is the XS every popup has; footer: another size for one list.
 export const LIST_FOOTER = FOOTER_DEFAULT;
+/**
+ * Build the popup frame of a list popup: the title, the buttons at the footer's bottom right, the details
+ * panel's and the list's panels and the paper.
+ * @param {string} title The title.
+ * @param {{label: string, fn?: Function, primary?: boolean, greyed?: boolean, action?: string}[]} buttons The
+ *     buttons under the list.
+ * @param {boolean} closeButton Whether the frame has a close button.
+ * @param {boolean} [check] Whether a checkbox sits below the details.
+ * @param {string|null} [kind] The kind of cards the list shows.
+ * @param {number} [band] The band over the paper (LIST_BAND).
+ * @param {string} [footer] The footer's size.
+ * @returns {NguiNode} The popup's node tree.
+ */
 export function listFrame(
   title,
   buttons,
@@ -967,24 +1236,44 @@ export function listFrame(
   return t;
 }
 
-// one card of the list: the game's card body, the picture clipped to its window, a name bar under it. A card that
-// cannot be chosen (dim) is darkened like the roster's not-owned cards, its picture without colour; its badge (In Use,
-// or the caller's) stays bright.
-// tick: null, or whether the card is ticked, for a list whose cards are ticked apart from being shown (listPopup
-// tick): a check box at the card's top right corner, the selection frame then without its check (it marks the card
-// the details show)
+// The tick box at a list card's top right corner, in units; inset is its distance from the corner.
 export const TICK_BOX = Object.freeze({ w: 60, h: 58, icon: 48, inset: 42 });
-// badgeRoom(card): the widest a card's top badge may be beside the tick box, BADGE_GAP short of it (both slant alike:
-// their edges are compared without the slant, which corner and tickPlace add by height)
+// The gap between a card's top badge and the tick box.
 export const BADGE_GAP = 8;
+/**
+ * The widest a card's top badge may be beside the tick box, BADGE_GAP short of it (both slant alike: their
+ * edges are compared without the slant, which corner and tickPlace add by height).
+ * @param {{w: number, h: number}} card The card's size.
+ * @returns {number} The width in units.
+ */
 export const badgeRoom = (card) => {
   const [x, y] = tickPlace(card);
   return x - y * TAN10 - TICK_BOX.w / 2 - BADGE_GAP - (-card.w / 2 + 12);
 };
+/**
+ * The centre of a card's tick box.
+ * @param {{w: number, h: number}} card The card's size.
+ * @returns {number[]} [x, y] from the card's centre, y up.
+ */
 export const tickPlace = (card) => [
   card.w / 2 - TICK_BOX.inset + (card.h / 2 - TICK_BOX.inset) * TAN10,
   card.h / 2 - TICK_BOX.inset,
 ];
+/**
+ * Draw one card of a list: the game's card body, the picture clipped to its window, a name bar under it.
+ * A card that cannot be chosen (dim) is darkened like the roster's not-owned cards, its picture without colour;
+ * its badge (In Use, or the caller's) stays bright.
+ * @param {ListItem} it The card's item.
+ * @param {number} x The card's x.
+ * @param {number} y The card's y.
+ * @param {boolean} selected Whether the card is the chosen one.
+ * @param {{w: number, h: number, bar: number}} [card] The card's size and its name bar's height.
+ * @param {string|null} [kind] The kind of cards the list shows.
+ * @param {boolean|null} [tick] Null, or whether the card is ticked, for a list whose cards are ticked apart
+ *     from being shown (listPopup tick): a check box at the card's top right corner, the selection frame then
+ *     without its check (it marks the card the details show).
+ * @returns {NguiNode} The card's node.
+ */
 export function listCard(it, x, y, selected, card = LP.card, kind = null, tick = null) {
   const { w, h, bar } = card;
   // The same upright image must reach both inclined edges even in a tall portrait window.
@@ -1134,7 +1423,8 @@ export function listCard(it, x, y, selected, card = LP.card, kind = null, tick =
     kids,
   );
   if (typeof it.applied === "boolean") {
-    // Keep the existing list's measured envelope, hit boxes and scroll pitch when replacing its decoration.
+    // layoutChildren keeps the complete set of children (the selection included) for the card's measured envelope,
+    // hit boxes and scroll pitch.
     tree.layoutChildren = [...kids];
     tree.children = kids.filter((n) => n.name !== "Select");
     // frameCaption false: the frame alone, no Applied word in it (the Hall's chosen background)
@@ -1148,7 +1438,7 @@ export function listCard(it, x, y, selected, card = LP.card, kind = null, tick =
       const source = find(tree, "Thumb"),
         image = { ...source.widgets[0] };
       const thumb = { ...source, pos: [window.x, window.y], widgets: [image] };
-      // Retain the pre-existing layout envelope; only the art underneath the selected frame changes.
+      // The layout envelope stays; only the art underneath the selected frame changes.
       Object.assign(image, { w_: window.width, h_: window.height, radius: 0 });
       const overscan = Math.max(0.15, (window.height * TAN10) / (2 * window.width));
       Object.assign(image, { imgLeft: `${-overscan * 100}%`, imgWidth: `${(1 + 2 * overscan) * 100}%` });
@@ -1170,9 +1460,9 @@ const ACTION_TIERS = Object.freeze([
 const ACTION_SHADOW = 14 / 176;
 // a loading action's ring against its body's height
 const ACTION_RING = 0.55;
-// The details panel one size down: its title and the name TYPE.body (the size under
-// TYPE.heading), its chips the S chip (CHIP_TIERS), as wide as their captions, its light box STATS_BOX_S; its actions keep
-// the XS button, the smallest. The chips stand on the name's line where they fit beside it, SPACE.s apart.
+// The details panel one size down: its title and the name TYPE.body (the size under TYPE.heading), its chips the
+// S chip (CHIP_TIERS), as wide as their captions, its light box STATS_BOX_S; its actions keep the XS button, the
+// smallest. The chips stand on the name's line where they fit beside it, SPACE.s apart.
 export const DETAILS = Object.freeze({
   title: TYPE.body,
   name: TYPE.body,
@@ -1181,16 +1471,29 @@ export const DETAILS = Object.freeze({
   chipGap: SPACE.s,
 });
 const CHIP_MIN_GAP = SPACE.xs;
-// a sized chip (CHIP_TIERS) for a caption: its width (the caption, the recruit mark before it, the pad on each side; minW at
-// least, maxW at most) and the caption's fit
+/**
+ * Size a chip (CHIP_TIERS) for a caption: as wide as the caption, the recruit mark before it and the pad on
+ * each side need, minW at least, maxW at most.
+ * @param {string} caption The chip's caption.
+ * @param {{chip?: object, mark?: boolean, maxW?: number}} [options] chip: the chip size (DETAILS.chip); mark:
+ *     the recruit mark leads the caption; maxW: the widest it may be.
+ * @returns {{w: number, h: number}} The chip's size.
+ */
 export function chipFit(caption, { chip = DETAILS.chip, mark = false, maxW = Infinity } = {}) {
   const iconW = mark ? (chip.fs * 1.35) / RECRUIT.ratio + 6 : 0;
   const need = Math.ceil(iconW + glyphsOf(caption, chip.fs) + 2 * chip.pad);
   return { w: Math.min(maxW, Math.max(chip.minW, need)), h: chip.h };
 }
-// Chips side by side in rows within panelW: each as wide as `widths` says, `gap` apart, a row centred, a new row where the
-// next one would not fit (its incline counted). Gives each chip's row and its centre's x from the panel's centre;
-// wrap: false keeps them on one row (the details panel's, whose widths the caller fitted to the panel).
+/**
+ * Place chips side by side in rows within a panel: each as wide as `widths` says, `gap` apart, a row centred, a
+ * new row where the next one would not fit (its incline counted).
+ * @param {number|number[]} widths The chips' widths, or the number of chips at CHIP.w.
+ * @param {number} panelW The panel's width.
+ * @param {{h?: number, gap?: number, wrap?: boolean}} [options] h: the chip height; gap: the space between
+ *     chips; wrap: false keeps them on one row (the details panel's, whose widths the caller fitted to the
+ *     panel).
+ * @returns {{row: number, x: number}[]} Each chip's row and its centre's x from the panel's centre.
+ */
 export function chipPlaces(widths, panelW, { h = DETAILS.chip.h, gap = DETAILS.chipGap, wrap = true } = {}) {
   if (typeof widths === "number") widths = Array.from({ length: widths }, () => CHIP.w);
   const slant = h * TAN10,
@@ -1211,17 +1514,38 @@ export function chipPlaces(widths, panelW, { h = DETAILS.chip.h, gap = DETAILS.c
   });
   return boxes;
 }
-// the "…" at the end of a value cut to one line (the panel does not scroll, a value shows whole in a
-// popup): the line button (LINE_BUTTON) of the light box's line
+/**
+ * Size the "..." button at the end of a value cut to one line (the panel does not scroll, a value shows whole
+ * in a popup): the line button (LINE_BUTTON) of the light box's line.
+ * @param {number} [fs] The value's font size.
+ * @returns {{h: number, fs: number, w: number, gap: number}} The button's height, caption size, width and the
+ *     gap before it.
+ */
 export function moreButton(fs = DETAILS.box.value.fs) {
   const h = Math.round(fs * NGUI.LINE_PITCH * LINE_BUTTON.height) + XS_BUTTON.boxInsetH;
   const cap = Math.max(LINE_BUTTON.fsMin, Math.round(fs * LINE_BUTTON.share));
   return { h, fs: cap, w: Math.ceil(glyphsOf(MORE, cap)) + LINE_BUTTON.pad, gap: SPACE.s };
 }
 const MORE = "…";
-// the details panel: title bar, the picture, name and chips, fields, actions (exported for the tests, like chipPlaces).
-// options.truncate: each field's value on one line, a "…" button opening it whole where it is cut (tree.more lists them).
-// The picture takes what the rest leaves of the panel, so the panel does not scroll; the actions stand on its bottom.
+/**
+ * Build the details panel of a list popup: title bar, the picture, name and chips, fields, actions (exported
+ * for the tests, like chipPlaces).
+ * The picture takes what the rest leaves of the panel, so the panel does not scroll; the actions stand on its
+ * bottom.
+ * @param {ListItem} it The card the details show.
+ * @param {string} title The title bar's text.
+ * @param {(string|null)[][]} fields The fields: [caption, value, colour]; a field without a caption (null) is
+ *     its value alone.
+ * @param {(string|boolean|Function|undefined)[][]} actions The actions: [caption, fn, disabled, semantic, hint,
+ *     loading].
+ * @param {NguiNode|null} [portraitTexture] The portrait picture node, for an upright picture beside the stacked
+ *     fields.
+ * @param {string|null} [kind] The kind of cards: "model" or "photo" give a square picture.
+ * @param {{l: number, r: number, t: number, b: number}} [panel] The panel's bounds.
+ * @param {{truncate?: boolean}} [options] truncate: each field's value on one line, a "..." button opening it
+ *     whole where it is cut (tree.more lists them).
+ * @returns {NguiNode} The panel's node tree, with `more`: the cut values.
+ */
 export function detailsTree(
   it,
   title,
@@ -1265,9 +1589,9 @@ export function detailsTree(
   );
   kids.push(titleNode);
   bands.push({ name: "Title_Bg", w, h: titleH });
-  // A 3D model's picture spans the panel, its name, chips and fields under it (beside them
-  // before), one size for every candidate (model); a photograph's square the same (photo), its picture filling the window
-  // (cover) where a model's still is shown whole (contain).
+  // A 3D model's picture spans the panel, its name, chips and fields under it, one size for every candidate
+  // (model); a photograph's square the same (photo), its picture filling the window (cover) where a model's still
+  // is shown whole (contain).
   const model = !portraitTexture && (kind === "model" || kind === "photo");
   const columns = grid(content),
     pictureColumn = portraitTexture ? columns.span(5) : content;
@@ -1403,9 +1727,10 @@ export function detailsTree(
     );
     info.splice(1, 0, { name: "OriginalName", w: infoW, h: original.h });
   }
-  // The light stats box keeps its own padding, row sizes and decoration, one size down. A portrait's narrow column stacks
-  // each caption and value as successive full-width rows; other sources retain the paired columns. A field without a caption
-  // (null) is its value alone. With options.truncate a value keeps one line, and a "…" at its end where it is cut.
+  // The light stats box keeps its own padding, row sizes and decoration, one size down. A portrait's narrow column
+  // stacks each caption and value as successive full-width rows; other sources retain the paired columns. A field
+  // without a caption (null) is its value alone. With options.truncate a value keeps one line, and a "…" at its
+  // end where it is cut.
   const button = moreButton();
   const cutRow = (field, caption, value) =>
     options.truncate
@@ -1476,14 +1801,15 @@ export function detailsTree(
   if (fieldBand) info.push(fieldBand);
   const infoStack = layoutStack(info, { w: infoW, gap: SPACE.m });
 
-  // The picture takes the room the title, the actions and the rest leave (the 3D model's square is one size for every
-  // candidate: what fields with the file name on three lines and the others on one leave, its 10 degree incline within its
-  // column; only longer fields shrink it).
-  // the actions in rows of as many XS buttons as the panel holds at their minimum width (the narrower panel, the
-  // captions' padding kept), the rows SPACE.m apart
+  // The picture takes the room the title, the actions and the rest leave (the 3D model's square is one size for
+  // every candidate: what fields with the file name on three lines and the others on one leave, its 10 degree
+  // incline within its column; only longer fields shrink it).
+  // The actions go in rows of as many XS buttons as the panel holds at their minimum width (the narrower panel,
+  // the captions' padding kept), the rows SPACE.m apart.
   const actionGap = SPACE.m,
     rowFits = (tier) => actions.length * (tier.control.minW + actionGap) - actionGap <= w - 2 * SPACE.m;
-  // more than even the XXS row holds (a Mod's five): rows of XS bodies, as many a row as the panel holds at their minimum
+  // more than even the XXS row holds (a Mod's five): rows of XS bodies, as many a row as the panel holds at their
+  // minimum
   const oneRow = ACTION_TIERS.find(rowFits),
     actionTier = oneRow ?? ACTION_TIERS[0],
     BTN = actionTier.control;
@@ -1496,8 +1822,8 @@ export function detailsTree(
   const actionsH = actionRows ? actionRows * BTN.h + (actionRows - 1) * actionGap : 0;
   const roomFor = (otherH, others) =>
     content.h - titleH - otherH - actionsH - SPACE.m * (1 + others + (actions.length ? 1 : 0));
-  // a model's picture as large as the most its name (two lines) and fields (the file name on three lines unless truncated)
-  // leave, whatever this candidate's hold
+  // a model's picture as large as the most its name (two lines) and fields (the file name on three lines unless
+  // truncated) leave, whatever this candidate's hold
   const reference = model
     ? infoStack.h -
       name.h +
@@ -1514,7 +1840,8 @@ export function detailsTree(
     : 0;
   const texture = portraitTexture && clone(portraitTexture),
     native = texture?.widgets.find((widget) => "texture" in widget);
-  const portraitCard = texture && switchGrid("spr").card; // Keep the portrait card's native aspect in its preview column.
+  // the portrait card keeps its native aspect in its preview column
+  const portraitCard = texture && switchGrid("spr").card;
   const aspect = portraitCard ? portraitCard.w / portraitCard.h : model ? 1 : 16 / 9;
   let pictureW;
   if (portraitTexture) pictureW = Math.max(0, Math.min(pictureColumn.w, roomFor(0, 0) * aspect));
@@ -1632,7 +1959,7 @@ export function detailsTree(
     body.pos = [0, 0];
     body.scale = [k, k];
     resizeButton(body, fits[i].width / k);
-    // a button however narrow the row makes it: the pre-release size tag marks it
+    // a button however narrow the row makes it: the size tag (developer previews) marks it
     Object.assign(bg, { depth: 6, tier: "button", ...(!disabled ? { color: "#dbeef5/1.00" } : {}) });
     for (const child of body.children || []) for (const widget of child.widgets) if ("w_" in widget) widget.depth = 7;
     // an action still loading (its check under way) shows the game's loading ring in its caption's place, in the
@@ -1741,42 +2068,84 @@ export function detailsTree(
   return tree;
 }
 
-// a list popup in host (an element or its id). Redrawn by the caller on every change (a card picked, a segment):
-//   items: [{key, label, full, thumb, big, recruit, kind, inUse, inUseText, fav, isNew, size, disabled, dim, badge: {text, color,
-//           ink}, tag: {text, color, ink}, chips, original, nameEdit: {label, fn(scroll)}}]; original: secondary name in the detail band;
-//           disabled: cannot be ticked (with multi); dim: the darkened look
-//   inUseText: a saved source's caption in the detail chip, independent of whether its files are in use
-//   selected: the chosen key; with multi, the ticked keys (selectable(items) ticks all), focus: the card whose details
-//             show (by default the first ticked one)
-//   onSelect(key, scroll): a card was clicked (the caller ticks it, toggled(), or chooses it, and draws the popup again)
-//   buttons: [{label, fn, primary, greyed, action}] under the list, or okText and onOk for the one confirm button
-//   onClose(how): the close button, the backdrop and Escape; null for a popup without them (it must be answered)
-//   A list with no card to show puts hall.noCandidates in the list paper; with tools, while the chosen card (selected)
-//   is not among the cards shown, the primary button is the game's disabled one and answers nothing.
-//   tools: {segs, seg, onSeg, sortKey, more, onView} for the student list's tools over the cards, or null; without
-//          them, hint (left) and footer (right) show in their place. more(query): cards added after the matching ones
-//          (Switch 3D Model's other students' models; asked on every drawing, with the search's words, which may be
-//          empty), ordered and turned like them. onView(keys): the keys of the cards in view, after every drawing and
-//          scroll (the same signal that brings their thumbnails in). toggle: {label, checked, onChange(checked)}, an icon
-//          toggle (TOGGLE_ICON) before search, its label the hover hint; a click flips toggle.checked and draws again.
-//   items' hint: the card's hover hint
-//   check: {label, checked, onChange} for a checkbox below the details; a click flips check.checked, so the same
-//          object is passed to every drawing
-//   details(it): {title, fields: [[caption, value, colour]], actions: [[caption, fn, disabled, semantic, hint, loading]],
-//                truncate} for the panel on the left; a loading action (disabled while its check runs) shows the
-//                loading ring in its caption's place;
-//                truncate: each value on one line, a "…" button showing a cut one whole
-//   footer: the line over the paper's right (the ticked cards, their size); the footer buttons are LIST_FOOTER's size
-//   keepScroll: the list's offset on its scrolling axis (horizontal for portraits)
-//   tick: {keys, onTick(key, scroll)}: cards ticked apart from being shown: a click on a card shows
-//         it in the details (onSelect, selected), a click on its corner's tick box ticks or unticks it (onTick)
-//   empty: what an empty list says, in the middle of its paper (hall.noCandidates by default)
-//   detailKind(it): the kind whose details panel a card shows when it differs from layoutKind's ("spr": the portrait
-//                   panel, an upright picture beside the stacked fields), for lists of several kinds
-//   alignStart: the generic grid's cards from the paper's left edge, as the kinds' grids place them
-//   slimBand: without tools and hint, the band over the paper only as high as the footer's count
+/**
+ * A card of a list popup.
+ * @typedef {object} ListItem
+ * @property {string} key The card's key.
+ * @property {string} label The name on the card.
+ * @property {string} [full] The full name, shown in the details panel.
+ * @property {string|Promise<string>} [thumb] The card's picture.
+ * @property {string|(() => string)} [big] The details panel's picture, or a function that gives it.
+ * @property {boolean} [recruit] The card is recruitable: shows the recruit icon.
+ * @property {string} [kind] "mod" for an added mod.
+ * @property {boolean} [inUse] The card is the one in use.
+ * @property {string} [inUseText] A saved source's caption in the detail chip, independent of whether its files are in use.
+ * @property {boolean} [fav] The card is a favourite: shows the pin.
+ * @property {boolean} [isNew] Shows the new dot.
+ * @property {number} [size] The size in bytes, for the footer's total of the ticked cards.
+ * @property {boolean} [disabled] Cannot be ticked (with multi).
+ * @property {boolean} [dim] The darkened look.
+ * @property {boolean} [applied] Draws the selection frame; true for the applied card.
+ * @property {boolean} [frameCaption] False: the frame alone, no Applied word in it (the Hall's chosen background).
+ * @property {{text: string, color: string, ink: string}} [badge] The badge at the card's top.
+ * @property {{text: string, color: string, ink: string}} [tag] The first tag of the card's bottom row.
+ * @property {object[]} [marks] The marks after the tag (Updatable).
+ * @property {object[]} [chips] The chips of the details panel.
+ * @property {string} [original] A secondary name in the detail band.
+ * @property {{label: string, fn: (scroll: number) => void}} [nameEdit] The name's edit button.
+ * @property {string} [hint] The card's hover hint.
+ */
+
+/**
+ * The student list's tools over the cards of a list popup.
+ * @typedef {object} ListTools
+ * @property {(string|{text: string})[]} [segs] The segment filter's captions: a string key, or {text} for a caption the caller wrote.
+ * @property {number|string} [seg] The chosen segment.
+ * @property {(seg: number|string) => void} [onSeg] A segment was chosen.
+ * @property {string} [sortKey] The sort shown.
+ * @property {(query: string) => ListItem[]} [more] Cards added after the matching ones (Switch 3D Model's other students' models), asked on every drawing with the search's words, which may be empty; ordered and turned like the others.
+ * @property {(keys: string[]) => void} [onView] The keys of the cards in view, after every drawing and scroll (the same signal that brings their thumbnails in).
+ * @property {{label: string, checked: boolean, onChange: (checked: boolean) => void}} [toggle] An icon toggle (TOGGLE_ICON) before search, its label the hover hint; a click flips toggle.checked and draws again.
+ */
+
+/**
+ * Options of listPopup().
+ * @typedef {object} ListPopupOptions
+ * @property {HTMLElement|string} [host] The element, or its id, the popup is drawn in.
+ * @property {string} [hostId] The host's id, when host is not given.
+ * @property {string} title The title.
+ * @property {ListItem[]} items The cards.
+ * @property {string|string[]|Set<string>|null} [selected] The chosen key; with multi, the ticked keys (selectable(items) ticks all).
+ * @property {boolean} [multi] Several cards are ticked.
+ * @property {string|null} [focus] With multi, the card whose details show (by default the first ticked one).
+ * @property {(key: string, scroll: number) => void} onSelect A card was clicked (the caller ticks it, toggled(), or chooses it, and draws the popup again).
+ * @property {{label: string, fn: () => void, primary?: boolean, greyed?: boolean, action?: string}[]|null} [buttons] The buttons under the list; or okText and onOk for the one confirm button.
+ * @property {string} [okText] The confirm button's label.
+ * @property {() => void} [onOk] The confirm button's handler.
+ * @property {string} [cancelText] A bright blue Cancel before the primary button (the switch popups).
+ * @property {string} [okSemantic] The confirm button's semantic, "confirm" by default.
+ * @property {((how: string) => void)|null} [onClose] The close button, the backdrop and Escape; null for a popup without them (it must be answered).
+ * @property {ListTools|null} [tools] The student list's tools over the cards; without them, hint (left) and footer (right) show in their place.
+ * @property {string} [hint] The line over the paper's left.
+ * @property {string} [footer] The line over the paper's right (the ticked cards, their size); the footer buttons are LIST_FOOTER's size.
+ * @property {{label: string, checked: boolean, onChange?: (checked: boolean) => void}|null} [check] A checkbox below the details; a click flips check.checked, so the same object is passed to every drawing.
+ * @property {(it: ListItem) => {title: string, fields: Array<Array<string|null>>, actions: Array<Array<unknown>>, truncate?: boolean}} details The panel on the left: fields as [caption, value, colour], actions as [caption, fn, disabled, semantic, hint, loading]; a loading action (disabled while its check runs) shows the loading ring in its caption's place; truncate: each value on one line, a "..." button showing a cut one whole.
+ * @property {number} [keepScroll] The list's offset on its scrolling axis (horizontal for portraits).
+ * @property {{keys: string[], onTick: (key: string, scroll: number) => void}|null} [tick] Cards ticked apart from being shown: a click on a card shows it in the details (onSelect, selected), a click on its corner's tick box ticks or unticks it (onTick).
+ * @property {string|null} [empty] What an empty list says, in the middle of its paper (hall.noCandidates by default). A list with no card to show puts it there; with tools, while the chosen card (selected) is not among the cards shown, the primary button is the game's disabled one and answers nothing.
+ * @property {string} [layoutKind] The kind of cards the list lays out ("spr", "lobby", "model", ...).
+ * @property {(it: ListItem) => string} [detailKind] The kind whose details panel a card shows when it differs from layoutKind's ("spr": the portrait panel, an upright picture beside the stacked fields), for lists of several kinds.
+ * @property {boolean} [alignStart] The generic grid's cards start at the paper's left edge, as the kinds' grids place them.
+ * @property {boolean} [slimBand] Without tools and hint, the band over the paper is only as high as the footer's count.
+ */
+
 const toolStates = new WeakMap();
 const tokens = new Map(); // host -> the latest drawing's number: an older one that ends later is dropped
+/**
+ * Draw a list popup in a host. The caller draws it again on every change (a card picked, a segment).
+ * @param {ListPopupOptions} options What the popup shows and how it answers.
+ * @returns {Promise<void>} Settles when the popup is drawn.
+ */
 export async function listPopup(options) {
   let {
     host: hostArg,
@@ -2081,9 +2450,9 @@ export async function listPopup(options) {
     listCard(it, 0, 0, isSelected(it.key), card, options.layoutKind, tickKeys ? tickKeys.has(it.key) : null),
   );
   const paper = { left: cardLeft, right: cardLeft + cardBox.w, top: top + SPACE.m };
-  // every list is placed as if every card were selected, so choosing or ticking a card, or a segment that hides the
-  // chosen one, never moves the cards (the list's padding is fixed whatever is ticked, and
-  // whatever is chosen); a card's own marks (the selection's check, the new dot) stand over that envelope
+  // every list is placed as if every card were selected, so choosing or ticking a card, or a segment that hides
+  // the chosen one, never moves the cards (the list's padding is fixed whatever is ticked, and whatever is
+  // chosen); a card's own marks (the selection's check, the new dot) stand over that envelope
   const shapes = items.map((it) => listCard(it, 0, 0, true, card, options.layoutKind, tickKeys ? true : null));
   // the envelopes where they stand, for the scroll extent and the cards in view: the same whatever is chosen
   const bounds = placeSwitchCards(shapes, cardGrid, paper);
@@ -2256,29 +2625,61 @@ export const MSG = {
   cap: POPUP_FRAME.maxH,
 };
 
-// message({title, lines, ok, cancel, check, host, width, close, confirmKeys, scroll}): a message on the popup frame, in host
-// (#dialog by default, over everything but the message popup). Resolves once it is closed, however it is closed, with
-// {button, checked}: button "ok" or "cancel", or null for the close button, the backdrop or Escape; checked, the
-// checkbox's state then (null without one).
-//   lines: text, or {text, button: {label, fn, inline}} for a line with a small button at its end (fn({close}), where
-//          close(button) closes the popup; inline, with plain: only as high as the line's text, right after it; more:
-//          [{label, fn}] further inline buttons after it, the same size); with such a line every line shows as a row of the game's light box
-//          fontSize/minFontSize optionally keep a row's existing type size (the tour counter and body).
-//          With plain: indent (units) moves a line right, marker hangs a bullet left of its first line (markerGap wide,
-//          its font size by default), gap adds space above it (release notes' lists and sections), italic slants it.
-//   fitTogether: line indices fitted at one shared size, using the smallest fit within the popup's size floor
-//   plain: left-aligned lines without a box or separators, including lines with a button at the right; a line
-//          {rule: true} is the game's dotted divider (Common_Line_Dot, as the light stats box draws it) across the text
-//   ok, cancel: the buttons' labels (either may be left out); check: {label, checked}
-//   buttons: optional named footer choices [{label, value, primary}], instead of ok/cancel
-//   footer: the footer buttons' size, "XS", "S", "M" or "L" (FOOTER); without it the default size, XS, its bodies as wide as the captions need
-//   close: false for a popup that must be answered with a button (no close button; the backdrop and Escape do nothing)
-//   confirmKeys: keys that press OK while the popup is in front and holds the focus itself (a focused button takes its
-//                own key), as the PC client binds its popups' confirm (["Enter", " "]); none by default
-//   scroll: constrain the findings to the frame; title and action buttons stay visible. A message whose frame would
-//           be taller than that frame (MSG.cap) scrolls by itself, so its title and buttons stay on the stage
-// The popup takes the keyboard focus while it is open (Enter presses nothing under it) and gives it back after.
-// Without the frame's prefab (no game folder) the same message is drawn plain.
+/**
+ * A line of a message popup: plain text, or an object for a line with a small button or a special look.
+ * @typedef {string | object} MessageLine
+ * The object form carries `text`, and optionally: `button: {label, fn, inline, more}`, a small button at the end
+ * of the line (fn({close}) runs on a click, where close(button) closes the popup; inline, with `plain`, makes it
+ * only as high as the line's text, right after it; more: [{label, fn}] further inline buttons after it, the same
+ * size); `fontSize` and `minFontSize`, to keep a row's type size (the tour counter and body); and, with `plain`,
+ * `indent` (units, moves the line right), `marker` (hangs a bullet left of its first line, markerGap wide, its font
+ * size by default), `gap` (space above it, for the release notes' lists and sections), `italic`, and `rule: true`
+ * (the game's dotted divider, Common_Line_Dot, as the light stats box draws it, across the text).
+ */
+
+/**
+ * Options of message().
+ * @typedef {object} MessageOptions
+ * @property {string} title The title.
+ * @property {MessageLine[]} [lines] The text. With a line that has a small button, every line shows as a row of the
+ *     game's light box.
+ * @property {string} [ok] The OK button's label; either button may be left out.
+ * @property {string} [cancel] The Cancel button's label.
+ * @property {{label: string, value?: *, primary?: boolean}[]} [buttons] Named footer choices instead of ok and cancel.
+ * @property {{label: string, checked: boolean}} [check] A checkbox; its state comes back in the result.
+ * @property {string|HTMLElement} [host] Where it is drawn: #dialog by default, over everything but the message popup.
+ * @property {number} [width] The frame's width class or width.
+ * @property {number} [height] The least height of the frame.
+ * @property {boolean} [close] False for a popup that must be answered with a button (no close button; the backdrop
+ *     and Escape do nothing).
+ * @property {string[]} [confirmKeys] Keys that press OK while the popup is in front and holds the focus itself (a
+ *     focused button takes its own key), as the PC client binds its popups' confirm (["Enter", " "]); none by default.
+ * @property {boolean} [scroll] Constrain the lines to the frame; the title and the action buttons stay visible. A
+ *     message whose frame would be taller than MSG.cap scrolls by itself, so they stay on the stage.
+ * @property {number[]} [fitTogether] Indices of the lines fitted at one shared size, using the smallest fit within
+ *     the popup's size floor.
+ * @property {boolean} [plain] Left-aligned lines without a box or separators, including lines with a button at the
+ *     right.
+ * @property {string} [footer] The footer buttons' size, "XS", "S", "M" or "L" (FOOTER); without it the default size,
+ *     XS, its bodies as wide as the captions need.
+ * @property {string} [captionSite] The wording site, which makes a caption that cannot fit throw.
+ * @property {object|string} [error] An error: the popup becomes the Failed notice with an Error Report button.
+ */
+
+/**
+ * What message() resolves with.
+ * @typedef {object} MessageResult
+ * @property {"ok"|"cancel"|null} button The button pressed, or null for the close button, the backdrop or Escape.
+ * @property {boolean|null} checked The checkbox's state then; null without a checkbox.
+ */
+
+/**
+ * Show a message on the popup frame, in a host. The popup takes the keyboard focus while it is open (Enter
+ * presses nothing under it) and gives it back after. Without the frame's prefab (no game folder) the same
+ * message is drawn plain.
+ * @param {MessageOptions} opts What the message says and offers.
+ * @returns {Promise<MessageResult>} Settles once the popup is closed, however it is closed.
+ */
 export function message(opts) {
   if (opts.error || opts.title === T("job.failed")) {
     const error = typeof opts.error === "object" && opts.error ? opts.error : {};
@@ -2310,14 +2711,26 @@ export function message(opts) {
   });
 }
 
-// a key that presses OK (confirmKeys): alone, not a held key's repeat, not while an input method composes
+/**
+ * Whether a key presses OK (confirmKeys): alone, not a held key's repeat, not while an input method composes.
+ * @param {KeyboardEvent} ev The key event.
+ * @param {string[]} [keys] The confirm keys.
+ * @returns {boolean} True when the key confirms.
+ */
 export function confirmKey(ev, keys) {
   if (!keys?.length || !ev || ev.defaultPrevented || ev.isComposing || ev.keyCode === 229 || ev.repeat) return false;
   if (ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return false;
   return keys.includes(ev.key);
 }
 
-// the message without the game's prefab: a plain box on a dark backdrop, the same buttons, marked the same way
+/**
+ * Draw a message without the game's prefab: a plain box on a dark backdrop, the same buttons, marked the same
+ * way.
+ * @param {HTMLElement} layer The popup's layer.
+ * @param {MessageOptions & {state?: object|null, dismissable?: boolean}} opts The message, as for message();
+ *     state is the checkbox's state, dismissable false for a popup that must be answered with a button.
+ * @param {(result: MessageResult) => void} finish Closes the popup with a result.
+ */
 export function plainMessage(
   layer,
   {
@@ -2559,9 +2972,9 @@ export function plainMessage(
   return { box, content, layout };
 }
 
-// a fixed size (max equals min) only wraps, on as many lines as it needs, and never shrinks below that size. strict: no size
-// under min either way (the light box's rows): text that cannot keep it within `lines` lines breaks at separators and between
-// characters, down to min, on as many lines as it needs
+// a fixed size (max equals min) only wraps, on as many lines as it needs, and never shrinks below that size.
+// strict: no size under min either way (the light box's rows): text that cannot keep it within `lines` lines
+// breaks at separators and between characters, down to min, on as many lines as it needs
 function messageText(text, max, min, room, lines = 4, strict = false) {
   const fixed = max === min;
   const fitted = fitText(text, max, min, room, fixed ? Infinity : lines);
@@ -2573,13 +2986,14 @@ const counted = (fitted) => ({ ...fitted, lines: fitted.text.split("\n").length 
 
 const placeholderButton = (name, x, y, caption, { w, h = XS_BUTTON.h }) =>
   node(name, [x, y], [sprite("Common_Btn_BG", w, h)]);
-// the inline buttons went one size down with the small button: the XS body's height over the S one's
+// the inline buttons are the XS small button: the XS body's height over the S one's
 const XS_RATIO = XS_BUTTON.h / SMALL_BUTTON.h;
 // a plain message's divider row ({rule: true}): the light stats box's dotted line, its height
 export const RULE = Object.freeze({ h: 4 });
-// a plain line's inline button (button.inline): the small button, shadow included, within its line's text from top to
-// bottom (``height`` of the type size: the ink of a line, not its pitch), its caption at most ``share`` of the type size
-// pad: the small button fits its caption again within its width less XS_BUTTON.fitInset, so the pad is at least that
+// a plain line's inline button (button.inline): the small button, shadow included, within its line's text from
+// top to bottom (``height`` of the type size: the ink of a line, not its pitch), its caption at most ``share``
+// of the type size pad: the small button fits its caption again within its width less XS_BUTTON.fitInset, so the
+// pad is at least that
 export const INLINE_BUTTON = Object.freeze({
   height: 0.9 * XS_RATIO,
   share: 0.55 * XS_RATIO,
@@ -2628,14 +3042,15 @@ function oneInlineButton(r, button, fs) {
 function messageLines(lines, w, fitTogether, plain, assets = true) {
   const rows = lines.map((l) => (typeof l === "string" ? { text: l } : l));
   const boxed = !plain && rows.some((r) => r.button);
-  // paragraphs at POPUP_TYPE.text (one size under the 52 down to 44 they had), light stats rows their own range
-  // (38 down to 26); the width selection allows six lines
+  // paragraphs at POPUP_TYPE.text, light stats rows their own range (38 down to 26); the width selection allows
+  // six lines
   const min = boxed ? STATS_BOX.value.fsMin : POPUP_TYPE.text.min,
     max = boxed ? STATS_BOX.value.fs : POPUP_TYPE.text.fs,
     most = 6;
   const fitted = rows.map((r) => {
     if (r.rule) return { r, room: w - 2 * SPACE.xxxl, f: counted({ text: "", fs: min }) };
-    // a line button is the small button: 136 high, as wide as its caption needs and 90 more (240 at least), the caption 48 down to 34
+    // a line button is the small button: 136 high, as wide as its caption needs and 90 more (240 at least), the
+    // caption 48 down to 34
     const bf = r.button
       ? fitText(r.button.label, XS_BUTTON.fs, XS_BUTTON.fsMin, XS_BUTTON.w - XS_BUTTON.fitInset)
       : null;
@@ -2675,8 +3090,8 @@ function messageLines(lines, w, fitTogether, plain, assets = true) {
         );
   const buttons = [];
   if (boxed) {
-    // rows on the game's light stats box: text at the left, the line's button at the right; a row with a button holds it, in 156
-    // at least (the button and 10 above and below)
+    // rows on the game's light stats box: text at the left, the line's button at the right; a row with a button
+    // holds it, in 156 at least (the button and 10 above and below)
     const box = statsBox({
       holder: "frame",
       width: w,
@@ -2798,8 +3213,17 @@ function messageLines(lines, w, fitTogether, plain, assets = true) {
 }
 
 // Shared by ordinary messages and text-only tours, including row fitting, frame padding and footer clearance.
-// `scroll` in the result tells whether the lines scroll in the frame: asked for, or forced because the frame would
-// be taller than MSG.cap. Non-scrolling bodies, including their check row, centre in the content box.
+/**
+ * Lay out a message: the frame, the content box and the lines' rows. `scroll` in the result tells whether the
+ * lines scroll in the frame: asked for, or forced because the frame would be taller than MSG.cap. Non-scrolling
+ * bodies, including their check row, centre in the content box.
+ * @param {MessageOptions & {assets?: boolean}} [opts] The message, as for message(); assets false measures
+ *     without the game's art.
+ * @returns
+ *     {{body: object, width: number, height: number, visible: number, y0: number, content: Box, checkBox: object, checkCaption: object, scroll: boolean}}
+ *     The lines' fit, the frame's size, the height of the visible part, the top of the body, the content box,
+ *     the checkbox's place and caption, and whether the lines scroll.
+ */
 export function messageLayout({
   lines = [],
   width,
@@ -2974,7 +3398,13 @@ async function showMessage(
   }
 }
 
-// A scrollable text document on the shared popup frame. Text stays literal, selectable and in its original order.
+/**
+ * Show a scrollable text document on the shared popup frame. Text stays literal, selectable and in its original
+ * order.
+ * @param {{title: string, text: string, copy: string, close?: string, onCopy?: () => void}} options The title,
+ *     the text, the copy button's label, the close button's label and the copy handler.
+ * @returns {Promise<void>} Settles when the viewer is closed.
+ */
 export function textViewer({ title, text, copy, close = T("display.close"), onCopy }) {
   return new Promise((resolve) => {
     const host = hostOf("dialog"),
@@ -3069,26 +3499,44 @@ export function textViewer({ title, text, copy, close = T("display.close"), onCo
 }
 
 // --- ordinary refusals ---
-// A refusal declines an action because of a state or a rule (a task still running, the game open, no game folder, a
-// Hall rule): nothing broke, so it reads as the game's neutral notice (title quit.title, Confirm only), without Failed
-// and without an Error Report button. Every other code is a real failure and keeps both. Codes that report
-// something unreadable or unknown (game_status_unavailable, profiles_unreadable) stay failures.
+// A refusal declines an action because of a state or a rule (a task still running, the game open, no game
+// folder, a Hall rule): nothing broke, so it reads as the game's neutral notice (title quit.title, Confirm
+// only), without Failed and without an Error Report button. Every other code is a real failure and keeps both,
+// including codes that report something unreadable or unknown (game_status_unavailable, profiles_unreadable).
 export const REFUSALS = Object.freeze(noticeNames());
+/**
+ * Whether an error is an ordinary refusal.
+ * @param {{code?: string}|null|undefined} error The error.
+ * @returns {boolean} True for a refusal code.
+ */
 export const isRefusal = (error) => REFUSALS.includes(error?.code);
 
-// the neutral notice: the game's caption title (as the quit prompt), one line, Confirm only; resolves when closed
+/**
+ * Show the neutral notice: the game's caption title (as the quit prompt), one line, Confirm only.
+ * @param {string} text The line.
+ * @returns {Promise<MessageResult>} Settles when it is closed.
+ */
 export function notice(text) {
   return message({ title: T("quit.title"), lines: [text], ok: T("picker.ok") });
 }
 
-// Only errors/refusals use a notification popup: a refusal as a notice, anything else as Failed with the Error Report.
-// Rich results call message() explicitly.
-// deferWhile(blocked): automatic notifications wait while blocked() holds (loading.js: a strict hold covers every
-// popup), so they never open beneath the loading screen where they could not be closed
+// Only errors and refusals use a notification popup: a refusal as a notice, anything else as Failed with the
+// Error Report. Rich results call message() explicitly.
 let deferred = () => false;
+/**
+ * Hold automatic notifications while blocked() is true (loading.js: a strict hold covers every popup), so they
+ * never open beneath the loading screen where they could not be closed.
+ * @param {() => boolean} blocked True while notifications must wait.
+ */
 export function deferWhile(blocked) {
   deferred = blocked;
 }
+/**
+ * Show an error or refusal notification.
+ * @param {string} text The message; nothing is shown for an empty text or a kind other than "error".
+ * @param {{kind?: string, error?: object|null}} [options] kind: "error" shows it; error: the error, which
+ *     decides between a notice and the Failed popup.
+ */
 export function notify(text, { kind = "info", error = null } = {}) {
   if (!text || kind !== "error") return;
   if (deferred()) {
