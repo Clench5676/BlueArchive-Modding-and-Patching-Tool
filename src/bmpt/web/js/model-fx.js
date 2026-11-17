@@ -14,14 +14,37 @@ import { toLinear } from "./touch-fx.js";
 // glTF mirrors Unity on X (model.py)
 const MIRROR = new THREE.Matrix4().makeScale(-1, 1, 1);
 // UnityEngine.Rendering.BlendMode -> three.js factors
-const FACTORS = [THREE.ZeroFactor, THREE.OneFactor, THREE.DstColorFactor, THREE.SrcColorFactor,
-  THREE.OneMinusDstColorFactor, THREE.SrcAlphaFactor, THREE.OneMinusSrcColorFactor, THREE.DstAlphaFactor,
-  THREE.OneMinusDstAlphaFactor, THREE.SrcAlphaSaturateFactor, THREE.OneMinusSrcAlphaFactor];
+const FACTORS = [
+  THREE.ZeroFactor,
+  THREE.OneFactor,
+  THREE.DstColorFactor,
+  THREE.SrcColorFactor,
+  THREE.OneMinusDstColorFactor,
+  THREE.SrcAlphaFactor,
+  THREE.OneMinusSrcColorFactor,
+  THREE.DstAlphaFactor,
+  THREE.OneMinusDstAlphaFactor,
+  THREE.SrcAlphaSaturateFactor,
+  THREE.OneMinusSrcAlphaFactor,
+];
 // Unity's built-in default textures, for a texture property a material leaves empty
-const DEFAULT_TEXEL = { white: [255, 255, 255, 255], black: [0, 0, 0, 0], gray: [128, 128, 128, 128], grey: [128, 128, 128, 128],
-  bump: [128, 128, 255, 128], red: [255, 0, 0, 0] };
+const DEFAULT_TEXEL = {
+  white: [255, 255, 255, 255],
+  black: [0, 0, 0, 0],
+  gray: [128, 128, 128, 128],
+  grey: [128, 128, 128, 128],
+  bump: [128, 128, 255, 128],
+  red: [255, 0, 0, 0],
+};
 // the vertex layout geometry3d() writes: [attribute, components, offset]
-const LAYOUT = [["position", 3, 0], ["a_t0", 4, 3], ["a_t1", 4, 7], ["a_t2", 4, 11], ["a_col", 4, 15], ["a_n", 3, 19]];
+const LAYOUT = [
+  ["position", 3, 0],
+  ["a_t0", 4, 3],
+  ["a_t1", 4, 7],
+  ["a_t2", 4, 11],
+  ["a_col", 4, 15],
+  ["a_n", 3, 19],
+];
 const STILL_SECONDS = 2; // a still shows the effects this far in (after their prewarm)
 const STILL_STEP = 1 / 30;
 
@@ -43,7 +66,10 @@ export function vertex3d(kind) {
 // colour divided by the alpha first)
 export function fragment3d(kind) {
   let src = swap(fragmentSource(kind), "#version 300 es\n", "");
-  src = swap(src, "out vec4 o;\n", `out vec4 o;
+  src = swap(
+    src,
+    "out vec4 o;\n",
+    `out vec4 o;
 uniform float u_premul;
 vec4 fxTexture(sampler2D t, vec2 uv) { return texture(t, vec2(uv.x, 1.0 - uv.y)); }
 #define texture fxTexture
@@ -51,7 +77,8 @@ vec3 fxSrgb(vec3 c) {
   c = max(c, 0.0);
   return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c));
 }
-`);
+`,
+  );
   src = swap(src, "void main() {", "void fxMain() {");
   return `${src}
 void main() {
@@ -64,10 +91,16 @@ void main() {
 // the blend of a material (its BlendMode src and dst): the game's for colour; coverage only where the game's blend
 // covers what is behind (additive light adds none, as the lobbies' player does)
 export function blendOf(mat) {
-  const src = FACTORS[mat.src] ?? THREE.OneFactor, dst = FACTORS[mat.dst] ?? THREE.ZeroFactor;
+  const src = FACTORS[mat.src] ?? THREE.OneFactor,
+    dst = FACTORS[mat.dst] ?? THREE.ZeroFactor;
   const additive = dst === THREE.OneFactor;
-  return { blendSrc: src, blendDst: dst, blendSrcAlpha: additive ? THREE.ZeroFactor : THREE.OneFactor,
-    blendDstAlpha: additive ? THREE.OneFactor : THREE.OneMinusSrcAlphaFactor, premul: src === THREE.OneFactor && !additive };
+  return {
+    blendSrc: src,
+    blendDst: dst,
+    blendSrcAlpha: additive ? THREE.ZeroFactor : THREE.OneFactor,
+    blendDstAlpha: additive ? THREE.OneFactor : THREE.OneMinusSrcAlphaFactor,
+    premul: src === THREE.OneFactor && !additive,
+  };
 }
 
 // three.js matrix (column-major 4 x 4) <-> particles.js matrix (row-major 3 x 4)
@@ -96,7 +129,9 @@ export function createModelFx(fx, { nodes, textures, root }) {
   if (!defs.length) return null;
   // placed by their nodes every frame: their static place is only where the simulation starts
   const data = { systems: defs.map((d) => ({ ...d, static: IDENTITY })), toggles: [] };
-  const materials = fx.materials || {}, meshes = fx.meshes || {}, texmeta = fx.textures || {};
+  const materials = fx.materials || {},
+    meshes = fx.meshes || {},
+    texmeta = fx.textures || {};
   const group = new THREE.Group();
   group.name = "halo_fx";
   const defaults = new Map();
@@ -111,7 +146,8 @@ export function createModelFx(fx, { nodes, textures, root }) {
 
   // a system's mesh: its program, the material's uniforms and blend, room for its max particles
   function meshOf(def) {
-    const mat = materials[def.material], program = mat && PROGRAMS[mat.program];
+    const mat = materials[def.material],
+      program = mat && PROGRAMS[mat.program];
     if (!program) return null;
     const uniforms = { _TimeY: { value: 0 }, u_premul: { value: 0 } };
     for (const name of program.tex) {
@@ -135,16 +171,29 @@ export function createModelFx(fx, { nodes, textures, root }) {
     const { premul, ...blend } = blendOf(mat);
     uniforms.u_premul.value = premul ? 1 : 0;
     const material = new THREE.RawShaderMaterial({
-      name: `fx_${def.name}`, glslVersion: THREE.GLSL3, vertexShader: vertex3d(mat.program), fragmentShader: fragment3d(mat.program),
-      uniforms, transparent: true, depthWrite: false, depthTest: true, side: THREE.DoubleSide,
-      blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, ...blend,
+      name: `fx_${def.name}`,
+      glslVersion: THREE.GLSL3,
+      vertexShader: vertex3d(mat.program),
+      fragmentShader: fragment3d(mat.program),
+      uniforms,
+      transparent: true,
+      depthWrite: false,
+      depthTest: true,
+      side: THREE.DoubleSide,
+      blending: THREE.CustomBlending,
+      blendEquation: THREE.AddEquation,
+      ...blend,
     });
-    const r = def.renderer, perParticle = r.mode === 4
-      ? Math.max(...(r.meshes || [r.mesh]).map((id) => meshes[id]?.i.length || 0)) : 6;
-    const buffer = new THREE.InterleavedBuffer(new Float32Array(Math.max(1, (def.main.max || 1) * perParticle * STRIDE3)), STRIDE3);
+    const r = def.renderer,
+      perParticle = r.mode === 4 ? Math.max(...(r.meshes || [r.mesh]).map((id) => meshes[id]?.i.length || 0)) : 6;
+    const buffer = new THREE.InterleavedBuffer(
+      new Float32Array(Math.max(1, (def.main.max || 1) * perParticle * STRIDE3)),
+      STRIDE3,
+    );
     buffer.setUsage(THREE.DynamicDrawUsage);
     const geometry = new THREE.BufferGeometry();
-    for (const [name, n, offset] of LAYOUT) geometry.setAttribute(name, new THREE.InterleavedBufferAttribute(buffer, n, offset));
+    for (const [name, n, offset] of LAYOUT)
+      geometry.setAttribute(name, new THREE.InterleavedBufferAttribute(buffer, n, offset));
     geometry.setDrawRange(0, 0);
     const mesh = new THREE.Mesh(geometry, material);
     mesh.name = def.name;
@@ -158,12 +207,17 @@ export function createModelFx(fx, { nodes, textures, root }) {
 
   const draws = defs.map(meshOf);
   let effects = new Effects(data);
-  const toThree = new THREE.Matrix4(), toSim = new THREE.Matrix4(), m = new THREE.Matrix4();
+  const toThree = new THREE.Matrix4(),
+    toSim = new THREE.Matrix4(),
+    m = new THREE.Matrix4();
 
   // the simulation's space: the model's Unity space in lobby units, mirrored back to glTF and placed by the root
   function place() {
     root.updateMatrixWorld();
-    toThree.copy(root.matrixWorld).multiply(MIRROR).multiply(m.makeScale(1 / WORLD, 1 / WORLD, 1 / WORLD));
+    toThree
+      .copy(root.matrixWorld)
+      .multiply(MIRROR)
+      .multiply(m.makeScale(1 / WORLD, 1 / WORLD, 1 / WORLD));
     toSim.copy(toThree).invert();
     effects.systems.forEach((s) => {
       // a system's own Unity space (its node's, mirrored) in the simulation's space
@@ -199,7 +253,10 @@ export function createModelFx(fx, { nodes, textures, root }) {
     // the effects at a fixed moment, the same every time: a still is the same image whenever it is taken
     settle(camera) {
       let seed = 1;
-      effects = new Effects(data, { seed: 0x5eed, random: () => ((seed = Math.imul(seed, 48271) % 2147483647) / 2147483647) });
+      effects = new Effects(data, {
+        seed: 0x5eed,
+        random: () => (seed = Math.imul(seed, 48271) % 2147483647) / 2147483647,
+      });
       place();
       effects.update(0);
       for (let t = 0; t < STILL_SECONDS - 1e-9; t += STILL_STEP) effects.update(STILL_STEP);
@@ -208,7 +265,11 @@ export function createModelFx(fx, { nodes, textures, root }) {
     // for checks: live particles and drawn systems
     stats: () => ({ particles: effects.count(), systems: draws.filter(Boolean).length }),
     dispose() {
-      for (const d of draws) if (d) { d.mesh.geometry.dispose(); d.mesh.material.dispose(); }
+      for (const d of draws)
+        if (d) {
+          d.mesh.geometry.dispose();
+          d.mesh.material.dispose();
+        }
       for (const t of defaults.values()) t.dispose();
       group.removeFromParent();
     },

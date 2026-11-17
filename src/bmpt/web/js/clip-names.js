@@ -7,18 +7,71 @@
 // menuOf into the action bar's group cards and their lists' sections.
 
 // misspellings, fixed before the words are read
-const FIXES = [[/rnadom/gi, "Random"], [/fomation/gi, "Formation"], [/formation pickup/gi, "Formation_Pickup"],
-  [/callsigh(?!n)/gi, "Callsign"], [/strart/gi, "Start"], [/publlic/gi, "Public"], [/^nomal(?=_|\d)/i, "Normal"],
-  [/^norma(?=_)/i, "Normal"]];
+const FIXES = [
+  [/rnadom/gi, "Random"],
+  [/fomation/gi, "Formation"],
+  [/formation pickup/gi, "Formation_Pickup"],
+  [/callsigh(?!n)/gi, "Callsign"],
+  [/strart/gi, "Start"],
+  [/publlic/gi, "Public"],
+  [/^nomal(?=_|\d)/i, "Normal"],
+  [/^norma(?=_)/i, "Normal"],
+];
 // each word's one spelling
-const WORDS = new Map(["Normal", "Attack", "Start", "Ing", "Delay", "End", "Idle", "Reload", "Callsign", "Random", "Move",
-  "Jump", "Kneel", "Stand", "Vital", "Dying", "Panic", "Death", "Retreat", "Victory", "Formation", "Pickup", "Cafe", "Walk",
-  "Reaction", "Tactical", "Exs", "Ex", "Public", "Rearrange", "TSS", "Interaction"].map((w) => [w.toLowerCase(), w]));
+const WORDS = new Map(
+  [
+    "Normal",
+    "Attack",
+    "Start",
+    "Ing",
+    "Delay",
+    "End",
+    "Idle",
+    "Reload",
+    "Callsign",
+    "Random",
+    "Move",
+    "Jump",
+    "Kneel",
+    "Stand",
+    "Vital",
+    "Dying",
+    "Panic",
+    "Death",
+    "Retreat",
+    "Victory",
+    "Formation",
+    "Pickup",
+    "Cafe",
+    "Walk",
+    "Reaction",
+    "Tactical",
+    "Exs",
+    "Ex",
+    "Public",
+    "Rearrange",
+    "TSS",
+    "Interaction",
+  ].map((w) => [w.toLowerCase(), w]),
+);
 // words whose number counts the skill or the interaction (EX 2, Normal Skill 1), not the battle form
 const INDEXED = new Set(["Exs", "Ex", "Public", "Interaction"]);
 // slots also written with a leading "Normal" word (Normal01_Public01, Normal01_Victory_Start)
-const UNPREFIXED = new Set(["Exs", "Public", "Victory_Start", "Victory_End", "Victory_Start_Random", "Victory_End_Random",
-  "Vital_Death", "Vital_Dying_Ing", "Vital_Panic", "Vital_Retreat", "Move_Ing", "Move_End_Normal", "Move_Jump"]);
+const UNPREFIXED = new Set([
+  "Exs",
+  "Public",
+  "Victory_Start",
+  "Victory_End",
+  "Victory_Start_Random",
+  "Victory_End_Random",
+  "Vital_Death",
+  "Vital_Dying_Ing",
+  "Vital_Panic",
+  "Vital_Retreat",
+  "Move_Ing",
+  "Move_End_Normal",
+  "Move_Jump",
+]);
 const RENAMED = { Ex: "Exs", Vital_Dying: "Vital_Dying_Ing" };
 
 // name -> { slot, form, index } (form and index 0 when the name has none), or null for another prefab's clip or a
@@ -29,7 +82,8 @@ export function parseClip(name, dev) {
   let rest = name.slice(prefix.length);
   for (const [re, to] of FIXES) rest = rest.replace(re, to);
   const words = [];
-  let form = 0, index = 0;
+  let form = 0,
+    index = 0;
   for (const token of rest.split("_")) {
     const m = /^([A-Za-z]*)(\d*)$/.exec(token);
     if (!m) return null;
@@ -39,10 +93,14 @@ export function parseClip(name, dev) {
       const word = WORDS.get(letters.toLowerCase());
       if (!word) return null;
       words.push(word);
-      if (digits) { if (INDEXED.has(word)) index = n; else form = n; }
+      if (digits) {
+        if (INDEXED.has(word)) index = n;
+        else form = n;
+      }
     } else if (digits) {
       // a number on its own: the skill's after a skill word (Exs_02), else the form (Normal_Idle_01, Exs_1_02)
-      if (INDEXED.has(words.at(-1)) && !index) index = n; else form = n;
+      if (INDEXED.has(words.at(-1)) && !index) index = n;
+      else form = n;
     }
   }
   let slot = words.join("_");
@@ -61,7 +119,11 @@ export const ACTION_DEFS = [
   { id: "victory", group: "basic", play: ["Victory_Start", "Victory_End"] },
   { id: "pickup", group: "basic", play: ["Formation_Pickup"] },
   { id: "combatIdle", group: "combat", play: ["Normal_Idle"] },
-  { id: "attack", group: "combat", play: ["Normal_Attack_Start", "Normal_Attack_Ing", "Normal_Attack_Delay", "Normal_Attack_End"] },
+  {
+    id: "attack",
+    group: "combat",
+    play: ["Normal_Attack_Start", "Normal_Attack_Ing", "Normal_Attack_Delay", "Normal_Attack_End"],
+  },
   { id: "reload", group: "combat", play: ["Normal_Reload"] },
   { id: "callsign", group: "combat", play: ["Normal_Callsign"] },
   { id: "tacticalEntry", group: "combat", play: ["Tactical_Start"] },
@@ -71,12 +133,22 @@ export const ACTION_DEFS = [
   { id: "moveCallsign", group: "move", section: "movement", play: ["Move_Callsign"] },
   { id: "kneelIn", group: "move", section: "kneel", play: ["Move_End_Kneel"] },
   { id: "kneelIdle", group: "move", section: "kneel", play: ["Kneel_Idle"] },
-  { id: "kneelAttack", group: "move", section: "kneel", play: ["Kneel_Attack_Start", "Kneel_Attack_Ing", "Kneel_Attack_Delay", "Kneel_Attack_End"] },
+  {
+    id: "kneelAttack",
+    group: "move",
+    section: "kneel",
+    play: ["Kneel_Attack_Start", "Kneel_Attack_Ing", "Kneel_Attack_Delay", "Kneel_Attack_End"],
+  },
   { id: "kneelReload", group: "move", section: "kneel", play: ["Kneel_Reload"] },
   { id: "kneelCallsign", group: "move", section: "kneel", play: ["Kneel_Callsign"] },
   { id: "standIn", group: "move", section: "stand", play: ["Move_End_Stand"] },
   { id: "standIdle", group: "move", section: "stand", play: ["Stand_Idle"] },
-  { id: "standAttack", group: "move", section: "stand", play: ["Stand_Attack_Start", "Stand_Attack_Ing", "Stand_Attack_Delay", "Stand_Attack_End"] },
+  {
+    id: "standAttack",
+    group: "move",
+    section: "stand",
+    play: ["Stand_Attack_Start", "Stand_Attack_Ing", "Stand_Attack_Delay", "Stand_Attack_End"],
+  },
   { id: "standReload", group: "move", section: "stand", play: ["Stand_Reload"] },
   { id: "standCallsign", group: "move", section: "stand", play: ["Stand_Callsign"] },
   { id: "ex", group: "skills", play: ["Exs"], indexed: true },
@@ -112,15 +184,21 @@ export function actionsOf(names, dev) {
   }
   // one form number alone is no second form: fold it into the plain one
   const forms = new Set(parsed.map((p) => p.form).filter(Boolean));
-  if (forms.size < 2) parsed.forEach((p) => { p.form = 0; });
+  if (forms.size < 2)
+    parsed.forEach((p) => {
+      p.form = 0;
+    });
   const named = new Map();
   for (const p of parsed) {
     const k = `${p.slot}|${p.form}|${p.index}`;
     if (!named.has(k)) named.set(k, p.name); // the first clip of a slot wins, as the export picks it
   }
-  const variants = (slot) => parsed.filter((p) => p.slot === slot)
-    .map((p) => [p.form, p.index]).filter(([f, i], n, all) => all.findIndex(([g, j]) => g === f && j === i) === n)
-    .sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const variants = (slot) =>
+    parsed
+      .filter((p) => p.slot === slot)
+      .map((p) => [p.form, p.index])
+      .filter(([f, i], n, all) => all.findIndex(([g, j]) => g === f && j === i) === n)
+      .sort((a, b) => a[0] - b[0] || a[1] - b[1]);
   const out = [];
   for (const def of ACTION_DEFS) {
     const lead = def.pick ? def.pick.find((s) => variants(s).length) : def.play[0];

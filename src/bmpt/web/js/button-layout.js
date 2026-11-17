@@ -7,23 +7,29 @@ const PIVY = [1, 1, 1, 0.5, 0.5, 0.5, 0, 0, 0];
 export function resizeButton(body, width = null, height = null) {
   const bg = body.widgets.find((w) => "sprite" in w && "w_" in w);
   if (!bg) return body;
-  const oldW = bg.w_, oldH = bg.h_, pivot = bg.pivot ?? 4;
+  const oldW = bg.w_,
+    oldH = bg.h_,
+    pivot = bg.pivot ?? 4;
   bg.w_ = width ?? oldW;
   bg.h_ = height ?? oldH;
   for (const child of body.children || []) {
     for (const w of child.widgets) {
       if (!/^Common_Btn_.*_Pt$/.test(w.sprite || "")) continue;
-      const anchors = w.anchors || {}, p = w.pivot ?? 4;
+      const anchors = w.anchors || {},
+        p = w.pivot ?? 4;
       const axis = (i, size, old, bp, cp, lo, hi) => {
-        const scale = child.scale[i], span = w[size] * scale;
-        const start = -bp * bg[size], end = start + bg[size];
-        const edge = (key) => anchors[key] ? start + (end - start) * anchors[key][0] + anchors[key][1] : null;
-        let a = edge(lo), b = edge(hi);
+        const scale = child.scale[i],
+          span = w[size] * scale;
+        const start = -bp * bg[size],
+          end = start + bg[size];
+        const edge = (key) => (anchors[key] ? start + (end - start) * anchors[key][0] + anchors[key][1] : null);
+        let a = edge(lo),
+          b = edge(hi);
         if (a == null && b == null) {
           // Unanchored patterns retain their prefab edge offsets. Items/UseBtn's second pattern is mirrored
           // on the left/bottom; Mailbox/ReceiveAll uses a negative child scale for the same decoration.
           const flipped = i === 0 ? w.flip === 1 || w.flip === 3 : w.flip >= 2;
-          const mirrored = flipped !== (scale < 0);
+          const mirrored = flipped !== scale < 0;
           child.pos[i] += (bg[size] - old) * ((mirrored ? 0 : 1) - bp);
           return;
         }
@@ -51,18 +57,32 @@ export function clipButtonPatterns(view, { load } = {}) {
     const element = entry.els[0];
     if (!body || !element) continue;
     const rect = (el) => ["left", "top", "width", "height"].map((key) => parseFloat(el.style[key]));
-    const source = parent.els[0], [, , bw, bh] = rect(source);
+    const source = parent.els[0],
+      [, , bw, bh] = rect(source);
     // The cheap bounds are available before asynchronous sprite painting. The
     // alpha mask then adds the official body's rounded corners, which a four-
     // corner polygon cannot represent.
-    const transform = (widget) => `${widget.incline ? `skewX(${-widget.incline}deg)` : ""} scale(${widget.flip === 1 || widget.flip === 3 ? -1 : 1}, ${widget.flip >= 2 ? -1 : 1})`;
-    const style = (el, widget) => Object.fromEntries(["left", "top", "width", "height", "transform"].map((key) =>
-      [key, key === "transform" ? el.style.transform || transform(widget) : el.style[key]]));
-    const sourceStyle = style(source, body), targetStyle = style(element, w);
+    const transform = (widget) =>
+      `${widget.incline ? `skewX(${-widget.incline}deg)` : ""} scale(${widget.flip === 1 || widget.flip === 3 ? -1 : 1}, ${widget.flip >= 2 ? -1 : 1})`;
+    const style = (el, widget) =>
+      Object.fromEntries(
+        ["left", "top", "width", "height", "transform"].map((key) => [
+          key,
+          key === "transform" ? el.style.transform || transform(widget) : el.style[key],
+        ]),
+      );
+    const sourceStyle = style(source, body),
+      targetStyle = style(element, w);
     const [a, b, c, d, e, f] = spriteMaskTransform(sourceStyle, targetStyle);
-    const points = [[0, 0], [bw, 0], [bw, bh], [0, bh]].map(([x, y]) => [a * x + c * y + e, b * x + d * y + f]);
+    const points = [
+      [0, 0],
+      [bw, 0],
+      [bw, bh],
+      [0, bh],
+    ].map(([x, y]) => [a * x + c * y + e, b * x + d * y + f]);
     element.style.clipPath = `polygon(${points.map(([x, y]) => `${x}px ${y}px`).join(", ")})`;
-    if (load) pending.push(Promise.all(view.images || []).then(() => maskWithSprite(source, element, load, { surface: true })));
+    if (load)
+      pending.push(Promise.all(view.images || []).then(() => maskWithSprite(source, element, load, { surface: true })));
   }
   return Promise.all(pending);
 }
@@ -73,7 +93,13 @@ export function clipButtonPatterns(view, { load } = {}) {
 // A pill is a body at most PILL.maxH high and PILL.ratio times as wide as high: the cards, thumbnails and square action
 // buttons that also draw Common_Btn_BG (the skill cards, the face cards) are not tagged.
 export const PILL = Object.freeze({ maxH: 200, ratio: 1.5 });
-export const BUTTON_TIERS = Object.freeze([["XXS", CONTROL.buttonXXS], ["XS", CONTROL.buttonXS], ["S", CONTROL.buttonS], ["M", CONTROL.buttonM], ["L", CONTROL.buttonL]]);
+export const BUTTON_TIERS = Object.freeze([
+  ["XXS", CONTROL.buttonXXS],
+  ["XS", CONTROL.buttonXS],
+  ["S", CONTROL.buttonS],
+  ["M", CONTROL.buttonM],
+  ["L", CONTROL.buttonL],
+]);
 export function buttonTier(height, tolerance = 0.5) {
   return BUTTON_TIERS.find(([, control]) => Math.abs(height - control.h) <= tolerance)?.[0] ?? null;
 }

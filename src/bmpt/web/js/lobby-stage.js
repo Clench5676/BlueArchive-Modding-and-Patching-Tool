@@ -21,7 +21,8 @@ const hosts = new WeakMap(); // guest player -> the player whose context it draw
 const own = new WeakMap(); // player -> its renderer's own drawSkeleton
 const plans = new WeakMap(); // player -> what it draws: {steps, fx, guests}, and for checks the players
 const hidden = new WeakSet(); // players not drawn now: the scenes only a lobby's intro shows (lobby-intro.js)
-let interleave = true, latest = null; // for checks: the order mode, and the host installed last (a WeakRef)
+let interleave = true,
+  latest = null; // for checks: the order mode, and the host installed last (a WeakRef)
 
 // The order of a lobby's skeleton parts. layers: the players' layers (sortingLayer, order, queue, pages, z) in stacking
 // order; each draws in the parts of queuesOf, one per render queue of its pages, lowest first. Returns [{layer, part,
@@ -29,9 +30,16 @@ let interleave = true, latest = null; // for checks: the order mode, and the hos
 // layer, sorting order, render queue, then back to front (particles.js sortKey), equal keys in stacking order; else
 // layer after layer, as stacked canvases draw them.
 export function order(layers, merged = true) {
-  const out = layers.flatMap((l, layer) => queuesOf(l).map((queue, part) => ({
-    layer, part, sortingLayer: l?.sortingLayer || 0, order: l?.order || 0, queue, z: l?.z || 0,
-  })));
+  const out = layers.flatMap((l, layer) =>
+    queuesOf(l).map((queue, part) => ({
+      layer,
+      part,
+      sortingLayer: l?.sortingLayer || 0,
+      order: l?.order || 0,
+      queue,
+      z: l?.z || 0,
+    })),
+  );
   if (!merged) return out;
   return out.sort((a, b) => compareKeys(sortKey(a), sortKey(b)) || a.layer - b.layer || a.part - b.part);
 }
@@ -42,7 +50,8 @@ export function order(layers, merged = true) {
 export function make(host, create) {
   const gl = host?.context?.gl;
   if (!gl || typeof HTMLCanvasElement === "undefined") return create();
-  const proto = HTMLCanvasElement.prototype, getContext = proto.getContext;
+  const proto = HTMLCanvasElement.prototype,
+    getContext = proto.getContext;
   proto.getContext = function (type, ...rest) {
     return this !== gl.canvas && /webgl/i.test(type) ? gl : getContext.call(this, type, ...rest);
   };
@@ -116,8 +125,12 @@ export function install(players, fx) {
   const merged = players.length > 1 && players.slice(1).every((p) => hosts.get(p) === host);
   const layers = players.map((p) => p.bamtLayer || {});
   const parts = layers.map((l) => Parts.partsOf(l));
-  const steps = order(layers, merged && interleave)
-    .map((s) => ({ ...s, player: players[s.layer], owner: merged ? host : players[s.layer], parts: parts[s.layer] }));
+  const steps = order(layers, merged && interleave).map((s) => ({
+    ...s,
+    player: players[s.layer],
+    owner: merged ? host : players[s.layer],
+    parts: parts[s.layer],
+  }));
   // the effects go after the parts they sort after. In one target a hidden scene's parts draw nothing and the rest
   // keep their order; on canvases of their own no effect goes after a scene the intro keeps hidden (its canvas hides
   // with it): the effects on at rest keep the places they have without the scenes
@@ -156,7 +169,8 @@ export function frame(player) {
   const guests = plans.get(player)?.guests;
   if (!guests?.length) return;
   for (const g of guests) if (g.skeleton && !g.disposed && !g.error) g.drawFrame(false);
-  const gl = player.context?.gl, canvas = player.canvas;
+  const gl = player.context?.gl,
+    canvas = player.canvas;
   if (gl && canvas) gl.viewport(0, 0, canvas.width, canvas.height);
 }
 
@@ -164,14 +178,20 @@ export function frame(player) {
 // its own player's renderer and camera, the slots of the step's part only, and after a step the effects that sort
 // after it (the batch flushed first). The guests' slot colours are tinted for linear light (linear.js) meanwhile.
 function draw(player, skeleton, args) {
-  const plan = plans.get(player), steps = plan?.steps || [];
+  const plan = plans.get(player),
+    steps = plan?.steps || [];
   const base = player.sceneRenderer;
-  if (steps.length <= 1 && !plan?.guests.length) { if (!hidden.has(player)) own.get(player)(skeleton, ...args); return; }
+  if (steps.length <= 1 && !plan?.guests.length) {
+    if (!hidden.has(player)) own.get(player)(skeleton, ...args);
+    return;
+  }
   for (const g of plan.guests) Linear.tint(g);
   let open = base;
   try {
     steps.forEach((step, i) => {
-      const p = step.player, renderer = p.sceneRenderer, drawSkeleton = own.get(p);
+      const p = step.player,
+        renderer = p.sceneRenderer,
+        drawSkeleton = own.get(p);
       if (p.skeleton && renderer && drawSkeleton && !p.disposed && !p.error && !hidden.has(p)) {
         if (open !== renderer) {
           open?.end();

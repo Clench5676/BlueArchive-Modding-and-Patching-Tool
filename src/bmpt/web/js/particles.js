@@ -24,13 +24,13 @@
 
 import { toLinear } from "./touch-fx.js";
 
-export const WORLD = 1665 / 2;      // lobby units per Unity world unit
-export const VIEW_H = 1665;         // the game's view height in lobby units (max particle size is a fraction of it)
-const GRAVITY = -9.81;              // Physics.gravity.y, world units / s^2
+export const WORLD = 1665 / 2; // lobby units per Unity world unit
+export const VIEW_H = 1665; // the game's view height in lobby units (max particle size is a fraction of it)
+const GRAVITY = -9.81; // Physics.gravity.y, world units / s^2
 const PREWARM_STEP = 1 / 30;
 const MAX_DT = 0.1;
-const DAMPEN_FPS = 30;              // limit velocity's dampen is per frame at this rate (frame-rate independent)
-const EPS = 1e-9;                   // seconds: emission times this close count as the same
+const DAMPEN_FPS = 30; // limit velocity's dampen is per frame at this rate (frame-rate independent)
+const EPS = 1e-9; // seconds: emission times this close count as the same
 
 // --- values ---------------------------------------------------------------------------------------------------------
 
@@ -44,9 +44,13 @@ export function curve(keys, t) {
   if (t >= last[0]) return last[1];
   let i = 1;
   while (keys[i][0] <= t) i++;
-  const [t0, v0, , m0] = keys[i - 1], [t1, v1, m1] = keys[i];
+  const [t0, v0, , m0] = keys[i - 1],
+    [t1, v1, m1] = keys[i];
   if (m0 == null || m1 == null) return v0;
-  const dt = t1 - t0, s = (t - t0) / dt, s2 = s * s, s3 = s2 * s;
+  const dt = t1 - t0,
+    s = (t - t0) / dt,
+    s2 = s * s,
+    s3 = s2 * s;
   return (2 * s3 - 3 * s2 + 1) * v0 + (s3 - 2 * s2 + s) * dt * m0 + (3 * s2 - 2 * s3) * v1 + (s3 - s2) * dt * m1;
 }
 
@@ -73,13 +77,20 @@ function ramp(keys, t, fixed, n) {
   if (t >= last[0]) return pick(last);
   let i = 1;
   while (keys[i][0] < t) i++;
-  const a = keys[i - 1], b = keys[i], f = (t - a[0]) / (b[0] - a[0] || 1);
+  const a = keys[i - 1],
+    b = keys[i],
+    f = (t - a[0]) / (b[0] - a[0] || 1);
   const out = [];
   for (let k = 1; k <= n; k++) out.push(a[k] + (b[k] - a[k]) * f);
   return out;
 }
 export const gradientAt = (g, t) => [...ramp(g.c, t, g.fixed, 3), ramp(g.a, t, g.fixed, 1)[0]];
-const lerp4 = (a, b, r) => [a[0] + (b[0] - a[0]) * r, a[1] + (b[1] - a[1]) * r, a[2] + (b[2] - a[2]) * r, a[3] + (b[3] - a[3]) * r];
+const lerp4 = (a, b, r) => [
+  a[0] + (b[0] - a[0]) * r,
+  a[1] + (b[1] - a[1]) * r,
+  a[2] + (b[2] - a[2]) * r,
+  a[3] + (b[3] - a[3]) * r,
+];
 // a MinMaxGradient (particles.py gradient) at normalized time t with the particle's random r: [r, g, b, a] as stored
 export function colorAt(g, t, r) {
   if (!g) return [1, 1, 1, 1];
@@ -98,11 +109,47 @@ export function rnd(seed, k) {
   h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
-const R = { life: 0, speed: 1, size: 2, sizeY: 3, sizeZ: 4, rotX: 5, rotY: 6, rot: 7, color: 8, colorLife: 9,
-  sizeLife: 10, rotLife: 11, velX: 12, velY: 13, velZ: 14, orbit: 15, radial: 16, speedMod: 17, limit: 18,
-  forceX: 19, forceY: 20, forceZ: 21, frame: 22, start: 23, row: 24, flipU: 25, flipV: 26, flipRot: 27, custom: 28,
-  mesh: 36, burst: 38, sub: 39, shape: 40, // shape: the first of the values the shape draws, one after another
-  colorSpeed: 90, trail: 91, trailLife: 92, trailColor: 93, trailWidth: 94, trailColorTrail: 95 };
+const R = {
+  life: 0,
+  speed: 1,
+  size: 2,
+  sizeY: 3,
+  sizeZ: 4,
+  rotX: 5,
+  rotY: 6,
+  rot: 7,
+  color: 8,
+  colorLife: 9,
+  sizeLife: 10,
+  rotLife: 11,
+  velX: 12,
+  velY: 13,
+  velZ: 14,
+  orbit: 15,
+  radial: 16,
+  speedMod: 17,
+  limit: 18,
+  forceX: 19,
+  forceY: 20,
+  forceZ: 21,
+  frame: 22,
+  start: 23,
+  row: 24,
+  flipU: 25,
+  flipV: 26,
+  flipRot: 27,
+  custom: 28,
+  mesh: 36,
+  burst: 38,
+  sub: 39,
+  shape: 40, // shape: the first of the values the shape draws, one after another
+  colorSpeed: 90,
+  trail: 91,
+  trailLife: 92,
+  trailColor: 93,
+  trailWidth: 94,
+  trailColorTrail: 95,
+};
 
 // --- 3 x 4 affine matrices (row-major) ------------------------------------------------------------------------------
 
@@ -110,22 +157,47 @@ export const IDENTITY = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0];
 export function mul(a, b) {
   const o = new Array(12);
   for (let i = 0; i < 3; i++) {
-    const r0 = a[i * 4], r1 = a[i * 4 + 1], r2 = a[i * 4 + 2];
+    const r0 = a[i * 4],
+      r1 = a[i * 4 + 1],
+      r2 = a[i * 4 + 2];
     for (let j = 0; j < 4; j++) o[i * 4 + j] = r0 * b[j] + r1 * b[4 + j] + r2 * b[8 + j] + (j === 3 ? a[i * 4 + 3] : 0);
   }
   return o;
 }
-export const apply = (m, x, y, z) => [m[0] * x + m[1] * y + m[2] * z + m[3], m[4] * x + m[5] * y + m[6] * z + m[7], m[8] * x + m[9] * y + m[10] * z + m[11]];
-export const applyDir = (m, x, y, z) => [m[0] * x + m[1] * y + m[2] * z, m[4] * x + m[5] * y + m[6] * z, m[8] * x + m[9] * y + m[10] * z];
+export const apply = (m, x, y, z) => [
+  m[0] * x + m[1] * y + m[2] * z + m[3],
+  m[4] * x + m[5] * y + m[6] * z + m[7],
+  m[8] * x + m[9] * y + m[10] * z + m[11],
+];
+export const applyDir = (m, x, y, z) => [
+  m[0] * x + m[1] * y + m[2] * z,
+  m[4] * x + m[5] * y + m[6] * z,
+  m[8] * x + m[9] * y + m[10] * z,
+];
 export function invert(m) {
   const [a, b, c, , d, e, f, , g, h, i] = m;
-  const A = e * i - f * h, B = -(d * i - f * g), C = d * h - e * g;
+  const A = e * i - f * h,
+    B = -(d * i - f * g),
+    C = d * h - e * g;
   const det = a * A + b * B + c * C || 1e-12;
-  const inv = [A / det, -(b * i - c * h) / det, (b * f - c * e) / det, 0,
-    B / det, (a * i - c * g) / det, -(a * f - c * d) / det, 0,
-    C / det, -(a * h - b * g) / det, (a * e - b * d) / det, 0];
+  const inv = [
+    A / det,
+    -(b * i - c * h) / det,
+    (b * f - c * e) / det,
+    0,
+    B / det,
+    (a * i - c * g) / det,
+    -(a * f - c * d) / det,
+    0,
+    C / det,
+    -(a * h - b * g) / det,
+    (a * e - b * d) / det,
+    0,
+  ];
   const t = applyDir(inv, m[3], m[7], m[11]);
-  inv[3] = -t[0]; inv[7] = -t[1]; inv[11] = -t[2];
+  inv[3] = -t[0];
+  inv[7] = -t[1];
+  inv[11] = -t[2];
   return inv;
 }
 const colLen = (m, j) => Math.hypot(m[j], m[4 + j], m[8 + j]);
@@ -134,16 +206,27 @@ function rotationOf(m) {
   const out = m.slice();
   for (let j = 0; j < 3; j++) {
     const l = colLen(m, j) || 1;
-    out[j] /= l; out[4 + j] /= l; out[8 + j] /= l;
+    out[j] /= l;
+    out[4 + j] /= l;
+    out[8 + j] /= l;
   }
   out[3] = out[7] = out[11] = 0;
   return out;
 }
 // Quaternion.Euler(x, y, z) in degrees as a 3 x 4 matrix (Unity's order: z, then x, then y)
 export function euler(x, y, z) {
-  const rx = (x * Math.PI) / 180, ry = (y * Math.PI) / 180, rz = (z * Math.PI) / 180;
-  const cx = Math.cos(rx), sx = Math.sin(rx), cy = Math.cos(ry), sy = Math.sin(ry), cz = Math.cos(rz), sz = Math.sin(rz);
-  const X = [1, 0, 0, 0, 0, cx, -sx, 0, 0, sx, cx, 0], Y = [cy, 0, sy, 0, 0, 1, 0, 0, -sy, 0, cy, 0], Z = [cz, -sz, 0, 0, sz, cz, 0, 0, 0, 0, 1, 0];
+  const rx = (x * Math.PI) / 180,
+    ry = (y * Math.PI) / 180,
+    rz = (z * Math.PI) / 180;
+  const cx = Math.cos(rx),
+    sx = Math.sin(rx),
+    cy = Math.cos(ry),
+    sy = Math.sin(ry),
+    cz = Math.cos(rz),
+    sz = Math.sin(rz);
+  const X = [1, 0, 0, 0, 0, cx, -sx, 0, 0, sx, cx, 0],
+    Y = [cy, 0, sy, 0, 0, 1, 0, 0, -sy, 0, cy, 0],
+    Z = [cz, -sz, 0, 0, sz, cz, 0, 0, 0, 0, 1, 0];
   return mul(Y, mul(X, Z));
 }
 // a system's simulation matrix for its scaling mode: Hierarchy keeps every scale, Local only the system's own (in
@@ -151,9 +234,16 @@ export function euler(x, y, z) {
 export function scaled(W, def) {
   const mode = def.main.scaling;
   if (mode === 0) return W;
-  const out = rotationOf(W), ls = mode === 1 ? def.ls : [1, 1, 1];
-  for (let j = 0; j < 3; j++) { out[j] *= ls[j] * WORLD; out[4 + j] *= ls[j] * WORLD; out[8 + j] *= ls[j] * WORLD; }
-  out[3] = W[3]; out[7] = W[7]; out[11] = W[11];
+  const out = rotationOf(W),
+    ls = mode === 1 ? def.ls : [1, 1, 1];
+  for (let j = 0; j < 3; j++) {
+    out[j] *= ls[j] * WORLD;
+    out[4 + j] *= ls[j] * WORLD;
+    out[8 + j] *= ls[j] * WORLD;
+  }
+  out[3] = W[3];
+  out[7] = W[7];
+  out[11] = W[11];
   return out;
 }
 
@@ -161,10 +251,15 @@ export function scaled(W, def) {
 
 const TAU = Math.PI * 2;
 function unitSphere(r) {
-  const z = 2 * r() - 1, a = TAU * r(), s = Math.sqrt(Math.max(0, 1 - z * z));
+  const z = 2 * r() - 1,
+    a = TAU * r(),
+    s = Math.sqrt(Math.max(0, 1 - z * z));
   return [s * Math.cos(a), s * Math.sin(a), z];
 }
-const norm = (v) => { const l = Math.hypot(v[0], v[1], v[2]); return l > 1e-9 ? [v[0] / l, v[1] / l, v[2] / l] : [0, 0, 1]; };
+const norm = (v) => {
+  const l = Math.hypot(v[0], v[1], v[2]);
+  return l > 1e-9 ? [v[0] / l, v[1] / l, v[2] / l] : [0, 0, 1];
+};
 // radius thickness: 0 emits from the surface, 1 from the whole area (2D) or volume (3D), uniformly
 const shell = (r, thickness, dims) => Math.pow(1 - thickness + thickness * r, 1 / dims);
 
@@ -186,22 +281,35 @@ export function along(mode, spread, speed, time, duration, batch, u = 0) {
 // position, rotation and scale; r() gives random values, arcPos (0..1) places it on the arc and edgePos (0..1) on an
 // edge where their modes say (along)
 export function shapePoint(shape, r, arcPos = null, edgePos = null) {
-  const type = shape.type, rad = shape.radius, th = shape.thickness;
-  const angle = (arcPos != null ? arcPos : r()) * ((shape.arc ?? 360) * Math.PI) / 180;
+  const type = shape.type,
+    rad = shape.radius,
+    th = shape.thickness;
+  const angle = ((arcPos != null ? arcPos : r()) * ((shape.arc ?? 360) * Math.PI)) / 180;
   switch (type) {
-    case 0: case 1: { // sphere, sphere shell: outwards
-      const d = unitSphere(r), k = rad * (type === 1 ? 1 : shell(r(), th, 3));
+    case 0:
+    case 1: {
+      // sphere, sphere shell: outwards
+      const d = unitSphere(r),
+        k = rad * (type === 1 ? 1 : shell(r(), th, 3));
       return { p: [d[0] * k, d[1] * k, d[2] * k], d };
     }
-    case 2: case 3: { // hemisphere towards +z, shell
+    case 2:
+    case 3: {
+      // hemisphere towards +z, shell
       const d = unitSphere(r);
       d[2] = Math.abs(d[2]);
       const k = rad * (type === 3 ? 1 : shell(r(), th, 3));
       return { p: [d[0] * k, d[1] * k, d[2] * k], d };
     }
-    case 4: case 7: case 8: case 9: { // cone from its base (shell: its rim), cone volume: along +z, opening by angle
+    case 4:
+    case 7:
+    case 8:
+    case 9: {
+      // cone from its base (shell: its rim), cone volume: along +z, opening by angle
       const f = type === 7 || type === 9 ? 1 : shell(r(), th, 2);
-      const ca = Math.cos(angle), sa = Math.sin(angle), tan = Math.tan((Math.min(89.9, shape.angle) * Math.PI) / 180);
+      const ca = Math.cos(angle),
+        sa = Math.sin(angle),
+        tan = Math.tan((Math.min(89.9, shape.angle) * Math.PI) / 180);
       const d = norm([ca * tan * f, sa * tan * f, 1]);
       const p = [ca * rad * f, sa * rad * f, 0];
       if (type === 8 || type === 9) {
@@ -212,20 +320,33 @@ export function shapePoint(shape, r, arcPos = null, edgePos = null) {
     }
     case 5: // box volume (the unit box, scaled by the shape's scale), along +z
       return { p: [r() - 0.5, r() - 0.5, r() - 0.5], d: [0, 0, 1] };
-    case 15: case 16: { // box shell (a face), box edge (an edge) of the unit box
-      const p = [r() - 0.5, r() - 0.5, r() - 0.5], a = Math.floor(r() * 3) % 3;
+    case 15:
+    case 16: {
+      // box shell (a face), box edge (an edge) of the unit box
+      const p = [r() - 0.5, r() - 0.5, r() - 0.5],
+        a = Math.floor(r() * 3) % 3;
       p[a] = r() < 0.5 ? -0.5 : 0.5;
-      if (type === 16) { const b = (a + 1 + Math.floor(r() * 2)) % 3; p[b] = r() < 0.5 ? -0.5 : 0.5; }
+      if (type === 16) {
+        const b = (a + 1 + Math.floor(r() * 2)) % 3;
+        p[b] = r() < 0.5 ? -0.5 : 0.5;
+      }
       return { p, d: [0, 0, 1] };
     }
-    case 10: case 11: { // circle in xy (edge: its rim), outwards
-      const k = rad * (type === 11 ? 1 : shell(r(), th, 2)), d = [Math.cos(angle), Math.sin(angle), 0];
+    case 10:
+    case 11: {
+      // circle in xy (edge: its rim), outwards
+      const k = rad * (type === 11 ? 1 : shell(r(), th, 2)),
+        d = [Math.cos(angle), Math.sin(angle), 0];
       return { p: [d[0] * k, d[1] * k, 0], d };
     }
     case 12: // single-sided edge along x, emitting along +y
       return { p: [((edgePos != null ? edgePos : r()) * 2 - 1) * rad, 0, 0], d: [0, 1, 0] };
-    case 17: { // donut around z: a ring of radius rad, a tube of radius donut
-      const k = shape.donut * shell(r(), th, 2), b = r() * TAU, cx = Math.cos(angle), cy = Math.sin(angle);
+    case 17: {
+      // donut around z: a ring of radius rad, a tube of radius donut
+      const k = shape.donut * shell(r(), th, 2),
+        b = r() * TAU,
+        cx = Math.cos(angle),
+        cy = Math.sin(angle);
       const off = [cx * Math.cos(b) * k, cy * Math.cos(b) * k, Math.sin(b) * k];
       return { p: [cx * rad + off[0], cy * rad + off[1], off[2]], d: norm(off) };
     }
@@ -318,13 +439,16 @@ export class Effects {
   // `pre` seconds in: prewarmed as at the start, then simulated that far (ParticleControlPlayable's Simulate)
   restart(s, pre = 0) {
     this.stop(s);
-    const main = s.def.main, D = main.duration;
+    const main = s.def.main,
+      D = main.duration;
     s.playing = true;
     s.done = false;
     s.clock = newClock(s.def.emission?.bursts || []);
     s.delay = Math.max(0, value(main.delay, 0, this.random()));
-    if (main.prewarm && main.loop) for (let t = 0; t < D - EPS; t += PREWARM_STEP) this.step(s, Math.min(PREWARM_STEP, D - t), true);
-    for (let t = 0; t < pre - EPS; t += PREWARM_STEP) this.step(s, Math.min(PREWARM_STEP, pre - t) * (s.speed ?? main.speedScale ?? 1), false);
+    if (main.prewarm && main.loop)
+      for (let t = 0; t < D - EPS; t += PREWARM_STEP) this.step(s, Math.min(PREWARM_STEP, D - t), true);
+    for (let t = 0; t < pre - EPS; t += PREWARM_STEP)
+      this.step(s, Math.min(PREWARM_STEP, pre - t) * (s.speed ?? main.speedScale ?? 1), false);
   }
 
   // the system stops and its particles go, its sub-emitters' too (its GameObject switched off)
@@ -334,7 +458,10 @@ export class Effects {
     s.instances = [];
     for (const e of s.def.subs || []) {
       const sub = this.systems[e.system];
-      if (sub) { sub.particles = []; sub.instances = []; }
+      if (sub) {
+        sub.particles = [];
+        sub.instances = [];
+      }
     }
   }
 
@@ -346,11 +473,17 @@ export class Effects {
       let W = s.static || s.def.static;
       if (a) {
         const b = this.bone(a.skeleton, a.bone);
-        if (b) W = mul(s.go || a.go, mul([b.a, b.b, 0, b.worldX * a.ds, b.c, b.d, 0, b.worldY * a.ds, 0, 0, 1, 0], s.rel || s.def.rel));
+        if (b)
+          W = mul(
+            s.go || a.go,
+            mul([b.a, b.b, 0, b.worldX * a.ds, b.c, b.d, 0, b.worldY * a.ds, 0, 0, 1, 0], s.rel || s.def.rel),
+          );
       }
       // how far its origin moved since the last frame, in Unity world units (rate over distance)
       const origin = [W[3], W[7], W[11]];
-      s.moved = s.origin ? Math.hypot(origin[0] - s.origin[0], origin[1] - s.origin[1], origin[2] - s.origin[2]) / WORLD : 0;
+      s.moved = s.origin
+        ? Math.hypot(origin[0] - s.origin[0], origin[1] - s.origin[1], origin[2] - s.origin[2]) / WORLD
+        : 0;
       s.origin = origin;
       s.W = W;
       s.M = scaled(W, s.def);
@@ -390,7 +523,9 @@ export class Effects {
       if (!s.def.main.loop && s.clock.time >= s.def.main.duration) s.done = true;
     }
     for (const inst of s.instances) this.emitSpan(s, inst.clock, dt, inst);
-    s.instances = s.instances.filter((inst) => !inst.parent.dead && !(inst.clock.time >= s.def.main.duration && !s.def.main.loop));
+    s.instances = s.instances.filter(
+      (inst) => !inst.parent.dead && !(inst.clock.time >= s.def.main.duration && !s.def.main.loop),
+    );
     this.simulate(s, dt);
   }
 
@@ -402,8 +537,11 @@ export class Effects {
   // number (within EPS, as reap() takes deaths), so one that lives a whole number of the rate's intervals is replaced
   // in the step it dies in at any frame rate.
   emitSpan(s, clock, dt, inst) {
-    const main = s.def.main, em = s.def.emission || { rate: 0, bursts: [] }, D = main.duration;
-    const from = clock.time, end = from + dt;
+    const main = s.def.main,
+      em = s.def.emission || { rate: 0, bursts: [] },
+      D = main.duration;
+    const from = clock.time,
+      end = from + dt;
     let to = end;
     if (!main.loop) to = Math.min(to, D);
     if (to <= from && !clock.fresh) return;
@@ -422,13 +560,17 @@ export class Effects {
         }
       }
     });
-    const u = (from % D) / D, rate = value(em.rate, u, this.random());
+    const u = (from % D) / D,
+      rate = value(em.rate, u, this.random());
     if (rate > 0) {
       clock.acc += rate * (to - from);
       // the count passed a whole number clock.acc / rate before `to`, n times in this span
       let n = 0;
       while (clock.acc - n >= 1 - rate * EPS) n++;
-      for (let i = 0; i < n; i++) { clock.acc -= 1; this.emit(s, u, inst, end - to + clock.acc / rate, { i, n }); }
+      for (let i = 0; i < n; i++) {
+        clock.acc -= 1;
+        this.emit(s, u, inst, end - to + clock.acc / rate, { i, n });
+      }
     }
     clock.time = to;
     clock.fresh = false;
@@ -437,9 +579,11 @@ export class Effects {
   // rate over distance: the particles of the distance the system's origin moved this frame (Unity world units, place),
   // spread over the step. CH0292's car headlights emit 6 to 8 a unit; at rest their bone sways 0.008 units in 10 s.
   emitMoved(s, dt) {
-    const em = s.def.emission, D = s.def.main.duration;
+    const em = s.def.emission,
+      D = s.def.main.duration;
     if (!em?.dist || !(s.moved > 0)) return;
-    const u = (s.clock.time % D) / D, clock = s.clock;
+    const u = (s.clock.time % D) / D,
+      clock = s.clock;
     clock.dacc = (clock.dacc || 0) + value(em.dist, u, this.random()) * s.moved;
     const n = Math.floor(clock.dacc);
     clock.dacc -= n;
@@ -450,26 +594,37 @@ export class Effects {
   // (none given: the whole step, a death sub-emitter's burst); batch: its index i among the n emitted together
   // (burst spread)
   emit(s, u, inst, share, batch = null) {
-    const def = s.def, main = def.main;
+    const def = s.def,
+      main = def.main;
     if (s.particles.length >= main.max) {
       if (!main.ring || !s.particles.length) return null;
       s.particles.shift().dead = true; // a ring buffer gives the oldest particle's place to the new one
     }
-    const seed = (rnd(this.seed, ++this.serial) * 4294967296) >>> 0, r = (k) => rnd(seed, k);
+    const seed = (rnd(this.seed, ++this.serial) * 4294967296) >>> 0,
+      r = (k) => rnd(seed, k);
     let n = R.shape;
     const next = () => rnd(seed, n++);
     const life = Math.max(1e-3, value(main.life, u, r(R.life)));
     const speed = value(main.speed, u, r(R.speed));
     const s0 = value(main.size[0], u, r(R.size));
-    const size = main.size.length === 3 ? [s0, value(main.size[1], u, r(R.sizeY)), value(main.size[2], u, r(R.sizeZ))] : [s0, s0, s0];
+    const size =
+      main.size.length === 3
+        ? [s0, value(main.size[1], u, r(R.sizeY)), value(main.size[2], u, r(R.sizeZ))]
+        : [s0, s0, s0];
     const flip = r(R.flipRot) < (main.flipRotation || 0) ? -1 : 1;
-    const rot = main.rotation.length === 3
-      ? [value(main.rotation[0], u, r(R.rotX)), value(main.rotation[1], u, r(R.rotY)), value(main.rotation[2], u, r(R.rot))]
-      : [0, 0, value(main.rotation[0], u, r(R.rot))];
+    const rot =
+      main.rotation.length === 3
+        ? [
+            value(main.rotation[0], u, r(R.rotX)),
+            value(main.rotation[1], u, r(R.rotY)),
+            value(main.rotation[2], u, r(R.rot)),
+          ]
+        : [0, 0, value(main.rotation[0], u, r(R.rot))];
     if (flip < 0) for (let i = 0; i < 3; i++) rot[i] = -rot[i];
     let color = colorAt(s.startColor || main.color, u, r(R.color)); // the intro can animate the start colour
     // the emission point and direction in the system's space
-    let p = [0, 0, 0], d = [0, 0, 1];
+    let p = [0, 0, 0],
+      d = [0, 0, 1];
     const sh = def.shape;
     if (sh) {
       // around the arc by its mode; along an edge by the radius's mode (an edge has no arc)
@@ -477,15 +632,25 @@ export class Effects {
       const arcPos = along(sh.arcMode, sh.arcSpread, sh.arcSpeed, time, main.duration, batch, u);
       const edgePos = along(sh.radiusMode, sh.radiusSpread || 0, sh.radiusSpeed ?? 1, time, main.duration, batch, u);
       const e = shapePoint(sh, next, arcPos, edgePos);
-      let q = e.p, dir = e.d;
+      let q = e.p,
+        dir = e.d;
       if (sh.randomPos > 0) q = q.map((v) => v + (next() * 2 - 1) * sh.randomPos);
-      if (sh.spherical > 0) { const out = norm(q); dir = norm(dir.map((v, i) => v + (out[i] - v) * sh.spherical)); }
-      if (sh.randomDir > 0) { const rd = unitSphere(next); dir = norm(dir.map((v, i) => v + (rd[i] - v) * sh.randomDir)); }
-      const T = mul(mul([1, 0, 0, sh.pos[0], 0, 1, 0, sh.pos[1], 0, 0, 1, sh.pos[2]], euler(sh.rot[0], sh.rot[1], sh.rot[2])),
-        [sh.scale[0], 0, 0, 0, 0, sh.scale[1], 0, 0, 0, 0, sh.scale[2], 0]);
+      if (sh.spherical > 0) {
+        const out = norm(q);
+        dir = norm(dir.map((v, i) => v + (out[i] - v) * sh.spherical));
+      }
+      if (sh.randomDir > 0) {
+        const rd = unitSphere(next);
+        dir = norm(dir.map((v, i) => v + (rd[i] - v) * sh.randomDir));
+      }
+      const T = mul(
+        mul([1, 0, 0, sh.pos[0], 0, 1, 0, sh.pos[1], 0, 0, 1, sh.pos[2]], euler(sh.rot[0], sh.rot[1], sh.rot[2])),
+        [sh.scale[0], 0, 0, 0, 0, sh.scale[1], 0, 0, 0, 0, sh.scale[2], 0],
+      );
       p = apply(T, q[0], q[1], q[2]);
       d = norm(applyDir(T, dir[0], dir[1], dir[2]));
-      if (main.scaling === 2) { // Shape scaling: the shape takes the hierarchy's scale, the particles do not
+      if (main.scaling === 2) {
+        // Shape scaling: the shape takes the hierarchy's scale, the particles do not
         const w = apply(s.W, p[0], p[1], p[2]);
         p = apply(s.Minv, w[0], w[1], w[2]);
       }
@@ -493,11 +658,15 @@ export class Effects {
     let vel = [d[0] * speed, d[1] * speed, d[2] * speed];
     if (inst) {
       // at the parent particle (in this system's space), inheriting what the sub-emitter says
-      const par = inst.parent, ps = inst.system, cur = par.cur || par;
+      const par = inst.parent,
+        ps = inst.system,
+        cur = par.cur || par;
       const w = ps.def.main.space === 1 ? par.pos : apply(ps.M, par.pos[0], par.pos[1], par.pos[2]);
       const at = main.space === 1 ? w : apply(s.Minv, w[0], w[1], w[2]);
-      if (main.space === 1) { const o = applyDir(s.M, p[0], p[1], p[2]); p = [at[0] + o[0], at[1] + o[1], at[2] + o[2]]; }
-      else p = [at[0] + p[0], at[1] + p[1], at[2] + p[2]];
+      if (main.space === 1) {
+        const o = applyDir(s.M, p[0], p[1], p[2]);
+        p = [at[0] + o[0], at[1] + o[1], at[2] + o[2]];
+      } else p = [at[0] + p[0], at[1] + p[1], at[2] + p[2]];
       if (main.space === 1) vel = applyDir(s.M, vel[0], vel[1], vel[2]);
       const bits = inst.inherit;
       if (bits & 1) color = color.map((c, i) => c * cur.color[i]);
@@ -507,8 +676,23 @@ export class Effects {
       p = apply(s.M, p[0], p[1], p[2]);
       vel = applyDir(s.M, vel[0], vel[1], vel[2]);
     }
-    const pt = { seed, age: 0, life, size, rot, flip, color, pos: p, vel, anim: [0, 0, 0], speed: 0, u, cur: null,
-      dead: false, share: share === undefined ? null : Math.max(0, share) };
+    const pt = {
+      seed,
+      age: 0,
+      life,
+      size,
+      rot,
+      flip,
+      color,
+      pos: p,
+      vel,
+      anim: [0, 0, 0],
+      speed: 0,
+      u,
+      cur: null,
+      dead: false,
+      share: share === undefined ? null : Math.max(0, share),
+    };
     // the trail module's share of the particles get a trail, its first point where they are born
     const tr = def.modules?.trail;
     if (tr && rnd(seed, R.trail) < (tr.ratio ?? 1)) {
@@ -519,7 +703,12 @@ export class Effects {
     for (const e of def.subs || []) {
       const sub = this.systems[e.system];
       if (e.type === 0 && sub?.live && rnd(seed, R.sub) < (e.p ?? 1)) {
-        sub.instances.push({ parent: pt, system: s, inherit: e.inherit, clock: newClock(sub.def.emission?.bursts || []) });
+        sub.instances.push({
+          parent: pt,
+          system: s,
+          inherit: e.inherit,
+          clock: newClock(sub.def.emission?.bursts || []),
+        });
       }
     }
     return pt;
@@ -539,44 +728,80 @@ export class Effects {
 
   // move, age and turn the particles of a system over a step; one emitted in it moves for its share of it
   simulate(s, step) {
-    const def = s.def, main = def.main, mod = def.modules || {}, world = main.space === 1;
-    const M = s.M, Minv = s.Minv;
+    const def = s.def,
+      main = def.main,
+      mod = def.modules || {},
+      world = main.space === 1;
+    const M = s.M,
+      Minv = s.Minv;
     // a module's vector in the simulation space (world-space values are in Unity world units)
     const toSim = (v, inWorld) => {
-      if (inWorld) return world ? [v[0] * WORLD, v[1] * WORLD, v[2] * WORLD] : applyDir(Minv, v[0] * WORLD, v[1] * WORLD, v[2] * WORLD);
+      if (inWorld)
+        return world
+          ? [v[0] * WORLD, v[1] * WORLD, v[2] * WORLD]
+          : applyDir(Minv, v[0] * WORLD, v[1] * WORLD, v[2] * WORLD);
       return world ? applyDir(M, v[0], v[1], v[2]) : v;
     };
     const gm = value(main.gravity, (s.clock.time % main.duration) / main.duration, 0.5);
     const g = gm ? toSim([0, GRAVITY * gm, 0], true) : null;
     // ring buffer: past its lifetime a particle holds still at its end (1) or plays the loop range again (2)
-    const ring = main.ring || 0, [loopFrom, loopTo] = main.ringRange || [0, 1];
+    const ring = main.ring || 0,
+      [loopFrom, loopTo] = main.ringRange || [0, 1];
     const alive = [];
     for (const pt of s.particles) {
-      if (pt.paused) { alive.push(pt); continue; }
+      if (pt.paused) {
+        alive.push(pt);
+        continue;
+      }
       const dt = pt.share === null ? step : Math.min(step, pt.share);
       pt.share = null;
-      if (!(dt > 0)) { alive.push(pt); continue; } // emitted at the step's very end
+      if (!(dt > 0)) {
+        alive.push(pt);
+        continue;
+      } // emitted at the step's very end
       pt.age += dt;
       const end = ring === 2 ? loopTo * pt.life : pt.life;
       if (pt.age >= end) {
-        if (ring === 1) { pt.age = pt.life; pt.paused = true; alive.push(pt); continue; }
-        if (ring !== 2) { this.die(s, pt); continue; }
-        const from = loopFrom * pt.life, span = end - from;
+        if (ring === 1) {
+          pt.age = pt.life;
+          pt.paused = true;
+          alive.push(pt);
+          continue;
+        }
+        if (ring !== 2) {
+          this.die(s, pt);
+          continue;
+        }
+        const from = loopFrom * pt.life,
+          span = end - from;
         pt.age = span > 1e-6 ? from + ((pt.age - from) % span) : from;
       }
-      const t = pt.age / pt.life, r = (k) => rnd(pt.seed, k);
+      const t = pt.age / pt.life,
+        r = (k) => rnd(pt.seed, k);
       if (mod.force) {
-        const f = toSim([value(mod.force.x, t, r(R.forceX)), value(mod.force.y, t, r(R.forceY)), value(mod.force.z, t, r(R.forceZ))], mod.force.world);
-        pt.vel[0] += f[0] * dt; pt.vel[1] += f[1] * dt; pt.vel[2] += f[2] * dt;
+        const f = toSim(
+          [value(mod.force.x, t, r(R.forceX)), value(mod.force.y, t, r(R.forceY)), value(mod.force.z, t, r(R.forceZ))],
+          mod.force.world,
+        );
+        pt.vel[0] += f[0] * dt;
+        pt.vel[1] += f[1] * dt;
+        pt.vel[2] += f[2] * dt;
       }
-      if (g) { pt.vel[0] += g[0] * dt; pt.vel[1] += g[1] * dt; pt.vel[2] += g[2] * dt; }
+      if (g) {
+        pt.vel[0] += g[0] * dt;
+        pt.vel[1] += g[1] * dt;
+        pt.vel[2] += g[2] * dt;
+      }
       // velocity over lifetime: linear, orbital around the system's centre (plus offset) and radial, on top of the
       // particle's own velocity for this frame
-      let anim = [0, 0, 0], speedMod = 1;
+      let anim = [0, 0, 0],
+        speedMod = 1;
       const vm = mod.velocity;
       if (vm) {
         anim = toSim([value(vm.x, t, r(R.velX)), value(vm.y, t, r(R.velY)), value(vm.z, t, r(R.velZ))], vm.world);
-        const ox = value(vm.orbitalX, t, r(R.orbit)), oy = value(vm.orbitalY, t, r(R.orbit)), oz = value(vm.orbitalZ, t, r(R.orbit));
+        const ox = value(vm.orbitalX, t, r(R.orbit)),
+          oy = value(vm.orbitalY, t, r(R.orbit)),
+          oz = value(vm.orbitalZ, t, r(R.orbit));
         const radial = value(vm.radial, t, r(R.radial));
         if (ox || oy || oz || radial) {
           const off = [value(vm.orbitalOffsetX, t, 0), value(vm.orbitalOffsetY, t, 0), value(vm.orbitalOffsetZ, t, 0)];
@@ -584,10 +809,14 @@ export class Effects {
           const rel = [lp[0] - off[0], lp[1] - off[1], lp[2] - off[2]];
           let lv = [0, 0, 0];
           if (ox || oy || oz) {
-            const deg = (180 / Math.PI) * dt, rp = applyDir(euler(ox * deg, oy * deg, oz * deg), rel[0], rel[1], rel[2]);
+            const deg = (180 / Math.PI) * dt,
+              rp = applyDir(euler(ox * deg, oy * deg, oz * deg), rel[0], rel[1], rel[2]);
             lv = [(rp[0] - rel[0]) / dt, (rp[1] - rel[1]) / dt, (rp[2] - rel[2]) / dt];
           }
-          if (radial) { const nr = norm(rel); lv = [lv[0] + nr[0] * radial, lv[1] + nr[1] * radial, lv[2] + nr[2] * radial]; }
+          if (radial) {
+            const nr = norm(rel);
+            lv = [lv[0] + nr[0] * radial, lv[1] + nr[1] * radial, lv[2] + nr[2] * radial];
+          }
           const sv = world ? applyDir(M, lv[0], lv[1], lv[2]) : lv;
           anim = [anim[0] + sv[0], anim[1] + sv[1], anim[2] + sv[2]];
         }
@@ -613,12 +842,15 @@ export class Effects {
       // until all of them went starts its trail again where it is, as at its birth.
       pt.speed = Math.hypot(pt.vel[0] + anim[0], pt.vel[1] + anim[1], pt.vel[2] + anim[2]) * Math.abs(speedMod);
       if (pt.trail) {
-        const at = this.trailPoint(s, pt), last = pt.trail[pt.trail.length - 1]?.p;
+        const at = this.trailPoint(s, pt),
+          last = pt.trail[pt.trail.length - 1]?.p;
         const unit = world || (mod.trail.world && !world) ? WORLD : 1;
-        if (!last || Math.hypot(at[0] - last[0], at[1] - last[1], at[2] - last[2]) >= mod.trail.minDist * unit) pt.trail.push({ p: at, t: pt.age });
+        if (!last || Math.hypot(at[0] - last[0], at[1] - last[1], at[2] - last[2]) >= mod.trail.minDist * unit)
+          pt.trail.push({ p: at, t: pt.age });
         while (pt.trail.length && pt.age - pt.trail[0].t > pt.trailLife) pt.trail.shift();
       }
-      if (mod.rotation) { // angular velocity in radians per second
+      if (mod.rotation) {
+        // angular velocity in radians per second
         const w = mod.rotation;
         if (w.sep) {
           pt.rot[0] += value(w.x, t, r(R.rotLife)) * pt.flip * dt;
@@ -655,11 +887,14 @@ export class Effects {
   // what a live particle draws with now: size, rotation, colour (stored values), sheet frame and custom data, at its
   // normalized age
   current(s, pt) {
-    const mod = s.def.modules || {}, t = pt.age / pt.life, r = (k) => rnd(pt.seed, k);
+    const mod = s.def.modules || {},
+      t = pt.age / pt.life,
+      r = (k) => rnd(pt.seed, k);
     let size = pt.size;
     if (mod.size) {
       const kx = value(mod.size.x, t, r(R.sizeLife));
-      const ky = mod.size.sep ? value(mod.size.y, t, r(R.sizeLife)) : kx, kz = mod.size.sep ? value(mod.size.z ?? 1, t, r(R.sizeLife)) : kx;
+      const ky = mod.size.sep ? value(mod.size.y, t, r(R.sizeLife)) : kx,
+        kz = mod.size.sep ? value(mod.size.z ?? 1, t, r(R.sizeLife)) : kx;
       size = [size[0] * kx, size[1] * ky, size[2] * kz];
     }
     let color = pt.color;
@@ -669,11 +904,17 @@ export class Effects {
     }
     if (mod.colorBySpeed) {
       // the gradient at the particle's speed (Unity units a second: world units in world space) within the range
-      const [lo, hi] = mod.colorBySpeed.range, sp = pt.speed / (s.def.main.space === 1 ? WORLD : 1);
-      const c = colorAt(mod.colorBySpeed.color, hi > lo ? Math.min(1, Math.max(0, (sp - lo) / (hi - lo))) : 0, r(R.colorSpeed));
+      const [lo, hi] = mod.colorBySpeed.range,
+        sp = pt.speed / (s.def.main.space === 1 ? WORLD : 1);
+      const c = colorAt(
+        mod.colorBySpeed.color,
+        hi > lo ? Math.min(1, Math.max(0, (sp - lo) / (hi - lo))) : 0,
+        r(R.colorSpeed),
+      );
       color = [color[0] * c[0], color[1] * c[1], color[2] * c[2], color[3] * c[3]];
     }
-    let frame = 0, tiles = null;
+    let frame = 0,
+      tiles = null;
     const sh = mod.sheet;
     if (sh) {
       // frame over time and the start frame are both stored as fractions of the sheet (the inspector shows them in
@@ -682,25 +923,37 @@ export class Effects {
       const tt = sh.time === 2 ? ((pt.age * sh.fps) / frames) % 1 : (t * sh.cycles) % 1;
       const at = value(sh.frame, tt, r(R.frame)) + value(sh.start, 0, r(R.start));
       frame = Math.min(frames - 1, Math.floor((((at % 1) + 1) % 1) * frames));
-      if (sh.type === 1) frame += Math.min(sh.y - 1, Math.max(0, sh.rowMode === 1 ? Math.floor(r(R.row) * sh.y) : sh.row)) * sh.x;
+      if (sh.type === 1)
+        frame += Math.min(sh.y - 1, Math.max(0, sh.rowMode === 1 ? Math.floor(r(R.row) * sh.y) : sh.row)) * sh.x;
       tiles = [sh.x, sh.y];
     }
-    const custom = [[0, 0, 0, 0], [0, 0, 0, 0]];
+    const custom = [
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+    ];
     (mod.custom || []).forEach((c, i) => {
       if (!c) return;
       if (c.col) custom[i] = colorAt(c.col, t, r(R.custom + i));
-      else c.v.forEach((v, k) => { custom[i][k] = value(v, t, r(R.custom + i * 4 + k)); });
+      else
+        c.v.forEach((v, k) => {
+          custom[i][k] = value(v, t, r(R.custom + i * 4 + k));
+        });
     });
     pt.cur = { size, color, rot: pt.rot };
     return { size, color, rot: pt.rot, frame, tiles, custom };
   }
 
   // how many particles are alive (for checks)
-  count() { return this.systems.reduce((n, s) => n + s.particles.length, 0); }
+  count() {
+    return this.systems.reduce((n, s) => n + s.particles.length, 0);
+  }
 
   // drop every particle (the lobby closes)
   clear() {
-    for (const s of this.systems) { s.particles = []; s.instances = []; }
+    for (const s of this.systems) {
+      s.particles = [];
+      s.instances = [];
+    }
   }
 }
 
@@ -723,7 +976,9 @@ export function vertexColor(c, linear) {
 const TC = new Float32Array(12);
 function texcoords(streams, custom) {
   const t = TC.fill(0);
-  const put = (at, vals) => { if (at) for (let k = 0; k < at[1] && at[0] + k < 12; k++) t[at[0] + k] = vals[k] ?? 0; };
+  const put = (at, vals) => {
+    if (at) for (let k = 0; k < at[1] && at[0] + k < 12; k++) t[at[0] + k] = vals[k] ?? 0;
+  };
   put(streams.c1, custom[0]);
   put(streams.c2, custom[1]);
   return t;
@@ -732,14 +987,22 @@ function texcoords(streams, custom) {
 // a billboard's normal: towards the camera, which looks along +z
 const FACING = [0, 0, -1];
 // quad corners [x, y, u, v] in the triangle order 0 1 2, 2 3 0
-const QUAD = [[-0.5, -0.5, 0, 0], [0.5, -0.5, 1, 0], [0.5, 0.5, 1, 1], [0.5, 0.5, 1, 1], [-0.5, 0.5, 0, 1], [-0.5, -0.5, 0, 0]];
+const QUAD = [
+  [-0.5, -0.5, 0, 0],
+  [0.5, -0.5, 1, 0],
+  [0.5, 0.5, 1, 1],
+  [0.5, 0.5, 1, 1],
+  [-0.5, 0.5, 0, 1],
+  [-0.5, -0.5, 0, 0],
+];
 
 // the index of the mesh a particle draws among a mesh renderer's meshes (particles.py _mesh_choice): Unity picks one
 // per particle, uniformly at random or by the meshes' weights
 export function meshIndex(rend, seed) {
   const n = rend.meshes?.length || 1;
   if (n === 1) return 0;
-  const w = rend.weights || null, total = w ? w.reduce((a, b) => a + Math.max(0, b), 0) : n;
+  const w = rend.weights || null,
+    total = w ? w.reduce((a, b) => a + Math.max(0, b), 0) : n;
   if (!(total > 0)) return 0;
   let x = rnd(seed, R.mesh) * total;
   for (let i = 0; i < n - 1; i++) {
@@ -755,16 +1018,22 @@ export function meshIndex(rend, seed) {
 // Positions are lobby units (z dropped: the camera is orthographic).
 let scratch = new Float32Array(0);
 export function geometry(fxs, s, { meshes = {}, linear = true } = {}) {
-  const def = s.def, rend = def.renderer, world = def.main.space === 1;
+  const def = s.def,
+    rend = def.renderer,
+    world = def.main.space === 1;
   const decode = linear && rend.colorSpace !== 0;
   const list = rend.mode === 4 ? (rend.meshes || [rend.mesh]).map((id) => meshes[id]) : null;
   if (!s.particles.length || (list && !list.every(Boolean))) return { data: new Float32Array(0), count: 0 };
-  const M = s.M, streams = rend.streams || { uv: [0, 2] };
+  const M = s.M,
+    streams = rend.streams || { uv: [0, 2] };
   const need = s.particles.length * (list ? Math.max(...list.map((m) => m.i.length)) : 6) * STRIDE;
   if (scratch.length < need) scratch = new Float32Array(Math.max(need, scratch.length * 2, 4096));
   const data = scratch;
   let o = 0;
-  const sx = colLen(M, 0), sy = colLen(M, 1), sz = colLen(M, 2), Rm = rotationOf(M);
+  const sx = colLen(M, 0),
+    sy = colLen(M, 1),
+    sz = colLen(M, 2),
+    Rm = rotationOf(M);
   const maxSize = (rend.maxSize ?? 0.5) * VIEW_H;
   // drawn in order, the last on top: oldest in front (2) draws the youngest first, youngest in front (3) the oldest;
   // by distance (1) and by depth (4) the farthest first, by z for the orthographic camera that looks along +z
@@ -777,65 +1046,114 @@ export function geometry(fxs, s, { meshes = {}, linear = true } = {}) {
   }
   for (const pt of order) {
     const mesh = list && list[meshIndex(rend, pt.seed)];
-    const cur = fxs.current(s, pt), c = vertexColor(cur.color, decode), tc = texcoords(streams, cur.custom);
+    const cur = fxs.current(s, pt),
+      c = vertexColor(cur.color, decode),
+      tc = texcoords(streams, cur.custom);
     const centre = world ? pt.pos : apply(M, pt.pos[0], pt.pos[1], pt.pos[2]);
-    const fu = rend.flip && rnd(pt.seed, R.flipU) < rend.flip[0], fv = rend.flip && rnd(pt.seed, R.flipV) < rend.flip[1];
+    const fu = rend.flip && rnd(pt.seed, R.flipU) < rend.flip[0],
+      fv = rend.flip && rnd(pt.seed, R.flipV) < rend.flip[1];
     // the sheet tile's UV rectangle (frame 0 is the top-left tile; UV (0, 0) is the bottom-left corner)
-    let u0 = 0, v0 = 0, du = 1, dv = 1;
+    let u0 = 0,
+      v0 = 0,
+      du = 1,
+      dv = 1;
     if (cur.tiles) {
-      du = 1 / cur.tiles[0]; dv = 1 / cur.tiles[1];
+      du = 1 / cur.tiles[0];
+      dv = 1 / cur.tiles[1];
       u0 = (cur.frame % cur.tiles[0]) * du;
       v0 = 1 - (Math.floor(cur.frame / cur.tiles[0]) + 1) * dv;
     }
     const push = (x, y, u, v, n = FACING, col = c) => {
-      const uu = u0 + (fu ? 1 - u : u) * du, vv = v0 + (fv ? 1 - v : v) * dv;
-      data[o++] = x; data[o++] = y;
+      const uu = u0 + (fu ? 1 - u : u) * du,
+        vv = v0 + (fv ? 1 - v : v) * dv;
+      data[o++] = x;
+      data[o++] = y;
       for (let k = 0; k < 12; k++) data[o + k] = tc[k];
-      if (streams.uv) { data[o + streams.uv[0]] = uu; data[o + streams.uv[0] + 1] = vv; }
-      if (streams.uv2) { data[o + streams.uv2[0]] = uu; data[o + streams.uv2[0] + 1] = vv; }
+      if (streams.uv) {
+        data[o + streams.uv[0]] = uu;
+        data[o + streams.uv[0] + 1] = vv;
+      }
+      if (streams.uv2) {
+        data[o + streams.uv2[0]] = uu;
+        data[o + streams.uv2[0] + 1] = vv;
+      }
       o += 12;
-      data[o++] = col[0]; data[o++] = col[1]; data[o++] = col[2]; data[o++] = col[3];
-      data[o++] = n[0]; data[o++] = n[1]; data[o++] = n[2];
+      data[o++] = col[0];
+      data[o++] = col[1];
+      data[o++] = col[2];
+      data[o++] = col[3];
+      data[o++] = n[0];
+      data[o++] = n[1];
+      data[o++] = n[2];
     };
     if (mesh) {
       // the mesh scaled by the particle's 3D size and the system's scale, turned like a billboard (z clockwise on
       // screen, then x and y), in the system's orientation with local alignment, else the camera's (world axes); the
       // particle's colour times the mesh's vertex colours where it has them (ch0188's sea meshes fade out by them)
-      const deg = 180 / Math.PI, mc = mesh.c, pc = cur.color;
+      const deg = 180 / Math.PI,
+        mc = mesh.c,
+        pc = cur.color;
       const turn = mul(rend.align === 2 ? Rm : IDENTITY, euler(cur.rot[0] * deg, cur.rot[1] * deg, -cur.rot[2] * deg));
       const T = mul(turn, [cur.size[0] * sx, 0, 0, 0, 0, cur.size[1] * sy, 0, 0, 0, 0, cur.size[2] * sz, 0]);
       for (const idx of mesh.i) {
         const p = applyDir(T, mesh.v[idx * 3], mesh.v[idx * 3 + 1], mesh.v[idx * 3 + 2]);
         const n = mesh.n ? norm(applyDir(turn, mesh.n[idx * 3], mesh.n[idx * 3 + 1], mesh.n[idx * 3 + 2])) : FACING;
-        const col = mc ? vertexColor([pc[0] * mc[idx * 4], pc[1] * mc[idx * 4 + 1], pc[2] * mc[idx * 4 + 2], pc[3] * mc[idx * 4 + 3]], decode) : c;
-        push(centre[0] + p[0], centre[1] + p[1], mesh.uv ? mesh.uv[idx * 2] : 0, mesh.uv ? mesh.uv[idx * 2 + 1] : 0, n, col);
+        const col = mc
+          ? vertexColor(
+              [pc[0] * mc[idx * 4], pc[1] * mc[idx * 4 + 1], pc[2] * mc[idx * 4 + 2], pc[3] * mc[idx * 4 + 3]],
+              decode,
+            )
+          : c;
+        push(
+          centre[0] + p[0],
+          centre[1] + p[1],
+          mesh.uv ? mesh.uv[idx * 2] : 0,
+          mesh.uv ? mesh.uv[idx * 2 + 1] : 0,
+          n,
+          col,
+        );
       }
       continue;
     }
-    let w = cur.size[0] * sx, h = cur.size[1] * sy;
+    let w = cur.size[0] * sx,
+      h = cur.size[1] * sy;
     const big = Math.max(Math.abs(w), Math.abs(h));
-    if (big > maxSize) { w *= maxSize / big; h *= maxSize / big; } // max particle size: a fraction of the view height
+    if (big > maxSize) {
+      w *= maxSize / big;
+      h *= maxSize / big;
+    } // max particle size: a fraction of the view height
     if (rend.mode === 1) {
       // stretched along its velocity on screen, the particle at the head: length = size x length scale + speed x
       // velocity scale
-      const v = world ? [pt.vel[0] + pt.anim[0], pt.vel[1] + pt.anim[1]]
+      const v = world
+        ? [pt.vel[0] + pt.anim[0], pt.vel[1] + pt.anim[1]]
         : applyDir(M, pt.vel[0] + pt.anim[0], pt.vel[1] + pt.anim[1], pt.vel[2] + pt.anim[2]);
-      const sp = Math.hypot(v[0], v[1]) || 1e-6, dx = v[0] / sp, dy = v[1] / sp;
+      const sp = Math.hypot(v[0], v[1]) || 1e-6,
+        dx = v[0] / sp,
+        dy = v[1] / sp;
       const len = w * (rend.lengthScale ?? 2) + sp * (rend.velocityScale || 0);
       for (const q of QUAD) {
-        const a = (q[0] - 0.5) * len, b = q[1] * h;
+        const a = (q[0] - 0.5) * len,
+          b = q[1] * h;
         push(centre[0] + dx * a - dy * b, centre[1] + dy * a + dx * b, q[2], q[3]);
       }
       continue;
     }
     // facing the camera (or in the system's plane with local alignment), turned clockwise by the rotation
-    const rz = -cur.rot[2], cz = Math.cos(rz), sn = Math.sin(rz);
-    const px = (rend.pivot?.[0] || 0) * w, py = (rend.pivot?.[1] || 0) * h;
-    const X = rend.align === 2 ? [Rm[0], Rm[4]] : [1, 0], Y = rend.align === 2 ? [Rm[1], Rm[5]] : [0, 1];
-    const fx3 = def.main.rotation.length === 3 ? Math.cos(cur.rot[1]) : 1, fy3 = def.main.rotation.length === 3 ? Math.cos(cur.rot[0]) : 1;
+    const rz = -cur.rot[2],
+      cz = Math.cos(rz),
+      sn = Math.sin(rz);
+    const px = (rend.pivot?.[0] || 0) * w,
+      py = (rend.pivot?.[1] || 0) * h;
+    const X = rend.align === 2 ? [Rm[0], Rm[4]] : [1, 0],
+      Y = rend.align === 2 ? [Rm[1], Rm[5]] : [0, 1];
+    const fx3 = def.main.rotation.length === 3 ? Math.cos(cur.rot[1]) : 1,
+      fy3 = def.main.rotation.length === 3 ? Math.cos(cur.rot[0]) : 1;
     for (const q of QUAD) {
-      const lx = (q[0] * w + px) * fx3, ly = (q[1] * h + py) * fy3;
-      const rx = lx * cz - ly * sn, ry = lx * sn + ly * cz;
+      const lx = (q[0] * w + px) * fx3,
+        ly = (q[1] * h + py) * fy3;
+      const rx = lx * cz - ly * sn,
+        ry = lx * sn + ly * cz;
       push(centre[0] + X[0] * rx + Y[0] * ry, centre[1] + X[1] * rx + Y[1] * ry, q[2], q[3]);
     }
   }
@@ -858,18 +1176,26 @@ const cross3 = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], 
 // (no halo has them).
 let scratch3 = new Float32Array(0);
 export function geometry3d(fxs, s, view, { meshes = {}, linear = true } = {}) {
-  const def = s.def, rend = def.renderer, world = def.main.space === 1;
+  const def = s.def,
+    rend = def.renderer,
+    world = def.main.space === 1;
   const decode = linear && rend.colorSpace !== 0;
   const list = rend.mode === 4 ? (rend.meshes || [rend.mesh]).map((id) => meshes[id]) : null;
-  if (!s.particles.length || rend.mode === 5 || (list && !list.every(Boolean))) return { data: new Float32Array(0), count: 0 };
-  const M = s.M, streams = rend.streams || { uv: [0, 2] };
+  if (!s.particles.length || rend.mode === 5 || (list && !list.every(Boolean)))
+    return { data: new Float32Array(0), count: 0 };
+  const M = s.M,
+    streams = rend.streams || { uv: [0, 2] };
   const need = s.particles.length * (list ? Math.max(...list.map((m) => m.i.length)) : 6) * STRIDE3;
   if (scratch3.length < need) scratch3 = new Float32Array(Math.max(need, scratch3.length * 2, 4096));
   const data = scratch3;
   let o = 0;
-  const sx = colLen(M, 0), sy = colLen(M, 1), sz = colLen(M, 2), Rm = rotationOf(M);
+  const sx = colLen(M, 0),
+    sy = colLen(M, 1),
+    sz = colLen(M, 2),
+    Rm = rotationOf(M);
   const facing = [-view.z[0], -view.z[1], -view.z[2]];
-  const depth = (p) => (p[0] - view.eye[0]) * view.z[0] + (p[1] - view.eye[1]) * view.z[1] + (p[2] - view.eye[2]) * view.z[2];
+  const depth = (p) =>
+    (p[0] - view.eye[0]) * view.z[0] + (p[1] - view.eye[1]) * view.z[1] + (p[2] - view.eye[2]) * view.z[2];
   const centreOf = (pt) => (world ? pt.pos : apply(M, pt.pos[0], pt.pos[1], pt.pos[2]));
   // drawn in order, the last on top (geometry()), by distance from the eye (1) or by depth (4) the farthest first
   let order = s.particles;
@@ -883,72 +1209,148 @@ export function geometry3d(fxs, s, view, { meshes = {}, linear = true } = {}) {
     order = order.slice().sort((a, b) => far(b) - far(a));
   }
   // the camera's axes as a matrix's columns: a mesh's View alignment
-  const camera = [view.x[0], view.y[0], view.z[0], 0, view.x[1], view.y[1], view.z[1], 0, view.x[2], view.y[2], view.z[2], 0];
+  const camera = [
+    view.x[0],
+    view.y[0],
+    view.z[0],
+    0,
+    view.x[1],
+    view.y[1],
+    view.z[1],
+    0,
+    view.x[2],
+    view.y[2],
+    view.z[2],
+    0,
+  ];
   for (const pt of order) {
     const mesh = list && list[meshIndex(rend, pt.seed)];
-    const cur = fxs.current(s, pt), c = vertexColor(cur.color, decode), tc = texcoords(streams, cur.custom);
+    const cur = fxs.current(s, pt),
+      c = vertexColor(cur.color, decode),
+      tc = texcoords(streams, cur.custom);
     const centre = centreOf(pt);
-    const fu = rend.flip && rnd(pt.seed, R.flipU) < rend.flip[0], fv = rend.flip && rnd(pt.seed, R.flipV) < rend.flip[1];
-    let u0 = 0, v0 = 0, du = 1, dv = 1;
+    const fu = rend.flip && rnd(pt.seed, R.flipU) < rend.flip[0],
+      fv = rend.flip && rnd(pt.seed, R.flipV) < rend.flip[1];
+    let u0 = 0,
+      v0 = 0,
+      du = 1,
+      dv = 1;
     if (cur.tiles) {
-      du = 1 / cur.tiles[0]; dv = 1 / cur.tiles[1];
+      du = 1 / cur.tiles[0];
+      dv = 1 / cur.tiles[1];
       u0 = (cur.frame % cur.tiles[0]) * du;
       v0 = 1 - (Math.floor(cur.frame / cur.tiles[0]) + 1) * dv;
     }
     const push = (p, u, v, n = facing, col = c) => {
-      const uu = u0 + (fu ? 1 - u : u) * du, vv = v0 + (fv ? 1 - v : v) * dv;
-      data[o++] = p[0]; data[o++] = p[1]; data[o++] = p[2];
+      const uu = u0 + (fu ? 1 - u : u) * du,
+        vv = v0 + (fv ? 1 - v : v) * dv;
+      data[o++] = p[0];
+      data[o++] = p[1];
+      data[o++] = p[2];
       for (let k = 0; k < 12; k++) data[o + k] = tc[k];
-      if (streams.uv) { data[o + streams.uv[0]] = uu; data[o + streams.uv[0] + 1] = vv; }
-      if (streams.uv2) { data[o + streams.uv2[0]] = uu; data[o + streams.uv2[0] + 1] = vv; }
+      if (streams.uv) {
+        data[o + streams.uv[0]] = uu;
+        data[o + streams.uv[0] + 1] = vv;
+      }
+      if (streams.uv2) {
+        data[o + streams.uv2[0]] = uu;
+        data[o + streams.uv2[0] + 1] = vv;
+      }
       o += 12;
-      data[o++] = col[0]; data[o++] = col[1]; data[o++] = col[2]; data[o++] = col[3];
-      data[o++] = n[0]; data[o++] = n[1]; data[o++] = n[2];
+      data[o++] = col[0];
+      data[o++] = col[1];
+      data[o++] = col[2];
+      data[o++] = col[3];
+      data[o++] = n[0];
+      data[o++] = n[1];
+      data[o++] = n[2];
     };
     if (mesh) {
-      const deg = 180 / Math.PI, mc = mesh.c, pc = cur.color;
+      const deg = 180 / Math.PI,
+        mc = mesh.c,
+        pc = cur.color;
       const base = rend.align === 2 ? Rm : rend.align === 1 ? IDENTITY : camera;
       const turn = mul(base, euler(cur.rot[0] * deg, cur.rot[1] * deg, -cur.rot[2] * deg));
       const T = mul(turn, [cur.size[0] * sx, 0, 0, 0, 0, cur.size[1] * sy, 0, 0, 0, 0, cur.size[2] * sz, 0]);
       for (const idx of mesh.i) {
         const p = applyDir(T, mesh.v[idx * 3], mesh.v[idx * 3 + 1], mesh.v[idx * 3 + 2]);
         const n = mesh.n ? norm(applyDir(turn, mesh.n[idx * 3], mesh.n[idx * 3 + 1], mesh.n[idx * 3 + 2])) : facing;
-        const col = mc ? vertexColor([pc[0] * mc[idx * 4], pc[1] * mc[idx * 4 + 1], pc[2] * mc[idx * 4 + 2], pc[3] * mc[idx * 4 + 3]], decode) : c;
-        push([centre[0] + p[0], centre[1] + p[1], centre[2] + p[2]], mesh.uv ? mesh.uv[idx * 2] : 0, mesh.uv ? mesh.uv[idx * 2 + 1] : 0, n, col);
+        const col = mc
+          ? vertexColor(
+              [pc[0] * mc[idx * 4], pc[1] * mc[idx * 4 + 1], pc[2] * mc[idx * 4 + 2], pc[3] * mc[idx * 4 + 3]],
+              decode,
+            )
+          : c;
+        push(
+          [centre[0] + p[0], centre[1] + p[1], centre[2] + p[2]],
+          mesh.uv ? mesh.uv[idx * 2] : 0,
+          mesh.uv ? mesh.uv[idx * 2 + 1] : 0,
+          n,
+          col,
+        );
       }
       continue;
     }
-    let w = cur.size[0] * sx, h = cur.size[1] * sy;
-    const big = Math.max(Math.abs(w), Math.abs(h)), maxSize = (rend.maxSize ?? 0.5) * view.k * Math.max(depth(centre), 1e-6);
-    if (big > maxSize) { w *= maxSize / big; h *= maxSize / big; }
+    let w = cur.size[0] * sx,
+      h = cur.size[1] * sy;
+    const big = Math.max(Math.abs(w), Math.abs(h)),
+      maxSize = (rend.maxSize ?? 0.5) * view.k * Math.max(depth(centre), 1e-6);
+    if (big > maxSize) {
+      w *= maxSize / big;
+      h *= maxSize / big;
+    }
     if (rend.mode === 1) {
       // along its velocity, the particle at the head, its width across the velocity and the line of sight
-      const v = world ? [pt.vel[0] + pt.anim[0], pt.vel[1] + pt.anim[1], pt.vel[2] + pt.anim[2]]
+      const v = world
+        ? [pt.vel[0] + pt.anim[0], pt.vel[1] + pt.anim[1], pt.vel[2] + pt.anim[2]]
         : applyDir(M, pt.vel[0] + pt.anim[0], pt.vel[1] + pt.anim[1], pt.vel[2] + pt.anim[2]);
-      const sp = Math.hypot(v[0], v[1], v[2]) || 1e-6, d = [v[0] / sp, v[1] / sp, v[2] / sp];
+      const sp = Math.hypot(v[0], v[1], v[2]) || 1e-6,
+        d = [v[0] / sp, v[1] / sp, v[2] / sp];
       const toEye = norm([view.eye[0] - centre[0], view.eye[1] - centre[1], view.eye[2] - centre[2]]);
       let side = cross3(d, toEye);
       side = Math.hypot(side[0], side[1], side[2]) > 1e-6 ? norm(side) : view.y;
       const len = w * (rend.lengthScale ?? 2) + sp * (rend.velocityScale || 0);
       for (const q of QUAD) {
-        const a = (q[0] - 0.5) * len, b = q[1] * h;
-        push([centre[0] + d[0] * a + side[0] * b, centre[1] + d[1] * a + side[1] * b, centre[2] + d[2] * a + side[2] * b], q[2], q[3]);
+        const a = (q[0] - 0.5) * len,
+          b = q[1] * h;
+        push(
+          [centre[0] + d[0] * a + side[0] * b, centre[1] + d[1] * a + side[1] * b, centre[2] + d[2] * a + side[2] * b],
+          q[2],
+          q[3],
+        );
       }
       continue;
     }
-    const rz = -cur.rot[2], cz = Math.cos(rz), sn = Math.sin(rz);
-    const px = (rend.pivot?.[0] || 0) * w, py = (rend.pivot?.[1] || 0) * h;
-    let X = view.x, Y = view.y;
-    if (rend.mode === 2) { X = [1, 0, 0]; Y = [0, 0, 1]; }
-    else if (rend.mode === 3) {
+    const rz = -cur.rot[2],
+      cz = Math.cos(rz),
+      sn = Math.sin(rz);
+    const px = (rend.pivot?.[0] || 0) * w,
+      py = (rend.pivot?.[1] || 0) * h;
+    let X = view.x,
+      Y = view.y;
+    if (rend.mode === 2) {
+      X = [1, 0, 0];
+      Y = [0, 0, 1];
+    } else if (rend.mode === 3) {
       const flat = [view.x[0], 0, view.x[2]];
-      X = Math.hypot(flat[0], flat[2]) > 1e-6 ? norm(flat) : [1, 0, 0]; Y = [0, 1, 0];
-    } else if (rend.align === 2) { X = [Rm[0], Rm[4], Rm[8]]; Y = [Rm[1], Rm[5], Rm[9]]; }
-    const fx3 = def.main.rotation.length === 3 ? Math.cos(cur.rot[1]) : 1, fy3 = def.main.rotation.length === 3 ? Math.cos(cur.rot[0]) : 1;
+      X = Math.hypot(flat[0], flat[2]) > 1e-6 ? norm(flat) : [1, 0, 0];
+      Y = [0, 1, 0];
+    } else if (rend.align === 2) {
+      X = [Rm[0], Rm[4], Rm[8]];
+      Y = [Rm[1], Rm[5], Rm[9]];
+    }
+    const fx3 = def.main.rotation.length === 3 ? Math.cos(cur.rot[1]) : 1,
+      fy3 = def.main.rotation.length === 3 ? Math.cos(cur.rot[0]) : 1;
     for (const q of QUAD) {
-      const lx = (q[0] * w + px) * fx3, ly = (q[1] * h + py) * fy3;
-      const rx = lx * cz - ly * sn, ry = lx * sn + ly * cz;
-      push([centre[0] + X[0] * rx + Y[0] * ry, centre[1] + X[1] * rx + Y[1] * ry, centre[2] + X[2] * rx + Y[2] * ry], q[2], q[3]);
+      const lx = (q[0] * w + px) * fx3,
+        ly = (q[1] * h + py) * fy3;
+      const rx = lx * cz - ly * sn,
+        ry = lx * sn + ly * cz;
+      push(
+        [centre[0] + X[0] * rx + Y[0] * ry, centre[1] + X[1] * rx + Y[1] * ry, centre[2] + X[2] * rx + Y[2] * ry],
+        q[2],
+        q[3],
+      );
     }
   }
   return { data: data.subarray(0, o), count: o / STRIDE3 };
@@ -962,10 +1364,15 @@ export function geometry3d(fxs, s, view, { meshes = {}, linear = true } = {}) {
 // is TEXCOORD0.xy, whatever the renderer's custom streams say.
 let trailScratch = new Float32Array(0);
 export function trailGeometry(fxs, s, { linear = true } = {}) {
-  const def = s.def, tr = def.modules?.trail, world = def.main.space === 1;
+  const def = s.def,
+    tr = def.modules?.trail,
+    world = def.main.space === 1;
   const empty = { data: new Float32Array(0), count: 0 };
   if (!tr || !s.particles.length) return empty;
-  const decode = linear && def.renderer.colorSpace !== 0, M = s.M, sx = colLen(M, 0), lobby = world || tr.world;
+  const decode = linear && def.renderer.colorSpace !== 0,
+    M = s.M,
+    sx = colLen(M, 0),
+    lobby = world || tr.world;
   let need = 0;
   for (const pt of s.particles) if (pt.trail) need += pt.trail.length * 6 * STRIDE;
   if (!need) return empty;
@@ -973,39 +1380,66 @@ export function trailGeometry(fxs, s, { linear = true } = {}) {
   const data = trailScratch;
   let o = 0;
   const push = (p, u, v, col) => {
-    data[o++] = p[0]; data[o++] = p[1];
-    data[o] = u; data[o + 1] = v;
+    data[o++] = p[0];
+    data[o++] = p[1];
+    data[o] = u;
+    data[o + 1] = v;
     for (let k = 2; k < 12; k++) data[o + k] = 0;
     o += 12;
-    data[o++] = col[0]; data[o++] = col[1]; data[o++] = col[2]; data[o++] = col[3];
-    data[o++] = FACING[0]; data[o++] = FACING[1]; data[o++] = FACING[2];
+    data[o++] = col[0];
+    data[o++] = col[1];
+    data[o++] = col[2];
+    data[o++] = col[3];
+    data[o++] = FACING[0];
+    data[o++] = FACING[1];
+    data[o++] = FACING[2];
   };
   for (const pt of s.particles) {
     if (!pt.trail) continue;
     // the particle in lobby units, then its points (in the simulation space or, World Space, lobby units: trailPoint)
     const pts = [world ? pt.pos : apply(M, pt.pos[0], pt.pos[1], pt.pos[2])];
     for (let i = pt.trail.length - 1; i >= 0; i--) {
-      const at = pt.trail[i].p, p = lobby ? at : apply(M, at[0], at[1], at[2]), q = pts[pts.length - 1];
+      const at = pt.trail[i].p,
+        p = lobby ? at : apply(M, at[0], at[1], at[2]),
+        q = pts[pts.length - 1];
       if (Math.hypot(p[0] - q[0], p[1] - q[1]) > 1e-6) pts.push(p);
     }
     if (pts.length < 2) continue;
     const len = [0];
-    for (let i = 1; i < pts.length; i++) len.push(len[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
-    const total = len[len.length - 1], cur = fxs.current(s, pt), r = (k) => rnd(pt.seed, k);
-    const life = colorAt(tr.color, pt.age / pt.life, r(R.trailColor)), base = tr.inherit ? cur.color : [1, 1, 1, 1];
+    for (let i = 1; i < pts.length; i++)
+      len.push(len[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+    const total = len[len.length - 1],
+      cur = fxs.current(s, pt),
+      r = (k) => rnd(pt.seed, k);
+    const life = colorAt(tr.color, pt.age / pt.life, r(R.trailColor)),
+      base = tr.inherit ? cur.color : [1, 1, 1, 1];
     const size = (tr.sizeWidth ? cur.size[0] : 1) * sx;
     const corners = pts.map((p, i) => {
-      const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
-      const dx = a[0] - b[0], dy = a[1] - b[1], dl = Math.hypot(dx, dy) || 1, u = len[i] / total;
-      const half = (value(tr.width, u, r(R.trailWidth)) * size) / 2, nx = (-dy / dl) * half, ny = (dx / dl) * half;
+      const a = pts[Math.max(0, i - 1)],
+        b = pts[Math.min(pts.length - 1, i + 1)];
+      const dx = a[0] - b[0],
+        dy = a[1] - b[1],
+        dl = Math.hypot(dx, dy) || 1,
+        u = len[i] / total;
+      const half = (value(tr.width, u, r(R.trailWidth)) * size) / 2,
+        nx = (-dy / dl) * half,
+        ny = (dx / dl) * half;
       const c = colorAt(tr.colorTrail, u, r(R.trailColorTrail));
-      const col = vertexColor([life[0] * c[0] * base[0], life[1] * c[1] * base[1], life[2] * c[2] * base[2], life[3] * c[3] * base[3]], decode);
+      const col = vertexColor(
+        [life[0] * c[0] * base[0], life[1] * c[1] * base[1], life[2] * c[2] * base[2], life[3] * c[3] * base[3]],
+        decode,
+      );
       return { l: [p[0] + nx, p[1] + ny], r: [p[0] - nx, p[1] - ny], u, col };
     });
     for (let i = 0; i + 1 < corners.length; i++) {
-      const a = corners[i], b = corners[i + 1];
-      push(a.l, a.u, 1, a.col); push(a.r, a.u, 0, a.col); push(b.r, b.u, 0, b.col);
-      push(b.r, b.u, 0, b.col); push(b.l, b.u, 1, b.col); push(a.l, a.u, 1, a.col);
+      const a = corners[i],
+        b = corners[i + 1];
+      push(a.l, a.u, 1, a.col);
+      push(a.r, a.u, 0, a.col);
+      push(b.r, b.u, 0, b.col);
+      push(b.r, b.u, 0, b.col);
+      push(b.l, b.u, 1, b.col);
+      push(a.l, a.u, 1, a.col);
     }
   }
   return { data: data.subarray(0, o), count: o / STRIDE };
@@ -1015,17 +1449,29 @@ export function trailGeometry(fxs, s, { linear = true } = {}) {
 // GameObject's units, through its matrix M; the sprite's UVs (flipped as the renderer says) in TEXCOORD0 and its
 // colour as the renderer's vertex colour (decoded from sRGB in linear light, like a particle's).
 export function spriteGeometry(def, M, color, { linear = true } = {}) {
-  const [x0, y0, x1, y1] = def.quad, [u0, v0, u1, v1] = def.uv, c = vertexColor(color, linear);
-  const fu = def.flip?.[0], fv = def.flip?.[1], data = new Float32Array(6 * STRIDE);
+  const [x0, y0, x1, y1] = def.quad,
+    [u0, v0, u1, v1] = def.uv,
+    c = vertexColor(color, linear);
+  const fu = def.flip?.[0],
+    fv = def.flip?.[1],
+    data = new Float32Array(6 * STRIDE);
   let o = 0;
   for (const q of QUAD) {
-    const lx = q[2] ? x1 : x0, ly = q[3] ? y1 : y0, p = apply(M, lx, ly, 0);
-    data[o++] = p[0]; data[o++] = p[1];
+    const lx = q[2] ? x1 : x0,
+      ly = q[3] ? y1 : y0,
+      p = apply(M, lx, ly, 0);
+    data[o++] = p[0];
+    data[o++] = p[1];
     data[o] = (fu ? !q[2] : q[2]) ? u1 : u0;
     data[o + 1] = (fv ? !q[3] : q[3]) ? v1 : v0;
     o += 12;
-    data[o++] = c[0]; data[o++] = c[1]; data[o++] = c[2]; data[o++] = c[3];
-    data[o++] = FACING[0]; data[o++] = FACING[1]; data[o++] = FACING[2];
+    data[o++] = c[0];
+    data[o++] = c[1];
+    data[o++] = c[2];
+    data[o++] = c[3];
+    data[o++] = FACING[0];
+    data[o++] = FACING[1];
+    data[o++] = FACING[2];
   }
   return { data, count: 6 };
 }
@@ -1035,7 +1481,12 @@ export function spriteGeometry(def, M, color, { linear = true } = {}) {
 // Unity draws transparent renderers by sorting layer (its value: Default 0, the game's one other layer 2), order in
 // layer, render queue, then back to front: by the distance from the camera plus, for a particle renderer, its sorting
 // fudge (Unity world units). The key's last part is that distance in lobby units, negated (the farther draws first).
-export const sortKey = (x) => [x.sortingLayer || 0, x.order || 0, x.queue ?? 3000, -((x.z || 0) + (x.fudge || 0) * WORLD)];
+export const sortKey = (x) => [
+  x.sortingLayer || 0,
+  x.order || 0,
+  x.queue ?? 3000,
+  -((x.z || 0) + (x.fudge || 0) * WORLD),
+];
 // two sort keys compared part by part (negative: a draws first, 0: a tie)
 export function compareKeys(ka, kb) {
   for (let i = 0; i < ka.length; i++) if (ka[i] !== kb[i]) return ka[i] - kb[i];
@@ -1048,7 +1499,9 @@ const before = (a, b) => compareKeys(sortKey(a), sortKey(b)) <= 0;
 // river surface (queue 3000) draws after her lobby's background page (2900), before her own (3050).
 export function lastBefore(def, steps) {
   let at = -1;
-  steps.forEach((step, i) => { if (before(step, def)) at = i; });
+  steps.forEach((step, i) => {
+    if (before(step, def)) at = i;
+  });
   return at;
 }
 

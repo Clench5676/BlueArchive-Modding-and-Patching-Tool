@@ -4,7 +4,14 @@ let strings = {};
 let lang = "zh-CN";
 
 // the app's language -> the key used in name data ({"zh-CN", "zh-TW", "en", "ja", "ko", "th"})
-export const NAME_LANG = { "zh-CN": "zh-CN", "zh-TW": "zh-TW", "en-US": "en", "ja-JP": "ja", "ko-KR": "ko", "th-TH": "th" };
+export const NAME_LANG = {
+  "zh-CN": "zh-CN",
+  "zh-TW": "zh-TW",
+  "en-US": "en",
+  "ja-JP": "ja",
+  "ko-KR": "ko",
+  "th-TH": "th",
+};
 
 export function setStrings(appLang, table) {
   lang = appLang || "zh-CN";
@@ -21,10 +28,16 @@ export function languageRefresh({ load, refresh }) {
   let revision = 0;
   return async (next) => {
     const my = ++revision;
-    if (!tables.has(next)) tables.set(next, Promise.resolve().then(() => load(next)).catch((error) => {
-      tables.delete(next);
-      throw error;
-    }));
+    if (!tables.has(next))
+      tables.set(
+        next,
+        Promise.resolve()
+          .then(() => load(next))
+          .catch((error) => {
+            tables.delete(next);
+            throw error;
+          }),
+      );
     const table = await tables.get(next);
     if (my !== revision) return false;
     setStrings(next, table);
@@ -42,10 +55,13 @@ export function T(key, vars = {}) {
 // says of itself (its params' error, else its message); with nothing to say it ends where that detail would start, so
 // no raw key (error.undefined) and no empty detail ("Something went wrong: ") is shown. t: a caller's own T (quit.js)
 export function errorText(err, t = T) {
-  const code = err?.code || "internal", params = { ...(err?.params || {}) };
+  const code = err?.code || "internal",
+    params = { ...(err?.params || {}) };
   if (code !== "internal" || params.error) return t(`error.${code}`, params);
   const said = typeof err === "string" ? err : err?.message && err.message !== err.code ? String(err) : "";
-  return said ? t("error.internal", { ...params, error: said }) : t("error.internal", params).replace(/[\s:\uFF1A]+$/u, "");
+  return said
+    ? t("error.internal", { ...params, error: said })
+    : t("error.internal", params).replace(/[\s:\uFF1A]+$/u, "");
 }
 
 // the name keys to try for a UI language: its own, then zh-CN for Simplified Chinese and en for the others

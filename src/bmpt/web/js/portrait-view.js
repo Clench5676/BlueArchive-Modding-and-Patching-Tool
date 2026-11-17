@@ -17,19 +17,31 @@ export function portraitViewport(node, { origin, s, box }) {
   const pos = Array.isArray(node?.pos) ? node.pos : CHARACTER_POS.pos;
   const scale = Number(node?.scale?.[0]) > 0 ? node.scale[0] : CHARACTER_POS.scale[0];
   const k = scale * SKELETON_SCALE * s; // stage px per skeleton unit
-  const ox = origin[0] + pos[0] * s, oy = origin[1] - pos[1] * s;
+  const ox = origin[0] + pos[0] * s,
+    oy = origin[1] - pos[1] * s;
   return {
-    x: (box.left - ox) / k, y: (oy - (box.top + box.height)) / k, width: box.width / k, height: box.height / k,
-    padLeft: 0, padRight: 0, padTop: 0, padBottom: 0, transitionTime: 0, animations: {},
+    x: (box.left - ox) / k,
+    y: (oy - (box.top + box.height)) / k,
+    width: box.width / k,
+    height: box.height / k,
+    padLeft: 0,
+    padRight: 0,
+    padTop: 0,
+    padBottom: 0,
+    transitionTime: 0,
+    animations: {},
   };
 }
 
 // where a skeleton point lands on the stage, by spine-player's own camera arithmetic for a canvas of the box's size
 // at a device pixel ratio (its drawing buffer is the box times the ratio)
 export function stagePoint(view, box, x, y, dpr = 1) {
-  const cw = Math.round(box.width * dpr), ch = Math.round(box.height * dpr);
+  const cw = Math.round(box.width * dpr),
+    ch = Math.round(box.height * dpr);
   const zoom = ch / cw > view.height / view.width ? view.width / cw : view.height / ch;
-  const cx = view.x + view.width / 2, cy = view.y + view.height / 2;
-  const bx = (x - cx) / zoom + cw / 2, by = ch / 2 - (y - cy) / zoom;
+  const cx = view.x + view.width / 2,
+    cy = view.y + view.height / 2;
+  const bx = (x - cx) / zoom + cw / 2,
+    by = ch / 2 - (y - cy) / zoom;
   return [box.left + (bx / cw) * box.width, box.top + (by / ch) * box.height];
 }

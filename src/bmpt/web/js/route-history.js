@@ -10,8 +10,15 @@ export function routeHistory(root = ROOT_ROUTE) {
     entries: () => [...entries],
     commit(route, { home = false } = {}) {
       route ||= root;
-      if (home && route === root) { entries.splice(0, entries.length, root); returning = null; return root; }
-      if (returning === route) { returning = null; return route; }
+      if (home && route === root) {
+        entries.splice(0, entries.length, root);
+        returning = null;
+        return root;
+      }
+      if (returning === route) {
+        returning = null;
+        return route;
+      }
       returning = null;
       if (route === entries.at(-1)) return route;
       if (screen(route) === "student" && screen(entries.at(-1)) === "student") entries[entries.length - 1] = route;
@@ -22,7 +29,9 @@ export function routeHistory(root = ROOT_ROUTE) {
       // Cancelling an unfinished navigation returns to the last committed page.
       if (requested !== entries.at(-1)) return entries.at(-1);
       if (entries.length === 1) return null;
-      entries.pop(); returning = entries.at(-1); return returning;
+      entries.pop();
+      returning = entries.at(-1);
+      return returning;
     },
   };
 }

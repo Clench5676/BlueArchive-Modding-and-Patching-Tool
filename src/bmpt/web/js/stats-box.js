@@ -43,31 +43,41 @@ export const captionWidth = (captions, size = B.caption) => {
 
 // The details panel's box, one size under the prefab's (the panel one size down): captions and values 34
 // (TYPE.badge, the size under the box's 38), values down to 26 as before, rows 56 high at least.
-export const STATS_BOX_S = Object.freeze({ caption: 34, value: Object.freeze({ fs: 34, fsMin: 26, lines: 3 }), rowMin: 56 });
+export const STATS_BOX_S = Object.freeze({
+  caption: 34,
+  value: Object.freeze({ fs: 34, fsMin: 26, lines: 3 }),
+  rowMin: 56,
+});
 
-const graphemes = (text) => globalThis.Intl?.Segmenter
-  ? [...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text)].map((part) => part.segment) : Array.from(text);
+const graphemes = (text) =>
+  globalThis.Intl?.Segmenter
+    ? [...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text)].map((part) => part.segment)
+    : Array.from(text);
 // a value on one line at size fs within room: the whole of it when it fits (cut false), else as much of its first line as
 // fits (whole graphemes)
 export function oneLine(text, fs, room) {
   const first = String(text).split("\n")[0];
   if (first === String(text) && NGUI.glyphWidth(first, fs) <= room) return { text: first, fs, lines: 1, cut: false };
   const parts = graphemes(first);
-  let lo = 0, hi = parts.length;
+  let lo = 0,
+    hi = parts.length;
   while (lo < hi) {
     const mid = Math.ceil((lo + hi) / 2);
-    if (NGUI.glyphWidth(parts.slice(0, mid).join(""), fs) <= room) lo = mid; else hi = mid - 1;
+    if (NGUI.glyphWidth(parts.slice(0, mid).join(""), fs) <= room) lo = mid;
+    else hi = mid - 1;
   }
   return { text: parts.slice(0, lo).join(""), fs, lines: 1, cut: true };
 }
 
 // the room a value's text may fill: the box less its padding on both sides, the caption column, what the row reserves and the slack
-export const valueRoom = (holder, width, { capW = 0, reserve = 0 } = {}) => boxWidth(holder, width) - 2 * B.padX - capW - reserve - B.slack;
+export const valueRoom = (holder, width, { capW = 0, reserve = 0 } = {}) =>
+  boxWidth(holder, width) - 2 * B.padX - capW - reserve - B.slack;
 
 // the height of a box whose values take these numbers of lines at the full value size (no secondary lines, no minH); type: the
 // box's sizes, as statsBox takes them
 export const boxHeight = (lines, type = null) => {
-  const rowMin = type?.rowMin ?? B.rowMin, fs = type?.value?.fs ?? B.value.fs;
+  const rowMin = type?.rowMin ?? B.rowMin,
+    fs = type?.value?.fs ?? B.value.fs;
   return lines.reduce((sum, n) => sum + Math.max(rowMin, n * fs * B.linePitch + B.rowPad), 0) + 2 * B.padY;
 };
 
@@ -88,14 +98,31 @@ function cutTo(fitted, cut, room = Infinity) {
 // Gives {nodes, height, width, capW, rows: [{y, h, top, bottom, text, room}]}; the nodes are the box (fill and line) first, then
 // each row's caption, value, secondary line, slot nodes and the divider under it (none under the last row).
 // boldCaptions: the captions drawn bold (their column measured a little wider for the heavier strokes)
-export function statsBox({ holder, width, at = [0, 0], rows, name = "Box", names = {}, type = null, boldCaptions = false }) {
+export function statsBox({
+  holder,
+  width,
+  at = [0, 0],
+  rows,
+  name = "Box",
+  names = {},
+  type = null,
+  boldCaptions = false,
+}) {
   const prefix = { caption: "F", value: "V", divider: "L", secondary: "Original", ...names };
   const size = { caption: B.caption, value: B.value, rowMin: B.rowMin, ...(type || {}) };
   const boxW = boxWidth(holder, width);
-  const capW = captionWidth(rows.map((row) => row.caption), size.caption) * (boldCaptions ? BOLD_WIDTH : 1);
-  const left = at[0] - boxW / 2, right = at[0] + boxW / 2 - B.padX;
+  const capW =
+    captionWidth(
+      rows.map((row) => row.caption),
+      size.caption,
+    ) * (boldCaptions ? BOLD_WIDTH : 1);
+  const left = at[0] - boxW / 2,
+    right = at[0] + boxW / 2 - B.padX;
   const placed = rows.map((row) => {
-    let reserve = row.reserve ?? 0, room = valueRoom(holder, width, { capW, reserve }), cut = false, fitted;
+    let reserve = row.reserve ?? 0,
+      room = valueRoom(holder, width, { capW, reserve }),
+      cut = false,
+      fitted;
     if (typeof row.value === "object" && row.value) fitted = row.value;
     else if (row.more) {
       // one line at the full size: the whole value, or what fits beside the button
@@ -106,29 +133,105 @@ export function statsBox({ holder, width, at = [0, 0], rows, name = "Box", names
         fitted = oneLine(row.value ?? "", size.value.fs, room);
         cut = true;
       }
-    } else fitted = cutTo(wrapPath(String(row.value ?? ""), size.value.fs, size.value.fsMin, room, size.value.lines), row.cut, room);
-    const h = Math.max(row.minH ?? size.rowMin, lineHeight(fitted) + B.rowPad + (row.secondary ? B.secondary.extra : 0));
+    } else
+      fitted = cutTo(
+        wrapPath(String(row.value ?? ""), size.value.fs, size.value.fsMin, room, size.value.lines),
+        row.cut,
+        room,
+      );
+    const h = Math.max(
+      row.minH ?? size.rowMin,
+      lineHeight(fitted) + B.rowPad + (row.secondary ? B.secondary.extra : 0),
+    );
     return { row, room, fitted, h, cut };
   });
   const height = placed.reduce((sum, { h }) => sum + h, 0) + 2 * B.padY;
-  const nodes = [node(name, [at[0], at[1] - height / 2], [sprite("Common_Bg_Raius10px", boxW, height, { depth: 5, color: `${B.fill}/1.00` })], [
-    node("Line", [0, 0], [sprite("Common_Line_Raius10px", boxW + B.lineOutset, height + B.lineOutset, { depth: 4, color: `${B.line}/1.00` })]),
-  ])];
+  const nodes = [
+    node(
+      name,
+      [at[0], at[1] - height / 2],
+      [sprite("Common_Bg_Raius10px", boxW, height, { depth: 5, color: `${B.fill}/1.00` })],
+      [
+        node(
+          "Line",
+          [0, 0],
+          [
+            sprite("Common_Line_Raius10px", boxW + B.lineOutset, height + B.lineOutset, {
+              depth: 4,
+              color: `${B.line}/1.00`,
+            }),
+          ],
+        ),
+      ],
+    ),
+  ];
   const out = [];
   let top = at[1] - B.padY;
   placed.forEach(({ row, room, fitted, h, cut }, i) => {
-    const y = top - h / 2, x = left + B.padX + capW, valueY = y + (row.secondary ? B.secondary.rise : 0);
-    if (row.caption != null) nodes.push(node(`${prefix.caption}_${i}`, [left + B.padX, y], [label(row.caption, size.caption, "#2d4664/1.00", capW, 50, { pivot: 3, depth: 8, ...(boldCaptions ? { bold: true } : {}) })]));
-    nodes.push(node(`${prefix.value}_${i}`, [x, valueY], [label(fitted.text, fitted.fs, colourOf(row.colour), room + B.slack,
-      fitted.lines * fitted.fs * B.linePitch + B.labelPad, { pivot: 3, depth: 8, ...(row.bold ? { bold: true } : {}), ...(row.ariaLabel != null ? { ariaLabel: row.ariaLabel } : {}) })]));
+    const y = top - h / 2,
+      x = left + B.padX + capW,
+      valueY = y + (row.secondary ? B.secondary.rise : 0);
+    if (row.caption != null)
+      nodes.push(
+        node(
+          `${prefix.caption}_${i}`,
+          [left + B.padX, y],
+          [
+            label(row.caption, size.caption, "#2d4664/1.00", capW, 50, {
+              pivot: 3,
+              depth: 8,
+              ...(boldCaptions ? { bold: true } : {}),
+            }),
+          ],
+        ),
+      );
+    nodes.push(
+      node(
+        `${prefix.value}_${i}`,
+        [x, valueY],
+        [
+          label(
+            fitted.text,
+            fitted.fs,
+            colourOf(row.colour),
+            room + B.slack,
+            fitted.lines * fitted.fs * B.linePitch + B.labelPad,
+            {
+              pivot: 3,
+              depth: 8,
+              ...(row.bold ? { bold: true } : {}),
+              ...(row.ariaLabel != null ? { ariaLabel: row.ariaLabel } : {}),
+            },
+          ),
+        ],
+      ),
+    );
     if (row.secondary) {
       const second = NGUI.fitText(row.secondary, B.secondary.fs, B.secondary.fsMin, room, 1);
-      nodes.push(node(`${prefix.secondary}_${i}`, [x, top - h + B.secondary.foot],
-        [label(second.text, second.fs, B.secondary.colour, room, B.secondary.h, { pivot: 3, depth: 8, ellipsis: true, ariaLabel: row.secondary })]));
+      nodes.push(
+        node(
+          `${prefix.secondary}_${i}`,
+          [x, top - h + B.secondary.foot],
+          [
+            label(second.text, second.fs, B.secondary.colour, room, B.secondary.h, {
+              pivot: 3,
+              depth: 8,
+              ellipsis: true,
+              ariaLabel: row.secondary,
+            }),
+          ],
+        ),
+      );
     }
     if (row.slot) nodes.push(...row.slot({ i, x, y, valueY, right, room, text: fitted, h, cut }));
-    if (i < placed.length - 1 && !row.joined) nodes.push(node(`${prefix.divider}_${i}`, [at[0], top - h],
-      [sprite("Common_Line_Dot", boxW - 2 * B.dividerInset, 4, { type: 2, depth: 7, color: `${B.divider}/1.00` })]));
+    if (i < placed.length - 1 && !row.joined)
+      nodes.push(
+        node(
+          `${prefix.divider}_${i}`,
+          [at[0], top - h],
+          [sprite("Common_Line_Dot", boxW - 2 * B.dividerInset, 4, { type: 2, depth: 7, color: `${B.divider}/1.00` })],
+        ),
+      );
     out.push({ y, h, top, bottom: top - h, text: fitted, room, cut });
     top -= h;
   });

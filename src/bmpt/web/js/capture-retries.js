@@ -14,16 +14,26 @@ export function captureRetries(wake) {
     idle(match = () => true) {
       for (const [item, entry] of waiting) {
         if (!match(item) || entry.ready || entry.timer !== null) continue;
-        entry.timer = setTimeout(() => { entry.timer = null; entry.ready = true; wake(); }, entry.delay);
+        entry.timer = setTimeout(() => {
+          entry.timer = null;
+          entry.ready = true;
+          wake();
+        }, entry.delay);
       }
     },
     busy() {
       for (const entry of waiting.values()) {
-        clearTimeout(entry.timer); entry.timer = null; entry.ready = false;
+        clearTimeout(entry.timer);
+        entry.timer = null;
+        entry.ready = false;
       }
     },
     take(match = () => true) {
-      for (const [item, entry] of waiting) if (entry.ready && match(item)) { waiting.delete(item); return item; }
+      for (const [item, entry] of waiting)
+        if (entry.ready && match(item)) {
+          waiting.delete(item);
+          return item;
+        }
       return null;
     },
     delete(item) {

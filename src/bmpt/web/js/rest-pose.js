@@ -10,12 +10,18 @@
 // thumbnail has only the skeleton, which is Idle_01 on every lobby of the game.
 export function lobbyIdles(data, { idle = null, animation = null } = {}) {
   const ok = (n) => n && !/^start_/i.test(n) && data.findAnimation(n);
-  const names = [idle, "Idle_01", animation,
+  const names = [
+    idle,
+    "Idle_01",
+    animation,
     ...data.animations.filter((a) => /idle|loop|rest/i.test(a.name)).map((a) => a.name),
-    ...data.animations.filter((a) => a.name !== "Dummy").map((a) => a.name), "Dummy"];
+    ...data.animations.filter((a) => a.name !== "Dummy").map((a) => a.name),
+    "Dummy",
+  ];
   const candidates = [...new Set(names.filter(ok))];
   // Repackers sometimes keep an empty placeholder under the original idle's name.
-  return candidates.filter((n) => data.findAnimation(n).timelines?.length !== 0)
+  return candidates
+    .filter((n) => data.findAnimation(n).timelines?.length !== 0)
     .concat(candidates.filter((n) => data.findAnimation(n).timelines?.length === 0));
 }
 export const lobbyIdle = (data, options) => lobbyIdles(data, options)[0] || null;

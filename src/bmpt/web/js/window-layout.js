@@ -7,15 +7,15 @@ export function headerGeometry(width, height, nativeBottom = 0, immersive = fals
   // The native row overlays the stage, as the prefab bar does. Reserving extra
   // height would letterbox an otherwise 16:9 client area at the minimum size.
   const extra = 0;
-  return { scale, rowHeight, centre: barCentre(undefined, rowHeight), extra,
-    contentScale: scale };
+  return { scale, rowHeight, centre: barCentre(undefined, rowHeight), extra, contentScale: scale };
 }
 
 // Detail portrait/L2D share fullscreen; photography also owns an independent
 // root flag while preparing or switching those two renderers. Hall is separate.
 export function isImmersive(stageClasses, rootClasses) {
-  const stage = new Set(stageClasses), root = new Set(rootClasses);
-  return stage.has('fullscreen') || stage.has('hall-fullscreen') || root.has('photo-active');
+  const stage = new Set(stageClasses),
+    root = new Set(rootClasses);
+  return stage.has("fullscreen") || stage.has("hall-fullscreen") || root.has("photo-active");
 }
 
 export function dragRegions({ width, height, bounds, immersive = false, blocked = false, exclusions = [] }) {
@@ -24,8 +24,16 @@ export function dragRegions({ width, height, bounds, immersive = false, blocked 
   return subtractRegions(background, [...exclusions, ...(bounds ? [expandRect(bounds, 8)] : [])]);
 }
 
-export function rowLayout({ scale, nativeLeft = 0, rightStart, modsWidth,
-  captionWidth, compact = false, modsVisible = true, hall = false }) {
+export function rowLayout({
+  scale,
+  nativeLeft = 0,
+  rightStart,
+  modsWidth,
+  captionWidth,
+  compact = false,
+  modsVisible = true,
+  hall = false,
+}) {
   const shift = Math.max(0, nativeLeft + (nativeLeft ? 8 : 0) - 38 * scale);
   // Reuse the former title slot; Hall owns the Back/title slot.
   const modsLeft = (hall ? 38 : 160) * scale + shift;
@@ -39,19 +47,28 @@ export function subtractRegions(background, exclusions) {
   let regions = [background];
   for (const cut of exclusions) {
     regions = regions.flatMap((r) => {
-      const l = Math.max(r.left, cut.left), t = Math.max(r.top, cut.top);
-      const x = Math.min(r.right, cut.right), y = Math.min(r.bottom, cut.bottom);
+      const l = Math.max(r.left, cut.left),
+        t = Math.max(r.top, cut.top);
+      const x = Math.min(r.right, cut.right),
+        y = Math.min(r.bottom, cut.bottom);
       if (l >= x || t >= y) return [r];
-      return [{ left: r.left, top: r.top, right: r.right, bottom: t },
+      return [
+        { left: r.left, top: r.top, right: r.right, bottom: t },
         { left: r.left, top: y, right: r.right, bottom: r.bottom },
         { left: r.left, top: t, right: l, bottom: y },
-        { left: x, top: t, right: r.right, bottom: y }].filter((b) => b.right > b.left && b.bottom > b.top);
+        { left: x, top: t, right: r.right, bottom: y },
+      ].filter((b) => b.right > b.left && b.bottom > b.top);
     });
   }
   return regions;
 }
 
-export const expandRect = (r, gap = 4) => ({ left: r.left - gap, top: r.top - gap, right: r.right + gap, bottom: r.bottom + gap });
+export const expandRect = (r, gap = 4) => ({
+  left: r.left - gap,
+  top: r.top - gap,
+  right: r.right + gap,
+  bottom: r.bottom + gap,
+});
 
 // Cover the shared stage/overlay antialiasing footprint with the opaque loading
 // backdrop. One device pixel hides the stage colour at every fractional origin.

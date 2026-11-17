@@ -99,20 +99,40 @@ void main() {
   vec3 cover = r.a > 0.0 ? enc(grade > 0.5 ? graded(col) : col) * r.a : vec3(0.0);
   o = vec4(min(cover + max(c - a3, 0.0), 1.0), r.a);
 }`;
-const UNIFORMS = ["t", "size", "screen", "ca", "clear", "panini", "grade", "exposure", "filt", "hsc", "lift", "gamma", "gain"];
+const UNIFORMS = [
+  "t",
+  "size",
+  "screen",
+  "ca",
+  "clear",
+  "panini",
+  "grade",
+  "exposure",
+  "filt",
+  "hsc",
+  "lift",
+  "gamma",
+  "gain",
+];
 
 const states = new WeakMap();
 
 function compile(gl) {
   const prog = gl.createProgram();
-  for (const [type, src] of [[gl.VERTEX_SHADER, VS], [gl.FRAGMENT_SHADER, FS]]) {
+  for (const [type, src] of [
+    [gl.VERTEX_SHADER, VS],
+    [gl.FRAGMENT_SHADER, FS],
+  ]) {
     const s = gl.createShader(type);
     gl.shaderSource(s, src);
     gl.compileShader(s);
     gl.attachShader(prog, s);
     const log = gl.getShaderParameter(s, gl.COMPILE_STATUS) ? null : gl.getShaderInfoLog(s) || "shader";
     gl.deleteShader(s); // freed with the program
-    if (log) { gl.deleteProgram(prog); throw new Error(log); }
+    if (log) {
+      gl.deleteProgram(prog);
+      throw new Error(log);
+    }
   }
   gl.bindAttribLocation(prog, 0, "p");
   gl.linkProgram(prog);
@@ -122,7 +142,8 @@ function compile(gl) {
     throw new Error(log);
   }
   // one triangle over the whole target, in its own vertex array so spine's attribute state stays untouched
-  const vao = gl.createVertexArray(), buf = gl.createBuffer();
+  const vao = gl.createVertexArray(),
+    buf = gl.createBuffer();
   gl.bindVertexArray(vao);
   gl.bindBuffer(gl.ARRAY_BUFFER, buf);
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
@@ -154,7 +175,8 @@ function srgbPage(gl, texture) {
 }
 
 function pagesOf(player) {
-  const out = new Set(), data = player.skeleton?.data;
+  const out = new Set(),
+    data = player.skeleton?.data;
   for (const skin of data?.skins || []) {
     for (const entry of skin.getAttachments()) {
       const t = entry.attachment?.region?.texture;
@@ -172,7 +194,13 @@ function pagesOf(player) {
 export function attach(player, host = null) {
   // Callers create this player only after their preview entry awaits ensureSpine().
   const gl = player?.context?.gl;
-  if (!gl || typeof WebGL2RenderingContext === "undefined" || !(gl instanceof WebGL2RenderingContext) || states.has(player)) return false;
+  if (
+    !gl ||
+    typeof WebGL2RenderingContext === "undefined" ||
+    !(gl instanceof WebGL2RenderingContext) ||
+    states.has(player)
+  )
+    return false;
   const hs = host ? states.get(host) : null;
   if (host && !hs?.on) return false;
   let st;
@@ -188,20 +216,34 @@ export function attach(player, host = null) {
     // a lost and restored context uploads the page again: keep it sRGB
     const own = Object.prototype.hasOwnProperty.call(texture, "update") ? texture.update : undefined;
     const update = texture.update.bind(texture);
-    texture.update = (mips) => { update(mips); if (st.on) srgbPage(gl, texture); };
+    texture.update = (mips) => {
+      update(mips);
+      if (st.on) srgbPage(gl, texture);
+    };
     st.pages.push([texture, own]);
   }
   // the program and the framebuffer are rebuilt after a context loss (spine restores its own objects first)
   if (!host) {
-    st.restorable = { restore: () => { try { st.res = compile(gl); } catch { st.on = false; } } };
+    st.restorable = {
+      restore: () => {
+        try {
+          st.res = compile(gl);
+        } catch {
+          st.on = false;
+        }
+      },
+    };
     player.context.addRestorable?.(st.restorable);
   }
   // additive slots add colour, not coverage
-  const batcher = player.sceneRenderer?.batcher, table = spine.PolygonBatcher?.blendModesGL;
+  const batcher = player.sceneRenderer?.batcher,
+    table = spine.PolygonBatcher?.blendModesGL;
   if (batcher && table) {
     st.batcher = batcher;
     batcher.setBlendMode = function (mode, pma) {
-      const m = table[mode], src = pma ? m.srcRgbPma : m.srcRgb, dst = m.dstRgb;
+      const m = table[mode],
+        src = pma ? m.srcRgbPma : m.srcRgb,
+        dst = m.dstRgb;
       const srcA = mode === spine.BlendMode.Additive ? gl.ZERO : m.srcAlpha;
       if (this.srcColorBlend === src && this.srcAlphaBlend === srcA && this.dstBlend === dst) return;
       this.srcColorBlend = src;
@@ -244,15 +286,21 @@ export function begin(player) {
   if (!st?.on) return;
   if (st.host) {
     // a guest's own frame: its clear goes into the host's framebuffer, which the host clears again before drawing
-    const hs = states.get(st.host), gl = st.gl;
+    const hs = states.get(st.host),
+      gl = st.gl;
     if (!hs?.on || !hs.res?.w || gl.isContextLost()) return;
     st.prev = gl.getParameter(gl.FRAMEBUFFER_BINDING);
     gl.bindFramebuffer(gl.FRAMEBUFFER, hs.res.fbo);
     st.bound = true;
     return;
   }
-  const { gl, res } = st, w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
-  if (!w || !h || gl.isContextLost()) { st.bound = false; return; }
+  const { gl, res } = st,
+    w = gl.drawingBufferWidth,
+    h = gl.drawingBufferHeight;
+  if (!w || !h || gl.isContextLost()) {
+    st.bound = false;
+    return;
+  }
   if (w !== res.w || h !== res.h) {
     gl.bindTexture(gl.TEXTURE_2D, res.tex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.SRGB8_ALPHA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
@@ -290,7 +338,9 @@ export function begin(player) {
 // back.
 const dec = (c) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
 export let vertexColours = true; // for checks
-export const setVertexColours = (on) => { vertexColours = !!on; };
+export const setVertexColours = (on) => {
+  vertexColours = !!on;
+};
 // curveOf(attachment) -> the decoding curve of the shader that draws it (null: every slot decoded with the sRGB curve)
 export function setCurves(player, curveOf) {
   const st = states.get(player);
@@ -301,14 +351,23 @@ export function setCurves(player, curveOf) {
 export function tint(player) {
   const st = states.get(player);
   if (!st?.on || !vertexColours || !player.skeleton || st.saved) return;
-  const saved = (st.saved = []), additive = spine.BlendMode.Additive;
+  const saved = (st.saved = []),
+    additive = spine.BlendMode.Additive;
   for (const slot of player.skeleton.drawOrder) {
-    const c = slot.color, att = slot.getAttachment(), ac = att?.color;
+    const c = slot.color,
+      att = slot.getAttachment(),
+      ac = att?.color;
     const white = !ac || (ac.r === 1 && ac.g === 1 && ac.b === 1 && ac.a === 1);
     if (white && c.r === 1 && c.g === 1 && c.b === 1 && (c.a === 1 || slot.data.blendMode !== additive)) continue;
     saved.push([c, c.r, c.g, c.b, c.a, white ? null : ac, ac?.r, ac?.g, ac?.b, ac?.a]);
     let [r, g, b, a] = [c.r, c.g, c.b, c.a];
-    if (!white) { r *= ac.r; g *= ac.g; b *= ac.b; a *= ac.a; ac.set(1, 1, 1, 1); }
+    if (!white) {
+      r *= ac.r;
+      g *= ac.g;
+      b *= ac.b;
+      a *= ac.a;
+      ac.set(1, 1, 1, 1);
+    }
     const curve = st.curveOf?.(att) || dec;
     if (slot.data.blendMode === additive) c.set(curve(r * a), curve(g * a), curve(b * a), 1);
     else c.set(curve(r), curve(g), curve(b), a);
@@ -335,8 +394,17 @@ const FOV = 10;
 const lum = (c) => c[0] * 0.2126729 + c[1] * 0.7151522 + c[2] * 0.072175;
 // Mathf.GammaToLinearSpace (Color.linear): the sRGB curve, a 2.2 power above 1 (HDR colours)
 const toLinear = (v) => (v <= 0.04045 ? v / 12.92 : v < 1 ? Math.pow((v + 0.055) / 1.055, 2.4) : Math.pow(v, 2.2));
-const IDENTITY = Object.freeze({ ca: 0, panini: [1, 1, 0, 1], grade: false, exposure: 1, filt: [1, 1, 1],
-  hsc: [0, 1, 1], lift: [0, 0, 0], gamma: [1, 1, 1], gain: [1, 1, 1] });
+const IDENTITY = Object.freeze({
+  ca: 0,
+  panini: [1, 1, 0, 1],
+  grade: false,
+  exposure: 1,
+  filt: [1, 1, 1],
+  hsc: [0, 1, 1],
+  lift: [0, 0, 0],
+  gamma: [1, 1, 1],
+  gain: [1, 1, 1],
+});
 // What the shader gets for a lobby's post-processing (lobby.json "post", lobby.py post_processing) on a target of the
 // given aspect, as URP 12's PostProcessPass, ColorGradingLutPass and ColorUtils.PrepareLiftGammaGain work it out;
 // null when there is nothing to do.
@@ -346,15 +414,23 @@ export function postParams(post, aspect = 16 / 9) {
   if (post.chromaticAberration > 0) out.ca = post.chromaticAberration * 0.05;
   const pn = post.panini;
   if (pn?.distance > 0) {
-    const ey = Math.tan((FOV * Math.PI) / 360), ex = aspect * ey, d = pn.distance;
+    const ey = Math.tan((FOV * Math.PI) / 360),
+      ex = aspect * ey,
+      d = pn.distance;
     // CalcCropExtents over CalcViewExtents: the same ratio across and down
-    const near = 1 / Math.hypot(ex, 1), crop = (near * (1 + d)) / (near + d);
+    const near = 1 / Math.hypot(ex, 1),
+      crop = (near * (1 + d)) / (near + d);
     out.panini = [ex, ey, d, 1 + (Math.min(1, Math.max(0, crop)) - 1) * (pn.cropToFit ?? 1)];
   }
   const lgg = post.liftGammaGain;
   if (lgg) {
-    const part = (v, k) => { const c = v.slice(0, 3).map((x) => toLinear(x) * k); return [c, lum(c)]; };
-    const [l, ll] = part(lgg.lift, 0.15), [g, gl] = part(lgg.gamma, 0.8), [n, nl] = part(lgg.gain, 0.8);
+    const part = (v, k) => {
+      const c = v.slice(0, 3).map((x) => toLinear(x) * k);
+      return [c, lum(c)];
+    };
+    const [l, ll] = part(lgg.lift, 0.15),
+      [g, gl] = part(lgg.gamma, 0.8),
+      [n, nl] = part(lgg.gain, 0.8);
     out.lift = l.map((x) => x - ll + lgg.lift[3]);
     out.gamma = g.map((x) => 1 / Math.max(x - gl + lgg.gamma[3] + 1, 1e-3));
     out.gain = n.map((x) => x - nl + lgg.gain[3] + 1);
@@ -370,17 +446,23 @@ export function postParams(post, aspect = 16 / 9) {
   return out.ca > 0 || out.panini[2] > 0 || out.grade ? out : null;
 }
 export let postOn = true; // for checks: false draws every lobby without its post-processing
-export const setPostEnabled = (on) => { postOn = !!on; };
+export const setPostEnabled = (on) => {
+  postOn = !!on;
+};
 // the lobby's post-processing for an attached player (lobby.json "post"; null: none)
 export function setPost(player, post) {
   const st = states.get(player);
-  if (st) { st.post = post || null; st.params = null; }
+  if (st) {
+    st.post = post || null;
+    st.params = null;
+  }
 }
 // the game camera's view (G) in the player's skeleton units, as a spine-player viewport {x, y, width, height}: the
 // screen the post-processing is placed in (null: the canvas is the screen)
 export function setScreen(player, view) {
   const st = states.get(player);
-  if (st) st.screen = view?.width > 0 && view?.height > 0 ? { x: view.x, y: view.y, w: view.width, h: view.height } : null;
+  if (st)
+    st.screen = view?.width > 0 && view?.height > 0 ? { x: view.x, y: view.y, w: view.width, h: view.height } : null;
 }
 // a pass over the frame in linear light before the post-processing's colour steps: fn(gl, texture, width, height,
 // screen) returns the texture to grade instead (falsy: the frame as it is); null removes it (lobby-dof.js)
@@ -397,9 +479,11 @@ const CANVAS = Object.freeze([0, 0, 1, 1]);
 // the screen on the canvas this frame, [x, y, w, h] in canvas uv (y up), from the camera the skeleton was just drawn
 // with; the canvas itself (exactly) when they are the same within a millionth
 export function screenOnCanvas(screen, camera) {
-  const vw = camera?.zoom * camera?.viewportWidth, vh = camera?.zoom * camera?.viewportHeight;
+  const vw = camera?.zoom * camera?.viewportWidth,
+    vh = camera?.zoom * camera?.viewportHeight;
   if (!screen || !(vw > 0) || !(vh > 0)) return CANVAS;
-  const x0 = camera.position.x - vw / 2, y0 = camera.position.y - vh / 2;
+  const x0 = camera.position.x - vw / 2,
+    y0 = camera.position.y - vh / 2;
   const out = [(screen.x - x0) / vw, (screen.y - y0) / vh, screen.w / vw, screen.h / vh];
   return out.every((v, i) => Math.abs(v - CANVAS[i]) < 1e-6) ? CANVAS : out;
 }
@@ -416,7 +500,9 @@ export function end(player) {
     return;
   }
   if (!st?.on || !st.bound) return;
-  const { gl, res } = st, w = res.w, h = res.h;
+  const { gl, res } = st,
+    w = res.w,
+    h = res.h;
   st.bound = false;
   const screen = screenOnCanvas(st.screen, player.sceneRenderer?.camera);
   // a pass before the colour steps (the intro's depth of field, lobby-dof.js), with the post-processing on
@@ -450,10 +536,12 @@ export const active = (player) => !!states.get(player)?.on;
 // Inspect the ungraded target once the lobby has settled. The camera's opaque clear colour is added by the final
 // pass, so it cannot disguise a transparent atlas, a shader that discards everything, or an empty render plan.
 export function hasPixels(player) {
-  const st = states.get(player), gl = player.context?.gl;
+  const st = states.get(player),
+    gl = player.context?.gl;
   if (!gl || gl.isContextLost()) return false;
   const target = st?.on && !st.host ? st.res : null;
-  const w = target?.w || player.canvas.width, h = target?.h || player.canvas.height;
+  const w = target?.w || player.canvas.width,
+    h = target?.h || player.canvas.height;
   if (!(w > 0 && h > 0)) return false;
   const previous = gl.getParameter(gl.FRAMEBUFFER_BINDING);
   try {
@@ -461,7 +549,9 @@ export function hasPixels(player) {
     const pixels = new Uint8Array(w * h * 4);
     gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
     return pixels.some((v) => v !== 0);
-  } finally { gl.bindFramebuffer(gl.FRAMEBUFFER, previous); }
+  } finally {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, previous);
+  }
 }
 
 // for checks: draw an attached player in linear light (true) or in plain sRGB values as before (false)

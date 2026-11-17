@@ -1,4 +1,4 @@
-import {portraitCaptureView} from './photography/camera.js';
+import { portraitCaptureView } from "./photography/camera.js";
 // The portrait's visual mode framing and the numbers of its prefab (visual-mode.js draws it). No DOM: the tests run
 // it in Node.
 // A view is the skeleton point at the stage's centre (cx, cy, skeleton units) and the stage px per skeleton unit (k);
@@ -19,8 +19,18 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // the spine-player viewport showing a view in a box of the stage's size, and back
 export function viewport(view, box = STAGE) {
-  const w = box.width / view.k, h = box.height / view.k;
-  return { x: view.cx - w / 2, y: view.cy - h / 2, width: w, height: h, padLeft: 0, padRight: 0, padTop: 0, padBottom: 0 };
+  const w = box.width / view.k,
+    h = box.height / view.k;
+  return {
+    x: view.cx - w / 2,
+    y: view.cy - h / 2,
+    width: w,
+    height: h,
+    padLeft: 0,
+    padRight: 0,
+    padTop: 0,
+    padBottom: 0,
+  };
 }
 export function viewOf(vp, box = STAGE) {
   return { cx: vp.x + vp.width / 2, cy: vp.y + vp.height / 2, k: box.width / vp.width };
@@ -30,7 +40,8 @@ export function viewOf(vp, box = STAGE) {
 // the Spine editor exported them), else the setup pose's
 export function artBox(data, measured = null) {
   if (data && data.width > 0 && data.height > 0) return [data.x, data.y, data.x + data.width, data.y + data.height];
-  if (measured && measured[2] > 0 && measured[3] > 0) return [measured[0], measured[1], measured[0] + measured[2], measured[1] + measured[3]];
+  if (measured && measured[2] > 0 && measured[3] > 0)
+    return [measured[0], measured[1], measured[0] + measured[2], measured[1] + measured[3]];
   return [-1000, -1000, 1000, 1500];
 }
 
@@ -47,7 +58,8 @@ export function limits(box, home) {
   return { box, kMin: home.k, kMax: home.k * ZOOM_MAX };
 }
 export function clampView(v, lim) {
-  if(lim.photoFrame)return portraitCaptureView({...v,k:clamp(v.k,lim.kMin,lim.kMax)},lim.photoBounds,lim.photoFrame);
+  if (lim.photoFrame)
+    return portraitCaptureView({ ...v, k: clamp(v.k, lim.kMin, lim.kMax) }, lim.photoBounds, lim.photoFrame);
   const [x0, y0, x1, y1] = lim.box;
   return { cx: clamp(v.cx, x0, x1), cy: clamp(v.cy, y0, y1), k: clamp(v.k, lim.kMin, lim.kMax) };
 }
@@ -55,8 +67,10 @@ export function clampView(v, lim) {
 // zoom by f with the skeleton point under the stage point (sx, sy) staying there (until the limits move it)
 export function zoomAt(v, f, sx, sy, lim, box = STAGE) {
   const k = clamp(v.k * f, lim.kMin, lim.kMax);
-  const dx = sx - box.width / 2, dy = sy - box.height / 2;
-  const px = v.cx + dx / v.k, py = v.cy - dy / v.k;
+  const dx = sx - box.width / 2,
+    dy = sy - box.height / 2;
+  const px = v.cx + dx / v.k,
+    py = v.cy - dy / v.k;
   return clampView({ cx: px - dx / k, cy: py + dy / k, k }, lim);
 }
 // the art follows the pointer: (dx, dy) stage px, y down
@@ -69,7 +83,11 @@ export function mix(a, b, t) {
 }
 // the view is the whole art (the reset button greys out): within a hundredth of a stage px
 export function atHome(v, home) {
-  return Math.abs(v.k / home.k - 1) < 1e-4 && Math.abs((v.cx - home.cx) * v.k) < 0.01 && Math.abs((v.cy - home.cy) * v.k) < 0.01;
+  return (
+    Math.abs(v.k / home.k - 1) < 1e-4 &&
+    Math.abs((v.cx - home.cx) * v.k) < 0.01 &&
+    Math.abs((v.cy - home.cy) * v.k) < 0.01
+  );
 }
 
 // --- the prefab's layout ---
@@ -79,16 +97,29 @@ export function atHome(v, home) {
 export function anchoredCentre(widget, screen = SCREEN) {
   const a = widget?.anchors;
   if (!a?.leftAnchor || !a.rightAnchor || !a.bottomAnchor || !a.topAnchor) return null;
-  const x = ([rel, abs]) => -screen.w / 2 + rel * screen.w + abs, y = ([rel, abs]) => -screen.h / 2 + rel * screen.h + abs;
+  const x = ([rel, abs]) => -screen.w / 2 + rel * screen.w + abs,
+    y = ([rel, abs]) => -screen.h / 2 + rel * screen.h + abs;
   return [(x(a.leftAnchor) + x(a.rightAnchor)) / 2, (y(a.bottomAnchor) + y(a.topAnchor)) / 2];
 }
 
 // UIAni_CharacterVisualMode_PC (legacy clip, 60 fps): the buttons slide in from the screen's edges. Keys of their x
 // as offsets from where they stop: [time s, value, in slope, out slope] (Unity Hermite keys, not weighted).
 export const SLIDE = Object.freeze({
-  Btn_Back: [[0, -300, 0, 0], [0.21666667, -30, 378.94733, 378.94733], [0.31666666, 0, 0, 0]],
-  Btn_HideUI: [[0, 300, 0, 0], [0.21666667, 30, -378.94733, -378.94733], [0.31666666, 0, 0, 0]],
-  Btn_RefreshPos: [[0, 300, 0, 0], [0.21666667, 40.85596, -516.07526, -516.07526], [0.31666666, 0, 0, 0]],
+  Btn_Back: [
+    [0, -300, 0, 0],
+    [0.21666667, -30, 378.94733, 378.94733],
+    [0.31666666, 0, 0, 0],
+  ],
+  Btn_HideUI: [
+    [0, 300, 0, 0],
+    [0.21666667, 30, -378.94733, -378.94733],
+    [0.31666666, 0, 0, 0],
+  ],
+  Btn_RefreshPos: [
+    [0, 300, 0, 0],
+    [0.21666667, 40.85596, -516.07526, -516.07526],
+    [0.31666666, 0, 0, 0],
+  ],
 });
 export const SLIDE_S = 0.31666666;
 
@@ -99,12 +130,17 @@ export function hermite(keys, t) {
   if (t >= last[0]) return last[1];
   let i = 0;
   while (t > keys[i + 1][0]) i++;
-  const [t0, p0, , out0] = keys[i], [t1, p1, in1] = keys[i + 1];
-  const d = t1 - t0, s = (t - t0) / d, s2 = s * s, s3 = s2 * s;
+  const [t0, p0, , out0] = keys[i],
+    [t1, p1, in1] = keys[i + 1];
+  const d = t1 - t0,
+    s = (t - t0) / d,
+    s2 = s * s,
+    s3 = s2 * s;
   return (2 * s3 - 3 * s2 + 1) * p0 + (s3 - 2 * s2 + s) * out0 * d + (-2 * s3 + 3 * s2) * p1 + (s3 - s2) * in1 * d;
 }
 // the curve sampled at the clip's frame rate: [{offset 0..1, value}]
 export function slideFrames(keys, fps = 60) {
-  const end = keys[keys.length - 1][0], n = Math.max(1, Math.round(end * fps));
+  const end = keys[keys.length - 1][0],
+    n = Math.max(1, Math.round(end * fps));
   return Array.from({ length: n + 1 }, (_, i) => ({ offset: i / n, value: hermite(keys, (i / n) * end) }));
 }

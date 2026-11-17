@@ -1,12 +1,22 @@
 // A modal owns capture priority until its scope closes, even between lazy card requests.
-const popups = new Set(), listeners = new Set();
-const changed = () => { for (const listener of [...listeners]) listener(); };
+const popups = new Set(),
+  listeners = new Set();
+const changed = () => {
+  for (const listener of [...listeners]) listener();
+};
 export const popupCapturesOpen = () => popups.size > 0;
 export const popupCapture = (signal) => popups.has(signal);
 export function holdPopupCaptures(signal) {
   if (signal.aborted) return;
   popups.add(signal);
-  signal.addEventListener("abort", () => { popups.delete(signal); changed(); }, { once: true });
+  signal.addEventListener(
+    "abort",
+    () => {
+      popups.delete(signal);
+      changed();
+    },
+    { once: true },
+  );
   changed();
 }
 export function onCapturePriorityChange(listener) {

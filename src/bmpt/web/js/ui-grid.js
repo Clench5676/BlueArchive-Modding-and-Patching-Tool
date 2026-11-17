@@ -53,7 +53,7 @@ export function row(items, { x = 0, y = 0, w = null, h = null, gap = 0, align = 
   const grows = items.reduce((sum, item) => sum + (item.grow || 0), 0);
   const width = w ?? fixed;
   const left = Math.max(0, width - fixed);
-  const widths = items.map((item) => item.grow ? left * item.grow / grows : item.w);
+  const widths = items.map((item) => (item.grow ? (left * item.grow) / grows : item.w));
   // the room above and under the centre line every item needs, and so the row's height
   const above = Math.max(0, ...items.filter((item) => !item.grow || item.h).map(centreOf));
   const below = Math.max(0, ...items.filter((item) => !item.grow || item.h).map((item) => item.h - centreOf(item)));
@@ -64,9 +64,16 @@ export function row(items, { x = 0, y = 0, w = null, h = null, gap = 0, align = 
   const between = justify === "between" && items.length > 1 ? free / (items.length - 1) : 0;
   let cursor = x + (justify === "end" ? free : justify === "center" ? free / 2 : 0);
   const boxes = items.map((item, i) => {
-    const itemW = widths[i], itemH = item.grow && !item.h ? height : item.h;
-    const top = item.grow && !item.h ? y : align === "start" ? y : align === "end" ? y + height - itemH
-      : y + centre - centreOf(item);
+    const itemW = widths[i],
+      itemH = item.grow && !item.h ? height : item.h;
+    const top =
+      item.grow && !item.h
+        ? y
+        : align === "start"
+          ? y
+          : align === "end"
+            ? y + height - itemH
+            : y + centre - centreOf(item);
     const out = { ...item, ...box(cursor, top, itemW, itemH) };
     cursor += itemW + gap + between;
     return out;
@@ -79,7 +86,8 @@ export function row(items, { x = 0, y = 0, w = null, h = null, gap = 0, align = 
 export function stack(items, { x = 0, y = 0, w = null, h = null, gap = 0, align = "start", justify = "start" } = {}) {
   const width = w ?? Math.max(0, ...items.map((item) => item.w || 0));
   const used = items.reduce((sum, item) => sum + item.h, 0) + gap * Math.max(0, items.length - 1);
-  const height = h ?? used, free = Math.max(0, height - used);
+  const height = h ?? used,
+    free = Math.max(0, height - used);
   let cursor = y + (justify === "end" ? free : justify === "center" ? free / 2 : 0);
   const boxes = items.map((item) => {
     const itemW = align === "stretch" ? width : item.w;
@@ -110,7 +118,8 @@ export function textItem(ui, text, type, { maxW = Infinity, lines = 1 } = {}) {
 
 // A control whose width follows its caption (CONTROL entries: { h, fs, pad, minW }): the caption's width and pad on each side,
 // at least minW. measure(caption, fs) is the caption's width at its size.
-export const controlWidth = (control, caption, measure) => Math.max(control.minW ?? 0, measure(caption, control.fs) + 2 * control.pad);
+export const controlWidth = (control, caption, measure) =>
+  Math.max(control.minW ?? 0, measure(caption, control.fs) + 2 * control.pad);
 
 // NGUI's pivots: the share of the width and height left of and above the pivot point (0 top left ... 8 bottom right).
 const PIVOT_X = [0, 0.5, 1, 0, 0.5, 1, 0, 0.5, 1];
@@ -119,6 +128,7 @@ const PIVOT_Y = [0, 0, 0, 0.5, 0.5, 0.5, 1, 1, 1];
 // The NGUI position (y up) of a widget with this pivot that fills box b of a container whose frame centre sits at
 // [cx, cy] in the parent's NGUI space and is w x h.
 export function toNode(b, pivot, frame) {
-  const left = frame.cx - frame.w / 2 + b.x, top = frame.cy + frame.h / 2 - b.y;
+  const left = frame.cx - frame.w / 2 + b.x,
+    top = frame.cy + frame.h / 2 - b.y;
   return [left + b.w * PIVOT_X[pivot ?? 4], top - b.h * PIVOT_Y[pivot ?? 4]];
 }

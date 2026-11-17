@@ -18,18 +18,23 @@ import { S } from "./util.js";
 import { freezeShown } from "./preview-lifecycle.js";
 
 const STAGE_UNITS_H = 1080 / S; // 1665 units: the stage is taller than the prefabs' 2960 x 1440 frame
-const FADE_BLACK = 150;         // a scene first fades to black; work done by then fades straight back
+const FADE_BLACK = 150; // a scene first fades to black; work done by then fades straight back
 const FADE_OUT = 300;
-const WAIT_AFTER = 300;         // indicator mode: a shorter wait shows nothing
-const WAIT_MIN = 500;           // once shown, the indicator stays at least this long
-const HARD_CAP = 15000;         // warn about a slow scene; only its work or cancellation can reveal it
-const EDGE_HORIZONTAL = 260, EDGE_SIDE = 150, EDGE_ALPHA = 0.6;
+const WAIT_AFTER = 300; // indicator mode: a shorter wait shows nothing
+const WAIT_MIN = 500; // once shown, the indicator stays at least this long
+const HARD_CAP = 15000; // warn about a slow scene; only its work or cancellation can reveal it
+const EDGE_HORIZONTAL = 260,
+  EDGE_SIDE = 150,
+  EDGE_ALPHA = 0.6;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const stage = () => document.getElementById("stage");
 
-let overlay = null, gen = 0, closeSeq = 0;
-let writerOverlay = null, writerGen = 0;
+let overlay = null,
+  gen = 0,
+  closeSeq = 0;
+let writerOverlay = null,
+  writerGen = 0;
 const pending = new Set();
 function track(promise) {
   const work = Promise.resolve(promise);
@@ -38,10 +43,14 @@ function track(promise) {
   work.then(finish, finish);
   return work;
 }
-let repeater = null, loadingTree = null, shade = null, geometry = null;
+let repeater = null,
+  loadingTree = null,
+  shade = null,
+  geometry = null;
 const letterInk = new Map();
 const initialCover = document.getElementById("loading-boot");
-let styled = !!initialCover && !initialCover.classList.contains("neutral"), assetsAllowed = styled;
+let styled = !!initialCover && !initialCover.classList.contains("neutral"),
+  assetsAllowed = styled;
 let firstLoading = null;
 export const timings = () => firstLoading || {};
 
@@ -53,13 +62,15 @@ export function init(info) {
   styled = assetsAllowed;
   for (const o of [overlay, writerOverlay]) if (o && !o.done) decorate(o);
   if (!assetsAllowed || !info?.gameFound) return;
-  NGUI.layout("UILoading").then((tree) => {
-    loadingTree = tree;
-    for (const o of [overlay, writerOverlay]) if (o) queueProgress(o);
-    const back = NGUI.find(tree, "BlackBG")?.widgets.find((w) => "color" in w)?.color;
-    geometry = { back: back ? back.split("/")[0] : "#000000" };
-    if (overlay) overlay.el.querySelector(".loading-back").style.background = geometry.back;
-  }).catch(() => {});
+  NGUI.layout("UILoading")
+    .then((tree) => {
+      loadingTree = tree;
+      for (const o of [overlay, writerOverlay]) if (o) queueProgress(o);
+      const back = NGUI.find(tree, "BlackBG")?.widgets.find((w) => "color" in w)?.color;
+      geometry = { back: back ? back.split("/")[0] : "#000000" };
+      if (overlay) overlay.el.querySelector(".loading-back").style.background = geometry.back;
+    })
+    .catch(() => {});
 }
 
 // the strings are in: the overlay's label and the fallback indicator's text
@@ -81,7 +92,9 @@ export const busy = () => pending.size > 0 || active() || held() || (!!writerOve
 // How a job over mods names a variant ({variant, core}) in its progress line (job-progress.js modLine): the roster's
 // names once the App has them (setNames), the key until then.
 let nameOf = (entry) => entry?.variant || entry?.core || "";
-export function setNames(fn) { if (typeof fn === "function") nameOf = fn; }
+export function setNames(fn) {
+  if (typeof fn === "function") nameOf = fn;
+}
 export const variantName = (entry) => nameOf(entry);
 
 // A progress line: {text}, or {text, parts} for a job over mods, whose parts fitLine shortens to the line's width.
@@ -94,11 +107,15 @@ export function progressLine(value, fallback) {
 
 // fraction: the share done of the item at hand, after the line as job-progress.js's percentText writes it (whole
 // percents, below 100 while the item runs); nothing without one
-export function progressText({ label = "", current = 0, total = 0, fraction = null } = {}, fallback = T("progress.process", { name: T("progress.mods") })) {
+export function progressText(
+  { label = "", current = 0, total = 0, fraction = null } = {},
+  fallback = T("progress.process", { name: T("progress.mods") }),
+) {
   const text = label || fallback;
   const line = total > 0 ? T("progress.count", { label: text, current, total }) : text;
   return typeof fraction === "number" && Number.isFinite(fraction) && fraction > 0
-    ? `${line} ${T("progress.percent", { percent: Math.min(99, Math.floor(fraction * 100)) })}` : line;
+    ? `${line} ${T("progress.percent", { percent: Math.min(99, Math.floor(fraction * 100)) })}`
+    : line;
 }
 
 // A writer task stays visible until it settles. Progress survives the sprite upgrade and belongs to this task only,
@@ -113,15 +130,22 @@ export async function task(run, { label = null } = {}) {
   detail.style.visibility = "hidden";
   o.progress?.remove();
   o.progress = detail;
-  o.progressTree = null; o.progressContent = null;
+  o.progressTree = null;
+  o.progressContent = null;
   o.el.appendChild(detail);
-  let latest = {}, item = null, best = null;
+  let latest = {},
+    item = null,
+    best = null;
   const update = (value = latest) => {
     if (my !== writerGen || o !== writerOverlay) return;
     latest = value;
     // the fraction only grows within one item (its current / total) and starts again with the next
-    const key = `${value?.current ?? ""}/${value?.total ?? ""}`, f = value?.fraction;
-    if (key !== item) { item = key; best = null; }
+    const key = `${value?.current ?? ""}/${value?.total ?? ""}`,
+      f = value?.fraction;
+    if (key !== item) {
+      item = key;
+      best = null;
+    }
     if (typeof f === "number" && Number.isFinite(f) && (best === null || f > best)) best = f;
     // label false: work that is no job over mods (a screen being prepared) shows no line until it reports one
     const quiet = label === false && !value?.text && !value?.label && !value?.variant && !value?.core;
@@ -129,9 +153,11 @@ export async function task(run, { label = null } = {}) {
   };
   o.relabelProgress = () => update();
   update();
-  refresh(); decorate(o);
-  try { return await track(run(update)); }
-  finally {
+  refresh();
+  decorate(o);
+  try {
+    return await track(run(update));
+  } finally {
     detail.remove();
     if (my === writerGen && o === writerOverlay && !o.closing) {
       o.relabelProgress = null;
@@ -142,8 +168,12 @@ export async function task(run, { label = null } = {}) {
 
 // --- the overlay ---
 
-const nowLoading = () => { const s = T("loading.now"); return s === "loading.now" ? "" : s; };
-const indicatorText = (o) => o.plain ? (T("loading.plain") === "loading.plain" ? "" : T("loading.plain")) : nowLoading();
+const nowLoading = () => {
+  const s = T("loading.now");
+  return s === "loading.now" ? "" : s;
+};
+const indicatorText = (o) =>
+  o.plain ? (T("loading.plain") === "loading.plain" ? "" : T("loading.plain")) : nowLoading();
 function label(el) {
   const s = T("app.loading");
   if (s !== "app.loading") el.setAttribute("aria-label", s);
@@ -157,22 +187,46 @@ function open(mode, opaque = false, writer = false) {
   el.className = `loading ${mode}${styled ? "" : " neutral"}`;
   el.setAttribute("role", "status");
   label(el);
-  if (!el.querySelector(".loading-ind")) el.innerHTML = '<div class="loading-back"></div><div class="loading-ind" aria-hidden="true"></div>';
+  if (!el.querySelector(".loading-ind"))
+    el.innerHTML = '<div class="loading-back"></div><div class="loading-ind" aria-hidden="true"></div>';
   if (geometry) el.querySelector(".loading-back").style.background = geometry.back;
   if (!el.isConnected) stage().appendChild(el);
   if (boot && el !== boot) boot.remove();
-  const o = { el, mode, ind: el.querySelector(".loading-ind"), back: el.querySelector(".loading-back"),
-    shownAt: performance.now(), closing: false, done: false, sprites: false, plain: !styled, boot: opaque && !writer };
+  const o = {
+    el,
+    mode,
+    ind: el.querySelector(".loading-ind"),
+    back: el.querySelector(".loading-back"),
+    shownAt: performance.now(),
+    closing: false,
+    done: false,
+    sprites: false,
+    plain: !styled,
+    boot: opaque && !writer,
+  };
   if (opaque) el.classList.add("on");
-  else { void el.offsetWidth; el.classList.add("on"); } // fade in from the first frame
+  else {
+    void el.offsetWidth;
+    el.classList.add("on");
+  } // fade in from the first frame
   if (writer) writerOverlay = o;
   else overlay = o;
   if (mode === "indicator" && !writer) {
-    const detail = document.createElement("div"); detail.className = "loading-progress";
+    const detail = document.createElement("div");
+    detail.className = "loading-progress";
     detail.style.visibility = "hidden";
-    o.el.appendChild(detail); o.progress = detail;
+    o.el.appendChild(detail);
+    o.progress = detail;
     o.relabelProgress = () => {
-      setProgress(o, [...holds].reverse().find((hold) => hold.progress)?.progress() || o.waitLabel || T("app.loading"));
+      setProgress(
+        o,
+        [...holds]
+          .reverse()
+          .find((hold) => hold.progress)
+          ?.progress() ||
+          o.waitLabel ||
+          T("app.loading"),
+      );
     };
     o.relabelProgress();
   }
@@ -182,7 +236,9 @@ function open(mode, opaque = false, writer = false) {
 
 export function refresh() {
   for (const o of [overlay, writerOverlay]) o?.relabelProgress?.();
-  if (overlay) overlay.el.style.visibility = overlay.mode === "indicator" && writerOverlay && !writerOverlay.closing ? "hidden" : "";
+  if (overlay)
+    overlay.el.style.visibility =
+      overlay.mode === "indicator" && writerOverlay && !writerOverlay.closing ? "hidden" : "";
   // over a full cover (the start's), the writer shows only its progress: the cover keeps the one Now Loading
   if (writerOverlay) {
     if (covering() && !writerOverlay.closing) writerOverlay.el.classList.add("over-cover");
@@ -193,13 +249,18 @@ export function refresh() {
 
 // The progress line's width on the stage, the prefab label's (ngui-label.js) and the plain one's (app.css), less room
 // for the label's outline; the plain line's font size (app.css .loading-progress).
-const PROGRESS_WIDTH = 1000 - 8, PLAIN_FONT = 26;
+const PROGRESS_WIDTH = 1000 - 8,
+  PLAIN_FONT = 26;
 // The line shortened to its width at a font size (CSS px): a job over mods shortens its names (fitLine), any other
 // line is left to the label's ellipsis.
 function fittedProgress(o, fontSize) {
   const text = o.progressText || "";
   if (!o.progressParts) return text;
-  try { return fitLine(o.progressParts, (str) => NGUI.textWidth(str, fontSize), PROGRESS_WIDTH); } catch { return text; }
+  try {
+    return fitLine(o.progressParts, (str) => NGUI.textWidth(str, fontSize), PROGRESS_WIDTH);
+  } catch {
+    return text;
+  }
 }
 
 function setProgress(o, value) {
@@ -220,40 +281,58 @@ function queueProgress(o) {
   if (o.progressWork) return o.progressWork;
   // Concurrent imports can advance several phases before one prefab label has
   // decoded. Finish that draw, then render only the latest pending snapshot.
-  const work = Promise.resolve().then(async () => {
-    do {
-      o.progressDirty = false;
-      try { await renderProgress(o); }
-      catch {
-        if (o.closing || o.done || !o.progress || o.progressDirty) continue;
-        o.progressContent = null; o.progressTree = null;
-        o.progress.classList.remove("prefab-label");
-        o.progress.textContent = fittedProgress(o, PLAIN_FONT);
-        o.geometryFailed = true;
-        correctFallback(o);
-        if (!o.progressContent) o.progress.style.visibility = "";
-      }
-    } while (o.progressDirty && !o.closing && !o.done);
-  }).finally(() => {
-    if (o.progressWork === work) o.progressWork = null;
-  });
+  const work = Promise.resolve()
+    .then(async () => {
+      do {
+        o.progressDirty = false;
+        try {
+          await renderProgress(o);
+        } catch {
+          if (o.closing || o.done || !o.progress || o.progressDirty) continue;
+          o.progressContent = null;
+          o.progressTree = null;
+          o.progress.classList.remove("prefab-label");
+          o.progress.textContent = fittedProgress(o, PLAIN_FONT);
+          o.geometryFailed = true;
+          correctFallback(o);
+          if (!o.progressContent) o.progress.style.visibility = "";
+        }
+      } while (o.progressDirty && !o.closing && !o.done);
+    })
+    .finally(() => {
+      if (o.progressWork === work) o.progressWork = null;
+    });
   o.progressWork = work;
   return work;
 }
 async function renderProgress(o) {
   if (!assetsAllowed || !o.progress || !o.repeaterTree || o.closing) return;
-  const token = o.progressVersion = (o.progressVersion || 0) + 1;
+  const token = (o.progressVersion = (o.progressVersion || 0) + 1);
   const text = o.progressText || "";
   const template = await NGUI.layout("UICharacterDetail");
   const style = NGUI.find(template, "Inventory_ListControl/LeftInfo/CharInfo/Char_Target/Text_Lv/Text_Lv_Exp");
-  const bounds = await Promise.all(loadingLetterSprites(o.repeaterTree).map(async ({ w }) => {
-    if (!letterInk.has(w.sprite)) letterInk.set(w.sprite, NGUI.load(spriteUrl(w.atlas || "Common", w.sprite)).then((img) => {
-      const c = document.createElement("canvas"); c.width = img.naturalWidth; c.height = img.naturalHeight;
-      const ctx = c.getContext("2d"); ctx.drawImage(img, 0, 0);
-      return alphaBounds(ctx.getImageData(0, 0, c.width, c.height));
-    }).catch((err) => { letterInk.delete(w.sprite); throw err; }));
-    return [w.sprite, await letterInk.get(w.sprite)];
-  }));
+  const bounds = await Promise.all(
+    loadingLetterSprites(o.repeaterTree).map(async ({ w }) => {
+      if (!letterInk.has(w.sprite))
+        letterInk.set(
+          w.sprite,
+          NGUI.load(spriteUrl(w.atlas || "Common", w.sprite))
+            .then((img) => {
+              const c = document.createElement("canvas");
+              c.width = img.naturalWidth;
+              c.height = img.naturalHeight;
+              const ctx = c.getContext("2d");
+              ctx.drawImage(img, 0, 0);
+              return alphaBounds(ctx.getImageData(0, 0, c.width, c.height));
+            })
+            .catch((err) => {
+              letterInk.delete(w.sprite);
+              throw err;
+            }),
+        );
+      return [w.sprite, await letterInk.get(w.sprite)];
+    }),
+  );
   const ink = Object.fromEntries(bounds);
   const tree = loadingLabel(o.repeaterTree, style || loadingTree, text, S, ink);
   // a job over mods: its names shortened to the label's width at the label's size
@@ -268,17 +347,31 @@ async function renderProgress(o) {
     if (tree) await NGUI.render(tree, next, { scale: S, origin: [0, 0] });
     else {
       const css = getComputedStyle(o.progress);
-      Object.assign(next.style, { inset: "auto", left: "84px", bottom: "44px", font: css.font, color: css.color, whiteSpace: "nowrap" });
+      Object.assign(next.style, {
+        inset: "auto",
+        left: "84px",
+        bottom: "44px",
+        font: css.font,
+        color: css.color,
+        whiteSpace: "nowrap",
+      });
       next.textContent = fittedProgress(o, PLAIN_FONT);
     }
     await document.fonts?.ready;
-    if (token !== o.progressVersion || o.closing || o.done) { next.remove(); return; }
+    if (token !== o.progressVersion || o.closing || o.done) {
+      next.remove();
+      return;
+    }
     o.progress.classList.add("prefab-label");
     o.progress.style.transform = "";
     if (!publishAligned(o.progress, next, line, stage())) throw new Error("Loading label alignment unavailable");
-  } catch (err) { next.remove(); throw err; }
+  } catch (err) {
+    next.remove();
+    throw err;
+  }
   o.progressTree = tree;
-  o.inkLine = line; o.progressContent = next;
+  o.inkLine = line;
+  o.progressContent = next;
   o.progress.style.visibility = "";
 }
 
@@ -286,11 +379,14 @@ function correctFallback(o) {
   if (!o.progress || o.progressContent) return;
   if (assetsAllowed && o.inkLine == null && !o.geometryFailed) return;
   try {
-    const indicator = o.ind.querySelector("span"), rect = stage().getBoundingClientRect();
+    const indicator = o.ind.querySelector("span"),
+      rect = stage().getBoundingClientRect();
     if (!indicator || !rect.width) return;
     const line = o.inkLine ?? (domBaseline(indicator) - rect.top) / (rect.width / 1920);
     if (alignBaseline(o.progress, line, stage())) o.progress.style.visibility = "";
-  } catch { /* a detached boot surface waits for its first measurable frame */ }
+  } catch {
+    /* a detached boot surface waits for its first measurable frame */
+  }
 }
 
 function realignProgress() {
@@ -303,8 +399,8 @@ function realignProgress() {
 globalThis.addEventListener?.("resize", realignProgress);
 document.fonts?.addEventListener?.("loadingdone", realignProgress);
 if (globalThis.ResizeObserver && stage()) new ResizeObserver(realignProgress).observe(stage());
-if (globalThis.MutationObserver && stage()) new MutationObserver(realignProgress)
-  .observe(stage(), { attributes: true, attributeFilter: ["style"] });
+if (globalThis.MutationObserver && stage())
+  new MutationObserver(realignProgress).observe(stage(), { attributes: true, attributeFilter: ["style"] });
 
 // resolves in the first frame the overlay is fully black (the fade may start late on a busy page, so it is watched,
 // not timed); a page in the background, which draws no frames, gets a time limit instead
@@ -313,7 +409,10 @@ function whenOpaque(o) {
     const limit = setTimeout(resolve, FADE_BLACK + 1500);
     const check = () => {
       const op = Number(getComputedStyle(o.el).opacity) * Number(getComputedStyle(o.back).opacity);
-      if (op >= 0.999 || o !== overlay || o.closing) { clearTimeout(limit); resolve(); } else requestAnimationFrame(check);
+      if (op >= 0.999 || o !== overlay || o.closing) {
+        clearTimeout(limit);
+        resolve();
+      } else requestAnimationFrame(check);
     };
     check();
   });
@@ -323,12 +422,16 @@ function whenOpaque(o) {
 function cover(opaque) {
   const o = overlay;
   if (o && (!o.closing || o.mode === "full")) {
-    if (o.closing) { o.closing = false; o.el.classList.remove("out"); }
+    if (o.closing) {
+      o.closing = false;
+      o.el.classList.remove("out");
+    }
     if (o.mode !== "full") {
       o.mode = "full";
       o.el.classList.replace("indicator", "full");
     }
-    o.done = false; refresh();
+    o.done = false;
+    refresh();
     return o;
   }
   return open("full", opaque);
@@ -338,12 +441,18 @@ function close(o) {
   // A scene can finish while an independent detail job still owns input. Hand
   // its cover back to the holds instead of leaving an invisible capture lock.
   if (o === overlay && held()) {
-    o.mode = "indicator"; o.holdOwned = true; o.done = false; o.closing = false;
-    o.el.classList.replace("full", "indicator"); o.el.classList.remove("out");
-    decorate(o); refresh();
+    o.mode = "indicator";
+    o.holdOwned = true;
+    o.done = false;
+    o.closing = false;
+    o.el.classList.replace("full", "indicator");
+    o.el.classList.remove("out");
+    decorate(o);
+    refresh();
     return Promise.resolve();
   }
-  o.closing = true; o.done = true;
+  o.closing = true;
+  o.done = true;
   const id = ++closeSeq;
   o.closeId = id;
   o.el.classList.add("out");
@@ -351,7 +460,8 @@ function close(o) {
   return sleep(FADE_OUT).then(() => {
     if (!o.closing || o.closeId !== id) return; // taken over while fading out
     if (o.boot && !firstLoading) {
-      const end = performance.now(), sprites = o.spritesAt ?? end;
+      const end = performance.now(),
+        sprites = o.spritesAt ?? end;
       firstLoading = { "fallback-loading": sprites - o.shownAt, "sprite-loading": end - sprites };
     }
     o.el.remove();
@@ -375,7 +485,12 @@ function fallback(o) {
 }
 
 function repeaterTree() {
-  repeater ||= NGUI.init().then(() => NGUI.layout("UIRepeater")).catch(() => { repeater = null; return null; });
+  repeater ||= NGUI.init()
+    .then(() => NGUI.layout("UIRepeater"))
+    .catch(() => {
+      repeater = null;
+      return null;
+    });
   return repeater;
 }
 
@@ -383,21 +498,42 @@ function repeaterTree() {
 async function shadeEdges(o) {
   if (!assetsAllowed || o.mode !== "indicator" || o.shade) return;
   o.shade = true;
-  shade ||= NGUI.init().then(() => NGUI.layout("UICharacterDetail")).then((tree) =>
-    NGUI.find(tree, "Inventory_ListControl/LeftInfo/CharCombatStyle/CharCombatStyleAniwidget/Bg"))
-    .catch(() => { shade = null; return null; });
+  shade ||= NGUI.init()
+    .then(() => NGUI.layout("UICharacterDetail"))
+    .then((tree) => NGUI.find(tree, "Inventory_ListControl/LeftInfo/CharCombatStyle/CharCombatStyleAniwidget/Bg"))
+    .catch(() => {
+      shade = null;
+      return null;
+    });
   const template = await shade;
-  if (!template || o.closing || o.done || (o !== overlay && o !== writerOverlay)) { o.shade = false; return; }
+  if (!template || o.closing || o.done || (o !== overlay && o !== writerOverlay)) {
+    o.shade = false;
+    return;
+  }
   for (const [name, width, angle, x, y, reach, inset] of [
-    ["Bottom", 1920, 0, 960, 1080, EDGE_HORIZONTAL, EDGE_SIDE], ["Top", 1920, 180, 960, 0, EDGE_HORIZONTAL, EDGE_SIDE],
-    ["Left", 1080, 90, 0, 540, EDGE_SIDE, EDGE_HORIZONTAL], ["Right", 1080, -90, 1920, 540, EDGE_SIDE, EDGE_HORIZONTAL]]) {
-    const host = document.createElement("div"); host.className = "loading-edge";
+    ["Bottom", 1920, 0, 960, 1080, EDGE_HORIZONTAL, EDGE_SIDE],
+    ["Top", 1920, 180, 960, 0, EDGE_HORIZONTAL, EDGE_SIDE],
+    ["Left", 1080, 90, 0, 540, EDGE_SIDE, EDGE_HORIZONTAL],
+    ["Right", 1080, -90, 1920, 540, EDGE_SIDE, EDGE_HORIZONTAL],
+  ]) {
+    const host = document.createElement("div");
+    host.className = "loading-edge";
     Object.assign(host.style, { left: `${x}px`, top: `${y}px`, transform: `rotate(${angle}deg)` });
-    const node = structuredClone(template); node.name = name; node.pos = [0, 0]; node.active = true; node.children = [];
+    const node = structuredClone(template);
+    node.name = name;
+    node.pos = [0, 0];
+    node.active = true;
+    node.children = [];
     // flipped: the gradient's dark side sits on the window edge and fades inwards; shorter and lighter than the prefab
     const [hex, alpha = "1"] = node.widgets[0].color.split("/");
-    Object.assign(node.widgets[0], { w_: width / S, h_: reach, pivot: 7, incline: 0, flip: (node.widgets[0].flip || 0) ^ 2,
-      color: `${hex}/${(Number(alpha) * EDGE_ALPHA).toFixed(2)}` });
+    Object.assign(node.widgets[0], {
+      w_: width / S,
+      h_: reach,
+      pivot: 7,
+      incline: 0,
+      flip: (node.widgets[0].flip || 0) ^ 2,
+      color: `${hex}/${(Number(alpha) * EDGE_ALPHA).toFixed(2)}`,
+    });
     await NGUI.render(node, host, { scale: S, origin: [0, 0] });
     // Full native gradients overlap smoothly; polygon joins exposed diagonal cuts on scaled windows.
     if (o.closing || (o !== overlay && o !== writerOverlay)) return;
@@ -409,22 +545,44 @@ async function upgrade(o) {
   if (!assetsAllowed || o.sprites) return;
   o.sprites = true;
   const tree = await repeaterTree();
-  if (!tree || (o !== overlay && o !== writerOverlay)) { o.sprites = false; o.geometryFailed = !tree; correctFallback(o); return; }
+  if (!tree || (o !== overlay && o !== writerOverlay)) {
+    o.sprites = false;
+    o.geometryFailed = !tree;
+    correctFallback(o);
+    return;
+  }
   const next = document.createElement("div");
   next.className = "loading-repeater";
   // the corner widget is anchored to the screen: moved down to the stage's bottom edge
-  await NGUI.render(tree, next, { scale: S, origin: [960, 540], shift: { "UIRepeater/Widget": [0, -(STAGE_UNITS_H - 1440) / 2] } });
+  await NGUI.render(tree, next, {
+    scale: S,
+    origin: [960, 540],
+    shift: { "UIRepeater/Widget": [0, -(STAGE_UNITS_H - 1440) / 2] },
+  });
   const decoded = await NGUI.decoded(next, HARD_CAP);
-  if (!assetsAllowed || (o !== overlay && o !== writerOverlay)) { o.sprites = false; return; }
+  if (!assetsAllowed || (o !== overlay && o !== writerOverlay)) {
+    o.sprites = false;
+    return;
+  }
   const widgets = [...next.querySelectorAll(".ngui")];
   // NGUI keeps hit geometry after image failures; it must not replace the fallback with empty widgets.
   if (!decoded || !widgets.length || widgets.some((el) => !el.style.backgroundImage && !el.textContent)) {
-    o.sprites = false; o.geometryFailed = true; correctFallback(o); return;
+    o.sprites = false;
+    o.geometryFailed = true;
+    correctFallback(o);
+    return;
   }
   o.repeaterTree = tree;
   let progress = queueProgress(o);
-  do { await progress; if (progress === o.progressWork) break; progress = o.progressWork; } while (progress);
-  if (o.closing || o.done || (o !== overlay && o !== writerOverlay)) { o.sprites = false; return; }
+  do {
+    await progress;
+    if (progress === o.progressWork) break;
+    progress = o.progressWork;
+  } while (progress);
+  if (o.closing || o.done || (o !== overlay && o !== writerOverlay)) {
+    o.sprites = false;
+    return;
+  }
   o.ind.replaceChildren(next);
   styled = true;
   o.plain = false;
@@ -434,7 +592,9 @@ async function upgrade(o) {
 
 // once the screen is black and the work goes on: the indicator in the corner, nothing in the middle
 function decorate(o) {
-  shadeEdges(o).catch(() => { o.shade = false; });
+  shadeEdges(o).catch(() => {
+    o.shade = false;
+  });
   if (o.plain === styled) {
     o.plain = !styled;
     o.sprites = false;
@@ -446,7 +606,11 @@ function decorate(o) {
     const text = o.ind.querySelector("span");
     if (text) text.textContent = indicatorText(o);
   }
-  upgrade(o).catch(() => { o.sprites = false; o.geometryFailed = true; correctFallback(o); });
+  upgrade(o).catch(() => {
+    o.sprites = false;
+    o.geometryFailed = true;
+    correctFallback(o);
+  });
 }
 
 // --- modes ---
@@ -454,15 +618,23 @@ function decorate(o) {
 // Only opaque boot waits for black. Other scenes retain the current frame while
 // callers build hidden content and publish it after their readiness barrier.
 export async function scene(fn, { opaque = false, until = null } = {}) {
-  if (!opaque) return hold(() => {
-    const work = Promise.resolve().then(() => fn(Promise.resolve()));
-    return until ? Promise.race([work, until]) : work;
-  }, { until });
+  if (!opaque)
+    return hold(
+      () => {
+        const work = Promise.resolve().then(() => fn(Promise.resolve()));
+        return until ? Promise.race([work, until]) : work;
+      },
+      { until },
+    );
   const my = ++gen;
   const o = cover(opaque);
   const covered = whenOpaque(o);
-  let failed = false, error = null, result;
-  covered.then(() => { if (my === gen && !o.done) decorate(o); });
+  let failed = false,
+    error = null,
+    result;
+  covered.then(() => {
+    if (my === gen && !o.done) decorate(o);
+  });
   try {
     const work = Promise.resolve().then(() => fn(covered));
     result = await (until ? Promise.race([work, until]) : work);
@@ -490,14 +662,23 @@ export async function wait(promise, { label: text = null, cap = HARD_CAP, immedi
   // being committed in that same frame
   const reveal = () => {
     if (my !== gen || settled) return;
-    if (active()) { if (immediate) overlay.holdOwned = true; refresh(); return; }
+    if (active()) {
+      if (immediate) overlay.holdOwned = true;
+      refresh();
+      return;
+    }
     const o = open("indicator");
     o.holdOwned = immediate;
-    o.waitLabel = text; o.relabelProgress?.();
+    o.waitLabel = text;
+    o.relabelProgress?.();
     decorate(o);
   };
-  const timer = immediate ? (Promise.resolve().then(reveal), null) : setTimeout(() => requestAnimationFrame(reveal), WAIT_AFTER);
-  let failed = false, error = null, result;
+  const timer = immediate
+    ? (Promise.resolve().then(reveal), null)
+    : setTimeout(() => requestAnimationFrame(reveal), WAIT_AFTER);
+  let failed = false,
+    error = null,
+    result;
   try {
     result = cap === null ? await promise : await Promise.race([promise, sleep(cap)]);
   } catch (err) {
@@ -509,8 +690,11 @@ export async function wait(promise, { label: text = null, cap = HARD_CAP, immedi
   const o = overlay;
   if (my === gen && o && !o.closing && o.mode === "indicator" && !(o.holdOwned && held())) {
     const left = immediate ? 0 : WAIT_MIN - (performance.now() - o.shownAt);
-    const finish = () => { if (my === gen && o === overlay && !o.closing) close(o); };
-    if (left > 0) sleep(left).then(finish); else finish();
+    const finish = () => {
+      if (my === gen && o === overlay && !o.closing) close(o);
+    };
+    if (left > 0) sleep(left).then(finish);
+    else finish();
   }
   if (failed) throw error;
   return result;
@@ -522,9 +706,12 @@ const holds = new Set();
 export const held = () => holds.size > 0;
 export async function hold(work, { until = null, all = false, progress = null } = {}) {
   let latest = null;
-  const el = stage(), key = { all, progress: () => latest === null ? progress?.() || T("app.loading")
-    : progressLine(latest) };
-  const update = (value) => { latest = value; refresh(); };
+  const el = stage(),
+    key = { all, progress: () => (latest === null ? progress?.() || T("app.loading") : progressLine(latest)) };
+  const update = (value) => {
+    latest = value;
+    refresh();
+  };
   holds.add(key);
   if (all) el.classList.add("input-held");
   refresh();
@@ -537,7 +724,11 @@ export async function hold(work, { until = null, all = false, progress = null } 
   const task = track(Promise.resolve().then(() => work(update)));
   const visible = until ? Promise.race([task, until.then(release)]) : task;
   wait(visible, { cap: null, immediate: true }).catch(() => {});
-  try { return await task; } finally { release(); }
+  try {
+    return await task;
+  } finally {
+    release();
+  }
 }
 
 // Read-only previews retain their frame-swap guard but allow existing popups to cancel or supersede the wait.
@@ -554,9 +745,28 @@ export const locked = () => held() || active() || (!!writerOverlay && !writerOve
 const strict = () => [...holds].some((hold) => hold.all);
 const exempt = (ev) => !strict() && Popup.allowsInput(ev);
 // WebKit's trackpad pinch comes as gesture events, not as wheel events.
-export const LOCKED_EVENTS = ["pointerdown", "pointerup", "pointermove", "mousedown", "mouseup", "click", "dblclick", "auxclick",
-  "contextmenu", "keydown", "keyup", "wheel", "touchstart", "touchmove", "touchend", "gesturestart", "gesturechange",
-  "gestureend", "dragstart", "drop"];
+export const LOCKED_EVENTS = [
+  "pointerdown",
+  "pointerup",
+  "pointermove",
+  "mousedown",
+  "mouseup",
+  "click",
+  "dblclick",
+  "auxclick",
+  "contextmenu",
+  "keydown",
+  "keyup",
+  "wheel",
+  "touchstart",
+  "touchmove",
+  "touchend",
+  "gesturestart",
+  "gesturechange",
+  "gestureend",
+  "dragstart",
+  "drop",
+];
 const wired = new WeakSet();
 function wire(el = stage()) {
   if (!el?.addEventListener || wired.has(el)) return;
@@ -567,10 +777,18 @@ function wire(el = stage()) {
   };
   for (const type of LOCKED_EVENTS) el.addEventListener(type, block, { capture: true, passive: false });
   // keys with the focus outside the stage (the page's own shortcuts: arrows, Escape); system shortcuts pass
-  const keys = (ev) => { if (ev.target && !ev.defaultPrevented && !ev.metaKey && !ev.ctrlKey) block(ev); };
+  const keys = (ev) => {
+    if (ev.target && !ev.defaultPrevented && !ev.metaKey && !ev.ctrlKey) block(ev);
+  };
   for (const type of ["keydown", "keyup"]) globalThis.addEventListener?.(type, keys, true);
   // focus cannot be cancelled: a control beneath that takes it while locked gives it up at once
-  el.addEventListener("focusin", (ev) => { if (locked() && !exempt(ev)) ev.target?.blur?.(); }, true);
+  el.addEventListener(
+    "focusin",
+    (ev) => {
+      if (locked() && !exempt(ev)) ev.target?.blur?.();
+    },
+    true,
+  );
   wired.add(el);
 }
 // Controls outside the stage miss the stage's listeners and draw above its overlays: the native window's toolbar row
@@ -587,11 +805,19 @@ export function lockOutside(el) {
       ev.stopImmediatePropagation();
     };
     for (const type of LOCKED_EVENTS) el.addEventListener(type, block, { capture: true, passive: false });
-    el.addEventListener("focusin", (ev) => { if (locked() && outside.has(el)) ev.target?.blur?.(); }, true);
+    el.addEventListener(
+      "focusin",
+      (ev) => {
+        if (locked() && outside.has(el)) ev.target?.blur?.();
+      },
+      true,
+    );
     wired.add(el);
   }
   syncLock();
-  return () => { outside.delete(el); };
+  return () => {
+    outside.delete(el);
+  };
 }
 // on locking: the focused control beneath gives up its focus, so Enter or Space cannot press it, and the previews
 // shown beneath freeze until the lock ends
@@ -608,4 +834,7 @@ function syncLock() {
 Popup.deferWhile?.(strict);
 
 // Prefabs and derived UI values belong to the selected installation.
-NGUI.onResourceChange?.(() => { repeater = loadingTree = shade = geometry = null; letterInk.clear(); });
+NGUI.onResourceChange?.(() => {
+  repeater = loadingTree = shade = geometry = null;
+  letterInk.clear();
+});

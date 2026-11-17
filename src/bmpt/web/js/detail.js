@@ -47,22 +47,85 @@ import { clearUnseen, hasUnseen as hasFresh, shownUnseen, switchUnseen } from ".
 import { crossName, customAliases as aliasesOf, modName, modOriginalName, studentName } from "./names.js";
 import { setTitle } from "./nav.js";
 import { KEYS, deltaOf, pacer, typing } from "./step-keys.js";
-import { closable, closed as popupClosed, frameReady, hit as hitNode, listPopup, message, notice, popupFrame, scrollArea } from "./popup.js";
+import {
+  closable,
+  closed as popupClosed,
+  frameReady,
+  hit as hitNode,
+  listPopup,
+  message,
+  notice,
+  popupFrame,
+  scrollArea,
+} from "./popup.js";
 import { ALIAS, DETAILS, aliasFrame, detailsFrame, popupContent } from "./popup-frames.js";
 import { statsBox } from "./stats-box.js";
 import { CHIP, COLOUR, CONTROL, SPACE, TYPE } from "./ui-tokens.js";
 import { container, row, stack, textItem, toNode } from "./ui-grid.js";
-import { CAUTIONS, CROSS_LIMIT, cautionKey, crossExtras, setShowOthers, showOthers, detailStatus, selectionStatus, selectionError, intendedKey, isApplied, availableTab, coreOf, costumeCandidates, costumeHold, crossCandidates, crossCard, crossModels, hasAsset, hasKind, primaryKind, appliedKey as keyOf, appliedOf, candidates as listSources, partsOf, popupMode, modelSource, previewBase, previewChanged, previewKey, sourceOf, switchKindOf } from "./switch-sources.js";
+import {
+  CAUTIONS,
+  CROSS_LIMIT,
+  cautionKey,
+  crossExtras,
+  setShowOthers,
+  showOthers,
+  detailStatus,
+  selectionStatus,
+  selectionError,
+  intendedKey,
+  isApplied,
+  availableTab,
+  coreOf,
+  costumeCandidates,
+  costumeHold,
+  crossCandidates,
+  crossCard,
+  crossModels,
+  hasAsset,
+  hasKind,
+  primaryKind,
+  appliedKey as keyOf,
+  appliedOf,
+  candidates as listSources,
+  partsOf,
+  popupMode,
+  modelSource,
+  previewBase,
+  previewChanged,
+  previewKey,
+  sourceOf,
+  switchKindOf,
+} from "./switch-sources.js";
 import { pickerItems } from "./roster-widgets.js";
-import { $, DOT, RECRUIT, S, TAN10, advanceOf, at, clone, glyphsOf, hitButton, markedLabel, off, text, widget, wrapPath } from "./util.js";
+import {
+  $,
+  DOT,
+  RECRUIT,
+  S,
+  TAN10,
+  advanceOf,
+  at,
+  clone,
+  glyphsOf,
+  hitButton,
+  markedLabel,
+  off,
+  text,
+  widget,
+  wrapPath,
+} from "./util.js";
 
 const { node, sprite, label, find, rect } = NGUI;
 const fitText = (...a) => NGUI.fitText(...a);
 // fitText for a box: where nothing fits from fsMin up (fitText then gives up on one line at fsMin - 8, however wide),
 // the same again from smaller sizes, down to 60 % of fsMin
 function fitIn(str, fsMax, fsMin, maxW, maxLines = 2) {
-  let f = fitText(str, fsMax, fsMin, maxW, maxLines), min = fsMin;
-  while (f.lines === 1 && f.fs < min && min - 8 >= fsMin * 0.6) { min -= 8; f = fitText(str, min + 6, min, maxW, maxLines); }
+  let f = fitText(str, fsMax, fsMin, maxW, maxLines),
+    min = fsMin;
+  while (f.lines === 1 && f.fs < min && min - 8 >= fsMin * 0.6) {
+    min -= 8;
+    f = fitText(str, min + 6, min, maxW, maxLines);
+  }
   return f;
 }
 const ORIGIN = [960, 515]; // prefab centre; 25 px above the stage centre so the panels clear the nav bar
@@ -72,13 +135,35 @@ const stage = () => document.getElementById("stage");
 // the portrait's players cover the stage (.portrait in app.css), so nothing the game shows is cut at a box edge
 const PORTRAIT_BOX = { left: 0, top: 0, width: 1920, height: 1080 };
 
-let ctx = null, fam = null, variantKey = null, layouts = null;
+let ctx = null,
+  fam = null,
+  variantKey = null,
+  layouts = null;
 // Prefabs and derived UI values belong to the selected installation.
-NGUI.onResourceChange?.(() => { layouts = null; fam = null; resetOthers(); costumeState.clear(); photoFaces.clear(); });
+NGUI.onResourceChange?.(() => {
+  layouts = null;
+  fam = null;
+  resetOthers();
+  costumeState.clear();
+  photoFaces.clear();
+});
 let previewEnabled = true;
-let tab = "portrait", fullscreen = false, expression = "00", expanded = false, exprScroll = 0;
-let mainPlayer = null, blinkTimer = null, pending = null, pickerSel = null, lobbySeq = null, busy = false, lobbyShot = null;
-let modelShot = null, modelActions = [], modelAction = null, modelGeneration = 0;
+let tab = "portrait",
+  fullscreen = false,
+  expression = "00",
+  expanded = false,
+  exprScroll = 0;
+let mainPlayer = null,
+  blinkTimer = null,
+  pending = null,
+  pickerSel = null,
+  lobbySeq = null,
+  busy = false,
+  lobbyShot = null;
+let modelShot = null,
+  modelActions = [],
+  modelAction = null,
+  modelGeneration = 0;
 // every action of the chibi (clip-names.js actionsOf: its own clips by group), which the action bar shows; null: the
 // model has none of its own (a story or an NPC model), and row 4 lists today's actions (modelActions)
 let modelMenu = null;
@@ -87,13 +172,19 @@ let actionLoad = null;
 // three.js and the model viewer load with the first 3D model
 let modelLib = null;
 const ModelLib = () => (modelLib ||= import("./model.js"));
-let renderToken = 0, exprToken = 0, chipToken = 0, spineToken = 0, leftToken = 0;
+let renderToken = 0,
+  exprToken = 0,
+  chipToken = 0,
+  spineToken = 0,
+  leftToken = 0;
 
 // --- readiness ---
-const HARD_CAP = 15000;  // individual failed assets settle with an error before the screen is revealed
-const LINES_CAP = 1500;  // the lobby's lines from Kivo (a network call) likewise
+const HARD_CAP = 15000; // individual failed assets settle with an error before the screen is revealed
+const LINES_CAP = 1500; // the lobby's lines from Kivo (a network call) likewise
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const frames = async (n) => { while (n-- > 0) await nextFrame(); };
+const frames = async (n) => {
+  while (n-- > 0) await nextFrame();
+};
 function renderFailed(err, source = null) {
   console.error("Detail render failed", ...(source ? [source] : []), err);
   previewError(err, source, "detail");
@@ -108,15 +199,28 @@ const commit = (fn) => (batch ? batch.push(fn) : fn());
 // one on screen and belongs to that change: a re-render still running at the commit (late lobby lines) then follows
 // it instead of keeping the old part in the commit.
 const applied = { screen: 0, chips: 0, expr: 0 };
-const showable = (part, my, latest, gen) => open && (my === latest || (!!batch && gen === showGen && my > applied[part]));
+const showable = (part, my, latest, gen) =>
+  open && (my === latest || (!!batch && gen === showGen && my > applied[part]));
 // the screen is shown (from show() until hide()): what a show, a tab change or a job started for it starts nothing
 // once it is hidden (the left side's players least of all)
-let open = false, suspended = false, pageToken = 0;
-let leftPage = Promise.resolve(), leavePage = () => {};
+let open = false,
+  suspended = false,
+  pageToken = 0;
+let leftPage = Promise.resolve(),
+  leavePage = () => {};
 // a generation of the screen: a newer show, tab change or hide ends the wait of the one before
-let showGen = 0, endWait = () => {};
+let showGen = 0,
+  endWait = () => {};
 let thumbnailWork = thumbnailScope();
-const thumb = (base, frame = "bust", expr = null, lobby = false, framing = null, background = variant()?.bg, work = thumbnailWork) => {
+const thumb = (
+  base,
+  frame = "bust",
+  expr = null,
+  lobby = false,
+  framing = null,
+  background = variant()?.bg,
+  work = thumbnailWork,
+) => {
   if (!base) return null;
   if (!spineAllowed()) return collectionPortrait(base);
   return work.thumb(base, frame, expr, lobby, framing, frame === "face" ? null : background);
@@ -129,18 +233,30 @@ function collectionPortrait(base) {
   return null;
 }
 // a model card's still: another variant's costume shows that variant's own model
-const modelPicture = (c, v = variant(), work = thumbnailWork) => c.kind === "variant"
-  ? modelThumbnail(c.variant.key, "official", { version: modelStillVersion(fam, c.variant, modelGeneration), signal: work.signal })
-  : c.kind !== "mod" && !coreOf(v, "model") && !v.fieldModel ? null
-    : modelThumbnail(v.key, c.kind === "mod" ? `mod:${c.id}` : "official",
-      { version: modelStillVersion(fam, v, modelGeneration), signal: work.signal });
+const modelPicture = (c, v = variant(), work = thumbnailWork) =>
+  c.kind === "variant"
+    ? modelThumbnail(c.variant.key, "official", {
+        version: modelStillVersion(fam, c.variant, modelGeneration),
+        signal: work.signal,
+      })
+    : c.kind !== "mod" && !coreOf(v, "model") && !v.fieldModel
+      ? null
+      : modelThumbnail(v.key, c.kind === "mod" ? `mod:${c.id}` : "official", {
+          version: modelStillVersion(fam, v, modelGeneration),
+          signal: work.signal,
+        });
 function begin() {
   endWait();
   thumbnailWork.cancel();
   thumbnailWork = thumbnailScope();
   screenPics = exprPics = chipPics = [];
   const gen = ++showGen;
-  return { gen, ended: new Promise((resolve) => { endWait = resolve; }) };
+  return {
+    gen,
+    ended: new Promise((resolve) => {
+      endWait = resolve;
+    }),
+  };
 }
 // work() renders every part; resolves once they are ready (or given up on). In place, their swaps are queued
 // meanwhile and applied in one animation frame; a generation that was taken over drops its queue (the newer one
@@ -157,7 +273,12 @@ async function prepare({ gen, ended }, inPlace, work) {
   if (queued) {
     await nextFrame();
     if (gen !== showGen) return false;
-    for (const fn of queued) try { fn(); } catch (err) { console.error(err); }
+    for (const fn of queued)
+      try {
+        fn();
+      } catch (err) {
+        console.error(err);
+      }
     batch = null;
   }
   if (open && fam) markSeen(shownUnseen(fam, variant(), tabKind(), modsOn()));
@@ -165,7 +286,9 @@ async function prepare({ gen, ended }, inPlace, work) {
 }
 // Required UI pictures settle before publication; optional thumbnails keep their
 // existing scopes and fill locally without holding the primary preview.
-let screenPics = [], exprPics = [], chipPics = [];
+let screenPics = [],
+  exprPics = [],
+  chipPics = [];
 const picturesReady = (pictures, ...roots) => {
   const { signal } = thumbnailWork;
   // roots may be missing (a part not drawn) and descendants may lack a style (e.g. text holders): skip both
@@ -178,7 +301,9 @@ const picturesReady = (pictures, ...roots) => {
 };
 function fillPictures(pictures, ...roots) {
   const { signal } = thumbnailWork;
-  picturesReady(pictures, ...roots).catch((error) => { if (!signal.aborted) renderFailed(error); });
+  picturesReady(pictures, ...roots).catch((error) => {
+    if (!signal.aborted) renderFailed(error);
+  });
 }
 async function settlePictures(read, signal) {
   let before;
@@ -198,7 +323,8 @@ const fullName = (v) => studentName(v, originalName(v));
 const shortName = (v) => studentName(v, L(v.names)?.short ?? v.key);
 // the current variant's own aliases (webui/state.py keeps the same limits): the roster search
 // finds this skin by all of them; the first one is the nameplate's main name
-const ALIAS_MAX = ALIAS.max, ALIAS_LENGTH = 24;
+const ALIAS_MAX = ALIAS.max,
+  ALIAS_LENGTH = 24;
 const customAliases = () => aliasesOf(variant());
 const aliasList = () => customAliases().join(/^(zh|ja)/.test(language()) ? "\u3001" : ", ");
 const variant = () => fam.variants.find((v) => v.key === variantKey) || fam.variants[0];
@@ -207,15 +333,22 @@ const isFav = (v) => !!v.favorite;
 const hasLobby = (v) => hasKind(v, "lobby");
 const hasModel = (v) => hasKind(v, "model");
 const modLabel = (m) => modName(m, familyMods(), T);
-const repairedId = (c) => c?.mod?.repaired_id && familyMods().some((m) => m.id === c.mod.repaired_id) ? c.mod.repaired_id : null;
-const repairAction = (c) => repairedId(c) ? "remap.go" : "act.update";
+const repairedId = (c) =>
+  c?.mod?.repaired_id && familyMods().some((m) => m.id === c.mod.repaired_id) ? c.mod.repaired_id : null;
+const repairAction = (c) => (repairedId(c) ? "remap.go" : "act.update");
 // Optimize Physics runs on the official model (which needs none: its own clips move its skirt) and on another
 // variant's costume; the copy it made from a costume, a model mod of the variant, takes its place afterwards
-const optimizeSource = (c) => (c.kind === "self" ? "official" : c.kind === "variant" ? `variant:${c.variant.key}` : null);
-const optimizedCopy = (c, v = variant()) => (c.kind !== "variant" ? null : familyMods().find((m) => m.kind === "model"
-  && m.target === v.key && m.optimized_from === `variant:${c.variant.key}`) || null);
+const optimizeSource = (c) =>
+  c.kind === "self" ? "official" : c.kind === "variant" ? `variant:${c.variant.key}` : null;
+const optimizedCopy = (c, v = variant()) =>
+  c.kind !== "variant"
+    ? null
+    : familyMods().find(
+        (m) => m.kind === "model" && m.target === v.key && m.optimized_from === `variant:${c.variant.key}`,
+      ) || null;
 // a candidate's skeleton: a mod's preview (its parts over the official ones), else the variant's own portrait or lobby
-const baseOf = (c, kind = "spr") => (c.kind === "mod" ? spineBase("mod", c.id) : c.core ? spineBase(`official-${kind}`, c.core) : null);
+const baseOf = (c, kind = "spr") =>
+  c.kind === "mod" ? spineBase("mod", c.id) : c.core ? spineBase(`official-${kind}`, c.core) : null;
 // The installed portrait comes from the current game files; with mods off, preview the configured source.
 const currentBase = () => variantBase(variant());
 // no deadline: the read waits for a job that holds the library lock, as the route's does (main.js), and the screen stays as
@@ -229,13 +362,20 @@ function candidates(v = variant(), kind = "spr") {
   return listSources(fam, v, kind, costumeState.get(v.key), otherStudents).map(named);
 }
 // a lobby camera framed on the official art takes the name of the variant's own card, as the cards show it
-const cameraLabel = (c) => (c.mod.camera && !c.mod.alias && !c.mod.camera.source?.startsWith("mod:") && c.origin
-  ? `${shortName(c.origin)} - ${T("lobby.cameraName", { n: c.mod.camera.number })}` : modLabel(c.mod));
-const named = (c) => (c.kind === "mod" ? { ...c, label: cameraLabel(c) }
-  : { ...c, label: shortName(c.variant), recruit: c.variant.recruitable, fav: isFav(c.variant) });
+const cameraLabel = (c) =>
+  c.mod.camera && !c.mod.alias && !c.mod.camera.source?.startsWith("mod:") && c.origin
+    ? `${shortName(c.origin)} - ${T("lobby.cameraName", { n: c.mod.camera.number })}`
+    : modLabel(c.mod);
+const named = (c) =>
+  c.kind === "mod"
+    ? { ...c, label: cameraLabel(c) }
+    : { ...c, label: shortName(c.variant), recruit: c.variant.recruitable, fav: isFav(c.variant) };
 // Switch 3D Model takes any student's model, offered through its search only: roster.list's families, read
 // with the 3D tab or the popup (the one already chosen keeps its card), for the life of the screen
-let otherStudents = null, othersLoad = null, othersEpoch = 0, startLoose = false;
+let otherStudents = null,
+  othersLoad = null,
+  othersEpoch = 0,
+  startLoose = false;
 function resetOthers() {
   othersEpoch++;
   otherStudents = null;
@@ -246,10 +386,16 @@ function resetOthers() {
 function readOthers() {
   if (otherStudents || !ctx?.roster) return Promise.resolve(otherStudents);
   const epoch = othersEpoch;
-  return (othersLoad ||= Promise.resolve().then(() => ctx.roster({ stale: true }))
-    .then((data) => epoch === othersEpoch ? (otherStudents = data?.families || null) : null)
-    .catch((err) => { console.error("Roster read failed", err); return null; })
-    .finally(() => { if (epoch === othersEpoch) othersLoad = null; }));
+  return (othersLoad ||= Promise.resolve()
+    .then(() => ctx.roster({ stale: true }))
+    .then((data) => (epoch === othersEpoch ? (otherStudents = data?.families || null) : null))
+    .catch((err) => {
+      console.error("Roster read failed", err);
+      return null;
+    })
+    .finally(() => {
+      if (epoch === othersEpoch) othersLoad = null;
+    }));
 }
 // a 3D candidate key as a card, another student's model found by the search included
 function popupCandidate(v, kind, key) {
@@ -264,19 +410,46 @@ function popupCandidate(v, kind, key) {
 // are judged at once; all the students' models only as they come into view (viewCross).
 function crossItems(v, query, own, item) {
   const all = showOthers();
-  if (!otherStudents || (!all && !query.trim())) {  // today's cards only, and only the chosen pair is checked
+  if (!otherStudents || (!all && !query.trim())) {
+    // today's cards only, and only the chosen pair is checked
     judgeCross(v);
     return [];
   }
   let collator = null;
-  try { collator = new Intl.Collator(language(), { numeric: true, sensitivity: "base" }); } catch { collator = null; }
-  const name = (a, b) => (collator ? collator.compare(fullName(a), fullName(b)) : fullName(a) < fullName(b) ? -1 : fullName(a) > fullName(b) ? 1 : 0);
+  try {
+    collator = new Intl.Collator(language(), { numeric: true, sensitivity: "base" });
+  } catch {
+    collator = null;
+  }
+  const name = (a, b) =>
+    collator
+      ? collator.compare(fullName(a), fullName(b))
+      : fullName(a) < fullName(b)
+        ? -1
+        : fullName(a) > fullName(b)
+          ? 1
+          : 0;
   const hits = crossCandidates(otherStudents, v, costumeState.get(v.key), {
-    match: (o) => (popupSeg === 0 || (popupSeg === 1) === !!o.recruitable) && pickerItems([{ label: crossLabel(o), full: fullName(o),
-      original: originalName(o), key: `v:${o.key}`, terms: [o.fileId, o.model, o.fieldModel] }], { query }).length > 0,
-    compare: (a, b) => (isFav(b) - isFav(a)) || name(a, b), exclude: own, limit: all ? Infinity : CROSS_LIMIT });
+    match: (o) =>
+      (popupSeg === 0 || (popupSeg === 1) === !!o.recruitable) &&
+      pickerItems(
+        [
+          {
+            label: crossLabel(o),
+            full: fullName(o),
+            original: originalName(o),
+            key: `v:${o.key}`,
+            terms: [o.fileId, o.model, o.fieldModel],
+          },
+        ],
+        { query },
+      ).length > 0,
+    compare: (a, b) => isFav(b) - isFav(a) || name(a, b),
+    exclude: own,
+    limit: all ? Infinity : CROSS_LIMIT,
+  });
   const keys = hits.map((c) => c.variant.key);
-  const inView = new Set(crossShown);  // the cards in view, as the list last reported them (popup.js onView)
+  const inView = new Set(crossShown); // the cards in view, as the list last reported them (popup.js onView)
   judgeCross(v, all ? keys.filter((key) => inView.has(key)) : keys);
   return hits.map((c) => item(named(c)));
 }
@@ -284,7 +457,9 @@ function crossItems(v, query, own, item) {
 // ones to judge, the others dropped from the queue; a scroll brings the next ones in
 let crossShown = [];
 function viewCross(v, keys) {
-  const shown = keys.filter((key) => typeof key === "string" && key.startsWith("v:")).map((key) => key.slice(2))
+  const shown = keys
+    .filter((key) => typeof key === "string" && key.startsWith("v:"))
+    .map((key) => key.slice(2))
     .filter((key) => !fam.variants.some((o) => o.key === key));
   if (shown.length === crossShown.length && shown.every((key, i) => key === crossShown[i])) return;
   crossShown = shown;
@@ -294,13 +469,17 @@ function viewCross(v, keys) {
 // and exported for these files (model.costumes): the verdicts by variant, read when the 3D tab shows
 // and checked to their end (model.checkCostumes) in the background, one pair at a time; each card turns applicable
 // as its check ends.
-const costumeState = new Map(), costumeChecks = new Map();
+const costumeState = new Map(),
+  costumeChecks = new Map();
 function costumesReady(v) {
   const run = costumeRun;
   void readOthers().then((families) => {
     if (!costumesWanted(v, run)) return;
     // a roster that cannot be read leaves another student's model unjudged: its loading ring stops
-    if (!families) { costumesChecked(v); return; }
+    if (!families) {
+      costumesChecked(v);
+      return;
+    }
     // Loading the roster must not replace the popup's current hits with just the saved choices.
     if (switchPopupPage !== pageToken || $("popup").hidden) judgeCross(v);
     costumesChecked(v);
@@ -313,7 +492,10 @@ function costumesReady(v) {
     check = (async () => {
       const known = await rpc("model.costumes", { variant: v.key, others });
       costumeState.set(v.key, { ...(costumeState.get(v.key) || {}), ...known });
-      void readCautions(v, others.filter((o) => known[o] === "ok" || known[o] === "preview"));
+      void readCautions(
+        v,
+        others.filter((o) => known[o] === "ok" || known[o] === "preview"),
+      );
       // the Apply card follows the shown costume's verdict, and an open switch its cards' verdicts
       costumesChecked(v);
       const unknown = others.filter((o) => known[o] == null);
@@ -340,8 +522,14 @@ function costumesReady(v) {
 // Another student's model is judged only once it shows: the chosen one, and the search's hits while they are
 // hits. Their saved verdicts are read at once (model.costumes), the rest checked in the background one pair at a time;
 // a pair no longer wanted (a new query, another variant) is not checked. Each card waits until its verdict lands.
-let crossWanted = { variant: null, keys: [] }, crossRunning = null;
-const chosenCross = (v) => (otherStudents ? candidates(v, "model").filter((c) => c.cross).map((c) => c.variant.key) : []);
+let crossWanted = { variant: null, keys: [] },
+  crossRunning = null;
+const chosenCross = (v) =>
+  otherStudents
+    ? candidates(v, "model")
+        .filter((c) => c.cross)
+        .map((c) => c.variant.key)
+    : [];
 function judgeCross(v, hits = []) {
   const keys = [...new Set([...chosenCross(v), ...hits])];
   crossWanted = { variant: v, keys };
@@ -365,7 +553,10 @@ function runCross() {
         const known = await rpc("model.costumes", { variant: v.key, others: fresh });
         if (epoch !== othersEpoch) continue;
         costumeState.set(v.key, { ...(costumeState.get(v.key) || {}), ...known });
-        void readCautions(v, fresh.filter((o) => known[o] === "ok" || known[o] === "preview"));
+        void readCautions(
+          v,
+          fresh.filter((o) => known[o] === "ok" || known[o] === "preview"),
+        );
         costumesChecked(v);
         continue;
       }
@@ -378,12 +569,14 @@ function runCross() {
       void readCautions(v, [next]);
       costumesChecked(v);
     }
-  })().catch((err) => console.error("Costume check failed", err)).finally(() => {
-    crossRunning = null;
-    if (handled !== crossWanted) runCross();
-    // a wanted pair left without a verdict stops showing the loading ring
-    else if (handled?.variant && unjudged(handled.variant, handled.keys)) costumesChecked(handled.variant);
-  });
+  })()
+    .catch((err) => console.error("Costume check failed", err))
+    .finally(() => {
+      crossRunning = null;
+      if (handled !== crossWanted) runCross();
+      // a wanted pair left without a verdict stops showing the loading ring
+      else if (handled?.variant && unjudged(handled.variant, handled.keys)) costumesChecked(handled.variant);
+    });
 }
 // Costume checks run only while they are wanted: the screen open on the same variant with its 3D tab shown (the
 // Switch 3D Model popup opens from that tab). Leaving it (another tab, another variant, the screen closed) stops them
@@ -429,19 +622,28 @@ function costumeChecking(v, kind, key) {
   if (kind !== "model" || typeof key !== "string" || !key.startsWith("v:")) return false;
   const other = key.slice(2);
   if ((costumeState.get(v.key) || {})[other] != null) return false;
-  if (fam.variants.some((o) => o.key === other)) return [...costumeChecks.keys()].some((k) => k.startsWith(`${v.key}|`));
+  if (fam.variants.some((o) => o.key === other))
+    return [...costumeChecks.keys()].some((k) => k.startsWith(`${v.key}|`));
   if (!otherStudents) return !!othersLoad;
   return !!crossRunning && crossWanted.variant === v && crossWanted.keys.includes(other);
 }
 // the 3D tab's Apply card while the shown costume (another student's model) waits for its check
-const applyChecking = (v, kind) => !!kind && !!coreOf(v, kind) && !busy && costumeBlock(v, kind, shownSource(v, kind)) === "pending"
-  && costumeChecking(v, kind, shownSource(v, kind));
+const applyChecking = (v, kind) =>
+  !!kind &&
+  !!coreOf(v, kind) &&
+  !busy &&
+  costumeBlock(v, kind, shownSource(v, kind)) === "pending" &&
+  costumeChecking(v, kind, shownSource(v, kind));
 // The cautions of the offered pairs (model.costumeCautions), beside their verdicts (switch-sources.js CAUTIONS), read
 // aside from the check queue; a failed read leaves them unknown, which shows no caution.
 async function readCautions(v, others) {
   if (!others.length) return;
   let found = {};
-  try { found = await rpc("model.costumeCautions", { variant: v.key, others }); } catch (err) { console.error("Costume cautions failed", err); }
+  try {
+    found = await rpc("model.costumeCautions", { variant: v.key, others });
+  } catch (err) {
+    console.error("Costume cautions failed", err);
+  }
   if (!found || !Object.keys(found).length) return;
   const state = costumeState.get(v.key) || {};
   costumeState.set(v.key, { ...state, [CAUTIONS]: { ...(state[CAUTIONS] || {}), ...found } });
@@ -462,7 +664,14 @@ function costumesChecked(v) {
 const tabKind = () => (tab === "lobby" || tab === "model" ? tab : "spr");
 // The switch card uses the kind of the shown asset tab.
 const switchKind = () => switchKindOf(tab);
-const dateOf = (v, kind) => (kind === "spr" ? v.date : partsOf(v, kind).map((f) => f.date).filter(Boolean).sort().pop());
+const dateOf = (v, kind) =>
+  kind === "spr"
+    ? v.date
+    : partsOf(v, kind)
+        .map((f) => f.date)
+        .filter(Boolean)
+        .sort()
+        .pop();
 function crcOf(v, kind = "spr") {
   const states = partsOf(v, kind).map((f) => f.crc);
   return states.includes("needs_fix") ? "needs_fix" : states.includes("fixed") ? "fixed" : "ok";
@@ -470,18 +679,26 @@ function crcOf(v, kind = "spr") {
 const appliedKey = (v = variant(), kind = primaryKind(v)) => keyOf(v, kind);
 const shownSource = (v = variant(), kind = primaryKind(v)) => previewKey(v, kind, modsOn());
 // the left side draws a kind it can preview: a variant's own files, a field or NPC model without a slot (// Shown, never switched), or an added mod
-const previewAvailable = (v, kind) => !!coreOf(v, kind) || (kind === "model" && !!v?.fieldModel) || shownSource(v, kind).startsWith("m:");
-const variantBase = (v, kind = "spr") => previewAvailable(v, kind) ? previewBase(v, kind, modsOn(), fam.variants) : null;
+const previewAvailable = (v, kind) =>
+  !!coreOf(v, kind) || (kind === "model" && !!v?.fieldModel) || shownSource(v, kind).startsWith("m:");
+const variantBase = (v, kind = "spr") =>
+  previewAvailable(v, kind) ? previewBase(v, kind, modsOn(), fam.variants) : null;
 // The configured portrait or lobby while mods are off; otherwise what the game files carry.
-const current = (kind = "spr") => candidates(variant(), kind).find((c) => c.key === shownSource(variant(), kind)) || candidates(variant(), kind)[0];
+const current = (kind = "spr") =>
+  candidates(variant(), kind).find((c) => c.key === shownSource(variant(), kind)) || candidates(variant(), kind)[0];
 // another student's costume, named after the student: "Yukino (Original)" (the family's base name from the roster read)
 const crossLabel = (o) => {
   const base = L(otherStudents?.find((f) => f.key === o.family)?.base);
-  return base ? crossName(o, base, L(o.names)?.short ?? o.key, T) : fullName(o);  // no family read: the variant's full name
+  return base ? crossName(o, base, L(o.names)?.short ?? o.key, T) : fullName(o); // no family read: the variant's full name
 };
 // a candidate's name on the cards: another variant's mod with that variant's name first, another student's model with
 // the student's name first
-const candidateLabel = (c, v = variant()) => (c.cross ? crossLabel(c.variant) : c.kind === "mod" && !c.mod.alias && c.origin && c.origin.key !== v.key ? `${shortName(c.origin)} - ${c.label}` : c.label);
+const candidateLabel = (c, v = variant()) =>
+  c.cross
+    ? crossLabel(c.variant)
+    : c.kind === "mod" && !c.mod.alias && c.origin && c.origin.key !== v.key
+      ? `${shortName(c.origin)} - ${c.label}`
+      : c.label;
 // The lobby's preview source as a label: the original, a mod's or another variant's name, or "replaced".
 const lobbyLabel = (v) => sourceLabel(v, "lobby");
 function sourceLabel(v, kind) {
@@ -492,12 +709,17 @@ function sourceLabel(v, kind) {
 }
 const gameFile = (v = variant(), kind = "spr") => partsOf(v, kind)[0]?.file || null;
 const baseName = (path) => (path ? path.split(/[\\/]/).pop() : "—");
-const sizeText = (bytes) => (!bytes ? "—" : bytes < 1048576 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1048576).toFixed(1)} MB`);
+const sizeText = (bytes) =>
+  !bytes ? "—" : bytes < 1048576 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1048576).toFixed(1)} MB`;
 
 const svg = (body) => `data:image/svg+xml,${encodeURIComponent(body)}`;
 const TEXTURES = {
-  "svg:stop": svg('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect x="10" y="10" width="28" height="28" rx="4" fill="#2b496e"/></svg>'),
-  "svg:folder": svg('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path fill="#2d5164" d="M5 12a3 3 0 0 1 3-3h11l4 5h17a3 3 0 0 1 3 3v19a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3Z"/></svg>'),
+  "svg:stop": svg(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect x="10" y="10" width="28" height="28" rx="4" fill="#2b496e"/></svg>',
+  ),
+  "svg:folder": svg(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path fill="#2d5164" d="M5 12a3 3 0 0 1 3-3h11l4 5h17a3 3 0 0 1 3 3v19a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3Z"/></svg>',
+  ),
 };
 
 // Keep the card readable; disabled colours come from FilterSort's disabled button.
@@ -515,36 +737,72 @@ export function actionState(card, enabled, disabledTemplate = null) {
 }
 
 // an upright texture inside a slanted body is clipped to the body (the game does this with panel clipping)
-const clipped = (name, pos, url, win, img, opts = {}) => node(name, pos, [{ clipImage: url, placeholder: opts.placeholder, w_: win.w, h_: win.h, pivot: 4, depth: opts.depth ?? 9,
-  placeholderRect: { x: img.dx, y: img.dy, w: img.w, h: img.h },
-  incline: 10, radius: win.r ?? 20, color: opts.color ?? "#ffffff/1.00", tint: opts.tint, imgSize: "100% 100%", imgPosition: "0 0",
-  imgLeft: `${(win.w / 2 + img.dx - img.w / 2) * S}px`, imgTop: `${(win.h / 2 - img.dy - img.h / 2) * S}px`, imgWidth: `${img.w * S}px`, imgHeight: `${img.h * S}px`,
-  imgMask: opts.mask, imgEdge: opts.edge }]);
+const clipped = (name, pos, url, win, img, opts = {}) =>
+  node(name, pos, [
+    {
+      clipImage: url,
+      placeholder: opts.placeholder,
+      w_: win.w,
+      h_: win.h,
+      pivot: 4,
+      depth: opts.depth ?? 9,
+      placeholderRect: { x: img.dx, y: img.dy, w: img.w, h: img.h },
+      incline: 10,
+      radius: win.r ?? 20,
+      color: opts.color ?? "#ffffff/1.00",
+      tint: opts.tint,
+      imgSize: "100% 100%",
+      imgPosition: "0 0",
+      imgLeft: `${(win.w / 2 + img.dx - img.w / 2) * S}px`,
+      imgTop: `${(win.h / 2 - img.dy - img.h / 2) * S}px`,
+      imgWidth: `${img.w * S}px`,
+      imgHeight: `${img.h * S}px`,
+      imgMask: opts.mask,
+      imgEdge: opts.edge,
+    },
+  ]);
 
 // --- row 4 geometry ---
-const ROW4_Y = -552;                       // centre of row 4's visible part (Bg_W4: top -436, 234 tall, shadow below)
-const BOX_RIGHT = 332;                     // the first skill card's right edge: the box ends there
+const ROW4_Y = -552; // centre of row 4's visible part (Bg_W4: top -436, 234 tall, shadow below)
+const BOX_RIGHT = 332; // the first skill card's right edge: the box ends there
 // UICharacterDetail's Skill + SkillData + Bg supply these columns, pitch and bodies; keep the prefab's own values.
-const COLS = [461.9, 707.5, 953.2];        // skill cards 2-4 (Skill at 202 + SkillData x + Bg x 24)
-const BTN_COL = [1079.8, 1284.8];          // expression pile's column, derived from the skill/Add cards; keep its x edges
-const CARD = { w: 242, h: 209 };           // Common_Btn_BG like the skill cards; the visible body is h - 13 (shadow below)
+const COLS = [461.9, 707.5, 953.2]; // skill cards 2-4 (Skill at 202 + SkillData x + Bg x 24)
+const BTN_COL = [1079.8, 1284.8]; // expression pile's column, derived from the skill/Add cards; keep its x edges
+const CARD = { w: 242, h: 209 }; // Common_Btn_BG like the skill cards; the visible body is h - 13 (shadow below)
 const PITCH = 245.7;
 const LOCAL_FRAME = { cx: 0, cy: 0, w: 0, h: 0 };
 
 // --- the static screen: background, arrows, tabs, right panel, nameplate frame ---
 function screenTree() {
   const t = clone(layouts.list);
-  off(t, "Top", "NUITop_Scenes", "LeftInfo/CharInfo_Disable", "LeftInfo/CharCombatStyle", "RightInfo/Target/Disable",
-    "RightInfo/Target/Active/2_LevelUp", "RightInfo/Target/Active/3_Transcendence", "RightInfo/Target/Active/FullCollier", "RightInfo/Target/Active/Effect");
+  off(
+    t,
+    "Top",
+    "NUITop_Scenes",
+    "LeftInfo/CharInfo_Disable",
+    "LeftInfo/CharCombatStyle",
+    "RightInfo/Target/Disable",
+    "RightInfo/Target/Active/2_LevelUp",
+    "RightInfo/Target/Active/3_Transcendence",
+    "RightInfo/Target/Active/FullCollier",
+    "RightInfo/Target/Active/Effect",
+  );
   // The right panel is its Target only: buttons a game update adds beside it are game features the App does not
   // have (the 2026-11 update's Btn_Engrave, whose label is the prefab's untranslated text).
   for (const n of at(t, "RightInfo")?.children || []) if (n.name !== "Target") n.active = false;
-  const v = variant(), sk = switchKind(), c = current(sk || "spr"), kind = tabKind();
+  const v = variant(),
+    sk = switchKind(),
+    c = current(sk || "spr"),
+    kind = tabKind();
   // layer 1 of the panel: measured on the game screenshots it lets about 55 % of the background through
   widget(t, "RightInfo/Target/Active/Bg").color = "#0c284b/0.45";
 
   // tabs: portrait / memorial lobby / 3D model (disabled where unavailable)
-  const tabs = [["Tab_1", "tab.portrait", "portrait", hasKind(v, "spr")], ["Tab_2", "tab.lobby", "lobby", hasLobby(v)], ["Tab_3", "tab.model", "model", hasModel(v)]];
+  const tabs = [
+    ["Tab_1", "tab.portrait", "portrait", hasKind(v, "spr")],
+    ["Tab_2", "tab.lobby", "lobby", hasLobby(v)],
+    ["Tab_3", "tab.model", "model", hasModel(v)],
+  ];
   // the three captions share one size: the largest at which every one fits its tab on one line
   const tabLabels = tabs.map(([, key, id]) => T(isSpecial(v) && id === "lobby" ? "special.background" : key));
   const tabSize = NGUI.fitGroup(tabLabels, 52, 36, 360, 1)[0].fs;
@@ -559,20 +817,45 @@ function screenTree() {
     if (dot) dot.active = hasFresh(v, id === "portrait" ? "spr" : id);
   }
   // the separator on a tab's right edge goes when either neighbour is active
-  if (tab !== "portrait") { const l = find(t, "RightInfo/Target/Active/CharacterTab/Tab_1/Tab_Off/Line"); if (l) l.active = tab !== "lobby"; }
-  { const l = find(t, "RightInfo/Target/Active/CharacterTab/Tab_2/Tab_Off/Line (1)"); if (l) l.active = tab === "portrait"; }
+  if (tab !== "portrait") {
+    const l = find(t, "RightInfo/Target/Active/CharacterTab/Tab_1/Tab_Off/Line");
+    if (l) l.active = tab !== "lobby";
+  }
+  {
+    const l = find(t, "RightInfo/Target/Active/CharacterTab/Tab_2/Tab_Off/Line (1)");
+    if (l) l.active = tab === "portrait";
+  }
   // row 1: portrait information
-  text(t, `${INFO}/Title_Bg/Label_Locale`, T(isSpecial(v) && tab === "lobby" ? "special.background" : `info.title.${tab}`), { w_: 600 });
+  text(
+    t,
+    `${INFO}/Title_Bg/Label_Locale`,
+    T(isSpecial(v) && tab === "lobby" ? "special.background" : `info.title.${tab}`),
+    { w_: 600 },
+  );
   text(t, `${INFO}/Detail_Btn/Label_Locale`, T("info.details"));
   const crcState = crcOf(v, kind);
-  const crc = crcState === "fixed" ? ["crc.fixed", COLOUR.success] : crcState === "needs_fix" ? ["crc.needed", COLOUR.warning] : ["crc.original", "#000000"];
+  const crc =
+    crcState === "fixed"
+      ? ["crc.fixed", COLOUR.success]
+      : crcState === "needs_fix"
+        ? ["crc.needed", COLOUR.warning]
+        : ["crc.original", "#000000"];
   const now = tab === "portrait" ? c.label : sourceLabel(v, kind);
-  const stats = [["Label_Life", "info.current", "Data_Widget/Data", now],
-    ["Label_Attact", "info.status", "Data_Widget/Data", !coreOf(v, kind) ? T("import.reason.no_target") : detailStatus(v, kind) ? T(detailStatus(v, kind)) : "—"],
-    ["Label_Defense", "info.gameFile", "Data", dateOf(v, kind) || "—"], ["Label_Healing", "info.crc", "Data_Widget/Data", T(crc[0]), crc[1]]];
+  const stats = [
+    ["Label_Life", "info.current", "Data_Widget/Data", now],
+    [
+      "Label_Attact",
+      "info.status",
+      "Data_Widget/Data",
+      !coreOf(v, kind) ? T("import.reason.no_target") : detailStatus(v, kind) ? T(detailStatus(v, kind)) : "—",
+    ],
+    ["Label_Defense", "info.gameFile", "Data", dateOf(v, kind) || "—"],
+    ["Label_Healing", "info.crc", "Data_Widget/Data", T(crc[0]), crc[1]],
+  ];
   // the value column starts after the longest caption of its column
   const capW = (keys) => Math.max(...keys.map((k) => advanceOf(T(k), 42))) + 24;
-  const leftCap = capW(["info.current", "info.gameFile"]), rightCap = capW(["info.status", "info.crc"]);
+  const leftCap = capW(["info.current", "info.gameFile"]),
+    rightCap = capW(["info.status", "info.crc"]);
   const rooms = stats.map(([name_]) => {
     const right = name_ === "Label_Attact" || name_ === "Label_Healing";
     return (right ? 1240 - 773 - rightCap : 773 - 293 - leftCap) - 24;
@@ -587,16 +870,41 @@ function screenTree() {
     // Fit each value independently; the compact rows use an ellipsis once this value reaches the size floor.
     const original = i === 0 && editingMod?.mod.alias ? modOriginalName(editingMod.mod) : "";
     const fit = fitText(String(value), original ? 34 : 42, 28, rooms[i], 1);
-    text(t, `${INFO}/Status/${name_}/${dataPath}`, fit.text, { w_: rooms[i], fontSize: fit.fs, ellipsis: true, ariaLabel: String(value), ...(original ? { h_: 42 } : {}), ...(color ? { color: `${color}/1.00` } : {}) });
+    text(t, `${INFO}/Status/${name_}/${dataPath}`, fit.text, {
+      w_: rooms[i],
+      fontSize: fit.fs,
+      ellipsis: true,
+      ariaLabel: String(value),
+      ...(original ? { h_: 42 } : {}),
+      ...(color ? { color: `${color}/1.00` } : {}),
+    });
     if (original) {
       const main = at(t, `${INFO}/Status/${name_}/${dataPath}`);
       main.pos[1] += 15;
       const secondary = fitText(original, 24, 20, rooms[i], 1);
-      dataNode.children.push(node("OriginalName", [main.pos[0], main.pos[1] - 38],
-        [label(secondary.text, secondary.fs, "#2d4664/0.65", rooms[i], 28, { pivot: 3, depth: 22, ellipsis: true, ariaLabel: original })]));
+      dataNode.children.push(
+        node(
+          "OriginalName",
+          [main.pos[0], main.pos[1] - 38],
+          [
+            label(secondary.text, secondary.fs, "#2d4664/0.65", rooms[i], 28, {
+              pivot: 3,
+              depth: 22,
+              ellipsis: true,
+              ariaLabel: original,
+            }),
+          ],
+        ),
+      );
     }
-    if (i === 0 && editingMod) dataNode.children.push(node("ModAliasBtn", [Math.min(glyphsOf(String(value), fit.fs), rooms[i]) + 32, original ? 15 : 0],
-      [sprite("Cafe_Icon_NameEdit", 46, 46, { type: 0, depth: 22, color: "#2d4664/1.00" })]));
+    if (i === 0 && editingMod)
+      dataNode.children.push(
+        node(
+          "ModAliasBtn",
+          [Math.min(glyphsOf(String(value), fit.fs), rooms[i]) + 32, original ? 15 : 0],
+          [sprite("Cafe_Icon_NameEdit", 46, 46, { type: 0, depth: 22, color: "#2d4664/1.00" })],
+        ),
+      );
     const pot = find(t, `${INFO}/Status/${name_}/Data_Widget/Potential_Widget`);
     if (pot) pot.active = false;
   });
@@ -611,37 +919,71 @@ function screenTree() {
   const open_ = explorerLayout(T(platform === "mac" ? "open.mac" : "open.win"));
   text(t, `${up}/Label_Locale`, open_.text, { fontSize: open_.fs, w_: 160, h_: open_.label[2], color: "#2d5164/1.00" });
   at(t, `${up}/Label_Locale`).pos = [open_.label[0], open_.label[1]];
-  at(t, up).children.push(node("Folder", open_.folder, [{ texture: "svg:folder", w_: 56, h_: 50, pivot: 4, depth: 12, color: "#ffffff/1.00" }]));
+  at(t, up).children.push(
+    node("Folder", open_.folder, [
+      { texture: "svg:folder", w_: 56, h_: 50, pivot: 4, depth: 12, color: "#ffffff/1.00" },
+    ]),
+  );
 
   // row 2: four actions on what the shown tab's game files carry. Title and icon centred as a group on the card's
   // slanted midline.
   // Keep these action cards and row 3's Add card at their existing prefab-based positions and sizes.
   const isMod = !!sk && c.kind === "mod";
-  const actions = [["SkillData_EX", "compatibility.check", "compare", isMod && !busy], ["SkillData_EX (1)", repairAction(c), "update", isMod && !busy],
-    ["SkillData_EX (2)", "export.title", "extract", !busy], ["SkillData_EX (3)", "popup.apply", "apply", !!sk && !!coreOf(v, sk) && !busy && !isApplied(v, sk, shownSource(v, sk)) && !unfitCostume(v, sk, shownSource(v, sk)),
-      applyChecking(v, sk)]];
+  const actions = [
+    ["SkillData_EX", "compatibility.check", "compare", isMod && !busy],
+    ["SkillData_EX (1)", repairAction(c), "update", isMod && !busy],
+    ["SkillData_EX (2)", "export.title", "extract", !busy],
+    [
+      "SkillData_EX (3)",
+      "popup.apply",
+      "apply",
+      !!sk &&
+        !!coreOf(v, sk) &&
+        !busy &&
+        !isApplied(v, sk, shownSource(v, sk)) &&
+        !unfitCostume(v, sk, shownSource(v, sk)),
+      applyChecking(v, sk),
+    ],
+  ];
   // the row's white section spans x 58..1320 (Bg_W2 at 689, 1262 wide); cards keep the first card's 37-unit margins
-  const ROW_L = 58 + 37, ROW_R = 1320 - 37, GAP = 6, CW = (ROW_R - ROW_L - 3 * GAP) / 4;
+  const ROW_L = 58 + 37,
+    ROW_R = 1320 - 37,
+    GAP = 6,
+    CW = (ROW_R - ROW_L - 3 * GAP) / 4;
   actions.forEach(([card], i) => {
-    const base = `${INFO}/Skill/${card}`, bg = at(t, `${base}/Bg`);
+    const base = `${INFO}/Skill/${card}`,
+      bg = at(t, `${base}/Bg`);
     at(t, base).pos[0] = ROW_L + CW / 2 + i * (CW + GAP) - 202 - bg.pos[0];
     resizeButton(bg, CW);
     find(t, `${base}/Bg/Bg_Line`).widgets[0].w_ = CW - 10;
   });
   off(t, `${INFO}/Skill/Btn_Up_Wrapper`); // the install button, removed for now
   // the four titles share one size: the largest at which every one fits its card after wrapping onto two lines
-  const titles = NGUI.fitGroup(actions.map(([, key]) => T(key)), 40, 28, CW - 60, 2, { maxH: 90 });
+  const titles = NGUI.fitGroup(
+    actions.map(([, key]) => T(key)),
+    40,
+    28,
+    CW - 60,
+    2,
+    { maxH: 90 },
+  );
   for (const [index, [card, key, glyph, enabled, loading]] of actions.entries()) {
     const base = `${INFO}/Skill/${card}`;
     actionState(at(t, base), enabled, layouts.disabled);
     off(t, `${base}/Normal/Label_SkillType (1)`, `${base}/Normal/Line (1)`);
     const max = find(t, `${base}/Normal/Icon_Max`);
     if (max) max.active = false;
-    const bgX = at(t, `${base}/Bg`).pos[0] + 1, midY = 158.3 - 126; // Bg_Line centre: the card's visible body
+    const bgX = at(t, `${base}/Bg`).pos[0] + 1,
+      midY = 158.3 - 126; // Bg_Line centre: the card's visible body
     const title = titles[index];
-    const disabledInk = layouts.disabled && find(layouts.disabled, "Label_Locale")?.widgets.find((w) => "text" in w)?.color;
-    text(t, `${base}/Normal/Label_SkillType`, title.text, { fontSize: title.fs, w_: CW - 56, h_: Math.max(46, title.fs * title.lines * 1.3),
-      color: !enabled && disabledInk ? disabledInk : "#466399/1.00" });
+    const disabledInk =
+      layouts.disabled && find(layouts.disabled, "Label_Locale")?.widgets.find((w) => "text" in w)?.color;
+    text(t, `${base}/Normal/Label_SkillType`, title.text, {
+      fontSize: title.fs,
+      w_: CW - 56,
+      h_: Math.max(46, title.fs * title.lines * 1.3),
+      color: !enabled && disabledInk ? disabledInk : "#466399/1.00",
+    });
     at(t, `${base}/Normal/Label_SkillType`).pos = [bgX + 66 * TAN10, midY + 66];
     const icon = at(t, `${base}/Normal/SkillIconBg`);
     icon.pos = [bgX - 30 * TAN10, midY - 30];
@@ -649,45 +991,99 @@ function screenTree() {
     icon.children = icon.children.filter((child) => child.name === "Texture");
     const picture = widget(t, `${base}/Normal/SkillIconBg/Texture`);
     delete picture.texture;
-    const [atlas, sprite] = { compare: ["Common", "School_Icon_Schedule"], update: ["Common", "Common_Icon_All_Download"],
-      extract: ["Common", "Common_Icon_Inventory_Equip"], apply: ["Common", "Common_Icon_All_Download"] }[glyph];
+    const [atlas, sprite] = {
+      compare: ["Common", "School_Icon_Schedule"],
+      update: ["Common", "Common_Icon_All_Download"],
+      extract: ["Common", "Common_Icon_Inventory_Equip"],
+      apply: ["Common", "Common_Icon_All_Download"],
+    }[glyph];
     Object.assign(picture, { cls: "UISprite", sprite, atlas, type: 0, w_: 109, h_: 109, keepAspect: true });
     if (!enabled && disabledInk) picture.color = disabledInk;
     // the shown costume's check under way: the game's loading ring turns in the icon's place, the title stays
-    if (loading) at(t, `${base}/Normal/SkillIconBg/Texture`).widgets = [{ loadingRing: true, w_: 82, h_: 82, pivot: 4,
-      depth: picture.depth, color: picture.color || "#466399/1.00", fallback: { ...picture } }];
+    if (loading)
+      at(t, `${base}/Normal/SkillIconBg/Texture`).widgets = [
+        {
+          loadingRing: true,
+          w_: 82,
+          h_: 82,
+          pivot: 4,
+          depth: picture.depth,
+          color: picture.color || "#466399/1.00",
+          fallback: { ...picture },
+        },
+      ];
   }
   // row 3: portrait box, the switch card (the game's light weapon card), add portrait. The box's visible body (its
   // straight left side, its slanted right edge) has its centre at mid-height 3 units left of the box's; the title is
   // centred there.
   const boxTitle = fitIn(T(isSpecial(v) && tab === "lobby" ? "special.background" : `row.box.${tab}`), 48, 42, 160);
-  text(t, `${INFO}/Weapon/WeaponType/Label_WeaponType`, boxTitle.text, { fontSize: boxTitle.fs, w_: 200, h_: 60 * boxTitle.lines });
+  text(t, `${INFO}/Weapon/WeaponType/Label_WeaponType`, boxTitle.text, {
+    fontSize: boxTitle.fs,
+    w_: 200,
+    h_: 60 * boxTitle.lines,
+  });
   at(t, `${INFO}/Weapon/WeaponType/Label_WeaponType`).pos = [-3, -2];
   off(t, `${INFO}/Weapon/WeaponType/Icon`);
   const card = `${INFO}/Weapon/Equip_1/UIEquipmentCard/Btn_Target`;
   if (!sk || !switchUnseen(fam, v, sk, modsOn())) off(t, `${INFO}/Weapon/Equip_1/UIEquipmentCard/Dot`);
-  off(t, `${card}/Normal_NotEquip`, `${card}/Lock`, `${card}/Normal/Icon`, `${card}/Normal/Icon_Star`,
-    `${card}/Normal/Card_Equipment`, `${card}/Normal/Card_Bg/Deco`);
+  off(
+    t,
+    `${card}/Normal_NotEquip`,
+    `${card}/Lock`,
+    `${card}/Normal/Icon`,
+    `${card}/Normal/Icon_Star`,
+    `${card}/Normal/Card_Equipment`,
+    `${card}/Normal/Card_Bg/Deco`,
+  );
   text(t, `${card}/Normal/Card_Level`, "");
   // window = the card's inner line (Common_Line_Raius20px 766 x 201 at (1, 6)); the decoration and the picture are clipped to it
   const win = { w: 766, h: 201, r: 20 };
   const deco = layouts.textures.Img_Deco_Weapon;
   at(t, `${card}/Normal`).children.push(
-    ...(deco ? [clipped("DecoClip", [1, 6], deco, win, { dx: 30.8 - 1, dy: 7.5 - 6, w: 820, h: 198 }, { depth: 9 })] : []),
+    ...(deco
+      ? [clipped("DecoClip", [1, 6], deco, win, { dx: 30.8 - 1, dy: 7.5 - 6, w: 820, h: 198 }, { depth: 9 })]
+      : []),
     tab === "portrait"
-      ? clipped("Bust", [1, 6], thumb(currentBase(), "bust"), win, { dx: -383 + 202 - 40, dy: -67.5, w: 404, h: 404 },
-        { depth: 10, mask: "linear-gradient(90deg, #000 70%, transparent 98%)" })
-      // wider than the window's slanted left edge; the lobby fades out before the labels so their contrast is known
-      : clipped("Bust", [1, 6], tab === "model" ? modelPicture(current("model")) : lobbyCard(v), win, { dx: -383 + 216, dy: 0, w: tab === "model" ? 253 : 450, h: 253 },
-        { depth: 10, placeholder: T("import.previewUnavailable"), edge: 0.7, mask: `linear-gradient(90deg, transparent 0, #000 10%, #000 70%, transparent ${tab === "model" ? 96 : 82}%)` }));
+      ? clipped(
+          "Bust",
+          [1, 6],
+          thumb(currentBase(), "bust"),
+          win,
+          { dx: -383 + 202 - 40, dy: -67.5, w: 404, h: 404 },
+          { depth: 10, mask: "linear-gradient(90deg, #000 70%, transparent 98%)" },
+        )
+      : // wider than the window's slanted left edge; the lobby fades out before the labels so their contrast is known
+        clipped(
+          "Bust",
+          [1, 6],
+          tab === "model" ? modelPicture(current("model")) : lobbyCard(v),
+          win,
+          { dx: -383 + 216, dy: 0, w: tab === "model" ? 253 : 450, h: 253 },
+          {
+            depth: 10,
+            placeholder: T("import.previewUnavailable"),
+            edge: 0.7,
+            mask: `linear-gradient(90deg, transparent 0, #000 10%, #000 70%, transparent ${tab === "model" ? 96 : 82}%)`,
+          },
+        ),
+  );
   // the wrapper holds an enabled (cyan) and a disabled (grey) body and label: the enabled ones while the tab has
   // something to add and switch to (switchKind), else the disabled ones
   const keep = switchKind() ? 1 : 2;
-  let bodies = 0, labels = 0;
+  let bodies = 0,
+    labels = 0;
   const add = fitIn(T(isSpecial(v) && tab === "lobby" ? "special.add" : `row.add.${tab}`), 52, 30, 160, 3); // the cyan body is 205 wide, slanted
   for (const k of at(t, `${INFO}/Weapon/Btn_Up_Wrapper/Btn_Up`).children) {
-    if (k.name === "BG (1)") { resizeButton(k); bodies += 1; if (bodies !== keep) k.active = false; }
-    if (k.name === "Label_Locale") { labels += 1; if (labels !== keep) k.active = false; else Object.assign(k.widgets[0], { text: add.text, fontSize: add.fs, w_: 200, h_: 160 }); }
+    if (k.name === "BG (1)") {
+      resizeButton(k);
+      bodies += 1;
+      if (bodies !== keep) k.active = false;
+    }
+    if (k.name === "Label_Locale") {
+      labels += 1;
+      if (labels !== keep) k.active = false;
+      else Object.assign(k.widgets[0], { text: add.text, fontSize: add.fs, w_: 200, h_: 160 });
+    }
     if (k.name === "Bg" || k.name === "Lock" || k.name === "Dot") k.active = false;
   }
 
@@ -696,7 +1092,7 @@ function screenTree() {
   const box = clone(find(t, `${INFO}/Weapon/WeaponType`));
   box.name = "ExprType";
   box.pos = [374.7, ROW4_Y];
-  find(box, "BG/BG (1)").widgets[0].w_ = BOX_RIGHT - 126;   // ends where the first skill card of row 2 ends
+  find(box, "BG/BG (1)").widgets[0].w_ = BOX_RIGHT - 126; // ends where the first skill card of row 2 ends
   find(box, "Line/Line").widgets[0].w_ = BOX_RIGHT + 3 - 123.7;
   const boxLabel = find(box, "Label_WeaponType");
   // the box's visible body, as row 3's, has its centre at mid-height 1.5 units left of the span's middle; the label is
@@ -708,7 +1104,16 @@ function screenTree() {
 
   // nameplate: favourite pin, name, the white panel for the variant chips; no stars, level, heart, squad or terrain
   const np = PLATE_PATH;
-  off(t, `${np}/Icon_Star`, `${np}/Text_Lv`, `${np}/FavorBG`, `${np}/SquadType`, `${np}/Type`, `${np}/Terrain`, `${np}/Char_ProfileBtn`);
+  off(
+    t,
+    `${np}/Icon_Star`,
+    `${np}/Text_Lv`,
+    `${np}/FavorBG`,
+    `${np}/SquadType`,
+    `${np}/Type`,
+    `${np}/Terrain`,
+    `${np}/Char_ProfileBtn`,
+  );
   const fav = isFav(v);
   at(t, `${np}/Pin/Pin_On`).active = fav;
   at(t, `${np}/Pin/Pin_Off`).active = !fav;
@@ -716,7 +1121,8 @@ function screenTree() {
     const base = `${np}/Pin/${state}`;
     at(t, base).pos[1] = 392;
     const lblNode = find(t, `${base}/Bg/Icon/Label_Locale`) || find(t, `${base}/Bg/Label_Locale`);
-    const label = lblNode.widgets.find((w) => "text" in w), tw = advanceOf(T("fav.label"), label.fontSize);
+    const label = lblNode.widgets.find((w) => "text" in w),
+      tw = advanceOf(T("fav.label"), label.fontSize);
     // Keep each state's sprite, baked shading, icon tint and local positions.
     // Only the translated caption and its right anchor expand the prefab.
     const oldWidth = label.w_;
@@ -724,34 +1130,83 @@ function screenTree() {
     widget(t, `${base}/Bg`).w_ += label.w_ - oldWidth;
   }
   // Both names share the existing dark band, leaving room for the pencil after the main name.
-  const original = originalName(v), shown = fullName(v), aliased = customAliases().length > 0;
+  const original = originalName(v),
+    shown = fullName(v),
+    aliased = customAliases().length > 0;
   const { room } = aliasPlate(at(t, np), shown, aliased);
   if (aliased) {
     const secondary = fitText(original, 28, 24, room, 1);
-    at(t, np).children.push(node("Label_OriginalName", [110, 258],
-      [label(secondary.text, secondary.fs, "#ffffff/0.62", room, 36, { pivot: 3, depth: 22, ellipsis: true, ariaLabel: original })]));
+    at(t, np).children.push(
+      node(
+        "Label_OriginalName",
+        [110, 258],
+        [
+          label(secondary.text, secondary.fs, "#ffffff/0.62", room, 36, {
+            pivot: 3,
+            depth: 22,
+            ellipsis: true,
+            ariaLabel: original,
+          }),
+        ],
+      ),
+    );
   }
   // the dark plate keeps its bottom edge and loses the level row; the game's shard texture is clipped to it
   widget(t, `${np}/BG`).h_ = 120;
   off(t, `${np}/BG/Deco`);
   const poli = layouts.textures.Img_Deco_Poli;
   if (poli) {
-    at(t, `${np}/BG`).children.push(node("DecoClip", [0, 0], [{ clipImage: poli, tint: "#0e62b2",
-      w_: 906, h_: 120, pivot: 6, depth: 5, incline: 10, radius: 10, color: "#ffffff/0.90",
-      imgLeft: `${-13.4 * S}px`, imgTop: "0", imgWidth: `${388 * S}px`, imgHeight: `${172 * S}px`, imgSize: "100% 100%", imgPosition: "0 0" }]));
+    at(t, `${np}/BG`).children.push(
+      node(
+        "DecoClip",
+        [0, 0],
+        [
+          {
+            clipImage: poli,
+            tint: "#0e62b2",
+            w_: 906,
+            h_: 120,
+            pivot: 6,
+            depth: 5,
+            incline: 10,
+            radius: 10,
+            color: "#ffffff/0.90",
+            imgLeft: `${-13.4 * S}px`,
+            imgTop: "0",
+            imgWidth: `${388 * S}px`,
+            imgHeight: `${172 * S}px`,
+            imgSize: "100% 100%",
+            imgPosition: "0 0",
+          },
+        ],
+      ),
+    );
   }
   // square buttons: fullscreen (the portrait's visual mode with the game's own icon, the lobby, the 3D model), copy the
   // file name, and on the lobby tab play all dialogue
   at(t, `${np}/Char_CVCollectionBtn`).pos[0] = 1208.8;
-  if (tab === "lobby" || tab === "model") Object.assign(widget(t, `${np}/Char_ZoomBtn/Sprite`), { sprite: "Common_UIHide_Icon", w_: 74, h_: 66, color: "#2b496e/1.00" });
-  Object.assign(widget(t, `${np}/Char_CVCollectionBtn/Sprite`), { sprite: "Common_Icon_Copy", w_: 64, h_: 76, color: "#2b496e/1.00" });
+  if (tab === "lobby" || tab === "model")
+    Object.assign(widget(t, `${np}/Char_ZoomBtn/Sprite`), {
+      sprite: "Common_UIHide_Icon",
+      w_: 74,
+      h_: 66,
+      color: "#2b496e/1.00",
+    });
+  Object.assign(widget(t, `${np}/Char_CVCollectionBtn/Sprite`), {
+    sprite: "Common_Icon_Copy",
+    w_: 64,
+    h_: 76,
+    color: "#2b496e/1.00",
+  });
   if (tab === "lobby") {
     const play = clone(find(t, `${np}/Char_ZoomBtn`));
     play.name = "Char_PlayBtn";
     play.pos[0] = 1362;
     const w = play.children[0].widgets[0];
-    if (Lobby.playingAll()) { Object.assign(w, { texture: "svg:stop", w_: 54, h_: 54, color: "#2b496e/1.00" }); delete w.sprite; }
-    else Object.assign(w, { sprite: "Common_Icon_Play", w_: 64, h_: 64, color: "#2b496e/1.00" });
+    if (Lobby.playingAll()) {
+      Object.assign(w, { texture: "svg:stop", w_: 54, h_: 54, color: "#2b496e/1.00" });
+      delete w.sprite;
+    } else Object.assign(w, { sprite: "Common_Icon_Play", w_: 64, h_: 64, color: "#2b496e/1.00" });
     at(t, np).children.push(play);
   }
   return t;
@@ -760,14 +1215,18 @@ function screenTree() {
 // The game's input-popup pencil opens the alias editor; its accessible name includes every saved alias.
 const PENCIL = CONTROL.icon.h; // App-created sprite, not a cloned prefab icon
 function nameplateRow(np, caption, aliased, ui = NGUI) {
-  const y = aliased ? 310 : 288, bg = find(np, "BG"), body = bg.widgets.find(w => "sprite" in w);
+  const y = aliased ? 310 : 288,
+    bg = find(np, "BG"),
+    body = bg.widgets.find((w) => "sprite" in w);
   // The prefab band's right edge at the name's height, with the App's margin on the spacing scale.
   // Its retained body is 120 high; include its pivot and shear rather than a hand-set right limit.
   const [px, py] = toNode({ x: 0, y: 0, w: body.w_, h: 120 }, body.pivot, LOCAL_FRAME);
-  const right = bg.pos[0] - px + body.w_ + (y - (bg.pos[1] - py - 60)) * Math.tan((body.incline || 0) * Math.PI / 180);
+  const right =
+    bg.pos[0] - px + body.w_ + (y - (bg.pos[1] - py - 60)) * Math.tan(((body.incline || 0) * Math.PI) / 180);
   const content = container({ x: 110, w: right - 110, h: 120, padding: [0, SPACE.xl, 0, 0] }).inner;
   const room = content.w - PENCIL - SPACE.xs;
-  const type = { fs: aliased ? 54 : 64, min: 44 }, height = aliased ? 64 : 76;
+  const type = { fs: aliased ? 54 : 64, min: 44 },
+    height = aliased ? 64 : 76;
   let name;
   do {
     name = textItem(ui, caption, type, { maxW: room });
@@ -778,23 +1237,35 @@ function nameplateRow(np, caption, aliased, ui = NGUI) {
   return { ...line, room, frame: { ...LOCAL_FRAME, cy: y + line.centre } };
 }
 function aliasPlate(np, caption, aliased) {
-  const layout = nameplateRow(np, caption, aliased), [name, pencil] = layout.boxes;
+  const layout = nameplateRow(np, caption, aliased),
+    [name, pencil] = layout.boxes;
   const main = find(np, "Label_Name");
   // The box is the measured width; the ellipsis only applies when the name really exceeds the room, so a sub-pixel
   // difference between canvas measurement and the web view's layout never cuts a name that fits.
   const clipped = NGUI.glyphWidth(name.text, name.fs) > layout.room;
-  Object.assign(main.widgets.find(w => "text" in w), { text: name.text, w_: name.w, h_: name.h, fontSize: name.fs, pivot: 3, ellipsis: clipped, ariaLabel: caption });
+  Object.assign(
+    main.widgets.find((w) => "text" in w),
+    { text: name.text, w_: name.w, h_: name.h, fontSize: name.fs, pivot: 3, ellipsis: clipped, ariaLabel: caption },
+  );
   main.pos = toNode(name, 3, layout.frame);
-  np.children.push(node("Char_AliasBtn", toNode(pencil, 4, layout.frame),
-    [sprite("Cafe_Icon_NameEdit", PENCIL, PENCIL, { type: 0, depth: 22, color: "#ffffff/0.85" })]));
+  np.children.push(
+    node("Char_AliasBtn", toNode(pencil, 4, layout.frame), [
+      sprite("Cafe_Icon_NameEdit", PENCIL, PENCIL, { type: 0, depth: 22, color: "#ffffff/0.85" }),
+    ]),
+  );
   return layout;
 }
 
-function renderScreen() { return drawScreen().catch(renderFailed); }
+function renderScreen() {
+  return drawScreen().catch(renderFailed);
+}
 async function drawScreen() {
-  const my = ++renderToken, gen = showGen, shown = tab;
+  const my = ++renderToken,
+    gen = showGen,
+    shown = tab;
   const ok = () => showable("screen", my, renderToken, gen);
-  const host = $("ngui"), bgHost = $("ngui-bg");
+  const host = $("ngui"),
+    bgHost = $("ngui-bg");
   const v = variant();
   const t = screenTree();
   const bgNode = find(t, "BG");
@@ -810,14 +1281,27 @@ async function drawScreen() {
     NGUI.render(right, rightHost, { scale: S, origin: ORIGIN, textureNames: TEXTURES, deferImages: true }),
   ]);
   const frag = document.createDocumentFragment();
-  const bg = await NGUI.render(bgNode, frag, { scale: S, origin: ORIGIN, rootPath: "Inventory_ListControl", textures: { BG: v.bg || undefined }, deferImages: true });
+  const bg = await NGUI.render(bgNode, frag, {
+    scale: S,
+    origin: ORIGIN,
+    rootPath: "Inventory_ListControl",
+    textures: { BG: v.bg || undefined },
+    deferImages: true,
+  });
   if (!ok()) return;
   const view = { nodes: new Map([...lv.nodes, ...rv.nodes]) };
   const panel = rv.nodes.get("Inventory_ListControl/RightInfo/Target/Active/Bg")?.els[0];
   if (panel) {
     const [left, , , height] = NGUI.rect(panel);
-    const incline = rv.nodes.get("Inventory_ListControl/RightInfo/Target/Active/Bg").node.widgets.find((w) => "sprite" in w)?.incline || 0;
-    Lobby.setDialogueBounds({ left: 0, top: 0, right: left - Math.abs(Math.tan(incline * Math.PI / 180)) * height / 2, bottom: 1080 });
+    const incline =
+      rv.nodes.get("Inventory_ListControl/RightInfo/Target/Active/Bg").node.widgets.find((w) => "sprite" in w)
+        ?.incline || 0;
+    Lobby.setDialogueBounds({
+      left: 0,
+      top: 0,
+      right: left - (Math.abs(Math.tan((incline * Math.PI) / 180)) * height) / 2,
+      bottom: 1080,
+    });
   }
   const cardReady = addSwitchText(rightHost, view);
   if (my === renderToken) {
@@ -844,49 +1328,96 @@ async function drawScreen() {
 function switchTextLayout(w, h, title, sub, arrow) {
   // The prefab bust keeps the left half. The App composes the text and chevron inside the other half.
   const content = container({ x: w / 2, w: w / 2, h, padding: SPACE.s }).inner;
-  const columns = row([{ grow: 1 }, ...(arrow ? [{ w: CONTROL.icon.h, h: CONTROL.icon.h }] : [])], { ...content, gap: SPACE.xs });
+  const columns = row([{ grow: 1 }, ...(arrow ? [{ w: CONTROL.icon.h, h: CONTROL.icon.h }] : [])], {
+    ...content,
+    gap: SPACE.xs,
+  });
   const room = columns.boxes[0];
-  let titleSize = TYPE.body.fs, subSize = TYPE.caption.fs, texts;
+  let titleSize = TYPE.body.fs,
+    subSize = TYPE.caption.fs,
+    texts;
   do {
-    texts = stack([
-      textItem(NGUI, title, { ...TYPE.body, fs: titleSize }, { maxW: room.w, lines: 2 }),
-      textItem(NGUI, sub, { ...TYPE.caption, fs: subSize }, { maxW: room.w, lines: 2 }),
-    ], { x: room.x, gap: SPACE.xs });
+    texts = stack(
+      [
+        textItem(NGUI, title, { ...TYPE.body, fs: titleSize }, { maxW: room.w, lines: 2 }),
+        textItem(NGUI, sub, { ...TYPE.caption, fs: subSize }, { maxW: room.w, lines: 2 }),
+      ],
+      { x: room.x, gap: SPACE.xs },
+    );
     if (texts.h <= room.h || (titleSize === TYPE.body.min && subSize === TYPE.caption.min)) break;
     titleSize = Math.max(TYPE.body.min, titleSize - 2);
     subSize = Math.max(TYPE.caption.min, subSize - 2);
   } while (true);
-  return { texts: texts.boxes.map(b => ({ ...b, y: b.y + room.y + (room.h - texts.h) / 2 })), arrow: columns.boxes[1], content };
+  return {
+    texts: texts.boxes.map((b) => ({ ...b, y: b.y + room.y + (room.h - texts.h) / 2 })),
+    arrow: columns.boxes[1],
+    content,
+  };
 }
 function addSwitchText(host, view) {
-  const cardEl = view.nodes.get(`Inventory_ListControl/${INFO}/Weapon/Equip_1/UIEquipmentCard/Btn_Target/Normal/Card_Bg`)?.els[0];
+  const cardEl = view.nodes.get(
+    `Inventory_ListControl/${INFO}/Weapon/Equip_1/UIEquipmentCard/Btn_Target/Normal/Card_Bg`,
+  )?.els[0];
   if (!cardEl) return;
   const [l, t, w, h] = rect(cardEl);
   const box = document.createElement("div");
   box.className = "switch-text";
-  Object.assign(box.style, { left: `${l}px`, top: `${t}px`, width: `${w}px`, height: `${h}px`, display: "block", padding: "0" });
+  Object.assign(box.style, {
+    left: `${l}px`,
+    top: `${t}px`,
+    width: `${w}px`,
+    height: `${h}px`,
+    display: "block",
+    padding: "0",
+  });
   const selectedStatus = selectionStatus(variant(), tabKind());
-  const sub = [tab === "portrait" ? candidateLabel(current()) : sourceLabel(variant(), tabKind()), selectedStatus && T(selectedStatus)].filter(Boolean).join(" - ");
+  const sub = [
+    tab === "portrait" ? candidateLabel(current()) : sourceLabel(variant(), tabKind()),
+    selectedStatus && T(selectedStatus),
+  ]
+    .filter(Boolean)
+    .join(" - ");
   const title = T(isSpecial(variant()) && tab === "lobby" ? "special.switch" : `row.switch.${tab}`);
   const layout = switchTextLayout(w / S, h / S, title, sub, !!switchKind());
-  const b = document.createElement("b"), span = document.createElement("span"), go = document.createElement("i");
+  const b = document.createElement("b"),
+    span = document.createElement("span"),
+    go = document.createElement("i");
   [b, span].forEach((el, i) => {
     const item = layout.texts[i];
     el.innerText = item.text;
-    Object.assign(el.style, { position: "absolute", left: `${item.x * S}px`, top: `${item.y * S}px`, width: `${item.w * S}px`,
-      height: `${item.h * S}px`, fontSize: `${item.px * S}px`, lineHeight: String(NGUI.LINE_PITCH), whiteSpace: "pre" });
+    Object.assign(el.style, {
+      position: "absolute",
+      left: `${item.x * S}px`,
+      top: `${item.y * S}px`,
+      width: `${item.w * S}px`,
+      height: `${item.h * S}px`,
+      fontSize: `${item.px * S}px`,
+      lineHeight: String(NGUI.LINE_PITCH),
+      whiteSpace: "pre",
+    });
   });
   go.className = "switch-go";
-  if (layout.arrow) Object.assign(go.style, { left: `${layout.arrow.x * S}px`, top: `${layout.arrow.y * S}px`,
-    width: `${layout.arrow.w * S}px`, height: `${layout.arrow.h * S}px`, right: "auto", marginTop: "0" });
+  if (layout.arrow)
+    Object.assign(go.style, {
+      left: `${layout.arrow.x * S}px`,
+      top: `${layout.arrow.y * S}px`,
+      width: `${layout.arrow.w * S}px`,
+      height: `${layout.arrow.h * S}px`,
+      right: "auto",
+      marginTop: "0",
+    });
   // The chevron opens the shared source popup.
   box.append(b, span, ...(switchKind() ? [go] : []));
   host.appendChild(box);
   const bust = view.nodes.get(`Inventory_ListControl/${INFO}/Weapon/Equip_1/UIEquipmentCard/Btn_Target/Normal/Bust`);
   const { signal } = thumbnailWork;
   const background = variant().bg || layouts.textures[widget(layouts.list, "BG").texture];
-  if (switchKind() && bust?.els[0]) return colourSwitchCard(bust.els[0], box, bust.node.widgets[0], NGUI.load, { signal, kind: tab, background })
-    .catch((err) => { if (!signal.aborted) console.warn("Switch card colours unavailable", err); });
+  if (switchKind() && bust?.els[0])
+    return colourSwitchCard(bust.els[0], box, bust.node.widgets[0], NGUI.load, { signal, kind: tab, background }).catch(
+      (err) => {
+        if (!signal.aborted) console.warn("Switch card colours unavailable", err);
+      },
+    );
 }
 
 function hits(view, leftHost, rightHost) {
@@ -901,73 +1432,147 @@ function hits(view, leftHost, rightHost) {
   // The switch card selects a source for the shown asset kind.
   const sk = switchKind();
   if (sk) {
-    add(rightHost, `${INFO}/Weapon/Equip_1/UIEquipmentCard/Btn_Target/Normal/Card_Bg`, () => openPopup(sk), T(isSpecial(variant()) && sk === "lobby" ? "special.switch" : `row.switch.${tab}`));
-    add(rightHost, `${INFO}/Weapon/Btn_Up_Wrapper/Btn_Up/BG (1)`, addMods, T(isSpecial(variant()) && sk === "lobby" ? "special.add" : `row.add.${tab}`));
+    add(
+      rightHost,
+      `${INFO}/Weapon/Equip_1/UIEquipmentCard/Btn_Target/Normal/Card_Bg`,
+      () => openPopup(sk),
+      T(isSpecial(variant()) && sk === "lobby" ? "special.switch" : `row.switch.${tab}`),
+    );
+    add(
+      rightHost,
+      `${INFO}/Weapon/Btn_Up_Wrapper/Btn_Up/BG (1)`,
+      addMods,
+      T(isSpecial(variant()) && sk === "lobby" ? "special.add" : `row.add.${tab}`),
+    );
   }
-  add(rightHost, `${INFO}/Status/Btn_Up_Wrapper/Btn_Up/BG (1)`, () => reveal(gameFile(variant(), tabKind())), T(platform === "mac" ? "open.mac" : "open.win"));
+  add(
+    rightHost,
+    `${INFO}/Status/Btn_Up_Wrapper/Btn_Up/BG (1)`,
+    () => reveal(gameFile(variant(), tabKind())),
+    T(platform === "mac" ? "open.mac" : "open.win"),
+  );
   add(rightHost, `${INFO}/Detail_Btn`, showDetails, T("info.details"));
-  if (shownMod()) add(rightHost, `${INFO}/Status/Label_Life/Data_Widget/ModAliasBtn`, () => editModName(shownMod().mod), T("modAlias.title"));
+  if (shownMod())
+    add(
+      rightHost,
+      `${INFO}/Status/Label_Life/Data_Widget/ModAliasBtn`,
+      () => editModName(shownMod().mod),
+      T("modAlias.title"),
+    );
   const act = (card, fn, name) => add(rightHost, `${INFO}/Skill/${card}/Bg`, fn, name);
   act("SkillData_EX", () => runCompatibility(), T("compatibility.check"));
-  act("SkillData_EX (1)", () => repairedId(shownMod()) ? jumpRepaired(shownMod()) : runUpdate(),
-    T(repairAction(shownMod())));
+  act(
+    "SkillData_EX (1)",
+    () => (repairedId(shownMod()) ? jumpRepaired(shownMod()) : runUpdate()),
+    T(repairAction(shownMod())),
+  );
   act("SkillData_EX (2)", () => runExport(), T("export.title"));
   const apply = act("SkillData_EX (3)", () => applyCandidate(shownSource(variant(), sk), sk), T("popup.apply"));
   if (apply) {
-    const hold = costumeBlock(variant(), sk, shownSource(variant(), sk)), unfit = hold === "unfit";
-    apply.disabled = !unfit && (!!hold || !sk || !coreOf(variant(), sk) || busy || isApplied(variant(), sk, shownSource(variant(), sk)));
+    const hold = costumeBlock(variant(), sk, shownSource(variant(), sk)),
+      unfit = hold === "unfit";
+    apply.disabled =
+      !unfit &&
+      (!!hold || !sk || !coreOf(variant(), sk) || busy || isApplied(variant(), sk, shownSource(variant(), sk)));
     if (!coreOf(variant(), sk)) apply.setAttribute("aria-description", T("import.reason.no_target"));
     if (applyChecking(variant(), sk)) apply.setAttribute("aria-busy", "true");
     // a refused costume: greyed, the reason on hover (the click does nothing, applyCandidate); another
     // student's model waits for its check
-    if (unfit) { apply.setAttribute("aria-disabled", "true"); apply.setAttribute("aria-description", T("model.unfit")); attachHint(apply, T("model.unfit")); }
+    if (unfit) {
+      apply.setAttribute("aria-disabled", "true");
+      apply.setAttribute("aria-description", T("model.unfit"));
+      attachHint(apply, T("model.unfit"));
+    }
   }
   add(leftHost, "LeftInfo/CharInfo/Char_Target/Pin/Pin_On/Bg", toggleFav, T("fav.label"));
   add(leftHost, "LeftInfo/CharInfo/Char_Target/Pin/Pin_Off/Bg", toggleFav, T("fav.label"));
   // Copy, then the file it copies
-  add(leftHost, "LeftInfo/CharInfo/Char_Target/Char_CVCollectionBtn", copyName, `${T("window.copy")}${listSep()}${baseName(gameFile(variant(), tabKind()))}`);
+  add(
+    leftHost,
+    "LeftInfo/CharInfo/Char_Target/Char_CVCollectionBtn",
+    copyName,
+    `${T("window.copy")}${listSep()}${baseName(gameFile(variant(), tabKind()))}`,
+  );
   // The pencil opens the editor beside the displayed name.
-  const aliasEls = ["Char_AliasBtn"].map((n) => view.nodes.get(`Inventory_ListControl/LeftInfo/CharInfo/Char_Target/${n}`)?.els[0]).filter(Boolean);
+  const aliasEls = ["Char_AliasBtn"]
+    .map((n) => view.nodes.get(`Inventory_ListControl/LeftInfo/CharInfo/Char_Target/${n}`)?.els[0])
+    .filter(Boolean);
   if (aliasEls.length) {
-    const boxes = aliasEls.map(rect), pad = 14;
-    const l = Math.min(...boxes.map((b) => b[0])) - pad, tp = Math.min(...boxes.map((b) => b[1])) - pad;
-    const r = Math.max(...boxes.map((b) => b[0] + b[2])) + pad, bt = Math.max(...boxes.map((b) => b[1] + b[3])) + pad;
+    const boxes = aliasEls.map(rect),
+      pad = 14;
+    const l = Math.min(...boxes.map((b) => b[0])) - pad,
+      tp = Math.min(...boxes.map((b) => b[1])) - pad;
+    const r = Math.max(...boxes.map((b) => b[0] + b[2])) + pad,
+      bt = Math.max(...boxes.map((b) => b[1] + b[3])) + pad;
     const list = aliasList();
-    hitButton(leftHost, [l, tp, r - l, bt - tp], () => call(() => openAliases()), list ? `${T("alias.title")} - ${list}` : T("alias.title"));
+    hitButton(
+      leftHost,
+      [l, tp, r - l, bt - tp],
+      () => call(() => openAliases()),
+      list ? `${T("alias.title")} - ${list}` : T("alias.title"),
+    );
   }
   // the previous or next card of the student list, within its filters and in its order
   add(leftHost, "Arrow_L/Left", () => ctx.step(-1, fam.key, variantKey), T("hall.previous"));
   add(rightHost, "Arrow_R/Right", () => ctx.step(1, fam.key, variantKey), T("hall.next"));
   add(leftHost, "LeftInfo/CharInfo/Char_Target/Char_ZoomBtn", () => setFullscreen(true), T("lobby.fullscreen"));
-  if (tab === "lobby") add(leftHost, "LeftInfo/CharInfo/Char_Target/Char_PlayBtn", togglePlayAll, T(Lobby.playingAll() ? "lobby.stop" : "lobby.playAll"));
+  if (tab === "lobby")
+    add(
+      leftHost,
+      "LeftInfo/CharInfo/Char_Target/Char_PlayBtn",
+      togglePlayAll,
+      T(Lobby.playingAll() ? "lobby.stop" : "lobby.playAll"),
+    );
   const v = variant();
-  [["Tab_1", "portrait", hasKind(v, "spr")], ["Tab_2", "lobby", hasLobby(v)], ["Tab_3", "model", hasModel(v)]].forEach(([n, id, ok]) => {
-    if (ok && id !== tab) add(rightHost, `RightInfo/Target/Active/CharacterTab/${n}/Tab_Off/Label`, () => showTab(id), T(isSpecial(v) && id === "lobby" ? "special.background" : `tab.${id}`));
+  [
+    ["Tab_1", "portrait", hasKind(v, "spr")],
+    ["Tab_2", "lobby", hasLobby(v)],
+    ["Tab_3", "model", hasModel(v)],
+  ].forEach(([n, id, ok]) => {
+    if (ok && id !== tab)
+      add(
+        rightHost,
+        `RightInfo/Target/Active/CharacterTab/${n}/Tab_Off/Label`,
+        () => showTab(id),
+        T(isSpecial(v) && id === "lobby" ? "special.background" : `tab.${id}`),
+      );
   });
 }
 
 // --- actions ---
 async function call(fn) {
-  try { return await fn(); } catch (err) {
+  try {
+    return await fn();
+  } catch (err) {
     console.error("Detail action failed", err);
     notify(err.code ? errorText(err) : T("detail.failed"), { kind: "error", error: err });
     return null;
   }
 }
-async function reveal(path) { if (path) await call(() => rpc("os.reveal", { path })); }
+async function reveal(path) {
+  if (path) await call(() => rpc("os.reveal", { path }));
+}
 async function copyName() {
   const name = baseName(gameFile(variant(), tabKind()));
-  try { await navigator.clipboard.writeText(name); }
-  catch (err) { notify(T("detail.copyFailed"), { kind: "error", error: err }); }
+  try {
+    await navigator.clipboard.writeText(name);
+  } catch (err) {
+    notify(T("detail.copyFailed"), { kind: "error", error: err });
+  }
 }
 function editModName(mod, redraw = null) {
   const page = pageToken;
-  return call(() => ModAlias.open({ mod, onSaved: async () => {
-    ctx.invalidateRoster();
-    if (!open || page !== pageToken) return;
-    await reload();
-    if (open && page === pageToken) await redraw?.();
-  } }));
+  return call(() =>
+    ModAlias.open({
+      mod,
+      onSaved: async () => {
+        ctx.invalidateRoster();
+        if (!open || page !== pageToken) return;
+        await reload();
+        if (open && page === pageToken) await redraw?.();
+      },
+    }),
+  );
 }
 async function toggleFav() {
   const v = variant();
@@ -986,45 +1591,75 @@ function addMods() {
 // An apply while mods are off only saves the choice (deferred): a notice says so ("Saved, applied when mods are on").
 async function job(method, params, options = {}) {
   const { onDone, after = () => reload(), name = fullName(variant()) } = options;
-  if (busy) { notify(T("error.busy"), { kind: "error", error: { code: "busy" } }); return false; }
+  if (busy) {
+    notify(T("error.busy"), { kind: "error", error: { code: "busy" } });
+    return false;
+  }
   busy = true;
   const page = pageToken;
-  let ok = false, result = null, refusal = null;
-  const action = ({ "actions.apply": params.source === "official" ? "restore" : "apply", "actions.restore": "restore", "actions.update": "repair",
-    "actions.extract": "extract", "mods.remove": "delete", "model.optimize": "optimize" })[method] || "process";
-  const mod = fam?.variants?.flatMap((v) => v.modList || []).find((m) => m.id === (params.mod || params.id || params.target?.replace(/^mod:/, "")));
+  let ok = false,
+    result = null,
+    refusal = null;
+  const action =
+    {
+      "actions.apply": params.source === "official" ? "restore" : "apply",
+      "actions.restore": "restore",
+      "actions.update": "repair",
+      "actions.extract": "extract",
+      "mods.remove": "delete",
+      "model.optimize": "optimize",
+    }[method] || "process";
+  const mod = fam?.variants
+    ?.flatMap((v) => v.modList || [])
+    .find((m) => m.id === (params.mod || params.id || params.target?.replace(/^mod:/, "")));
   const targetKey = params.variant || (params.target?.startsWith("variant:") ? params.target.slice(8) : mod?.target);
   const target = fam?.variants?.find((v) => v.key === targetKey) || variant();
   const kind = params.kind || mod?.kind || switchKind() || "spr";
   // the progress line (job-progress.js modJob): the student, the kind, the mod's own name or the variant whose
   // files it takes, how far a build is (a 3D model's costume) and the step; one item, so no count
   const who = progressName(target, "", name, fam);
-  const sourceKey = typeof params.source === "string" && params.source.startsWith("variant:") ? params.source.slice(8) : "";
+  const sourceKey =
+    typeof params.source === "string" && params.source.startsWith("variant:") ? params.source.slice(8) : "";
   const sourceVariant = sourceKey ? fam?.variants?.find((v) => v.key === sourceKey) : null;
-  const nameOf = (entry) => entry?.variant === sourceKey && sourceKey ? progressName(sourceVariant, "", sourceKey, fam) : who;
-  const progress = modJob({ variant: target?.key || targetKey || kind, kind, name: mod ? modLabel(mod) : "", source: sourceKey },
-    { nameOf, action: `progress.action${action[0].toUpperCase()}${action.slice(1)}` });
+  const nameOf = (entry) =>
+    entry?.variant === sourceKey && sourceKey ? progressName(sourceVariant, "", sourceKey, fam) : who;
+  const progress = modJob(
+    { variant: target?.key || targetKey || kind, kind, name: mod ? modLabel(mod) : "", source: sourceKey },
+    { nameOf, action: `progress.action${action[0].toUpperCase()}${action.slice(1)}` },
+  );
   const running = progress();
   try {
-    return await Loading.hold(async (update) => {
-      update(running);
-      try {
+    return await Loading.hold(
+      async (update) => {
+        update(running);
         try {
-          await renderScreen();
-          const id = await rpc(method, params, { timeout: 30000 });
-          result = await waitJob(id, (p) => { const text = progress(p); update(text); });
-          await onDone?.(result);
-          ok = true;
-        } catch (err) { refusal = err; }
-        if (page === pageToken && open) await after(ok, result);
-        return ok;
-      } finally {
-        busy = false;
-        if (page === pageToken && open) {
-          try { await renderScreen(); } catch (err) { notify(errorText(err), { kind: "error", error: err }); }
+          try {
+            await renderScreen();
+            const id = await rpc(method, params, { timeout: 30000 });
+            result = await waitJob(id, (p) => {
+              const text = progress(p);
+              update(text);
+            });
+            await onDone?.(result);
+            ok = true;
+          } catch (err) {
+            refusal = err;
+          }
+          if (page === pageToken && open) await after(ok, result);
+          return ok;
+        } finally {
+          busy = false;
+          if (page === pageToken && open) {
+            try {
+              await renderScreen();
+            } catch (err) {
+              notify(errorText(err), { kind: "error", error: err });
+            }
+          }
         }
-      }
-    }, { all: true });
+      },
+      { all: true },
+    );
   } catch (err) {
     notify(errorText(err), { kind: "error", error: err });
     return false;
@@ -1035,11 +1670,14 @@ async function job(method, params, options = {}) {
       if (page === pageToken && open && refusal.code === "original_unavailable" && QUEUEABLE.includes(method))
         await overwrittenMessage(variant(), params.kind || "spr");
       // an untested game build's confirmation makes the call again, from this same page only
-      else if (QUEUEABLE.includes(method)) await refused(refusal, method, params, page === pageToken && open ? () => job(method, params, options) : null);
+      else if (QUEUEABLE.includes(method))
+        await refused(refusal, method, params, page === pageToken && open ? () => job(method, params, options) : null);
       else notify(errorText(refusal), { kind: "error", error: refusal });
     } else if (ok) {
       // an apply while mods are off only saves the choice, without a notice, like any other saved choice (owner)
-      const lines = [result?.kept_current && T("mods.keptCurrent"), result?.incomplete && T("mods.incomplete")].filter(Boolean);
+      const lines = [result?.kept_current && T("mods.keptCurrent"), result?.incomplete && T("mods.incomplete")].filter(
+        Boolean,
+      );
       if (lines.length) void notice(lines.join("\n"));
     }
     resumeChanged();
@@ -1047,20 +1685,29 @@ async function job(method, params, options = {}) {
 }
 // The mod previewed on the shown tab (row 2's update and compare act on it), or null.
 function shownMod() {
-  const sk = switchKind(), c = sk && current(sk);
+  const sk = switchKind(),
+    c = sk && current(sk);
   return c?.kind === "mod" ? c : null;
 }
 // who a mod's repair or check is (mod-compatibility.js progressTask, job-progress.js modJob)
 function modProgressName(c) {
-  const mod = c.mod || c, target = fam.variants.find((v) => v.key === mod.target) || variant();
-  return { variant: target?.key || mod.target, kind: mod.kind || switchKind(), core: mod.core || "", name: c.label || "" };
+  const mod = c.mod || c,
+    target = fam.variants.find((v) => v.key === mod.target) || variant();
+  return {
+    variant: target?.key || mod.target,
+    kind: mod.kind || switchKind(),
+    core: mod.core || "",
+    name: c.label || "",
+  };
 }
 async function runUpdate(c = shownMod()) {
   const kind = switchKind();
   if (!c || busy) return;
   if (c.mod?.optimized_from) return runRebuild(c);
   const page = pageToken;
-  const report = await call(() => Loading.hold(() => Compatibility.forUpdate(c.id, c.label, modProgressName(c)), { all: true }));
+  const report = await call(() =>
+    Loading.hold(() => Compatibility.forUpdate(c.id, c.label, modProgressName(c)), { all: true }),
+  );
   if (!report || page !== pageToken || !open) return false;
   if (Compatibility.eligible(c.mod) && Compatibility.canRemap(c.id, c.mod)) return runRemap(c);
   // drawn on a rig the App does not have: an update would change nothing, so the result says why instead
@@ -1069,25 +1716,42 @@ async function runUpdate(c = shownMod()) {
     return false;
   }
   if (!report.assessment.available || !report.assessment.issues.length) {
-    const answer = await message({ title: T("act.update"), lines: [T(report.assessment.available ? "compatibility.forceUpdate" : "compatibility.updateUnchecked")],
-      cancel: T("popup.cancel"), ok: T("act.update") });
+    const answer = await message({
+      title: T("act.update"),
+      lines: [T(report.assessment.available ? "compatibility.forceUpdate" : "compatibility.updateUnchecked")],
+      cancel: T("popup.cancel"),
+      ok: T("act.update"),
+    });
     if (answer.button !== "ok" || page !== pageToken || !open) return false;
   }
   let notice = "";
-  const done = await job("actions.update", { mod: c.id }, {
-    name: c.label,
-    onDone: (result) => { forget(spinePrefix("mod", c.id)); notice = Compatibility.rigNotice(result); },
-    after: (ok) => reload(ok ? [kind] : []),
-  });
+  const done = await job(
+    "actions.update",
+    { mod: c.id },
+    {
+      name: c.label,
+      onDone: (result) => {
+        forget(spinePrefix("mod", c.id));
+        notice = Compatibility.rigNotice(result);
+      },
+      after: (ok) => reload(ok ? [kind] : []),
+    },
+  );
   // An update that kept the Mod's own skeleton says what the official one has since gained.
-  if (done && notice && page === pageToken && open) await message({ title: T("act.update"), lines: [notice], ok: T("picker.ok") });
+  if (done && notice && page === pageToken && open)
+    await message({ title: T("act.update"), lines: [notice], ok: T("picker.ok") });
   return done;
 }
 // Update of an Optimize Physics copy: its costume built again under the current costume rule, in place; where
 // the student's model is configured with it, applied again
 async function runRebuild(c) {
-  const v = variant(), applied = isApplied(v, "model", c.key);
-  const done = await job("actions.update", { mod: c.id }, { name: c.label, after: (ok) => reload(ok ? ["model"] : []) });
+  const v = variant(),
+    applied = isApplied(v, "model", c.key);
+  const done = await job(
+    "actions.update",
+    { mod: c.id },
+    { name: c.label, after: (ok) => reload(ok ? ["model"] : []) },
+  );
   if (done && applied && open && variant() === v) await applyCandidate(c.key, "model", { again: true });
   return done;
 }
@@ -1117,7 +1781,9 @@ async function jumpRepaired(c) {
 // did not reach soon (a hall that kept the screen, another route) is dropped.
 let wanted = null;
 const WANTED_MS = 30000;
-export function want(request) { wanted = request ? { ...request, at: Date.now() } : null; }
+export function want(request) {
+  wanted = request ? { ...request, at: Date.now() } : null;
+}
 export async function takeWanted() {
   const w = wanted;
   wanted = null;
@@ -1130,7 +1796,9 @@ export async function takeWanted() {
   if (!candidates(variant(), kind).some((c) => c.key === key)) return;
   pending = key;
   await renderPopup();
-  [...$("popup").querySelectorAll("[data-key]")].find((el) => el.dataset.key === key)?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  [...$("popup").querySelectorAll("[data-key]")]
+    .find((el) => el.dataset.key === key)
+    ?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
 }
 function runExport() {
   const c = shownMod();
@@ -1150,60 +1818,79 @@ async function runCompare() {
 async function applyCandidate(key, kind = "spr", { again = false } = {}) {
   const v = variant();
   if (!kind || !coreOf(v, kind) || busy || (!again && isApplied(v, kind, key)) || unfitCostume(v, kind, key)) return;
-  await job("actions.apply", { variant: v.key, source: sourceOf(key), kind }, {
-    onDone: (result) => {
-      if (result?.files?.length) {
-        const core = coreOf(v, kind);
-        forget(spinePrefix(kind, core));
-        forget(spinePrefix(`official-${kind}`, core));
-      }
+  await job(
+    "actions.apply",
+    { variant: v.key, source: sourceOf(key), kind },
+    {
+      onDone: (result) => {
+        if (result?.files?.length) {
+          const core = coreOf(v, kind);
+          forget(spinePrefix(kind, core));
+          forget(spinePrefix(`official-${kind}`, core));
+        }
+      },
+      // the applied portrait or lobby swaps in with the rest of the screen; the old one shows until then
+      after: async (ok, result) => {
+        ctx.invalidateRoster();
+        if (!ok) return reload();
+        if (result?.unchanged) return reload();
+        resetPreview(kind);
+        if (!open) return null; // the screen was left meanwhile: the next show reads the family again
+        return changeInPlace(async () => {
+          const read = fam;
+          const data = await call(() => readFamily(read.key));
+          if (data && fam !== read) return; // the screen was read anew meanwhile
+          if (data) fam = data;
+          await Promise.all([renderAll(), renderLeft()]);
+        });
+      },
     },
-    // the applied portrait or lobby swaps in with the rest of the screen; the old one shows until then
-    after: async (ok, result) => {
-      ctx.invalidateRoster();
-      if (!ok) return reload();
-      if (result?.unchanged) return reload();
-      resetPreview(kind);
-      if (!open) return null; // the screen was left meanwhile: the next show reads the family again
-      return changeInPlace(async () => {
-        const read = fam;
-        const data = await call(() => readFamily(read.key));
-        if (data && fam !== read) return; // the screen was read anew meanwhile
-        if (data) fam = data;
-        await Promise.all([renderAll(), renderLeft()]);
-      });
-    },
-  });
+  );
   if (switchPopupPage === pageToken && !$("popup").hidden) await renderPopup();
 }
 
 async function saveCandidate(key, kind) {
-  const v = variant(), family = fam;
-  await call(() => Loading.hold(async () => {
-    const sources = await rpc("ui.preview", { variant: v.key, kind, source: sourceOf(key) });
-    ctx.invalidateRoster();
-    if (!open || fam !== family || variant() !== v) return;
-    v.previewSources = sources;
-    if (kind === "model") judgeCross(v);
-    resetPreview(kind);
-    await changeInPlace(() => Promise.all([renderAll(), renderLeft()]));
-  }, { all: true }));
+  const v = variant(),
+    family = fam;
+  await call(() =>
+    Loading.hold(
+      async () => {
+        const sources = await rpc("ui.preview", { variant: v.key, kind, source: sourceOf(key) });
+        ctx.invalidateRoster();
+        if (!open || fam !== family || variant() !== v) return;
+        v.previewSources = sources;
+        if (kind === "model") judgeCross(v);
+        resetPreview(kind);
+        await changeInPlace(() => Promise.all([renderAll(), renderLeft()]));
+      },
+      { all: true },
+    ),
+  );
 }
 
 // --- variant chips in the nameplate's white panel (style of the game's type chips) ---
 // 3 columns x 2 rows; a long name takes two columns; with more variants than fit, the last cell opens the picker.
-const CHIP_FS = CHIP.fs, CHIP_W = CHIP.w, CHIP_PITCH = CHIP.pitch; // the prefab chip (Char_Target/Type/MainType/BG): 272 x 72, 40 down to 28
+const CHIP_FS = CHIP.fs,
+  CHIP_W = CHIP.w,
+  CHIP_PITCH = CHIP.pitch; // the prefab chip (Char_Target/Type/MainType/BG): 272 x 72, 40 down to 28
 const chipSpan = (item) => {
-  const need = glyphsOf(shortName(item), 32) + (item.recruitable ? 32 * 1.35 / RECRUIT.ratio + 6 : 0) + (appliedKey(item) !== "self" ? 34 : 0);
+  const need =
+    glyphsOf(shortName(item), 32) +
+    (item.recruitable ? (32 * 1.35) / RECRUIT.ratio + 6 : 0) +
+    (appliedKey(item) !== "self" ? 34 : 0);
   return need > CHIP_W - CHIP.inset ? 2 : 1;
 };
-const byRank = (a, b) => (isFav(b) - isFav(a)) || (b.recruitable - a.recruitable) || a.order - b.order;
+const byRank = (a, b) => isFav(b) - isFav(a) || b.recruitable - a.recruitable || a.order - b.order;
 function placeChips(items) {
   const cells = [];
-  let row = 0, col = 0;
+  let row = 0,
+    col = 0;
   for (const item of items) {
     const span = chipSpan(item);
-    if (col + span > 3) { row += 1; col = 0; }
+    if (col + span > 3) {
+      row += 1;
+      col = 0;
+    }
     if (row > 1) return null;
     cells.push({ v: item, row, col, span });
     col += span;
@@ -1216,65 +1903,143 @@ function chipLayout() {
   const all = placeChips(list);
   if (all) return all;
   // six cells, the last one is "more": take variants in order, skipping ones too wide for the space left in a row
-  const caps = [3, 2], fill = [0, 0], picked = [];
+  const caps = [3, 2],
+    fill = [0, 0],
+    picked = [];
   const tryPlace = (v) => {
     const span = chipSpan(v);
-    for (let r = 0; r < 2; r++) if (fill[r] + span <= caps[r]) { picked.push({ v, row: r, col: fill[r], span }); fill[r] += span; return true; }
+    for (let r = 0; r < 2; r++)
+      if (fill[r] + span <= caps[r]) {
+        picked.push({ v, row: r, col: fill[r], span });
+        fill[r] += span;
+        return true;
+      }
     return false;
   };
-  for (const v of list) { tryPlace(v); if (fill[0] === caps[0] && fill[1] === caps[1]) break; }
+  for (const v of list) {
+    tryPlace(v);
+    if (fill[0] === caps[0] && fill[1] === caps[1]) break;
+  }
   // the current variant is always shown
   if (!picked.some((p) => p.v.key === variantKey)) {
-    const last = [...picked].reverse().find((p) => p.span === chipSpan(variant()) || (p.span === 2 && chipSpan(variant()) === 1));
+    const last = [...picked]
+      .reverse()
+      .find((p) => p.span === chipSpan(variant()) || (p.span === 2 && chipSpan(variant()) === 1));
     if (last) Object.assign(last, { v: variant(), span: chipSpan(variant()) });
   }
   return [...picked, { more: list.length - picked.length, row: 1, col: 2, span: 1 }];
 }
 function chipNode(name, pos, w, caption, active, swapped, mark, fresh = false) {
-  const body = sprite("Common_Bg_Raius10px", w, CHIP.h, { incline: 10, depth: 5, color: active ? "#2c4564/1.00" : "#ffffff/1.00" });
+  const body = sprite("Common_Bg_Raius10px", w, CHIP.h, {
+    incline: 10,
+    depth: 5,
+    color: active ? "#2c4564/1.00" : "#ffffff/1.00",
+  });
   const color = active ? "#ffffff/1.00" : "#2c4564/1.00";
-  const lbl = markedLabel(caption, { fs: CHIP_FS, fsMin: CHIP.fsMin, color, maxW: w - CHIP.inset - (swapped ? 30 : 0), mark, depth: 8 });
+  const lbl = markedLabel(caption, {
+    fs: CHIP_FS,
+    fsMin: CHIP.fsMin,
+    color,
+    maxW: w - CHIP.inset - (swapped ? 30 : 0),
+    mark,
+    depth: 8,
+  });
   const kids = [node("Label", [swapped ? -15 : 0, 0], [], lbl.nodes)];
-  if (!active) kids.push(node("Line", [0, 0], [sprite("Common_Line_Raius10px", w, CHIP.h, { incline: 10, depth: 6, color: "#c0c9d4/1.00" })]));
+  if (!active)
+    kids.push(
+      node(
+        "Line",
+        [0, 0],
+        [sprite("Common_Line_Raius10px", w, CHIP.h, { incline: 10, depth: 6, color: "#c0c9d4/1.00" })],
+      ),
+    );
   // the variant wears another portrait: the game's swap icon at the right end
-  if (swapped) kids.push(node("Swapped", [w / 2 - 36, 0], [sprite("Common_Icon_Change", 32, 32, { type: 0, depth: 9, color: active ? "#e6b6ef/1.00" : "#9c44ac/1.00" })]));
+  if (swapped)
+    kids.push(
+      node(
+        "Swapped",
+        [w / 2 - 36, 0],
+        [sprite("Common_Icon_Change", 32, 32, { type: 0, depth: 9, color: active ? "#e6b6ef/1.00" : "#9c44ac/1.00" })],
+      ),
+    );
   if (fresh) kids.push(DOT([w / 2 - 4 + 36 * TAN10, 34], 30));
   return node(name, pos, [body], kids);
 }
 function chipBoxes(chips) {
   // UICharacterDetail's 272 x 72 chip, 290 pitch and 84 row pitch are prefab geometry, not App spacing.
   const width = CHIP_W + 2 * CHIP_PITCH;
-  const rows = stack([{ h: CHIP.h }, { h: CHIP.h }], { y: -(234 - 58) - CHIP.h / 2, w: width, gap: CHIP.rowPitch - CHIP.h });
-  const slots = rows.boxes.map(b => row(Array.from({ length: 3 }, () => ({ w: CHIP_W, h: CHIP.h })), {
-    x: 514 + (-b.y - CHIP.h / 2 - (234 - 101)) * TAN10 - width / 2, y: b.y, gap: CHIP.gap,
-  }).boxes);
-  return chips.map(chip => ({ ...chip, box: { ...slots[chip.row][chip.col], w: CHIP_W + (chip.span - 1) * CHIP_PITCH } }));
+  const rows = stack([{ h: CHIP.h }, { h: CHIP.h }], {
+    y: -(234 - 58) - CHIP.h / 2,
+    w: width,
+    gap: CHIP.rowPitch - CHIP.h,
+  });
+  const slots = rows.boxes.map(
+    (b) =>
+      row(
+        Array.from({ length: 3 }, () => ({ w: CHIP_W, h: CHIP.h })),
+        {
+          x: 514 + (-b.y - CHIP.h / 2 - (234 - 101)) * TAN10 - width / 2,
+          y: b.y,
+          gap: CHIP.gap,
+        },
+      ).boxes,
+  );
+  return chips.map((chip) => ({
+    ...chip,
+    box: { ...slots[chip.row][chip.col], w: CHIP_W + (chip.span - 1) * CHIP_PITCH },
+  }));
 }
 // Char_Target's frame in the screen: the prefab's offsets down to it, summed as NGUI.render does. The chips are drawn in
 // their own layer and take the plate's frame from the layout, so they stay in its white panel wherever the game puts it.
 const PLATE_PATH = "LeftInfo/CharInfo/Char_Target";
 function plateFrame(list) {
-  let x = list.pos[0], y = list.pos[1], sx = list.scale?.[0] ?? 1, sy = list.scale?.[1] ?? 1, at = list;
+  let x = list.pos[0],
+    y = list.pos[1],
+    sx = list.scale?.[0] ?? 1,
+    sy = list.scale?.[1] ?? 1,
+    at = list;
   for (const name of PLATE_PATH.split("/")) {
     at = at.children.find((k) => k.name === name);
-    x += at.pos[0] * sx; y += at.pos[1] * sy;
-    sx *= at.scale?.[0] ?? 1; sy *= at.scale?.[1] ?? 1;
+    x += at.pos[0] * sx;
+    y += at.pos[1] * sy;
+    sx *= at.scale?.[0] ?? 1;
+    sy *= at.scale?.[1] ?? 1;
   }
   return { pos: [x, y], scale: [sx, sy] };
 }
-function renderChips() { return drawChips().catch(renderFailed); }
+function renderChips() {
+  return drawChips().catch(renderFailed);
+}
 async function drawChips() {
-  const my = ++chipToken, gen = showGen;
+  const my = ++chipToken,
+    gen = showGen;
   const ok = () => showable("chips", my, chipToken, gen);
   const host = $("ngui-chips");
   // BG2 (886 x 202, top-centre at 514, 234 in Char_Target, sheared about its centre) holds the chips
-  const chips = chipLayout(), plate = plateFrame(layouts.list);
-  const tree = node("Chips", plate.pos, [], chipBoxes(chips).map(({ v, more, box }) => {
-    const pos = toNode(box, 4, LOCAL_FRAME), w = box.w;
-    return v
-      ? chipNode(`Chip_${v.key}`, pos, w, shortName(v), v.key === variantKey, shownSource(v) !== "self", v.recruitable, hasFresh(v))
-      : chipNode("Chip_more", pos, w, T("chips.more", { n: more }), false, false, false);
-  }), plate.scale);
+  const chips = chipLayout(),
+    plate = plateFrame(layouts.list);
+  const tree = node(
+    "Chips",
+    plate.pos,
+    [],
+    chipBoxes(chips).map(({ v, more, box }) => {
+      const pos = toNode(box, 4, LOCAL_FRAME),
+        w = box.w;
+      return v
+        ? chipNode(
+            `Chip_${v.key}`,
+            pos,
+            w,
+            shortName(v),
+            v.key === variantKey,
+            shownSource(v) !== "self",
+            v.recruitable,
+            hasFresh(v),
+          )
+        : chipNode("Chip_more", pos, w, T("chips.more", { n: more }), false, false, false);
+    }),
+    plate.scale,
+  );
   const next = document.createDocumentFragment();
   const view = await NGUI.render(tree, next, { scale: S, origin: ORIGIN, z: 20, deferImages: true });
   if (my === chipToken) {
@@ -1287,8 +2052,12 @@ async function drawChips() {
     if (!m || !entry.els[0]) continue;
     // the chip's caption names it; the shown variant's chip is the pressed one
     const chip = m[1] === "more" ? chips.find((c) => !c.v) : chips.find((c) => c.v?.key === m[1]);
-    const button = hitButton(next, rect(entry.els[0]), () => (m[1] === "more" ? openPicker() : ctx.go(fam.key, m[1])),
-      chip?.v ? shortName(chip.v) : T("chips.more", { n: chip?.more ?? 0 }));
+    const button = hitButton(
+      next,
+      rect(entry.els[0]),
+      () => (m[1] === "more" ? openPicker() : ctx.go(fam.key, m[1])),
+      chip?.v ? shortName(chip.v) : T("chips.more", { n: chip?.more ?? 0 }),
+    );
     if (chip?.v) button.setAttribute("aria-pressed", String(chip.v.key === variantKey));
   }
   commit(() => {
@@ -1301,42 +2070,137 @@ async function drawChips() {
 // --- row 4: a box, then cards on the columns of row 2's skill cards, the pile in the button column ---
 function expressionBoxes(count, nativeColumns = false) {
   // Slots retain the prefab's pitch (including its rounded column coordinates); the bodies remain 242 x 209.
-  return row(Array.from({ length: count }, (_, i) => ({ w: nativeColumns && i + 1 < COLS.length ? COLS[i + 1] - COLS[i] : PITCH, h: CARD.h })), {
-    x: COLS[0] - CARD.w / 2, y: -ROW4_Y + 6.5 - CARD.h / 2,
-  }).boxes.map(b => ({ ...b, w: CARD.w }));
+  return row(
+    Array.from({ length: count }, (_, i) => ({
+      w: nativeColumns && i + 1 < COLS.length ? COLS[i + 1] - COLS[i] : PITCH,
+      h: CARD.h,
+    })),
+    {
+      x: COLS[0] - CARD.w / 2,
+      y: -ROW4_Y + 6.5 - CARD.h / 2,
+    },
+  ).boxes.map((b) => ({ ...b, w: CARD.w }));
 }
 function pileBoxes() {
   const w = BTN_COL[1] - BTN_COL[0] - SPACE.l;
   // Overlapping row slots fan the pile inside its retained column; each step is SPACE.s across and in height.
-  return row(Array.from({ length: 3 }, (_, i) => ({ w: SPACE.s, h: CARD.h - i * SPACE.s })), {
-    x: BTN_COL[1] - w - 2 * SPACE.s, y: -ROW4_Y + 6.5 - CARD.h / 2,
-  }).boxes.map(b => ({ ...b, w }));
+  return row(
+    Array.from({ length: 3 }, (_, i) => ({ w: SPACE.s, h: CARD.h - i * SPACE.s })),
+    {
+      x: BTN_COL[1] - w - 2 * SPACE.s,
+      y: -ROW4_Y + 6.5 - CARD.h / 2,
+    },
+  ).boxes.map((b) => ({ ...b, w }));
 }
 // (captionFit: the caption's fit, drawn captionY over the card's centre, as the action bar's cards fit their names;
 // loading: the game's loading ring turns in the caption's place, as on a button whose action is still loading)
-function stripCard(name, x, { w = CARD.w, h = CARD.h, thumb: pic = null, selected = false, dim = false, caption = "", body = "", placeholder = false, tone = "#ffffff",
-  captionFit = null, captionY = 0, loading = false } = {}) {
-  const vis = h - 13, cy = 6.5; // the visible body's centre sits 6.5 units above the widget's centre
-  const kids = [node("Line", [1, cy], [sprite("Common_Line_Raius20px", w - 10, vis, { incline: 10, depth: 9, color: "#bebebe/1.00" })])];
-  if (pic) kids.push(node("Thumb", [1, cy], [{ clipImage: pic, w_: w - 18, h_: vis - 8, pivot: 4, depth: 8, incline: 10, radius: 16, color: "#ffffff/1.00", imgSize: "cover", imgPosition: "center 50%" }]));
-  if (dim) kids.push(node("Dim", [1, cy], [sprite("Common_Bg_Raius20px", w - 12, vis - 4, { incline: 10, depth: 10, color: "#000000/0.50" })]));
+function stripCard(
+  name,
+  x,
+  {
+    w = CARD.w,
+    h = CARD.h,
+    thumb: pic = null,
+    selected = false,
+    dim = false,
+    caption = "",
+    body = "",
+    placeholder = false,
+    tone = "#ffffff",
+    captionFit = null,
+    captionY = 0,
+    loading = false,
+  } = {},
+) {
+  const vis = h - 13,
+    cy = 6.5; // the visible body's centre sits 6.5 units above the widget's centre
+  const kids = [
+    node(
+      "Line",
+      [1, cy],
+      [sprite("Common_Line_Raius20px", w - 10, vis, { incline: 10, depth: 9, color: "#bebebe/1.00" })],
+    ),
+  ];
+  if (pic)
+    kids.push(
+      node(
+        "Thumb",
+        [1, cy],
+        [
+          {
+            clipImage: pic,
+            w_: w - 18,
+            h_: vis - 8,
+            pivot: 4,
+            depth: 8,
+            incline: 10,
+            radius: 16,
+            color: "#ffffff/1.00",
+            imgSize: "cover",
+            imgPosition: "center 50%",
+          },
+        ],
+      ),
+    );
+  if (dim)
+    kids.push(
+      node(
+        "Dim",
+        [1, cy],
+        [sprite("Common_Bg_Raius20px", w - 12, vis - 4, { incline: 10, depth: 10, color: "#000000/0.50" })],
+      ),
+    );
   if (caption) {
-    const f = captionFit || fitText(caption, 56, 28, w - 50), ink = dim ? "#ffffff/1.00" : "#2c4564/1.00";
+    const f = captionFit || fitText(caption, 56, 28, w - 50),
+      ink = dim ? "#ffffff/1.00" : "#2c4564/1.00";
     const shown = label(f.text, f.fs, ink, w - 30, f.fs * 1.3 * f.lines, { depth: 12 });
-    kids.push(node("Caption", [0, cy + (loading ? 0 : captionY)],
-      [loading ? { loadingRing: true, w_: 82, h_: 82, pivot: 4, depth: 12, color: ink, fallback: shown } : shown]));
+    kids.push(
+      node(
+        "Caption",
+        [0, cy + (loading ? 0 : captionY)],
+        [loading ? { loadingRing: true, w_: 82, h_: 82, pivot: 4, depth: 12, color: ink, fallback: shown } : shown],
+      ),
+    );
   }
   if (body) {
     // a dialogue line: centred on the card, as large as fits in up to four lines; a longer line ends in an ellipsis
     // (the subtitle shows it in full). A placeholder (no line in the UI language) is grey and slanted.
-    let f = fitText(body, 40, 32, w - 52, 4), cut = body;
-    while (f.lines === 1 && glyphsOf(f.text, f.fs) > w - 52 && cut.length > 4) { cut = cut.slice(0, -2).trimEnd(); f = fitText(`${cut}…`, 40, 32, w - 52, 4); }
+    let f = fitText(body, 40, 32, w - 52, 4),
+      cut = body;
+    while (f.lines === 1 && glyphsOf(f.text, f.fs) > w - 52 && cut.length > 4) {
+      cut = cut.slice(0, -2).trimEnd();
+      f = fitText(`${cut}…`, 40, 32, w - 52, 4);
+    }
     const ink = placeholder ? "#8f9aa6/1.00" : "#2c4564/1.00";
-    kids.push(node("Body", [0, cy], [label(f.text, f.fs, ink, w - 40, f.fs * 1.3 * f.lines, { depth: 12, italic: placeholder })]));
+    kids.push(
+      node(
+        "Body",
+        [0, cy],
+        [label(f.text, f.fs, ink, w - 40, f.fs * 1.3 * f.lines, { depth: 12, italic: placeholder })],
+      ),
+    );
   }
-  if (selected) kids.push(node("Select", [1, cy], [sprite("Card_Select_Line_Blue", w + 6, vis + 8, { incline: 10, depth: 20 })],
-    [node("Check", [w / 2 - 30 + (vis / 2 - 26) * TAN10, vis / 2 - 26], [sprite("Common_Icon_Check_B", 56, 54, { type: 0, depth: 21 })])]));
-  return node(name, [x, ROW4_Y - cy], [sprite("Common_Btn_BG", w, h, { incline: 10, depth: 7, color: `${tone}/1.00` })], kids);
+  if (selected)
+    kids.push(
+      node(
+        "Select",
+        [1, cy],
+        [sprite("Card_Select_Line_Blue", w + 6, vis + 8, { incline: 10, depth: 20 })],
+        [
+          node(
+            "Check",
+            [w / 2 - 30 + (vis / 2 - 26) * TAN10, vis / 2 - 26],
+            [sprite("Common_Icon_Check_B", 56, 54, { type: 0, depth: 21 })],
+          ),
+        ],
+      ),
+    );
+  return node(
+    name,
+    [x, ROW4_Y - cy],
+    [sprite("Common_Btn_BG", w, h, { incline: 10, depth: 7, color: `${tone}/1.00` })],
+    kids,
+  );
 }
 
 // row 4 per tab: the portrait's faces, the memorial lobby's dialogues
@@ -1344,18 +2208,27 @@ function row4Items() {
   if (tab === "lobby") {
     // the dialogue's lines in the UI language, else a numbered placeholder
     return (Lobby.meta()?.sequences || []).map((sq) => {
-      const text = Lobby.textOf(sq).join(" "), none = T("lobby.dialogue", { n: sq.n });
+      const text = Lobby.textOf(sq).join(" "),
+        none = T("lobby.dialogue", { n: sq.n });
       return text ? { key: sq.anim, body: text } : { key: sq.anim, body: none, placeholder: true };
     });
   }
   if (tab === "model" && modelMenu) return barItems();
   // a story model's own cutscene clips read "Story 1", "Story 2", ...
-  if (tab === "model") return modelActions.map((a) => ({ key: a,
-    caption: /^story\d+$/.test(a) ? T("model.action.story", { n: a.slice(5) }) : T(`model.action.${a}`) }));
+  if (tab === "model")
+    return modelActions.map((a) => ({
+      key: a,
+      caption: /^story\d+$/.test(a) ? T("model.action.story", { n: a.slice(5) }) : T(`model.action.${a}`),
+    }));
   if (!spineAllowed()) return [];
   const base = currentBase();
   if (!base) return [];
-  const names = mainPlayer?.skeleton ? mainPlayer.skeleton.data.animations.map((a) => a.name).filter((n) => /^\d{2}$/.test(n)).sort() : [];
+  const names = mainPlayer?.skeleton
+    ? mainPlayer.skeleton.data.animations
+        .map((a) => a.name)
+        .filter((n) => /^\d{2}$/.test(n))
+        .sort()
+    : [];
   const request = thumbnailWork.thumb;
   return (names.length ? names : ["00"]).map((e) => ({ key: e, thumb: () => request(base, "face", e) }));
 }
@@ -1364,29 +2237,58 @@ function row4Items() {
 // are fetched.
 const playingAction = () => modelMenu?.find((a) => a.key === modelAction) || null;
 function barItems() {
-  const groups = menuOf(modelMenu), playing = playingAction(), names = groups.map((g) => groupLabel(g.id, T)), fits = fitCards(names);
+  const groups = menuOf(modelMenu),
+    playing = playingAction(),
+    names = groups.map((g) => groupLabel(g.id, T)),
+    fits = fitCards(names);
   ActionList.warm();
   return groups.map((g, i) => {
-    const now = playing?.group === g.id ? actionLabel(playing, T) : null, text = cardText(fits[i], now);
-    return { key: `group:${g.id}`, group: g, caption: now || names[i], captionFit: text.name, captionY: text.nameY,
-      loading: !!now && actionLoad?.key === playing.key };
+    const now = playing?.group === g.id ? actionLabel(playing, T) : null,
+      text = cardText(fits[i], now);
+    return {
+      key: `group:${g.id}`,
+      group: g,
+      caption: now || names[i],
+      captionFit: text.name,
+      captionY: text.nameY,
+      loading: !!now && actionLoad?.key === playing.key,
+    };
   });
 }
 // the bar's key of an action model.js names when it changes by itself (a tap's reaction, the idle after it)
-const actionKey = (name) => (modelMenu?.find((a) => a.key === name) || modelMenu?.find((a) => a.id === name && (a.form || 0) <= 1))?.key || name;
-const row4Selected = () => (tab === "lobby" ? lobbySeq : tab === "model" && modelMenu ? `group:${playingAction()?.group}`
-  : tab === "model" ? modelAction : expression);
+const actionKey = (name) =>
+  (modelMenu?.find((a) => a.key === name) || modelMenu?.find((a) => a.id === name && (a.form || 0) <= 1))?.key || name;
+const row4Selected = () =>
+  tab === "lobby"
+    ? lobbySeq
+    : tab === "model" && modelMenu
+      ? `group:${playingAction()?.group}`
+      : tab === "model"
+        ? modelAction
+        : expression;
 // A group card pressed: its action list opens over it (action-list.js); the same card closes it, another group's
 // switches to that one. A picked action plays (pickAction) and the list closes.
 let barCards = new Map(); // group card key -> its centre x in units, unscrolled
 function toggleGroup(item) {
-  if (ActionList.openGroup() === item.key) { ActionList.close(); return; }
+  if (ActionList.openGroup() === item.key) {
+    ActionList.close();
+    return;
+  }
   const anchor = () => {
     const x = barCards.get(item.key) - (document.querySelector(".expr-clip")?.scrollLeft || 0) / S;
     return { left: x - CARD.w / 2, right: x + CARD.w / 2, top: ROW4_Y + (CARD.h - 13) / 2 };
   };
-  ActionList.open({ host: $("ngui-expr").parentElement, group: item.key, anchor, sections: item.group.sections, selected: modelAction,
-    onPick: (key) => { const a = modelMenu?.find((x) => x.key === key); if (tab === "model" && a) void pickAction(a); } }).catch(renderFailed);
+  ActionList.open({
+    host: $("ngui-expr").parentElement,
+    group: item.key,
+    anchor,
+    sections: item.group.sections,
+    selected: modelAction,
+    onPick: (key) => {
+      const a = modelMenu?.find((x) => x.key === key);
+      if (tab === "model" && a) void pickAction(a);
+    },
+  }).catch(renderFailed);
 }
 // An action picked on the bar plays at once when its clips are there (the model's GLB carries today's actions;
 // others added before). Else they are fetched (model.js loadClips: the model route's ?clip=, from the shown model's
@@ -1398,15 +2300,30 @@ const CLIP_CAP = 15000;
 async function pickAction(a) {
   stopActionLoad();
   const M = await ModelLib();
-  if (M.playAction(a)) { modelAction = a.key; keepScroll(); renderExpressions(); return; }
-  const v = variant(), run = costumeRun, before = M.current() ?? modelAction, abort = new AbortController();
+  if (M.playAction(a)) {
+    modelAction = a.key;
+    keepScroll();
+    renderExpressions();
+    return;
+  }
+  const v = variant(),
+    run = costumeRun,
+    before = M.current() ?? modelAction,
+    abort = new AbortController();
   const load = (actionLoad = { key: a.key, abort });
   modelAction = a.key;
-  keepScroll(); renderExpressions();
-  let played = false, failure = null;
+  keepScroll();
+  renderExpressions();
+  let played = false,
+    failure = null;
   try {
-    played = await withPreviewTimeout(M.loadClips(a.clips, { signal: abort.signal }), CLIP_CAP, "model clips", { signal: abort.signal })
-      && costumesWanted(v, run) && actionLoad === load && M.playAction(a);
+    played =
+      (await withPreviewTimeout(M.loadClips(a.clips, { signal: abort.signal }), CLIP_CAP, "model clips", {
+        signal: abort.signal,
+      })) &&
+      costumesWanted(v, run) &&
+      actionLoad === load &&
+      M.playAction(a);
   } catch (err) {
     failure = err;
     abort.abort(); // past its deadline: the request too
@@ -1418,7 +2335,10 @@ async function pickAction(a) {
     previewError(failure, a.clips.join(","), "model-clip");
     notify(T("detail.failed"), { kind: "error", error: failure });
   }
-  if (costumesWanted(v, run)) { keepScroll(); renderExpressions(); }
+  if (costumesWanted(v, run)) {
+    keepScroll();
+    renderExpressions();
+  }
 }
 function stopActionLoad() {
   const load = actionLoad;
@@ -1427,11 +2347,16 @@ function stopActionLoad() {
 }
 function row4Pick(key) {
   // the card follows the dialogue through Lobby.onTalk: selected while it plays, let go when it ends
-  if (tab === "lobby") { if (Lobby.playing() === key) Lobby.stop(); else Lobby.play(key); }
-  else if (tab === "model") {
+  if (tab === "lobby") {
+    if (Lobby.playing() === key) Lobby.stop();
+    else Lobby.play(key);
+  } else if (tab === "model") {
     modelAction = key;
     modelLib?.then((M) => M.play(key));
-  } else { expression = key; applyExpression(); }
+  } else {
+    expression = key;
+    applyExpression();
+  }
 }
 // play every dialogue in order; the cards and the play-all button follow along (Lobby.onTalk)
 function togglePlayAll() {
@@ -1451,26 +2376,48 @@ Lobby.onTalk((anim, all) => {
   if (button) renderScreen();
 });
 
-function renderExpressions() { return drawExpressions().catch(renderFailed); }
+function renderExpressions() {
+  return drawExpressions().catch(renderFailed);
+}
 async function drawExpressions() {
-  const my = ++exprToken, gen = showGen;
+  const my = ++exprToken,
+    gen = showGen;
   const ok = () => showable("expr", my, exprToken, gen);
   const host = $("ngui-expr");
   // the 3D tab's action bar: every group card in a row that scrolls, no pile; its open list stays over a redraw of
   // the bar and closes when the bar goes
   const bar = tab === "model" && !!modelMenu;
   if (!bar) ActionList.close();
-  const list = row4Items(), sel = row4Selected(), unfolded = expanded || bar, pics = [], thumbs = [];
-  const picture = (it) => typeof it.thumb === "function" ? it.thumb() : it.thumb;
-  const placed = (name, box, options) => Object.assign(stripCard(name, 0, { w: box.w, h: box.h, ...options }), { pos: toNode(box, 4, LOCAL_FRAME) });
-  const cardOf = (it, box) => placed(`Item_${it.key}`, box, { thumb: picture(it), body: it.body, placeholder: it.placeholder, caption: it.caption, selected: it.key === sel,
-    captionFit: it.captionFit, captionY: it.captionY, loading: it.loading });
+  const list = row4Items(),
+    sel = row4Selected(),
+    unfolded = expanded || bar,
+    pics = [],
+    thumbs = [];
+  const picture = (it) => (typeof it.thumb === "function" ? it.thumb() : it.thumb);
+  const placed = (name, box, options) =>
+    Object.assign(stripCard(name, 0, { w: box.w, h: box.h, ...options }), { pos: toNode(box, 4, LOCAL_FRAME) });
+  const cardOf = (it, box) =>
+    placed(`Item_${it.key}`, box, {
+      thumb: picture(it),
+      body: it.body,
+      placeholder: it.placeholder,
+      caption: it.caption,
+      selected: it.key === sel,
+      captionFit: it.captionFit,
+      captionY: it.captionY,
+      loading: it.loading,
+    });
   const cards = [];
   if (unfolded || list.length <= 4) {
     const boxes = expressionBoxes(list.length + (expanded && !bar ? 1 : 0));
     list.forEach((it, i) => cards.push({ tree: cardOf(it, boxes[i]), item: it }));
     if (bar) barCards = new Map(cards.map((cd) => [cd.item.key, cd.tree.pos[0]]));
-    if (expanded && !bar) cards.push({ tree: placed("Fold", boxes.at(-1), { caption: T("fold.label"), tone: "#eef4f8" }), fold: true, name: T("fold.label") });
+    if (expanded && !bar)
+      cards.push({
+        tree: placed("Fold", boxes.at(-1), { caption: T("fold.label"), tone: "#eef4f8" }),
+        fold: true,
+        name: T("fold.label"),
+      });
   } else {
     // three cards; a chosen item further along takes the third card so it stays in view
     const shown = list.slice(0, 3);
@@ -1483,38 +2430,81 @@ async function drawExpressions() {
     const pile = pileBoxes();
     cards.push({ tree: placed("Pile_2", pile[2], { tone: "#dfe8ef" }), pile: true, z: 100 });
     cards.push({ tree: placed("Pile_1", pile[1], { tone: "#eef4f8" }), pile: true, z: 140 });
-    cards.push({ tree: placed("Pile_0", pile[0], { thumb: picture(rest[0]), dim: !!rest[0].thumb, caption: `+${rest.length}`, tone: rest[0].thumb ? "#ffffff" : "#d3dee8" }),
-      pile: true, name: T("chips.more", { n: rest.length }), z: 180 });
+    cards.push({
+      tree: placed("Pile_0", pile[0], {
+        thumb: picture(rest[0]),
+        dim: !!rest[0].thumb,
+        caption: `+${rest.length}`,
+        tone: rest[0].thumb ? "#ffffff" : "#d3dee8",
+      }),
+      pile: true,
+      name: T("chips.more", { n: rest.length }),
+      z: 180,
+    });
   }
   // clip: the row's height, from the box's slanted right edge to the row's inner right edge
-  const Lx = 300, Rx = 1316, TOPU = -436, BOTU = -670;
+  const Lx = 300,
+    Rx = 1316,
+    TOPU = -436,
+    BOTU = -670;
   const [cl, ct] = toStage(Lx, TOPU);
   const clip = document.createElement("div");
   clip.className = "expr-clip";
-  Object.assign(clip.style, { left: `${cl}px`, top: `${ct}px`, width: `${(Rx - Lx) * S}px`, height: `${(TOPU - BOTU) * S}px` });
-  const edgeTop = BOX_RIGHT + (TOPU - ROW4_Y) * TAN10 + 5 - Lx, edgeBottom = BOX_RIGHT + (BOTU - ROW4_Y) * TAN10 + 5 - Lx;
+  Object.assign(clip.style, {
+    left: `${cl}px`,
+    top: `${ct}px`,
+    width: `${(Rx - Lx) * S}px`,
+    height: `${(TOPU - BOTU) * S}px`,
+  });
+  const edgeTop = BOX_RIGHT + (TOPU - ROW4_Y) * TAN10 + 5 - Lx,
+    edgeBottom = BOX_RIGHT + (BOTU - ROW4_Y) * TAN10 + 5 - Lx;
   clip.style.clipPath = `polygon(${edgeTop * S}px 0, 100% 0, 100% 100%, ${edgeBottom * S}px 100%)`;
   const track = document.createElement("div");
   track.className = "expr-track";
   clip.appendChild(track);
   const origin = [ORIGIN[0] - cl, ORIGIN[1] - ct];
-  await Promise.all(cards.map(async (cd) => {
-    const view = await NGUI.render(cd.tree, track, { scale: S, origin, z: cd.z || 30, textureNames: TEXTURES, deferImages: true });
-    pics.push(...view.images);
-    thumbs.push(...view.thumbnails);
-    const body = view.nodes.get(cd.tree.name)?.els[0];
-    if (!body || (cd.pile && cd.tree.name !== "Pile_0")) return;
-    const strip = hitButton(track, rect(body), () => {
-      if (cd.item?.group) toggleGroup(cd.item);
-      else if (cd.item) { row4Pick(cd.item.key); keepScroll(); renderExpressions(); }
-      if (cd.pile) { expanded = true; exprScroll = 0; renderExpressions(); }
-      if (cd.fold) { expanded = false; renderExpressions(); }
-    }, cd.name || cd.item?.body || cd.item?.caption || (cd.item ? faceName(cd.item.key) : ""), 260);
-    // the strip's cards pick one item: the picked one is pressed; a group card opens its list (action-list.js), and a
-    // press on one is not outside the open list
-    if (cd.item) strip.setAttribute("aria-pressed", String(cd.item.key === sel));
-    if (cd.item?.group) strip.dataset.actionGroup = cd.item.group.id;
-  }));
+  await Promise.all(
+    cards.map(async (cd) => {
+      const view = await NGUI.render(cd.tree, track, {
+        scale: S,
+        origin,
+        z: cd.z || 30,
+        textureNames: TEXTURES,
+        deferImages: true,
+      });
+      pics.push(...view.images);
+      thumbs.push(...view.thumbnails);
+      const body = view.nodes.get(cd.tree.name)?.els[0];
+      if (!body || (cd.pile && cd.tree.name !== "Pile_0")) return;
+      const strip = hitButton(
+        track,
+        rect(body),
+        () => {
+          if (cd.item?.group) toggleGroup(cd.item);
+          else if (cd.item) {
+            row4Pick(cd.item.key);
+            keepScroll();
+            renderExpressions();
+          }
+          if (cd.pile) {
+            expanded = true;
+            exprScroll = 0;
+            renderExpressions();
+          }
+          if (cd.fold) {
+            expanded = false;
+            renderExpressions();
+          }
+        },
+        cd.name || cd.item?.body || cd.item?.caption || (cd.item ? faceName(cd.item.key) : ""),
+        260,
+      );
+      // the strip's cards pick one item: the picked one is pressed; a group card opens its list (action-list.js), and a
+      // press on one is not outside the open list
+      if (cd.item) strip.setAttribute("aria-pressed", String(cd.item.key === sel));
+      if (cd.item?.group) strip.dataset.actionGroup = cd.item.group.id;
+    }),
+  );
   if (!ok()) return; // a newer render took over (e.g. the tab changed while faces were rendering)
   if (my === exprToken) {
     exprPics = [picturesReady(pics, clip)];
@@ -1523,16 +2513,19 @@ async function drawExpressions() {
   if (unfolded) {
     clip.classList.add("expanded");
     const last = cards.at(-1).tree;
-    const width = (Rx - Lx) * S, contentW = (last.pos[0] + CARD.w / 2 + SPACE.m - Lx) * S;
+    const width = (Rx - Lx) * S,
+      contentW = (last.pos[0] + CARD.w / 2 + SPACE.m - Lx) * S;
     track.style.width = `${contentW}px`;
     // the wheel, a mouse drag and touch scroll the strip as the popups' card rows do (Popup.scrollArea); a drag picks nothing
     horizontalScroll(clip, width, contentW);
     // an open action list follows its card; it closes once the card has left the row
-    if (bar) clip.addEventListener("scroll", () => {
-      exprScroll = clip.scrollLeft;
-      const x = barCards.get(ActionList.openGroup()) - clip.scrollLeft / S;
-      if (x < Lx || x > Rx) ActionList.close(); else ActionList.follow();
-    });
+    if (bar)
+      clip.addEventListener("scroll", () => {
+        exprScroll = clip.scrollLeft;
+        const x = barCards.get(ActionList.openGroup()) - clip.scrollLeft / S;
+        if (x < Lx || x > Rx) ActionList.close();
+        else ActionList.follow();
+      });
   }
   commit(() => {
     if (!ok()) return;
@@ -1543,7 +2536,9 @@ async function drawExpressions() {
 }
 // a portrait face's name, as the camera's expression list has it
 const faceName = (key) => (key === "00" ? T("photo.natural") : `${T("photo.expressions")} ${key}`);
-const keepScroll = () => { exprScroll = document.querySelector(".expr-clip")?.scrollLeft || 0; };
+const keepScroll = () => {
+  exprScroll = document.querySelector(".expr-clip")?.scrollLeft || 0;
+};
 
 // --- main Spine portrait ---
 // loadSpine(base) -> Promise, resolved once the portrait's first frame is drawn and the expression strip shows its
@@ -1569,10 +2564,19 @@ async function showSpine(base, my, signal) {
     for (const old of layers) {
       if (old.retired) continue;
       old.retired = true;
-      if (batch || Loading.covering()) { old.load?.dispose(); old.remove(); continue; }
+      if (batch || Loading.covering()) {
+        old.load?.dispose();
+        old.remove();
+        continue;
+      }
       old.classList.add("fading");
       // disposePortrait() may have freed it meanwhile (a quick second step)
-      setTimeout(() => { if (old.isConnected) { old.load?.dispose(); old.remove(); } }, 400);
+      setTimeout(() => {
+        if (old.isConnected) {
+          old.load?.dispose();
+          old.remove();
+        }
+      }, 400);
     }
   };
   if (!allowed) {
@@ -1586,7 +2590,10 @@ async function showSpine(base, my, signal) {
       layer.appendChild(image);
       await decodeAll([portrait], () => image.decode?.(), HARD_CAP, { signal });
     }
-    if (signal.aborted || my !== spineToken) { layer.remove(); return; }
+    if (signal.aborted || my !== spineToken) {
+      layer.remove();
+      return;
+    }
     commit(() => {
       if (signal.aborted || my !== spineToken) return;
       layer.classList.remove("fading");
@@ -1596,78 +2603,106 @@ async function showSpine(base, my, signal) {
   }
   prioritise(base);
   try {
-    await loadSpineAssets(base, async (resolved) => {
-      if (signal.aborted || my !== spineToken) { layer.remove(); return; }
-      layer.load?.dispose();
-      layer.replaceChildren();
-      const load = layer.load = loadPlayer((config) => new spine.SpinePlayer(layer, config), {
-        // the idle is set in success(): some NPC skeletons have no Idle_01, and spine-player fails on a missing one
-        skeleton: `${resolved}.skel`, atlas: `${resolved}.atlas`, animation: undefined,
-        premultipliedAlpha: false, alpha: true, backgroundColor: "#00000000",
-        showControls: false, showLoading: false, preserveDrawingBuffer: true,
-        // framed like the game (portrait-view.js), never on the skeleton's bounds; no viewport transition:
-        // spine-player starts it from an undefined viewport and draws nothing meanwhile
-        viewport: detailViewport(),
-        // the visual mode (visual-mode.js) frames it while it is open
-        frame: (p) => Visual.frame(p),
-        success: async (player, live) => {
-          // before the first await: once this returns, spine-player frames the view on track 0's animation and plays.
-          // With nothing on track 0 it would pause (no face, no blink): a skeleton without an idle gets an empty
-          // animation there that never ends, so it keeps its setup pose and the faces on tracks 1-2 still play.
-          const idle = idleAnimation(player.skeleton.data);
-          if (idle) player.animationState.setAnimation(0, idle, true);
-          else player.animationState.setEmptyAnimation(0, 0).trackEnd = Number.MAX_VALUE;
-          if (my !== spineToken || !live()) return; // a newer portrait took over; it retires this layer
-          mainPlayer = player;
-          applyExpression();
-          await renderExpressions(); // the faces come from this skeleton
-          await frames(2);           // its first frame is on the canvas
-          commit(() => {
-            if (my !== spineToken || !live()) return;
-            if (batch || Loading.covering()) layer.style.transition = "none";
-            layer.classList.remove("fading");
-            retire(previous);
-          });
-        },
-      }, { signal,
-        onRecover: () => {
-          if (open && !signal.aborted && my === spineToken) loadSpine(base).catch((err) => renderFailed(err, base));
-        },
-        onError: (err) => {
-          if (signal.aborted || my !== spineToken) return;
-          clearTimeout(blinkTimer); mainPlayer = null;
-          layer.querySelector(".spine-player-error")?.remove();
-          retire([layer]);
-          renderFailed(err, base);
-        },
-      });
-      layer.player = load.player;
-      await load.ready;
-    }, { signal });
+    await loadSpineAssets(
+      base,
+      async (resolved) => {
+        if (signal.aborted || my !== spineToken) {
+          layer.remove();
+          return;
+        }
+        layer.load?.dispose();
+        layer.replaceChildren();
+        const load = (layer.load = loadPlayer(
+          (config) => new spine.SpinePlayer(layer, config),
+          {
+            // the idle is set in success(): some NPC skeletons have no Idle_01, and spine-player fails on a missing one
+            skeleton: `${resolved}.skel`,
+            atlas: `${resolved}.atlas`,
+            animation: undefined,
+            premultipliedAlpha: false,
+            alpha: true,
+            backgroundColor: "#00000000",
+            showControls: false,
+            showLoading: false,
+            preserveDrawingBuffer: true,
+            // framed like the game (portrait-view.js), never on the skeleton's bounds; no viewport transition:
+            // spine-player starts it from an undefined viewport and draws nothing meanwhile
+            viewport: detailViewport(),
+            // the visual mode (visual-mode.js) frames it while it is open
+            frame: (p) => Visual.frame(p),
+            success: async (player, live) => {
+              // before the first await: once this returns, spine-player frames the view on track 0's animation and plays.
+              // With nothing on track 0 it would pause (no face, no blink): a skeleton without an idle gets an empty
+              // animation there that never ends, so it keeps its setup pose and the faces on tracks 1-2 still play.
+              const idle = idleAnimation(player.skeleton.data);
+              if (idle) player.animationState.setAnimation(0, idle, true);
+              else player.animationState.setEmptyAnimation(0, 0).trackEnd = Number.MAX_VALUE;
+              if (my !== spineToken || !live()) return; // a newer portrait took over; it retires this layer
+              mainPlayer = player;
+              applyExpression();
+              await renderExpressions(); // the faces come from this skeleton
+              await frames(2); // its first frame is on the canvas
+              commit(() => {
+                if (my !== spineToken || !live()) return;
+                if (batch || Loading.covering()) layer.style.transition = "none";
+                layer.classList.remove("fading");
+                retire(previous);
+              });
+            },
+          },
+          {
+            signal,
+            onRecover: () => {
+              if (open && !signal.aborted && my === spineToken) loadSpine(base).catch((err) => renderFailed(err, base));
+            },
+            onError: (err) => {
+              if (signal.aborted || my !== spineToken) return;
+              clearTimeout(blinkTimer);
+              mainPlayer = null;
+              layer.querySelector(".spine-player-error")?.remove();
+              retire([layer]);
+              renderFailed(err, base);
+            },
+          },
+        ));
+        layer.player = load.player;
+        await load.ready;
+      },
+      { signal },
+    );
     if (signal.aborted || my !== spineToken) layer.remove();
   } catch (err) {
     if (!signal.aborted && my === spineToken) renderFailed(err, base);
     // spine-player's own error box (black, with the message) never shows: the message popup says it
     layer.querySelector(".spine-player-error")?.remove();
     if (my === spineToken) {
-      if (mainPlayer === layer.player) { clearTimeout(blinkTimer); mainPlayer = null; } // it broke after it was shown
-      commit(() => { if (my === spineToken) retire([...previous, layer]); });
+      if (mainPlayer === layer.player) {
+        clearTimeout(blinkTimer);
+        mainPlayer = null;
+      } // it broke after it was shown
+      commit(() => {
+        if (my === spineToken) retire([...previous, layer]);
+      });
     }
   }
 }
 // the detail screen's portrait framing: the skeleton's origin on CharacterPos
-const detailViewport = () => portraitViewport(layouts && find(layouts.list, "CharacterPos"), { origin: ORIGIN, s: S, box: PORTRAIT_BOX });
+const detailViewport = () =>
+  portraitViewport(layouts && find(layouts.list, "CharacterPos"), { origin: ORIGIN, s: S, box: PORTRAIT_BOX });
 function scheduleBlink(player) {
   clearTimeout(blinkTimer);
   if (expression !== "00" || mainPlayer !== player) return;
-  blinkTimer = setTimeout(() => {
-    if (expression !== "00" || mainPlayer !== player) return;
-    if (player.skeleton?.data.findAnimation("Eye_Close_01")) {
-      player.animationState.setAnimation(2, "Eye_Close_01", false);
-      player.animationState.addEmptyAnimation(2, 0.1, 0);
-    }
-    scheduleBlink(player);
-  }, 2500 + Math.random() * 3500);
+  blinkTimer = setTimeout(
+    () => {
+      if (expression !== "00" || mainPlayer !== player) return;
+      if (player.skeleton?.data.findAnimation("Eye_Close_01")) {
+        player.animationState.setAnimation(2, "Eye_Close_01", false);
+        player.animationState.addEmptyAnimation(2, 0.1, 0);
+      }
+      scheduleBlink(player);
+    },
+    2500 + Math.random() * 3500,
+  );
 }
 function applyExpression() {
   clearTimeout(blinkTimer);
@@ -1679,7 +2714,10 @@ function disposePortrait() {
   clearTimeout(blinkTimer);
   spineToken += 1;
   portraitLoads.cancel();
-  for (const l of $("portrait").querySelectorAll(".layer")) { l.load?.dispose(); l.remove(); }
+  for (const l of $("portrait").querySelectorAll(".layer")) {
+    l.load?.dispose();
+    l.remove();
+  }
   mainPlayer = null;
 }
 
@@ -1691,63 +2729,147 @@ function disposePortrait() {
 // While mods are off the popup saves the choice instead of writing it (popupMode): it starts on the configured source,
 // whose card carries "Set", and its button reads Save. On an overwritten kind its cards are greyed (switch-sources.js):
 // a click on one opens the entry's Add First or Overwritten message instead of choosing it.
-let popupSeg = 0, popupKind = "spr", popupStart = null, switchPopupPage = null;
+let popupSeg = 0,
+  popupKind = "spr",
+  popupStart = null,
+  switchPopupPage = null;
 let switchThumbnails = null;
 const modsOn = () => modsState()?.enabled !== false;
 const GREYED_BADGE = () => ({ text: T("mods.overwritten"), color: COLOUR.greyed, ink: "#ffffff" });
-function renderPopup(scroll = 0) { return drawPopup(scroll).catch(renderFailed); }
+function renderPopup(scroll = 0) {
+  return drawPopup(scroll).catch(renderFailed);
+}
 async function drawPopup(scroll = 0) {
   if (!switchThumbnails || switchPopupPage !== pageToken) return;
-  const v = variant(), kind = popupKind, applied = intendedKey(v, kind);
+  const v = variant(),
+    kind = popupKind,
+    applied = intendedKey(v, kind);
   const mode = popupMode(fam, v, kind, modsOn(), otherStudents);
   const own = candidates(v, kind);
   const item = (c) => {
     const work = switchThumbnails;
-    const picture = lazyThumbnail(() => kind === "model" ? modelPicture(c, v, work)
-      : thumb(baseOf(c, kind), kind === "spr" ? "portrait" : "landscape", null, kind === "lobby", specialFraming(v), (c.origin || c.variant || v).bg, work), work.signal);
+    const picture = lazyThumbnail(
+      () =>
+        kind === "model"
+          ? modelPicture(c, v, work)
+          : thumb(
+              baseOf(c, kind),
+              kind === "spr" ? "portrait" : "landscape",
+              null,
+              kind === "lobby",
+              specialFraming(v),
+              (c.origin || c.variant || v).bg,
+              work,
+            ),
+      work.signal,
+    );
     return {
-      key: c.key, kind: c.kind, recruit: c.kind !== "mod" && c.recruit,
+      key: c.key,
+      kind: c.kind,
+      recruit: c.kind !== "mod" && c.recruit,
       label: candidateLabel(c, v),
       full: c.kind === "mod" ? c.label : fullName(c.variant),
       original: c.cross ? originalName(c.variant) : c.mod?.alias ? modOriginalName(c.mod) : "",
-      nameEdit: c.kind === "mod" ? { label: T("modAlias.title"), fn: (s = scroll) => editModName(c.mod,
-        () => switchPopupPage === pageToken && !$("popup").hidden ? renderPopup(s) : null) } : null,
+      nameEdit:
+        c.kind === "mod"
+          ? {
+              label: T("modAlias.title"),
+              fn: (s = scroll) =>
+                editModName(c.mod, () => (switchPopupPage === pageToken && !$("popup").hidden ? renderPopup(s) : null)),
+            }
+          : null,
       // The card and info panel consume one still, including its fallback, so they cannot disagree after a retry.
-      thumb: picture, big: () => picture.start(),
-      inUse: false, applied: !!coreOf(v, kind) && c.key === applied, fav: c.fav, isNew: c.kind === "mod" && c.mod.fresh && c.key !== applied, src: c,
-      inUseText: c.mod?.incomplete ? T("mods.incomplete") : coreOf(v, kind) && c.key === applied ? T("status.applied") : null,
+      thumb: picture,
+      big: () => picture.start(),
+      inUse: false,
+      applied: !!coreOf(v, kind) && c.key === applied,
+      fav: c.fav,
+      isNew: c.kind === "mod" && c.mod.fresh && c.key !== applied,
+      src: c,
+      inUseText: c.mod?.incomplete
+        ? T("mods.incomplete")
+        : coreOf(v, kind) && c.key === applied
+          ? T("status.applied")
+          : null,
       dim: c.greyed,
       // past-limit own costumes and another student's model carry their caution on hover
       // what the game may draw differently (cautionKey); past the limit, another student's model say more
       ...(cautionKey(c) ? { hint: T(cautionKey(c)) } : {}),
       ...(c.beyondFit ? { hint: T("model.beyondFit") } : {}),
       ...crossExtras(c, T("model.crossCharacter")),
-      badge: c.greyed ? { ...GREYED_BADGE(), ...(!coreOf(v, kind) && c.kind === "self" ? { text: T("import.reason.no_target") } : {}) }
-        : c.mod?.incomplete ? { text: T("mods.incomplete"), color: COLOUR.warning, ink: "#ffffff" }
-        : null,
-      tag: c.mod?.repaired_from ? { text: T("remap.repaired"), color: "#d7eaf4", ink: "#2d4664" }
-        : c.mod?.optimized_from ? { text: T("model.optimized"), color: "#d7eaf4", ink: "#2d4664" } : null,
+      badge: c.greyed
+        ? {
+            ...GREYED_BADGE(),
+            ...(!coreOf(v, kind) && c.kind === "self" ? { text: T("import.reason.no_target") } : {}),
+          }
+        : c.mod?.incomplete
+          ? { text: T("mods.incomplete"), color: COLOUR.warning, ink: "#ffffff" }
+          : null,
+      tag: c.mod?.repaired_from
+        ? { text: T("remap.repaired"), color: "#d7eaf4", ink: "#2d4664" }
+        : c.mod?.optimized_from
+          ? { text: T("model.optimized"), color: "#d7eaf4", ink: "#2d4664" }
+          : null,
     };
   };
-  const items = own.map(item)
+  const items = own
+    .map(item)
     .filter((it) => popupSeg === 0 || (popupSeg === 1) === !!it.recruit)
     .sort((a, b) => (b.fav ? 1 : 0) - (a.fav ? 1 : 0));
   // a search adds the other students' models after the matching cards
-  const more = kind === "model" && coreOf(v, kind) ? (query) => crossItems(v, query, own.map((c) => c.key), item) : null;
+  const more =
+    kind === "model" && coreOf(v, kind)
+      ? (query) =>
+          crossItems(
+            v,
+            query,
+            own.map((c) => c.key),
+            item,
+          )
+      : null;
   await listPopup({
-    hostId: "popup", layoutKind: kind, title: T(isSpecial(v) ? "special.switch" : kind === "spr" ? "popup.switch" : `row.switch.${kind}`), okText: T(mode.button), okSemantic: "save", cancelText: T("popup.cancel"), items, selected: pending, keepScroll: scroll,
-    tools: { segs: ["seg.all", "seg.recruit", "seg.noRecruit"], seg: popupSeg, onSeg: (i) => { popupSeg = i; renderPopup(); }, sortKey: "sort.default", more,
+    hostId: "popup",
+    layoutKind: kind,
+    title: T(isSpecial(v) ? "special.switch" : kind === "spr" ? "popup.switch" : `row.switch.${kind}`),
+    okText: T(mode.button),
+    okSemantic: "save",
+    cancelText: T("popup.cancel"),
+    items,
+    selected: pending,
+    keepScroll: scroll,
+    tools: {
+      segs: ["seg.all", "seg.recruit", "seg.noRecruit"],
+      seg: popupSeg,
+      onSeg: (i) => {
+        popupSeg = i;
+        renderPopup();
+      },
+      sortKey: "sort.default",
+      more,
       // the icon toggle lists every other student's model (an icon in the toolbar); the cards in view are
       // the ones judged
-      ...(more ? { toggle: { label: T("model.showOthers"), checked: showOthers(), onChange: (on) => { setShowOthers(on); crossShown = []; } },
-        onView: (keys) => viewCross(v, keys) } : {}) },
+      ...(more
+        ? {
+            toggle: {
+              label: T("model.showOthers"),
+              checked: showOthers(),
+              onChange: (on) => {
+                setShowOthers(on);
+                crossShown = [];
+              },
+            },
+            onView: (keys) => viewCross(v, keys),
+          }
+        : {}),
+    },
     onSelect: (key, s) => {
       const c = candidates(v, kind).find((x) => x.key === key);
       if (c?.kind === "mod") markSeen([c.mod], s);
       pending = key;
       renderPopup(s);
     },
-    onOk: () => closePopup(true), onClose: () => closePopup(false),
+    onOk: () => closePopup(true),
+    onClose: () => closePopup(false),
     details: (it) => {
       const c = it.src;
       const file = c.kind === "mod" ? c.mod.file : gameFile(c.variant, kind);
@@ -1755,34 +2877,113 @@ async function drawPopup(scroll = 0) {
       // File and Size; no State or CRC rows (the chips say what is applied): only a problem shows, a
       // row of its own in the warning colour (no file of this kind in the game, the configured choice's error)
       const error = c.key === mode.set ? selectionError(v, kind) : null;
-      const problem = [!coreOf(v, kind) && T("import.reason.no_target"), error && T(`error.${error.code}`, error.params)].filter(Boolean).join("\n");
+      const problem = [
+        !coreOf(v, kind) && T("import.reason.no_target"),
+        error && T(`error.${error.code}`, error.params),
+      ]
+        .filter(Boolean)
+        .join("\n");
       // its costume check under way: Apply and Optimize Physics show the loading ring until the verdict lands
       const checking = !!coreOf(v, kind) && !c.greyed && costumeChecking(v, kind, c.key);
       return {
         title: T(isSpecial(v) ? "special.background" : kind === "spr" ? "info.title.portrait" : `info.title.${kind}`),
-        fields: [[T("field.file"), baseName(file)], [T("field.size"), sizeText(size)], ...(problem ? [[null, problem, `${COLOUR.warning}/1.00`]] : [])],
+        fields: [
+          [T("field.file"), baseName(file)],
+          [T("field.size"), sizeText(size)],
+          ...(problem ? [[null, problem, `${COLOUR.warning}/1.00`]] : []),
+        ],
         truncate: true,
-        actions: [[T("popup.apply"), () => applyCandidate(c.key, kind), !coreOf(v, kind) || isApplied(v, kind, c.key) || !!c.greyed || !!c.previewOnly || !!c.pending || busy, "apply",
-          checking ? null : c.previewOnly ? T("model.unfit") : c.beyondFit ? T("model.beyondFit") : cautionKey(c) ? T(cautionKey(c)) : null, checking && !isApplied(v, kind, c.key)],
+        actions: [
+          [
+            T("popup.apply"),
+            () => applyCandidate(c.key, kind),
+            !coreOf(v, kind) || isApplied(v, kind, c.key) || !!c.greyed || !!c.previewOnly || !!c.pending || busy,
+            "apply",
+            checking
+              ? null
+              : c.previewOnly
+                ? T("model.unfit")
+                : c.beyondFit
+                  ? T("model.beyondFit")
+                  : cautionKey(c)
+                    ? T(cautionKey(c))
+                    : null,
+            checking && !isApplied(v, kind, c.key),
+          ],
           [T(platform === "mac" ? "open.mac" : "open.win"), () => reveal(file)],
-          ...(c.kind === "mod" ? [[T("compatibility.check"), async () => {
-            let rebuilt = false;
-            await call(() => Compatibility.check(c.id, c.label, () => { rebuilt = true; return remapped(); }, c.mod, modProgressName(c)));
-            if (open && !rebuilt) await renderPopup();
-          }], ...(repairedId(c) ? [[T("remap.go"), () => jumpRepaired(c)]] : [[T("act.update"), () => runUpdate(c)]])] : []),
-          ...(kind === "model" && optimizeSource(c) ? [optimizedCopy(c, v)
-            ? [T("model.optimizedGo"), () => { pending = `m:${optimizedCopy(c, v).id}`; renderPopup(); }]
-            : [T("model.optimize"), () => runOptimize(c, v), busy || !!c.greyed || !!c.previewOnly || !!c.pending || !coreOf(v, kind), "secondary",
-              checking ? null : c.previewOnly ? T("model.unfit") : c.beyondFit ? T("model.beyondFit") : T("model.optimizeHint"), checking]] : []),
+          ...(c.kind === "mod"
+            ? [
+                [
+                  T("compatibility.check"),
+                  async () => {
+                    let rebuilt = false;
+                    await call(() =>
+                      Compatibility.check(
+                        c.id,
+                        c.label,
+                        () => {
+                          rebuilt = true;
+                          return remapped();
+                        },
+                        c.mod,
+                        modProgressName(c),
+                      ),
+                    );
+                    if (open && !rebuilt) await renderPopup();
+                  },
+                ],
+                ...(repairedId(c) ? [[T("remap.go"), () => jumpRepaired(c)]] : [[T("act.update"), () => runUpdate(c)]]),
+              ]
+            : []),
+          ...(kind === "model" && optimizeSource(c)
+            ? [
+                optimizedCopy(c, v)
+                  ? [
+                      T("model.optimizedGo"),
+                      () => {
+                        pending = `m:${optimizedCopy(c, v).id}`;
+                        renderPopup();
+                      },
+                    ]
+                  : [
+                      T("model.optimize"),
+                      () => runOptimize(c, v),
+                      busy || !!c.greyed || !!c.previewOnly || !!c.pending || !coreOf(v, kind),
+                      "secondary",
+                      checking
+                        ? null
+                        : c.previewOnly
+                          ? T("model.unfit")
+                          : c.beyondFit
+                            ? T("model.beyondFit")
+                            : T("model.optimizeHint"),
+                      checking,
+                    ],
+              ]
+            : []),
           c.kind === "mod"
-            ? [T("btn.delete"), async () => {
-              if (!(await removeMod(c.id))) return;
-              await reload();
-              ctx.invalidateRoster();
-              if (pending === c.key) pending = popupMode(fam, variant(), kind, modsOn(), otherStudents).start;
-              renderPopup();
-            }]
-            : [T("btn.extract"), () => { closePopup(false); job("actions.extract", { target: `variant:${c.variant.key}` }, { name: fullName(c.variant), onDone: (r) => reveal(r?.folder) }); }]],
+            ? [
+                T("btn.delete"),
+                async () => {
+                  if (!(await removeMod(c.id))) return;
+                  await reload();
+                  ctx.invalidateRoster();
+                  if (pending === c.key) pending = popupMode(fam, variant(), kind, modsOn(), otherStudents).start;
+                  renderPopup();
+                },
+              ]
+            : [
+                T("btn.extract"),
+                () => {
+                  closePopup(false);
+                  job(
+                    "actions.extract",
+                    { target: `variant:${c.variant.key}` },
+                    { name: fullName(c.variant), onDone: (r) => reveal(r?.folder) },
+                  );
+                },
+              ],
+        ],
       };
     },
   });
@@ -1793,28 +2994,52 @@ async function runOptimize(c, v = variant()) {
   if (!source || busy) return;
   const shown = c.kind === "self" ? shortName(v) : candidateLabel(c, v);
   let result = null;
-  const ok = await job("model.optimize", { variant: v.key, source, name: shown }, { name: shown, onDone: (r) => { result = r; } });
+  const ok = await job(
+    "model.optimize",
+    { variant: v.key, source, name: shown },
+    {
+      name: shown,
+      onDone: (r) => {
+        result = r;
+      },
+    },
+  );
   if (!ok || !open || switchPopupPage !== pageToken || $("popup").hidden) return;
   // nothing to build: the official model needs none; a costume that no physics rule improves says it has no gain
-  if (result?.unneeded) await message({ title: T("model.optimize"), lines: [T(result.reason === "no_gain" ? "model.optimizeNoGain" : "model.optimizeUnneeded")], ok: T("picker.ok") });
+  if (result?.unneeded)
+    await message({
+      title: T("model.optimize"),
+      lines: [T(result.reason === "no_gain" ? "model.optimizeNoGain" : "model.optimizeUnneeded")],
+      ok: T("picker.ok"),
+    });
   else if (result?.mod) pending = `m:${result.mod}`;
   await renderPopup($("popup").querySelector(".popup-cards")?.scrollTop || 0);
 }
 async function openPopup(kind = "spr") {
-  const family = fam, v = variant();
+  const family = fam,
+    v = variant();
   if (kind === "model") {
     void costumesReady(v).catch((err) => console.error("Costume check failed", err));
     // the switch opens at once with the student's own cards; another student's model already chosen
     // gets its card, and the popup its start, once the roster is in
     if (otherStudents) judgeCross(v);
-    else void readOthers().then((families) => {
-      if (!families || !open || fam !== family || variant() !== v || popupKind !== kind || switchPopupPage !== pageToken) return;
-      const start = popupMode(fam, v, kind, modsOn(), otherStudents).start;
-      if (pending === popupStart) pending = start;
-      popupStart = start;
-      startLoose = false;
-      void renderPopup($("popup").querySelector(".popup-cards")?.scrollTop || 0);
-    });
+    else
+      void readOthers().then((families) => {
+        if (
+          !families ||
+          !open ||
+          fam !== family ||
+          variant() !== v ||
+          popupKind !== kind ||
+          switchPopupPage !== pageToken
+        )
+          return;
+        const start = popupMode(fam, v, kind, modsOn(), otherStudents).start;
+        if (pending === popupStart) pending = start;
+        popupStart = start;
+        startLoose = false;
+        void renderPopup($("popup").querySelector(".popup-cards")?.scrollTop || 0);
+      });
   }
   switchThumbnails?.cancel();
   switchThumbnails = thumbnailScope({ priority: "popup" });
@@ -1825,11 +3050,16 @@ async function openPopup(kind = "spr") {
   pending = popupStart;
   popupSeg = 0;
   crossShown = [];
-  const mods = candidates(variant(), kind).filter((c) => c.kind === "mod").map((c) => c.mod);
+  const mods = candidates(variant(), kind)
+    .filter((c) => c.kind === "mod")
+    .map((c) => c.mod);
   try {
     await drawPopup();
     if (open && fam === family && variant() === v && popupKind === kind && !$("popup").hidden) await markSeen(mods);
-  } catch (err) { closePopup(false); renderFailed(err); }
+  } catch (err) {
+    closePopup(false);
+    renderFailed(err);
+  }
 }
 
 const seeing = new Set();
@@ -1844,10 +3074,17 @@ async function markSeen(mods, scroll = 0) {
     if (fam !== family) clearUnseen(fam, ids);
     ctx.invalidateRoster();
     // The save may finish after the switch closed and another popup took its host.
-    if (open) await Promise.all([renderScreen(), renderChips(),
-      switchPopupPage === pageToken && !$("popup").hidden ? renderPopup(scroll) : null]);
-  } catch (err) { console.error("Mark mods seen failed", err); }
-  finally { ids.forEach((id) => seeing.delete(id)); }
+    if (open)
+      await Promise.all([
+        renderScreen(),
+        renderChips(),
+        switchPopupPage === pageToken && !$("popup").hidden ? renderPopup(scroll) : null,
+      ]);
+  } catch (err) {
+    console.error("Mark mods seen failed", err);
+  } finally {
+    ids.forEach((id) => seeing.delete(id));
+  }
 }
 function closePopup(apply) {
   const album = albumClosed;
@@ -1876,17 +3113,24 @@ function closeSwitch(apply) {
 async function removeMod(id) {
   try {
     const info = await rpc("mods.removalInfo", { id });
-    if(info.official)return false;
+    if (info.official) return false;
     const r = await message({
       title: T("btn.delete"),
-      lines: info.used?[T("error.asset_delete_confirm")]:[T("mods.deleteConfirm", { name: info.name })],
-      ok: T("btn.delete"), cancel: T("popup.cancel"),
+      lines: info.used ? [T("error.asset_delete_confirm")] : [T("mods.deleteConfirm", { name: info.name })],
+      ok: T("btn.delete"),
+      cancel: T("popup.cancel"),
     });
     if (r.button !== "ok") return false;
-    return await job("mods.remove", { id, confirm: true }, {
-      name: info.name,
-      onDone: (result) => { if (result?.failed?.length) throw Object.assign(new Error('Asset deletion failed'),result.failed[0]); },
-    });
+    return await job(
+      "mods.remove",
+      { id, confirm: true },
+      {
+        name: info.name,
+        onDone: (result) => {
+          if (result?.failed?.length) throw Object.assign(new Error("Asset deletion failed"), result.failed[0]);
+        },
+      },
+    );
   } catch (err) {
     notify(errorText(err), { kind: "error", error: err });
     return false;
@@ -1898,8 +3142,15 @@ async function removeMod(id) {
 async function overwrittenMessage(v, kind = "spr") {
   const page = pageToken;
   const core = coreOf(v, kind);
-  const added = await Prompts.overwritten({ name: entryLabel({ core, kind }, () => fullName(v)), core, files: partsOf(v, kind) });
-  if (added && open && page === pageToken) { ctx.invalidateRoster(); await reload(); }
+  const added = await Prompts.overwritten({
+    name: entryLabel({ core, kind }, () => fullName(v)),
+    core,
+    files: partsOf(v, kind),
+  });
+  if (added && open && page === pageToken) {
+    ctx.invalidateRoster();
+    await reload();
+  }
   return added;
 }
 
@@ -1911,26 +3162,85 @@ function closePicker() {
 }
 async function openPicker(scroll = 0) {
   pickerSel = pickerSel || variantKey;
-  const items = fam.variants.filter(hasAsset).sort(byRank).map((o) => ({
-    key: o.key, kind: o.recruitable ? "playable" : "other", recruit: o.recruitable, label: shortName(o), full: fullName(o),
-    thumb: primaryKind(o) === "model" ? null : thumb(variantBase(o, primaryKind(o)), "card", null, primaryKind(o) === "lobby", specialFraming(o), o.bg),
-    big: () => primaryKind(o) === "model" ? null : thumb(variantBase(o, primaryKind(o)), "bust", null, primaryKind(o) === "lobby", specialFraming(o), o.bg),
-    inUse: false, fav: isFav(o), isNew: hasFresh(o), src: o,
-  })).filter((it) => pickerSeg === 0 || (pickerSeg === 1) === it.recruit);
+  const items = fam.variants
+    .filter(hasAsset)
+    .sort(byRank)
+    .map((o) => ({
+      key: o.key,
+      kind: o.recruitable ? "playable" : "other",
+      recruit: o.recruitable,
+      label: shortName(o),
+      full: fullName(o),
+      thumb:
+        primaryKind(o) === "model"
+          ? null
+          : thumb(variantBase(o, primaryKind(o)), "card", null, primaryKind(o) === "lobby", specialFraming(o), o.bg),
+      big: () =>
+        primaryKind(o) === "model"
+          ? null
+          : thumb(variantBase(o, primaryKind(o)), "bust", null, primaryKind(o) === "lobby", specialFraming(o), o.bg),
+      inUse: false,
+      fav: isFav(o),
+      isNew: hasFresh(o),
+      src: o,
+    }))
+    .filter((it) => pickerSeg === 0 || (pickerSeg === 1) === it.recruit);
   await listPopup({
-    hostId: "picker", title: T("picker.title"), okText: T("picker.ok"), items, selected: pickerSel, keepScroll: scroll,
-    tools: { segs: ["seg.all", "seg.recruit", "seg.noRecruit"], seg: pickerSeg, onSeg: (i) => { pickerSeg = i; openPicker(); }, sortKey: "sort.release" },
-    onSelect: (key, s) => { pickerSel = key; openPicker(s); },
-    onOk: () => { closePicker(); const k = pickerSel; pickerSel = null; ctx.go(fam.key, k); },
-    onClose: () => { closePicker(); pickerSel = null; },
+    hostId: "picker",
+    title: T("picker.title"),
+    okText: T("picker.ok"),
+    items,
+    selected: pickerSel,
+    keepScroll: scroll,
+    tools: {
+      segs: ["seg.all", "seg.recruit", "seg.noRecruit"],
+      seg: pickerSeg,
+      onSeg: (i) => {
+        pickerSeg = i;
+        openPicker();
+      },
+      sortKey: "sort.release",
+    },
+    onSelect: (key, s) => {
+      pickerSel = key;
+      openPicker(s);
+    },
+    onOk: () => {
+      closePicker();
+      const k = pickerSel;
+      pickerSel = null;
+      ctx.go(fam.key, k);
+    },
+    onClose: () => {
+      closePicker();
+      pickerSel = null;
+    },
     details: (it) => {
-      const o = it.src, kind = primaryKind(o), file = gameFile(o, kind);
+      const o = it.src,
+        kind = primaryKind(o),
+        file = gameFile(o, kind);
       return {
         title: T(isSpecial(o) ? "special.background" : "info.title.portrait"),
-        fields: [[T("field.file"), coreOf(o, kind)], [T("info.gameFile"), o.date || "—"], [T("info.status"), T(appliedKey(o, kind) === "self" ? "status.original" : "status.replaced")],
-          [T(isSpecial(o) ? "special.background" : "tab.lobby"), T(o.lobby ? "model.has" : "model.none")]],
-        actions: [[T(platform === "mac" ? "open.mac" : "open.win"), () => reveal(file)],
-          [T("btn.extract"), () => { closePicker(); job("actions.extract", { target: `variant:${o.key}` }, { name: fullName(o), onDone: (r) => reveal(r?.folder) }); }]],
+        fields: [
+          [T("field.file"), coreOf(o, kind)],
+          [T("info.gameFile"), o.date || "—"],
+          [T("info.status"), T(appliedKey(o, kind) === "self" ? "status.original" : "status.replaced")],
+          [T(isSpecial(o) ? "special.background" : "tab.lobby"), T(o.lobby ? "model.has" : "model.none")],
+        ],
+        actions: [
+          [T(platform === "mac" ? "open.mac" : "open.win"), () => reveal(file)],
+          [
+            T("btn.extract"),
+            () => {
+              closePicker();
+              job(
+                "actions.extract",
+                { target: `variant:${o.key}` },
+                { name: fullName(o), onDone: (r) => reveal(r?.folder) },
+              );
+            },
+          ],
+        ],
       };
     },
   });
@@ -1959,20 +3269,40 @@ async function openAliases(draft = customAliases(), focusAt = null, key = varian
   const popup = find(t, "Popup");
   ys.forEach((y, i) => {
     const add = adding && i === n - 1;
-    const icon = add ? sprite("Cafe_Icon_NameEdit", 50, 50, { type: 0, depth: 9, color: "#2d4664/1.00" })
+    const icon = add
+      ? sprite("Cafe_Icon_NameEdit", 50, 50, { type: 0, depth: 9, color: "#2d4664/1.00" })
       : sprite("Common_Icon_Close", 42, 42, { type: 0, depth: 9, color: "#2d4664/1.00" });
-    popup.children.push(node(`Row_${i}`, [0, y], [sprite("Common_Bg_Raius10px", AL.rowW, AL.rowH, { depth: 6, color: "#e6eaec/1.00" })], [
-      node("BG_Line", [0, 0], [sprite("Common_line_10px", AL.rowW + 2, AL.rowH, { depth: 7, color: "#cfd4da/1.00" })]),
-      node("Icon", [AL.rowW / 2 - 58, 0], [icon]),
-    ]));
+    popup.children.push(
+      node(
+        `Row_${i}`,
+        [0, y],
+        [sprite("Common_Bg_Raius10px", AL.rowW, AL.rowH, { depth: 6, color: "#e6eaec/1.00" })],
+        [
+          node(
+            "BG_Line",
+            [0, 0],
+            [sprite("Common_line_10px", AL.rowW + 2, AL.rowH, { depth: 7, color: "#cfd4da/1.00" })],
+          ),
+          node("Icon", [AL.rowW / 2 - 58, 0], [icon]),
+        ],
+      ),
+    );
   });
   host.hidden = false;
   const next = document.createElement("div");
   const view = await NGUI.render(t, next, { scale: S, origin: [960, 540], z: 10 });
   if (my !== aliasToken) return;
-  const close = () => { aliasToken += 1; host.hidden = true; host.innerHTML = ""; popupClosed(host); };
+  const close = () => {
+    aliasToken += 1;
+    host.hidden = true;
+    host.innerHTML = "";
+    popupClosed(host);
+  };
   // the screen was left or shows another variant meanwhile
-  if (!open || variantKey !== key) { close(); return; }
+  if (!open || variantKey !== key) {
+    close();
+    return;
+  }
   const inputs = [];
   // the rows' aliases as edited, and what the empty row holds
   const rows = () => inputs.slice(0, names.length).map((el) => el.value);
@@ -1999,8 +3329,11 @@ async function openAliases(draft = customAliases(), focusAt = null, key = varian
     el.placeholder = add ? T("alias.add") : "";
     el.setAttribute("aria-label", add ? T("alias.add") : T("alias.title"));
     Object.assign(el.style, {
-      left: `${960 + (-AL.rowW / 2 + 36) * S}px`, top: `${540 - (y + AL.rowH / 2) * S}px`,
-      width: `${(AL.rowW - 150) * S}px`, height: `${AL.rowH * S}px`, fontSize: `${50 * S}px`,
+      left: `${960 + (-AL.rowW / 2 + 36) * S}px`,
+      top: `${540 - (y + AL.rowH / 2) * S}px`,
+      width: `${(AL.rowW - 150) * S}px`,
+      height: `${AL.rowH * S}px`,
+      fontSize: `${50 * S}px`,
     });
     el.addEventListener("keydown", (ev) => {
       if (ev.isComposing || ev.keyCode === 229 || ev.key !== "Enter") return;
@@ -2009,16 +3342,28 @@ async function openAliases(draft = customAliases(), focusAt = null, key = varian
         const text = el.value;
         el.value = "";
         openAliases([...rows(), text], names.length + 1, key, el);
-      }
-      else if (i < n - 1) inputs[i + 1].focus();
+      } else if (i < n - 1) inputs[i + 1].focus();
       else keep();
     });
     next.appendChild(el);
     inputs.push(el);
-    const [ix, iy] = [960 + (AL.rowW / 2 - 58) * S, 540 - y * S], size = 84 * S;
-    const b = hitButton(next, [ix - size / 2, iy - size / 2, size, size],
-      add ? () => el.focus() : () => openAliases(rows().filter((_, j) => j !== i), i, key, adding ? inputs[n - 1] : null),
-      add ? T("alias.add") : T("alias.remove"), 86);
+    const [ix, iy] = [960 + (AL.rowW / 2 - 58) * S, 540 - y * S],
+      size = 84 * S;
+    const b = hitButton(
+      next,
+      [ix - size / 2, iy - size / 2, size, size],
+      add
+        ? () => el.focus()
+        : () =>
+            openAliases(
+              rows().filter((_, j) => j !== i),
+              i,
+              key,
+              adding ? inputs[n - 1] : null,
+            ),
+      add ? T("alias.add") : T("alias.remove"),
+      86,
+    );
     if (add) b.tabIndex = -1;
   });
   const hit = (path, fn, name, action) => hitNode(next, view, path, fn, { name, action });
@@ -2035,70 +3380,153 @@ async function openAliases(draft = customAliases(), focusAt = null, key = varian
 // what the files carry and, for a mod, its file and the variant it was made for), then one row per bundle: name,
 // size, date, CRC and what it carries ---
 const DT = DETAILS;
-const DT_COLS = [["field.file", 1040], ["field.size", 220], ["field.date", 270], ["field.crc", 290], ["field.status", 260]];
-const crcLabel = (state) => (state === "fixed" ? [T("crc.fixed"), COLOUR.success] : state === "needs_fix" ? [T("crc.needed"), COLOUR.warning] : [T("crc.original"), "#000000"]);
+const DT_COLS = [
+  ["field.file", 1040],
+  ["field.size", 220],
+  ["field.date", 270],
+  ["field.crc", 290],
+  ["field.status", 260],
+];
+const crcLabel = (state) =>
+  state === "fixed"
+    ? [T("crc.fixed"), COLOUR.success]
+    : state === "needs_fix"
+      ? [T("crc.needed"), COLOUR.warning]
+      : [T("crc.original"), "#000000"];
 // what a game file carries, as a label: the original, a mod's name, another variant's name, or "replaced"
 function carriedLabel(applied) {
   if (!applied || applied === "official") return T("status.original");
-  if (applied.startsWith("mod:")) { const m = familyMods().find((x) => x.id === applied.slice(4)); if (m) return modLabel(m); }
-  if (applied.startsWith("variant:")) { const o = fam.variants.find((x) => x.key === applied.slice(8)); if (o) return shortName(o); }
+  if (applied.startsWith("mod:")) {
+    const m = familyMods().find((x) => x.id === applied.slice(4));
+    if (m) return modLabel(m);
+  }
+  if (applied.startsWith("variant:")) {
+    const o = fam.variants.find((x) => x.key === applied.slice(8));
+    if (o) return shortName(o);
+  }
   return T("status.replaced");
 }
 function detailsInfo() {
-  const v = variant(), kind = tabKind(), parts = partsOf(v, kind);
+  const v = variant(),
+    kind = tabKind(),
+    parts = partsOf(v, kind);
   const first = parts[0]?.file || null;
   const folder = first ? first.replace(/[\\/][^\\/]*$/, "") : "—";
   const applied = appliedOf(v, kind);
-  const fields = [[T("field.folder"), folder], [T("info.current"), tab === "portrait" ? current().label : sourceLabel(v, kind), shownMod()?.mod]];
+  const fields = [
+    [T("field.folder"), folder],
+    [T("info.current"), tab === "portrait" ? current().label : sourceLabel(v, kind), shownMod()?.mod],
+  ];
   const mod = applied.startsWith("mod:") ? familyMods().find((m) => m.id === applied.slice(4)) : null;
-  const from = mod ? fam.variants.find((o) => o.key === mod.target) : applied.startsWith("variant:") ? fam.variants.find((o) => o.key === applied.slice(8)) : null;
+  const from = mod
+    ? fam.variants.find((o) => o.key === mod.target)
+    : applied.startsWith("variant:")
+      ? fam.variants.find((o) => o.key === applied.slice(8))
+      : null;
   if (mod) fields.push([T("field.modFile"), mod.file || "—"]);
   if (from) fields.push([T("field.source"), fullName(from)]);
   const rows = parts.map((p) => {
     const crc = crcLabel(p.crc);
     return [baseName(p.file), sizeText(p.size), p.date || "—", [crc[0], crc[1]], carriedLabel(p.applied)];
   });
-  return { title: T(isSpecial(v) && tab === "lobby" ? "special.background" : `info.title.${tab}`), fields, rows, reveal: first };
+  return {
+    title: T(isSpecial(v) && tab === "lobby" ? "special.background" : `info.title.${tab}`),
+    fields,
+    rows,
+    reveal: first,
+  };
 }
 // the summary box and the file table, laid out from the top left of the scrolling area (units); returns the tree
 // and its height
 function detailsBody({ fields, rows }) {
-  const W = popupContent(DT.w, DT.h).w, kids = [];
+  const W = popupContent(DT.w, DT.h).w,
+    kids = [];
   // summary: captions, then values that wrap (paths), never cut; on the game's light stats box, as wide as the file table under
   // it. A mod's value leaves room at the right for its edit icon, and its original name stands under it.
   const TOP = SPACE.s;
   // The light stats box retains STATS_BOX's own geometry and typography (stats-box.js).
-  const box = statsBox({ holder: "table", width: W, at: [W / 2, -TOP], name: "Summary", rows: fields.map(([k, v, mod]) => ({
-    caption: k, value: String(v), ariaLabel: String(v), reserve: mod ? 70 : 0, secondary: mod?.alias ? modOriginalName(mod) : "",
-    slot: mod ? ({ i, x, valueY, room, text }) => [node(`Edit_${i}`, [x + Math.min(glyphsOf(text.text, text.fs), room) + 32, valueY],
-      [sprite("Cafe_Icon_NameEdit", 46, 46, { type: 0, depth: 9, color: "#2d4664/1.00" })])] : undefined,
-  })) });
+  const box = statsBox({
+    holder: "table",
+    width: W,
+    at: [W / 2, -TOP],
+    name: "Summary",
+    rows: fields.map(([k, v, mod]) => ({
+      caption: k,
+      value: String(v),
+      ariaLabel: String(v),
+      reserve: mod ? 70 : 0,
+      secondary: mod?.alias ? modOriginalName(mod) : "",
+      slot: mod
+        ? ({ i, x, valueY, room, text }) => [
+            node(
+              `Edit_${i}`,
+              [x + Math.min(glyphsOf(text.text, text.fs), room) + 32, valueY],
+              [sprite("Cafe_Icon_NameEdit", 46, 46, { type: 0, depth: 9, color: "#2d4664/1.00" })],
+            ),
+          ]
+        : undefined,
+    })),
+  });
   kids.push(...box.nodes);
   const boxH = box.height;
   // the file table: the list header's light blue bar with the captions, then the bundles
   const cols = DT_COLS.filter((_, i) => i < 4 || rows.some((r) => r[4] !== null));
   const extra = DT_COLS.reduce((a, [, w]) => a + w, 0) - cols.reduce((a, [, w]) => a + w, 0);
-  const columns = row(cols.map(([, w], i) => ({ grow: w + (i === 0 ? extra : 0) })), { w: W }).boxes;
-  const widths = columns.map(b => b.w - 2 * SPACE.s);
+  const columns = row(
+    cols.map(([, w], i) => ({ grow: w + (i === 0 ? extra : 0) })),
+    { w: W },
+  ).boxes;
+  const widths = columns.map((b) => b.w - 2 * SPACE.s);
   const head = cols.map(([key], i) => textItem(NGUI, T(key), TYPE.caption, { maxW: widths[i], lines: 2 }));
-  const data = rows.map(r => cols.map((_, i) => {
-    const [value, color] = i === 3 ? r[3] : [r[i], "#000000"];
-    // Dense rows keep their 42-unit floor. Wrap paths at separators and other text at language-aware boundaries;
-    // longer values grow the row, keeping every character rather than escaping the range or clipping.
-    let fit = i === 0 ? wrapPath(value, TYPE.caption.fs, TYPE.caption.min, widths[i], Infinity)
-      : NGUI.wrapText(String(value), TYPE.caption.fs, widths[i], Infinity);
-    if (fit.overflow) fit = wrapPath(value, TYPE.caption.fs, TYPE.caption.min, widths[i], Infinity);
-    return { ...textItem({ ...NGUI, fitText: () => fit }, value, TYPE.caption, { maxW: widths[i], lines: Infinity }), color };
-  }));
-  const lines = [head, ...data].map(items => row(items.map((item, i) => ({ ...item, w: widths[i] })), { x: SPACE.s, gap: 2 * SPACE.s }));
-  const table = stack(lines.map(line => ({ w: W, h: line.h + 2 * SPACE.s })), { y: TOP + boxH + SPACE.xl, gap: SPACE.s });
+  const data = rows.map((r) =>
+    cols.map((_, i) => {
+      const [value, color] = i === 3 ? r[3] : [r[i], "#000000"];
+      // Dense rows keep their 42-unit floor. Wrap paths at separators and other text at language-aware boundaries;
+      // longer values grow the row, keeping every character rather than escaping the range or clipping.
+      let fit =
+        i === 0
+          ? wrapPath(value, TYPE.caption.fs, TYPE.caption.min, widths[i], Infinity)
+          : NGUI.wrapText(String(value), TYPE.caption.fs, widths[i], Infinity);
+      if (fit.overflow) fit = wrapPath(value, TYPE.caption.fs, TYPE.caption.min, widths[i], Infinity);
+      return {
+        ...textItem({ ...NGUI, fitText: () => fit }, value, TYPE.caption, { maxW: widths[i], lines: Infinity }),
+        color,
+      };
+    }),
+  );
+  const lines = [head, ...data].map((items) =>
+    row(
+      items.map((item, i) => ({ ...item, w: widths[i] })),
+      { x: SPACE.s, gap: 2 * SPACE.s },
+    ),
+  );
+  const table = stack(
+    lines.map((line) => ({ w: W, h: line.h + 2 * SPACE.s })),
+    { y: TOP + boxH + SPACE.xl, gap: SPACE.s },
+  );
   table.boxes.forEach((box, ri) => {
     const items = row(lines[ri].boxes, { x: SPACE.s, y: box.y + SPACE.s, gap: 2 * SPACE.s }).boxes;
-    if (!ri) kids.push(node("Head", toNode(box, 4, LOCAL_FRAME), [sprite("Common_Bg_Raius10px", W, box.h, { depth: 5, color: "#d1edff/1.00" })]));
-    items.forEach((item, i) => kids.push(node(ri ? `R_${ri - 1}_${i}` : `H_${i}`, toNode(item, 3, LOCAL_FRAME), [
-      label(item.text, item.fs, ri ? `${item.color}/1.00` : "#294263/1.00", item.w, item.h, { pivot: 3, depth: 8 }),
-    ])));
-    if (ri) kids.push(node(`RL_${ri - 1}`, [W / 2, -box.y - box.h], [sprite("Common_Line_Dot", W - 2 * SPACE.m, SPACE.hair, { type: 2, depth: 7, color: "#c0c9d4/1.00" })]));
+    if (!ri)
+      kids.push(
+        node("Head", toNode(box, 4, LOCAL_FRAME), [
+          sprite("Common_Bg_Raius10px", W, box.h, { depth: 5, color: "#d1edff/1.00" }),
+        ]),
+      );
+    items.forEach((item, i) =>
+      kids.push(
+        node(ri ? `R_${ri - 1}_${i}` : `H_${i}`, toNode(item, 3, LOCAL_FRAME), [
+          label(item.text, item.fs, ri ? `${item.color}/1.00` : "#294263/1.00", item.w, item.h, { pivot: 3, depth: 8 }),
+        ]),
+      ),
+    );
+    if (ri)
+      kids.push(
+        node(
+          `RL_${ri - 1}`,
+          [W / 2, -box.y - box.h],
+          [sprite("Common_Line_Dot", W - 2 * SPACE.m, SPACE.hair, { type: 2, depth: 7, color: "#c0c9d4/1.00" })],
+        ),
+      );
   });
   return { tree: node("Details", [0, 0], [], kids), height: table.boxes.at(-1).y + table.boxes.at(-1).h + SPACE.m };
 }
@@ -2108,21 +3536,45 @@ async function showDetails() {
   const body = detailsBody(info);
   // popup.js supplies the L frame; popupContent keeps the table 40 from either side (popup-frames.js).
   const { h, top, bottom, content } = detailsFrame(body.height);
-  const t = popupFrame(info.title, DT.w, h, { ok: T("picker.ok"), cancel: info.reveal ? T(platform === "mac" ? "open.mac" : "open.win") : null });
+  const t = popupFrame(info.title, DT.w, h, {
+    ok: T("picker.ok"),
+    cancel: info.reveal ? T(platform === "mac" ? "open.mac" : "open.win") : null,
+  });
   host.hidden = false;
   const next = document.createElement("div");
   const view = await NGUI.render(t, next, { scale: S, origin: [960, 540], z: 10 });
-  const done = () => { host.hidden = true; host.innerHTML = ""; popupClosed(host); };
+  const done = () => {
+    host.hidden = true;
+    host.innerHTML = "";
+    popupClosed(host);
+  };
   const hit = (path, fn, name, action) => hitNode(next, view, path, fn, { name, action });
   hit("Center/Popup/Base/BG/Btn_Close", done, T("display.close"), "close");
   hit("Center/Popup/Btn/Btn_Ok/BG (1)", done, T("picker.ok"), "ok");
-  if (info.reveal) hit("Center/Popup/Btn/Btn_Cancel/BG (1)", () => reveal(info.reveal), T(platform === "mac" ? "open.mac" : "open.win"), "cancel");
+  if (info.reveal)
+    hit(
+      "Center/Popup/Btn/Btn_Cancel/BG (1)",
+      () => reveal(info.reveal),
+      T(platform === "mac" ? "open.mac" : "open.win"),
+      "cancel",
+    );
   closable(view, host, done);
-  const inner = scrollArea(next, [960 + (content.x - DT.w / 2) * S, 540 - top * S, content.w * S, (top - bottom) * S], body.height * S);
+  const inner = scrollArea(
+    next,
+    [960 + (content.x - DT.w / 2) * S, 540 - top * S, content.w * S, (top - bottom) * S],
+    body.height * S,
+  );
   await inner.ready;
   const bodyView = await NGUI.render(body.tree, inner, { scale: S, origin: [0, 0], z: 20 });
   info.fields.forEach(([, , mod], i) => {
-    if (mod) hitNode(inner, bodyView, `Details/Edit_${i}`, () => editModName(mod, () => !host.hidden ? showDetails() : null), { name: T("modAlias.title") });
+    if (mod)
+      hitNode(
+        inner,
+        bodyView,
+        `Details/Edit_${i}`,
+        () => editModName(mod, () => (!host.hidden ? showDetails() : null)),
+        { name: T("modAlias.title") },
+      );
   });
   if (host.hidden) return;
   host.replaceChildren(...next.childNodes);
@@ -2136,14 +3588,17 @@ async function renderAll() {
 // A tab or applied preview prepares under the shared in-page shade, with the input hold retained.
 function changeInPlace(work) {
   const g = begin();
-  return Loading.page(async (covered) => {
-    await covered;
-    if (g.gen !== showGen) return false;
-    return prepare(g, true, async () => {
-      await work();
-      await settleImages();
-    });
-  }, { until: g.ended }).then((ready) => {
+  return Loading.page(
+    async (covered) => {
+      await covered;
+      if (g.gen !== showGen) return false;
+      return prepare(g, true, async () => {
+        await work();
+        await settleImages();
+      });
+    },
+    { until: g.ended },
+  ).then((ready) => {
     // it may have taken over a show (a tab clicked while a step loads): the screen is on that student now
     if (ready && fam) arrived(fam.key, askedKey);
     return ready;
@@ -2171,14 +3626,24 @@ function showTab(id) {
 // committed with the rest of the screen; the part it replaces fades out and is freed. The lobby and the model are
 // single players: when the shown one is replaced by another variant's, a still of it holds the place meanwhile.
 const LEFT = ["portrait", "lobby", "model"];
-let shownLeft = null, shownKey = null;
+let shownLeft = null,
+  shownKey = null;
 // what the lobby or the model shows: the same variant of another install (game folder, file source) is another one
-const leftKey = (part, v) => (part === "lobby" ? `${v.lobby}:${shownSource(v, "lobby")}@${fam.version}` : part === "model" ? `${v.key}:${shownSource(v, "model")}@${fam.version}` : null);
+const leftKey = (part, v) =>
+  part === "lobby"
+    ? `${v.lobby}:${shownSource(v, "lobby")}@${fam.version}`
+    : part === "model"
+      ? `${v.key}:${shownSource(v, "model")}@${fam.version}`
+      : null;
 let lobbyFrom = null; // the install of the lobby in lobby.js, which keeps a lobby shown again by its core
 let lobbyStale = false; // its game files were switched: lobby.js reads them again
 function renderLeft() {
   if (!open) return Promise.resolve();
-  const v = variant(), my = ++leftToken, want = tab, el = $(want), key = leftKey(want, v);
+  const v = variant(),
+    my = ++leftToken,
+    want = tab,
+    el = $(want),
+    key = leftKey(want, v);
   const available = previewAvailable(v, switchKindOf(want));
   if (!available) {
     if (want === "portrait") disposePortrait();
@@ -2195,9 +3660,21 @@ function renderLeft() {
   let expired = false;
   // a newer left side or hide() came first: nothing is started
   // the preview's own work: foreground time only, without waits for the library
-  const ready = withPreviewTimeout(Promise.resolve(swap).then(() => (my !== leftToken || expired || !available ? null
-    : want === "portrait" ? (mainPlayer ? null : loadSpine(currentBase()))
-      : want === "lobby" ? showLobby(v, my, () => !expired) : showModel(v, my, () => !expired))), want === "lobby" ? HARD_CAP + 3000 : HARD_CAP, `Detail ${want}`).catch((err) => {
+  const ready = withPreviewTimeout(
+    Promise.resolve(swap).then(() =>
+      my !== leftToken || expired || !available
+        ? null
+        : want === "portrait"
+          ? mainPlayer
+            ? null
+            : loadSpine(currentBase())
+          : want === "lobby"
+            ? showLobby(v, my, () => !expired)
+            : showModel(v, my, () => !expired),
+    ),
+    want === "lobby" ? HARD_CAP + 3000 : HARD_CAP,
+    `Detail ${want}`,
+  ).catch((err) => {
     expired = true;
     if (my !== leftToken || !open) return;
     if (want === "lobby") Lobby.unavailable(err, el, spineBase("lobby", v.lobby));
@@ -2205,16 +3682,18 @@ function renderLeft() {
     else hideModel();
     renderFailed(err);
   });
-  const shown = ready.then(() => commit(() => {
-    if (my !== leftToken) return;
-    el.hidden = false;
-    el.classList.remove("pending", "leaving");
-    shownLeft = want;
-    shownKey = key;
-    unfreezeLeft();
-    if (want === "lobby") Lobby.reveal(); // on screen: its intro starts
-    for (const part of LEFT) if (part !== want) retireLeft(part, my);
-  }));
+  const shown = ready.then(() =>
+    commit(() => {
+      if (my !== leftToken) return;
+      el.hidden = false;
+      el.classList.remove("pending", "leaving");
+      shownLeft = want;
+      shownKey = key;
+      unfreezeLeft();
+      if (want === "lobby") Lobby.reveal(); // on screen: its intro starts
+      for (const part of LEFT) if (part !== want) retireLeft(part, my);
+    }),
+  );
   return shown;
 }
 // a part no longer shown: faded out, then freed (unless a newer change wants it again)
@@ -2227,33 +3706,54 @@ function retireLeft(part, my) {
     else if (part === "lobby") Lobby.hide(el);
     else hideModel();
   };
-  if (batch || Loading.covering() || el.hidden || el.classList.contains("pending")) { free(); return; }
+  if (batch || Loading.covering() || el.hidden || el.classList.contains("pending")) {
+    free();
+    return;
+  }
   el.classList.add("leaving");
-  setTimeout(() => { if (my === leftToken && el.classList.contains("leaving")) free(); }, 360);
+  setTimeout(() => {
+    if (my === leftToken && el.classList.contains("leaving")) free();
+  }, 360);
 }
 // a still of the shown lobby or model over the left side, until its replacement is committed. The model's canvas
 // keeps no drawing buffer: it is copied in an animation frame, after the model's own loop has drawn into it.
 async function freezeLeft(part) {
   const host = $(part);
-  const sources = [...host.querySelectorAll(part === "lobby" ? ".lobby-view .lobby-layer:not(.lobby-off) canvas" : "canvas.model-view")];
+  const sources = [
+    ...host.querySelectorAll(
+      part === "lobby" ? ".lobby-view .lobby-layer:not(.lobby-off) canvas" : "canvas.model-view",
+    ),
+  ];
   if (!sources.length) return;
   if (part === "model") await nextFrame();
   const box = document.createElement("div");
   box.className = `left-freeze ${part}`;
-  Object.assign(box.style, { left: `${host.offsetLeft}px`, top: `${host.offsetTop}px`, width: `${host.offsetWidth}px`, height: `${host.offsetHeight}px` });
+  Object.assign(box.style, {
+    left: `${host.offsetLeft}px`,
+    top: `${host.offsetTop}px`,
+    width: `${host.offsetWidth}px`,
+    height: `${host.offsetHeight}px`,
+  });
   const c = document.createElement("canvas");
   c.width = sources[0].width;
   c.height = sources[0].height;
   const g = c.getContext("2d");
   for (const src of sources) if (src.width && src.height) g.drawImage(src, 0, 0, c.width, c.height);
   box.appendChild(c);
-  if (part === "lobby") { const frost = document.createElement("div"); frost.className = "lobby-frost"; box.appendChild(frost); }
+  if (part === "lobby") {
+    const frost = document.createElement("div");
+    frost.className = "lobby-frost";
+    box.appendChild(frost);
+  }
   unfreezeLeft(true);
   $("lobby").after(box);
 }
 function unfreezeLeft(now = false) {
   for (const box of document.querySelectorAll(".left-freeze:not(.leaving)")) {
-    if (now || batch || Loading.covering()) { box.remove(); continue; }
+    if (now || batch || Loading.covering()) {
+      box.remove();
+      continue;
+    }
     box.classList.add("leaving");
     setTimeout(() => box.remove(), 360);
   }
@@ -2274,46 +3774,66 @@ async function showLobby(v, my, alive = () => true) {
   lobbyFrom = fam.version;
   lobbyStale = false;
   const c = current("lobby");
-  const options = { framing: specialFraming(v),
+  const options = {
+    framing: specialFraming(v),
     mod: c.kind === "mod" && (!!v.previewSources?.lobby || !!v.configured || !modsOn() || !v.lobby) ? c.id : null,
     camera: !!c.mod?.camera,
-    official: c.kind === "self" && (!!v.configured || !!v.previewSources?.lobby || !modsOn()) };
+    official: c.kind === "self" && (!!v.configured || !!v.previewSources?.lobby || !modsOn()),
+  };
   let m = await Lobby.show(v.lobby, $("lobby"), v.key, options);
   if (!still()) return;
   // A cancelled attempt is not a ready preview. The newest detail render owns one fresh attempt.
   if (!m) m = await Lobby.show(v.lobby, $("lobby"), v.key, options);
   if (!still()) return;
   if (!m) throw new Error(`Lobby load superseded without a replacement: ${v.lobby}`);
-  if (fullscreen) { Lobby.frame("full"); Lobby.interactive(true); }
+  if (fullscreen) {
+    Lobby.frame("full");
+    Lobby.interactive(true);
+  }
   const lines = refreshLobbyLines(v, m, still);
   // the still is taken in the left framing, once the players have drawn a few frames of it; while the intro plays (its
   // flash and scenes are not the lobby at rest), once it has ended
   await frames(4);
   if (!still()) return;
   if (Lobby.introPending()) {
-    Lobby.introDone().then(() => frames(4)).then(() => {
-      if (!still() || lobbyShot || fullscreen) return;
-      lobbyShot = snapshotLobby();
-      if (lobbyShot) return renderScreen();
-    }).catch(renderFailed);
+    Lobby.introDone()
+      .then(() => frames(4))
+      .then(() => {
+        if (!still() || lobbyShot || fullscreen) return;
+        lobbyShot = snapshotLobby();
+        if (lobbyShot) return renderScreen();
+      })
+      .catch(renderFailed);
   } else if (!lobbyShot && !fullscreen) lobbyShot = snapshotLobby();
   await Promise.all([renderScreen(), renderExpressions(), Promise.race([lines, sleep(LINES_CAP)])]);
 }
 
 let linesRevision = 0;
 function refreshLobbyLines(v, meta, alive = () => true) {
-  const my = ++linesRevision, lang = language(), key = LINE_LANG[lang] || "en";
-  const still = () => my === linesRevision && alive() && open && tab === "lobby"
-    && variantKey === v.key && language() === lang && Lobby.meta() === meta;
+  const my = ++linesRevision,
+    lang = language(),
+    key = LINE_LANG[lang] || "en";
+  const still = () =>
+    my === linesRevision &&
+    alive() &&
+    open &&
+    tab === "lobby" &&
+    variantKey === v.key &&
+    language() === lang &&
+    Lobby.meta() === meta;
   const talks = Object.fromEntries(meta.sequences.map((sq) => [sq.anim, sq.cues.map((cue) => cue.clip)]));
   // Change the subtitle picker immediately, retaining voice metadata while the
   // next language's table is fetched. Pending voice cues must keep playing.
   Lobby.setLines(undefined, (line) => line?.[key] || "");
-  return (isSpecial(v) ? Promise.resolve({}) : rpc("lobby.lines", { variant: v.key, talks, lang: key })).then((table) => {
-    if (!still()) return;
-    Lobby.setLines(table, (line) => line?.[key] || "");
-    return renderExpressions();
-  }).catch((err) => { console.error("Lobby lines failed", err); });
+  return (isSpecial(v) ? Promise.resolve({}) : rpc("lobby.lines", { variant: v.key, talks, lang: key }))
+    .then((table) => {
+      if (!still()) return;
+      Lobby.setLines(table, (line) => line?.[key] || "");
+      return renderExpressions();
+    })
+    .catch((err) => {
+      console.error("Lobby lines failed", err);
+    });
 }
 // the 3D chibi: loaded, its shaders compiled and its first frame drawn; the actions fill row 4 and a still of it goes
 // on the switch card
@@ -2323,8 +3843,15 @@ async function showModel(v, my, alive = () => true) {
     const M = await ModelLib();
     if (!still()) return;
     const list = await M.show(v.key, $("model"), {
-      frame: fullscreen ? "full" : "left", version: `${fam.version}:${modelGeneration}`, source: modelSource(v, modsOn()),
-      onAction: (a) => { if (tab === "model" && variantKey === v.key) { modelAction = actionKey(a); renderExpressions(); } },
+      frame: fullscreen ? "full" : "left",
+      version: `${fam.version}:${modelGeneration}`,
+      source: modelSource(v, modsOn()),
+      onAction: (a) => {
+        if (tab === "model" && variantKey === v.key) {
+          modelAction = actionKey(a);
+          renderExpressions();
+        }
+      },
     });
     if (!list || !still()) return;
     modelActions = list;
@@ -2341,8 +3868,11 @@ async function showModel(v, my, alive = () => true) {
     // the official model asked for has a part with no official copy left: the install's own repair message, not
     // awaited (the left side's load has a time limit)
     if (err?.code === "original_unavailable") void overwrittenMessage(v, "model");
-    else if (err?.code === "source_unsupported" && v.previewSources?.model?.startsWith("variant:")
-             && !costumeRefusals.has(`${v.key}|${v.previewSources.model}`)) {
+    else if (
+      err?.code === "source_unsupported" &&
+      v.previewSources?.model?.startsWith("variant:") &&
+      !costumeRefusals.has(`${v.key}|${v.previewSources.model}`)
+    ) {
       // a costume refused at its first build (saved before the check existed): read the family again, whose preview
       // sources leave it out now, instead of an error
       costumeRefusals.add(`${v.key}|${v.previewSources.model}`);
@@ -2365,17 +3895,21 @@ function hideModel() {
 // card); any other lobby the still below
 function lobbyCard(v) {
   const c = current("lobby");
-  return c?.mod?.camera ? thumb(baseOf(c, "lobby"), "landscape", null, true, specialFraming(v), (c.origin || v).bg) : lobbyShot;
+  return c?.mod?.camera
+    ? thumb(baseOf(c, "lobby"), "landscape", null, true, specialFraming(v), (c.origin || v).bg)
+    : lobbyShot;
 }
 // a still of the lobby for the switch card, framed on the face: lobby.js picks the crop inside the left view, which
 // lies inside the lobby's painted area, so the still is opaque everywhere and the card's mask fades it out softly
 function snapshotLobby() {
   const canvases = [...$("lobby").querySelectorAll(".lobby-view .lobby-layer:not(.lobby-off) canvas")];
   if (!canvases.length) return null;
-  const W = canvases[0].width, H = canvases[0].height;
+  const W = canvases[0].width,
+    H = canvases[0].height;
   const r = Lobby.stillRect(W, H) || { x: W * 0.1, y: H * 0.16, w: W * 0.5, h: W * 0.5 * (253 / 450) };
   const c = document.createElement("canvas");
-  c.width = 900; c.height = Math.round(900 * (253 / 450));
+  c.width = 900;
+  c.height = Math.round(900 * (253 / 450));
   const g = c.getContext("2d");
   g.imageSmoothingQuality = "high";
   for (const src of canvases) g.drawImage(src, r.x, r.y, r.w, r.h, 0, 0, c.width, c.height);
@@ -2396,14 +3930,23 @@ const wake = () => {
 // closes the visual mode.
 let fullscreenRequest = 0;
 async function setFullscreen(on, { switching = false } = {}) {
-  const request = ++fullscreenRequest, part = tab, key = variantKey;
-  if (on && tab === "portrait") { return enterVisual({ switching }); }
+  const request = ++fullscreenRequest,
+    part = tab,
+    key = variantKey;
+  if (on && tab === "portrait") {
+    return enterVisual({ switching });
+  }
   if (on) {
     const layout = await (layouts.visual ||= NGUI.layout("UICharacterVisualMode").catch(() => null));
     if (layout) await Visual.exitControl($("fs-exit"), layout);
-    const control = tab === "lobby" && previewAvailable(variant(), "spr") ? await Visual.prepareSwitch({
-      layout, label: T("row.switch.portrait"), onSwitch: switchFullscreenView,
-    }) : null;
+    const control =
+      tab === "lobby" && previewAvailable(variant(), "spr")
+        ? await Visual.prepareSwitch({
+            layout,
+            label: T("row.switch.portrait"),
+            onSwitch: switchFullscreenView,
+          })
+        : null;
     if (request !== fullscreenRequest || !open || tab !== part || variantKey !== key) return;
     $("visual-ui").replaceChildren(...(control ? [control] : []));
     $("visual-ui").hidden = !control;
@@ -2412,42 +3955,81 @@ async function setFullscreen(on, { switching = false } = {}) {
     $("visual-ui").replaceChildren();
   }
   setStage(on);
-  if (!on || tab === "lobby") { Lobby.frame(on ? "full" : "left"); Lobby.interactive(on); }
+  if (!on || tab === "lobby") {
+    Lobby.frame(on ? "full" : "left");
+    Lobby.interactive(on);
+  }
   if (!on || tab === "model") modelLib?.then((M) => M.frame(on ? "full" : "left"));
   showExit(on);
   if (!on) Camera.close(false);
   await Photo.visualEntry(on);
   await Camera.entry(on && tab === "lobby", cameraBridge);
-  if (!on) { await photoBridge.release(); stillAfterFullscreen(); }
+  if (!on) {
+    await photoBridge.release();
+    stillAfterFullscreen();
+  }
 }
 // the camera framing's view of the detail page (lobby-camera.js)
 // source: what the lobby shows (the camera's art); saved: the student's lobby choices read again with the new one;
 // still: a saved camera's still, as its Switch Memorial Lobby card draws it; album: Switch Memorial Lobby itself,
 // resolved once it closed and what was chosen there is shown
 let albumClosed = null;
-const cameraBridge = { variant: () => variantKey, lobby: () => variant()?.lobby,
-  source: () => { const c = current("lobby"); return c?.kind === "mod" ? `mod:${c.id}` : "official"; },
+const cameraBridge = {
+  variant: () => variantKey,
+  lobby: () => variant()?.lobby,
+  source: () => {
+    const c = current("lobby");
+    return c?.kind === "mod" ? `mod:${c.id}` : "official";
+  },
   saved: () => reload(),
-  still: (id) => { const v = variant(); return thumb(spineBase("mod", id), "landscape", null, true, specialFraming(v), v.bg); },
-  album: () => new Promise((resolve) => {
-    albumClosed?.();
-    albumClosed = resolve;
-    const ended = () => { if ($("popup").hidden && albumClosed === resolve) { albumClosed = null; resolve(); } };
-    openPopup("lobby").then(ended, ended);
-  }) };
+  still: (id) => {
+    const v = variant();
+    return thumb(spineBase("mod", id), "landscape", null, true, specialFraming(v), v.bg);
+  },
+  album: () =>
+    new Promise((resolve) => {
+      albumClosed?.();
+      albumClosed = resolve;
+      const ended = () => {
+        if ($("popup").hidden && albumClosed === resolve) {
+          albumClosed = null;
+          resolve();
+        }
+      };
+      openPopup("lobby").then(ended, ended);
+    }),
+};
 // the UI slides out (app.css .stage.fullscreen) and out of the keyboard's reach; back, the visual mode closes and the
 // focus returns (visual-mode.js uiOut, uiBack)
-const slidOut = () => [$("ngui"), $("ngui-chips"), $("ngui-expr"), document.querySelector(".topbar"), stage().querySelector(".nav")];
+const slidOut = () => [
+  $("ngui"),
+  $("ngui-chips"),
+  $("ngui-expr"),
+  document.querySelector(".topbar"),
+  stage().querySelector(".nav"),
+];
 function setStage(on) {
   fullscreen = on;
   stage().classList.toggle("fullscreen", on);
   if (on) Visual.uiOut(slidOut());
-  else Visual.uiBack(slidOut(), { refocus: open, fallback: () => [...$("ngui").querySelectorAll("button")]
-    .find((button) => button.getAttribute("aria-label") === T("lobby.fullscreen")) });
+  else
+    Visual.uiBack(slidOut(), {
+      refocus: open,
+      fallback: () =>
+        [...$("ngui").querySelectorAll("button")].find(
+          (button) => button.getAttribute("aria-label") === T("lobby.fullscreen"),
+        ),
+    });
 }
 function showExit(on) {
   $("fs-exit").hidden = !on;
-  if (on) { wake(); stage().addEventListener("pointermove", wake); } else { stage().removeEventListener("pointermove", wake); clearTimeout(idleTimer); }
+  if (on) {
+    wake();
+    stage().addEventListener("pointermove", wake);
+  } else {
+    stage().removeEventListener("pointermove", wake);
+    clearTimeout(idleTimer);
+  }
 }
 // the visual mode: its background and buttons are made off screen first, then the UI slides out as the portrait
 // glides into the whole art and they come in. Without the prefab (another game version) the portrait still goes
@@ -2455,22 +4037,44 @@ function showExit(on) {
 let visualToken = 0;
 async function enterVisual({ switching = false } = {}) {
   if ((fullscreen && !switching) || !mainPlayer?.skeleton) return; // the portrait is not in yet
-  const my = ++visualToken, key = variantKey, request = fullscreenRequest;
-  const alive = () => my === visualToken && request === fullscreenRequest && open && fullscreen === switching
-    && tab === "portrait" && variantKey === key && !!mainPlayer?.skeleton;
+  const my = ++visualToken,
+    key = variantKey,
+    request = fullscreenRequest;
+  const alive = () =>
+    my === visualToken &&
+    request === fullscreenRequest &&
+    open &&
+    fullscreen === switching &&
+    tab === "portrait" &&
+    variantKey === key &&
+    !!mainPlayer?.skeleton;
   const layout = await (layouts.visual ||= NGUI.layout("UICharacterVisualMode").catch(() => null));
-  const strings = { reset: T("visual.reset"), back: T("lobby.exit"),
-    switch: previewAvailable(variant(), "lobby") ? T("row.switch.lobby") : null };
-  const parts = await Visual.prepare({ layout, bg: variant().bg, strings }).catch((err) => { console.error(err); return null; });
+  const strings = {
+    reset: T("visual.reset"),
+    back: T("lobby.exit"),
+    switch: previewAvailable(variant(), "lobby") ? T("row.switch.lobby") : null,
+  };
+  const parts = await Visual.prepare({ layout, bg: variant().bg, strings }).catch((err) => {
+    console.error(err);
+    return null;
+  });
   if (!alive()) return;
-  if (!(await Visual.open({
-    instant: switching,
-    parts, skeleton: mainPlayer.skeleton, detail: detailViewport(), host: stage(), bgHost: $("visual-bg"), uiHost: $("visual-ui"),
-    players: () => [...$("portrait").querySelectorAll(".layer")].map((l) => l.player).filter(Boolean),
-    onBack: () => setFullscreen(false),
-    onSwitch: switchFullscreenView,
-    alive,
-  }))) return;
+  if (
+    !(await Visual.open({
+      instant: switching,
+      parts,
+      skeleton: mainPlayer.skeleton,
+      detail: detailViewport(),
+      host: stage(),
+      bgHost: $("visual-bg"),
+      uiHost: $("visual-ui"),
+      players: () => [...$("portrait").querySelectorAll(".layer")].map((l) => l.player).filter(Boolean),
+      onBack: () => setFullscreen(false),
+      onSwitch: switchFullscreenView,
+      alive,
+    }))
+  )
+    return;
   if (!alive()) return;
   setStage(true);
   await Photo.visualEntry(true);
@@ -2481,8 +4085,17 @@ async function enterVisual({ switching = false } = {}) {
 // read previews; the selected skin, expression, mod toggle and configured sources remain owned by the detail page.
 let fullscreenSwitching = false;
 async function switchFullscreenView() {
-  if (!fullscreen || fullscreenSwitching || busy || Loading.held() || photoSession || !["portrait", "lobby"].includes(tab)) return;
-  const target = tab === "portrait" ? "lobby" : "portrait", key = variantKey;
+  if (
+    !fullscreen ||
+    fullscreenSwitching ||
+    busy ||
+    Loading.held() ||
+    photoSession ||
+    !["portrait", "lobby"].includes(tab)
+  )
+    return;
+  const target = tab === "portrait" ? "lobby" : "portrait",
+    key = variantKey;
   if (!previewAvailable(variant(), switchKindOf(target))) return;
   const request = ++fullscreenRequest;
   const alive = () => request === fullscreenRequest && open && fullscreen && variantKey === key;
@@ -2500,16 +4113,27 @@ async function switchFullscreenView() {
       if (alive()) await setFullscreen(true, { switching: true });
     });
     if (ready && open && fullscreen && variantKey === key && tab === target) {
-      [...$("visual-ui").querySelectorAll("button")].find((button) => button.dataset.visualAction === "Btn_HideUI")?.focus({ preventScroll: true });
+      [...$("visual-ui").querySelectorAll("button")]
+        .find((button) => button.dataset.visualAction === "Btn_HideUI")
+        ?.focus({ preventScroll: true });
     }
-  } finally { fullscreenSwitching = false; }
+  } finally {
+    fullscreenSwitching = false;
+  }
 }
 // the switch card's still is taken in the left framing: when fullscreen was entered before the lobby or the model was
 // in, the still is taken once the left framing is back
 async function stillAfterFullscreen() {
-  const part = tab, key = variantKey;
-  const wanted = () => open && !fullscreen && tab === part && variantKey === key && (part === "lobby"
-    ? !lobbyShot && !!Lobby.meta() : part === "model" && !modelShot && !!$("model").querySelector(".model-view.ready"));
+  const part = tab,
+    key = variantKey;
+  const wanted = () =>
+    open &&
+    !fullscreen &&
+    tab === part &&
+    variantKey === key &&
+    (part === "lobby"
+      ? !lobbyShot && !!Lobby.meta()
+      : part === "model" && !modelShot && !!$("model").querySelector(".model-view.ready"));
   if (!wanted()) return;
   // the lobby draws the left view within a few frames (after its intro); the model glides there
   const M = part === "model" ? await ModelLib() : null;
@@ -2527,7 +4151,9 @@ async function reload(refresh = []) {
   if (data && fam !== read) return; // the screen was read anew meanwhile
   const next = data?.variants.find((v) => v.key === variantKey) || data?.variants[0];
   const changed = new Set(refresh);
-  if (data) for (const kind of ["spr", "lobby", "model"]) if (previewChanged(variant(), next, kind, previewEnabled, modsOn())) changed.add(kind);
+  if (data)
+    for (const kind of ["spr", "lobby", "model"])
+      if (previewChanged(variant(), next, kind, previewEnabled, modsOn())) changed.add(kind);
   if (data) fam = data;
   for (const kind of changed) resetPreview(kind);
   await Promise.all([renderAll(), changed.has(tabKind()) ? renderLeft() : null]);
@@ -2558,10 +4184,20 @@ function resetPreview(kind) {
 // open, while the screen changes and while this screen's own job runs (whose reload comes first). ---
 let heldChange; // undefined: nothing waiting; null: anything may have changed; {cores}: those lower-case cores
 let reloadingChanged = null;
-const mergeChange = (a, b) => (a === null || b === null ? null : a === undefined ? b : { cores: [...new Set([...a.cores, ...b.cores])] });
+const mergeChange = (a, b) =>
+  a === null || b === null ? null : a === undefined ? b : { cores: [...new Set([...a.cores, ...b.cores])] };
 const lower = (core) => String(core || "").toLowerCase();
 // a variant's game files of a kind as the screen judged them: they changed when this differs
-const filesSig = (v, kind) => JSON.stringify(v ? [v.configured?.[kind], v.selection?.[kind], partsOf(v, kind).map((f) => [f.file, f.applied, f.crc, f.size, f.date, f.mtime, f.official])] : null);
+const filesSig = (v, kind) =>
+  JSON.stringify(
+    v
+      ? [
+          v.configured?.[kind],
+          v.selection?.[kind],
+          partsOf(v, kind).map((f) => [f.file, f.applied, f.crc, f.size, f.date, f.mtime, f.official]),
+        ]
+      : null,
+  );
 const quiet = () => !fullscreen && !Visual.isOpen() && !popupOpen() && !changing() && !Loading.covering();
 
 // filesChanged({cores} | null): resolves after queued changes have refreshed and drawn, or the screen is left
@@ -2569,8 +4205,12 @@ export function filesChanged(change = null) {
   if (!open || !fam) return;
   if (change) {
     const cores = new Set(change.cores.map(lower));
-    if (!fam.variants.some((v) => [v.spr, v.lobby, v.model, ...(v.modelCores || [])]
-      .some((core) => cores.has(lower(core))))) return;
+    if (
+      !fam.variants.some((v) =>
+        [v.spr, v.lobby, v.model, ...(v.modelCores || [])].some((core) => cores.has(lower(core))),
+      )
+    )
+      return;
   }
   heldChange = mergeChange(heldChange, change && { cores: change.cores.map(lower) });
   return resumeChanged();
@@ -2584,10 +4224,12 @@ function resumeChanged() {
       if (!open) return;
       await reloadChanged();
     }
-  })().catch((err) => console.error("reload after a switch", err)).finally(() => {
-    reloadingChanged = null;
-    resumeChanged();
-  });
+  })()
+    .catch((err) => console.error("reload after a switch", err))
+    .finally(() => {
+      reloadingChanged = null;
+      resumeChanged();
+    });
   return reloadingChanged;
 }
 async function reloadChanged() {
@@ -2598,20 +4240,29 @@ async function reloadChanged() {
   const read = fam;
   const data = await readFamily(read.key).catch(renderFailed);
   if (!data || !open || fam?.key !== read.key || busy) return;
-  if (fam !== read) { heldChange = mergeChange(heldChange, change); return; } // read anew meanwhile: read again after it
+  if (fam !== read) {
+    heldChange = mergeChange(heldChange, change);
+    return;
+  } // read anew meanwhile: read again after it
   // A repacked file can retain its size, date and family fields. A source event still revalidates its manifest.
   const lobbyChanged = change === null || change.cores.includes(lower(variant().lobby));
-  const modelChanged = change === null || [variant().model, ...(variant().modelCores || [])]
-    .some((core) => change.cores.includes(lower(core)));
-  if (JSON.stringify(data) === JSON.stringify(fam) && previewEnabled === modsOn() && !lobbyChanged && !modelChanged) return;
+  const modelChanged =
+    change === null ||
+    [variant().model, ...(variant().modelCores || [])].some((core) => change.cores.includes(lower(core)));
+  if (JSON.stringify(data) === JSON.stringify(fam) && previewEnabled === modsOn() && !lobbyChanged && !modelChanged)
+    return;
   // the thumbnails of every core of the family whose files or configured preview changed
   const changed = { spr: false, lobby: lobbyChanged, model: modelChanged };
   for (const v of data.variants) {
     const was = fam.variants.find((x) => x.key === v.key);
     for (const kind of ["spr", "lobby", "model"]) {
-      if (filesSig(was, kind) === filesSig(v, kind) && !previewChanged(was, v, kind, previewEnabled, modsOn())) continue;
+      if (filesSig(was, kind) === filesSig(v, kind) && !previewChanged(was, v, kind, previewEnabled, modsOn()))
+        continue;
       const core = coreOf(v, kind);
-      if (core) { forget(spinePrefix(kind, core)); forget(spinePrefix(`official-${kind}`, core)); }
+      if (core) {
+        forget(spinePrefix(kind, core));
+        forget(spinePrefix(`official-${kind}`, core));
+      }
       if (v.key === variantKey) changed[kind] = true;
     }
   }
@@ -2629,8 +4280,12 @@ async function ensureLayouts() {
   const detail = await withTimeout(NGUI.layout("UICharacterDetail"), HARD_CAP, "Detail layout");
   const filter = await withTimeout(NGUI.layout("UIPopup_FilterSort"), HARD_CAP, "Disabled button layout");
   await NGUI.init().catch(renderFailed);
-  layouts = { list: find(detail, "Inventory_ListControl"), textures: NGUI.textureIndex(), visual: null,
-    disabled: find(filter, "Center/Popup/Btn_Section/Btn_Disable") };
+  layouts = {
+    list: find(detail, "Inventory_ListControl"),
+    textures: NGUI.textureIndex(),
+    visual: null,
+    disabled: find(filter, "Center/Popup/Btn_Section/Btn_Disable"),
+  };
 }
 
 // the voice volume and mute (development runs started with --mute stay silent), the zoom-out limit and the
@@ -2653,11 +4308,17 @@ export async function relabel() {
     // Network-backed dialogue is optional; it must not delay language selection.
     refreshLobbyLines(variant(), Lobby.meta());
   }
-  if (switchThumbnails && switchPopupPage === pageToken && !$("popup").hidden && !$("popup").querySelector(".alias-input")) {
+  if (
+    switchThumbnails &&
+    switchPopupPage === pageToken &&
+    !$("popup").hidden &&
+    !$("popup").querySelector(".alias-input")
+  ) {
     const scroll = $("popup").querySelector(".popup-cards");
     work.push(renderPopup(popupKind === "spr" ? scroll?.scrollLeft || 0 : scroll?.scrollTop || 0));
   }
-  if (pickerSel && !$("picker").hidden) work.push(openPicker($("picker").querySelector(".popup-cards")?.scrollTop || 0));
+  if (pickerSel && !$("picker").hidden)
+    work.push(openPicker($("picker").querySelector(".popup-cards")?.scrollTop || 0));
   await Promise.all(work);
 }
 
@@ -2667,14 +4328,27 @@ export async function relabel() {
 // follows and starts no load it would drop. The keys are the screen's own: not while a text field or an input method
 // has them, under a popup (the screen's, the settings, the consent or update dialog), in a fullscreen view (the lobby,
 // the 3D model, the portrait's visual mode), during a job or another change of the screen, or behind the loading screen.
-const blocked = () => !open || !fam || fullscreen || Visual.isOpen() || busy || Loading.held() || Loading.covering() || $("screen-detail").hidden
-  || !!document.querySelector(".popup-host:not([hidden]), .consent-host:not([hidden])");
+const blocked = () =>
+  !open ||
+  !fam ||
+  fullscreen ||
+  Visual.isOpen() ||
+  busy ||
+  Loading.held() ||
+  Loading.covering() ||
+  $("screen-detail").hidden ||
+  !!document.querySelector(".popup-host:not([hidden]), .consent-host:not([hidden])");
 const changing = () => !!batch; // an in-place change is being prepared (a step, a chip, a tab, an applied portrait)
 // the address, as main.js routes it: what the arrows asked for
 function address() {
-  try { return location.hash.replace(/^#\/?/, "").split("/").map(decodeURIComponent); } catch { return []; }
+  try {
+    return location.hash.replace(/^#\/?/, "").split("/").map(decodeURIComponent);
+  } catch {
+    return [];
+  }
 }
-let arrivals = [], askedKey = null; // askedKey: the variant the last show() was asked for, as in the address
+let arrivals = [],
+  askedKey = null; // askedKey: the variant the last show() was asked for, as in the address
 // the screen is ready on a student (or was left: no arguments): a step waiting for the address to be shown goes on
 function arrived(family, key) {
   if (!arrivals.length) return;
@@ -2686,7 +4360,10 @@ const keySteps = pacer(async (delta) => {
   if (blocked() || changing()) return;
   const from = location.hash;
   let resolve;
-  const shown = new Promise((r) => { resolve = r; arrivals.push(r); });
+  const shown = new Promise((r) => {
+    resolve = r;
+    arrivals.push(r);
+  });
   try {
     await ctx.step(delta, fam.key, variantKey);
   } finally {
@@ -2694,13 +4371,26 @@ const keySteps = pacer(async (delta) => {
     if (location.hash === from) resolve();
   }
   let timer;
-  await Promise.race([shown, new Promise((r) => { timer = setTimeout(r, HARD_CAP); })]); // a screen that never comes
+  await Promise.race([
+    shown,
+    new Promise((r) => {
+      timer = setTimeout(r, HARD_CAP);
+    }),
+  ]); // a screen that never comes
   clearTimeout(timer);
   arrivals = arrivals.filter((r) => r !== resolve);
 });
 // Escape leaves fullscreen only when no popup took it or is open over the view (Escape belongs to the top layer)
 addEventListener("keydown", (ev) => {
-  if (ev.key === "Escape" && !ev.defaultPrevented && !popupOpen() && open && fullscreen && !Visual.isOpen() && !photoSession) {
+  if (
+    ev.key === "Escape" &&
+    !ev.defaultPrevented &&
+    !popupOpen() &&
+    open &&
+    fullscreen &&
+    !Visual.isOpen() &&
+    !photoSession
+  ) {
     ev.preventDefault();
     void setFullscreen(false);
     return;
@@ -2710,18 +4400,24 @@ addEventListener("keydown", (ev) => {
   ev.preventDefault(); // the page's own use of the arrows (scrolling the unfolded strip) gives way to the step
   keySteps.press(delta, ev.repeat);
 });
-addEventListener("keyup", (ev) => { if (KEYS[ev.key]) keySteps.release(KEYS[ev.key]); });
+addEventListener("keyup", (ev) => {
+  if (KEYS[ev.key]) keySteps.release(KEYS[ev.key]);
+});
 addEventListener("blur", () => keySteps.release());
 
 // show(context, familyData, variantKey, {inPlace}): open the detail screen on a variant; resolves once the screen is
 // ready (the panels, primary preview and decoded UI images). In place (another
 // variant or family while the screen is shown), the shown screen stays until then and every part swaps in one frame.
 export async function show(context, familyData, key, { inPlace = false, kind = null } = {}) {
-  Photo.destroy(); Camera.close(false); document.getElementById("camera-launcher")?.remove();
+  Photo.destroy();
+  Camera.close(false);
+  document.getElementById("camera-launcher")?.remove();
   ModAlias.close();
   leavePage();
   pageToken += 1;
-  leftPage = new Promise((resolve) => { leavePage = resolve; });
+  leftPage = new Promise((resolve) => {
+    leavePage = resolve;
+  });
   ctx = context;
   applyPrefs(ctx.prefs);
   open = true;
@@ -2730,11 +4426,17 @@ export async function show(context, familyData, key, { inPlace = false, kind = n
   const g = begin();
   const sameFamily = fam?.key === familyData.key;
   // the alias editor of another variant goes (a history step while it was open)
-  if ((!sameFamily || variantKey !== key) && $("popup").querySelector(".alias-input")) { aliasToken += 1; $("popup").hidden = true; $("popup").innerHTML = ""; }
+  if ((!sameFamily || variantKey !== key) && $("popup").querySelector(".alias-input")) {
+    aliasToken += 1;
+    $("popup").hidden = true;
+    $("popup").innerHTML = "";
+  }
   // the same variant of another install (another game folder or file source) is read again like another variant
   const sameVariant = sameFamily && variantKey === key && fam.version === familyData.version;
   fam = familyData;
-  variantKey = fam.variants.some((v) => v.key === key && hasAsset(v)) ? key : (fam.variants.find(hasAsset) || fam.variants[0]).key;
+  variantKey = fam.variants.some((v) => v.key === key && hasAsset(v))
+    ? key
+    : (fam.variants.find(hasAsset) || fam.variants[0]).key;
   if (!sameVariant) {
     expression = "00";
     expanded = false;
@@ -2752,17 +4454,30 @@ export async function show(context, familyData, key, { inPlace = false, kind = n
     mainPlayer = null;
   }
   // the tabs the variant has, on every show: another install may lack a part under the same variant
-  tab = availableTab(variant(), ({ spr: "portrait", portrait: "portrait", lobby: "lobby", model: "model" })[kind] || tab);
+  tab = availableTab(variant(), { spr: "portrait", portrait: "portrait", lobby: "lobby", model: "model" }[kind] || tab);
   // the costume checks of another variant, or of a 3D tab no longer shown, stop; the same 3D tab's go on
   if (!sameVariant || tab !== "model") stopCostumeChecks();
   previewEnabled = modsOn();
   rpc("ui.visit", { variant: variantKey }).catch(() => {});
   // The portrait uses its own assets and default framing while the UI layout is still loading or unavailable.
   const ready = await prepare(g, true, async () => {
-    commit(() => setTitle(T("top.students"), ctx.back || (() => { location.hash = "#/roster"; })));
-    await Promise.all([renderLeft(), ensureLayouts().then(() => {
-      if (g.gen === showGen) return renderAll();
-    }).catch(renderFailed)]);
+    commit(() =>
+      setTitle(
+        T("top.students"),
+        ctx.back ||
+          (() => {
+            location.hash = "#/roster";
+          }),
+      ),
+    );
+    await Promise.all([
+      renderLeft(),
+      ensureLayouts()
+        .then(() => {
+          if (g.gen === showGen) return renderAll();
+        })
+        .catch(renderFailed),
+    ]);
     await settleImages();
   });
   if (ready) arrived(familyData.key, key);
@@ -2777,25 +4492,37 @@ export async function show(context, familyData, key, { inPlace = false, kind = n
 }
 
 // a route to a student failed (main.js): a key step waiting for that screen goes on at once
-export function stepFailed() { arrived(); }
+export function stepFailed() {
+  arrived();
+}
 
 // The variant actually shown, including the fallback for a family-only or unavailable-variant route.
-export const currentVariant = () => (open || suspended) && fam ? variant().key : null;
+export const currentVariant = () => ((open || suspended) && fam ? variant().key : null);
 
 // Release page work before a destination waits on library locks, retaining the
 // complete current frame until that destination can replace it.
 export function suspend() {
-  Photo.destroy(); Camera.close(false); document.getElementById("camera-launcher")?.remove();
+  Photo.destroy();
+  Camera.close(false);
+  document.getElementById("camera-launcher")?.remove();
   switchThumbnails?.cancel();
   switchThumbnails = null;
-  ModAlias.close(); leavePage(); open = false; suspended = true;
+  ModAlias.close();
+  leavePage();
+  open = false;
+  suspended = true;
   stopCostumeChecks();
-  begin(); batch = null; leftToken += 1; spineToken += 1;
+  begin();
+  batch = null;
+  leftToken += 1;
+  spineToken += 1;
 }
 
 // leaving the screen: stop the players, drop any change being prepared
 export function hide() {
-  Photo.destroy(); Camera.close(false); document.getElementById("camera-launcher")?.remove();
+  Photo.destroy();
+  Camera.close(false);
+  document.getElementById("camera-launcher")?.remove();
   switchThumbnails?.cancel();
   switchThumbnails = null;
   ModAlias.close();
@@ -2820,8 +4547,14 @@ export function hide() {
   hideModel();
   unfreezeLeft(true);
   shownLeft = shownKey = null;
-  for (const part of LEFT) { $(part).hidden = true; $(part).classList.remove("pending", "leaving"); }
-  for (const id of ["popup", "picker"]) { $(id).hidden = true; $(id).innerHTML = ""; }
+  for (const part of LEFT) {
+    $(part).hidden = true;
+    $(part).classList.remove("pending", "leaving");
+  }
+  for (const id of ["popup", "picker"]) {
+    $(id).hidden = true;
+    $(id).innerHTML = "";
+  }
   keySteps.clear();
   heldChange = undefined; // the next show reads the family anyway
   arrived();
@@ -2830,112 +4563,252 @@ export function hide() {
 $("fs-exit")?.addEventListener("click", () => setFullscreen(false));
 
 // Student photography retains both real renderers during in-place camera mode changes.
-let photoLastAction="",photoPrepared=null,photoSession=false,photoOrigin=null;
-const photoFaces=new Map();
-async function photoPreload(){
-  if(photoPrepared)return photoPrepared;
-  photoOrigin=variantKey;photoSession=true;
-  photoPrepared=(async()=>{
-    const v=variant(),portraitAvailable=previewAvailable(v,'spr'),lobbyAvailable=previewAvailable(v,'lobby'),portrait=$("portrait"),lobby=$("lobby");
-    if(!mainPlayer){portrait.hidden=false;portrait.classList.add('photo-preloading');}
-    if(tab!=='lobby'){lobby.hidden=false;lobby.classList.add('photo-preloading');}
+let photoLastAction = "",
+  photoPrepared = null,
+  photoSession = false,
+  photoOrigin = null;
+const photoFaces = new Map();
+async function photoPreload() {
+  if (photoPrepared) return photoPrepared;
+  photoOrigin = variantKey;
+  photoSession = true;
+  photoPrepared = (async () => {
+    const v = variant(),
+      portraitAvailable = previewAvailable(v, "spr"),
+      lobbyAvailable = previewAvailable(v, "lobby"),
+      portrait = $("portrait"),
+      lobby = $("lobby");
+    if (!mainPlayer) {
+      portrait.hidden = false;
+      portrait.classList.add("photo-preloading");
+    }
+    if (tab !== "lobby") {
+      lobby.hidden = false;
+      lobby.classList.add("photo-preloading");
+    }
     await Promise.all([
-      (async()=>{if(portraitAvailable&&!mainPlayer)await loadSpine(currentBase());if(portraitAvailable&&!mainPlayer?.skeleton)throw new Error('Portrait renderer is not ready');})(),
-      (async()=>{
-        if(!lobbyAvailable)return;
-        const c=current('lobby'),options={framing:specialFraming(v),deferPlayback:true,
-          mod:c.kind==='mod'&&(!!v.previewSources?.lobby||!!v.configured||!modsOn()||!v.lobby)?c.id:null,camera:!!c.mod?.camera,
-          official:c.kind==='self'&&(!!v.configured||!!v.previewSources?.lobby||!modsOn())};
-        if(!await Lobby.show(v.lobby,lobby,v.key,options))throw new Error('Memorial renderer is not ready');
-        lobbyFrom=fam.version;lobbyStale=false;Lobby.suspend();Lobby.frame('full');Lobby.photography(Photo.FRAME);Lobby.skipIntro();
+      (async () => {
+        if (portraitAvailable && !mainPlayer) await loadSpine(currentBase());
+        if (portraitAvailable && !mainPlayer?.skeleton) throw new Error("Portrait renderer is not ready");
+      })(),
+      (async () => {
+        if (!lobbyAvailable) return;
+        const c = current("lobby"),
+          options = {
+            framing: specialFraming(v),
+            deferPlayback: true,
+            mod:
+              c.kind === "mod" && (!!v.previewSources?.lobby || !!v.configured || !modsOn() || !v.lobby) ? c.id : null,
+            camera: !!c.mod?.camera,
+            official: c.kind === "self" && (!!v.configured || !!v.previewSources?.lobby || !modsOn()),
+          };
+        if (!(await Lobby.show(v.lobby, lobby, v.key, options))) throw new Error("Memorial renderer is not ready");
+        lobbyFrom = fam.version;
+        lobbyStale = false;
+        Lobby.suspend();
+        Lobby.frame("full");
+        Lobby.photography(Photo.FRAME);
+        Lobby.skipIntro();
         await Lobby.prepareFrame();
       })(),
     ]);
-    if(photoOrigin!==variantKey||!open)throw new DOMException('Photography source changed','AbortError');
-    if(portraitAvailable&&!Visual.isOpen()){
-      const layout=await(layouts.visual ||= NGUI.layout('UICharacterVisualMode'));
-      const parts=await Visual.prepare({layout,bg:v.bg,strings:{reset:T('visual.reset'),back:T('lobby.exit')}});
-      await Visual.open({parts,skeleton:mainPlayer.skeleton,detail:detailViewport(),host:stage(),bgHost:$("visual-bg"),uiHost:$("visual-ui"),
-        players:()=>[...portrait.querySelectorAll('.layer')].map(layer=>layer.player).filter(Boolean),onBack:()=>setFullscreen(false),alive:()=>open&&photoOrigin===variantKey});
+    if (photoOrigin !== variantKey || !open) throw new DOMException("Photography source changed", "AbortError");
+    if (portraitAvailable && !Visual.isOpen()) {
+      const layout = await (layouts.visual ||= NGUI.layout("UICharacterVisualMode"));
+      const parts = await Visual.prepare({
+        layout,
+        bg: v.bg,
+        strings: { reset: T("visual.reset"), back: T("lobby.exit") },
+      });
+      await Visual.open({
+        parts,
+        skeleton: mainPlayer.skeleton,
+        detail: detailViewport(),
+        host: stage(),
+        bgHost: $("visual-bg"),
+        uiHost: $("visual-ui"),
+        players: () => [...portrait.querySelectorAll(".layer")].map((layer) => layer.player).filter(Boolean),
+        onBack: () => setFullscreen(false),
+        alive: () => open && photoOrigin === variantKey,
+      });
     }
-    if(portraitAvailable){Visual.photography(true,Photo.FRAME);Visual.captureReady();mainPlayer.drawFrame?.(false);}
-  })().catch(error=>{photoPrepared=null;throw error;});
+    if (portraitAvailable) {
+      Visual.photography(true, Photo.FRAME);
+      Visual.captureReady();
+      mainPlayer.drawFrame?.(false);
+    }
+  })().catch((error) => {
+    photoPrepared = null;
+    throw error;
+  });
   return photoPrepared;
 }
-function photoPortraitClock(on){
-  for(const layer of $("portrait").querySelectorAll('.layer')){
-    const p=layer.player;if(!p)continue;p.paused=!on;
-    if(on){p.drawFrame?.(false);if(p.stopRequestAnimationFrame)p.startRendering?.();}
-    else p.stopRendering?.();
+function photoPortraitClock(on) {
+  for (const layer of $("portrait").querySelectorAll(".layer")) {
+    const p = layer.player;
+    if (!p) continue;
+    p.paused = !on;
+    if (on) {
+      p.drawFrame?.(false);
+      if (p.stopRequestAnimationFrame) p.startRendering?.();
+    } else p.stopRendering?.();
   }
 }
-function photoVisibility(mode){
-  const portrait=mode==='portrait';
-  for(const id of ['portrait','visual-bg','visual-ui'])$(id).style.visibility=portrait?'visible':'hidden';
-  $("portrait").hidden=!portrait;$("lobby").hidden=portrait;
-  $("lobby").style.visibility=portrait?'hidden':'visible';
-  for(const id of ['portrait','lobby'])$(id).classList.remove('photo-preloading','pending','leaving');
-  document.documentElement.classList.toggle('photo-lobby',!portrait);
+function photoVisibility(mode) {
+  const portrait = mode === "portrait";
+  for (const id of ["portrait", "visual-bg", "visual-ui"]) $(id).style.visibility = portrait ? "visible" : "hidden";
+  $("portrait").hidden = !portrait;
+  $("lobby").hidden = portrait;
+  $("lobby").style.visibility = portrait ? "hidden" : "visible";
+  for (const id of ["portrait", "lobby"]) $(id).classList.remove("photo-preloading", "pending", "leaving");
+  document.documentElement.classList.toggle("photo-lobby", !portrait);
 }
-const photoBridge={
-  info:()=>({variant:variantKey,mode:tab,source:tab==='portrait'?currentBase():shownSource(variant(),'lobby'),hasPortrait:previewAvailable(variant(),'spr'),hasLobby:previewAvailable(variant(),'lobby')}),
-  async full(mode){
+const photoBridge = {
+  info: () => ({
+    variant: variantKey,
+    mode: tab,
+    source: tab === "portrait" ? currentBase() : shownSource(variant(), "lobby"),
+    hasPortrait: previewAvailable(variant(), "spr"),
+    hasLobby: previewAvailable(variant(), "lobby"),
+  }),
+  async full(mode) {
     await photoPreload();
-    if(mode==='portrait'){
-      Visual.photography(true,Photo.FRAME);mainPlayer.paused=false;mainPlayer.drawFrame?.(false);
-    }else await Lobby.prepareFrame();
+    if (mode === "portrait") {
+      Visual.photography(true, Photo.FRAME);
+      mainPlayer.paused = false;
+      mainPlayer.drawFrame?.(false);
+    } else await Lobby.prepareFrame();
     await nextFrame();
-    tab=mode;fullscreen=true;stage().classList.add('fullscreen');Visual.uiOut(slidOut());
-    if(mode==='portrait'){Lobby.suspend();photoVisibility(mode);photoPortraitClock(true);}
-    else{photoPortraitClock(false);photoVisibility(mode);Lobby.resume();Lobby.interactive(false);}
+    tab = mode;
+    fullscreen = true;
+    stage().classList.add("fullscreen");
+    Visual.uiOut(slidOut());
+    if (mode === "portrait") {
+      Lobby.suspend();
+      photoVisibility(mode);
+      photoPortraitClock(true);
+    } else {
+      photoPortraitClock(false);
+      photoVisibility(mode);
+      Lobby.resume();
+      Lobby.interactive(false);
+    }
   },
-  async leave(){
+  async leave() {
     Lobby.suspend();
-    shownLeft=tab;shownKey=leftKey(tab,variant());
+    shownLeft = tab;
+    shownKey = leftKey(tab, variant());
     await setFullscreen(false);
-    await renderAll();await settleImages();
-    if(tab==='lobby')await Lobby.prepareFrame();
+    await renderAll();
+    await settleImages();
+    if (tab === "lobby") await Lobby.prepareFrame();
     await nextFrame();
   },
-  async release(){
-    if(!photoSession)return;photoSession=false;photoPrepared=null;photoOrigin=null;
-    Visual.close({instant:true});Lobby.photography(null);
-    for(const id of ['portrait','lobby','visual-bg','visual-ui']){$(id).style.visibility='';$(id).classList.remove('photo-preloading');}
-    if(tab==='portrait'){Lobby.hide($("lobby"));$("lobby").hidden=true;photoPortraitClock(true);}
-    else{disposePortrait();$("portrait").hidden=true;Lobby.resume();}
-    photoFaces.clear();document.documentElement.classList.remove('photo-lobby');
+  async release() {
+    if (!photoSession) return;
+    photoSession = false;
+    photoPrepared = null;
+    photoOrigin = null;
+    Visual.close({ instant: true });
+    Lobby.photography(null);
+    for (const id of ["portrait", "lobby", "visual-bg", "visual-ui"]) {
+      $(id).style.visibility = "";
+      $(id).classList.remove("photo-preloading");
+    }
+    if (tab === "portrait") {
+      Lobby.hide($("lobby"));
+      $("lobby").hidden = true;
+      photoPortraitClock(true);
+    } else {
+      disposePortrait();
+      $("portrait").hidden = true;
+      Lobby.resume();
+    }
+    photoFaces.clear();
+    document.documentElement.classList.remove("photo-lobby");
   },
-  cancel(){
-    const owned=photoSession;
+  cancel() {
+    const owned = photoSession;
     void photoBridge.release();
-    if(owned&&fullscreen){setStage(false);showExit(false);Lobby.frame('left');Lobby.interactive(false);}
+    if (owned && fullscreen) {
+      setStage(false);
+      showExit(false);
+      Lobby.frame("left");
+      Lobby.interactive(false);
+    }
   },
-  generatedThumbnail:async()=>variant().spr?await thumbnailWork.thumb(currentBase(),'roster'):variant().portrait,
-  defaultThumbnail:async()=>variant().portrait||(variant().spr?await thumb(spineBase('official-spr',variant().spr),'roster'):null),
-  thumbnailChanged(){ctx?.invalidateRoster();},
-  expressions:()=>(mainPlayer?.skeleton?.data.animations||[]).map(a=>a.name).filter(name=>/^\d{2}$/.test(name)),
-  expressionPreview(key){
-    if(!photoFaces.has(key))photoFaces.set(key,thumbnailWork.thumb(currentBase(),'face',key));
+  generatedThumbnail: async () =>
+    variant().spr ? await thumbnailWork.thumb(currentBase(), "roster") : variant().portrait,
+  defaultThumbnail: async () =>
+    variant().portrait || (variant().spr ? await thumb(spineBase("official-spr", variant().spr), "roster") : null),
+  thumbnailChanged() {
+    ctx?.invalidateRoster();
+  },
+  expressions: () =>
+    (mainPlayer?.skeleton?.data.animations || []).map((a) => a.name).filter((name) => /^\d{2}$/.test(name)),
+  expressionPreview(key) {
+    if (!photoFaces.has(key)) photoFaces.set(key, thumbnailWork.thumb(currentBase(), "face", key));
     return photoFaces.get(key);
   },
-  async prepareExpressions(){await Promise.all(photoBridge.expressions().map(key=>photoBridge.expressionPreview(key)));},
-  expressionCard(key,preview){const tree=stripCard(`Expression${key}`,0,{thumb:preview,selected:key===expression});tree.pos=[0,0];return tree;},
-  expression:()=>expression,
-  action:()=>Lobby.playing()||photoLastAction,
-  setExpression(value){expression=value;applyExpression();},
-  actions:()=>[...(Lobby.meta()?.sequences||[]),...[...new Set(Object.values(Lobby.meta()?.idles||{}).flat())].map(anim=>({anim}))].filter((item,index,list)=>list.findIndex(other=>other.anim===item.anim)===index),
-  play(value){photoLastAction=value;Lobby.resume();if((Lobby.meta()?.sequences||[]).some(seq=>seq.anim===value))Lobby.play(value);
-    else{Lobby.skipIntro();Lobby.stop();for(const p of Lobby.layerPlayers())if(p.skeleton?.data.findAnimation(value))p.animationState.setAnimation(0,value,true);}},
-  pause(on){if(tab==='lobby'){if(on)Lobby.suspend();else{Lobby.resume();Lobby.interactive(false);}}else if(mainPlayer)mainPlayer.paused=on;},
-  async redraw(){
-    if(tab==='lobby'){if(await Lobby.prepareFrame())return;}
-    else if(mainPlayer?.skeleton){
-      if(mainPlayer.error)throw new Error('Portrait renderer failed');
-      if(!mainPlayer.disposed){mainPlayer.paused=true;mainPlayer.drawFrame(false);return;}
-    }
-    throw Object.assign(new Error('Renderer is not ready'),{code:'capture_not_ready'});
+  async prepareExpressions() {
+    await Promise.all(photoBridge.expressions().map((key) => photoBridge.expressionPreview(key)));
   },
-  pan(dx,dy){if(tab==='portrait')Visual.panCapture(dx,dy);else Lobby.panBy(dx,dy);},
-  zoom(f,x,y){if(tab==='portrait')Visual.zoomCapture(f,x,y);else Lobby.zoomAt(f,x,y);},
-  paintRoots:()=>tab==='portrait'?[$("visual-bg"),$("portrait")]:[$("lobby")],
+  expressionCard(key, preview) {
+    const tree = stripCard(`Expression${key}`, 0, { thumb: preview, selected: key === expression });
+    tree.pos = [0, 0];
+    return tree;
+  },
+  expression: () => expression,
+  action: () => Lobby.playing() || photoLastAction,
+  setExpression(value) {
+    expression = value;
+    applyExpression();
+  },
+  actions: () =>
+    [
+      ...(Lobby.meta()?.sequences || []),
+      ...[...new Set(Object.values(Lobby.meta()?.idles || {}).flat())].map((anim) => ({ anim })),
+    ].filter((item, index, list) => list.findIndex((other) => other.anim === item.anim) === index),
+  play(value) {
+    photoLastAction = value;
+    Lobby.resume();
+    if ((Lobby.meta()?.sequences || []).some((seq) => seq.anim === value)) Lobby.play(value);
+    else {
+      Lobby.skipIntro();
+      Lobby.stop();
+      for (const p of Lobby.layerPlayers())
+        if (p.skeleton?.data.findAnimation(value)) p.animationState.setAnimation(0, value, true);
+    }
+  },
+  pause(on) {
+    if (tab === "lobby") {
+      if (on) Lobby.suspend();
+      else {
+        Lobby.resume();
+        Lobby.interactive(false);
+      }
+    } else if (mainPlayer) mainPlayer.paused = on;
+  },
+  async redraw() {
+    if (tab === "lobby") {
+      if (await Lobby.prepareFrame()) return;
+    } else if (mainPlayer?.skeleton) {
+      if (mainPlayer.error) throw new Error("Portrait renderer failed");
+      if (!mainPlayer.disposed) {
+        mainPlayer.paused = true;
+        mainPlayer.drawFrame(false);
+        return;
+      }
+    }
+    throw Object.assign(new Error("Renderer is not ready"), { code: "capture_not_ready" });
+  },
+  pan(dx, dy) {
+    if (tab === "portrait") Visual.panCapture(dx, dy);
+    else Lobby.panBy(dx, dy);
+  },
+  zoom(f, x, y) {
+    if (tab === "portrait") Visual.zoomCapture(f, x, y);
+    else Lobby.zoomAt(f, x, y);
+  },
+  paintRoots: () => (tab === "portrait" ? [$("visual-bg"), $("portrait")] : [$("lobby")]),
 };

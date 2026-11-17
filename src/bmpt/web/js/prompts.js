@@ -46,7 +46,10 @@ export function installId(state, key) {
 
 // a card's skeleton: the entry's core in its own install, so a card never shows the current install's file of the
 // same name
-export const entryBase = (entry, state) => ["model", "other"].includes(entry?.kind) ? null : spineBase(entry?.kind === "lobby" ? "lobby" : "spr", entry?.core, installId(state, entry?.install));
+export const entryBase = (entry, state) =>
+  ["model", "other"].includes(entry?.kind)
+    ? null
+    : spineBase(entry?.kind === "lobby" ? "lobby" : "spr", entry?.core, installId(state, entry?.install));
 
 // the entries a prompt lists, from the last scan (mods.entries), leaving out the dismissed ones unless asked (Settings'
 // Check lists them again):
@@ -80,7 +83,9 @@ export function copyText(entry) {
   if (!files.length) return T("mods.copy.kept");
   if (files.some((f) => !f.copy)) return T("mods.copy.none");
   const order = ["kept", "backup", "elsewhere", "game"];
-  const best = order.find((c) => files.every((f) => f.copy === c)) || files.map((f) => f.copy).sort((a, b) => order.indexOf(b) - order.indexOf(a))[0];
+  const best =
+    order.find((c) => files.every((f) => f.copy === c)) ||
+    files.map((f) => f.copy).sort((a, b) => order.indexOf(b) - order.indexOf(a))[0];
   return T(best === "game" ? "mods.copy.kept" : `mods.copy.${best}`);
 }
 
@@ -108,12 +113,27 @@ export function card(entry, { state = null, nameOf = (e) => e?.variant || e?.cor
   if (installs.length > 1) chips.push(installOf(state, entry.install)?.label || entry.install);
   if (entry.overwritten) chips.push(T("mods.copy.none"));
   const apart = which === "untracked" ? entry.state === "damaged" : entry.state === "pending" && entry.overwritten;
-  const badge = entry.state === "damaged" ? { text: T("mods.damaged"), color: COLOUR.greyed, ink: "#ffffff" }
-    : entry.overwritten ? { text: which === "drift" ? T("mods.overwritten") : T("mods.copy.none"), color: COLOUR.greyed, ink: "#ffffff" }
-      : null;
+  const badge =
+    entry.state === "damaged"
+      ? { text: T("mods.damaged"), color: COLOUR.greyed, ink: "#ffffff" }
+      : entry.overwritten
+        ? {
+            text: which === "drift" ? T("mods.overwritten") : T("mods.copy.none"),
+            color: COLOUR.greyed,
+            ink: "#ffffff",
+          }
+        : null;
   return {
-    key: entryKey(entry), label, full: name, kind: entry.kind, size: apart ? 0 : entry.size || 0, chips,
-    disabled: apart, dim: apart, badge, entry,
+    key: entryKey(entry),
+    label,
+    full: name,
+    kind: entry.kind,
+    size: apart ? 0 : entry.size || 0,
+    chips,
+    disabled: apart,
+    dim: apart,
+    badge,
+    entry,
   };
 }
 
@@ -127,9 +147,13 @@ export function details(entry, { which = "untracked" } = {}) {
   const name = (shown[0] || files[0])?.file?.split(/[\\/]/).pop() || entry?.core || "-";
   const more = shown.length > 1 ? ` +${shown.length - 1}` : "";
   const size = shown.reduce((n, f) => n + (f.size || 0), 0);
-  const fields = [[T("field.file"), `${name}${more}`], [T("field.size"), size ? sizeText(size) : "-"]];
+  const fields = [
+    [T("field.file"), `${name}${more}`],
+    [T("field.size"), size ? sizeText(size) : "-"],
+  ];
   if (entry?.state !== "damaged") fields.push([T("field.crc"), crcText(entry)], [T("field.copy"), copyText(entry)]);
-  const repair = entry?.state === "damaged" || (which === "drift" ? entry?.state === "pending" && entry?.overwritten : false);
+  const repair =
+    entry?.state === "damaged" || (which === "drift" ? entry?.state === "pending" && entry?.overwritten : false);
   return { title: kindLabel(entry), fields, repair };
 }
 
@@ -157,7 +181,8 @@ export function untrackedOutcome(button, items, selection, dontAsk = false) {
 export function driftSummary(result, nameOf) {
   const list = (k) => result?.[k] || [];
   const skipped = list("skipped").filter((s) => ["changed", "untracked", "entry_changed"].includes(s.why));
-  const kept = list("done").some((item) => item.kept_current), incomplete = list("done").some((item) => item.incomplete);
+  const kept = list("done").some((item) => item.kept_current),
+    incomplete = list("done").some((item) => item.incomplete);
   if (!list("failed").length && !skipped.length && !list("stuck").length && !kept && !incomplete) return null;
   const label = (e) => ModSwitch.entryLabel(e, nameOf);
   const lines = [T("mods.result", { done: list("done").length, failed: list("failed").length + skipped.length })];
@@ -176,7 +201,9 @@ export function driftSummary(result, nameOf) {
 // the message for an overwritten entry's files: Add First while the mod in the game is not in the library (no library
 // source carries its non-official parts), else the Overwritten message with the repair lines
 export function overwrittenKind(files) {
-  const modded = (files || []).filter((f) => !(typeof f.official === "boolean" ? f.official : f.applied === "official"));
+  const modded = (files || []).filter(
+    (f) => !(typeof f.official === "boolean" ? f.official : f.applied === "official"),
+  );
   return modded.length && modded.every((f) => /^(mod|variant):/.test(f.applied || "")) ? "overwritten" : "addFirst";
 }
 
@@ -193,11 +220,14 @@ export function init(options = {}) {
   // the tray's Back to Official: the drift prompt, or the update summary when only a game update put entries back
   ModSwitch.setDriftPrompt(async () => {
     const entries = await rpc("mods.entries").catch(() => []);
-    if ((await show("drift", { entries, force: true })) == null && !busy && entries.some((e) => e?.state === "updated")) await Impact.show();
+    if ((await show("drift", { entries, force: true })) == null && !busy && entries.some((e) => e?.state === "updated"))
+      await Impact.show();
   });
   // a scan after the start (the window back in front, the classic window closed, a game folder change): the prompts
   // that have something new show once no other popup is open
-  on("library.scanned", () => { later().catch((err) => console.error("prompts", err)); });
+  on("library.scanned", () => {
+    later().catch((err) => console.error("prompts", err));
+  });
 }
 
 // Ready scan results keep startup priority. An unfinished background scan never holds the usable first screen's tour.
@@ -221,7 +251,11 @@ export async function reconcile(entries, s) {
   if (!again.length) return false;
   reconciling = true;
   try {
-    await waitJob(await rpc("mods.restoreDrift", { entries: again.map((e) => ({ install: e.install, core: e.core, state: e.state })) }));
+    await waitJob(
+      await rpc("mods.restoreDrift", {
+        entries: again.map((e) => ({ install: e.install, core: e.core, state: e.state })),
+      }),
+    );
     return true;
   } catch (err) {
     console.warn("drift reconcile", err);
@@ -287,7 +321,8 @@ export async function show(which, { entries = null, dismissed = false, force = f
 async function cardsOf(entries, state, which) {
   const nameOf = await names().catch(() => undefined);
   return entries.map((e) => {
-    const base = entryBase(e, state), lobby = e?.kind === "lobby";
+    const base = entryBase(e, state),
+      lobby = e?.kind === "lobby";
     // a portrait's details show it upright, as the portrait switch popup does
     const big = e?.kind === "spr" ? () => thumb(base, "portrait") : () => thumb(base, "bust", null, lobby);
     return { ...card(e, { state, nameOf, which }), thumb: thumb(base, "card", null, lobby), big };
@@ -307,19 +342,40 @@ function listPrompt({ title, items, buttons, hint, check, closable, which, untic
       Popup.closed(host);
       resolve({ button, selection, checked: !!check?.checked });
     };
-    const draw = (scroll = 0) => Popup.listPopup({
-      host, title, items, selected: [...selection], multi: true, focus, keepScroll: scroll, hint,
-      detailKind: (it) => it.entry?.kind, alignStart: true, slimBand: true,
-      footer: footer(items, selection, { size: which === "untracked" }), check,
-      buttons: buttons.map((b) => ({ ...b, fn: () => (b.greyed ? notify(b.why || "", { kind: "error", error: b.whyError }) : done(b.action)) })),
-      onClose: closable ? () => done("later") : null,
-      onSelect: (key, s) => { focus = key; selection = Popup.toggled(selection, items, key); draw(s); },
-      details: (it) => {
-        const d = details(it.entry, { which });
-        const actions = d.repair ? [[T("mods.details"), () => repairMessage([it], currentState())]] : [];
-        return { title: d.title, fields: d.fields, actions };
-      },
-    }).catch((err) => { console.error("prompt", err); done(null); });
+    const draw = (scroll = 0) =>
+      Popup.listPopup({
+        host,
+        title,
+        items,
+        selected: [...selection],
+        multi: true,
+        focus,
+        keepScroll: scroll,
+        hint,
+        detailKind: (it) => it.entry?.kind,
+        alignStart: true,
+        slimBand: true,
+        footer: footer(items, selection, { size: which === "untracked" }),
+        check,
+        buttons: buttons.map((b) => ({
+          ...b,
+          fn: () => (b.greyed ? notify(b.why || "", { kind: "error", error: b.whyError }) : done(b.action)),
+        })),
+        onClose: closable ? () => done("later") : null,
+        onSelect: (key, s) => {
+          focus = key;
+          selection = Popup.toggled(selection, items, key);
+          draw(s);
+        },
+        details: (it) => {
+          const d = details(it.entry, { which });
+          const actions = d.repair ? [[T("mods.details"), () => repairMessage([it], currentState())]] : [];
+          return { title: d.title, fields: d.fields, actions };
+        },
+      }).catch((err) => {
+        console.error("prompt", err);
+        done(null);
+      });
     draw();
   });
 }
@@ -336,23 +392,40 @@ function repairMessage(items, s) {
 // heldCards(items, held): the cards of entries whose configured mod's rig a game update changed (``held``: their keys)
 // carry the Rig Changed badge; they start unticked, so Apply Mod Configuration writes them only when ticked
 export function heldCards(items, held) {
-  return items.map((it) => (held.has(it.key) && !it.disabled
-    ? { ...it, badge: { text: T("mods.heldBadge"), color: COLOUR.warning, ink: "#ffffff" } } : it));
+  return items.map((it) =>
+    held.has(it.key) && !it.disabled
+      ? { ...it, badge: { text: T("mods.heldBadge"), color: COLOUR.warning, ink: "#ffffff" } }
+      : it,
+  );
 }
-
 
 // "Mods Back to Official": exactly two buttons, no Later and no close; Escape and the backdrop do
 // nothing. Apply Mod Configuration sends the ticked cards (the others are kept as they are); Keep as Is keeps them all.
 async function driftPrompt(lists, s) {
   const held = Impact.heldKeys(lists.listed, await Impact.impacts(lists.listed));
-  const items = heldCards([...(await cardsOf(lists.listed, s, "drift")), ...(await cardsOf(lists.apart, s, "drift"))], held);
+  const items = heldCards(
+    [...(await cardsOf(lists.listed, s, "drift")), ...(await cardsOf(lists.apart, s, "drift"))],
+    held,
+  );
   const blocked = s.available === false ? ModSwitch.reasonText(s) : "";
   const hint = lists.apart.length ? T("mods.stillOverwritten", { n: lists.apart.length }) : "";
   const answer = await listPrompt({
-    title: T("mods.driftTitle"), items, hint, closable: false, which: "drift", unticked: held,
+    title: T("mods.driftTitle"),
+    items,
+    hint,
+    closable: false,
+    which: "drift",
+    unticked: held,
     buttons: [
       { label: T("mods.driftKeep"), action: "keep" },
-      { label: T("mods.driftApply"), action: "apply", primary: true, greyed: !!blocked && s.reason !== "classic_open", why: blocked, whyError: { code: s.reason, params: s.reasonParams } },
+      {
+        label: T("mods.driftApply"),
+        action: "apply",
+        primary: true,
+        greyed: !!blocked && s.reason !== "classic_open",
+        why: blocked,
+        whyError: { code: s.reason, params: s.reasonParams },
+      },
     ],
   });
   if (!answer.button) return null;
@@ -360,7 +433,9 @@ async function driftPrompt(lists, s) {
   const choice = ModSwitch.driftChoice(answer.button, listed, [...answer.selection]);
   const plain = (e) => ({ install: e.install, core: e.core, state: e.state });
   if (choice.dismiss.length) {
-    await rpc("mods.dismiss", { kind: "drift", entries: choice.dismiss.map(plain) }).catch((err) => notify(ModSwitch.errorText(err.code, err.params), { kind: "error", error: err }));
+    await rpc("mods.dismiss", { kind: "drift", entries: choice.dismiss.map(plain) }).catch((err) =>
+      notify(ModSwitch.errorText(err.code, err.params), { kind: "error", error: err }),
+    );
   }
   if (choice.restore.length) await applyDrift(choice.restore.map(plain));
   return answer.button;
@@ -383,8 +458,12 @@ export async function applyDrift(entries) {
     const result = await Loading.task((update) => waitJob(id, update), { label: running });
     const summary = driftSummary(result, await names().catch(() => undefined));
     if (!summary) return;
-    await Popup.message({ title: summary.title, lines: summary.lines, ok: T("picker.ok"),
-      error: { code: result.failed?.[0]?.code || "internal", params: { failed: result.failed, left: result.left } } });
+    await Popup.message({
+      title: summary.title,
+      lines: summary.lines,
+      ok: T("picker.ok"),
+      error: { code: result.failed?.[0]?.code || "internal", params: { failed: result.failed, left: result.left } },
+    });
   } catch (err) {
     refusal = err;
   }
@@ -399,13 +478,22 @@ async function untrackedPrompt(lists, s) {
   const check = { label: T("mods.dontAsk"), checked: false, onChange: () => {} };
   const labels = { add: T("mods.untrackedAdd"), addTurnOn: T("mods.addTurnOn"), later: T("update.later") };
   const answer = await listPrompt({
-    title: T("mods.untrackedTitle"), items, hint: T("mods.untrackedHint"), check, closable: true, which: "untracked",
-    buttons: ModSwitch.untrackedButtons(s).reverse().map((id) => ({ label: labels[id], action: id, primary: id === "add" })),
+    title: T("mods.untrackedTitle"),
+    items,
+    hint: T("mods.untrackedHint"),
+    check,
+    closable: true,
+    which: "untracked",
+    buttons: ModSwitch.untrackedButtons(s)
+      .reverse()
+      .map((id) => ({ label: labels[id], action: id, primary: id === "add" })),
   });
   if (!answer.button) return null;
   const outcome = untrackedOutcome(answer.button, items, answer.selection, answer.checked);
   if (outcome.dismiss.length) {
-    await rpc("mods.dismiss", { kind: "untracked", entries: outcome.dismiss }).catch((err) => notify(ModSwitch.errorText(err.code, err.params), { kind: "error", error: err }));
+    await rpc("mods.dismiss", { kind: "untracked", entries: outcome.dismiss }).catch((err) =>
+      notify(ModSwitch.errorText(err.code, err.params), { kind: "error", error: err }),
+    );
   }
   if (outcome.adopt.length) {
     const added = await adopt(outcome.adopt);
@@ -426,13 +514,21 @@ export async function adopt(entries) {
   const running = T("progress.add", { name: T("progress.mods") });
   try {
     const result = await Loading.task((update) => waitJob(id, update), { label: running });
-    const failed = [...(result?.failed || []), ...(result?.skipped || []).map((s) => ({ entry: s, code: "entry_changed" }))];
+    const failed = [
+      ...(result?.failed || []),
+      ...(result?.skipped || []).map((s) => ({ entry: s, code: "entry_changed" })),
+    ];
     if (!failed.length) return true;
     const nameOf = await names().catch(() => undefined);
     await Popup.message({
-      title: T("mods.untrackedAdd"), error: { code: failed[0].code, params: { failed } },
-      lines: [T("mods.result", { done: (result?.added || []).length, failed: failed.length }),
-        ...failed.slice(0, 6).map((f) => `${ModSwitch.entryLabel(f.entry, nameOf)} - ${ModSwitch.errorText(f.code, f.params)}`)],
+      title: T("mods.untrackedAdd"),
+      error: { code: failed[0].code, params: { failed } },
+      lines: [
+        T("mods.result", { done: (result?.added || []).length, failed: failed.length }),
+        ...failed
+          .slice(0, 6)
+          .map((f) => `${ModSwitch.entryLabel(f.entry, nameOf)} - ${ModSwitch.errorText(f.code, f.params)}`),
+      ],
       ok: T("picker.ok"),
     });
     return (result?.added || []).length > 0;
@@ -450,12 +546,18 @@ export async function overwritten({ name, core, files }) {
   const install = s.current;
   const installs = (s.installs || []).filter((i) => i.key === install);
   if (overwrittenKind(files) === "overwritten") {
-    await Popup.message({ title: T("mods.overwrittenTitle"), lines: overwrittenLines({ names: name ? [name] : [], installs }, T), ok: T("picker.ok") });
+    await Popup.message({
+      title: T("mods.overwrittenTitle"),
+      lines: overwrittenLines({ names: name ? [name] : [], installs }, T),
+      ok: T("picker.ok"),
+    });
     return false;
   }
   const r = await Popup.message({
-    title: T("mods.overwrittenTitle"), lines: addFirstLines({ names: name ? [name] : [] }, T),
-    ok: T("mods.untrackedAdd"), cancel: T("popup.cancel"),
+    title: T("mods.overwrittenTitle"),
+    lines: addFirstLines({ names: name ? [name] : [] }, T),
+    ok: T("mods.untrackedAdd"),
+    cancel: T("popup.cancel"),
   });
   if (r.button !== "ok" || !install || !core) return false;
   return adopt([{ install, core: String(core).toLowerCase() }]);

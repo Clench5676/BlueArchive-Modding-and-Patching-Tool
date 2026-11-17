@@ -19,30 +19,86 @@ import { S } from "./util.js";
 import { XS_BUTTON, SPACE, TYPE, CONTROL, POPUP_FRAME, POPUP_TYPE } from "./ui-tokens.js";
 import { row as layoutRow, stack as layoutStack, container } from "./ui-grid.js";
 import { ROW_W as OPTION_WIDTH, rowBase, radioRow } from "./settings-rows.js";
-import { BUTTON_BODY_H, loadImportLayouts, importArtwork, clipButtonPatterns, ROW_SCALE, ROW_WIDTH, ROW_HEIGHT, ROW_SELECTION, ROW_CHECK_TOP,
-  PAPER_CENTRE, emptyBlock, controlRect, badgeRect } from "./import-layout.js";
+import {
+  BUTTON_BODY_H,
+  loadImportLayouts,
+  importArtwork,
+  clipButtonPatterns,
+  ROW_SCALE,
+  ROW_WIDTH,
+  ROW_HEIGHT,
+  ROW_SELECTION,
+  ROW_CHECK_TOP,
+  PAPER_CENTRE,
+  emptyBlock,
+  controlRect,
+  badgeRect,
+} from "./import-layout.js";
 import { hasDetails, detailLines, withoutFile } from "./import-details.js";
 import { suggestImports } from "./import-assistants.js";
-import { createImportState, countsOf, eligible, RESOURCE_TYPES, STATES, createMissingFlow, missingText, statusText, groupsText,
-  needsChoose, chooseSize, CHOOSE, NOTE_LEFT, noteRoom, sourceFolder } from "./import-state.js";
+import {
+  createImportState,
+  countsOf,
+  eligible,
+  RESOURCE_TYPES,
+  STATES,
+  createMissingFlow,
+  missingText,
+  statusText,
+  groupsText,
+  needsChoose,
+  chooseSize,
+  CHOOSE,
+  NOTE_LEFT,
+  noteRoom,
+  sourceFolder,
+} from "./import-state.js";
 import { characterPicker } from "./character-picker.js";
 import { scrollbar as gameScrollbar, scrollbarTrack } from "./scrollbar.js";
 
 // The list's top in the panel: 12 under Items' grey Inbox (its top edge is at 98). The search field, open, takes its place and
 // pushes the rows down by SEARCH_ROOM.
-const LIST_TOP = 110, SEARCH_ROOM = 92;
+const LIST_TOP = 110,
+  SEARCH_ROOM = 92;
 // The list's box in the panel (px): where it starts, how wide it is and where it ends; the search field and the tools under it share its width.
-const LIST_X = 26, LIST_W = 1220, LIST_BOTTOM = 616;
+const LIST_X = 26,
+  LIST_W = 1220,
+  LIST_BOTTOM = 616;
 const KIND_KEYS = { spr: "tab.portrait", lobby: "tab.lobby", model: "tab.model", other: "import.other" };
-const REASONS = new Set(["unreadable", "no_target", "conflict", "spine_version", "unsupported",
-  "source_unknown", "source_conflict", "platform_unsupported", "target_unknown", "conversion_names", "no_matching_assets", "conversion_failed",
-  "mod_platform_unknown", "library_io_error", "mod_target_ambiguous", "mod_target_unknown", "mod_parts_missing",
-  "game_file_conflict", "mod_platform_mismatch", "mod_unity_version_mismatch", "mod_release_mismatch", "required_asset_extract_failed",
-  "required_asset_apply_failed", "required_assets_unmatched", "entry_changed", "original_invalid", "failed"]);
+const REASONS = new Set([
+  "unreadable",
+  "no_target",
+  "conflict",
+  "spine_version",
+  "unsupported",
+  "source_unknown",
+  "source_conflict",
+  "platform_unsupported",
+  "target_unknown",
+  "conversion_names",
+  "no_matching_assets",
+  "conversion_failed",
+  "mod_platform_unknown",
+  "library_io_error",
+  "mod_target_ambiguous",
+  "mod_target_unknown",
+  "mod_parts_missing",
+  "game_file_conflict",
+  "mod_platform_mismatch",
+  "mod_unity_version_mismatch",
+  "mod_release_mismatch",
+  "required_asset_extract_failed",
+  "required_asset_apply_failed",
+  "required_assets_unmatched",
+  "entry_changed",
+  "original_invalid",
+  "failed",
+]);
 const OUTCOMES = new Set(["imported", "updated", "unchanged", "failed", "skipped"]);
-const sizeText = (size) => size >= 1048576 ? `${(size / 1048576).toFixed(1)} MB` : `${Math.ceil((size || 0) / 1024)} KB`;
+const sizeText = (size) =>
+  size >= 1048576 ? `${(size / 1048576).toFixed(1)} MB` : `${Math.ceil((size || 0) / 1024)} KB`;
 const baseName = (path) => path?.split(/[\\/]/).pop() || "";
-const listSeparator = () => /^(zh|ja)/i.test(language()) ? "、" : ", ";
+const listSeparator = () => (/^(zh|ja)/i.test(language()) ? "、" : ", ");
 // the dialogs' scrolling area [left, top, width, height] (px in the stage; app.css .import-dialog-content has the same numbers)
 // and their frame's height: the area 83.5 px under the frame's top, and the XS footer every popup has about
 // SPACE.xl under the area (POPUP_FOOTER.clearance)
@@ -53,78 +109,176 @@ export function catalogEntries(data) {
   return (data?.families || []).flatMap((family) => (family.variants || []).map((variant) => ({ ...variant, family })));
 }
 export function entryIdentity(entry, catalog) {
-  const variant = catalog.find((item) => item.key === entry.variant)
-    || catalog.find((item) => entry.core && [item.fileId, item.spr, item.lobby, item.model].includes(entry.core));
+  const variant =
+    catalog.find((item) => item.key === entry.variant) ||
+    catalog.find((item) => entry.core && [item.fileId, item.spr, item.lobby, item.model].includes(entry.core));
   const names = L(variant?.names);
-  const name = studentName(variant, names?.full || names?.short || entry.core || baseName(entry.paths?.[0]) || entry.id);
-  return { variant, name, core: entry.core || variant?.fileId || entry.variant || baseName(entry.paths?.[0]),
-    search: [name, entry.core, entry.variant, ...(entry.paths || []), ...customAliases(variant),
-      ...Object.values(variant?.names || {}).flatMap((value) => typeof value === "string" ? [value] : Object.values(value))].filter(Boolean).join(" ").toLocaleLowerCase() };
+  const name = studentName(
+    variant,
+    names?.full || names?.short || entry.core || baseName(entry.paths?.[0]) || entry.id,
+  );
+  return {
+    variant,
+    name,
+    core: entry.core || variant?.fileId || entry.variant || baseName(entry.paths?.[0]),
+    search: [
+      name,
+      entry.core,
+      entry.variant,
+      ...(entry.paths || []),
+      ...customAliases(variant),
+      ...Object.values(variant?.names || {}).flatMap((value) =>
+        typeof value === "string" ? [value] : Object.values(value),
+      ),
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLocaleLowerCase(),
+  };
 }
 
-export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, popups = Popup,
-  thumbnails = thumbnailScope, modelThumbnails = modelThumbnail, allowed = spineAllowed, suggest = suggestImports, loading = Loading,
-  bars = gameScrollbar } = {}) {
+export function createImportPage({
+  host,
+  call = rpc,
+  jobs = waitJob,
+  ui = NGUI,
+  popups = Popup,
+  thumbnails = thumbnailScope,
+  modelThumbnails = modelThumbnail,
+  allowed = spineAllowed,
+  suggest = suggestImports,
+  loading = Loading,
+  bars = gameScrollbar,
+} = {}) {
   const model = createImportState({ rpc: call, waitJob: jobs, suggest, changed: () => context?.invalidateRoster?.() });
-  let context = null, catalog = [], visible = false, root = null, scope = null;
-  let query = "", filter = "all", ascending = true, searchOpen = false, rowsKey = null, previewKey = null, generation = 0;
-  let rows = new Map(), identities = new WeakMap(), dom = {}, dialogClose = null, countsKey = null;
-  let art = null, merged = false, shownError = null, listTop = LIST_TOP;
+  let context = null,
+    catalog = [],
+    visible = false,
+    root = null,
+    scope = null;
+  let query = "",
+    filter = "all",
+    ascending = true,
+    searchOpen = false,
+    rowsKey = null,
+    previewKey = null,
+    generation = 0;
+  let rows = new Map(),
+    identities = new WeakMap(),
+    dom = {},
+    dialogClose = null,
+    countsKey = null;
+  let art = null,
+    merged = false,
+    shownError = null,
+    listTop = LIST_TOP;
   const thumbnailJobs = new Map();
-  const liveVersions = new Map(), refreshedResults = new WeakSet();
-  let listGeneration = 0, liveRefreshPending = false;
-  const showError = (message, error) => Popup.isRefusal(error)
-    ? popups.message({ title: T("quit.title"), lines: [message], ok: T("picker.ok") })
-    : popups.message({ title: T("job.failed"), lines: [withCode(message, error, T)], ok: T("picker.ok"), error });
+  const liveVersions = new Map(),
+    refreshedResults = new WeakSet();
+  let listGeneration = 0,
+    liveRefreshPending = false;
+  const showError = (message, error) =>
+    Popup.isRefusal(error)
+      ? popups.message({ title: T("quit.title"), lines: [message], ok: T("picker.ok") })
+      : popups.message({ title: T("job.failed"), lines: [withCode(message, error, T)], ok: T("picker.ok"), error });
   const drawings = new Set();
-  let loadingHold = null, left = Promise.resolve(), leave = () => {};
+  let loadingHold = null,
+    left = Promise.resolve(),
+    leave = () => {};
   const waiters = new Set();
-  const wake = () => { for (const resolve of waiters) resolve(); waiters.clear(); };
-  const waiting = () => model.state.phase !== "picking" && (drawings.size || ["analyzing", "running", "saving"].includes(model.state.phase));
+  const wake = () => {
+    for (const resolve of waiters) resolve();
+    waiters.clear();
+  };
+  const waiting = () =>
+    model.state.phase !== "picking" &&
+    (drawings.size || ["analyzing", "running", "saving"].includes(model.state.phase));
   function importProgress() {
     const { phase, progress: p, reconnecting } = model.state;
     if (phase === "running") {
-      const done = p?.completed ?? p?.done ?? 0, total = p?.total || model.state.taskEntries.length;
-      if (reconnecting) return T("import.completedProgress", { done, total, remaining: p?.remaining ?? Math.max(0, total - done),
-        action: T("import.reconnecting"), name: "", step: "" }).trim();
+      const done = p?.completed ?? p?.done ?? 0,
+        total = p?.total || model.state.taskEntries.length;
+      if (reconnecting)
+        return T("import.completedProgress", {
+          done,
+          total,
+          remaining: p?.remaining ?? Math.max(0, total - done),
+          action: T("import.reconnecting"),
+          name: "",
+          step: "",
+        }).trim();
       const current = model.state.taskEntries.find((entry) => entry.id === p?.current);
-      const action = ["update", "convert", "add", "apply"].includes(p?.phase) ? `import.phase.${p.phase}` : "job.running";
+      const action = ["update", "convert", "add", "apply"].includes(p?.phase)
+        ? `import.phase.${p.phase}`
+        : "job.running";
       const identity = current && identified(current);
-      const phase = T(action).replace(/\{name\}/g, "").replace(/[:：]\s*$/u, "").trim();
-      const step = p?.step || "import.step.check", detail = T(step);
+      const phase = T(action)
+        .replace(/\{name\}/g, "")
+        .replace(/[:：]\s*$/u, "")
+        .trim();
+      const step = p?.step || "import.step.check",
+        detail = T(step);
       const repeated = { "import.phase.add": "import.step.add", "import.phase.apply": "import.step.apply" };
-      return T("import.completedProgress", { done, total, remaining: p?.remaining ?? Math.max(0, total - done), action: phase,
+      return T("import.completedProgress", {
+        done,
+        total,
+        remaining: p?.remaining ?? Math.max(0, total - done),
+        action: phase,
         // who and the kind as a job over mods names them (job-progress.js modLine): "Hoshino (Swimsuit) - Chibi"
-        name: current ? `${progressName(identity.variant, "", identity.name)}${T("progress.sep")}${T(KIND_KEYS[current.kind] || KIND_KEYS.other)}` : "",
-        step: detail && detail !== phase && repeated[action] !== step ? T("progress.step", { step: detail }) : "" });
+        name: current
+          ? `${progressName(identity.variant, "", identity.name)}${T("progress.sep")}${T(KIND_KEYS[current.kind] || KIND_KEYS.other)}`
+          : "",
+        step: detail && detail !== phase && repeated[action] !== step ? T("progress.step", { step: detail }) : "",
+      });
     }
-    const label = T(reconnecting ? "import.reconnecting" : ["analyzing", "saving"].includes(phase) ? `import.${phase}` : "app.loading");
+    const label = T(
+      reconnecting
+        ? "import.reconnecting"
+        : ["analyzing", "saving"].includes(phase)
+          ? `import.${phase}`
+          : "app.loading",
+    );
     const done = p?.completed ?? p?.done ?? (Number.isFinite(p?.current) ? p.current : 0);
     return p?.total > 0 ? T("import.waitProgress", { label, done, total: p.total }) : label;
   }
   function holdArtwork() {
     if (!visible || loadingHold || !waiting()) return;
     const token = generation;
-    const work = loading.hold(async () => {
-      while (visible && token === generation && waiting()) {
-        await new Promise((resolve) => waiters.add(resolve));
-      }
-    }, { until: left, all: true, progress: importProgress });
+    const work = loading.hold(
+      async () => {
+        while (visible && token === generation && waiting()) {
+          await new Promise((resolve) => waiters.add(resolve));
+        }
+      },
+      { until: left, all: true, progress: importProgress },
+    );
     loadingHold = work;
-    work.catch((error) => console.error("Import loading", error)).finally(() => {
-      if (loadingHold === work) { loadingHold = null; holdArtwork(); }
-    });
+    work
+      .catch((error) => console.error("Import loading", error))
+      .finally(() => {
+        if (loadingHold === work) {
+          loadingHold = null;
+          holdArtwork();
+        }
+      });
   }
   const report = (error, entry = null) => {
     const code = typeof error === "string" ? error : error?.code || error?.reason;
     if (code === "original_unavailable") {
       const state = modsState() || {};
-      return [T("mods.overwrittenTitle"), ...overwrittenLines({
-        installs: (state.installs || []).filter((i) => i.key === state.current),
-      }, T)].join("\n");
+      return [
+        T("mods.overwrittenTitle"),
+        ...overwrittenLines(
+          {
+            installs: (state.installs || []).filter((i) => i.key === state.current),
+          },
+          T,
+        ),
+      ].join("\n");
     }
     if (entry && REASONS.has(code)) return T(`import.reason.${code}`, error?.params || {});
-    const key = `error.${code}`, text = T(key, { file: entry?.paths?.[0] || "", ...(error?.params || {}) });
+    const key = `error.${code}`,
+      text = T(key, { file: entry?.paths?.[0] || "", ...(error?.params || {}) });
     return code && code !== "internal" && text !== key ? text : T("import.failed");
   };
   // A failed row's note: the row's short reason, then the localized error text with its parameters when the code has
@@ -134,48 +288,79 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     const detail = item.error || { code: item.reason, params: item.params || {} };
     const label = report(item, entry);
     if (item.reason === "original_unavailable") return label;
-    const key = `error.${detail.code}`, text = detail.code ? T(key, { file: entry?.paths?.[0] || "", ...(detail.params || {}) }) : key;
+    const key = `error.${detail.code}`,
+      text = detail.code ? T(key, { file: entry?.paths?.[0] || "", ...(detail.params || {}) }) : key;
     return text !== key && text !== label ? `${label} - ${text}` : label;
   };
   const el = (tag, className = "", text = "") => {
-    const element = document.createElement(tag); element.className = className; element.textContent = text; return element;
+    const element = document.createElement(tag);
+    element.className = className;
+    element.textContent = text;
+    return element;
   };
   const tracked = (work) => {
     drawings.add(work);
     holdArtwork();
-    work.catch((error) => console.error("Import artwork", error)).finally(() => { drawings.delete(work); wake(); });
+    work
+      .catch((error) => console.error("Import artwork", error))
+      .finally(() => {
+        drawings.delete(work);
+        wake();
+      });
     return work;
   };
   // The game list's scrollbar (UICharacterCollection/SeletControl/List/Scroll Bar) over a native scrolling area, as
   // Popup.scrollArea draws it: the area's own bar is hidden (app.css), this one follows its scroll position and shows only
   // while the content overflows. box: the area's [left, top, width, height] in host, the edge the painted bar ends on.
   const scrollBars = new Map();
-  const syncBar = (area) => { scrollBars.get(area)?.bar?.sync(area.clientHeight, area.scrollHeight, area.scrollTop); };
+  const syncBar = (area) => {
+    scrollBars.get(area)?.bar?.sync(area.clientHeight, area.scrollHeight, area.scrollTop);
+  };
   function bindBar(area, barHost, box, z = 60) {
-    const key = JSON.stringify(box), mine = scrollBars.get(area);
-    if (mine?.key === key) { syncBar(area); return; }
+    const key = JSON.stringify(box),
+      mine = scrollBars.get(area);
+    if (mine?.key === key) {
+      syncBar(area);
+      return;
+    }
     mine?.bar?.remove();
     const record = { key, bar: null };
     scrollBars.set(area, record);
     if (!mine) area.addEventListener("scroll", () => syncBar(area));
-    tracked(bars(barHost, scrollbarTrack(box, S), { collection: art.collection(), z, className: "import-bar" }).then((bar) => {
-      if (scrollBars.get(area) !== record) { bar.remove(); return; }
-      record.bar = bar; syncBar(area);
-    }).catch((error) => console.warn("import scrollbar unavailable", error)));
+    tracked(
+      bars(barHost, scrollbarTrack(box, S), { collection: art.collection(), z, className: "import-bar" })
+        .then((bar) => {
+          if (scrollBars.get(area) !== record) {
+            bar.remove();
+            return;
+          }
+          record.bar = bar;
+          syncBar(area);
+        })
+        .catch((error) => console.warn("import scrollbar unavailable", error)),
+    );
   }
   // DOM below is geometry, scrolling and accessible hit areas only. All visible widgets come from import-layout.js.
   const place = (element, x, y, width, height) => {
-    Object.assign(element.style, { position: "absolute", left: `${x}px`, top: `${y}px`, width: `${width}px`, height: `${height}px` });
+    Object.assign(element.style, {
+      position: "absolute",
+      left: `${x}px`,
+      top: `${y}px`,
+      width: `${width}px`,
+      height: `${height}px`,
+    });
     return element;
   };
   function paint(element, tree, { scale = S, origin = [0, 0], textures = {}, onRender = null } = {}) {
-    const version = element.paintVersion = (element.paintVersion || 0) + 1;
+    const version = (element.paintVersion = (element.paintVersion || 0) + 1);
     const next = el("div", "import-art");
     if (tree.rowHeight) element.style.height = `${tree.rowHeight * scale}px`;
     const drawing = ui.render(tree, next, { scale, origin, textures, deferImages: true }).then((view) => {
       clipButtonPatterns(view);
       if (element.paintVersion === version) {
-        element.art?.remove(); element.art = next; element.appendChild(next);
+        element.art?.remove();
+        element.art = next;
+        element.appendChild(next);
         onRender?.(view);
       }
       return Promise.allSettled(view.images || []).then(() => view);
@@ -184,97 +369,198 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
   }
   function textWidget(element, caption, source = "note", { scale = 0.5, origin = [0, 0] } = {}) {
     if (element.caption === `${source}/${caption}`) return;
-    element.caption = `${source}/${caption}`; paint(element, art[source](caption), { scale, origin });
+    element.caption = `${source}/${caption}`;
+    paint(element, art[source](caption), { scale, origin });
   }
   // name: the accessible name where the painted caption is not one (a glyph on a pager button)
   function button(caption, action, { width = 180, primary = false, scale = 0.4, name = null, bodyHeight = null } = {}) {
-    const b = el("button", "hit import-button"); b.type = "button"; b.dataset.action = action; b.accessibleName = name;
+    const b = el("button", "hit import-button");
+    b.type = "button";
+    b.dataset.action = action;
+    b.accessibleName = name;
     const height = (bodyHeight ?? BUTTON_BODY_H) * scale;
     Object.assign(b.style, { width: `${width}px`, height: `${height}px` });
     b.refresh = () => {
-      const key = JSON.stringify([b.caption, b.disabled, b.size]); if (key === b.drawKey) return; b.drawKey = key;
-      paint(b, art.button(b.caption, width / scale, primary, !b.disabled, b.size, bodyHeight), { scale, origin: [width / 2, height / 2] });
+      const key = JSON.stringify([b.caption, b.disabled, b.size]);
+      if (key === b.drawKey) return;
+      b.drawKey = key;
+      paint(b, art.button(b.caption, width / scale, primary, !b.disabled, b.size, bodyHeight), {
+        scale,
+        origin: [width / 2, height / 2],
+      });
     };
     b.buttonWidth = width / scale;
-    setCaption(b, caption); return b;
+    setCaption(b, caption);
+    return b;
   }
   function setCaption(b, caption) {
-    b.caption = caption; b.setAttribute("aria-label", b.accessibleName || caption); b.refresh();
+    b.caption = caption;
+    b.setAttribute("aria-label", b.accessibleName || caption);
+    b.refresh();
   }
-  const EMPTY_BOX = [1200, 100];   // each empty-list label's box (px), its text centred in it
+  const EMPTY_BOX = [1200, 100]; // each empty-list label's box (px), its text centred in it
   // The row under the list is one row of buttonXS controls (CONTROL.buttonXS: 104 high, caption 40 down to XS_BUTTON.fsMin), SPACE.m
   // apart, drawn from the prefabs' 162-high bodies. Import stands out by its gold, not by its size. Its right edge is the list
   // tools'. The 902 is the row's centre line in the stage (px; the App's own: the row clears the bottom nav's 104 px area).
-  const FOOTER_ROW = { scale: CONTROL.buttonXS.h * S / BUTTON_BODY_H, y: 902, right: 1848, wide: 330, width: XS_BUTTON.w * S,
-    gap: SPACE.m * S, size: { max: CONTROL.buttonXS.fs * BUTTON_BODY_H / CONTROL.buttonXS.h, min: XS_BUTTON.fsMin * BUTTON_BODY_H / CONTROL.buttonXS.h } };
+  const FOOTER_ROW = {
+    scale: (CONTROL.buttonXS.h * S) / BUTTON_BODY_H,
+    y: 902,
+    right: 1848,
+    wide: 330,
+    width: XS_BUTTON.w * S,
+    gap: SPACE.m * S,
+    size: {
+      max: (CONTROL.buttonXS.fs * BUTTON_BODY_H) / CONTROL.buttonXS.h,
+      min: (XS_BUTTON.fsMin * BUTTON_BODY_H) / CONTROL.buttonXS.h,
+    },
+  };
   // The list's tools (the Items prefab's Btn_Receive bodies at TOOL_SCALE) fill the list's width, SPACE.m apart, each in the share of
   // it its caption needs in the longest language: [key, caption key, share].
-  const TOOL_SCALE = 0.34 * CONTROL.buttonXS.h / CONTROL.buttonS.h;
-  const TOOLBAR = [["files", "addFiles", 174], ["folder", "addFolder", 190], ["all", "all", 126], ["none", "none", 140],
-    ["remove", "remove", 150], ["removeImported", "removeImported", 224], ["clear", "clear", 156]];
+  const TOOL_SCALE = (0.34 * CONTROL.buttonXS.h) / CONTROL.buttonS.h;
+  const TOOLBAR = [
+    ["files", "addFiles", 174],
+    ["folder", "addFolder", 190],
+    ["all", "all", 126],
+    ["none", "none", 140],
+    ["remove", "remove", 150],
+    ["removeImported", "removeImported", 224],
+    ["clear", "clear", 156],
+  ];
   // the tools, in px of the panel: a row under the list, level with it, as high as the body
-  const toolRow = () => layoutRow(TOOLBAR.map(([, , share]) => ({ grow: share, h: BUTTON_BODY_H * TOOL_SCALE })),
-    { x: LIST_X, y: LIST_BOTTOM + SPACE.m * S, w: LIST_W, gap: SPACE.m * S });
+  const toolRow = () =>
+    layoutRow(
+      TOOLBAR.map(([, , share]) => ({ grow: share, h: BUTTON_BODY_H * TOOL_SCALE })),
+      { x: LIST_X, y: LIST_BOTTOM + SPACE.m * S, w: LIST_W, gap: SPACE.m * S },
+    );
   // Buttons side by side share one caption size: the list's seven tools, and the row under the list.
   function shareSizes() {
-    for (const [keys, range] of [[TOOLBAR.map(([key]) => key)], [["fillAll", "options", "recheck", "start"], FOOTER_ROW.size]]) {
+    for (const [keys, range] of [
+      [TOOLBAR.map(([key]) => key)],
+      [["fillAll", "options", "recheck", "start"], FOOTER_ROW.size],
+    ]) {
       const buttons = keys.map((key) => dom[key]).filter((b) => b && !b.hidden);
-      const size = buttons.length > 1 && art ? art.buttonSize(buttons.map((b) => b.caption), buttons.map((b) => b.buttonWidth), range) : null;
-      for (const b of buttons) { b.size = size; b.refresh(); }
+      const size =
+        buttons.length > 1 && art
+          ? art.buttonSize(
+              buttons.map((b) => b.caption),
+              buttons.map((b) => b.buttonWidth),
+              range,
+            )
+          : null;
+      for (const b of buttons) {
+        b.size = size;
+        b.refresh();
+      }
     }
   }
   function checkbox(caption, checked, onChange, { labelWidth = 540 } = {}) {
-    const label = el("label", "import-check"), input = el("input", "hit"); input.type = "checkbox"; input.checked = checked;
+    const label = el("label", "import-check"),
+      input = el("input", "hit");
+    input.type = "checkbox";
+    input.checked = checked;
     const graphic = place(el("div", "import-check-art"), 0, 0, 50, 50);
     input.setAttribute("aria-label", caption || T("import.select"));
     label.append(graphic, input);
     let copy = null;
     if (caption) {
-      copy = place(el("div"), 65, 0, labelWidth, 55); label.appendChild(copy);
-      paint(copy, art.label(art.empty(caption), caption, labelWidth / 0.4), { scale: 0.4, origin: [labelWidth / 2, 26] });
+      copy = place(el("div"), 65, 0, labelWidth, 55);
+      label.appendChild(copy);
+      paint(copy, art.label(art.empty(caption), caption, labelWidth / 0.4), {
+        scale: 0.4,
+        origin: [labelWidth / 2, 26],
+      });
     }
     let previous = null;
     const refresh = () => {
-      const key = `${input.checked}/${input.disabled}`; if (key === previous) return; previous = key;
+      const key = `${input.checked}/${input.disabled}`;
+      if (key === previous) return;
+      previous = key;
       paint(graphic, art.checkbox(input.checked, input.disabled), { scale: 0.5, origin: [25, 25] });
     };
-    input.addEventListener("change", () => { onChange(input.checked); refresh(); }); refresh();
-    return { label, input, refresh, relabel(value) {
-      input.setAttribute("aria-label", value);
-      if (copy) paint(copy, art.label(art.empty(value), value, labelWidth / 0.4), { scale: 0.4, origin: [labelWidth / 2, 26] });
-    } };
+    input.addEventListener("change", () => {
+      onChange(input.checked);
+      refresh();
+    });
+    refresh();
+    return {
+      label,
+      input,
+      refresh,
+      relabel(value) {
+        input.setAttribute("aria-label", value);
+        if (copy)
+          paint(copy, art.label(art.empty(value), value, labelWidth / 0.4), {
+            scale: 0.4,
+            origin: [labelWidth / 2, 26],
+          });
+      },
+    };
   }
   function toggle(caption, checked, onChange) {
-    const label = el("label", "import-toggle"), input = el("input", "hit"); input.type = "checkbox"; input.checked = checked;
-    const graphic = el("div", "import-check-art"); input.setAttribute("aria-label", caption);
+    const label = el("label", "import-toggle"),
+      input = el("input", "hit");
+    input.type = "checkbox";
+    input.checked = checked;
+    const graphic = el("div", "import-check-art");
+    input.setAttribute("aria-label", caption);
     label.append(graphic, input);
     let previous = null;
     const refresh = () => {
-      const key = JSON.stringify([caption, input.checked]); if (key === previous) return; previous = key;
-      const tree = art.toggle(caption, input.checked), body = tree.widgets.find((w) => "sprite" in w);
-      label.style.width = `${body.w_ * S}px`; label.style.height = `${body.h_ * S}px`;
-      paint(graphic, tree, { origin: [0, body.h_ * S / 2] });
+      const key = JSON.stringify([caption, input.checked]);
+      if (key === previous) return;
+      previous = key;
+      const tree = art.toggle(caption, input.checked),
+        body = tree.widgets.find((w) => "sprite" in w);
+      label.style.width = `${body.w_ * S}px`;
+      label.style.height = `${body.h_ * S}px`;
+      paint(graphic, tree, { origin: [0, (body.h_ * S) / 2] });
     };
-    input.addEventListener("change", () => { onChange(input.checked); refresh(); }); refresh();
-    return { label, input, refresh, relabel(value) { caption = value; input.setAttribute("aria-label", value); refresh(); } };
+    input.addEventListener("change", () => {
+      onChange(input.checked);
+      refresh();
+    });
+    refresh();
+    return {
+      label,
+      input,
+      refresh,
+      relabel(value) {
+        caption = value;
+        input.setAttribute("aria-label", value);
+        refresh();
+      },
+    };
   }
   // Match roster.js's native input and clear hit area to the rendered prefab labels/icons.
   function inputControl(caption, value, { type = "text", width = 650, search = false } = {}) {
-    const wrap = el("div", "import-input-wrap"), input = el("input", `roster-search${search ? " import-search" : ""}`);
-    input.type = type; input.value = value; input.setAttribute("aria-label", caption);
-    input.autocomplete = "off"; input.spellcheck = false;
+    const wrap = el("div", "import-input-wrap"),
+      input = el("input", `roster-search${search ? " import-search" : ""}`);
+    input.type = type;
+    input.value = value;
+    input.setAttribute("aria-label", caption);
+    input.autocomplete = "off";
+    input.spellcheck = false;
     Object.assign(wrap.style, { position: "relative", width: `${width}px`, height: `${112 * S}px` });
-    Object.assign(input.style, art.inputStyle(S)); wrap.appendChild(input);
+    Object.assign(input.style, art.inputStyle(S));
+    wrap.appendChild(input);
     const clear = search ? el("button", "hit import-search-clear") : null;
-    if (clear) { clear.type = "button"; clear.setAttribute("aria-label", T("display.reset")); wrap.appendChild(clear); }
-    paint(wrap, art.search(width / S, search), { scale: S, origin: [width / 2, 0], onRender: (view) => {
-      const [x, y, w, h] = Popup.nodeRect(view, "SearchNameArea/InputField/Label_Search");
-      place(input, x, y + h / 2 - 46 * S, w, 92 * S);
-      if (clear) {
-        const [cx, cy, cw, ch] = Popup.nodeRect(view, "SearchNameArea/Btn_Close");
-        place(clear, cx + cw / 2 - 55 * S, cy + ch / 2 - 55 * S, 110 * S, 110 * S);
-      }
-    } });
+    if (clear) {
+      clear.type = "button";
+      clear.setAttribute("aria-label", T("display.reset"));
+      wrap.appendChild(clear);
+    }
+    paint(wrap, art.search(width / S, search), {
+      scale: S,
+      origin: [width / 2, 0],
+      onRender: (view) => {
+        const [x, y, w, h] = Popup.nodeRect(view, "SearchNameArea/InputField/Label_Search");
+        place(input, x, y + h / 2 - 46 * S, w, 92 * S);
+        if (clear) {
+          const [cx, cy, cw, ch] = Popup.nodeRect(view, "SearchNameArea/Btn_Close");
+          place(clear, cx + cw / 2 - 55 * S, cy + ch / 2 - 55 * S, 110 * S, 110 * S);
+        }
+      },
+    });
     return { wrap, input, clear };
   }
   // The state filter uses FilterSort/UISortObjectListUnit, as in display.js.
@@ -283,18 +569,38 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     const refresh = () => {
       for (const c of controls) {
         c.button.setAttribute("aria-checked", String(c.value === value));
-        paint(c.button, art.radio(c.caption, c.value === value, width / columns / 0.5 - 50), { scale: 0.5, origin: [35, 44] });
+        paint(c.button, art.radio(c.caption, c.value === value, width / columns / 0.5 - 50), {
+          scale: 0.5,
+          origin: [35, 44],
+        });
       }
     };
-    const group = el("div", "import-radio-group"); group.setAttribute("role", "radiogroup");
+    const group = el("div", "import-radio-group");
+    group.setAttribute("role", "radiogroup");
     Object.assign(group.style, { position: "relative", height: `${Math.ceil(values.length / columns) * 96}px` });
     values.forEach(([key, caption], i) => {
-      const button = place(el("button", "hit"), i % columns * width / columns, Math.floor(i / columns) * 96, width / columns - 15, 92);
-      button.type = "button"; button.setAttribute("role", "radio"); button.setAttribute("aria-label", caption); button.dataset.value = key;
-      button.addEventListener("click", () => { value = key; onChange(key); refresh(); });
-      controls.push({ value: key, caption, button }); group.appendChild(button);
+      const button = place(
+        el("button", "hit"),
+        ((i % columns) * width) / columns,
+        Math.floor(i / columns) * 96,
+        width / columns - 15,
+        92,
+      );
+      button.type = "button";
+      button.setAttribute("role", "radio");
+      button.setAttribute("aria-label", caption);
+      button.dataset.value = key;
+      button.addEventListener("click", () => {
+        value = key;
+        onChange(key);
+        refresh();
+      });
+      controls.push({ value: key, caption, button });
+      group.appendChild(button);
     });
-    area.appendChild(group); refresh(); return group;
+    area.appendChild(group);
+    refresh();
+    return group;
   }
   const identified = (entry) => {
     if (!identities.has(entry)) identities.set(entry, entryIdentity(entry, catalog));
@@ -302,61 +608,100 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
   };
   // a refused row's reason is on its badge (stateText); the note line keeps only what a badge cannot say: a missing official
   // copy's repair guidance
-  const rowNote = (entry) => entry.state === "blocked" && entry.reason === "original_unavailable" ? report(entry, entry) : "";
+  const rowNote = (entry) =>
+    entry.state === "blocked" && entry.reason === "original_unavailable" ? report(entry, entry) : "";
   // the badge's short reason: the row's reason label, the error's own text when it needs no parameters, or Import Check
   // Failed (the details give the rest)
   const ANY_PARAMETER = new Proxy({}, { get: () => "\u0000" });
   const badgeReason = (entry) => {
     if (REASONS.has(entry.reason)) return T(`import.reason.${entry.reason}`);
-    const key = `error.${entry.reason}`, text = T(key, ANY_PARAMETER);
+    const key = `error.${entry.reason}`,
+      text = T(key, ANY_PARAMETER);
     return text !== key && !text.includes("\u0000") ? text : T("import.reason.failed");
   };
   // A refused row's badge opens its reason and what the check read of its files (import-details.js).
   const detailReason = (entry) => {
     if (entry.state === "incomplete") return statusText(entry.missing);
-    const detail = entry.error || { code: entry.reason, params: entry.params || {} }, label = report(entry, entry);
-    const key = `error.${detail.code}`, text = detail.code ? withoutFile(T, key, detail.params || {}) : key;
+    const detail = entry.error || { code: entry.reason, params: entry.params || {} },
+      label = report(entry, entry);
+    const key = `error.${detail.code}`,
+      text = detail.code ? withoutFile(T, key, detail.params || {}) : key;
     return text && text !== key && text !== label ? `${label} - ${text}` : label;
   };
-  const showDetails = (entries) => popups.message({ title: T("info.details"), scroll: true, ok: T("picker.ok"),
-    lines: entries.flatMap((entry) => detailLines(entry, { T, separator: listSeparator(), reason: detailReason(entry) })) });
+  const showDetails = (entries) =>
+    popups.message({
+      title: T("info.details"),
+      scroll: true,
+      ok: T("picker.ok"),
+      lines: entries.flatMap((entry) =>
+        detailLines(entry, { T, separator: listSeparator(), reason: detailReason(entry) }),
+      ),
+    });
 
   function build() {
-    root = el("div", "import-page"); root.dataset.phase = model.state.phase;
-    dom.background = el("div", "import-background"); root.appendChild(dom.background);
+    root = el("div", "import-page");
+    root.dataset.phase = model.state.phase;
+    dom.background = el("div", "import-background");
+    root.appendChild(dom.background);
     paint(dom.background, art.background(), { origin: [960, 540] });
-    dom.preview = place(el("div", "import-detail"), 46, 132, 524, 707); root.appendChild(dom.preview);
+    dom.preview = place(el("div", "import-detail"), 46, 132, 524, 707);
+    root.appendChild(dom.preview);
     // Items/ListBG: the two-column frame retains its paper/inbox insets, with a mail list in place of the item grid.
-    const panel = place(el("div", "import-panel"), 602, 132, 1272, 704); dom.panel = panel;
+    const panel = place(el("div", "import-panel"), 602, 132, 1272, 704);
+    dom.panel = panel;
     paint(panel, art.panel(1272 / S, 704 / S), { origin: [636, 352] });
     dom.header = place(el("div", "import-header"), 0, 0, 1272, 136 * S);
     panel.append(dom.header);
     const search = inputControl(T("import.search"), query, { width: LIST_W, search: true });
-    dom.search = search.input; dom.search.placeholder = T("import.search"); dom.search.enterKeyHint = "search";
+    dom.search = search.input;
+    dom.search.placeholder = T("import.search");
+    dom.search.enterKeyHint = "search";
     dom.searchWrap = place(search.wrap, LIST_X, LIST_TOP, LIST_W, 112 * S);
-    const runSearch = () => { query = dom.search.value.toLocaleLowerCase(); renderRows(); };
-    dom.search.addEventListener("input", (event) => { if (!event.isComposing) runSearch(); }); dom.search.addEventListener("compositionend", runSearch);
-    search.clear.addEventListener("click", () => { dom.search.value = ""; runSearch(); dom.search.focus(); });
+    const runSearch = () => {
+      query = dom.search.value.toLocaleLowerCase();
+      renderRows();
+    };
+    dom.search.addEventListener("input", (event) => {
+      if (!event.isComposing) runSearch();
+    });
+    dom.search.addEventListener("compositionend", runSearch);
+    search.clear.addEventListener("click", () => {
+      dom.search.value = "";
+      runSearch();
+      dom.search.focus();
+    });
     dom.search.addEventListener("keydown", (event) => {
       if (!event.isComposing && event.keyCode !== 229 && event.key === "Enter") dom.search.blur();
     });
     for (const key of ["searchToggle", "filter", "order"]) {
-      dom[key] = el("button", "hit"); dom[key].type = "button"; dom[key].dataset.action = key;
+      dom[key] = el("button", "hit");
+      dom[key].type = "button";
+      dom[key].dataset.action = key;
       dom.header.appendChild(dom[key]);
     }
     dom.searchToggle.setAttribute("aria-label", T("import.search"));
     panel.appendChild(search.wrap);
-    dom.merge = toggle(T("import.merge"), merged, (checked) => { merged = checked; rowsKey = null; renderRows(); });
-    dom.merge.label.dataset.action = "merge"; panel.appendChild(dom.merge.label);
-    dom.list = el("div", "import-list"); dom.list.setAttribute("aria-label", T("import.list")); panel.appendChild(dom.list);
+    dom.merge = toggle(T("import.merge"), merged, (checked) => {
+      merged = checked;
+      rowsKey = null;
+      renderRows();
+    });
+    dom.merge.label.dataset.action = "merge";
+    panel.appendChild(dom.merge.label);
+    dom.list = el("div", "import-list");
+    dom.list.setAttribute("aria-label", T("import.list"));
+    panel.appendChild(dom.list);
     dom.list.addEventListener("scroll", () => prepareVisibleRows(dom.list, rows.values()));
     layoutList();
     toolRow().boxes.forEach((box, i) => {
       const [key, caption] = TOOLBAR[i];
-      dom[key] = button(T(`import.${caption}`), key, { width: box.w, scale: TOOL_SCALE }); place(dom[key], box.x, box.y, box.w, box.h); panel.appendChild(dom[key]);
+      dom[key] = button(T(`import.${caption}`), key, { width: box.w, scale: TOOL_SCALE });
+      place(dom[key], box.x, box.y, box.w, box.h);
+      panel.appendChild(dom[key]);
     });
     root.appendChild(panel);
-    const { scale: rowScale, wide, width: rowWidth, gap: rowGap } = FOOTER_ROW, rowHeight = BUTTON_BODY_H * rowScale;
+    const { scale: rowScale, wide, width: rowWidth, gap: rowGap } = FOOTER_ROW,
+      rowHeight = BUTTON_BODY_H * rowScale;
     dom.options = button(T("import.options.title"), "options", { width: wide, scale: rowScale });
     dom.recheck = button(T("import.recheck"), "recheck", { width: rowWidth, scale: rowScale });
     dom.start = button(T("import.action", { n: 0 }), "start", { width: rowWidth, scale: rowScale, primary: true });
@@ -364,31 +709,62 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     dom.fillAll = button(missingText("fillAll", { n: 1 }), "fillAll", { width: wide, scale: rowScale });
     // As on the roster/detail screens, reserve the nav's entire 104 px area, with 24 px above it. One row, right-aligned: the
     // count's room ends before Fill All (hidden until a row can be filled), which stands left of Advanced Options.
-    const bar = layoutRow([wide, wide, rowWidth, rowWidth].map((w) => ({ w, h: rowHeight })),
-      { x: 0, y: FOOTER_ROW.y - rowHeight / 2, w: FOOTER_ROW.right, gap: rowGap, justify: "end" });
-    for (const [part, box] of [[dom.fillAll, bar.boxes[0]], [dom.options, bar.boxes[1]], [dom.recheck, bar.boxes[2]], [dom.start, bar.boxes[3]]]) {
+    const bar = layoutRow(
+      [wide, wide, rowWidth, rowWidth].map((w) => ({ w, h: rowHeight })),
+      { x: 0, y: FOOTER_ROW.y - rowHeight / 2, w: FOOTER_ROW.right, gap: rowGap, justify: "end" },
+    );
+    for (const [part, box] of [
+      [dom.fillAll, bar.boxes[0]],
+      [dom.options, bar.boxes[1]],
+      [dom.recheck, bar.boxes[2]],
+      [dom.start, bar.boxes[3]],
+    ]) {
       place(part, box.x, box.y, box.w, box.h);
     }
     dom.fillAll.hidden = true;
     root.append(dom.options, dom.recheck, dom.start);
     const footer = { left: bar.boxes[1].x, gap: rowGap, wide };
     dom.missingNote = place(el("div"), NOTE_LEFT, bar.boxes[0].y, noteRoom(footer), rowHeight);
-    dom.missingNoteRoom = noteRoom(footer); dom.missingNoteHeight = rowHeight;
+    dom.missingNoteRoom = noteRoom(footer);
+    dom.missingNoteHeight = rowHeight;
     root.append(dom.fillAll, dom.missingNote);
     root.addEventListener("click", (event) => {
       const target = event.target.closest?.("[data-action]");
       if (!target || target.disabled) return;
-      const actions = { files: () => model.pick(false), folder: pickFolder, filter: openFilter, searchToggle: () => {
-        searchOpen = !searchOpen; layoutList(); renderToolbar();
-        if (searchOpen) dom.search.focus(); else dom.search.blur();
-      }, order: () => {
-        ascending = !ascending; renderToolbar(); renderRows();
-      }, all: () => model.checkAll(true), none: () => model.checkAll(false), remove: () => model.remove(),
-      removeImported: () => model.removeImported(), clear: () => model.clear(),
-      options: openOptions, fillAll: () => missingFlow.fillAll(), recheck: () => model.recheck(), start: () => model.state.phase === "done" ? results() : start() };
-      Promise.resolve(actions[target.dataset.action]?.()).catch((error) => { showError(report(error), error); });
+      const actions = {
+        files: () => model.pick(false),
+        folder: pickFolder,
+        filter: openFilter,
+        searchToggle: () => {
+          searchOpen = !searchOpen;
+          layoutList();
+          renderToolbar();
+          if (searchOpen) dom.search.focus();
+          else dom.search.blur();
+        },
+        order: () => {
+          ascending = !ascending;
+          renderToolbar();
+          renderRows();
+        },
+        all: () => model.checkAll(true),
+        none: () => model.checkAll(false),
+        remove: () => model.remove(),
+        removeImported: () => model.removeImported(),
+        clear: () => model.clear(),
+        options: openOptions,
+        fillAll: () => missingFlow.fillAll(),
+        recheck: () => model.recheck(),
+        start: () => (model.state.phase === "done" ? results() : start()),
+      };
+      Promise.resolve(actions[target.dataset.action]?.()).catch((error) => {
+        showError(report(error), error);
+      });
     });
-    root.addEventListener("dragover", (event) => { event.preventDefault(); if (event.dataTransfer) event.dataTransfer.dropEffect = model.busy() ? "none" : "copy"; });
+    root.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = model.busy() ? "none" : "copy";
+    });
     root.addEventListener("drop", (event) => {
       event.preventDefault();
       const paths = [...(event.dataTransfer?.files || [])].map((file) => file.path).filter(Boolean);
@@ -396,7 +772,8 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
       // Browser File objects do not expose native paths; the native window drop event handles them in the app.
       else if (!context?.info?.native) showError(T("error.native_unavailable"), { code: "native_unavailable" });
     });
-    host.replaceChildren(root); rowsKey = previewKey = countsKey = null;
+    host.replaceChildren(root);
+    rowsKey = previewKey = countsKey = null;
   }
 
   function layoutList() {
@@ -405,44 +782,94 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     dom.searchToggle.setAttribute("aria-expanded", String(searchOpen));
     place(dom.list, LIST_X, top, LIST_W, LIST_BOTTOM - top);
     bindBar(dom.list, dom.panel, [LIST_X, top, LIST_W, LIST_BOTTOM - top]);
-    listTop = top; placeEmpty();
+    listTop = top;
+    placeEmpty();
   }
   // Items' ListEmpty message, with the drop hint under it while nothing is added: one block whose ink centre sits on the
   // middle of the grey frame (diagonal centre, header strip and toolbar included), wherever the list starts.
   function placeEmpty() {
     if (!dom.empty) return;
-    const [x, y] = PAPER_CENTRE(S), { title, note } = dom.empty;
+    const [x, y] = PAPER_CENTRE(S),
+      { title, note } = dom.empty;
     const ink = (part) => part && NGUI.inkBand(part.text, part.px);
     const at = emptyBlock(y - listTop, ink(title), ink(note));
-    for (const [part, centre] of [[title, at.title], [note, at.note]]) {
+    for (const [part, centre] of [
+      [title, at.title],
+      [note, at.note],
+    ]) {
       if (part) place(part.element, x - LIST_X - EMPTY_BOX[0] / 2, centre - EMPTY_BOX[1] / 2, ...EMPTY_BOX);
     }
   }
   function renderToolbar() {
-    const options = filterOptions(), caption = options.find(([value]) => value === filter)?.[1] || options[0][1];
+    const options = filterOptions(),
+      caption = options.find(([value]) => value === filter)?.[1] || options[0][1];
     const key = JSON.stringify([T("import.list"), caption, filter, ascending, searchOpen]);
-    if (countsKey === key) return; countsKey = key;
+    if (countsKey === key) return;
+    countsKey = key;
     dom.filter.setAttribute("aria-label", caption);
     dom.order.setAttribute("aria-label", T(ascending ? "roster.asc" : "roster.desc"));
-    paint(dom.header, art.header(1272 / S, T("import.list"), caption, filter !== "all", ascending, searchOpen), { onRender: (view) => {
-      for (const [key, path] of [["searchToggle", `SearchBtn/${searchOpen ? "Btn_Pressed" : "Btn_Normal"}`], ["filter", "SortBtn/Btn_Normal"], ["order", "OrderBtn/Btn_Normal"]]) {
-        place(dom[key], ...Popup.nodeRect(view, `BG_Top_Widget/${path}`));
-      }
-      // as on the roster's top menu: the toggle follows the title, ending a gap before the first tool
-      const [x, y, , h] = Popup.nodeRect(view, `BG_Top_Widget/SearchBtn/${searchOpen ? "Btn_Pressed" : "Btn_Normal"}`), style = dom.merge.label.style;
-      Object.assign(style, { left: `${x - SPACE.l * S - parseFloat(style.width)}px`, top: `${y + (h - parseFloat(style.height)) / 2}px` });
-    } });
+    paint(dom.header, art.header(1272 / S, T("import.list"), caption, filter !== "all", ascending, searchOpen), {
+      onRender: (view) => {
+        for (const [key, path] of [
+          ["searchToggle", `SearchBtn/${searchOpen ? "Btn_Pressed" : "Btn_Normal"}`],
+          ["filter", "SortBtn/Btn_Normal"],
+          ["order", "OrderBtn/Btn_Normal"],
+        ]) {
+          place(dom[key], ...Popup.nodeRect(view, `BG_Top_Widget/${path}`));
+        }
+        // as on the roster's top menu: the toggle follows the title, ending a gap before the first tool
+        const [x, y, , h] = Popup.nodeRect(
+            view,
+            `BG_Top_Widget/SearchBtn/${searchOpen ? "Btn_Pressed" : "Btn_Normal"}`,
+          ),
+          style = dom.merge.label.style;
+        Object.assign(style, {
+          left: `${x - SPACE.l * S - parseFloat(style.width)}px`,
+          top: `${y + (h - parseFloat(style.height)) / 2}px`,
+        });
+      },
+    });
   }
   const filterOptions = () => {
     const counts = countsOf(model.state.entries);
-    return [["all", T("import.filterCount", { state: T("seg.all"), n: model.state.entries.length })],
-      ...STATES.map((state) => [state, T("import.filterCount", { state: state === "incomplete" ? missingText("state") : T(`import.state.${state}`), n: counts[state] })])];
+    return [
+      ["all", T("import.filterCount", { state: T("seg.all"), n: model.state.entries.length })],
+      ...STATES.map((state) => [
+        state,
+        T("import.filterCount", {
+          state: state === "incomplete" ? missingText("state") : T(`import.state.${state}`),
+          n: counts[state],
+        }),
+      ]),
+    ];
   };
   async function openFilter() {
     let draft = filter;
-    await dialog(T("import.filter"), { action: T("picker.ok"), cancel: T("popup.cancel"), width: 1800, bodyWidth: OPTION_WIDTH * S, onAction: () => {
-      filter = draft; countsKey = null; render(); return true;
-    } }, (area) => radioOptions(area, filterOptions(), draft, (value) => { draft = value; }, { width: OPTION_WIDTH * S }));
+    await dialog(
+      T("import.filter"),
+      {
+        action: T("picker.ok"),
+        cancel: T("popup.cancel"),
+        width: 1800,
+        bodyWidth: OPTION_WIDTH * S,
+        onAction: () => {
+          filter = draft;
+          countsKey = null;
+          render();
+          return true;
+        },
+      },
+      (area) =>
+        radioOptions(
+          area,
+          filterOptions(),
+          draft,
+          (value) => {
+            draft = value;
+          },
+          { width: OPTION_WIDTH * S },
+        ),
+    );
   }
 
   // Pictures stay in the actual prefab UITexture widgets; no separate DOM picture/frame is assembled.
@@ -450,36 +877,46 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     if (!source) return;
     image.dataset.source = source;
     const surface = image.firstElementChild || image;
-    Object.assign(surface.style, { backgroundImage: `url(${JSON.stringify(source)})`, backgroundSize: large ? "contain" : "cover", backgroundPosition: large ? "center top" : "center", backgroundRepeat: "no-repeat" });
+    Object.assign(surface.style, {
+      backgroundImage: `url(${JSON.stringify(source)})`,
+      backgroundSize: large ? "contain" : "cover",
+      backgroundPosition: large ? "center top" : "center",
+      backgroundRepeat: "no-repeat",
+    });
   }
   function bindTexture(drawing, path, source, className, large = false) {
     const token = generation;
     // Retain the UITexture rectangle while its generated still is pending. No catalog/game texture is shown first.
-    drawing.then((view) => {
-      const image = view.nodes.get(path)?.els[0];
-      if (image) {
-        image.classList.add(className);
-        if (!view.nodes.get(path).node.widgets.some((w) => "clipImage" in w))
-          Object.assign(image.style, { overflow: "hidden", clipPath: "inset(0)" });
-      }
-    }).catch(() => {});
-    return tracked(Promise.all([drawing, source]).then(async ([view, url]) => {
-      const image = view.nodes.get(path)?.els[0];
-      // Rows may still be in the staging tree. Generation guards prevent a
-      // departed page from publishing; detached obsolete rows are never shown.
-      if (image && visible && token === generation) {
-        setTexture(image, url, large);
-        await ui.decoded(image, 15000, null, { signal: scope?.signal });
-      }
-      return image;
-    }));
+    drawing
+      .then((view) => {
+        const image = view.nodes.get(path)?.els[0];
+        if (image) {
+          image.classList.add(className);
+          if (!view.nodes.get(path).node.widgets.some((w) => "clipImage" in w))
+            Object.assign(image.style, { overflow: "hidden", clipPath: "inset(0)" });
+        }
+      })
+      .catch(() => {});
+    return tracked(
+      Promise.all([drawing, source]).then(async ([view, url]) => {
+        const image = view.nodes.get(path)?.els[0];
+        // Rows may still be in the staging tree. Generation guards prevent a
+        // departed page from publishing; detached obsolete rows are never shown.
+        if (image && visible && token === generation) {
+          setTexture(image, url, large);
+          await ui.decoded(image, 15000, null, { signal: scope?.signal });
+        }
+        return image;
+      }),
+    );
   }
   function incomingSource(entry) {
     // Analysis previews remain valid for the immutable input session after
     // import. Changing the label/status must not reload the same picture from
     // a new library endpoint (conversion output is validated separately).
     const result = model.state.results.find((result) => result.id === entry.id);
-    if (entry.preview?.kind === "import" && entry.preview.key && (!entry.libraryId || result?.libraryId)) return entry.preview;
+    if (entry.preview?.kind === "import" && entry.preview.key && (!entry.libraryId || result?.libraryId))
+      return entry.preview;
     const libraryId = result?.libraryId || entry.libraryId;
     if (libraryId) return { kind: "mod", key: libraryId };
     return null;
@@ -488,11 +925,21 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     const source = incomingSource(entry);
     return source && ["spr", "lobby"].includes(entry.kind) ? spineBase(source.kind, source.key) : null;
   }
-  const representative = (entries) => entries.find((entry) => eligible(entry) && incomingBase(entry))
-    || entries.find((entry) => eligible(entry) && incomingSource(entry))
-    || entries.find(eligible) || entries.find((entry) => incomingSource(entry)) || entries[0];
-  const liveIdentity = (entry, variant) => JSON.stringify([entry.kind, entry.kind === "model" ? variant?.key || entry.variant
-    : entry.kind === "spr" ? variant?.spr || entry.core : variant?.lobby || entry.core]);
+  const representative = (entries) =>
+    entries.find((entry) => eligible(entry) && incomingBase(entry)) ||
+    entries.find((entry) => eligible(entry) && incomingSource(entry)) ||
+    entries.find(eligible) ||
+    entries.find((entry) => incomingSource(entry)) ||
+    entries[0];
+  const liveIdentity = (entry, variant) =>
+    JSON.stringify([
+      entry.kind,
+      entry.kind === "model"
+        ? variant?.key || entry.variant
+        : entry.kind === "spr"
+          ? variant?.spr || entry.core
+          : variant?.lobby || entry.core,
+    ]);
   function refreshCurrentPreviews() {
     for (const [key, version] of liveVersions) liveVersions.set(key, version + 1);
     for (const key of thumbnailJobs.keys()) {
@@ -509,7 +956,8 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
       refreshedResults.add(result);
       const entry = model.state.taskEntries.find((item) => item.id === result.id);
       if (!entry) continue;
-      const { variant } = identified(entry), key = liveIdentity(entry, variant);
+      const { variant } = identified(entry),
+        key = liveIdentity(entry, variant);
       liveVersions.set(key, (liveVersions.get(key) || 0) + 1);
       if (["spr", "lobby"].includes(entry.kind)) {
         const core = entry.kind === "spr" ? variant?.spr || entry.core : variant?.lobby || entry.core;
@@ -522,45 +970,63 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     const signal = scope?.signal;
     const kind = entry.kind;
     const key = kind === "spr" ? variant?.spr || entry.core : kind === "lobby" ? variant?.lobby || entry.core : null;
-    const base = incoming ? incomingBase(entry)
-      : key ? spineBase(kind, key) : null;
-    const input = incomingSource(entry), framing = specialFraming(variant);
+    const base = incoming ? incomingBase(entry) : key ? spineBase(kind, key) : null;
+    const input = incomingSource(entry),
+      framing = specialFraming(variant);
     const frame = large ? (kind === "lobby" ? "landscape" : "portrait") : "card";
     const liveKey = liveIdentity(entry, variant);
     if (!incoming && !liveVersions.has(liveKey)) liveVersions.set(liveKey, 0);
     const liveVersion = incoming ? 0 : liveVersions.get(liveKey);
     const version = JSON.stringify([incoming ? input : "live", entry.files, liveVersion]);
-    const identity = JSON.stringify([kind, kind === "model" ? variant?.key || entry.variant : base,
-      incoming, frame, framing, variant?.bg, kind === "model" ? version : null, liveVersion, allowed()]);
+    const identity = JSON.stringify([
+      kind,
+      kind === "model" ? variant?.key || entry.variant : base,
+      incoming,
+      frame,
+      framing,
+      variant?.bg,
+      kind === "model" ? version : null,
+      liveVersion,
+      allowed(),
+    ]);
     if (thumbnailJobs.has(identity)) return thumbnailJobs.get(identity);
     let work = Promise.resolve(null);
     const modelKey = variant?.key || entry.variant;
     if (kind === "model" && modelKey && scope) {
       const source = input;
-      if (!incoming || source) work = modelThumbnails(modelKey, incoming ? `${source.kind}:${source.key}` : "live", {
-        signal, version,
-      });
+      if (!incoming || source)
+        work = modelThumbnails(modelKey, incoming ? `${source.kind}:${source.key}` : "live", {
+          signal,
+          version,
+        });
     } else if (allowed() && base && scope) {
       work = scope.thumb(base, frame, null, kind === "lobby", framing, variant?.bg);
     }
     if (large) work.bump?.();
-    const source = Promise.resolve(work).then(async (url) => {
-      if (url && ui.load) await ui.load(url, { signal });
-      return url;
-    }).catch(() => null).then((url) => {
-      if (!url && thumbnailJobs.get(identity) === source) thumbnailJobs.delete(identity);
-      return url;
-    });
+    const source = Promise.resolve(work)
+      .then(async (url) => {
+        if (url && ui.load) await ui.load(url, { signal });
+        return url;
+      })
+      .catch(() => null)
+      .then((url) => {
+        if (!url && thumbnailJobs.get(identity) === source) thumbnailJobs.delete(identity);
+        return url;
+      });
     thumbnailJobs.set(identity, source);
     return source;
   }
 
   function prepareVisibleRows(container, records, fallbackHeight = 640) {
-    const items = [...records], height = container.clientHeight || parseFloat(container.style.height) || fallbackHeight;
+    const items = [...records],
+      height = container.clientHeight || parseFloat(container.style.height) || fallbackHeight;
     const heights = items.map((record) => parseFloat(record.row.style.height) || record.height || ROW_HEIGHT);
     // A filtered staging tree can be shorter than the currently displayed
     // list. Prepare the viewport the browser will show after it clamps scroll.
-    const top = Math.min(Math.max(0, container.scrollTop || 0), Math.max(0, heights.reduce((sum, h) => sum + h, 0) - height));
+    const top = Math.min(
+      Math.max(0, container.scrollTop || 0),
+      Math.max(0, heights.reduce((sum, h) => sum + h, 0) - height),
+    );
     const work = [];
     let y = 0;
     for (const [index, record] of items.entries()) {
@@ -573,35 +1039,82 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
 
   function renderPreview() {
     const entry = model.state.entries.find((item) => item.id === model.state.selected);
-    const key = JSON.stringify([entry?.id, entry?.libraryId, entry?.preview, entry?.source, entry?.target, model.busy(), model.state.phase, model.state.results, allowed()]);
-    if (key === previewKey) return; previewKey = key;
+    const key = JSON.stringify([
+      entry?.id,
+      entry?.libraryId,
+      entry?.preview,
+      entry?.source,
+      entry?.target,
+      model.busy(),
+      model.state.phase,
+      model.state.results,
+      allowed(),
+    ]);
+    if (key === previewKey) return;
+    previewKey = key;
     const next = el("div", "import-detail-content");
     if (entry) {
       const identity = identified(entry);
       const landscape = entry.kind === "lobby";
       // two pictures, side by side or stacked, above the name plate, whose foot meets the list's
-      const width = landscape ? 444 : 254, height = landscape ? 250 : 466, headerHeight = landscape ? 30 : 44;
+      const width = landscape ? 444 : 254,
+        height = landscape ? 250 : 466,
+        headerHeight = landscape ? 30 : 44;
       for (const incoming of [false, true]) {
-        const box = place(el("div", `import-preview${incoming ? " incoming" : ""}`), landscape ? 40 : incoming ? 270 : 0,
-          landscape && incoming ? 296 : 0, width, headerHeight + height);
+        const box = place(
+          el("div", `import-preview${incoming ? " incoming" : ""}`),
+          landscape ? 40 : incoming ? 270 : 0,
+          landscape && incoming ? 296 : 0,
+          width,
+          headerHeight + height,
+        );
         const source = thumbnail(entry, { incoming, large: true });
-        const drawing = paint(box, art.preview(T(incoming ? "import.incoming" : "import.current"), { width: width / 0.46, height: height / 0.46, headerHeight: headerHeight / 0.46 }), {
-          scale: 0.46, origin: [width / 2, 0], textures: { "Texture": Promise.resolve(null) },
-        });
+        const drawing = paint(
+          box,
+          art.preview(T(incoming ? "import.incoming" : "import.current"), {
+            width: width / 0.46,
+            height: height / 0.46,
+            headerHeight: headerHeight / 0.46,
+          }),
+          {
+            scale: 0.46,
+            origin: [width / 2, 0],
+            textures: { Texture: Promise.resolve(null) },
+          },
+        );
         bindTexture(drawing, "EquipPos/Texture", source, "import-preview-image", true);
         if (incoming && !incomingSource(entry)) {
-          const note = place(el("div"), 0, headerHeight + height - 45, width, 45); note.style.zIndex = "20"; box.appendChild(note);
+          const note = place(el("div"), 0, headerHeight + height - 45, width, 45);
+          note.style.zIndex = "20";
+          box.appendChild(note);
           textWidget(note, T("import.previewUnavailable"), "empty", { scale: 0.4, origin: [width / 2, 23] });
         }
         next.appendChild(box);
       }
       const banner = place(el("div", "import-name-banner"), 0, 587, 524, 120);
-      paint(banner, art.banner(identity.name, T(KIND_KEYS[entry.kind] || KIND_KEYS.other)), { scale: 0.42, origin: [255, 104] });
+      paint(banner, art.banner(identity.name, T(KIND_KEYS[entry.kind] || KIND_KEYS.other)), {
+        scale: 0.42,
+        origin: [255, 104],
+      });
       next.appendChild(banner);
-      if (!entry.libraryOnly && entry.target && (!entry.source?.server || !entry.source?.platform || ["server", "platform"].some((key) => entry.source[key] !== entry.target[key]))) next.appendChild(sourceControl(entry));
-      if (!["done", "library", "installed"].includes(entry.state) && (!entry.variant || entry.assignment || ["mod_target_unknown", "mod_target_ambiguous", "no_target"].includes(entry.reason))) {
+      if (
+        !entry.libraryOnly &&
+        entry.target &&
+        (!entry.source?.server ||
+          !entry.source?.platform ||
+          ["server", "platform"].some((key) => entry.source[key] !== entry.target[key]))
+      )
+        next.appendChild(sourceControl(entry));
+      if (
+        !["done", "library", "installed"].includes(entry.state) &&
+        (!entry.variant ||
+          entry.assignment ||
+          ["mod_target_unknown", "mod_target_ambiguous", "no_target"].includes(entry.reason))
+      ) {
         const assign = button(T("import.assignCharacter"), "assignCharacter", { width: 524, scale: 0.34 });
-        place(assign, 0, 765, 524, 55); assign.disabled = model.busy(); assign.refresh();
+        place(assign, 0, 765, 524, 55);
+        assign.disabled = model.busy();
+        assign.refresh();
         assign.addEventListener("click", () => openCharacter(entry).catch((error) => showError(report(error), error)));
         next.appendChild(assign);
       }
@@ -614,30 +1127,67 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     return `${T(`settings.server.${source.server}`)} ${T(`import.source.${source.platform}`)}`;
   }
   function conversionRoutes(entries) {
-    return [...new Set(entries.filter((item) => item.source && item.target
-      && ["server", "platform"].some((key) => item.source[key] !== item.target[key]))
-      .map((item) => T("import.source.route", { source: sourceLabel(item.source), target: sourceLabel(item.target) })))].join(listSeparator());
+    return [
+      ...new Set(
+        entries
+          .filter(
+            (item) =>
+              item.source && item.target && ["server", "platform"].some((key) => item.source[key] !== item.target[key]),
+          )
+          .map((item) =>
+            T("import.source.route", { source: sourceLabel(item.source), target: sourceLabel(item.target) }),
+          ),
+      ),
+    ].join(listSeparator());
   }
   function sourceControl(entry) {
     const group = el("div", "import-source");
     const choose = button(T("import.source.choose"), "source", { width: 524, scale: 0.34 });
-    place(choose, 0, 706, 524, 55); choose.disabled = model.busy() || model.state.phase === "done"; choose.refresh();
-    choose.addEventListener("click", () => openSource(entry).catch((error) => showError(report(error), error))); group.append(choose); return group;
+    place(choose, 0, 706, 524, 55);
+    choose.disabled = model.busy() || model.state.phase === "done";
+    choose.refresh();
+    choose.addEventListener("click", () => openSource(entry).catch((error) => showError(report(error), error)));
+    group.append(choose);
+    return group;
   }
   async function openSource(entry) {
     if (model.busy()) return;
-    let server = entry.source?.server || entry.target.server, platform = entry.source?.platform || "android";
-    await dialog(T("import.source.choose"), { action: T("picker.ok"), cancel: T("popup.cancel"),
-      onAction: () => model.setSource(entry.id, server, platform) }, (area, { width }) => {
-      const choices = (key, values, value, change) => {
-        const title = el("div"); Object.assign(title.style, { height: "60px", position: "relative" }); area.appendChild(title);
-        textWidget(title, T(`import.source.${key}`), "empty", { scale: 0.5, origin: [width / 2, 30] });
-        const group = radioOptions(area, values, value, change, { columns: values.length });
-        group.setAttribute("aria-label", T(`import.source.${key}`));
-      };
-      choices("server", ["global", "japan"].map((value) => [value, T(`settings.server.${value}`)]), server, (value) => { server = value; });
-      choices("platform", ["android", "ios", "windows"].map((value) => [value, T(`import.source.${value}`)]), platform, (value) => { platform = value; });
-    });
+    let server = entry.source?.server || entry.target.server,
+      platform = entry.source?.platform || "android";
+    await dialog(
+      T("import.source.choose"),
+      {
+        action: T("picker.ok"),
+        cancel: T("popup.cancel"),
+        onAction: () => model.setSource(entry.id, server, platform),
+      },
+      (area, { width }) => {
+        const choices = (key, values, value, change) => {
+          const title = el("div");
+          Object.assign(title.style, { height: "60px", position: "relative" });
+          area.appendChild(title);
+          textWidget(title, T(`import.source.${key}`), "empty", { scale: 0.5, origin: [width / 2, 30] });
+          const group = radioOptions(area, values, value, change, { columns: values.length });
+          group.setAttribute("aria-label", T(`import.source.${key}`));
+        };
+        choices(
+          "server",
+          ["global", "japan"].map((value) => [value, T(`settings.server.${value}`)]),
+          server,
+          (value) => {
+            server = value;
+          },
+        );
+        choices(
+          "platform",
+          ["android", "ios", "windows"].map((value) => [value, T(`import.source.${value}`)]),
+          platform,
+          (value) => {
+            platform = value;
+          },
+        );
+      },
+    );
   }
 
   async function openCharacter(entry) {
@@ -645,130 +1195,269 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     const data = await call("import.catalog");
     // Installed entries supply the same aliases, favourites and Mod counts as the main roster.
     const current = new Map(catalog.map((variant) => [variant.key, variant]));
-    for (const family of data.families) family.variants = family.variants.map((variant) => ({ ...variant, ...current.get(variant.key) }));
-    catalog = catalogEntries(data); identities = new WeakMap();
-    await characterPicker({ data, selected: entry.variant, dialog, el, button, inputControl, checkbox, radioOptions,
+    for (const family of data.families)
+      family.variants = family.variants.map((variant) => ({ ...variant, ...current.get(variant.key) }));
+    catalog = catalogEntries(data);
+    identities = new WeakMap();
+    await characterPicker({
+      data,
+      selected: entry.variant,
+      dialog,
+      el,
+      button,
+      inputControl,
+      checkbox,
+      radioOptions,
       emptyNote: (host, caption) => textWidget(host, caption, "empty", { scale: 0.5, origin: [685, 50] }),
-      refresh: syncBar, onSelect: (variant) => model.assignCharacter(entry.id, variant) });
+      refresh: syncBar,
+      onSelect: (variant) => model.assignCharacter(entry.id, variant),
+    });
   }
 
-  const stateText = (entry) => entry.state === "incomplete" ? statusText(entry.missing)
-    : entry.state === "blocked" && entry.reason !== "source_unknown" ? `${T("import.state.blocked")} - ${badgeReason(entry)}`
-    : T(entry.libraryOnly && eligible(entry) ? "import.libraryOnly" : entry.reason === "source_unknown" ? "import.reason.source_unknown" : `import.state.${entry.state}`);
+  const stateText = (entry) =>
+    entry.state === "incomplete"
+      ? statusText(entry.missing)
+      : entry.state === "blocked" && entry.reason !== "source_unknown"
+        ? `${T("import.state.blocked")} - ${badgeReason(entry)}`
+        : T(
+            entry.libraryOnly && eligible(entry)
+              ? "import.libraryOnly"
+              : entry.reason === "source_unknown"
+                ? "import.reason.source_unknown"
+                : `import.state.${entry.state}`,
+          );
 
   function rowCopy(group, result = false) {
     const entry = representative(group.entries);
     // A grouped row in the list reads like an ungrouped one: its kinds as text on the metadata line, its states on the status tag.
     const groupedRow = merged && !result;
-    const kindCounts = () => Object.entries(group.counts).filter(([, n]) => n)
-      .map(([kind, n]) => `${T(KIND_KEYS[kind] || KIND_KEYS.other)} ×${n}`).join(listSeparator());
-    return { result, kind: groupedRow ? "" : T(KIND_KEYS[entry.kind] || KIND_KEYS.other),
+    const kindCounts = () =>
+      Object.entries(group.counts)
+        .filter(([, n]) => n)
+        .map(([kind, n]) => `${T(KIND_KEYS[kind] || KIND_KEYS.other)} ×${n}`)
+        .join(listSeparator());
+    return {
+      result,
+      kind: groupedRow ? "" : T(KIND_KEYS[entry.kind] || KIND_KEYS.other),
       unidentified: entry.reason === "source_unknown",
       state: groupedRow ? [...new Set(group.entries.map(stateText))].join(listSeparator()) : stateText(entry),
-      counts: merged && result ? group.counts : null, badge: !result,
-      meta: result ? [...new Set(group.entries.map((entry) => model.state.results.find((item) => item.id === entry.id))
-        .map((item) => T(`import.outcome.${OUTCOMES.has(item?.outcome) ? item.outcome : "failed"}`)))].join(listSeparator())
-        : groupedRow ? kindCounts()
-        : T(entry.files?.length === 1 ? "import.metaOne" : "import.meta", { id: identified(entry).core, n: entry.files?.length || 0, size: sizeText(entry.size) }) };
+      counts: merged && result ? group.counts : null,
+      badge: !result,
+      meta: result
+        ? [
+            ...new Set(
+              group.entries
+                .map((entry) => model.state.results.find((item) => item.id === entry.id))
+                .map((item) => T(`import.outcome.${OUTCOMES.has(item?.outcome) ? item.outcome : "failed"}`)),
+            ),
+          ].join(listSeparator())
+        : groupedRow
+          ? kindCounts()
+          : T(entry.files?.length === 1 ? "import.metaOne" : "import.meta", {
+              id: identified(entry).core,
+              n: entry.files?.length || 0,
+              size: sizeText(entry.size),
+            }),
+    };
   }
 
   function paragraphCopy(group, result = false) {
-    const notes = result ? group.entries.map((entry) => {
-      const item = model.state.results.find((item) => item.id === entry.id);
-      if (item?.applyUnavailable) return T("import.libraryOnly");
-      return item?.reason ? [item.configured && T(importStatus(item)), resultNote(item, entry)].filter(Boolean).join(" - ") : ["imported", "updated", "unchanged"].includes(item?.outcome)
-        ? [T(importStatus(item)), item.kept_current && T("mods.keptCurrent")].filter(Boolean).join(" - ") : "";
-    }) : group.entries.map(rowNote);
-    const omitted = result ? group.entries.reduce((count, entry) => count
-      + (model.state.results.find((item) => item.id === entry.id)?.notTransferred?.length || 0), 0) : 0;
+    const notes = result
+      ? group.entries.map((entry) => {
+          const item = model.state.results.find((item) => item.id === entry.id);
+          if (item?.applyUnavailable) return T("import.libraryOnly");
+          return item?.reason
+            ? [item.configured && T(importStatus(item)), resultNote(item, entry)].filter(Boolean).join(" - ")
+            : ["imported", "updated", "unchanged"].includes(item?.outcome)
+              ? [T(importStatus(item)), item.kept_current && T("mods.keptCurrent")].filter(Boolean).join(" - ")
+              : "";
+        })
+      : group.entries.map(rowNote);
+    const omitted = result
+      ? group.entries.reduce(
+          (count, entry) =>
+            count + (model.state.results.find((item) => item.id === entry.id)?.notTransferred?.length || 0),
+          0,
+        )
+      : 0;
     if (omitted) notes.push(T("import.notTransferredCount", { count: omitted }));
-    return { ...rowCopy(group, result), route: conversionRoutes(group.entries),
-      note: [...new Set(notes.filter(Boolean))].join(listSeparator()) };
+    return {
+      ...rowCopy(group, result),
+      route: conversionRoutes(group.entries),
+      note: [...new Set(notes.filter(Boolean))].join(listSeparator()),
+    };
   }
 
   function renderRows() {
     if (!visible || !root) return;
     const allGroups = importGroups(model.state.entries, merged, identified);
-    const groups = allGroups.filter((group) => group.entries.some((entry) =>
-      (filter === "all" || entry.state === filter) && identified(entry).search.includes(query)));
+    const groups = allGroups.filter((group) =>
+      group.entries.some(
+        (entry) => (filter === "all" || entry.state === filter) && identified(entry).search.includes(query),
+      ),
+    );
     const textSize = art.rowTextSize(groups.map((group) => paragraphCopy(group)));
     const entries = groups.map((group) => group.entries[0]);
     const collator = new Intl.Collator(language(), { numeric: true, sensitivity: "base" });
-    groups.sort((a, b) => (ascending ? 1 : -1) * collator.compare(identified(a.entries[0]).name, identified(b.entries[0]).name));
+    groups.sort(
+      (a, b) => (ascending ? 1 : -1) * collator.compare(identified(a.entries[0]).name, identified(b.entries[0]).name),
+    );
     const key = JSON.stringify([merged, textSize, groups]);
     if (key !== rowsKey) {
-      rowsKey = key; const previous = rows; rows = new Map();
-      const token = ++listGeneration, page = generation;
-      const contents = []; dom.empty = null;
+      rowsKey = key;
+      const previous = rows;
+      rows = new Map();
+      const token = ++listGeneration,
+        page = generation;
+      const contents = [];
+      dom.empty = null;
       if (!entries.length) {
         const empty = el("div", "import-empty");
         const part = (caption) => {
-          const element = el("div"), label = art.empty(caption).widgets.find((w) => "text" in w);
+          const element = el("div"),
+            label = art.empty(caption).widgets.find((w) => "text" in w);
           textWidget(element, caption, "empty", { scale: 0.5, origin: [EMPTY_BOX[0] / 2, EMPTY_BOX[1] / 2] });
-          empty.appendChild(element); return { element, text: label.text, px: label.fontSize * 0.5 };
+          empty.appendChild(element);
+          return { element, text: label.text, px: label.fontSize * 0.5 };
         };
-        dom.empty = { title: part(T(model.state.entries.length ? "import.noMatch" : "import.empty")),
-          note: model.state.entries.length ? null : part(T("import.drop")) };
-        placeEmpty(); contents.push(empty);
+        dom.empty = {
+          title: part(T(model.state.entries.length ? "import.noMatch" : "import.empty")),
+          note: model.state.entries.length ? null : part(T("import.drop")),
+        };
+        placeEmpty();
+        contents.push(empty);
       }
       for (const group of groups) {
         const entry = representative(group.entries);
-        const existing = previous.get(group.key), signature = JSON.stringify([textSize, group]);
-        if (existing?.signature === signature) { rows.set(group.key, existing); contents.push(existing.row); continue; }
-        const row = el("div", "import-row"); row.dataset.entry = entry.id;
+        const existing = previous.get(group.key),
+          signature = JSON.stringify([textSize, group]);
+        if (existing?.signature === signature) {
+          rows.set(group.key, existing);
+          contents.push(existing.row);
+          continue;
+        }
+        const row = el("div", "import-row");
+        row.dataset.entry = entry.id;
         const name = identified(entry).name;
-        const chooseEntry = group.entries.find(needsChoose), control = chooseEntry ? chooseSize(art) : null;
-        const tree = art.row({ name, ...rowCopy(group), textSize, stateKey: entry.state,
+        const chooseEntry = group.entries.find(needsChoose),
+          control = chooseEntry ? chooseSize(art) : null;
+        const tree = art.row({
+          name,
+          ...rowCopy(group),
+          textSize,
+          stateKey: entry.state,
           route: conversionRoutes(group.entries),
-          note: [...new Set(group.entries.map(rowNote).filter(Boolean))].join(listSeparator()), muted: !eligible(entry), control });
-        const drawing = paint(row, tree,
-          { scale: ROW_SCALE, origin: [ROW_WIDTH / 2, 329 * ROW_SCALE / 2], textures: { "Icon_Arona": Promise.resolve(null) } });
+          note: [...new Set(group.entries.map(rowNote).filter(Boolean))].join(listSeparator()),
+          muted: !eligible(entry),
+          control,
+        });
+        const drawing = paint(row, tree, {
+          scale: ROW_SCALE,
+          origin: [ROW_WIDTH / 2, (329 * ROW_SCALE) / 2],
+          textures: { Icon_Arona: Promise.resolve(null) },
+        });
         // MailboxContent/List_01 or List_02/BG_Icon/Icon_Arona is the incoming Mod's real texture slot.
         const texturePath = `${eligible(entry) ? "List_01" : "List_02"}/BG_Icon/Icon_Arona`;
         let picture;
-        const prepare = () => picture ||= bindTexture(drawing, texturePath, thumbnail(entry, { incoming: true }), "import-thumb");
-        const copy = place(el("button", "hit import-row-copy"), 0, 0, ROW_WIDTH - 72, parseFloat(row.style.height || ROW_HEIGHT) - 10); copy.type = "button"; copy.setAttribute("aria-label", name);
+        const prepare = () =>
+          (picture ||= bindTexture(drawing, texturePath, thumbnail(entry, { incoming: true }), "import-thumb"));
+        const copy = place(
+          el("button", "hit import-row-copy"),
+          0,
+          0,
+          ROW_WIDTH - 72,
+          parseFloat(row.style.height || ROW_HEIGHT) - 10,
+        );
+        copy.type = "button";
+        copy.setAttribute("aria-label", name);
         copy.addEventListener("click", () => model.select(entry.id));
-        const detailed = group.entries.filter(hasDetails), badgeBox = detailed.length ? badgeRect(tree) : null;
+        const detailed = group.entries.filter(hasDetails),
+          badgeBox = detailed.length ? badgeRect(tree) : null;
         const badgeHit = badgeBox ? place(el("button", "hit import-row-badge"), ...badgeBox) : null;
         if (badgeHit) {
-          badgeHit.type = "button"; badgeHit.setAttribute("aria-label", T("info.details"));
-          badgeHit.addEventListener("click", (event) => { event.stopPropagation(); showDetails(detailed); });
+          badgeHit.type = "button";
+          badgeHit.setAttribute("aria-label", T("info.details"));
+          badgeHit.addEventListener("click", (event) => {
+            event.stopPropagation();
+            showDetails(detailed);
+          });
         }
-        const check = checkbox("", model.state.checked.has(entry.id), (checked) => model.toggleGroup(group.entries.map((item) => item.id), checked));
-        check.input.setAttribute("aria-label", T("import.selectNamed", { name })); place(check.label, ROW_WIDTH - 66, ROW_CHECK_TOP, 50, 50);
-        const selection = place(el("div", "import-selection"), ROW_SELECTION.left, ROW_SELECTION.top, ROW_SELECTION.width, ROW_SELECTION.height);
+        const check = checkbox("", model.state.checked.has(entry.id), (checked) =>
+          model.toggleGroup(
+            group.entries.map((item) => item.id),
+            checked,
+          ),
+        );
+        check.input.setAttribute("aria-label", T("import.selectNamed", { name }));
+        place(check.label, ROW_WIDTH - 66, ROW_CHECK_TOP, 50, 50);
+        const selection = place(
+          el("div", "import-selection"),
+          ROW_SELECTION.left,
+          ROW_SELECTION.top,
+          ROW_SELECTION.width,
+          ROW_SELECTION.height,
+        );
         paint(selection, art.selection(), { scale: ROW_SELECTION.scale, origin: ROW_SELECTION.origin });
-        row.append(selection, copy, ...badgeHit ? [badgeHit] : [], check.label);
+        row.append(selection, copy, ...(badgeHit ? [badgeHit] : []), check.label);
         if (chooseEntry) {
           const [x, y, width, height] = controlRect(tree);
-          const choose = button(missingText("choose"), "chooseFiles", { width, scale: CHOOSE.scale, bodyHeight: height / CHOOSE.scale });
-          choose.size = control.size; choose.refresh(); place(choose, x, y, width, height);
+          const choose = button(missingText("choose"), "chooseFiles", {
+            width,
+            scale: CHOOSE.scale,
+            bodyHeight: height / CHOOSE.scale,
+          });
+          choose.size = control.size;
+          choose.refresh();
+          place(choose, x, y, width, height);
           choose.addEventListener("click", () => {
             model.pick(false, false, sourceFolder(chooseEntry.paths[0]));
           });
           row.appendChild(choose);
         }
-        contents.push(row); rows.set(group.key, { row, copy, selection, input: check.input,
-          refresh: check.refresh, group, signature, prepare, drawing, previousRow: existing?.row });
+        contents.push(row);
+        rows.set(group.key, {
+          row,
+          copy,
+          selection,
+          input: check.input,
+          refresh: check.refresh,
+          group,
+          signature,
+          prepare,
+          drawing,
+          previousRow: existing?.row,
+        });
       }
       const staged = [...rows.values()];
-      tracked(Promise.all([prepareVisibleRows(dom.list, staged), Promise.allSettled(staged.map((record) => record.drawing))]).then(([scrollTop]) => {
-        if (!visible || page !== generation || token !== listGeneration) return;
-        const replacements = new Map();
-        for (const record of staged) if (record.previousRow) {
-          const previous = record.previousRow, next = record.row;
-          previous.paintVersion = (previous.paintVersion || 0) + 1;
-          previous.replaceChildren(...next.childNodes); previous.style.height = next.style.height;
-          Object.assign(previous.dataset, next.dataset); previous.art = next.art;
-          record.row = previous; record.previousRow = null; replacements.set(next, previous);
-        }
-        dom.list.replaceChildren(...contents.map((row) => replacements.get(row) || row));
-        dom.list.scrollTop = scrollTop; syncBar(dom.list);
-      }));
+      tracked(
+        Promise.all([
+          prepareVisibleRows(dom.list, staged),
+          Promise.allSettled(staged.map((record) => record.drawing)),
+        ]).then(([scrollTop]) => {
+          if (!visible || page !== generation || token !== listGeneration) return;
+          const replacements = new Map();
+          for (const record of staged)
+            if (record.previousRow) {
+              const previous = record.previousRow,
+                next = record.row;
+              previous.paintVersion = (previous.paintVersion || 0) + 1;
+              previous.replaceChildren(...next.childNodes);
+              previous.style.height = next.style.height;
+              Object.assign(previous.dataset, next.dataset);
+              previous.art = next.art;
+              record.row = previous;
+              record.previousRow = null;
+              replacements.set(next, previous);
+            }
+          dom.list.replaceChildren(...contents.map((row) => replacements.get(row) || row));
+          dom.list.scrollTop = scrollTop;
+          syncBar(dom.list);
+        }),
+      );
     }
     for (const row of rows.values()) {
-      const ids = row.group.entries.map((entry) => entry.id), selectable = row.group.entries.filter(eligible);
+      const ids = row.group.entries.map((entry) => entry.id),
+        selectable = row.group.entries.filter(eligible);
       // Items' selection mark is kept on the thumbnail, separate from the import checkbox.
       row.row.dataset.selected = String(ids.includes(model.state.selected));
       row.selection.hidden = !ids.includes(model.state.selected);
@@ -778,39 +1467,65 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
       row.input.disabled = model.busy() || !model.state.valid || model.state.phase === "done" || !selectable.length;
       row.refresh();
       const choose = [...row.row.querySelectorAll("button")].find((b) => b.dataset.action === "chooseFiles");
-      if (choose) { choose.disabled = model.busy(); choose.refresh(); }
+      if (choose) {
+        choose.disabled = model.busy();
+        choose.refresh();
+      }
     }
   }
 
   function render() {
     if (!visible || !root) return;
-    const state = model.state, busy = model.busy(); root.dataset.phase = state.phase; root.setAttribute("aria-busy", String(busy));
+    const state = model.state,
+      busy = model.busy();
+    root.dataset.phase = state.phase;
+    root.setAttribute("aria-busy", String(busy));
     renderToolbar();
-    dom.merge.input.disabled = busy; dom.merge.refresh();
-    for (const key of ["files", "folder", "options", "clear", "remove", "removeImported", "all", "none", "recheck"]) dom[key].disabled = busy;
-    dom.removeImported.disabled ||= !state.entries.some((entry) => ["done", "library", "installed"].includes(entry.state));
-    dom.clear.disabled ||= !state.entries.length; dom.remove.disabled ||= !state.selected;
+    dom.merge.input.disabled = busy;
+    dom.merge.refresh();
+    for (const key of ["files", "folder", "options", "clear", "remove", "removeImported", "all", "none", "recheck"])
+      dom[key].disabled = busy;
+    dom.removeImported.disabled ||= !state.entries.some((entry) =>
+      ["done", "library", "installed"].includes(entry.state),
+    );
+    dom.clear.disabled ||= !state.entries.length;
+    dom.remove.disabled ||= !state.selected;
     dom.recheck.disabled ||= !state.entries.length && !state.error;
     dom.all.disabled ||= !state.valid || state.phase === "done" || !state.entries.some(eligible);
     dom.none.disabled ||= !state.valid || state.phase === "done" || !state.checked.size;
-    dom.start.disabled = busy || state.phase !== "done" && (!state.valid || !model.selected().length);
-    setCaption(dom.start, state.phase === "done" ? T("import.results") : T("import.action", { n: model.selected().length }));
-    for (const key of ["files", "folder", "options", "clear", "remove", "removeImported", "all", "none", "recheck"]) dom[key].refresh();
+    dom.start.disabled = busy || (state.phase !== "done" && (!state.valid || !model.selected().length));
+    setCaption(
+      dom.start,
+      state.phase === "done" ? T("import.results") : T("import.action", { n: model.selected().length }),
+    );
+    for (const key of ["files", "folder", "options", "clear", "remove", "removeImported", "all", "none", "recheck"])
+      dom[key].refresh();
     if (state.error && state.error !== shownError) showError(report(state.error), state.error);
     shownError = state.error;
-    renderRows(); renderPreview();
-    const fillable = missingFlow.fillable().length, incomplete = state.entries.filter((entry) => entry.state === "incomplete").length;
-    dom.fillAll.hidden = !fillable; dom.fillAll.disabled = busy;
-    setCaption(dom.fillAll, missingText("fillAll", { n: fillable })); shareSizes();
+    renderRows();
+    renderPreview();
+    const fillable = missingFlow.fillable().length,
+      incomplete = state.entries.filter((entry) => entry.state === "incomplete").length;
+    dom.fillAll.hidden = !fillable;
+    dom.fillAll.disabled = busy;
+    setCaption(dom.fillAll, missingText("fillAll", { n: fillable }));
+    shareSizes();
     const note = incomplete ? groupsText(incomplete) : "";
     if (dom.missingNote.caption !== note) {
       dom.missingNote.caption = note;
       if (!note) dom.missingNote.replaceChildren();
       else {
-        const tree = art.note(note), label = tree.widgets.find((w) => "text" in w), room = dom.missingNoteRoom / S;
-        const fit = ui.fitText(note, label.fontSize, label.fontSize * .7, room, 2);
-        Object.assign(label, { text: fit.text, fontSize: fit.fs, w_: room,
-          h_: Math.max(label.h_, fit.fs * 1.3 * String(fit.text).split("\n").length), pivot: 3 });
+        const tree = art.note(note),
+          label = tree.widgets.find((w) => "text" in w),
+          room = dom.missingNoteRoom / S;
+        const fit = ui.fitText(note, label.fontSize, label.fontSize * 0.7, room, 2);
+        Object.assign(label, {
+          text: fit.text,
+          fontSize: fit.fs,
+          w_: room,
+          h_: Math.max(label.h_, fit.fs * 1.3 * String(fit.text).split("\n").length),
+          pivot: 3,
+        });
         paint(dom.missingNote, tree, { scale: S, origin: [0, dom.missingNoteHeight / 2] });
       }
     }
@@ -827,8 +1542,18 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     dom.searchWrap.querySelector("button")?.setAttribute("aria-label", T("display.reset"));
     dom.list.setAttribute("aria-label", T("import.list"));
     dom.merge.relabel(T("import.merge"));
-    for (const [key, label] of [["files", "addFiles"], ["folder", "addFolder"], ["all", "all"], ["none", "none"],
-      ["remove", "remove"], ["removeImported", "removeImported"], ["clear", "clear"], ["options", "options.title"], ["recheck", "recheck"]]) setCaption(dom[key], T(`import.${label}`));
+    for (const [key, label] of [
+      ["files", "addFiles"],
+      ["folder", "addFolder"],
+      ["all", "all"],
+      ["none", "none"],
+      ["remove", "remove"],
+      ["removeImported", "removeImported"],
+      ["clear", "clear"],
+      ["options", "options.title"],
+      ["recheck", "recheck"],
+    ])
+      setCaption(dom[key], T(`import.${label}`));
     shareSizes();
     render();
   }
@@ -836,8 +1561,13 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
   const start = () => model.start();
   // Popup.message adds UIPopup_GachaCharList/Btn_Checkbox to the same Sort frame for recursive scanning.
   async function pickFolder() {
-    const result = await popups.message({ title: T("import.addFolder"), lines: [],
-      check: { label: T("import.recursive"), checked: false }, ok: T("picker.ok"), cancel: T("popup.cancel") });
+    const result = await popups.message({
+      title: T("import.addFolder"),
+      lines: [],
+      check: { label: T("import.recursive"), checked: false },
+      ok: T("picker.ok"),
+      cancel: T("popup.cancel"),
+    });
     if (visible && result.button === "ok") await model.pick(true, result.checked);
   }
 
@@ -847,16 +1577,36 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
   // width: the frame's (units); bodyWidth: the content's, centred (px). padding instead: the content fills the frame's container
   // (container: the frame less padding units on each side), and content gets its width in px.
   // the dialogs are the L class at most, their area the frame's content box (padding SPACE.xl) unless one names its own
-  async function dialog(title, { action = T("display.close"), cancel = null, onAction = () => true, width = POPUP_FRAME.L.w, bodyWidth = null, padding = bodyWidth ? null : SPACE.xl } = {}, content) {
+  async function dialog(
+    title,
+    {
+      action = T("display.close"),
+      cancel = null,
+      onAction = () => true,
+      width = POPUP_FRAME.L.w,
+      bodyWidth = null,
+      padding = bodyWidth ? null : SPACE.xl,
+    } = {},
+    content,
+  ) {
     await popups.ready();
     if (!visible || dialogClose) return;
-    const dialogHost = document.getElementById("dialog"), layer = el("div", "popup-layer import-dialog-layer"), before = document.activeElement;
-    layer.tabIndex = -1; dialogHost.hidden = false; dialogHost.appendChild(layer);
-    let ended = false, working = false;
+    const dialogHost = document.getElementById("dialog"),
+      layer = el("div", "popup-layer import-dialog-layer"),
+      before = document.activeElement;
+    layer.tabIndex = -1;
+    dialogHost.hidden = false;
+    dialogHost.appendChild(layer);
+    let ended = false,
+      working = false;
     const close = (force = false) => {
-      if (ended || working && force !== true) return; ended = true; layer.remove(); popups.closed(dialogHost, layer);
+      if (ended || (working && force !== true)) return;
+      ended = true;
+      layer.remove();
+      popups.closed(dialogHost, layer);
       if (!dialogHost.children.length) dialogHost.hidden = true;
-      dialogClose = null; if (before?.isConnected) before.focus?.({ preventScroll: true });
+      dialogClose = null;
+      if (before?.isConnected) before.focus?.({ preventScroll: true });
     };
     dialogClose = () => close(true);
     popups.opened(dialogHost, close, { el: layer, loading: true });
@@ -864,131 +1614,282 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
       const frame = popups.popupFrame(title, width, DIALOG_H, { ok: action, cancel });
       const view = await ui.render(frame, layer, { scale: S, origin: [960, 540], z: 10 });
       if (ended) return;
-      let allowed = true, okHit = null, blocked = null;
+      let allowed = true,
+        okHit = null,
+        blocked = null;
       const sync = () => {
-        if (okHit) { okHit.disabled = !allowed; okHit.setAttribute("aria-disabled", String(!allowed)); }
+        if (okHit) {
+          okHit.disabled = !allowed;
+          okHit.setAttribute("aria-disabled", String(!allowed));
+        }
         if (blocked) blocked.hidden = allowed;
       };
       // the confirm in the game's disabled look, over the live one (above its caption), shown while blocked
       if (popups.disabledConfirm) {
-        blocked = el("div"); blocked.hidden = true; layer.appendChild(blocked);
+        blocked = el("div");
+        blocked.hidden = true;
+        layer.appendChild(blocked);
         await ui.render(popups.disabledConfirm(frame), blocked, { scale: S, origin: [960, 540], z: 40 });
         if (ended) return;
       }
-      const area = el("div", "import-dialog-content"), box = [...DIALOG_AREA];
+      const area = el("div", "import-dialog-content"),
+        box = [...DIALOG_AREA];
       if (padding != null) {
         const inner = container({ w: width, h: DIALOG_H, padding: [0, padding] }).inner;
-        box[0] = 960 + (inner.x - width / 2) * S; box[2] = inner.w * S;
+        box[0] = 960 + (inner.x - width / 2) * S;
+        box[2] = inner.w * S;
         Object.assign(area.style, { left: `${box[0]}px`, width: `${box[2]}px` });
-      } else if (bodyWidth) { box[0] = 960 - bodyWidth / 2 - 16; box[2] = bodyWidth + 32; Object.assign(area.style, { left: `${box[0]}px`, width: `${box[2]}px` }); }
+      } else if (bodyWidth) {
+        box[0] = 960 - bodyWidth / 2 - 16;
+        box[2] = bodyWidth + 32;
+        Object.assign(area.style, { left: `${box[0]}px`, width: `${box[2]}px` });
+      }
       layer.appendChild(area);
       // the area keeps 16 px each side for the game's scrollbar
-      await content(area, { width: box[2] - 32, primary: (enabled) => { allowed = enabled !== false; sync(); } });
+      await content(area, {
+        width: box[2] - 32,
+        primary: (enabled) => {
+          allowed = enabled !== false;
+          sync();
+        },
+      });
       bindBar(area, layer, box);
       const finish = async () => {
-        if (working || !allowed) return; working = true; layer.setAttribute("aria-busy", "true");
+        if (working || !allowed) return;
+        working = true;
+        layer.setAttribute("aria-busy", "true");
         try {
-          if (await onAction(area)) { working = false; close(); }
-        } finally { working = false; layer.setAttribute("aria-busy", "false"); }
+          if (await onAction(area)) {
+            working = false;
+            close();
+          }
+        } finally {
+          working = false;
+          layer.setAttribute("aria-busy", "false");
+        }
       };
       okHit = popups.hit(layer, view, "Center/Popup/Btn/Btn_Ok/BG (1)", finish, { name: action, action: "ok" });
       sync();
-      if (cancel) popups.hit(layer, view, "Center/Popup/Btn/Btn_Cancel/BG (1)", close, { name: cancel, action: "cancel" });
+      if (cancel)
+        popups.hit(layer, view, "Center/Popup/Btn/Btn_Cancel/BG (1)", close, { name: cancel, action: "cancel" });
       popups.hit(layer, view, "Center/Popup/Base/BG/Btn_Close", close, { name: T("display.close"), action: "close" });
       popups.closable(view, dialogHost, close, { el: layer });
-      layer.setAttribute("role", "dialog"); layer.setAttribute("aria-modal", "true"); layer.setAttribute("aria-label", title);
+      layer.setAttribute("role", "dialog");
+      layer.setAttribute("aria-modal", "true");
+      layer.setAttribute("aria-label", title);
       await (popups.reveal ? popups.reveal(layer, [...drawings]) : Promise.all([...drawings]));
       if (!ended) layer.focus?.({ preventScroll: true });
-    } catch (error) { close(); throw error; }
+    } catch (error) {
+      close();
+      throw error;
+    }
   }
 
   async function openOptions() {
-    if (model.busy() || !await model.loadOptions()) return;
+    if (model.busy() || !(await model.loadOptions())) return;
     const draft = { ...model.state.options, types: [...model.state.options.types] };
     let error;
     // The L frame (POPUP_FRAME.L: UIPopup_Option_PC's) with its content in a container padded SPACE.xl on each side (panels in a popup).
-    await dialog(T("import.options.title"), { action: T("picker.ok"), cancel: T("popup.cancel"), width: POPUP_FRAME.L.w, padding: SPACE.xl, onAction: async () => {
-      if (!draft.types.length || !Number.isSafeInteger(draft.workers) || draft.workers < 1) {
-        textWidget(error, T(!draft.types.length ? "import.options.typesRequired" : "import.options.workersInvalid"), "error", { origin: [OPTION_WIDTH * S / 2, 35] }); return false;
-      }
-      const saved = await model.saveOptions(draft); if (!saved) textWidget(error, report(model.state.error), "error", { origin: [OPTION_WIDTH * S / 2, 35] }); return saved;
-    } }, (area, { width: contentWidth }) => {
-      // The option groups (Settings' rows, OPTION_WIDTH wide) stack SPACE.l apart, centred in the content; the hint and the error
-      // line stack with them. parts: { element, w, h } in px, in order; holder: the element that stands in the stack for a group.
-      const parts = [];
-      const add = (key, height, holder = null) => {
-        const group = el("div", "import-option"); group.dataset.option = key;
-        Object.assign(group.style, { width: `${OPTION_WIDTH * S}px`, height: `${height * S}px` });
-        parts.push({ element: holder || group, w: OPTION_WIDTH * S, h: height * S });
-        if (holder) holder.appendChild(group);
-        return group;
-      };
-      const choice = (key, title, values, getValue, onPick, { multiple = false, parent = null } = {}) => {
-        const makeRow = () => radioRow(`Option_${key}`, 0, title, values, getValue(), onPick, { columns: Math.min(values.length, 3), type: POPUP_TYPE.card });
-        const group = add(key, makeRow().h, parent), controls = [];
-        group.setAttribute("role", multiple ? "group" : "radiogroup"); group.setAttribute("aria-label", title);
-        const refresh = () => {
-          const row = makeRow();
-          values.forEach(([value], i) => {
-            const checked = multiple ? getValue().has(value) : value === getValue();
-            const option = ui.find(row.tree, `Opt_${i}`), control = controls[i];
-            if (multiple) {
-              const check = art.checkbox(checked); check.scale = [0.6, 0.6];
-              option.children = [check, ui.find(option, "Label")]; control.checked = checked;
-            } else control.setAttribute("aria-checked", String(checked));
-          });
-          paint(group, row.tree, { scale: S, origin: [OPTION_WIDTH * S / 2, row.h * S / 2] });
+    await dialog(
+      T("import.options.title"),
+      {
+        action: T("picker.ok"),
+        cancel: T("popup.cancel"),
+        width: POPUP_FRAME.L.w,
+        padding: SPACE.xl,
+        onAction: async () => {
+          if (!draft.types.length || !Number.isSafeInteger(draft.workers) || draft.workers < 1) {
+            textWidget(
+              error,
+              T(!draft.types.length ? "import.options.typesRequired" : "import.options.workersInvalid"),
+              "error",
+              { origin: [(OPTION_WIDTH * S) / 2, 35] },
+            );
+            return false;
+          }
+          const saved = await model.saveOptions(draft);
+          if (!saved) textWidget(error, report(model.state.error), "error", { origin: [(OPTION_WIDTH * S) / 2, 35] });
+          return saved;
+        },
+      },
+      (area, { width: contentWidth }) => {
+        // The option groups (Settings' rows, OPTION_WIDTH wide) stack SPACE.l apart, centred in the content; the hint and the error
+        // line stack with them. parts: { element, w, h } in px, in order; holder: the element that stands in the stack for a group.
+        const parts = [];
+        const add = (key, height, holder = null) => {
+          const group = el("div", "import-option");
+          group.dataset.option = key;
+          Object.assign(group.style, { width: `${OPTION_WIDTH * S}px`, height: `${height * S}px` });
+          parts.push({ element: holder || group, w: OPTION_WIDTH * S, h: height * S });
+          if (holder) holder.appendChild(group);
+          return group;
         };
-        const row = makeRow();
-        values.forEach(([value, caption], i) => {
-          const option = ui.find(row.tree, `Opt_${i}`), hit = row.hits[i];
-          const control = place(el(multiple ? "input" : "button", "hit import-option-control"),
-            (OPTION_WIDTH / 2 + option.pos[0] - 30) * S, (row.h / 2 - option.pos[1] - 30) * S, hit.w * S, 60 * S);
-          control.type = multiple ? "checkbox" : "button";
-          if (!multiple) control.setAttribute("role", "radio");
-          control.setAttribute("aria-label", caption); control.dataset.value = String(value);
-          control.addEventListener(multiple ? "change" : "click", () => { onPick(value, control.checked); refresh(); });
-          controls.push(control); group.appendChild(control);
+        const choice = (key, title, values, getValue, onPick, { multiple = false, parent = null } = {}) => {
+          const makeRow = () =>
+            radioRow(`Option_${key}`, 0, title, values, getValue(), onPick, {
+              columns: Math.min(values.length, 3),
+              type: POPUP_TYPE.card,
+            });
+          const group = add(key, makeRow().h, parent),
+            controls = [];
+          group.setAttribute("role", multiple ? "group" : "radiogroup");
+          group.setAttribute("aria-label", title);
+          const refresh = () => {
+            const row = makeRow();
+            values.forEach(([value], i) => {
+              const checked = multiple ? getValue().has(value) : value === getValue();
+              const option = ui.find(row.tree, `Opt_${i}`),
+                control = controls[i];
+              if (multiple) {
+                const check = art.checkbox(checked);
+                check.scale = [0.6, 0.6];
+                option.children = [check, ui.find(option, "Label")];
+                control.checked = checked;
+              } else control.setAttribute("aria-checked", String(checked));
+            });
+            paint(group, row.tree, { scale: S, origin: [(OPTION_WIDTH * S) / 2, (row.h * S) / 2] });
+          };
+          const row = makeRow();
+          values.forEach(([value, caption], i) => {
+            const option = ui.find(row.tree, `Opt_${i}`),
+              hit = row.hits[i];
+            const control = place(
+              el(multiple ? "input" : "button", "hit import-option-control"),
+              (OPTION_WIDTH / 2 + option.pos[0] - 30) * S,
+              (row.h / 2 - option.pos[1] - 30) * S,
+              hit.w * S,
+              60 * S,
+            );
+            control.type = multiple ? "checkbox" : "button";
+            if (!multiple) control.setAttribute("role", "radio");
+            control.setAttribute("aria-label", caption);
+            control.dataset.value = String(value);
+            control.addEventListener(multiple ? "change" : "click", () => {
+              onPick(value, control.checked);
+              refresh();
+            });
+            controls.push(control);
+            group.appendChild(control);
+          });
+          refresh();
+          return refresh;
+        };
+        const onOff = [
+          [true, T("settings.post.on")],
+          [false, T("settings.post.off")],
+        ];
+        for (const [key, label] of [
+          ["previewAfterImport", "selectPreview"],
+          ["enableAfterImport", "applyGame"],
+        ]) {
+          choice(
+            key,
+            T(`import.${label}`),
+            onOff,
+            () => !!draft[key],
+            (value) => {
+              draft[key] = value;
+            },
+          );
+        }
+        for (const key of ["skipUnchanged", "backup"]) {
+          choice(
+            key,
+            T(`import.options.${key}`),
+            onOff,
+            () => draft[key],
+            (value) => {
+              draft[key] = value;
+            },
+          );
+        }
+        const radio = (key, values) =>
+          choice(
+            key,
+            T(`import.options.${key}`),
+            values,
+            () => draft[key],
+            (value) => {
+              draft[key] = value;
+            },
+          );
+        radio(
+          "strategy",
+          ["cont_name_type", "path_id", "name_type"].map((key) => [key, T(`import.strategy.${key}`)]),
+        );
+        radio("crc", [
+          ["auto", T("import.auto")],
+          ["on", T("settings.post.on")],
+          ["off", T("settings.post.off")],
+        ]);
+        radio("compression", [
+          ["lzma", "LZMA"],
+          ["lz4", "LZ4"],
+          ["original", T("import.original")],
+          ["none", T("import.uncompressed")],
+        ]);
+        const types = el("fieldset", "import-resource-types");
+        types.setAttribute("aria-label", T("import.options.types"));
+        choice(
+          "types",
+          T("import.options.types"),
+          RESOURCE_TYPES.map((type) => [type, type === "ALL" ? T("import.options.allTypes") : type]),
+          () => new Set(draft.types),
+          (type, checked) => {
+            const values = new Set(draft.types);
+            if (checked) values.add(type);
+            else values.delete(type);
+            if (checked && type === "ALL") {
+              values.clear();
+              values.add("ALL");
+            } else if (checked) values.delete("ALL");
+            draft.types = [...values];
+          },
+          { multiple: true, parent: types },
+        );
+        for (const key of ["extraBytes", "workers", "output"]) {
+          const group = add(key, 240);
+          paint(group, rowBase(`Option_${key}`, 0, 240, T(`import.options.${key}`), POPUP_TYPE.card), {
+            scale: S,
+            origin: [(OPTION_WIDTH * S) / 2, 120 * S],
+          });
+          const control = inputControl(T(`import.options.${key}`), draft[key] ?? "", {
+            type: key === "workers" ? "number" : "text",
+            width: (OPTION_WIDTH - 110) * S,
+          });
+          place(control.wrap, 55 * S, 120 * S, (OPTION_WIDTH - 110) * S, 112 * S);
+          group.appendChild(control.wrap);
+          const input = control.input;
+          if (key === "workers") {
+            input.min = "1";
+            input.step = "1";
+          }
+          input.addEventListener("input", () => {
+            draft[key] =
+              key === "workers" ? Number(input.value) : key === "output" ? input.value.trim() || null : input.value;
+          });
+        }
+        const note = el("div", "import-option-note");
+        note.style.height = "70px";
+        parts.push({ element: note, w: OPTION_WIDTH * S, h: 70 });
+        textWidget(note, T("import.options.bytesHint"), "empty", { origin: [(OPTION_WIDTH * S) / 2, 35] });
+        error = el("div", "import-option-error");
+        error.style.height = "80px";
+        error.setAttribute("role", "alert");
+        parts.push({ element: error, w: OPTION_WIDTH * S, h: 80 });
+        const pile = layoutStack(
+          parts.map(({ w, h }) => ({ w, h })),
+          { w: contentWidth, gap: SPACE.l * S, align: "center" },
+        );
+        const body = el("div", "import-options");
+        Object.assign(body.style, { position: "relative", width: `${contentWidth}px`, height: `${pile.h}px` });
+        parts.forEach(({ element }, i) => {
+          place(element, pile.boxes[i].x, pile.boxes[i].y, pile.boxes[i].w, pile.boxes[i].h);
+          body.appendChild(element);
         });
-        refresh(); return refresh;
-      };
-      const onOff = [[true, T("settings.post.on")], [false, T("settings.post.off")]];
-      for (const [key, label] of [["previewAfterImport", "selectPreview"], ["enableAfterImport", "applyGame"]]) {
-        choice(key, T(`import.${label}`), onOff, () => !!draft[key], (value) => { draft[key] = value; });
-      }
-      for (const key of ["skipUnchanged", "backup"]) {
-        choice(key, T(`import.options.${key}`), onOff, () => draft[key], (value) => { draft[key] = value; });
-      }
-      const radio = (key, values) => choice(key, T(`import.options.${key}`), values, () => draft[key], (value) => { draft[key] = value; });
-      radio("strategy", ["cont_name_type", "path_id", "name_type"].map((key) => [key, T(`import.strategy.${key}`)]));
-      radio("crc", [["auto", T("import.auto")], ["on", T("settings.post.on")], ["off", T("settings.post.off")]]);
-      radio("compression", [["lzma", "LZMA"], ["lz4", "LZ4"], ["original", T("import.original")], ["none", T("import.uncompressed")]]);
-      const types = el("fieldset", "import-resource-types"); types.setAttribute("aria-label", T("import.options.types"));
-      choice("types", T("import.options.types"), RESOURCE_TYPES.map((type) => [type, type === "ALL" ? T("import.options.allTypes") : type]),
-        () => new Set(draft.types), (type, checked) => {
-          const values = new Set(draft.types); if (checked) values.add(type); else values.delete(type);
-          if (checked && type === "ALL") { values.clear(); values.add("ALL"); } else if (checked) values.delete("ALL");
-          draft.types = [...values];
-        }, { multiple: true, parent: types });
-      for (const key of ["extraBytes", "workers", "output"]) {
-        const group = add(key, 240);
-        paint(group, rowBase(`Option_${key}`, 0, 240, T(`import.options.${key}`), POPUP_TYPE.card), { scale: S, origin: [OPTION_WIDTH * S / 2, 120 * S] });
-        const control = inputControl(T(`import.options.${key}`), draft[key] ?? "", { type: key === "workers" ? "number" : "text", width: (OPTION_WIDTH - 110) * S });
-        place(control.wrap, 55 * S, 120 * S, (OPTION_WIDTH - 110) * S, 112 * S); group.appendChild(control.wrap);
-        const input = control.input;
-        if (key === "workers") { input.min = "1"; input.step = "1"; }
-        input.addEventListener("input", () => { draft[key] = key === "workers" ? Number(input.value) : key === "output" ? input.value.trim() || null : input.value; });
-      }
-      const note = el("div", "import-option-note"); note.style.height = "70px";
-      parts.push({ element: note, w: OPTION_WIDTH * S, h: 70 });
-      textWidget(note, T("import.options.bytesHint"), "empty", { origin: [OPTION_WIDTH * S / 2, 35] });
-      error = el("div", "import-option-error"); error.style.height = "80px"; error.setAttribute("role", "alert");
-      parts.push({ element: error, w: OPTION_WIDTH * S, h: 80 });
-      const pile = layoutStack(parts.map(({ w, h }) => ({ w, h })), { w: contentWidth, gap: SPACE.l * S, align: "center" });
-      const body = el("div", "import-options"); Object.assign(body.style, { position: "relative", width: `${contentWidth}px`, height: `${pile.h}px` });
-      parts.forEach(({ element }, i) => { place(element, pile.boxes[i].x, pile.boxes[i].y, pile.boxes[i].w, pile.boxes[i].h); body.appendChild(element); });
-      area.appendChild(body);
-    });
+        area.appendChild(body);
+      },
+    );
   }
 
   async function results() {
@@ -999,16 +1900,30 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
       const pictures = [];
       const groups = importGroups(model.state.taskEntries, merged, identified);
       const textSize = art.rowTextSize(groups.map((group) => paragraphCopy(group, true)));
-      const resultScale = 0.62 * k, resultTextSize = textSize;
+      const resultScale = 0.62 * k,
+        resultTextSize = textSize;
       for (const group of groups) {
-        const entry = representative(group.entries), row = el("div", "import-result-row");
+        const entry = representative(group.entries),
+          row = el("div", "import-result-row");
         Object.assign(row.style, { width: `${1400 * k}px`, height: `${216 * k}px` });
         row.dataset.result = entry.id;
-        const drawing = paint(row, art.row({ name: identified(entry).name, ...paragraphCopy(group, true), textSize: resultTextSize }),
-        { scale: resultScale, origin: [700 * k, 104 * k], textures: { "Icon_Arona": Promise.resolve(null) } });
+        const drawing = paint(
+          row,
+          art.row({ name: identified(entry).name, ...paragraphCopy(group, true), textSize: resultTextSize }),
+          { scale: resultScale, origin: [700 * k, 104 * k], textures: { Icon_Arona: Promise.resolve(null) } },
+        );
         let picture;
-        pictures.push({ row, height: 216 * k, prepare: () => picture ||= bindTexture(drawing,
-          "List_01/BG_Icon/Icon_Arona", thumbnail(entry, { incoming: true }), "import-thumb") });
+        pictures.push({
+          row,
+          height: 216 * k,
+          prepare: () =>
+            (picture ||= bindTexture(
+              drawing,
+              "List_01/BG_Icon/Icon_Arona",
+              thumbnail(entry, { incoming: true }),
+              "import-thumb",
+            )),
+        });
         const go = button(T("add.go"), "go", { width: 225 * k, scale: 0.4 * k });
         place(go, 1115 * k, 86 * k, 225 * k, 65 * k);
         const navigate = (item) => {
@@ -1018,21 +1933,27 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
           else context?.go?.(variant.family.key, variant.key, item.kind === "spr" ? "portrait" : item.kind);
         };
         go.addEventListener("click", () => navigate(entry));
-        if (merged) drawing.then((view) => {
-          for (const kind of Object.keys(group.counts).filter((kind) => group.counts[kind])) {
-            const item = group.entries.find((item) => item.kind === kind);
-            const path = `List_01/Label_From/${kind}`;
-            const boxes = ["Count", "Icon"].map((part) => Popup.nodeRect(view, `${path}/${part}`)).filter(Boolean);
-            const x = Math.min(...boxes.map(([x]) => x)), y = Math.min(...boxes.map(([, y]) => y));
-            const right = Math.max(...boxes.map(([x, , w]) => x + w)), bottom = Math.max(...boxes.map(([, y, , h]) => y + h));
-            const count = place(el("button", "hit import-result-count"), x, y, right - x, bottom - y);
-            count.style.zIndex = "40";
-            count.type = "button"; count.dataset.kind = kind;
-            count.setAttribute("aria-label", T(KIND_KEYS[kind] || KIND_KEYS.other));
-            count.addEventListener("click", () => navigate(item)); row.appendChild(count);
-          }
-        });
-        row.appendChild(go); area.appendChild(row);
+        if (merged)
+          drawing.then((view) => {
+            for (const kind of Object.keys(group.counts).filter((kind) => group.counts[kind])) {
+              const item = group.entries.find((item) => item.kind === kind);
+              const path = `List_01/Label_From/${kind}`;
+              const boxes = ["Count", "Icon"].map((part) => Popup.nodeRect(view, `${path}/${part}`)).filter(Boolean);
+              const x = Math.min(...boxes.map(([x]) => x)),
+                y = Math.min(...boxes.map(([, y]) => y));
+              const right = Math.max(...boxes.map(([x, , w]) => x + w)),
+                bottom = Math.max(...boxes.map(([, y, , h]) => y + h));
+              const count = place(el("button", "hit import-result-count"), x, y, right - x, bottom - y);
+              count.style.zIndex = "40";
+              count.type = "button";
+              count.dataset.kind = kind;
+              count.setAttribute("aria-label", T(KIND_KEYS[kind] || KIND_KEYS.other));
+              count.addEventListener("click", () => navigate(item));
+              row.appendChild(count);
+            }
+          });
+        row.appendChild(go);
+        area.appendChild(row);
       }
       area.addEventListener("scroll", () => prepareVisibleRows(area, pictures));
       prepareVisibleRows(area, pictures);
@@ -1041,45 +1962,104 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
 
   async function reveal(id) {
     const entry = model.state.entries.find((entry) => entry.id === id);
-    if (entry && (filter !== "all" && entry.state !== filter || !identified(entry).search.includes(query))) {
-      filter = "all"; query = ""; dom.search.value = ""; countsKey = null; renderToolbar(); renderRows();
+    if (entry && ((filter !== "all" && entry.state !== filter) || !identified(entry).search.includes(query))) {
+      filter = "all";
+      query = "";
+      dom.search.value = "";
+      countsKey = null;
+      renderToolbar();
+      renderRows();
     }
     // Row replacement itself is tracked; wait for it as well as the individual artwork jobs.
     while (drawings.size) await Promise.all([...drawings]);
-    [...rows.values()].find((record) => record.group.entries.some((entry) => entry.id === id))?.row.scrollIntoView?.({ block: "nearest" });
+    [...rows.values()]
+      .find((record) => record.group.entries.some((entry) => entry.id === id))
+      ?.row.scrollIntoView?.({ block: "nearest" });
   }
-  const missingFlow = createMissingFlow({ model, identify: (entry) => identified(entry).name,
-    kindName: (kind) => T(KIND_KEYS[kind]), title: () => T("nav.import"), reveal, active: () => visible,
+  const missingFlow = createMissingFlow({
+    model,
+    identify: (entry) => identified(entry).name,
+    kindName: (kind) => T(KIND_KEYS[kind]),
+    title: () => T("nav.import"),
+    reveal,
+    active: () => visible,
     failed: (error) => showError(report(error), error),
-    ask: async ({ title, lines, ok }) => (await popups.message({ title, lines, plain: true,
-      fitTogether: lines.map((_, i) => i), ok, cancel: T("popup.cancel") })).button === "ok" });
+    ask: async ({ title, lines, ok }) =>
+      (
+        await popups.message({
+          title,
+          lines,
+          plain: true,
+          fitTogether: lines.map((_, i) => i),
+          ok,
+          cancel: T("popup.cancel"),
+        })
+      ).button === "ok",
+  });
   model.subscribe(() => {
-    if (liveRefreshPending && !model.busy()) { liveRefreshPending = false; refreshCurrentPreviews(); }
-    refreshAppliedPreviews(); render(); wake(); holdArtwork(); loading.refresh?.();
+    if (liveRefreshPending && !model.busy()) {
+      liveRefreshPending = false;
+      refreshCurrentPreviews();
+    }
+    refreshAppliedPreviews();
+    render();
+    wake();
+    holdArtwork();
+    loading.refresh?.();
     missingFlow.onChange(model.state);
   });
   return {
     model,
     async show(ctx, data) {
-      leave(); wake(); left = new Promise((resolve) => { leave = resolve; });
-      context = ctx; catalog = catalogEntries(data); identities = new WeakMap(); visible = true;
+      leave();
+      wake();
+      left = new Promise((resolve) => {
+        leave = resolve;
+      });
+      context = ctx;
+      catalog = catalogEntries(data);
+      identities = new WeakMap();
+      visible = true;
       const token = ++generation;
-      scope?.cancel(); scope = thumbnails();
+      scope?.cancel();
+      scope = thumbnails();
       thumbnailJobs.clear();
-      if (!art) { await ui.init(); art = importArtwork({ ...ui, translate: T }, await loadImportLayouts(ui)); }
+      if (!art) {
+        await ui.init();
+        art = importArtwork({ ...ui, translate: T }, await loadImportLayouts(ui));
+      }
       if (!visible || token !== generation) return;
       if (!root) build();
       for (const row of rows.values()) row.signature = null;
-      rowsKey = previewKey = null; render();
+      rowsKey = previewKey = null;
+      render();
       // The page is usable while these read; a failed options read can be retried from Advanced Options or Import.
       model.loadOptions();
-      await Promise.all([...drawings]); await ui.decoded(root, 15000);
+      await Promise.all([...drawings]);
+      await ui.decoded(root, 15000);
     },
-    hide() { visible = false; generation++; leave(); wake(); scope?.cancel(); dialogClose?.(); model.leave(); },
-    invalidate() { if (model.state.phase !== "running") liveRefreshPending = true; model.invalidate(); },
-    drop(paths) { return model.add(paths); },
-    openOptions, results, relabel,
-    async settled() { await Promise.all([...drawings]); },
+    hide() {
+      visible = false;
+      generation++;
+      leave();
+      wake();
+      scope?.cancel();
+      dialogClose?.();
+      model.leave();
+    },
+    invalidate() {
+      if (model.state.phase !== "running") liveRefreshPending = true;
+      model.invalidate();
+    },
+    drop(paths) {
+      return model.add(paths);
+    },
+    openOptions,
+    results,
+    relabel,
+    async settled() {
+      await Promise.all([...drawings]);
+    },
   };
 }
 
@@ -1088,7 +2068,15 @@ export function show(context, data) {
   page ||= createImportPage({ host: document.getElementById("import") });
   return page.show(context, data);
 }
-export function hide() { page?.hide(); }
-export function drop(paths) { return page?.drop(paths); }
-export function invalidate() { page?.invalidate(); }
-export function relabel() { return page?.relabel(); }
+export function hide() {
+  page?.hide();
+}
+export function drop(paths) {
+  return page?.drop(paths);
+}
+export function invalidate() {
+  page?.invalidate();
+}
+export function relabel() {
+  return page?.relabel();
+}

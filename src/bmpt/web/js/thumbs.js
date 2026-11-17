@@ -13,7 +13,13 @@ import { lobbyStillViewport } from "./lobby-still.js";
 import { previewError } from "./preview-error.js";
 import { captureRetries } from "./capture-retries.js";
 import { previewCache } from "./preview-cache.js";
-import { holdPopupCaptures, onCapturePriorityChange, popupCapturesOpen, popupItem, captureEligible } from "./capture-priority.js";
+import {
+  holdPopupCaptures,
+  onCapturePriorityChange,
+  popupCapturesOpen,
+  popupItem,
+  captureEligible,
+} from "./capture-priority.js";
 
 export const THUMB_LOAD_TIMEOUT = 15000;
 export const THUMB_CAPTURE_TIMEOUT = 15000;
@@ -38,11 +44,13 @@ export function idleAnimation(data) {
   return data.animations.find((a) => /^idle/i.test(a.name))?.name || null;
 }
 
-const cache = new Map();   // key -> cached picture or a request with its consumers
+const cache = new Map(); // key -> cached picture or a request with its consumers
 const queue = [];
 const retries = captureRetries(() => queueMicrotask(pump));
 const scopes = new Set();
-let running = false, active = null, preferred = "";
+let running = false,
+  active = null,
+  preferred = "";
 let host = null;
 
 function focusQueue() {
@@ -81,8 +89,14 @@ const isHalo = (part) => /halo/i.test(`${part.slot} ${part.attachment}`);
 // "defalt"), each no larger than a face can be and halos left out: a whole body some NPCs (citizen_animal1) swap per
 // expression is no face.
 export function faceOf(parts) {
-  const union = (list) => list.reduce((b, { box: p }) => (b
-    ? { x0: Math.min(b.x0, p.x0), y0: Math.min(b.y0, p.y0), x1: Math.max(b.x1, p.x1), y1: Math.max(b.y1, p.y1) } : { ...p }), null);
+  const union = (list) =>
+    list.reduce(
+      (b, { box: p }) =>
+        b
+          ? { x0: Math.min(b.x0, p.x0), y0: Math.min(b.y0, p.y0), x1: Math.max(b.x1, p.x1), y1: Math.max(b.y1, p.y1) }
+          : { ...p },
+      null,
+    );
   const named = parts.filter((p) => isFacePart(p.slot, p.attachment));
   if (named.length) return union(named);
   const faceSized = ({ box: b }) => b.x1 - b.x0 <= NOT_FACE && b.y1 - b.y0 <= NOT_FACE;
@@ -102,13 +116,21 @@ function faceBox(skeleton) {
     const att = slot.attachment;
     if (!att) return;
     let count = 0;
-    if (att instanceof spine.RegionAttachment) { att.computeWorldVertices(slot, verts, 0, 2); count = 8; }
-    else if (att instanceof spine.MeshAttachment) { count = att.worldVerticesLength; if (count > verts.length) return; att.computeWorldVertices(slot, 0, count, verts, 0, 2); }
+    if (att instanceof spine.RegionAttachment) {
+      att.computeWorldVertices(slot, verts, 0, 2);
+      count = 8;
+    } else if (att instanceof spine.MeshAttachment) {
+      count = att.worldVerticesLength;
+      if (count > verts.length) return;
+      att.computeWorldVertices(slot, 0, count, verts, 0, 2);
+    }
     if (!count) return;
     const box = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
     for (let k = 0; k < count; k += 2) {
-      box.x0 = Math.min(box.x0, verts[k]); box.x1 = Math.max(box.x1, verts[k]);
-      box.y0 = Math.min(box.y0, verts[k + 1]); box.y1 = Math.max(box.y1, verts[k + 1]);
+      box.x0 = Math.min(box.x0, verts[k]);
+      box.x1 = Math.max(box.x1, verts[k]);
+      box.y0 = Math.min(box.y0, verts[k + 1]);
+      box.y1 = Math.max(box.y1, verts[k + 1]);
     }
     parts.push({ slot: slot.data.name, attachment: att.name, box, expr: expr.has(i) });
   });
@@ -141,30 +163,65 @@ export function thumbFrame(found, bounds, frame, aspect) {
 function viewFor(p, frame, aspect, framing, lobby = false) {
   if (lobby && !framing) return lobbyStillViewport(p.bamtLobbyFrame, aspect);
   if (framing || frame === "landscape") {
-    const bounds = artBounds(p.skeleton), r = specialView(bounds, framing ? specialFramingOf(framing, bounds) : "scene", aspect);
-    return { x: r.x, y: r.y, width: r.w, height: r.h, padLeft: 0, padRight: 0, padTop: 0, padBottom: 0, transitionTime: 0, animations: {} };
+    const bounds = artBounds(p.skeleton),
+      r = specialView(bounds, framing ? specialFramingOf(framing, bounds) : "scene", aspect);
+    return {
+      x: r.x,
+      y: r.y,
+      width: r.w,
+      height: r.h,
+      padLeft: 0,
+      padRight: 0,
+      padTop: 0,
+      padBottom: 0,
+      transitionTime: 0,
+      animations: {},
+    };
   }
-  const offset = new spine.Vector2(), size = new spine.Vector2();
+  const offset = new spine.Vector2(),
+    size = new spine.Vector2();
   p.skeleton.getBounds(offset, size, []);
   const rect = thumbFrame(faceBox(p.skeleton), { x: offset.x, y: offset.y, w: size.x, h: size.y }, frame, aspect);
   return { ...rect, padLeft: 0, padRight: 0, padTop: 0, padBottom: 0, transitionTime: 0, animations: {} };
 }
 
 function loadPlayer(base, el, signal, onError) {
-  return spinePlayer((config) => new spine.SpinePlayer(el, config), {
-    skeleton: `${base}.skel`, atlas: `${base}.atlas`, animation: undefined,
-    premultipliedAlpha: false, alpha: true, backgroundColor: "#00000000",
-    showControls: false, showLoading: false, preserveDrawingBuffer: true,
-    // capture() supplies the actual frame. Do not sample the first animation's bounds a hundred times first.
-    viewport: { x: 0, y: 0, width: 1, height: 1, padLeft: 0, padRight: 0, padTop: 0, padBottom: 0, transitionTime: 0, animations: {} },
-  }, { signal, onError, manual: true });
+  return spinePlayer(
+    (config) => new spine.SpinePlayer(el, config),
+    {
+      skeleton: `${base}.skel`,
+      atlas: `${base}.atlas`,
+      animation: undefined,
+      premultipliedAlpha: false,
+      alpha: true,
+      backgroundColor: "#00000000",
+      showControls: false,
+      showLoading: false,
+      preserveDrawingBuffer: true,
+      // capture() supplies the actual frame. Do not sample the first animation's bounds a hundred times first.
+      viewport: {
+        x: 0,
+        y: 0,
+        width: 1,
+        height: 1,
+        padLeft: 0,
+        padRight: 0,
+        padTop: 0,
+        padBottom: 0,
+        transitionTime: 0,
+        animations: {},
+      },
+    },
+    { signal, onError, manual: true },
+  );
 }
 
 async function capture(player, el, frame, expr, lobby, framing, background, signal, partial = () => {}) {
   const [w, h] = FRAMES[frame];
   el.style.width = `${w}px`;
   el.style.height = `${h}px`;
-  const state = player.animationState, data = player.skeleton.data;
+  const state = player.animationState,
+    data = player.skeleton.data;
   // Stills own their frame clock, including in an unfocused window or an off-screen host.
   player.stopRendering();
   player.paused = true;
@@ -175,7 +232,10 @@ async function capture(player, el, frame, expr, lobby, framing, background, sign
   state.clearTracks();
   player.skeleton.setToSetupPose();
   let entry = idle ? state.setAnimation(0, idle, true) : state.setEmptyAnimation(0, 0);
-  if (framing) { settle(player, { name: "thumbnail" }, null, () => {}); entry = state.getCurrent(0); }
+  if (framing) {
+    settle(player, { name: "thumbnail" }, null, () => {});
+    entry = state.getCurrent(0);
+  }
   // The main portrait also applies 00. Some story portraits attach their entire body on that track;
   // an empty setup pose cannot produce a still, however often the same frame is drawn.
   const expression = expr || (!lobby && !framing ? "00" : null);
@@ -191,17 +251,26 @@ async function capture(player, el, frame, expr, lobby, framing, background, sign
     player.drawFrame(false);
     const gl = player.context?.gl;
     if (!gl || gl.isContextLost?.()) continue;
-    const width = gl.drawingBufferWidth, height = gl.drawingBufferHeight;
+    const width = gl.drawingBufferWidth,
+      height = gl.drawingBufferHeight;
     if (!(width > 0 && height > 0)) continue;
     const pixels = new Uint8Array(width * height * 4);
     gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-    if (hasThumbnailInk(pixels)) { valid = true; break; }
+    if (hasThumbnailInk(pixels)) {
+      valid = true;
+      break;
+    }
   }
   if (signal.aborted) return null;
-  if (!valid) throw new Error(`No visible pixels (frame=${frame}, idle=${idle || "setup"}, expression=${expression || "none"}, viewport=${JSON.stringify(player.config.viewport)})`);
+  if (!valid)
+    throw new Error(
+      `No visible pixels (frame=${frame}, idle=${idle || "setup"}, expression=${expression || "none"}, viewport=${JSON.stringify(player.config.viewport)})`,
+    );
   // Freeze the validated draw before background loading or encoding can yield to the running player.
-  const portrait = el.querySelector("canvas"), still = document.createElement("canvas");
-  still.width = portrait.width; still.height = portrait.height;
+  const portrait = el.querySelector("canvas"),
+    still = document.createElement("canvas");
+  still.width = portrait.width;
+  still.height = portrait.height;
   still.getContext("2d").drawImage(portrait, 0, 0);
   const canvas = await collectionStill(still, background, signal).catch((err) => {
     partial();
@@ -219,25 +288,42 @@ export function hasThumbnailInk(pixels) {
 }
 
 // Collection portraits fill their texture with the variant background before the transparent Spine still.
-export async function collectionStill(portrait, background, signal, load = (url, options) => import("./ngui.js").then((ui) => ui.load(url, options))) {
+export async function collectionStill(
+  portrait,
+  background,
+  signal,
+  load = (url, options) => import("./ngui.js").then((ui) => ui.load(url, options)),
+) {
   if (!background) return portrait;
   const image = await load(background, { signal });
   if (signal?.aborted) return portrait;
   const canvas = document.createElement("canvas");
-  canvas.width = portrait.width; canvas.height = portrait.height;
-  const g = canvas.getContext("2d"), scale = Math.max(canvas.width / image.naturalWidth, canvas.height / image.naturalHeight);
-  const width = image.naturalWidth * scale, height = image.naturalHeight * scale;
+  canvas.width = portrait.width;
+  canvas.height = portrait.height;
+  const g = canvas.getContext("2d"),
+    scale = Math.max(canvas.width / image.naturalWidth, canvas.height / image.naturalHeight);
+  const width = image.naturalWidth * scale,
+    height = image.naturalHeight * scale;
   g.drawImage(image, (canvas.width - width) / 2, (canvas.height - height) / 2, width, height);
   g.drawImage(portrait, 0, 0, canvas.width, canvas.height);
   return canvas;
 }
 
-const keyOf = (base, frame, expr, lobby = false, framing = null, background = null) => `${base}|${frame}|${expr || ""}|${lobby}|${framing || ""}|${background || ""}`;
-const persistentKey = (base, frame, expr, lobby, framing, background) => JSON.stringify([
-  "spine-4.2.120-still-v1", base.match(/\/([a-f0-9]{64})\//)?.[1] || base,
-  base.slice(base.lastIndexOf("/") + 1), frame, FRAMES[frame], expr, lobby, framing, background,
-  globalThis.devicePixelRatio || 1,
-]);
+const keyOf = (base, frame, expr, lobby = false, framing = null, background = null) =>
+  `${base}|${frame}|${expr || ""}|${lobby}|${framing || ""}|${background || ""}`;
+const persistentKey = (base, frame, expr, lobby, framing, background) =>
+  JSON.stringify([
+    "spine-4.2.120-still-v1",
+    base.match(/\/([a-f0-9]{64})\//)?.[1] || base,
+    base.slice(base.lastIndexOf("/") + 1),
+    frame,
+    FRAMES[frame],
+    expr,
+    lobby,
+    framing,
+    background,
+    globalThis.devicePixelRatio || 1,
+  ]);
 const persistentDependencies = (base, lobby, framing, background) => [
   ...(background ? [background.endsWith(".png") ? background : `${background}.png`] : []),
   ...(lobby && !framing ? [`${base.slice(0, base.lastIndexOf("/"))}/framing.json`] : []),
@@ -245,7 +331,9 @@ const persistentDependencies = (base, lobby, framing, background) => [
 
 // A fallback retains queue priority and cancellation: an abandoned view must never publish a late image.
 export function withThumbnailFallback(picture, fallback) {
-  const result = Promise.resolve(picture).catch(() => null).then((url) => picture?.signal?.aborted ? null : url || fallback());
+  const result = Promise.resolve(picture)
+    .catch(() => null)
+    .then((url) => (picture?.signal?.aborted ? null : url || fallback()));
   result.thumbnail = true;
   result.signal = picture?.signal;
   result.bump = () => picture?.bump?.();
@@ -267,13 +355,20 @@ function subscribe(item, signal) {
       finish(null);
       if (!item.settled && !item.clients.size) {
         complete(item, null);
-        if (active?.base === item.base && !queue.some((q) => q.base === item.base && !q.settled)) active.controller.abort();
+        if (active?.base === item.base && !queue.some((q) => q.base === item.base && !q.settled))
+          active.controller.abort();
       }
     };
     client = finish;
     client.signal = signal;
-    if (signal?.aborted) { cancel(); return; }
-    if (item.settled) { resolve(item.url); return; }
+    if (signal?.aborted) {
+      cancel();
+      return;
+    }
+    if (item.settled) {
+      resolve(item.url);
+      return;
+    }
     item.clients.add(client);
     signal?.addEventListener("abort", cancel, { once: true });
   });
@@ -286,7 +381,10 @@ function subscribe(item, signal) {
 }
 
 function complete(item, url, error = null) {
-  if (item.settled) { if (url) URL.revokeObjectURL(url); return; }
+  if (item.settled) {
+    if (url) URL.revokeObjectURL(url);
+    return;
+  }
   retries.delete(item);
   if (error) previewError(error, item.base, `thumbnail:${item.frame}`);
   if (!url && error && item.clients.size && retries.defer(item, error)) {
@@ -313,16 +411,20 @@ async function pump() {
       orderQueue();
       if (!queue.some(captureEligible)) {
         const retry = retries.take(captureEligible);
-        if (!retry) { retries.idle(captureEligible); break; }
+        if (!retry) {
+          retries.idle(captureEligible);
+          break;
+        }
         queue.push(retry);
         // Faces of one skeleton still share one load on each retry.
         let sibling;
-        while ((sibling = retries.take((item) => item.base === retry.base && captureEligible(item)))) queue.push(sibling);
+        while ((sibling = retries.take((item) => item.base === retry.base && captureEligible(item))))
+          queue.push(sibling);
         orderQueue();
       }
       retries.busy();
       try {
-        if (!await ensureSpine()) {
+        if (!(await ensureSpine())) {
           for (const item of [...queue]) complete(item, null);
           break;
         }
@@ -332,7 +434,10 @@ async function pump() {
       }
       orderQueue();
       if (!queue.length || !captureEligible(queue[0])) continue;
-      const first = queue[0], base = first.base, controller = new AbortController(), { signal } = controller;
+      const first = queue[0],
+        base = first.base,
+        controller = new AbortController(),
+        { signal } = controller;
       active = { base, controller, items: new Set(queue.filter((q) => q.base === base)) };
       const el = document.createElement("div");
       el.className = "thumb-player";
@@ -346,15 +451,22 @@ async function pump() {
         load = loadPlayer(base, el, signal, (err) => controller.abort(err));
         const player = await load.ready;
         if (!player || signal.aborted) {
-          if (!active.preempted) for (const q of active.items) complete(q, null, signal.reason?.name === "AbortError" ? null : signal.reason);
+          if (!active.preempted)
+            for (const q of active.items)
+              complete(q, null, signal.reason?.name === "AbortError" ? null : signal.reason);
           continue;
         }
         if (first.lobby && !first.framing) {
           const url = `${base.slice(0, base.lastIndexOf("/"))}/framing.json`;
-          player.bamtLobbyFrame = await withTimeout(fetch(url, { signal }).then((r) => {
-            if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
-            return r.json();
-          }), 15000, "Lobby still camera", { signal }).catch((err) => {
+          player.bamtLobbyFrame = await withTimeout(
+            fetch(url, { signal }).then((r) => {
+              if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
+              return r.json();
+            }),
+            15000,
+            "Lobby still camera",
+            { signal },
+          ).catch((err) => {
             if (signal.aborted) throw err;
             console.warn("Lobby still camera unavailable; using standard game placement", err);
             return null;
@@ -365,9 +477,18 @@ async function pump() {
         let q = first.settled ? queue.find((q) => q.base === base) : first;
         while (!signal.aborted && q && !q.settled && captureEligible(q)) {
           if (q.lobby && !q.framing && !player.bamtLobbyFrame) q.persistent = null;
-          const url = await withTimeout(capture(player, el, q.frame, q.expr, q.lobby, q.framing, q.background, signal,
-            () => { q.persistent = null; }), THUMB_CAPTURE_TIMEOUT, `Thumbnail capture ${base}`, { signal });
-          if (active.preempted) { if (url) URL.revokeObjectURL(url); break; }
+          const url = await withTimeout(
+            capture(player, el, q.frame, q.expr, q.lobby, q.framing, q.background, signal, () => {
+              q.persistent = null;
+            }),
+            THUMB_CAPTURE_TIMEOUT,
+            `Thumbnail capture ${base}`,
+            { signal },
+          );
+          if (active.preempted) {
+            if (url) URL.revokeObjectURL(url);
+            break;
+          }
           batch.push(q);
           complete(q, url, !url && !signal.aborted ? new Error(`PNG encoding failed (frame=${q.frame})`) : null);
           // Let a visible card's bump take effect before the next capture.
@@ -377,7 +498,9 @@ async function pump() {
         }
         if (!signal.aborted) await companions(player, el, base, batch, signal);
       } catch (err) {
-        if (!active.preempted) for (const q of active.items) complete(q, null, signal.aborted && signal.reason?.name === "AbortError" ? null : err);
+        if (!active.preempted)
+          for (const q of active.items)
+            complete(q, null, signal.aborted && signal.reason?.name === "AbortError" ? null : err);
       } finally {
         clearTimeout(timer);
         controller.abort();
@@ -386,7 +509,9 @@ async function pump() {
         active = null;
       }
     }
-  } finally { running = false; }
+  } finally {
+    running = false;
+  }
 }
 
 // Take the other frame while the skeleton is loaded, unless visible work for another skeleton is waiting.
@@ -396,13 +521,21 @@ async function companions(player, el, base, batch, signal) {
     if (!frame || queue.length || popupCapturesOpen()) continue;
     const key = keyOf(base, frame, null, q.lobby, q.framing, q.background);
     if (cache.has(key)) continue;
-    let persistent = await previewCache.assetTicket(previewCache.ticket(persistentKey(base, frame, null, q.lobby, q.framing, q.background), "spine"),
-      persistentDependencies(base, q.lobby, q.framing, q.background));
+    let persistent = await previewCache.assetTicket(
+      previewCache.ticket(persistentKey(base, frame, null, q.lobby, q.framing, q.background), "spine"),
+      persistentDependencies(base, q.lobby, q.framing, q.background),
+    );
     if (q.lobby && !q.framing && !player.bamtLobbyFrame) persistent = null;
     let url;
     try {
-      url = await withTimeout(capture(player, el, frame, null, q.lobby, q.framing, q.background, signal,
-        () => { persistent = null; }), THUMB_CAPTURE_TIMEOUT, `Thumbnail companion ${base}`, { signal });
+      url = await withTimeout(
+        capture(player, el, frame, null, q.lobby, q.framing, q.background, signal, () => {
+          persistent = null;
+        }),
+        THUMB_CAPTURE_TIMEOUT,
+        `Thumbnail companion ${base}`,
+        { signal },
+      );
       if (!url && !signal.aborted) throw new Error(`PNG encoding failed (frame=${frame})`);
     } catch (error) {
       // A speculative companion has no unsettled item to report through complete().
@@ -414,7 +547,17 @@ async function companions(player, el, base, batch, signal) {
     if (waiting && !waiting.settled) complete(waiting, url);
     else if (waiting) URL.revokeObjectURL(url);
     else {
-      cache.set(key, { key, base, frame, lobby: q.lobby, framing: q.framing, background: q.background, url, settled: true, clients: new Set() });
+      cache.set(key, {
+        key,
+        base,
+        frame,
+        lobby: q.lobby,
+        framing: q.framing,
+        background: q.background,
+        url,
+        settled: true,
+        clients: new Set(),
+      });
       void previewCache.put(persistent, url);
     }
   }
@@ -423,14 +566,17 @@ async function companions(player, el, base, batch, signal) {
 // A detail generation shares each manifest answer until it changes. Re-entering the page revalidates the source;
 // cancelling also stops manifest deadlines, queued renders and the active player when nobody else needs it.
 export function thumbnailScope({ priority = "background" } = {}) {
-  const controller = new AbortController(), manifests = new Map();
+  const controller = new AbortController(),
+    manifests = new Map();
   scopes.add(manifests);
   if (priority === "popup") holdPopupCaptures(controller.signal);
   return {
     signal: controller.signal,
-    thumb: (base, frame = "bust", expr = null, lobby = false, framing = null, background = null) => request(base, frame, expr, lobby, framing, background, { signal: controller.signal, manifests }),
+    thumb: (base, frame = "bust", expr = null, lobby = false, framing = null, background = null) =>
+      request(base, frame, expr, lobby, framing, background, { signal: controller.signal, manifests }),
     cancel: () => {
-      controller.abort(); manifests.clear();
+      controller.abort();
+      manifests.clear();
       scopes.delete(manifests);
       if (active && !queue.some((q) => q.base === active.base)) active.controller.abort();
     },
@@ -443,13 +589,24 @@ export function thumb(base, frame = "bust", expr = null, lobby = false, framing 
   return request(base, frame, expr, lobby, framing, background);
 }
 
-function request(base, frame = "bust", expr = null, lobby = false, framing = null, background = null, { signal, manifests } = {}) {
+function request(
+  base,
+  frame = "bust",
+  expr = null,
+  lobby = false,
+  framing = null,
+  background = null,
+  { signal, manifests } = {},
+) {
   if (!base || signal?.aborted || !spineAllowed()) return Promise.resolve(null);
   if (!/\/[a-f0-9]{64}\/skeleton$/.test(base)) {
     const resolveBase = () => {
       if (!manifests) return spineAssetBase(base);
       if (!manifests.has(base)) {
-        const asking = spineAssetBase(base, { signal }).catch((err) => { if (manifests.get(base) === asking) manifests.delete(base); throw err; });
+        const asking = spineAssetBase(base, { signal }).catch((err) => {
+          if (manifests.get(base) === asking) manifests.delete(base);
+          throw err;
+        });
         manifests.set(base, asking);
       }
       return manifests.get(base);
@@ -457,27 +614,36 @@ function request(base, frame = "bust", expr = null, lobby = false, framing = nul
     const refreshBase = async (resolved) => {
       if (manifests) {
         const previous = manifests.get(base);
-        if (previous && await previous !== resolved) return previous;
+        if (previous && (await previous) !== resolved) return previous;
         // Faces rejected together must join the first refresh, rather than invalidating each other's requests.
         if (manifests.get(base) === previous) manifests.delete(base);
       } else forgetSpineAssets(base.slice(0, base.lastIndexOf("/")));
       return resolveBase();
     };
-    let inner = null, first = false;
-    const outer = resolveBase().then(async (resolved) => {
-      for (let attempt = 0; resolved && !signal?.aborted && attempt < 2; attempt++) {
-        inner = request(resolved, frame, expr, lobby, framing, background, { signal });
-        if (first) inner.bump?.();
-        const url = await inner;
-        if (signal?.aborted || url || attempt) return url;
-        if (!/status 404|HTTP 404/.test(String(inner.failure?.()))) return null;
-        const fresh = await refreshBase(resolved);
-        if (fresh === resolved) return null;
-        resolved = fresh;
-      }
-      return null;
-    }).catch((err) => { if (!signal?.aborted) previewError(err, base, `thumbnail:${frame}`); return null; });
-    outer.bump = () => { first = true; inner?.bump?.(); };
+    let inner = null,
+      first = false;
+    const outer = resolveBase()
+      .then(async (resolved) => {
+        for (let attempt = 0; resolved && !signal?.aborted && attempt < 2; attempt++) {
+          inner = request(resolved, frame, expr, lobby, framing, background, { signal });
+          if (first) inner.bump?.();
+          const url = await inner;
+          if (signal?.aborted || url || attempt) return url;
+          if (!/status 404|HTTP 404/.test(String(inner.failure?.()))) return null;
+          const fresh = await refreshBase(resolved);
+          if (fresh === resolved) return null;
+          resolved = fresh;
+        }
+        return null;
+      })
+      .catch((err) => {
+        if (!signal?.aborted) previewError(err, base, `thumbnail:${frame}`);
+        return null;
+      });
+    outer.bump = () => {
+      first = true;
+      inner?.bump?.();
+    };
     outer.thumbnail = true;
     outer.signal = signal;
     outer.failure = () => inner?.failure?.();
@@ -485,24 +651,47 @@ function request(base, frame = "bust", expr = null, lobby = false, framing = nul
   }
   const key = keyOf(base, frame, expr, lobby, framing, background);
   if (!cache.has(key)) {
-    const item = { key, base, frame, expr, lobby, framing, background, clients: new Set(), settled: false,
-      persistent: previewCache.ticket(persistentKey(base, frame, expr, lobby, framing, background), "spine") };
+    const item = {
+      key,
+      base,
+      frame,
+      expr,
+      lobby,
+      framing,
+      background,
+      clients: new Set(),
+      settled: false,
+      persistent: previewCache.ticket(persistentKey(base, frame, expr, lobby, framing, background), "spine"),
+    };
     cache.set(key, item);
     const enqueue = () => {
-      if (item.settled || item.forgotten) { complete(item, null); return; }
+      if (item.settled || item.forgotten) {
+        complete(item, null);
+        return;
+      }
       queue.push(item);
       if (active?.base === base && !active.controller.signal.aborted) active.items.add(item);
       if (preferred) queue.sort((a, b) => b.base.startsWith(preferred) - a.base.startsWith(preferred));
       queueMicrotask(pump);
     };
-    if (item.persistent) void previewCache.assetTicket(item.persistent, persistentDependencies(base, lobby, framing, background)).then(async (ticket) => {
-      item.persistent = ticket;
-      return previewCache.get(ticket);
-    }).then((url) => {
-      if (item.settled || item.forgotten) { if (url) URL.revokeObjectURL(url); complete(item, null); return; }
-      if (url) { item.persistent = null; complete(item, url); }
-      else enqueue();
-    });
+    if (item.persistent)
+      void previewCache
+        .assetTicket(item.persistent, persistentDependencies(base, lobby, framing, background))
+        .then(async (ticket) => {
+          item.persistent = ticket;
+          return previewCache.get(ticket);
+        })
+        .then((url) => {
+          if (item.settled || item.forgotten) {
+            if (url) URL.revokeObjectURL(url);
+            complete(item, null);
+            return;
+          }
+          if (url) {
+            item.persistent = null;
+            complete(item, url);
+          } else enqueue();
+        });
     else enqueue();
   }
   const picture = subscribe(cache.get(key), signal);
@@ -534,7 +723,8 @@ export function prioritise(base) {
 export function forget(prefix = "") {
   forgetSpineAssets(prefix);
   const want = prefix.toLowerCase();
-  for (const manifests of scopes) for (const base of manifests.keys()) if (base.toLowerCase().startsWith(want)) manifests.delete(base);
+  for (const manifests of scopes)
+    for (const base of manifests.keys()) if (base.toLowerCase().startsWith(want)) manifests.delete(base);
   for (const [key, item] of cache) {
     if (!key.toLowerCase().startsWith(want)) continue;
     if (item.url) URL.revokeObjectURL(item.url);

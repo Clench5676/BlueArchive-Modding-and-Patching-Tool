@@ -4,15 +4,17 @@
 // hands over to the classic UI, through the hand-off prompt while the pref classicPrompt is on. An entry that gets a
 // route is drawn normally and drops out of the hand-off.
 
-export const ITEMS = Object.freeze([
-  { label: "nav.students", icon: "Common_Icon_Student", route: "#/roster" },
-  { label: "nav.import", icon: "Common_Icon_All_Download", route: "#/import" },
-  { label: "nav.crc", icon: "School_Icon_Schedule", classic: "crc_tool" },
-  { label: "nav.pack", icon: "Common_Icon_Craft", classic: "asset_packer" },
-  { label: "nav.extract", icon: "Common_Icon_Inventory_Equip", classic: "asset_extractor" },
-  { label: "nav.adb", icon: "Common_Icon_MoMoTalk", classic: "adb_push" },
-  { label: "nav.tools", icon: "Common_Icon_Setting_Game", classic: "tools" },
-].map((item) => Object.freeze(item)));
+export const ITEMS = Object.freeze(
+  [
+    { label: "nav.students", icon: "Common_Icon_Student", route: "#/roster" },
+    { label: "nav.import", icon: "Common_Icon_All_Download", route: "#/import" },
+    { label: "nav.crc", icon: "School_Icon_Schedule", classic: "crc_tool" },
+    { label: "nav.pack", icon: "Common_Icon_Craft", classic: "asset_packer" },
+    { label: "nav.extract", icon: "Common_Icon_Inventory_Equip", classic: "asset_extractor" },
+    { label: "nav.adb", icon: "Common_Icon_MoMoTalk", classic: "adb_push" },
+    { label: "nav.tools", icon: "Common_Icon_Setting_Game", classic: "tools" },
+  ].map((item) => Object.freeze(item)),
+);
 
 // greyed exactly when the entry has a classic tab and no web screen
 export const greyed = (item) => !!item.classic && !item.route;
@@ -22,14 +24,23 @@ export const greyed = (item) => !!item.classic && !item.route;
 export function view(item, T) {
   const label = T(item.label);
   const grey = greyed(item);
-  return { label, name: grey ? T("nav.classic", { label }) : label, greyed: grey, route: item.route || null, tab: grey ? item.classic : null };
+  return {
+    label,
+    name: grey ? T("nav.classic", { label }) : label,
+    greyed: grey,
+    route: item.route || null,
+    tab: grey ? item.classic : null,
+  };
 }
 
 // the hand-off prompt (popup.js message): the entry's label, where it opens, Don't Ask Again (unticked), Cancel and
 // Open
 export const handOffPrompt = (item, T) => ({
-  title: T(item.label), lines: [T("classic.hint")], check: { label: T("mods.dontAsk"), checked: false },
-  ok: T("settings.classic.open"), cancel: T("popup.cancel"),
+  title: T(item.label),
+  lines: [T("classic.hint")],
+  check: { label: T("mods.dontAsk"), checked: false },
+  ok: T("settings.classic.open"),
+  cancel: T("popup.cancel"),
 });
 
 // a click (or Enter, or Space) on an entry:
@@ -41,7 +52,7 @@ export const handOffPrompt = (item, T) => ({
 // Resolves with what happened: "route", "cancel" or "open".
 export async function activate(item, { prompt = true, go, ask, open, savePrompt }) {
   if (!greyed(item)) {
-    if (item.route && await go(item.route) === false) return "cancel";
+    if (item.route && (await go(item.route)) === false) return "cancel";
     return "route";
   }
   if (prompt !== false) {

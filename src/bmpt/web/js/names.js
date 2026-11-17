@@ -1,5 +1,6 @@
 // The first saved variant alias is the display name; all saved aliases remain searchable and editable.
-export const customAliases = (variant) => (Array.isArray(variant?.custom) ? variant.custom.filter((a) => typeof a === "string" && a) : []);
+export const customAliases = (variant) =>
+  Array.isArray(variant?.custom) ? variant.custom.filter((a) => typeof a === "string" && a) : [];
 export const studentName = (variant, original) => customAliases(variant)[0] || original;
 // Another student's costume: "Student (Costume)" in the language's brackets, the rule job progress names a
 // variant by (progress.subject). The student is the family's base name, or the user's alias of the variant; the
@@ -18,7 +19,9 @@ export function modName(mod, entries, translate, seen = new Set()) {
     const own = translate("lobby.cameraName", { n: mod.camera.number });
     if (!mod.camera.source?.startsWith("mod:")) return `${translate("lobby.original")} - ${own}`;
     const from = entries.find((entry) => entry.id === mod.camera.source.slice(4));
-    return from && !seen.has(from.id) ? `${modName(from, entries, translate, new Set([...seen, mod.id]))} - ${own}` : own;
+    return from && !seen.has(from.id)
+      ? `${modName(from, entries, translate, new Set([...seen, mod.id]))} - ${own}`
+      : own;
   }
   if (mod.repaired_from && !seen.has(mod.repaired_from)) {
     const parent = entries.find((entry) => entry.id === mod.repaired_from);
@@ -29,4 +32,5 @@ export function modName(mod, entries, translate, seen = new Set()) {
 }
 
 // A mod's label may already be its alias. Its core and file name still identify the original game resource.
-export const modOriginalName = (mod) => mod?.core || mod?.file?.split(/[\\/]/).pop() || (mod?.label !== mod?.alias ? mod?.label : "") || "";
+export const modOriginalName = (mod) =>
+  mod?.core || mod?.file?.split(/[\\/]/).pop() || (mod?.label !== mod?.alias ? mod?.label : "") || "";

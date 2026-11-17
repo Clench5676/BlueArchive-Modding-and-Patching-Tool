@@ -6,10 +6,14 @@ import { withCode } from "./error-codes.js";
 // An error text with the file it names left out (the details list each file), when the name opens or ends the text:
 // "{file}, build target ..." or "Not a valid bundle: {file}". A name inside a sentence stays.
 export function withoutFile(T, key, params = {}) {
-  const marker = "\u0000", text = T(key, { ...params, file: marker });
+  const marker = "\u0000",
+    text = T(key, { ...params, file: marker });
   if (!text.includes(marker)) return text;
   const separators = "[\\s,，、:：-]*";
-  const trimmed = text.replace(new RegExp(`^${separators}${marker}${separators}|${separators}${marker}${separators}$`), "");
+  const trimmed = text.replace(
+    new RegExp(`^${separators}${marker}${separators}|${separators}${marker}${separators}$`),
+    "",
+  );
   return trimmed.includes(marker) ? T(key, params) : trimmed;
 }
 
@@ -21,14 +25,26 @@ export function detailLines(entry, { reason = "", T, separator = ", " }) {
   const error = entry.error || { code: entry.reason || (entry.state === "incomplete" ? "mod_parts_missing" : null) };
   const lines = reason ? [withCode(reason, error, T)] : [];
   for (const bundle of entry.bundles || []) {
-    lines.push([bundle.file,
-      ...bundle.platforms?.length ? [T("import.detail.platform", { platforms: bundle.platforms.join(separator) })] : [],
-      ...bundle.unity?.length ? [T("import.detail.unity", { versions: bundle.unity.join(separator) })] : []].join("\n"));
+    lines.push(
+      [
+        bundle.file,
+        ...(bundle.platforms?.length
+          ? [T("import.detail.platform", { platforms: bundle.platforms.join(separator) })]
+          : []),
+        ...(bundle.unity?.length ? [T("import.detail.unity", { versions: bundle.unity.join(separator) })] : []),
+      ].join("\n"),
+    );
   }
   const missing = entry.missing || {};
-  if (missing.unresolved) lines.push([T("import.detail.unresolved", { n: missing.unresolved }), ...missing.cabs || []].join("\n"));
+  if (missing.unresolved)
+    lines.push([T("import.detail.unresolved", { n: missing.unresolved }), ...(missing.cabs || [])].join("\n"));
   if (missing.found?.length) {
-    lines.push([T("import.missing.promptHead"), ...missing.found.map((file) => T("import.missing.promptFile", { name: file.name }))].join("\n"));
+    lines.push(
+      [
+        T("import.missing.promptHead"),
+        ...missing.found.map((file) => T("import.missing.promptFile", { name: file.name })),
+      ].join("\n"),
+    );
   }
   return lines;
 }

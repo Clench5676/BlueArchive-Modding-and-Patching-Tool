@@ -29,7 +29,10 @@ export function sections(markdown) {
   for (const raw of String(markdown ?? "").split(/\r?\n/)) {
     const line = raw.replace(/\s+$/, "");
     const mark = MARK.exec(line.trim());
-    if (RULE.test(line)) { close(); continue; }
+    if (RULE.test(line)) {
+      close();
+      continue;
+    }
     if (mark) {
       if (current.lines.some((l) => l.trim())) close();
       current.lang = mark[1];
@@ -41,12 +44,19 @@ export function sections(markdown) {
   return out.map((s) => ({ lang: s.lang || scriptOf(s.lines.join("\n")), lines: s.lines }));
 }
 
-const base = (lang) => String(lang || "").toLowerCase().split("-")[0];
+const base = (lang) =>
+  String(lang || "")
+    .toLowerCase()
+    .split("-")[0];
 export function pick(list, lang) {
   if (!list.length) return null;
   const wanted = String(lang || "").toLowerCase();
-  return list.find((s) => s.lang.toLowerCase() === wanted) || list.find((s) => base(s.lang) === base(lang))
-    || list.find((s) => base(s.lang) === "en") || list[0];
+  return (
+    list.find((s) => s.lang.toLowerCase() === wanted) ||
+    list.find((s) => base(s.lang) === base(lang)) ||
+    list.find((s) => base(s.lang) === "en") ||
+    list[0]
+  );
 }
 
 // the text of one line, without Markdown's marks: images and links keep their text, emphasis, code and strike marks go,
@@ -78,21 +88,36 @@ export function blocks(lines) {
   let gap = false;
   for (const raw of lines) {
     const line = raw.replace(/\t/g, "    ");
-    if (!line.trim()) { gap = out.length > 0; continue; }
+    if (!line.trim()) {
+      gap = out.length > 0;
+      continue;
+    }
     let m = /^ {0,3}(#{1,6})\s+(.*?)(?:\s+#+)?\s*$/.exec(line);
-    if (m) { out.push({ kind: "heading", level: m[1].length, text: inline(m[2]), gap: out.length > 0 }); gap = false; continue; }
-    m = /^(\s*)([-*+]|\d{1,3}[.)])\s+(.*)$/.exec(line);
     if (m) {
-      const ordered = /\d/.test(m[2]);
-      out.push({ kind: "item", depth: Math.min(3, Math.floor(m[1].length / 2)), marker: ordered ? `${parseInt(m[2], 10)}.` : "\u2022",
-        text: inline(m[3]), gap });
+      out.push({ kind: "heading", level: m[1].length, text: inline(m[2]), gap: out.length > 0 });
       gap = false;
       continue;
     }
-    const previous = out.at(-1), text = inline(line.trim());
+    m = /^(\s*)([-*+]|\d{1,3}[.)])\s+(.*)$/.exec(line);
+    if (m) {
+      const ordered = /\d/.test(m[2]);
+      out.push({
+        kind: "item",
+        depth: Math.min(3, Math.floor(m[1].length / 2)),
+        marker: ordered ? `${parseInt(m[2], 10)}.` : "\u2022",
+        text: inline(m[3]),
+        gap,
+      });
+      gap = false;
+      continue;
+    }
+    const previous = out.at(-1),
+      text = inline(line.trim());
     if (!text) continue;
     const under = !gap && /^\s{2,}/.test(line) && (previous?.kind === "item" || previous?.under != null);
-    out.push(under ? { kind: "text", text, gap: false, under: previous.under ?? previous.depth } : { kind: "text", text, gap });
+    out.push(
+      under ? { kind: "text", text, gap: false, under: previous.under ?? previous.depth } : { kind: "text", text, gap },
+    );
     gap = false;
   }
   return out.filter((b) => b.text);

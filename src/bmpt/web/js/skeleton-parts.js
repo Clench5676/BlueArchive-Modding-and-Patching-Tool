@@ -20,7 +20,8 @@ export function pageOf(attachment) {
 // a layer's parts: how many, and the part of a page (by name); a page the prefab does not list draws with the
 // layer's own queue
 export function partsOf(layer) {
-  const queues = queuesOf(layer), byPage = new Map();
+  const queues = queuesOf(layer),
+    byPage = new Map();
   for (const [page, queue] of Object.entries(layer?.pages || {})) byPage.set(page, queues.indexOf(queue));
   const own = Math.max(0, queues.indexOf(layer?.queue));
   return { count: queues.length, of: (page) => byPage.get(page) ?? own };
@@ -30,11 +31,17 @@ export function partsOf(layer) {
 // back after it (a slot without a page, a clipping attachment's included, takes part in every one: its clipping still
 // applies to the slots it covers). A skeleton of one part is drawn as it is.
 export function drawPart(skeleton, parts, k, draw) {
-  if (!(parts?.count > 1)) { draw(); return; }
+  if (!(parts?.count > 1)) {
+    draw();
+    return;
+  }
   const emptied = [];
   for (const slot of skeleton.drawOrder) {
     const page = pageOf(slot.attachment);
-    if (page !== null && parts.of(page) !== k) { emptied.push([slot, slot.attachment]); slot.attachment = null; }
+    if (page !== null && parts.of(page) !== k) {
+      emptied.push([slot, slot.attachment]);
+      slot.attachment = null;
+    }
   }
   try {
     draw();

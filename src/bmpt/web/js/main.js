@@ -35,24 +35,48 @@ import { chromeMotion } from "./chrome-motion.js";
 import { installCloseGuard } from "./window-close.js";
 import { installVerticalWheel } from "./horizontal-scroll.js";
 
-installCloseGuard({ prepare: () => StudentHall.canLeave(), revision: StudentHall.closeRevision, root: () => [document.querySelector('.viewport'),
-  document.querySelector('.window-header')].filter(Boolean) });
+installCloseGuard({
+  prepare: () => StudentHall.canLeave(),
+  revision: StudentHall.closeRevision,
+  root: () => [document.querySelector(".viewport"), document.querySelector(".window-header")].filter(Boolean),
+});
 setupWindowChrome();
 installVerticalWheel();
 
-globalThis.BAMTRecovery?.presentReport((result) => Popup.message({ title: T("recovery.report"),
-  lines: result ? [T("recovery.saved"), result.path, T(result.copied ? "recovery.copied" : "recovery.copyFailed"),
-    ...(!result.copied ? [result.summary] : [])] : [T("recovery.actionFailed")], ok: T("picker.ok"), plain: true,
-}));
+globalThis.BAMTRecovery?.presentReport((result) =>
+  Popup.message({
+    title: T("recovery.report"),
+    lines: result
+      ? [
+          T("recovery.saved"),
+          result.path,
+          T(result.copied ? "recovery.copied" : "recovery.copyFailed"),
+          ...(!result.copied ? [result.summary] : []),
+        ]
+      : [T("recovery.actionFailed")],
+    ok: T("picker.ok"),
+    plain: true,
+  }),
+);
 
-let info = null, rosterData = null, rosterStale = true,resourceEpoch=0,configurationRevision=0;
+let info = null,
+  rosterData = null,
+  rosterStale = true,
+  resourceEpoch = 0,
+  configurationRevision = 0;
 const startup = {};
 async function timed(phase, work) {
   const began = performance.now();
   globalThis.BAMTRecovery?.begin(phase);
-  try { return await work(); }
-  catch (error) { if (globalThis.BAMTRecovery?.isBooting()) globalThis.BAMTRecovery.fail(error); throw error; }
-  finally { startup[phase] = performance.now() - began; globalThis.BAMTRecovery?.end(phase, startup[phase]); }
+  try {
+    return await work();
+  } catch (error) {
+    if (globalThis.BAMTRecovery?.isBooting()) globalThis.BAMTRecovery.fail(error);
+    throw error;
+  } finally {
+    startup[phase] = performance.now() - began;
+    globalThis.BAMTRecovery?.end(phase, startup[phase]);
+  }
 }
 // the roster's cards as the list showed them when it was left (its filters, search and sort): the detail screen's
 // arrows step through these, so visits and edits on the way do not reshuffle them; taken afresh once the roster shows
@@ -65,7 +89,10 @@ function relabelShell() {
   $("top-option").setAttribute("aria-label", T("settings.button"));
   $("top-home").setAttribute("aria-label", T("hall.home"));
   const back = document.querySelector(".topbar .back").onclick;
-  setTitle(T(!$("screen-hall").hidden ? "hall.title" : !$("screen-import").hidden ? "nav.import" : "top.students"), back);
+  setTitle(
+    T(!$("screen-hall").hidden ? "hall.title" : !$("screen-import").hidden ? "nav.import" : "top.students"),
+    back,
+  );
   Loading.relabel();
 }
 const refreshLanguage = languageRefresh({
@@ -75,8 +102,14 @@ const refreshLanguage = languageRefresh({
     stepCards = null;
     relabelShell();
     await document.fonts.ready;
-    await Promise.all([renderNav(!$("screen-hall").hidden ? -1 : !$("screen-import").hidden ? 1 : 0), ModSwitch.relabel(),
-      StudentHall.relabel(), Roster.relabel(), Detail.relabel(), BatchImport.relabel()]);
+    await Promise.all([
+      renderNav(!$("screen-hall").hidden ? -1 : !$("screen-import").hidden ? 1 : 0),
+      ModSwitch.relabel(),
+      StudentHall.relabel(),
+      Roster.relabel(),
+      Detail.relabel(),
+      BatchImport.relabel(),
+    ]);
   },
 });
 
@@ -88,7 +121,11 @@ const ctx = {
     const tab = ["portrait", "lobby", "model"].includes(target) ? `/${target}` : "";
     location.hash = `#/student/${encodeURIComponent(family)}/${encodeURIComponent(variant)}${tab}`;
   },
-  invalidateRoster: () => { rosterStale = true; rosterGen += 1; Roster.invalidate(); },
+  invalidateRoster: () => {
+    rosterStale = true;
+    rosterGen += 1;
+    Roster.invalidate();
+  },
   // roster.list's data (read again once invalidated): Switch 3D Model's other students. ``stale``: the copy in
   // hand at once, even when invalidated, read again in the background (roster.list waits for the library's
   // lock, held by a costume check for seconds)
@@ -101,28 +138,38 @@ const ctx = {
   step: async (delta, family, variant) => {
     const data = await roster();
     stepCards ||= Roster.order(data);
-    const next = neighbour(stepCards, () => Roster.order(data, { unfiltered: true }), { family, variant, merged: Roster.merged() }, delta);
+    const next = neighbour(
+      stepCards,
+      () => Roster.order(data, { unfiltered: true }),
+      { family, variant, merged: Roster.merged() },
+      delta,
+    );
     if (next) ctx.go(next.family, next.key);
   },
 };
 
 // one roster.list at a time: callers while it runs share its answer, unless the roster was invalidated since it began
 // (rosterGen); rosterEpoch: the resources the data was read for
-let rosterRead = null, rosterGen = 0, rosterEpoch = -1;
+let rosterRead = null,
+  rosterGen = 0,
+  rosterEpoch = -1;
 function roster() {
   if (rosterData && !rosterStale) return Promise.resolve(rosterData);
   if (rosterRead?.gen === rosterGen) return rosterRead.done;
   const gen = rosterGen;
   const done = (async () => {
-    const epoch=resourceEpoch,next=await rpc("roster.list");
-    if(epoch!==resourceEpoch)throw new DOMException('Game resources changed','AbortError');
+    const epoch = resourceEpoch,
+      next = await rpc("roster.list");
+    if (epoch !== resourceEpoch) throw new DOMException("Game resources changed", "AbortError");
     const before = rosterData;
-    rosterData=next;
+    rosterData = next;
     rosterEpoch = epoch;
     if (gen === rosterGen) rosterStale = false;
     forgetReplaced(before, rosterData);
     return rosterData;
-  })().finally(() => { if (rosterRead?.done === done) rosterRead = null; });
+  })().finally(() => {
+    if (rosterRead?.done === done) rosterRead = null;
+  });
   rosterRead = { gen, done };
   return done;
 }
@@ -133,10 +180,11 @@ function forgetReplaced(before, after) {
   if (!before) return;
   const was = new Map(before.families.flatMap((f) => f.variants.map((v) => [v.key, v.replaced ?? null])));
   for (const f of after.families) {
-    for (const v of f.variants) if (hasAsset(v) && was.has(v.key) && was.get(v.key) !== (v.replaced ?? null)) {
-      const kind = primaryKind(v);
-      forget(spinePrefix(kind, kind === "spr" ? v.spr : v.lobby));
-    }
+    for (const v of f.variants)
+      if (hasAsset(v) && was.has(v.key) && was.get(v.key) !== (v.replaced ?? null)) {
+        const kind = primaryKind(v);
+        forget(spinePrefix(kind, kind === "spr" ? v.spr : v.lobby));
+      }
   }
 }
 
@@ -152,7 +200,8 @@ async function variantNames() {
 }
 
 // the progress line's names (loading.js, job-progress.js modLine): the roster's as it is now, the key until it is in
-let nameIndex = new Map(), nameIndexOf = null;
+let nameIndex = new Map(),
+  nameIndexOf = null;
 function progressNames(entry) {
   if (nameIndexOf !== rosterData) {
     nameIndexOf = rosterData;
@@ -179,7 +228,9 @@ async function openMod({ id, variant, kind }) {
 // classic UI closed, a job stopped midway, the mod list changed). The roster is read again, the thumbnails of those
 // cores are forgotten (both live and official sources, including other installs' bases) and the detail screen
 // reloads what it shows of them ---
-let heldChange, changeTimer = null, changeRoute = 0;
+let heldChange,
+  changeTimer = null,
+  changeRoute = 0;
 function libraryChanged(data) {
   // An import changes the mod list without changing game files.
   const change = data && !data.mods && Array.isArray(data.cores) ? { cores: data.cores } : null;
@@ -193,8 +244,12 @@ function libraryChanged(data) {
     }
   }
   ctx.invalidateRoster();
-  heldChange = heldChange === undefined ? change : heldChange === null || change === null ? null
-    : { cores: [...new Set([...heldChange.cores, ...change.cores])] };
+  heldChange =
+    heldChange === undefined
+      ? change
+      : heldChange === null || change === null
+        ? null
+        : { cores: [...new Set([...heldChange.cores, ...change.cores])] };
   changeRoute = routeToken;
   clearTimeout(changeTimer);
   changeTimer = setTimeout(applyChange, 150); // the events of one job come together
@@ -226,9 +281,12 @@ async function refreshAfterToggle() {
 // the window back in front after 30 s or more: the server checks again with scan consent
 let hiddenAt = 0;
 function watchFront() {
-  const away = () => { hiddenAt ||= Date.now(); };
+  const away = () => {
+    hiddenAt ||= Date.now();
+  };
   const back = () => {
-    if (hiddenAt && Date.now() - hiddenAt >= 30000 && ModSwitch.current()?.scan === true) rpc("mods.scan").catch(() => {});
+    if (hiddenAt && Date.now() - hiddenAt >= 30000 && ModSwitch.current()?.scan === true)
+      rpc("mods.scan").catch(() => {});
     hiddenAt = 0;
   };
   addEventListener("blur", away);
@@ -245,8 +303,9 @@ function visited(fam, key) {
 }
 
 function showScreen(name) {
-  setTopActions(name === "hall",!!info?.gameFound);
-  for (const id of ["screen-hall", "screen-roster", "screen-detail", "screen-import", "screen-message"]) $(id).hidden = id !== `screen-${name}`;
+  setTopActions(name === "hall", !!info?.gameFound);
+  for (const id of ["screen-hall", "screen-roster", "screen-detail", "screen-import", "screen-message"])
+    $(id).hidden = id !== `screen-${name}`;
 }
 
 function message(title, hint, actions = []) {
@@ -254,20 +313,26 @@ function message(title, hint, actions = []) {
   $("message-title").textContent = title;
   $("message-hint").textContent = hint || "";
   const row = $("message-actions");
-  row.replaceChildren(...actions.map(([caption, fn]) => {
-    const b = document.createElement("button");
-    b.className = "message-button";
-    b.textContent = caption;
-    b.addEventListener("click", fn);
-    return b;
-  }));
+  row.replaceChildren(
+    ...actions.map(([caption, fn]) => {
+      const b = document.createElement("button");
+      b.className = "message-button";
+      b.textContent = caption;
+      b.addEventListener("click", fn);
+      return b;
+    }),
+  );
 }
 
 // the quit prompt (quit.js): the student list's back button and Escape on the list. In the app's window the quit
 // closes it; in browser mode the server stops once it has answered, and the page says so
 function askQuit() {
   return confirmQuit({
-    message: Popup.message, rpc, T, notify, native: !!info?.native,
+    message: Popup.message,
+    rpc,
+    T,
+    notify,
+    native: !!info?.native,
     closed: () => {
       $("stage").classList.add("closed");
       message(T("app.closed"));
@@ -284,8 +349,9 @@ addEventListener("keydown", (ev) => {
 // click then says so in the plain notice (the frame is missing too), and a failure with a game is reported as one.
 // Either way a click never fails silently.
 async function openSettings(changed) {
-  try { await Settings.open(changed); }
-  catch (err) {
+  try {
+    await Settings.open(changed);
+  } catch (err) {
     console.error(err);
     if (!info?.gameFound) Popup.notice(T("app.noGame.hint"));
     else notify(errorText(err), { kind: "error", error: err });
@@ -294,18 +360,36 @@ async function openSettings(changed) {
 
 // without a game folder the game's UI cannot be drawn: plain buttons to find or choose one
 function noGame() {
-  const region=ctx.prefs?.fileSource==='windows_japan'?'japan':'global';
+  const region = ctx.prefs?.fileSource === "windows_japan" ? "japan" : "global";
   const setDir = async (path) => {
-    try { await rpc("settings.set", { key: `gameDir.${region}`, value: path }); await refreshConfiguration(); }
-    catch (err) { notify(errorText(err), { kind: "error", error: err }); }
+    try {
+      await rpc("settings.set", { key: `gameDir.${region}`, value: path });
+      await refreshConfiguration();
+    } catch (err) {
+      notify(errorText(err), { kind: "error", error: err });
+    }
   };
   message(T("app.noGame.title"), T("app.noGame.hint"), [
-    [T("settings.detect"), async () => {
-      const found = await Consent.detectGame(region, plainScanConsent).catch(() => []);
-      if (found === null) return; // declined: the folder is chosen by hand
-      if (found.length) setDir(found[0]); else notify(T("app.noGame.hint"), { kind: "error", error: { code: "game_directory_missing" } });
-    }],
-    ...(info?.native ? [[T("settings.change"), async () => { const p = await rpc("settings.pickFolder", {}).catch(() => null); if (p) setDir(p); }]] : []),
+    [
+      T("settings.detect"),
+      async () => {
+        const found = await Consent.detectGame(region, plainScanConsent).catch(() => []);
+        if (found === null) return; // declined: the folder is chosen by hand
+        if (found.length) setDir(found[0]);
+        else notify(T("app.noGame.hint"), { kind: "error", error: { code: "game_directory_missing" } });
+      },
+    ],
+    ...(info?.native
+      ? [
+          [
+            T("settings.change"),
+            async () => {
+              const p = await rpc("settings.pickFolder", {}).catch(() => null);
+              if (p) setDir(p);
+            },
+          ],
+        ]
+      : []),
   ]);
 }
 
@@ -313,37 +397,69 @@ function noGame() {
 // built-in style, answered with its two buttons; the no-game screen comes back after the answer
 function plainScanConsent() {
   return new Promise((resolve) => {
-    const lines = [T("mods.scan.will.label"), T("mods.scan.will.steam"), T("mods.scan.will.items"),
-      T("mods.scan.willNot.label"), T("mods.scan.willNot.items"), T("mods.scan.note")];
+    const lines = [
+      T("mods.scan.will.label"),
+      T("mods.scan.will.steam"),
+      T("mods.scan.will.items"),
+      T("mods.scan.willNot.label"),
+      T("mods.scan.willNot.items"),
+      T("mods.scan.note"),
+    ];
     const answer = (granted) => async () => {
-      try { await rpc("mods.consent", { granted }); }
-      catch (err) { notify(errorText(err), { kind: "error", error: err }); return; }
+      try {
+        await rpc("mods.consent", { granted });
+      } catch (err) {
+        notify(errorText(err), { kind: "error", error: err });
+        return;
+      }
       noGame();
       resolve(granted);
     };
-    message(T("mods.scan.title"), lines.join("\n"), [[T("mods.scan.no"), answer(false)], [T("mods.scan.yes"), answer(true)]]);
+    message(T("mods.scan.title"), lines.join("\n"), [
+      [T("mods.scan.no"), answer(false)],
+      [T("mods.scan.yes"), answer(true)],
+    ]);
   });
 }
 
-async function refreshConfiguration(){
-  const revision=++configurationRevision;++resourceEpoch;++routeToken;++routeAttempt;endRoute();
-  StudentHall.hide();Detail.hide();Roster.hide();BatchImport.invalidate();stepCards=null;ctx.invalidateRoster();
-  const [next,prefs]=await Promise.all([rpc('app.info'),rpc('settings.get')]);
-  if(revision!==configurationRevision)return;
-  info=next;ctx.info=next;ctx.prefs=prefs;
+async function refreshConfiguration() {
+  const revision = ++configurationRevision;
+  ++resourceEpoch;
+  ++routeToken;
+  ++routeAttempt;
+  endRoute();
+  StudentHall.hide();
+  Detail.hide();
+  Roster.hide();
+  BatchImport.invalidate();
+  stepCards = null;
+  ctx.invalidateRoster();
+  const [next, prefs] = await Promise.all([rpc("app.info"), rpc("settings.get")]);
+  if (revision !== configurationRevision) return;
+  info = next;
+  ctx.info = next;
+  ctx.prefs = prefs;
   previewCache.configure(prefs);
   NGUI.setTierTags?.(prefs?.buttonSizeTags === true);
   if (NGUI.setResourceContext?.(next.resourceContext)) forget();
-  await renderNav(-1,{game:!!next.gameFound});
-  if(revision!==configurationRevision)return;
-  if(!next.gameFound){noGame();return;}
-  await NGUI.init();if(revision!==configurationRevision)return;
+  await renderNav(-1, { game: !!next.gameFound });
+  if (revision !== configurationRevision) return;
+  if (!next.gameFound) {
+    noGame();
+    return;
+  }
+  await NGUI.init();
+  if (revision !== configurationRevision) return;
   await route();
   // a game found after a start without one: the first-run sequence runs now, not at the next launch
-  if(revision===configurationRevision)firstRun().catch(console.error);
+  if (revision === configurationRevision) firstRun().catch(console.error);
 }
 
-let routeToken = 0, routeAttempt = 0, permissionAttempt = 0, endRoute = () => {}, homeRequested = false;
+let routeToken = 0,
+  routeAttempt = 0,
+  permissionAttempt = 0,
+  endRoute = () => {},
+  homeRequested = false;
 const navigation = routeHistory();
 let shownRoute = ROOT_ROUTE;
 let stagedDetail = null;
@@ -353,30 +469,35 @@ let stagedDetail = null;
 let stagedHall = null;
 function stageHall(target) {
   stagedHall ||= { hidden: target.hidden };
-  target.hidden = false; target.style.visibility = "hidden";
+  target.hidden = false;
+  target.style.visibility = "hidden";
 }
 function unstageHall(target, committed) {
   if (!stagedHall) return;
   if (!committed) target.hidden = stagedHall.hidden;
-  target.style.visibility = ""; stagedHall = null;
+  target.style.visibility = "";
+  stagedHall = null;
 }
 function goBack() {
   return withHallPermission(() => {
     const destination = navigation.back(location.hash || ROOT_ROUTE);
     if (destination) location.hash = destination;
-    else return Promise.resolve(askQuit()).then((result) => {
-      if (result !== "quit" && !$("screen-hall").hidden) return StudentHall.settleView?.();
-    });
+    else
+      return Promise.resolve(askQuit()).then((result) => {
+        if (result !== "quit" && !$("screen-hall").hidden) return StudentHall.settleView?.();
+      });
   });
 }
 function withHallPermission(action) {
   const permission = ++permissionAttempt;
   if ($("screen-hall").hidden) return action();
-  return Promise.resolve(StudentHall.canLeave?.()).then((allowed) => {
-    if (allowed !== false && permission === permissionAttempt) return action();
-  }).catch((err) => {
-    if (permission === permissionAttempt) notify(errorText(err), { kind: "error", error: err });
-  });
+  return Promise.resolve(StudentHall.canLeave?.())
+    .then((allowed) => {
+      if (allowed !== false && permission === permissionAttempt) return action();
+    })
+    .catch((err) => {
+      if (permission === permissionAttempt) notify(errorText(err), { kind: "error", error: err });
+    });
 }
 function goHome() {
   return withHallPermission(() => {
@@ -390,7 +511,8 @@ function goHome() {
 }
 async function route() {
   ++permissionAttempt;
-  const attempt = ++routeAttempt, address = location.hash || ROOT_ROUTE;
+  const attempt = ++routeAttempt,
+    address = location.hash || ROOT_ROUTE;
   if (!$("screen-hall").hidden) {
     try {
       const allowed = await StudentHall.canLeave?.();
@@ -410,77 +532,104 @@ async function route() {
   }
   endRoute();
   if (stagedDetail) {
-    stagedDetail.target.hidden = true; stagedDetail.target.style.visibility = ""; stagedDetail.target.inert = false;
+    stagedDetail.target.hidden = true;
+    stagedDetail.target.style.visibility = "";
+    stagedDetail.target.inert = false;
     stagedDetail = null;
   }
-  const ended = new Promise((resolve) => { endRoute = resolve; });
+  const ended = new Promise((resolve) => {
+    endRoute = resolve;
+  });
   const my = ++routeToken;
   const current = () => my === routeToken && attempt === routeAttempt;
   const parts = address.replace(/^#\/?/, "").split("/").map(decodeURIComponent);
   if (parts[0] !== "import") BatchImport.hide();
-  if (parts[0] !== "hall") { StudentHall.hide(); unstageHall($("screen-hall"), false); }
+  if (parts[0] !== "hall") {
+    StudentHall.hide();
+    unstageHall($("screen-hall"), false);
+  }
   renderNav(parts[0] === "hall" ? -1 : parts[0] === "import" ? 1 : 0);
   try {
     if (parts[0] === "hall") {
       Roster.hide();
-      await Loading.scene(async () => {
-        Detail.suspend();
-        Detail.hide();
-        const target = $("screen-hall");
-        let committed = false;
-        stageHall(target);
-        try {
-          await StudentHall.show(ctx);
-          if (!current()) return;
-          showScreen("hall"); setTitle(T("hall.title"), goBack);
-          committed = true;
-        } finally {
-          if (my === routeToken) unstageHall(target, committed);
-        }
-      }, { until: ended });
+      await Loading.scene(
+        async () => {
+          Detail.suspend();
+          Detail.hide();
+          const target = $("screen-hall");
+          let committed = false;
+          stageHall(target);
+          try {
+            await StudentHall.show(ctx);
+            if (!current()) return;
+            showScreen("hall");
+            setTitle(T("hall.title"), goBack);
+            committed = true;
+          } finally {
+            if (my === routeToken) unstageHall(target, committed);
+          }
+        },
+        { until: ended },
+      );
     } else if (parts[0] === "import") {
       Roster.hide();
-      await Loading.scene(async (covered) => {
-        await covered;
-        if (!current()) return;
-        Detail.suspend();
-        const data = await roster();
-        if (!current()) return;
-        await BatchImport.show(ctx, data);
-        if (!current()) return;
-        Detail.hide();
-        showScreen("import");
-        setTitle(T("nav.import"), goBack);
-      }, { until: ended });
+      await Loading.scene(
+        async (covered) => {
+          await covered;
+          if (!current()) return;
+          Detail.suspend();
+          const data = await roster();
+          if (!current()) return;
+          await BatchImport.show(ctx, data);
+          if (!current()) return;
+          Detail.hide();
+          showScreen("import");
+          setTitle(T("nav.import"), goBack);
+        },
+        { until: ended },
+      );
     } else if (parts[0] === "student" && parts[1]) {
       // leaving the list: its cards as shown are the arrows' order
       if (!stepCards && rosterData && !$("screen-roster").hidden) stepCards = Roster.order(rosterData);
       Roster.invalidate();
       Roster.hide();
       const inPlace = !$("screen-detail").hidden && !!Detail.currentVariant();
-      await Loading.hold(() => Loading.scene(async (covered) => {
-        // no client deadline, as roster.list: a writer job can hold the library lock for its whole run
-        const fam = await rpc("family.get", { key: parts[1] });
-        await covered;
-        if (!current()) return; // a later navigation took over
-        visited(fam, parts[2]);
-        const target = $("screen-detail"), wasHidden = target.hidden;
-        let committed = false;
-        if (wasHidden) {
-          target.hidden = false; target.style.visibility = "hidden"; target.inert = true;
-          stagedDetail = { target, token: my };
-        }
-        try {
-          await Detail.show(ctx, fam, parts[2], { inPlace, kind: parts[3] });
-          if (!current()) return;
-          showScreen("detail");
-          committed = true;
-        } finally {
-          if (stagedDetail?.token === my) {
-            target.hidden = !committed; target.style.visibility = ""; target.inert = false; stagedDetail = null;
-          }
-        }
-      }, { until: ended }), { until: ended });
+      await Loading.hold(
+        () =>
+          Loading.scene(
+            async (covered) => {
+              // no client deadline, as roster.list: a writer job can hold the library lock for its whole run
+              const fam = await rpc("family.get", { key: parts[1] });
+              await covered;
+              if (!current()) return; // a later navigation took over
+              visited(fam, parts[2]);
+              const target = $("screen-detail"),
+                wasHidden = target.hidden;
+              let committed = false;
+              if (wasHidden) {
+                target.hidden = false;
+                target.style.visibility = "hidden";
+                target.inert = true;
+                stagedDetail = { target, token: my };
+              }
+              try {
+                await Detail.show(ctx, fam, parts[2], { inPlace, kind: parts[3] });
+                if (!current()) return;
+                showScreen("detail");
+                committed = true;
+              } finally {
+                if (stagedDetail?.token === my) {
+                  target.hidden = !committed;
+                  target.style.visibility = "";
+                  target.inert = false;
+                  stagedDetail = null;
+                }
+              }
+            },
+            { until: ended },
+          ),
+        { until: ended },
+      );
     } else {
       const reveal = () => {
         Detail.hide();
@@ -511,11 +660,14 @@ async function route() {
       homeRequested = false;
     }
   } catch (err) {
-    if (!current()||err.name==='AbortError') return;
+    if (!current() || err.name === "AbortError") return;
     homeRequested = false;
     if (globalThis.BAMTRecovery?.isBooting() && err.code !== "game_not_found") throw err;
     console.error(err);
-    if (err.code === "game_not_found") { noGame(); return; }
+    if (err.code === "game_not_found") {
+      noGame();
+      return;
+    }
     notify(errorText(err), { kind: "error", error: err });
     if (parts[0] === "student") Detail.stepFailed();
     // a student the catalog does not have (a stale or mistyped link): the screen shown before, its portrait, lobby or
@@ -538,7 +690,10 @@ async function route() {
 // up; until then boot() itself starts the sequence if a game is found. startWithGame: start() gave the consent and the
 // loading screen the data of a start with a game; without it they still hold their no-game data and are given the data
 // of the game that was found.
-let sessionReady = null, firstRunStarted = false, startWithGame = false, dataDirNoticed = false;
+let sessionReady = null,
+  firstRunStarted = false,
+  startWithGame = false,
+  dataDirNoticed = false;
 async function firstRun() {
   if (!sessionReady || firstRunStarted || !info?.gameFound) return;
   firstRunStarted = true;
@@ -550,17 +705,26 @@ async function firstRun() {
   }
   Cursor.init();
   // the start popups only once the first screen is revealed, the data folder notice first
-  const popups = Popup.sequence([...(info.dataDirWritable === false ? [["data-dir", dataDirNotice]] : []), ...startPopups()]);
+  const popups = Popup.sequence([
+    ...(info.dataDirWritable === false ? [["data-dir", dataDirNotice]] : []),
+    ...startPopups(),
+  ]);
   // The network check never holds the start sequence or a screen. Keep a late offer until the UI is free.
   if (ModSwitch.startDue("update", { info })) {
-    Update.check($("consent"), undefined, { beforeShow: async () => {
-      await popups;
-      await Popup.whenIdle(200, () => Loading.busy() || ModSwitch.current()?.busy);
-    } }).catch((err) => console.error("update check", err));
+    Update.check($("consent"), undefined, {
+      beforeShow: async () => {
+        await popups;
+        await Popup.whenIdle(200, () => Loading.busy() || ModSwitch.current()?.busy);
+      },
+    }).catch((err) => console.error("update check", err));
   }
   await popups;
-  const blocked = () => Loading.busy() || ModSwitch.current()?.busy || Prompts.isBusy() || Impact.isBusy()
-    || !!document.getElementById("bamt-recovery");
+  const blocked = () =>
+    Loading.busy() ||
+    ModSwitch.current()?.busy ||
+    Prompts.isBusy() ||
+    Impact.isBusy() ||
+    !!document.getElementById("bamt-recovery");
   // after an upgrade, the new version's release notes, then its feature tour
   if (!info.safeMode) {
     await sessionReady;
@@ -574,8 +738,11 @@ async function boot() {
   addEventListener("resize", fitStage);
   // the page starts behind the loading screen: the game's UI is read, then the first screen is built; the bars come in
   // as the game's lobby brings them (chrome-motion.js), also over a recovery page, with the window buttons
-  try { await timed("boot", () => Loading.scene(start, { opaque: true })); }
-  finally { chromeMotion().enter(); }
+  try {
+    await timed("boot", () => Loading.scene(start, { opaque: true }));
+  } finally {
+    chromeMotion().enter();
+  }
   if (globalThis.BAMTRecovery && !globalThis.BAMTRecovery.ready()) return;
   sessionReady = rpc("app.ready", { timings: { ...startup, ...Loading.timings() } }).catch(console.error);
   if (!info?.gameFound) await dataDirNotice().catch(console.error); // the no-game screen has no other start popup
@@ -586,8 +753,11 @@ async function boot() {
 function dataDirNotice() {
   if (!info || info.dataDirWritable !== false || dataDirNoticed) return Promise.resolve();
   dataDirNoticed = true;
-  return Popup.message({ title: T("quit.title"), lines: [T("error.data_dir_readonly", { path: info.dataDir })],
-    ok: T("picker.ok") });
+  return Popup.message({
+    title: T("quit.title"),
+    lines: [T("error.data_dir_readonly", { path: info.dataDir })],
+    ok: T("picker.ok"),
+  });
 }
 
 // The start popups, one at a time and in this order, each only when it has something to show (mod-switch.js
@@ -601,16 +771,22 @@ function dataDirNotice() {
 function startPopups() {
   const due = (name) => ModSwitch.startDue(name, { info, state: ModSwitch.current() });
   return [
-    ["consent", async () => {
-      if (!due("consent")) return;
-      info.consent = await Consent.show($("consent"), info.cacheDir, info.native);
-      Loading.init(info);
-    }],
-    ["spine", async () => {
-      if (!due("spine")) return;
-      info.spineConsent = await Consent.spine($("consent"));
-      if (info.spineConsent === true) await route();
-    }],
+    [
+      "consent",
+      async () => {
+        if (!due("consent")) return;
+        info.consent = await Consent.show($("consent"), info.cacheDir, info.native);
+        Loading.init(info);
+      },
+    ],
+    [
+      "spine",
+      async () => {
+        if (!due("spine")) return;
+        info.spineConsent = await Consent.spine($("consent"));
+        if (info.spineConsent === true) await route();
+      },
+    ],
     ["scan", () => due("scan") && Consent.scan($("consent"))],
     ["impact", () => info.gameFound && Impact.check()],
     ["drift", () => Prompts.start("drift", info)],
@@ -647,8 +823,14 @@ async function start() {
   await timed("fonts", () => document.fonts.ready);
   // the bottom bar: its greyed entries hand over to the classic UI (with or without a game folder), their prompt
   // following the pref classicPrompt
-  const navOptions = { game: !!info.gameFound, prefs: () => ctx.prefs, setPrefs: (prefs) => { ctx.prefs = prefs; },
-    canLeave: () => $("screen-hall").hidden || StudentHall.canLeave?.() };
+  const navOptions = {
+    game: !!info.gameFound,
+    prefs: () => ctx.prefs,
+    setPrefs: (prefs) => {
+      ctx.prefs = prefs;
+    },
+    canLeave: () => $("screen-hall").hidden || StudentHall.canLeave?.(),
+  };
   await ui;
   renderNav(-1, navOptions);
   // the Enable Mods switch in the top bar, and what the writer jobs switched
@@ -668,10 +850,15 @@ async function start() {
     previewCache.configure(prefs);
     NGUI.setTierTags?.(prefs?.buttonSizeTags === true);
     if (key === "cacheCleared" || key === "previewCache" || key === "cacheDir") return;
-    if (key === "language") { await refreshLanguage(prefs.language); return; }
+    if (key === "language") {
+      await refreshLanguage(prefs.language);
+      return;
+    }
     Detail.applyPrefs(prefs);
     StudentHall.applyPrefs?.(prefs);
-    if (key === "fileSource" || key.startsWith("gameDir") || key === "libraryDir") { await refreshConfiguration(); }
+    if (key === "fileSource" || key.startsWith("gameDir") || key === "libraryDir") {
+      await refreshConfiguration();
+    }
   };
   ctx.goOther = () => Settings.open(settingsChanged, "mods");
   on("library.changed", libraryChanged);
@@ -680,8 +867,12 @@ async function start() {
   on("photography.changed", () => {
     ctx.invalidateRoster();
     if ($("screen-roster").hidden) return;
-    const token=routeToken;
-    Popup.whenIdle().then(() => { if(token===routeToken&&!$("screen-roster").hidden)return route(); }).catch(console.error);
+    const token = routeToken;
+    Popup.whenIdle()
+      .then(() => {
+        if (token === routeToken && !$("screen-roster").hidden) return route();
+      })
+      .catch(console.error);
   });
   watchFront();
   // Only Import Mod takes files dropped on the window; every other page refuses them.
@@ -703,7 +894,10 @@ async function start() {
   $("top-home").addEventListener("click", goHome);
   if (!location.hash) history.replaceState(null, "", ROOT_ROUTE);
   addEventListener("hashchange", route);
-  if(!info.gameFound){noGame();return;}
+  if (!info.gameFound) {
+    noGame();
+    return;
+  }
   // a game update since the last start: asked, and checked under the loading screen, before the first screen
   // (update-impact.js gate; the summary follows with the start popups)
   await timed("update-check", () => Impact.gate()).catch((err) => console.error("update check", err));

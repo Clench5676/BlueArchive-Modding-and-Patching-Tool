@@ -17,15 +17,29 @@ import { toLinear } from "./touch-fx.js";
 
 // Runtime hooks run only on players created after lobby.js awaits ensureSpine().
 
-const states = new WeakMap(), attached = new Set();
+const states = new WeakMap(),
+  attached = new Set();
 
 // for checks: draw with the game's materials (true) or as spine-player alone does (false: the slots' own blend modes,
 // the dark colour, spine-player's shader on every page)
 export let shown = true;
-export const show = (on) => { shown = !!on; };
+export const show = (on) => {
+  shown = !!on;
+};
 // UnityEngine.Rendering.BlendMode -> GL factors
-const FACTOR = (gl) => [gl.ZERO, gl.ONE, gl.DST_COLOR, gl.SRC_COLOR, gl.ONE_MINUS_DST_COLOR, gl.SRC_ALPHA,
-  gl.ONE_MINUS_SRC_COLOR, gl.DST_ALPHA, gl.ONE_MINUS_DST_ALPHA, gl.SRC_ALPHA_SATURATE, gl.ONE_MINUS_SRC_ALPHA];
+const FACTOR = (gl) => [
+  gl.ZERO,
+  gl.ONE,
+  gl.DST_COLOR,
+  gl.SRC_COLOR,
+  gl.ONE_MINUS_DST_COLOR,
+  gl.SRC_ALPHA,
+  gl.ONE_MINUS_SRC_COLOR,
+  gl.DST_ALPHA,
+  gl.ONE_MINUS_DST_ALPHA,
+  gl.SRC_ALPHA_SATURATE,
+  gl.ONE_MINUS_SRC_ALPHA,
+];
 const MODE = { 2: "multiply", 3: "screen", 1: "additive" }; // spine.BlendMode -> the blend lists' names
 
 // spine-player's batch vertex: position, light colour, UV, dark colour (all four are bound by name, so every program
@@ -85,7 +99,8 @@ float unused() { return u_dark > 0.5 ? v_dark.a : 0.0; }
 // premultiplied first). noiseFlow, portraitNoise: below.
 export const PROGRAMS = {
   pma: {
-    floats: ["straight"], colors: ["_Color"],
+    floats: ["straight"],
+    colors: ["_Color"],
     src: `uniform float straight;
 uniform vec4 _Color;
 void main() {
@@ -102,8 +117,21 @@ void main() {
   // premultiplied by its alpha and times the vertex colour as stored.
   noiseFlow: {
     tex: ["_NoiseTex"],
-    floats: ["_CenterX", "_CenterY", "_Rotate", "_SkewedX", "_SkewedY", "_SlopeForward", "_SlopeSide", "_NoiseTexTillingX",
-      "_NoiseTexTillingY", "_PixelNoiseSpeedX", "_PixelNoiseSpeedY", "_PixelNoisePower", "u_ds"],
+    floats: [
+      "_CenterX",
+      "_CenterY",
+      "_Rotate",
+      "_SkewedX",
+      "_SkewedY",
+      "_SlopeForward",
+      "_SlopeSide",
+      "_NoiseTexTillingX",
+      "_NoiseTexTillingY",
+      "_PixelNoiseSpeedX",
+      "_PixelNoiseSpeedY",
+      "_PixelNoisePower",
+      "u_ds",
+    ],
     src: `uniform sampler2D _NoiseTex;
 uniform float _CenterX, _CenterY, _Rotate, _SkewedX, _SkewedY, _SlopeForward, _SlopeSide, _NoiseTexTillingX, _NoiseTexTillingY,
   _PixelNoiseSpeedX, _PixelNoiseSpeedY, _PixelNoisePower, u_ds;
@@ -145,8 +173,10 @@ void main() {
   // red, plus _PortraitNoiseTint times (its red x luminance + its green x 0.03); alpha the page's times the vertex
   // alpha times _Color.a (0 for an additive slot). The vertex colour's rgb is never read.
   portraitNoise: {
-    tex: ["_PortraitNoiseTex"], passes: 2,
-    floats: ["_GlitchThickness", "_ScanLineSpeed", "u_pass"], colors: ["_Color", "_Black", "_PortraitNoiseTint"],
+    tex: ["_PortraitNoiseTex"],
+    passes: 2,
+    floats: ["_GlitchThickness", "_ScanLineSpeed", "u_pass"],
+    colors: ["_Color", "_Black", "_PortraitNoiseTint"],
     vectors: ["u_screen"],
     src: `uniform sampler2D _PortraitNoiseTex;
 uniform float _GlitchThickness, _ScanLineSpeed, u_pass;
@@ -183,9 +213,18 @@ function uniform(gl, sh, name) {
   if (!m.has(name)) m.set(name, gl.getUniformLocation(sh.getProgram(), name));
   return m.get(name);
 }
-const setF = (gl, sh, name, v) => { const l = uniform(gl, sh, name); if (l) gl.uniform1f(l, v); };
-const setI = (gl, sh, name, v) => { const l = uniform(gl, sh, name); if (l) gl.uniform1i(l, v); };
-const set4 = (gl, sh, name, a, b, c, d) => { const l = uniform(gl, sh, name); if (l) gl.uniform4f(l, a, b, c, d); };
+const setF = (gl, sh, name, v) => {
+  const l = uniform(gl, sh, name);
+  if (l) gl.uniform1f(l, v);
+};
+const setI = (gl, sh, name, v) => {
+  const l = uniform(gl, sh, name);
+  if (l) gl.uniform1i(l, v);
+};
+const set4 = (gl, sh, name, a, b, c, d) => {
+  const l = uniform(gl, sh, name);
+  if (l) gl.uniform4f(l, a, b, c, d);
+};
 
 function shaderFor(context, kind) {
   const p = PROGRAMS[kind];
@@ -201,15 +240,25 @@ function uploadTexture(gl, meta, image) {
   gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
   if (image) gl.texImage2D(gl.TEXTURE_2D, 0, meta.srgb ? gl.SRGB8_ALPHA8 : gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, image);
   else {
-    const px = { white: [255, 255, 255, 255], black: [0, 0, 0, 0], gray: [128, 128, 128, 128], grey: [128, 128, 128, 128] }[meta.default] || [255, 255, 255, 255];
+    const px = {
+      white: [255, 255, 255, 255],
+      black: [0, 0, 0, 0],
+      gray: [128, 128, 128, 128],
+      grey: [128, 128, 128, 128],
+    }[meta.default] || [255, 255, 255, 255];
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(px));
   }
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
   gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.BROWSER_DEFAULT_WEBGL);
-  const mips = !!image && !!meta.mips, point = meta.filter === 0;
+  const mips = !!image && !!meta.mips,
+    point = meta.filter === 0;
   if (mips) gl.generateMipmap(gl.TEXTURE_2D);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, point ? gl.NEAREST : gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, mips ? (meta.filter === 2 ? gl.LINEAR_MIPMAP_LINEAR : gl.LINEAR_MIPMAP_NEAREST) : point ? gl.NEAREST : gl.LINEAR);
+  gl.texParameteri(
+    gl.TEXTURE_2D,
+    gl.TEXTURE_MIN_FILTER,
+    mips ? (meta.filter === 2 ? gl.LINEAR_MIPMAP_LINEAR : gl.LINEAR_MIPMAP_NEAREST) : point ? gl.NEAREST : gl.LINEAR,
+  );
   const wrap = (w) => (w === 1 || w === 3 ? gl.CLAMP_TO_EDGE : w === 2 ? gl.MIRRORED_REPEAT : gl.REPEAT);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap(meta.wrap?.[0] ?? 0));
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap(meta.wrap?.[1] ?? 0));
@@ -231,7 +280,8 @@ function loadImage(url) {
 export function fallbackModes(materials, slotBlends = false) {
   const out = new Set();
   if (slotBlends) return out;
-  for (const mode of [spine.BlendMode.Multiply, spine.BlendMode.Screen]) if (!(materials?.blend && MODE[mode] in materials.blend)) out.add(mode);
+  for (const mode of [spine.BlendMode.Multiply, spine.BlendMode.Screen])
+    if (!(materials?.blend && MODE[mode] in materials.blend)) out.add(mode);
   return out;
 }
 
@@ -251,12 +301,27 @@ export function materialOf(materials, page, mode) {
 export function attach(player, layer, { screen = () => null, base = "", load = loadImage, slotBlends = false } = {}) {
   const mats = layer?.materials;
   if (!mats || !Linear.active(player) || states.has(player)) return false;
-  const gl = player.context.gl, renderer = player.sceneRenderer, batcher = renderer?.batcher, sr = renderer?.skeletonRenderer;
+  const gl = player.context.gl,
+    renderer = player.sceneRenderer,
+    batcher = renderer?.batcher,
+    sr = renderer?.skeletonRenderer;
   if (!batcher || !sr) return false;
   const data = player.skeleton.data;
   const fallback = fallbackModes(mats, slotBlends);
-  const st = { gl, mats, fallback, normal: (data.slots || []).filter((slot) => fallback.has(slot.blendMode)).map((slot) => slot.name),
-    pages: new Map(), shaders: new Map(), textures: new Map(), images: new Map(), mode: 0, pma: false, run: null, disposed: false };
+  const st = {
+    gl,
+    mats,
+    fallback,
+    normal: (data.slots || []).filter((slot) => fallback.has(slot.blendMode)).map((slot) => slot.name),
+    pages: new Map(),
+    shaders: new Map(),
+    textures: new Map(),
+    images: new Map(),
+    mode: 0,
+    pma: false,
+    run: null,
+    disposed: false,
+  };
   states.set(player, st);
   attached.add(st);
   // the dark colour is never drawn (tintBlack off): spine-player draws a slot without one as without a tint
@@ -264,12 +329,23 @@ export function attach(player, layer, { screen = () => null, base = "", load = l
     st.draw = sr.draw;
     sr.draw = function (...args) {
       const saved = [];
-      if (shown) for (const slot of args[1]?.slots || []) if (slot.darkColor) { saved.push([slot, slot.darkColor]); slot.darkColor = null; }
-      try { return st.draw.apply(this, args); } finally { for (const [slot, dark] of saved) slot.darkColor = dark; }
+      if (shown)
+        for (const slot of args[1]?.slots || [])
+          if (slot.darkColor) {
+            saved.push([slot, slot.darkColor]);
+            slot.darkColor = null;
+          }
+      try {
+        return st.draw.apply(this, args);
+      } finally {
+        for (const [slot, dark] of saved) slot.darkColor = dark;
+      }
     };
   }
-  const custom = [...Object.values(mats.pages || {}), ...Object.values(mats.blend || {}).flatMap((b) => Object.values(b))]
-    .filter((m) => m && PROGRAMS[m.program]);
+  const custom = [
+    ...Object.values(mats.pages || {}),
+    ...Object.values(mats.blend || {}).flatMap((b) => Object.values(b)),
+  ].filter((m) => m && PROGRAMS[m.program]);
   if (!custom.length && !st.normal.length) return true;
   // the pages by their GL texture (the page's file name without its extension, as the prefab names it)
   for (const skin of data.skins) {
@@ -286,12 +362,18 @@ export function attach(player, layer, { screen = () => null, base = "", load = l
     for (const meta of Object.values(m.tex || {})) {
       if (!meta.id || st.images.has(meta.id)) continue;
       st.images.set(meta.id, null);
-      load(`${base}fx_${encodeURIComponent(meta.id)}.png`).then((img) => { if (!st.disposed) st.images.set(meta.id, img); }, () => {});
+      load(`${base}fx_${encodeURIComponent(meta.id)}.png`).then(
+        (img) => {
+          if (!st.disposed) st.images.set(meta.id, img);
+        },
+        () => {},
+      );
     }
   }
   const F = FACTOR(gl);
   // the batcher's methods it replaces: linear.js's setBlendMode (its own property), spine-player's others
-  const own = {}, hooked = ["setBlendMode", "draw", "flush", "begin"];
+  const own = {},
+    hooked = ["setBlendMode", "draw", "flush", "begin"];
   for (const k of hooked) own[k] = batcher[k];
   st.own = own;
   st.ownProps = hooked.filter((k) => Object.prototype.hasOwnProperty.call(batcher, k));
@@ -309,15 +391,21 @@ export function attach(player, layer, { screen = () => null, base = "", load = l
       restoreBlend();
       return;
     }
-    const kind = mat.program, shaders = st.shaders.get(kind) || [];
+    const kind = mat.program,
+      shaders = st.shaders.get(kind) || [];
     if (!shaders.length) {
       for (let i = 0; i < (PROGRAMS[kind].passes || 1); i++) shaders.push(shaderFor(player.context, kind));
       st.shaders.set(kind, shaders);
     }
-    const t = time(), view = screen(), proj = renderer.camera.projectionView.values;
+    const t = time(),
+      view = screen(),
+      proj = renderer.camera.projectionView.values;
     shaders.forEach((sh, pass) => {
       sh.bind();
-      { const l = uniform(gl, sh, spine.Shader.MVP_MATRIX); if (l) gl.uniformMatrix4fv(l, false, proj); }
+      {
+        const l = uniform(gl, sh, spine.Shader.MVP_MATRIX);
+        if (l) gl.uniformMatrix4fv(l, false, proj);
+      }
       setI(gl, sh, spine.Shader.SAMPLER, 0);
       setF(gl, sh, "u_tinted", Linear.vertexColours ? 1 : 0);
       setF(gl, sh, "u_additive", additive ? 1 : 0);
@@ -332,13 +420,17 @@ export function attach(player, layer, { screen = () => null, base = "", load = l
       }
       if (view) set4(gl, sh, "u_screen", view.x, view.y, view.width, view.height);
       // the glitch frames shift each pass across by _GlitchOffset in the camera's clip space (half the screen per unit)
-      const shift = kind === "portraitNoise" && view && glitch(t, pass, mat.floats?._GlitchFreq ?? 1)
-        ? (pass ? -1 : 1) * (mat.floats?._GlitchOffset || 0) * view.width * 0.5 : 0;
+      const shift =
+        kind === "portraitNoise" && view && glitch(t, pass, mat.floats?._GlitchFreq ?? 1)
+          ? (pass ? -1 : 1) * (mat.floats?._GlitchOffset || 0) * view.width * 0.5
+          : 0;
       setF(gl, sh, "u_shift", shift);
       (PROGRAMS[kind].tex || []).forEach((name, i) => {
-        const meta = mat.tex?.[name] || { default: "white" }, key = meta.id || `default:${meta.default}`;
+        const meta = mat.tex?.[name] || { default: "white" },
+          key = meta.id || `default:${meta.default}`;
         let tex = st.textures.get(key);
-        if (!tex && (!meta.id || st.images.get(meta.id))) st.textures.set(key, (tex = uploadTexture(gl, meta, meta.id ? st.images.get(meta.id) : null)));
+        if (!tex && (!meta.id || st.images.get(meta.id)))
+          st.textures.set(key, (tex = uploadTexture(gl, meta, meta.id ? st.images.get(meta.id) : null)));
         gl.activeTexture(gl.TEXTURE1 + i);
         gl.bindTexture(gl.TEXTURE_2D, tex || null);
         setI(gl, sh, name, 1 + i);
@@ -347,7 +439,12 @@ export function attach(player, layer, { screen = () => null, base = "", load = l
     });
     batcher.shader = shaders[shaders.length - 1];
     // the shader's blend for colour and coverage, as the game's pass sets it
-    gl.blendFuncSeparate(F[mat.src] ?? gl.ONE, F[mat.dst] ?? gl.ONE_MINUS_SRC_ALPHA, F[mat.srcA] ?? gl.ONE, F[mat.dstA] ?? gl.ONE_MINUS_SRC_ALPHA);
+    gl.blendFuncSeparate(
+      F[mat.src] ?? gl.ONE,
+      F[mat.dst] ?? gl.ONE_MINUS_SRC_ALPHA,
+      F[mat.srcA] ?? gl.ONE,
+      F[mat.dstA] ?? gl.ONE_MINUS_SRC_ALPHA,
+    );
   };
   batcher.setBlendMode = function (mode, pma) {
     st.mode = shown && st.fallback.has(mode) ? spine.BlendMode.Normal : mode;
@@ -402,7 +499,8 @@ export function detach(player) {
       if (st.ownProps.includes(k)) st.batcher[k] = fn;
       else delete st.batcher[k];
     }
-    if (st.batcher.shader !== player.sceneRenderer.batcherShader && !st.batcher.isDrawing) st.batcher.shader = player.sceneRenderer.batcherShader;
+    if (st.batcher.shader !== player.sceneRenderer.batcherShader && !st.batcher.isDrawing)
+      st.batcher.shader = player.sceneRenderer.batcherShader;
   }
   const gl = st.gl;
   if (!gl.isContextLost()) {
@@ -416,6 +514,10 @@ export function detach(player) {
 
 // for checks: what each attached player draws with ported materials (pages by program, the programs compiled) and
 // which slots fell back to Normal
-export const stats = () => [...attached].map((st) => ({
-  pages: Object.fromEntries(Object.entries(st.mats.pages || {}).map(([p, m]) => [p, m.program])),
-  normal: st.normal, tintBlack: !!st.mats.tintBlack, shaders: [...st.shaders.keys()] }));
+export const stats = () =>
+  [...attached].map((st) => ({
+    pages: Object.fromEntries(Object.entries(st.mats.pages || {}).map(([p, m]) => [p, m.program])),
+    normal: st.normal,
+    tintBlack: !!st.mats.tintBlack,
+    shaders: [...st.shaders.keys()],
+  }));

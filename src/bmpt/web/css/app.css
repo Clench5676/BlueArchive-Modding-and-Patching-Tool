@@ -2,12 +2,20 @@
    the top bar, the navigation and the few texts the game has no widget for. One font weight, like the game.
    Fixed 1920 x 1080 stage scaled to the window. */
 
-@font-face { font-family: "RHR"; font-weight: 500; src: url("../fonts/ResourceHanRoundedCN-Medium.woff2") format("woff2"); }
+@font-face {
+  font-family: "RHR";
+  font-weight: 500;
+  src: url("../fonts/ResourceHanRoundedCN-Medium.woff2") format("woff2");
+}
 /* The same font for Latin only (the file is fetched once): Resource Han Rounded CN has Simplified Chinese glyph forms
    and punctuation and no Hangul, so in zh-TW, ja and ko the CJK text comes from that language's system font, the
    letters and digits stay the page's */
-@font-face { font-family: "RHR Latin"; font-weight: 500; src: url("../fonts/ResourceHanRoundedCN-Medium.woff2") format("woff2");
-  unicode-range: U+0000-024F, U+2070-209F, U+20A0-20CF; }
+@font-face {
+  font-family: "RHR Latin";
+  font-weight: 500;
+  src: url("../fonts/ResourceHanRoundedCN-Medium.woff2") format("woff2");
+  unicode-range: U+0000-024F, U+2070-209F, U+20A0-20CF;
+}
 
 :root {
   --navy-text: #2c4564;
@@ -20,457 +28,1765 @@
 /* per language (the html lang, i18n.js, or an element's own): zh-CN and en-US draw everything with RHR, the others
    their own system fonts for CJK and Thai (macOS, Windows, Linux), RHR last for a glyph none of them has. ngui.textWidth
    measures with the stack the text draws with */
-:root, [lang="zh-CN"], [lang="en-US"] { --font: "RHR", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; }
-:lang(zh-TW) { --font: "RHR Latin", "PingFang TC", "Microsoft JhengHei UI", "Microsoft JhengHei", "Noto Sans CJK TC", "RHR", sans-serif; }
-:lang(ja) { --font: "RHR Latin", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Meiryo UI", "Noto Sans CJK JP", "RHR", sans-serif; }
-:lang(ko) { --font: "RHR Latin", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans CJK KR", "RHR", sans-serif; }
-:lang(th) { --font: "RHR Latin", "Thonburi", "Sukhumvit Set", "Leelawadee UI", "Tahoma", "Noto Sans Thai", "RHR", sans-serif; }
+:root,
+[lang="zh-CN"],
+[lang="en-US"] {
+  --font: "RHR", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+}
+:lang(zh-TW) {
+  --font:
+    "RHR Latin", "PingFang TC", "Microsoft JhengHei UI", "Microsoft JhengHei", "Noto Sans CJK TC", "RHR", sans-serif;
+}
+:lang(ja) {
+  --font:
+    "RHR Latin", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Meiryo UI", "Noto Sans CJK JP", "RHR",
+    sans-serif;
+}
+:lang(ko) {
+  --font: "RHR Latin", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans CJK KR", "RHR", sans-serif;
+}
+:lang(th) {
+  --font: "RHR Latin", "Thonburi", "Sukhumvit Set", "Leelawadee UI", "Tahoma", "Noto Sans Thai", "RHR", sans-serif;
+}
 /* text in another language than the page's (each language's name in the language list) draws with its own stack: a
    Korean screen's fonts have no glyph for some Simplified characters and would mix two fonts in one name */
-.stage [lang] { font-family: var(--font); }
+.stage [lang] {
+  font-family: var(--font);
+}
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { height: 100%; background: #000; overflow: hidden; }
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+html,
+body {
+  height: 100%;
+  background: #000;
+  overflow: hidden;
+}
 /* the page's own, not the host's: pywebview's text_select=False would add body { cursor: default } after this
    (webui/main.py) */
-body { cursor: var(--cursor); -webkit-user-select: none; user-select: none; }
-button { font: inherit; color: inherit; border: 0; background: none; cursor: var(--cursor-press); }
-input[type="text"], input[type="search"], textarea { cursor: text; }
+body {
+  cursor: var(--cursor);
+  -webkit-user-select: none;
+  user-select: none;
+}
+button {
+  font: inherit;
+  color: inherit;
+  border: 0;
+  background: none;
+  cursor: var(--cursor-press);
+}
+input[type="text"],
+input[type="search"],
+textarea {
+  cursor: text;
+}
 
-.viewport { position: fixed; inset: 0; overflow: hidden; overflow: clip; }
+.viewport {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  overflow: clip;
+}
 .stage {
-  position: absolute; left: 50%; top: 50%; width: 1920px; height: 1080px;
-  transform: translate(-50%, -50%) scale(var(--scale, .5));
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 1920px;
+  height: 1080px;
+  transform: translate(-50%, -50%) scale(var(--scale, 0.5));
   /* nothing of the stage shows at its default scale: fitStage() (util.js) makes it visible once it fits the window */
   visibility: hidden;
   /* Art clips at its fitted scene; corner controls can reach the window's edges outside that scene. */
-  font-family: var(--font); font-weight: var(--w); color: var(--navy-text); user-select: none; text-rendering: geometricPrecision;
+  font-family: var(--font);
+  font-weight: var(--w);
+  color: var(--navy-text);
+  user-select: none;
+  text-rendering: geometricPrecision;
   background: linear-gradient(180deg, #d3eef9 0%, #b6e0f3 55%, #9fd4ee 100%);
 }
-.screen { position: absolute; inset: 0; }
-.screen[hidden] { display: none; }
-.scene-clip { position: absolute; inset: 0; overflow: hidden; overflow: clip; pointer-events: none; }
-.scene-clip > .portrait, .scene-clip > .lobby, .scene-clip > .model, .scene-clip > .nav { pointer-events: auto; }
-.screen:not(#screen-detail):not(#screen-hall), .popup-host, .consent-host,
-#student-hall > .lobby, #student-hall > .layer-host:not(.hall-chrome):not(.hall-fullscreen-exit) { overflow: hidden; overflow: clip; }
+.screen {
+  position: absolute;
+  inset: 0;
+}
+.screen[hidden] {
+  display: none;
+}
+.scene-clip {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  overflow: clip;
+  pointer-events: none;
+}
+.scene-clip > .portrait,
+.scene-clip > .lobby,
+.scene-clip > .model,
+.scene-clip > .nav {
+  pointer-events: auto;
+}
+.screen:not(#screen-detail):not(#screen-hall),
+.popup-host,
+.consent-host,
+#student-hall > .lobby,
+#student-hall > .layer-host:not(.hall-chrome):not(.hall-fullscreen-exit) {
+  overflow: hidden;
+  overflow: clip;
+}
 
 /* Batch Import: geometry, native text entry and hit areas only. import-layout.js draws the game prefab widgets. */
-.import-page, .import-background, .import-art { position: absolute; inset: 0; }
-.import-background, .import-art { pointer-events: none; }
-.import-art { z-index: 0; }
-.import-panel > :not(.import-art) { z-index: 1; }
-.import-panel, .import-detail { z-index: 1; }
-.import-button, .import-option, .import-option-note, .import-option-error, .import-row, .import-result-row { position: relative; }
-.import-button, .import-row-copy, .import-check { z-index: 40; }
+.import-page,
+.import-background,
+.import-art {
+  position: absolute;
+  inset: 0;
+}
+.import-background,
+.import-art {
+  pointer-events: none;
+}
+.import-art {
+  z-index: 0;
+}
+.import-panel > :not(.import-art) {
+  z-index: 1;
+}
+.import-panel,
+.import-detail {
+  z-index: 1;
+}
+.import-button,
+.import-option,
+.import-option-note,
+.import-option-error,
+.import-row,
+.import-result-row {
+  position: relative;
+}
+.import-button,
+.import-row-copy,
+.import-check {
+  z-index: 40;
+}
 /* a refused row's badge opens its details: above the row's own hit area */
-.import-row-badge { z-index: 41; }
+.import-row-badge {
+  z-index: 41;
+}
 /* the native bars are hidden: batch-import.js draws the game list's scrollbar (UICharacterCollection) over these areas */
-.import-list { overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
-.import-list::-webkit-scrollbar, .import-dialog-content::-webkit-scrollbar { display: none; }
-.import-row { width: 1192.32px; height: 187.92px; }
-.import-result-row { width: 1400px; height: 216px; }
-.import-selection { z-index: 34; pointer-events: none; }
-.import-check { position: relative; display: block; width: 50px; height: 50px; }
-.import-check input { position: absolute; inset: 0; width: 50px; height: 50px; appearance: none; -webkit-appearance: none; border: 0; cursor: var(--cursor-press); z-index: 40; }
-.import-toggle { position: absolute; display: block; z-index: 40; }
-.import-toggle .import-check-art { position: absolute; inset: 0; }
-.import-toggle input { position: absolute; inset: 0; width: 100%; height: 100%; appearance: none; -webkit-appearance: none; border: 0; cursor: var(--cursor-press); z-index: 40; }
-.import-toggle input:disabled { cursor: var(--cursor); }
-.import-input-wrap { z-index: 1; }
-.import-input-wrap .roster-search { z-index: 30; }
-.import-search-clear { z-index: 40; }
-.import-dialog-content { position: absolute; left: 228px; top: 203px; width: 1464px; height: 640px; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; padding: 16px; z-index: 40; }
-.import-resource-types { position: relative; border: 0; min-width: 0; }
-.import-option-control { position: absolute; z-index: 40; appearance: none; -webkit-appearance: none; background: transparent; border: 0; }
-.import-radio-group button { z-index: 40; }
-
+.import-list {
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+}
+.import-list::-webkit-scrollbar,
+.import-dialog-content::-webkit-scrollbar {
+  display: none;
+}
+.import-row {
+  width: 1192.32px;
+  height: 187.92px;
+}
+.import-result-row {
+  width: 1400px;
+  height: 216px;
+}
+.import-selection {
+  z-index: 34;
+  pointer-events: none;
+}
+.import-check {
+  position: relative;
+  display: block;
+  width: 50px;
+  height: 50px;
+}
+.import-check input {
+  position: absolute;
+  inset: 0;
+  width: 50px;
+  height: 50px;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0;
+  cursor: var(--cursor-press);
+  z-index: 40;
+}
+.import-toggle {
+  position: absolute;
+  display: block;
+  z-index: 40;
+}
+.import-toggle .import-check-art {
+  position: absolute;
+  inset: 0;
+}
+.import-toggle input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0;
+  cursor: var(--cursor-press);
+  z-index: 40;
+}
+.import-toggle input:disabled {
+  cursor: var(--cursor);
+}
+.import-input-wrap {
+  z-index: 1;
+}
+.import-input-wrap .roster-search {
+  z-index: 30;
+}
+.import-search-clear {
+  z-index: 40;
+}
+.import-dialog-content {
+  position: absolute;
+  left: 228px;
+  top: 203px;
+  width: 1464px;
+  height: 640px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+  padding: 16px;
+  z-index: 40;
+}
+.import-resource-types {
+  position: relative;
+  border: 0;
+  min-width: 0;
+}
+.import-option-control {
+  position: absolute;
+  z-index: 40;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: 0;
+}
+.import-radio-group button {
+  z-index: 40;
+}
 
 /* The shipped font's full-width brackets and commas have blank half-em advances that look like added spaces. */
-.popup-layer:lang(zh-CN) { font-feature-settings: "halt"; }
+.popup-layer:lang(zh-CN) {
+  font-feature-settings: "halt";
+}
 
 /* UICharacterCollection/BG_W/Bg: one raster of Common_Top_Menu_Bg, retaining its caps and shadow. */
 .topbar {
-  position: absolute; left: 0; top: 0; width: 100%; height: 64px; display: flex; align-items: center; z-index: 1000;
-  border-style: solid; border-width: 0 11px 0 172px; border-color: transparent;
-  background-origin: border-box; background-size: 100% 100%; background-repeat: no-repeat;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  z-index: 1000;
+  border-style: solid;
+  border-width: 0 11px 0 172px;
+  border-color: transparent;
+  background-origin: border-box;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
   /* content is centred on the fill (rows 0-96 of the sprite's 105: its dark lip and shadow below are not the bar), not on
      the whole height; top-bar.js sets --bar-padding from the sprite and moves each element's ink onto that centre */
   padding-bottom: var(--bar-padding, 4.88px);
 }
-.back { position: absolute; left: calc(var(--corner-margin, 43.978378px) - 172px); top: 9px; width: 106.38px; height: 111.57px; }
+.back {
+  position: absolute;
+  left: calc(var(--corner-margin, 43.978378px) - 172px);
+  top: 9px;
+  width: 106.38px;
+  height: 111.57px;
+}
 /* the game's top bar option button (Common_Top_Option_Btn tinted #466399) and the slanted divider before it */
-.top-option, .top-home { position: absolute; top: 7px; width: 50px; height: 50px; display: grid; place-items: center; }
-.top-option { right: calc(var(--corner-margin, 43.978378px) + 114px); }
-.top-home { right: var(--corner-margin, 43.978378px); }
-.top-home[hidden] { display: none; }
-.top-option i { width: 39px; height: 40px; background-color: #466399;
+.top-option,
+.top-home {
+  position: absolute;
+  top: 7px;
+  width: 50px;
+  height: 50px;
+  display: grid;
+  place-items: center;
+}
+.top-option {
+  right: calc(var(--corner-margin, 43.978378px) + 114px);
+}
+.top-home {
+  right: var(--corner-margin, 43.978378px);
+}
+.top-home[hidden] {
+  display: none;
+}
+.top-option i {
+  width: 39px;
+  height: 40px;
+  background-color: #466399;
   -webkit-mask: url("/asset/ui/sprite/Common/Common_Top_Option_Btn.png") center / contain no-repeat;
-  mask: url("/asset/ui/sprite/Common/Common_Top_Option_Btn.png") center / contain no-repeat; }
-.top-line { position: absolute; right: calc(var(--corner-margin, 43.978378px) + 76px); top: 12px; width: 3px; height: 32px; }
+  mask: url("/asset/ui/sprite/Common/Common_Top_Option_Btn.png") center / contain no-repeat;
+}
+.top-line {
+  position: absolute;
+  right: calc(var(--corner-margin, 43.978378px) + 76px);
+  top: 12px;
+  width: 3px;
+  height: 32px;
+}
 
 /* the Enable Mods switch after Back (js/mod-switch.js): two of the roster filter's segments (UICharacterCollection
    FilterBtn: Common_Filter_Tab_Type1 and its flipped twin, 9-sliced and inclined 10 degrees like NGUI draws them, at
    40/104 of their size), ON pressed in the Support segment's blue and OFF in the All segment's navy; its label; the
    square "?" (Btn_Information: Common_Btn_Information in #2c4564 over a white square) */
-.mod-switch { display: flex; align-items: center; gap: 12px; margin-left: -12px; height: 64px; }
-.topbar.hall-home .mod-switch { margin-left: -134px; }
-.mod-switch[hidden] { display: none; }
-.ms-toggle { position: relative; display: flex; height: 40px; }
-.ms-seg { position: relative; display: grid; place-items: center; min-width: 82px; height: 40px; padding: 0 14px; }
-.ms-skin { position: absolute; inset: 0; pointer-events: none; }
-.ms-seg b { position: relative; z-index: 1; font: var(--w) 24px/1 var(--font); letter-spacing: .5px; white-space: nowrap; margin-top: -3px; }
-.ms-seg.ms-on b { color: #006bff; }
-.ms-seg.ms-off b { color: #1d2a38; }
-.ms-toggle.is-on .ms-on b, .ms-toggle:not(.is-on) .ms-off b { color: #ffffff; margin-top: -1px; }
+.mod-switch {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: -12px;
+  height: 64px;
+}
+.topbar.hall-home .mod-switch {
+  margin-left: -134px;
+}
+.mod-switch[hidden] {
+  display: none;
+}
+.ms-toggle {
+  position: relative;
+  display: flex;
+  height: 40px;
+}
+.ms-seg {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-width: 82px;
+  height: 40px;
+  padding: 0 14px;
+}
+.ms-skin {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.ms-seg b {
+  position: relative;
+  z-index: 1;
+  font: var(--w) 24px / 1 var(--font);
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  margin-top: -3px;
+}
+.ms-seg.ms-on b {
+  color: #006bff;
+}
+.ms-seg.ms-off b {
+  color: #1d2a38;
+}
+.ms-toggle.is-on .ms-on b,
+.ms-toggle:not(.is-on) .ms-off b {
+  color: #ffffff;
+  margin-top: -1px;
+}
 /* busy: dimmed at the loading indicator's pace; unavailable: greyed */
-.ms-toggle.busy { animation: ms-busy 1.1667s ease-in-out infinite; }
-@keyframes ms-busy { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
-.ms-toggle.unavailable { filter: grayscale(1); opacity: .55; }
-.ms-dot { position: absolute; right: -10px; top: -8px; width: 24px; height: 22px; pointer-events: none;
-  background: url("/asset/ui/sprite/Common/Common_Icon_Reddot2.png") center / contain no-repeat; }
-.ms-dot[hidden] { display: none; }
-.ms-label { font: var(--w) 26px/1 var(--font); color: var(--navy-text); white-space: nowrap; letter-spacing: .5px; }
-.ms-help { position: relative; width: 40px; height: 40px; }
+.ms-toggle.busy {
+  animation: ms-busy 1.1667s ease-in-out infinite;
+}
+@keyframes ms-busy {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+.ms-toggle.unavailable {
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+.ms-dot {
+  position: absolute;
+  right: -10px;
+  top: -8px;
+  width: 24px;
+  height: 22px;
+  pointer-events: none;
+  background: url("/asset/ui/sprite/Common/Common_Icon_Reddot2.png") center / contain no-repeat;
+}
+.ms-dot[hidden] {
+  display: none;
+}
+.ms-label {
+  font: var(--w) 26px / 1 var(--font);
+  color: var(--navy-text);
+  white-space: nowrap;
+  letter-spacing: 0.5px;
+}
+.ms-help {
+  position: relative;
+  width: 40px;
+  height: 40px;
+}
 /* --- bottom navigation, pressed down to the bottom edge; icons only peek over the bar --- */
-.nav { position: absolute; left: 0; right: 0; bottom: 0; height: 104px; z-index: 1000; }
-.nav-bar { position: absolute; inset: 0; pointer-events: none; }
-.nav-items { position: absolute; left: 50px; right: 50px; bottom: 0; height: 104px; display: flex; justify-content: space-between; }
-.nav-item { position: relative; width: 260px; height: 104px; font: var(--w) 26px/1 var(--font); white-space: nowrap; }
-.nav-item.greyed { color: #828282; }
+.nav {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 104px;
+  z-index: 1000;
+}
+.nav-bar {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.nav-items {
+  position: absolute;
+  left: 50px;
+  right: 50px;
+  bottom: 0;
+  height: 104px;
+  display: flex;
+  justify-content: space-between;
+}
+.nav-item {
+  position: relative;
+  width: 260px;
+  height: 104px;
+  font: var(--w) 26px / 1 var(--font);
+  white-space: nowrap;
+}
+.nav-item.greyed {
+  color: #828282;
+}
 
 /* --- roster --- */
-.ngui-host { position: absolute; inset: 0; }
-.card-hit { position: absolute; z-index: 900; background: transparent; cursor: var(--cursor-press); }
-.card-hit:disabled { cursor: var(--cursor); }
-.card-clip { position: absolute; left: 0; right: 0; overflow: hidden; z-index: 100; touch-action: none; }
-.card-scroll { position: absolute; left: 0; top: 0; width: 1920px; height: 1px; will-change: transform; }
-.card-row { position: absolute; inset: 0; }
-.scrollbar { position: absolute; z-index: 150; pointer-events: none; }
-.scrollbar[hidden] { display: none; }
+.ngui-host {
+  position: absolute;
+  inset: 0;
+}
+.card-hit {
+  position: absolute;
+  z-index: 900;
+  background: transparent;
+  cursor: var(--cursor-press);
+}
+.card-hit:disabled {
+  cursor: var(--cursor);
+}
+.card-clip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  overflow: hidden;
+  z-index: 100;
+  touch-action: none;
+}
+.card-scroll {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1920px;
+  height: 1px;
+  will-change: transform;
+}
+.card-row {
+  position: absolute;
+  inset: 0;
+}
+.scrollbar {
+  position: absolute;
+  z-index: 150;
+  pointer-events: none;
+}
+.scrollbar[hidden] {
+  display: none;
+}
 /* the search box's input over the game's InputField: Label_Search's colour and size, the placeholder like
    Label_Locale_Input; selectable although the stage is not */
-.roster-search { position: absolute; z-index: 320; border: 0; outline: 0; background: transparent; padding: 0; margin: 0;
-  font-family: var(--font); font-weight: var(--w); line-height: 1.15; color: #1f3f5f; caret-color: #1f3f5f; text-align: center;
-  -webkit-appearance: none; appearance: none; -webkit-user-select: text; user-select: text; }
-.roster-search::placeholder { color: #98a3ae; font-size: .92em; opacity: 1; }
+.roster-search {
+  position: absolute;
+  z-index: 320;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  font-family: var(--font);
+  font-weight: var(--w);
+  line-height: 1.15;
+  color: #1f3f5f;
+  caret-color: #1f3f5f;
+  text-align: center;
+  -webkit-appearance: none;
+  appearance: none;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.roster-search::placeholder {
+  color: #98a3ae;
+  font-size: 0.92em;
+  opacity: 1;
+}
 /* Hall's box is a search field: no browser clear button or decoration over the game's InputField */
-.roster-search::-webkit-search-cancel-button, .roster-search::-webkit-search-decoration { -webkit-appearance: none; appearance: none; display: none; }
+.roster-search::-webkit-search-cancel-button,
+.roster-search::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
+}
 /* opened and focused before its box is drawn: it takes keystrokes unseen meanwhile */
-.roster-search.pending { opacity: 0; }
+.roster-search.pending {
+  opacity: 0;
+}
 /* keyboard focus (never shown for the pointer): one ring everywhere, 4 px in the app's focus blue, 2 px off the control, on the
    game's Raius10px corner (6.49 px at the stage's scale: ui-tokens.js FOCUS, which the token tests keep equal). A roster
    card's ring sits inside its portrait frame, because the list clips. */
-.hit:focus-visible, .card-hit:focus-visible, .nav-item:focus-visible, .top-option:focus-visible, .top-home:focus-visible, .back:focus-visible,
-.ms-toggle:focus-visible, .ms-help:focus-visible, .slider-thumb-focus,
-.plain-popup .message-button:focus-visible, .plain-check:focus-visible, .plain-line-button:focus-visible {
-  outline: 4px solid #2fa6f0; outline-offset: 2px; border-radius: 6.49px; }
-.card-row .card-hit:focus-visible { outline-offset: -3px; }
-.roster-empty { position: absolute; inset: 0; pointer-events: none; }
-.consent-host { position: absolute; inset: 0; z-index: 2000; }
-.consent-host[hidden] { display: none; }
+.hit:focus-visible,
+.card-hit:focus-visible,
+.nav-item:focus-visible,
+.top-option:focus-visible,
+.top-home:focus-visible,
+.back:focus-visible,
+.ms-toggle:focus-visible,
+.ms-help:focus-visible,
+.slider-thumb-focus,
+.plain-popup .message-button:focus-visible,
+.plain-check:focus-visible,
+.plain-line-button:focus-visible {
+  outline: 4px solid #2fa6f0;
+  outline-offset: 2px;
+  border-radius: 6.49px;
+}
+.card-row .card-hit:focus-visible {
+  outline-offset: -3px;
+}
+.roster-empty {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.consent-host {
+  position: absolute;
+  inset: 0;
+  z-index: 2000;
+}
+.consent-host[hidden] {
+  display: none;
+}
 /* the scan consent opened from Settings or the switch's help: over the settings and the message popups */
-#consent.over { z-index: 2700; }
+#consent.over {
+  z-index: 2700;
+}
 /* the display settings opened from a dialog (#dialog, 2600): over it, so it takes the clicks */
-#display.over { z-index: 2700; }
+#display.over {
+  z-index: 2700;
+}
 
 /* settings: the rows scroll inside the popup's white panel */
-.settings-host { z-index: 2500; }
-.settings-rows { position: absolute; z-index: 3005; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
-.settings-rows::-webkit-scrollbar { display: none; }
-.settings-rows-inner { position: relative; }
+.settings-host {
+  z-index: 2500;
+}
+.settings-rows {
+  position: absolute;
+  z-index: 3005;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+}
+.settings-rows::-webkit-scrollbar {
+  display: none;
+}
+.settings-rows-inner {
+  position: relative;
+}
 /* the sliders' range inputs lie unseen over the game's slider (settings.js wireSlider): the game's thumb shows the value and,
    on keyboard focus, a ring. The native thumb is 40 px wide (SLIDER_THUMB) so its centre travels the drawn thumb's range */
-.hit.slider-range { margin: 0; opacity: 0; touch-action: none; -webkit-appearance: none; appearance: none; }
-.slider-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 40px; height: 40px; }
-.slider-range::-moz-range-thumb { width: 40px; height: 40px; border: 0; }
+.hit.slider-range {
+  margin: 0;
+  opacity: 0;
+  touch-action: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.slider-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 40px;
+  height: 40px;
+}
+.slider-range::-moz-range-thumb {
+  width: 40px;
+  height: 40px;
+  border: 0;
+}
 
 /* --- detail --- */
 /* the alias editor's inputs, over the game's input rows (UIPopup_Input's text and placeholder colours) */
-.alias-input { position: absolute; z-index: 85; border: 0; outline: 0; background: transparent; padding: 0; margin: 0;
-  font-family: var(--font); font-weight: var(--w); line-height: 1.15; color: #1f3f5f; caret-color: #1f3f5f; text-align: left;
-  -webkit-appearance: none; appearance: none; -webkit-user-select: text; user-select: text; }
-.alias-input::placeholder { color: #98a3ae; opacity: 1; }
-.layer-host { position: absolute; inset: 0; pointer-events: none; }
-.layer-host .hit, .layer-host .expr-clip, .layer-host .popup-cards { pointer-events: auto; }
-.layer-host.ui { z-index: 2; }
-#ngui-chips { z-index: 3; }
-#ngui-expr { z-index: 4; }
+.alias-input {
+  position: absolute;
+  z-index: 85;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  font-family: var(--font);
+  font-weight: var(--w);
+  line-height: 1.15;
+  color: #1f3f5f;
+  caret-color: #1f3f5f;
+  text-align: left;
+  -webkit-appearance: none;
+  appearance: none;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.alias-input::placeholder {
+  color: #98a3ae;
+  opacity: 1;
+}
+.layer-host {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.layer-host .hit,
+.layer-host .expr-clip,
+.layer-host .popup-cards {
+  pointer-events: auto;
+}
+.layer-host.ui {
+  z-index: 2;
+}
+#ngui-chips {
+  z-index: 3;
+}
+#ngui-expr {
+  z-index: 4;
+}
 /* the portrait covers the stage like the game's, under every panel (PORTRAIT_BOX in detail.js) */
-.portrait { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; z-index: 1; }
-.portrait .layer { position: absolute; inset: 0; transition: opacity .35s ease; }
-.portrait .layer.fading { opacity: 0; }
-.portrait .portrait-static { position: absolute; left: 80px; top: 100px; width: 720px; height: 900px; object-fit: contain; }
-.portrait .spine-player, .lobby-layer .spine-player, .thumb-player .spine-player { background: transparent !important; }
+.portrait {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1920px;
+  height: 1080px;
+  z-index: 1;
+}
+.portrait .layer {
+  position: absolute;
+  inset: 0;
+  transition: opacity 0.35s ease;
+}
+.portrait .layer.fading {
+  opacity: 0;
+}
+.portrait .portrait-static {
+  position: absolute;
+  left: 80px;
+  top: 100px;
+  width: 720px;
+  height: 900px;
+  object-fit: contain;
+}
+.portrait .spine-player,
+.lobby-layer .spine-player,
+.thumb-player .spine-player {
+  background: transparent !important;
+}
 /* the detail screen's popups cover the whole stage like the game's (top bar and navigation included), under the
    loading screen, the consent popup and settings */
-.popup-host { z-index: 1200; pointer-events: auto; }
-.popup-host[hidden] { display: none; }
+.popup-host {
+  z-index: 1200;
+  pointer-events: auto;
+}
+.popup-host[hidden] {
+  display: none;
+}
 /* the shared popups' hosts on the stage (popup.js): over the settings and the display settings. Each
    message popup is a layer of its own, so one opened from another shows over it */
-.stage-host { position: absolute; inset: 0; }
-#prompt { z-index: 2550; }
-#dialog { z-index: 2600; }
-.popup-layer { position: absolute; inset: 0; z-index: 0; outline: none; }
+.stage-host {
+  position: absolute;
+  inset: 0;
+}
+#prompt {
+  z-index: 2550;
+}
+#dialog {
+  z-index: 2600;
+}
+.popup-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  outline: none;
+}
 /* the shared focus trap (popup.js) focuses a popup's host when nothing in it can take the focus: no ring round the stage */
-.popup-host, .consent-host { outline: none; }
+.popup-host,
+.consent-host {
+  outline: none;
+}
 /* a message popup without the game's frame (no game folder): a plain box on the popup's dark backdrop */
-.plain-popup-back { position: absolute; inset: 0; background: rgba(0, 0, 0, .6); }
-.plain-popup { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 1000px; padding: 48px 60px 52px;
-  display: flex; flex-direction: column; align-items: center; gap: 22px; border-radius: 14.27px; background: #f4fcfe; color: #2d4664; text-align: center; }
-.plain-popup h2 { font: var(--w) 48px/1.2 var(--font); }
-.plain-popup p { font: var(--w) 32px/1.4 var(--font); color: #2d4664; max-width: 100%; overflow-wrap: anywhere; }
-.plain-message-lines { width: 100%; max-height: 520px; overflow-y: auto; overflow-x: hidden; }
+.plain-popup-back {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+}
+.plain-popup {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 1000px;
+  padding: 48px 60px 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+  border-radius: 14.27px;
+  background: #f4fcfe;
+  color: #2d4664;
+  text-align: center;
+}
+.plain-popup h2 {
+  font: var(--w) 48px / 1.2 var(--font);
+}
+.plain-popup p {
+  font: var(--w) 32px / 1.4 var(--font);
+  color: #2d4664;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.plain-message-lines {
+  width: 100%;
+  max-height: 520px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
 /* the fallback button, one look for the no-game screens (here, fallback.css's .message-button and the recovery panel's): the light-blue
    button flat, #8de4ff with #314665 ink on the game's Raius10px corner, no skew and no shadow */
-.plain-line-button { margin-left: 20px; padding: 8px 22px; border-radius: 6.49px; background: #8de4ff; color: #314665; font: var(--w) 26px/1 var(--font); }
-.plain-check { display: flex; align-items: center; gap: 16px; font: var(--w) 30px/1 var(--font); color: #484e52; }
-.plain-check::before { content: ""; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 6.49px;
-  border: 3px solid #96b6c2; background: #e4f3f8; color: #fff; font: 700 28px/1 sans-serif; }
-.plain-check[aria-checked="true"]::before { content: "\2713"; background: #2a63c5; border-color: #2a63c5; }
-.plain-popup .message-actions { margin-top: 10px; }
-.spine-license-plain h2 { font: 600 48px/1.2 system-ui, sans-serif; }
-.spine-license-plain p, .spine-license-plain .message-button { font: 400 32px/1.4 system-ui, sans-serif; }
-.hit { position: absolute; background: transparent; cursor: var(--cursor-press); }
+.plain-line-button {
+  margin-left: 20px;
+  padding: 8px 22px;
+  border-radius: 6.49px;
+  background: #8de4ff;
+  color: #314665;
+  font: var(--w) 26px / 1 var(--font);
+}
+.plain-check {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font: var(--w) 30px / 1 var(--font);
+  color: #484e52;
+}
+.plain-check::before {
+  content: "";
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 6.49px;
+  border: 3px solid #96b6c2;
+  background: #e4f3f8;
+  color: #fff;
+  font: 700 28px / 1 sans-serif;
+}
+.plain-check[aria-checked="true"]::before {
+  content: "\2713";
+  background: #2a63c5;
+  border-color: #2a63c5;
+}
+.plain-popup .message-actions {
+  margin-top: 10px;
+}
+.spine-license-plain h2 {
+  font:
+    600 48px / 1.2 system-ui,
+    sans-serif;
+}
+.spine-license-plain p,
+.spine-license-plain .message-button {
+  font:
+    400 32px / 1.4 system-ui,
+    sans-serif;
+}
+.hit {
+  position: absolute;
+  background: transparent;
+  cursor: var(--cursor-press);
+}
 
 /* switch-portrait card: the game's weapon card has no text slot */
-.switch-text { position: absolute; z-index: 40; display: flex; flex-direction: column; justify-content: center; gap: 6px; padding-bottom: 5px; color: #2d4664; pointer-events: none; }
-.switch-text b { font: var(--w) var(--title-size, 30px)/1.15 var(--font); }
-.switch-text span { font: var(--w) var(--sub-size, 21px)/1.2 var(--font); }
-.switch-go { position: absolute; right: 6px; top: 50%; width: 22px; height: 34px; margin-top: -17px; background-color: currentColor; transform: scaleX(-.6);
-  -webkit-mask: url("/asset/ui/sprite/Common/Cafe_Icon_Arrow.png") center / contain no-repeat; mask: url("/asset/ui/sprite/Common/Cafe_Icon_Arrow.png") center / contain no-repeat; }
+.switch-text {
+  position: absolute;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  padding-bottom: 5px;
+  color: #2d4664;
+  pointer-events: none;
+}
+.switch-text b {
+  font: var(--w) var(--title-size, 30px) / 1.15 var(--font);
+}
+.switch-text span {
+  font: var(--w) var(--sub-size, 21px) / 1.2 var(--font);
+}
+.switch-go {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  width: 22px;
+  height: 34px;
+  margin-top: -17px;
+  background-color: currentColor;
+  transform: scaleX(-0.6);
+  -webkit-mask: url("/asset/ui/sprite/Common/Cafe_Icon_Arrow.png") center / contain no-repeat;
+  mask: url("/asset/ui/sprite/Common/Cafe_Icon_Arrow.png") center / contain no-repeat;
+}
 
 /* expression strip clip; unfolded it scrolls and drags */
-.expr-clip { position: absolute; overflow: hidden; }
-.expr-clip.expanded { overflow-x: auto; scrollbar-width: none; cursor: grab;
-  -webkit-mask-image: linear-gradient(90deg, transparent 2%, #000 7%, #000 93%, transparent 99%); mask-image: linear-gradient(90deg, transparent 2%, #000 7%, #000 93%, transparent 99%); }
-.expr-clip.expanded::-webkit-scrollbar { display: none; }
-.expr-track { position: relative; height: 100%; min-width: 100%; }
+.expr-clip {
+  position: absolute;
+  overflow: hidden;
+}
+.expr-clip.expanded {
+  overflow-x: auto;
+  scrollbar-width: none;
+  cursor: grab;
+  -webkit-mask-image: linear-gradient(90deg, transparent 2%, #000 7%, #000 93%, transparent 99%);
+  mask-image: linear-gradient(90deg, transparent 2%, #000 7%, #000 93%, transparent 99%);
+}
+.expr-clip.expanded::-webkit-scrollbar {
+  display: none;
+}
+.expr-track {
+  position: relative;
+  height: 100%;
+  min-width: 100%;
+}
 
 /* popups */
-.popup-cards { position: absolute; z-index: 30; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
-.popup-cards::-webkit-scrollbar { display: none; }
-.popup-cards-inner { position: relative; }
-.popup-host .scrollbar { z-index: 60; }
+.popup-cards {
+  position: absolute;
+  z-index: 30;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+}
+.popup-cards::-webkit-scrollbar {
+  display: none;
+}
+.popup-cards-inner {
+  position: relative;
+}
+.popup-host .scrollbar {
+  z-index: 60;
+}
 
 /* left halves and right halves of the UI, so fullscreen can slide each away */
-#ngui .side { position: absolute; inset: 0; pointer-events: none; transition: transform .45s ease, opacity .45s ease; }
-#ngui-chips, #ngui-expr, .topbar, .nav { transition: transform .45s ease, opacity .45s ease; }
-.stage.fullscreen #ngui .side.left, .stage.fullscreen #ngui-chips { transform: translateX(-70%); opacity: 0; }
-.stage.fullscreen #ngui .side.right, .stage.fullscreen #ngui-expr { transform: translateX(70%); opacity: 0; }
-.stage.fullscreen .lobby-frost { opacity: 0; }
+#ngui .side {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transition:
+    transform 0.45s ease,
+    opacity 0.45s ease;
+}
+#ngui-chips,
+#ngui-expr,
+.topbar,
+.nav {
+  transition:
+    transform 0.45s ease,
+    opacity 0.45s ease;
+}
+.stage.fullscreen #ngui .side.left,
+.stage.fullscreen #ngui-chips {
+  transform: translateX(-70%);
+  opacity: 0;
+}
+.stage.fullscreen #ngui .side.right,
+.stage.fullscreen #ngui-expr {
+  transform: translateX(70%);
+  opacity: 0;
+}
+.stage.fullscreen .lobby-frost {
+  opacity: 0;
+}
 /* Hall hides its chrome independently while retaining its portrait and memorial players. */
-#student-hall.hall-immersive > .hall-chrome, #student-hall.hall-immersive [data-actor-toolbar] { visibility: hidden; pointer-events: none; }
-.hall-fullscreen-exit { z-index: 6; }
-
+#student-hall.hall-immersive > .hall-chrome,
+#student-hall.hall-immersive [data-actor-toolbar] {
+  visibility: hidden;
+  pointer-events: none;
+}
+.hall-fullscreen-exit {
+  z-index: 6;
+}
 
 /* the collection background dims behind the lobby */
-#ngui-bg.dim { filter: blur(6px) brightness(.9); }
+#ngui-bg.dim {
+  filter: blur(6px) brightness(0.9);
+}
 
 /* memorial lobby: the lobby's skeletons fill the stage; the right side fades into a frosted blur */
-.lobby { position: absolute; inset: 0; z-index: 1; }
-.lobby[hidden] { display: none; }
+.lobby {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+.lobby[hidden] {
+  display: none;
+}
 /* fullscreen past the painted art (zoom-out Unlocked, Custom): the game's lobby camera clears to black; the bottom
    layer draws that black itself, graded with PP on (linear.js), so this shows only without WebGL2 */
-.stage.fullscreen .lobby.open-edge { background: #000; }
-.lobby-view, .lobby-layer { position: absolute; inset: 0; }
-.lobby-unavailable { position: absolute; left: 120px; top: 450px; width: 720px; text-align: center; color: #607689; font-size: 28px; }
-.stage.fullscreen .lobby-unavailable { left: 50%; top: 50%; transform: translate(-50%, -50%); }
-.lobby-extend { position: absolute; inset: 0; width: 100%; height: 100%; filter: blur(26px) saturate(1.05); transform: scale(1.08); }
-.lobby-extend[hidden] { display: none; }
+.stage.fullscreen .lobby.open-edge {
+  background: #000;
+}
+.lobby-view,
+.lobby-layer {
+  position: absolute;
+  inset: 0;
+}
+.lobby-unavailable {
+  position: absolute;
+  left: 120px;
+  top: 450px;
+  width: 720px;
+  text-align: center;
+  color: #607689;
+  font-size: 28px;
+}
+.stage.fullscreen .lobby-unavailable {
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+.lobby-extend {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  filter: blur(26px) saturate(1.05);
+  transform: scale(1.08);
+}
+.lobby-extend[hidden] {
+  display: none;
+}
 /* the previous framing, faded out over the new one when switching between the left view and fullscreen */
-.lobby-fade { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; opacity: 0; }
+.lobby-fade {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  opacity: 0;
+}
 /* fullscreen: the character can be touched (lobby-touch.js); the pointer shows what a press does */
-.stage.fullscreen .lobby { touch-action: none; }
-.lobby.grab { cursor: grab; }
-.lobby.grabbing { cursor: grabbing; }
-.lobby.talk { cursor: var(--cursor-press); }
-.lobby-frost { position: absolute; inset: 0; pointer-events: none; transition: opacity .45s ease;
-  -webkit-backdrop-filter: blur(18px) saturate(1.08) brightness(1.04); backdrop-filter: blur(18px) saturate(1.08) brightness(1.04);
-  -webkit-mask-image: linear-gradient(90deg, transparent 38%, #000 56%); mask-image: linear-gradient(90deg, transparent 38%, #000 56%);
-  background: linear-gradient(90deg, rgba(225, 240, 250, 0) 38%, rgba(225, 240, 250, .22) 66%); }
+.stage.fullscreen .lobby {
+  touch-action: none;
+}
+.lobby.grab {
+  cursor: grab;
+}
+.lobby.grabbing {
+  cursor: grabbing;
+}
+.lobby.talk {
+  cursor: var(--cursor-press);
+}
+.lobby-frost {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transition: opacity 0.45s ease;
+  -webkit-backdrop-filter: blur(18px) saturate(1.08) brightness(1.04);
+  backdrop-filter: blur(18px) saturate(1.08) brightness(1.04);
+  -webkit-mask-image: linear-gradient(90deg, transparent 38%, #000 56%);
+  mask-image: linear-gradient(90deg, transparent 38%, #000 56%);
+  background: linear-gradient(90deg, rgba(225, 240, 250, 0) 38%, rgba(225, 240, 250, 0.22) 66%);
+}
 
 /* 3D model: the left area over the dimmed collection background; fullscreen it takes the whole stage (the camera
    glides over, model.js) */
-.model { position: absolute; left: 0; top: 0; width: 1000px; height: 1080px; z-index: 1; }
-.model[hidden] { display: none; }
-.stage.fullscreen .model { width: 1920px; }
-.model-view { display: block; width: 100%; height: 100%; opacity: 0; transition: opacity .25s ease; touch-action: none; cursor: grab; }
-.model-view:active { cursor: grabbing; }
-.model-view.ready { opacity: 1; }
+.model {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1000px;
+  height: 1080px;
+  z-index: 1;
+}
+.model[hidden] {
+  display: none;
+}
+.stage.fullscreen .model {
+  width: 1920px;
+}
+.model-view {
+  display: block;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  touch-action: none;
+  cursor: grab;
+}
+.model-view:active {
+  cursor: grabbing;
+}
+.model-view.ready {
+  opacity: 1;
+}
 
 /* Game dialogue balloons; only their host's entry/exit motion belongs to CSS. Geometry comes from the prefab. */
-.lobby-subtitle { position: absolute; inset: 0; z-index: 6; pointer-events: none;
-  transition: opacity .26s ease, translate .26s ease; }
-.lobby-subtitle[hidden] { display: none; }
-.lobby-subtitle.out { opacity: 0; translate: 0 -24px; }
-.lobby-subtitle.in { opacity: 0; translate: 0 24px; transition: none; }
+.lobby-subtitle {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  transition:
+    opacity 0.26s ease,
+    translate 0.26s ease;
+}
+.lobby-subtitle[hidden] {
+  display: none;
+}
+.lobby-subtitle.out {
+  opacity: 0;
+  translate: 0 -24px;
+}
+.lobby-subtitle.in {
+  opacity: 0;
+  translate: 0 24px;
+  transition: none;
+}
 
 /* Fullscreen exit uses UICharacterVisualMode/LeftTop/Btn_Back. */
-.fs-exit { position: absolute; z-index: 30; transition: opacity .6s ease; }
-.fs-exit[hidden] { display: none; }
-.fs-exit.idle { opacity: 0; }
+.fs-exit {
+  position: absolute;
+  z-index: 30;
+  transition: opacity 0.6s ease;
+}
+.fs-exit[hidden] {
+  display: none;
+}
+.fs-exit.idle {
+  opacity: 0;
+}
 
 /* the portrait's visual mode (visual-mode.js): its background fades in over the detail screen's, under the portrait;
    the light patterns breathe like their TweenAlpha (0.2 to 0.5 and back every 1.25 s, in opposite phase). Its touch
    area and buttons lie over everything; the buttons slide with the game's clip (Web Animations). */
-.visual-bg { position: absolute; inset: 0; overflow: hidden; pointer-events: none; opacity: 0; transition: opacity .45s ease; }
-.visual-bg.on { opacity: 1; }
-.visual-bg[hidden], .visual-ui[hidden], .visual-btn[hidden] { display: none; }
-@keyframes visual-breathe { from { opacity: .2; } to { opacity: .5; } }
-.visual-bg [data-path$="/Bg_Pt_1"] { animation: visual-breathe 1.25s linear infinite alternate; }
-.visual-bg [data-path$="/Bg_Pt_2"] { animation: visual-breathe 1.25s linear infinite alternate-reverse; }
-.visual-ui { position: absolute; inset: 0; z-index: 30; pointer-events: none; }
-.visual-touch { position: absolute; inset: 0; pointer-events: auto; touch-action: none; cursor: grab; }
-.visual-touch.grabbing { cursor: grabbing; }
-.visual-btn { position: absolute; inset: 0; pointer-events: none; }
-.visual-btn .hit { pointer-events: auto; }
+.visual-bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.45s ease;
+}
+.visual-bg.on {
+  opacity: 1;
+}
+.visual-bg[hidden],
+.visual-ui[hidden],
+.visual-btn[hidden] {
+  display: none;
+}
+@keyframes visual-breathe {
+  from {
+    opacity: 0.2;
+  }
+  to {
+    opacity: 0.5;
+  }
+}
+.visual-bg [data-path$="/Bg_Pt_1"] {
+  animation: visual-breathe 1.25s linear infinite alternate;
+}
+.visual-bg [data-path$="/Bg_Pt_2"] {
+  animation: visual-breathe 1.25s linear infinite alternate-reverse;
+}
+.visual-ui {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+}
+.visual-touch {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+  touch-action: none;
+  cursor: grab;
+}
+.visual-touch.grabbing {
+  cursor: grabbing;
+}
+.visual-btn {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.visual-btn .hit {
+  pointer-events: auto;
+}
 
 /* thumbnails are rendered by a hidden player */
-.thumb-host { position: fixed; left: 0; top: 0; width: 0; height: 0; overflow: visible; opacity: 0; pointer-events: none; z-index: -1; }
-.thumb-player { position: absolute; left: 0; top: 0; }
+.thumb-host {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  overflow: visible;
+  opacity: 0;
+  pointer-events: none;
+  z-index: -1;
+}
+.thumb-player {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
 
 /* --- loading screen (loading.js): the game's UILoading (its black backdrop; the middle stays empty) and
    UIRepeater ("Now Loading") prefabs; above the top bar and the nav, below the consent popup and settings --- */
-.loading { position: absolute; inset: 0; z-index: 1500; opacity: 0; transition: opacity .15s ease; pointer-events: auto; }
-.loading.on { opacity: 1; }
-.loading.out { opacity: 0; transition-duration: .3s; }
-.loading.indicator { pointer-events: none; transition-duration: .2s; }
-.loading-back { position: absolute; inset: 0; background: #000; transition: opacity .15s ease; }
+.loading {
+  position: absolute;
+  inset: 0;
+  z-index: 1500;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: auto;
+}
+.loading.on {
+  opacity: 1;
+}
+.loading.out {
+  opacity: 0;
+  transition-duration: 0.3s;
+}
+.loading.indicator {
+  pointer-events: none;
+  transition-duration: 0.2s;
+}
+.loading-back {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  transition: opacity 0.15s ease;
+}
 /* UILoading/BlackBG covers fractional stage edges without exposing the blue stage underneath. */
-.loading.full .loading-back { inset: calc(0px - var(--cover-bleed, 2px)); }
-.loading.indicator .loading-back { opacity: 0; }
-.loading-ind, .loading-repeater { position: absolute; inset: 0; pointer-events: none; }
+.loading.full .loading-back {
+  inset: calc(0px - var(--cover-bleed, 2px));
+}
+.loading.indicator .loading-back {
+  opacity: 0;
+}
+.loading-ind,
+.loading-repeater {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
 /* UICharacterDetail's gradient sprites form the shared in-page inner shade. */
-.loading-edge { position: absolute; width: 0; height: 0; pointer-events: none; z-index: 0; }
-.loading-ind, .loading-progress { z-index: 1; }
-.loading.full .loading-edge, .loading.full .loading-progress { display: none; }
+.loading-edge {
+  position: absolute;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+.loading-ind,
+.loading-progress {
+  z-index: 1;
+}
+.loading.full .loading-edge,
+.loading.full .loading-progress {
+  display: none;
+}
 
 /* the game's clip "UIAni_Repeat 1" (legacy, 60 fps, loop of 140 frames = two equal halves of 70): the dots hop
    20 units (12.97 px) one after another; Arona and her halo squeeze to nothing and back, the halos swapping at the
    turn; "Now Loading" breathes between 100 % and 80 % every 50 frames. The individual translate / scale properties
    leave ngui.js's inline transform alone. */
-@keyframes ld-dot0 { 0%, 7.14% { translate: 0 0; } 18.57% { translate: 0 -12.97px; } 31.43%, 100% { translate: 0 0; } }
-@keyframes ld-dot1 { 0%, 7.14% { translate: 0 0; } 31.43% { translate: 0 -12.97px; } 41.43%, 100% { translate: 0 0; } }
-@keyframes ld-dot2 { 0%, 7.14% { translate: 0 0; } 41.43% { translate: 0 -12.97px; } 55.71%, 100% { translate: 0 0; } }
-@keyframes ld-turn { 0%, 40% { scale: 1 1; } 55.71% { scale: 0 1; } 71.43%, 100% { scale: 1 1; } }
-@keyframes ld-halo { 0%, 26.43% { opacity: 1; } 27.86%, 76.43% { opacity: .02; } 77.86%, 100% { opacity: 1; } }
-@keyframes ld-halo2 { 0%, 26.43% { opacity: .02; } 27.86%, 76.43% { opacity: 1; } 77.86%, 100% { opacity: .02; } }
-@keyframes ld-text { 0%, 100% { opacity: 1; } 50% { opacity: .8; } }
+@keyframes ld-dot0 {
+  0%,
+  7.14% {
+    translate: 0 0;
+  }
+  18.57% {
+    translate: 0 -12.97px;
+  }
+  31.43%,
+  100% {
+    translate: 0 0;
+  }
+}
+@keyframes ld-dot1 {
+  0%,
+  7.14% {
+    translate: 0 0;
+  }
+  31.43% {
+    translate: 0 -12.97px;
+  }
+  41.43%,
+  100% {
+    translate: 0 0;
+  }
+}
+@keyframes ld-dot2 {
+  0%,
+  7.14% {
+    translate: 0 0;
+  }
+  41.43% {
+    translate: 0 -12.97px;
+  }
+  55.71%,
+  100% {
+    translate: 0 0;
+  }
+}
+@keyframes ld-turn {
+  0%,
+  40% {
+    scale: 1 1;
+  }
+  55.71% {
+    scale: 0 1;
+  }
+  71.43%,
+  100% {
+    scale: 1 1;
+  }
+}
+@keyframes ld-halo {
+  0%,
+  26.43% {
+    opacity: 1;
+  }
+  27.86%,
+  76.43% {
+    opacity: 0.02;
+  }
+  77.86%,
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes ld-halo2 {
+  0%,
+  26.43% {
+    opacity: 0.02;
+  }
+  27.86%,
+  76.43% {
+    opacity: 1;
+  }
+  77.86%,
+  100% {
+    opacity: 0.02;
+  }
+}
+@keyframes ld-text {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
 /* a still being made: the game's loading ring (UIRatioNoticePopup LoadingIcon, its TweenRotation), shown after .2 s */
 /* developer previews: the size preset (S, M, L) or the height of a button body, at its top left; not a game widget */
-.ngui-tier { position: absolute; pointer-events: none; padding: 1px 5px; font: 700 13px/16px ui-monospace, Menlo, monospace;
-  color: #fff; background: rgba(214, 40, 40, 0.85); border-radius: 3px; }
-.ngui-tier.off { background: rgba(90, 100, 115, 0.85); }
+.ngui-tier {
+  position: absolute;
+  pointer-events: none;
+  padding: 1px 5px;
+  font:
+    700 13px / 16px ui-monospace,
+    Menlo,
+    monospace;
+  color: #fff;
+  background: rgba(214, 40, 40, 0.85);
+  border-radius: 3px;
+}
+.ngui-tier.off {
+  background: rgba(90, 100, 115, 0.85);
+}
 /* a chip's tag (CHIP_TIERS) in blue, a button's in red */
-.ngui-tier.chip:not(.off) { background: rgba(34, 110, 196, 0.85); }
+.ngui-tier.chip:not(.off) {
+  background: rgba(34, 110, 196, 0.85);
+}
 /* a tag that would cover the caption is a dot at the corner; its label shows on hover, without a native tooltip */
-.ngui-tier.dot { width: 8px; height: 8px; padding: 0; border-radius: 50%; pointer-events: auto; }
-.ngui-tier.dot:hover::after { content: attr(data-size); position: absolute; left: 10px; top: -4px; padding: 1px 5px; border-radius: 3px;
-  background: inherit; color: #fff; font: 700 13px/16px ui-monospace, Menlo, monospace; white-space: nowrap; pointer-events: none; }
-.ngui-loading { animation: ngui-turn var(--turn-time, 3s) linear infinite var(--turn-loop, normal), ngui-loading-in .2s ease .2s both; }
-@keyframes ngui-turn { from { rotate: var(--turn-from, -180deg); } to { rotate: var(--turn-to, 180deg); } }
-@keyframes ngui-loading-in { from { opacity: 0; } to { opacity: 1; } }
-.loading-ind [data-path$="/dot"] { animation: ld-dot0 1.1667s ease-in-out infinite; }
-.loading-ind [data-path$="/dot (1)"] { animation: ld-dot1 1.1667s ease-in-out infinite; }
-.loading-ind [data-path$="/dot (2)"] { animation: ld-dot2 1.1667s ease-in-out infinite; }
-.loading-ind [data-path$="/Arona/Arona"] { animation: ld-turn 1.1667s ease-in-out infinite; }
-.loading-ind [data-path$="/Arona/Halo"] { animation: ld-turn 1.1667s ease-in-out infinite, ld-halo 2.3333s step-end infinite; }
-.loading-ind [data-path$="/Arona/Halo_2"] { animation: ld-turn 1.1667s ease-in-out infinite, ld-halo2 2.3333s step-end infinite; }
-.loading-ind [data-path*="/Loading/"] { animation: ld-text .8333s ease-in-out infinite; }
+.ngui-tier.dot {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border-radius: 50%;
+  pointer-events: auto;
+}
+.ngui-tier.dot:hover::after {
+  content: attr(data-size);
+  position: absolute;
+  left: 10px;
+  top: -4px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: inherit;
+  color: #fff;
+  font:
+    700 13px / 16px ui-monospace,
+    Menlo,
+    monospace;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.ngui-loading {
+  animation:
+    ngui-turn var(--turn-time, 3s) linear infinite var(--turn-loop, normal),
+    ngui-loading-in 0.2s ease 0.2s both;
+}
+@keyframes ngui-turn {
+  from {
+    rotate: var(--turn-from, -180deg);
+  }
+  to {
+    rotate: var(--turn-to, 180deg);
+  }
+}
+@keyframes ngui-loading-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.loading-ind [data-path$="/dot"] {
+  animation: ld-dot0 1.1667s ease-in-out infinite;
+}
+.loading-ind [data-path$="/dot (1)"] {
+  animation: ld-dot1 1.1667s ease-in-out infinite;
+}
+.loading-ind [data-path$="/dot (2)"] {
+  animation: ld-dot2 1.1667s ease-in-out infinite;
+}
+.loading-ind [data-path$="/Arona/Arona"] {
+  animation: ld-turn 1.1667s ease-in-out infinite;
+}
+.loading-ind [data-path$="/Arona/Halo"] {
+  animation:
+    ld-turn 1.1667s ease-in-out infinite,
+    ld-halo 2.3333s step-end infinite;
+}
+.loading-ind [data-path$="/Arona/Halo_2"] {
+  animation:
+    ld-turn 1.1667s ease-in-out infinite,
+    ld-halo2 2.3333s step-end infinite;
+}
+.loading-ind [data-path*="/Loading/"] {
+  animation: ld-text 0.8333s ease-in-out infinite;
+}
 /* Once UI assets are ready, the corner keeps its style while a new repeater is rendered. */
-.loading-fallback { position: absolute; right: 84px; bottom: 44px; display: flex; align-items: flex-end; gap: 9px; color: #8de4ff;
-  font: italic var(--w) 44px/1 "RHR", sans-serif; letter-spacing: 1px; transform: skewX(-10deg);
-  -webkit-text-stroke: 1px #fff; text-shadow: 0 3px 0 #2c4564, 2px 0 0 #2c4564, -2px 0 0 #2c4564; }
-.loading-fallback span { margin-right: 4px; animation: ld-text .8333s ease-in-out infinite; }
-.loading.with-progress { z-index: 1501; }
+.loading-fallback {
+  position: absolute;
+  right: 84px;
+  bottom: 44px;
+  display: flex;
+  align-items: flex-end;
+  gap: 9px;
+  color: #8de4ff;
+  font:
+    italic var(--w) 44px / 1 "RHR",
+    sans-serif;
+  letter-spacing: 1px;
+  transform: skewX(-10deg);
+  -webkit-text-stroke: 1px #fff;
+  text-shadow:
+    0 3px 0 #2c4564,
+    2px 0 0 #2c4564,
+    -2px 0 0 #2c4564;
+}
+.loading-fallback span {
+  margin-right: 4px;
+  animation: ld-text 0.8333s ease-in-out infinite;
+}
+.loading.with-progress {
+  z-index: 1501;
+}
 /* a writer over a full cover: its progress only, the cover's indicator stays the one Now Loading */
-.loading.over-cover .loading-ind, .loading.over-cover .loading-edge { visibility: hidden; }
-.input-held > .loading { z-index: 4000; }
-.loading-progress { position: absolute; left: 84px; bottom: 44px; max-width: 1000px;
-  color: #fff; font-size: 26px;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
-.loading-progress.prefab-label { inset: 0; max-width: none; overflow: visible; background: none; }
-.loading-fallback i { width: 11px; height: 11px; margin-bottom: 5px; border-radius: 50%; background: #8de4ff;
-  box-shadow: 0 0 0 1px #fff, 0 3px 0 2px #2c4564; animation: ld-dot0 1.1667s ease-in-out infinite; }
-.loading-fallback i:nth-of-type(2) { animation-name: ld-dot1; }
-.loading-fallback i:nth-of-type(3) { animation-name: ld-dot2; }
+.loading.over-cover .loading-ind,
+.loading.over-cover .loading-edge {
+  visibility: hidden;
+}
+.input-held > .loading {
+  z-index: 4000;
+}
+.loading-progress {
+  position: absolute;
+  left: 84px;
+  bottom: 44px;
+  max-width: 1000px;
+  color: #fff;
+  font-size: 26px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.loading-progress.prefab-label {
+  inset: 0;
+  max-width: none;
+  overflow: visible;
+  background: none;
+}
+.loading-fallback i {
+  width: 11px;
+  height: 11px;
+  margin-bottom: 5px;
+  border-radius: 50%;
+  background: #8de4ff;
+  box-shadow:
+    0 0 0 1px #fff,
+    0 3px 0 2px #2c4564;
+  animation: ld-dot0 1.1667s ease-in-out infinite;
+}
+.loading-fallback i:nth-of-type(2) {
+  animation-name: ld-dot1;
+}
+.loading-fallback i:nth-of-type(3) {
+  animation-name: ld-dot2;
+}
 @media (prefers-reduced-motion: reduce) {
-  .loading-ind .ngui, .loading-fallback span, .loading-fallback i { animation: none !important; }
+  .loading-ind .ngui,
+  .loading-fallback span,
+  .loading-fallback i {
+    animation: none !important;
+  }
 }
 
 /* the detail screen's left side loads laid out but transparent (a hidden canvas has no size); the part it replaces,
    or a still of it, fades out once everything is in */
-.portrait.pending, .lobby.pending, .model.pending { opacity: 0; }
-.portrait.leaving, .lobby.leaving, .model.leaving, .left-freeze.leaving { opacity: 0; transition: opacity .35s ease; }
-.model.pending .model-view { transition: none; }
-.left-freeze { position: absolute; z-index: 1; pointer-events: none; }
-.left-freeze canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+.portrait.pending,
+.lobby.pending,
+.model.pending {
+  opacity: 0;
+}
+.portrait.leaving,
+.lobby.leaving,
+.model.leaving,
+.left-freeze.leaving {
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+.model.pending .model-view {
+  transition: none;
+}
+.left-freeze {
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+}
+.left-freeze canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
 
 /* the app has quit (browser mode): the Closed message alone */
-.stage.closed .topbar, .stage.closed .nav { display: none; }
+.stage.closed .topbar,
+.stage.closed .nav {
+  display: none;
+}
 
 /* the game's touch effect (cursor.js): over everything, never in the way of the pointer; the glow layer adds its light
    to what is below (screen), the shade layer under it only darkens (multiply) */
-.touch-fx { position: fixed; left: 0; top: 0; width: 100vw; height: 100vh; z-index: 2147483647; pointer-events: none; }
-.touch-fx[hidden] { display: none; }
-.touch-fx.shade { mix-blend-mode: multiply; }
-.touch-fx.glow { mix-blend-mode: screen; }
+.touch-fx {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 2147483647;
+  pointer-events: none;
+}
+.touch-fx[hidden] {
+  display: none;
+}
+.touch-fx.shade {
+  mix-blend-mode: multiply;
+}
+.touch-fx.glow {
+  mix-blend-mode: screen;
+}
 
-.log-text { margin: 0; padding: 18px; overflow: auto; white-space: pre; background: #ecf5f9; color: #2d4664;
-  font: 20px/1.45 monospace; user-select: text; -webkit-user-select: text; }
-.log-message { width: auto; max-width: 1550px; } /* the plain popup sized to the log, not to its 1000 px message width */
-.log-message .log-text { width: 1400px; height: 580px; margin: 24px 0; }
+.log-text {
+  margin: 0;
+  padding: 18px;
+  overflow: auto;
+  white-space: pre;
+  background: #ecf5f9;
+  color: #2d4664;
+  font: 20px / 1.45 monospace;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.log-message {
+  width: auto;
+  max-width: 1550px;
+} /* the plain popup sized to the log, not to its 1000 px message width */
+.log-message .log-text {
+  width: 1400px;
+  height: 580px;
+  margin: 24px 0;
+}
 
-.repair-compare { color: #2d4664; line-height: 1.4; overflow-wrap: anywhere; padding: 0 8px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; overflow: hidden; }
-.repair-previews { display: grid; gap: 16px; min-height: 0; height: 100%; }
-.repair-previews[data-kind="tall"] { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-.repair-previews[data-kind="wide"] { grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
-.repair-panel { display: flex; flex-direction: column; min-width: 0; min-height: 0; text-align: center; }
-.repair-stage { flex: 1; min-height: 0; display: flex; flex-direction: column; background: #dbe5ee; }
-.repair-player { flex: 1; min-height: 0; position: relative; overflow: hidden; cursor: grab; touch-action: none; }
-.repair-view { position: absolute; }
-.repair-canvas { position: absolute; inset: 0; }
-.repair-marks { position: absolute; inset: 0; pointer-events: none; }
-.repair-ring { position: absolute; border: 3px solid #ff00ff; border-radius: 50%; box-sizing: border-box; }
-.repair-tools { position: absolute; right: 8px; bottom: 8px; display: flex; gap: 6px; opacity: 0; transition: opacity .12s; cursor: var(--cursor-press); }
-.repair-player:hover .repair-tools, .repair-tools:focus-within { opacity: 1; }
-@media (hover: none) { .repair-tools { opacity: 1; } }
-.repair-tools .plain-line-button { margin-left: 0; min-width: 1.9em; padding: .25em .5em; font-size: .8em; }
-.repair-mark-toggle { color: #c800c8; }
-.repair-mark-toggle[aria-pressed="true"] { background: #ff00ff; color: #fff; }
-.repair-view img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; user-select: none; }
+.repair-compare {
+  color: #2d4664;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  padding: 0 8px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 32px;
+  overflow: hidden;
+}
+.repair-previews {
+  display: grid;
+  gap: 16px;
+  min-height: 0;
+  height: 100%;
+}
+.repair-previews[data-kind="tall"] {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+.repair-previews[data-kind="wide"] {
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+}
+.repair-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  text-align: center;
+}
+.repair-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #dbe5ee;
+}
+.repair-player {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+}
+.repair-view {
+  position: absolute;
+}
+.repair-canvas {
+  position: absolute;
+  inset: 0;
+}
+.repair-marks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.repair-ring {
+  position: absolute;
+  border: 3px solid #ff00ff;
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+.repair-tools {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 0.12s;
+  cursor: var(--cursor-press);
+}
+.repair-player:hover .repair-tools,
+.repair-tools:focus-within {
+  opacity: 1;
+}
+@media (hover: none) {
+  .repair-tools {
+    opacity: 1;
+  }
+}
+.repair-tools .plain-line-button {
+  margin-left: 0;
+  min-width: 1.9em;
+  padding: 0.25em 0.5em;
+  font-size: 0.8em;
+}
+.repair-mark-toggle {
+  color: #c800c8;
+}
+.repair-mark-toggle[aria-pressed="true"] {
+  background: #ff00ff;
+  color: #fff;
+}
+.repair-view img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+}
 /* the report starts level with the pictures, below their captions; its text keeps to its own column and the small
    buttons stand in a column of their own to the right of it */
-.repair-notes { min-height: 0; overflow-y: auto; padding-top: 1.4em; display: grid; grid-template-columns: minmax(0, 1fr) max-content;
-  column-gap: 24px; row-gap: 12px; align-content: start; align-items: center; }
-.repair-notes > div { grid-column: 1; }
-.repair-notes > .repair-line { display: contents; }
-.repair-line > div { grid-column: 1; }
-.repair-line > .plain-line-button { grid-column: 2; margin-left: 0; font-size: .8em; padding: .3em .9em; }
-.repair-verdict { font-size: 1.15em; }
-.repair-notes > .repair-steps { grid-column: 1 / -1; display: flex; align-items: center; gap: .6em; }
-.repair-steps > .plain-line-button { margin-left: 0; font-size: .8em; padding: .3em .9em; }
-.repair-player .spine-player { background: transparent !important; }
+.repair-notes {
+  min-height: 0;
+  overflow-y: auto;
+  padding-top: 1.4em;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  column-gap: 24px;
+  row-gap: 12px;
+  align-content: start;
+  align-items: center;
+}
+.repair-notes > div {
+  grid-column: 1;
+}
+.repair-notes > .repair-line {
+  display: contents;
+}
+.repair-line > div {
+  grid-column: 1;
+}
+.repair-line > .plain-line-button {
+  grid-column: 2;
+  margin-left: 0;
+  font-size: 0.8em;
+  padding: 0.3em 0.9em;
+}
+.repair-verdict {
+  font-size: 1.15em;
+}
+.repair-notes > .repair-steps {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+}
+.repair-steps > .plain-line-button {
+  margin-left: 0;
+  font-size: 0.8em;
+  padding: 0.3em 0.9em;
+}
+.repair-player .spine-player {
+  background: transparent !important;
+}
 
 /* Frameless desktop controls; they remain outside the fixed-aspect game stage. */
-#native-controls { position:fixed; right:0; top:0; display:flex; z-index:10000; opacity:0; transition:opacity .15s; }
-#native-controls:hover, #native-controls:focus-within { opacity:1; }
-#native-controls button { width:36px; height:24px; color:var(--navy-text); background:#eaf5fb; font:18px/1 sans-serif; display:grid; place-items:center; }
+#native-controls {
+  position: fixed;
+  right: 0;
+  top: 0;
+  display: flex;
+  z-index: 10000;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+#native-controls:hover,
+#native-controls:focus-within {
+  opacity: 1;
+}
+#native-controls button {
+  width: 36px;
+  height: 24px;
+  color: var(--navy-text);
+  background: #eaf5fb;
+  font: 18px / 1 sans-serif;
+  display: grid;
+  place-items: center;
+}
 
 /* M1 keeps the same Common_Top_Menu_Bg and NGUI children, anchored to the window. */
-.window-header { position: fixed; left: 0; top: 0; width: 100%; z-index: 1000; transition: opacity .3s ease; }
+.window-header {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100%;
+  z-index: 1000;
+  transition: opacity 0.3s ease;
+}
 /* the row sits outside the stage, above its Now Loading: a full cover (loading.js) hides it with the screen beneath */
-.now-loading-cover .window-header { opacity: 0; visibility: hidden; transition: opacity .15s ease, visibility 0s .15s; }
-.native-chrome .topbar { transform-origin: top left; transition: none; padding-left: var(--native-left, 0px);
-  font-family: var(--font); font-weight: var(--w); }
-.native-chrome .topbar .back { left: calc(var(--corner-margin, 43.978378px) - 172px + var(--native-left, 0px)); }
-.topbar .mod-switch { flex: none; }
-.topbar.mods-compact .ms-label { display: none; }
-.native-chrome .topbar.chrome-waiting > * { visibility: hidden; }
+.now-loading-cover .window-header {
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.15s ease,
+    visibility 0s 0.15s;
+}
+.native-chrome .topbar {
+  transform-origin: top left;
+  transition: none;
+  padding-left: var(--native-left, 0px);
+  font-family: var(--font);
+  font-weight: var(--w);
+}
+.native-chrome .topbar .back {
+  left: calc(var(--corner-margin, 43.978378px) - 172px + var(--native-left, 0px));
+}
+.topbar .mod-switch {
+  flex: none;
+}
+.topbar.mods-compact .ms-label {
+  display: none;
+}
+.native-chrome .topbar.chrome-waiting > * {
+  visibility: hidden;
+}
 /* chrome-motion.js moves the top bar and the bottom menu (translate); one that has left (an immersive scene's, or one
    waiting for its entry) is out of reach as well as out of view */
-.chrome-hide-top .topbar, .chrome-hide-bottom .nav { visibility: hidden; pointer-events: none; }
-.chrome-hide-top .window-header { pointer-events: none; }
+.chrome-hide-top .topbar,
+.chrome-hide-bottom .nav {
+  visibility: hidden;
+  pointer-events: none;
+}
+.chrome-hide-top .window-header {
+  pointer-events: none;
+}
 /* The optional WebView2 API routes these measured blank rectangles to native caption gestures. */
-.window-drag-region { position: absolute; app-region: drag; -webkit-app-region: drag; }
-.native-chrome button, .native-chrome [role="switch"], .native-chrome .mod-switch { app-region: no-drag; -webkit-app-region: no-drag; }
+.window-drag-region {
+  position: absolute;
+  app-region: drag;
+  -webkit-app-region: drag;
+}
+.native-chrome button,
+.native-chrome [role="switch"],
+.native-chrome .mod-switch {
+  app-region: no-drag;
+  -webkit-app-region: no-drag;
+}

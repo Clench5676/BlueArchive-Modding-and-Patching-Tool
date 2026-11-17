@@ -3,7 +3,7 @@ import * as NGUI from "./ngui.js";
 import { stageCoverBleed } from "./window-layout.js";
 import { reflowCorners } from "./corner-layout.js";
 
-export const S = 1920 / 2960;                       // stage px per NGUI unit (the game fits 2960 units to the width)
+export const S = 1920 / 2960; // stage px per NGUI unit (the game fits 2960 units to the width)
 export const TAN10 = Math.tan((10 * Math.PI) / 180); // the game's 10 degree incline
 export const clone = (o) => JSON.parse(JSON.stringify(o));
 export const $ = (id) => document.getElementById(id);
@@ -17,7 +17,12 @@ export function at(tree, path) {
   if (!n) console.warn("missing node", path);
   return n;
 }
-export const off = (tree, ...paths) => { for (const p of paths) { const n = at(tree, p); if (n) n.active = false; } };
+export const off = (tree, ...paths) => {
+  for (const p of paths) {
+    const n = at(tree, p);
+    if (n) n.active = false;
+  }
+};
 export function text(tree, path, value, extra = {}) {
   const n = at(tree, path);
   const w = n?.widgets.find((x) => "text" in x);
@@ -37,13 +42,21 @@ export function wrapPath(path, fsMax, fsMin, maxW, maxLines = 3) {
       if (glyphsOf(piece.trimEnd(), fs) <= maxW) return [piece];
       const out = [];
       let cur = "";
-      for (const ch of piece) { if (cur && glyphsOf(cur + ch, fs) > maxW) { out.push(cur); cur = ch; } else cur += ch; }
+      for (const ch of piece) {
+        if (cur && glyphsOf(cur + ch, fs) > maxW) {
+          out.push(cur);
+          cur = ch;
+        } else cur += ch;
+      }
       return cur ? [...out, cur] : out;
     });
     const lines = [];
     let cur = "";
     for (const part of parts) {
-      if (cur && glyphsOf((cur + part).trimEnd(), fs) > maxW) { lines.push(cur.trimEnd()); cur = part; } else cur += part;
+      if (cur && glyphsOf((cur + part).trimEnd(), fs) > maxW) {
+        lines.push(cur.trimEnd());
+        cur = part;
+      } else cur += part;
     }
     if (cur) lines.push(cur.trimEnd());
     best = { text: lines.join("\n"), fs, lines: lines.length };
@@ -65,33 +78,56 @@ export function hitButton(host, [l, t, w, h], fn, name, z = 50) {
 
 // recruitable marker: the game's recruitment (gacha) icon from the lobby
 export const RECRUIT = { sprite: "Common_Icon_Gacha2", atlas: "Common", ratio: 143 / 126 };
-export const recruitIcon = (pos, h, depth = 15) => NGUI.node("Recruit", pos, [NGUI.sprite(RECRUIT.sprite, h / RECRUIT.ratio, h, { atlas: RECRUIT.atlas, type: 0, depth })]);
+export const recruitIcon = (pos, h, depth = 15) =>
+  NGUI.node("Recruit", pos, [
+    NGUI.sprite(RECRUIT.sprite, h / RECRUIT.ratio, h, { atlas: RECRUIT.atlas, type: 0, depth }),
+  ]);
 
 // a label, optionally led by the recruit icon, centred as one group around x = 0; shrinks and wraps to fit
 export function markedLabel(caption, { fs = 40, fsMin = 26, color, maxW, mark = false, depth = 14, maxLines = 2 }) {
-  const iconH = fs * 1.35, iconW = mark ? iconH / RECRUIT.ratio + 6 : 0;
+  const iconH = fs * 1.35,
+    iconW = mark ? iconH / RECRUIT.ratio + 6 : 0;
   const f = NGUI.fitText(caption, fs, fsMin, maxW - iconW, maxLines);
-  const tw = glyphsOf(f.text, f.fs), adv = Math.max(...f.text.split("\n").map((l) => advanceOf(l, f.fs)));
+  const tw = glyphsOf(f.text, f.fs),
+    adv = Math.max(...f.text.split("\n").map((l) => advanceOf(l, f.fs)));
   const left = -(iconW + tw) / 2;
-  const textNode = NGUI.node("Text", [left + iconW + adv / 2, 0], [NGUI.label(f.text, f.fs, color, adv + 2, f.fs * 1.2 * f.lines, { depth })]);
-  return { nodes: mark ? [recruitIcon([left + iconW / 2 - 3, 0], iconH), textNode] : [textNode], fs: f.fs, lines: f.lines };
+  const textNode = NGUI.node(
+    "Text",
+    [left + iconW + adv / 2, 0],
+    [NGUI.label(f.text, f.fs, color, adv + 2, f.fs * 1.2 * f.lines, { depth })],
+  );
+  return {
+    nodes: mark ? [recruitIcon([left + iconW / 2 - 3, 0], iconH), textNode] : [textNode],
+    fs: f.fs,
+    lines: f.lines,
+  };
 }
 
 // the game's red "new" dot
-export const DOT = (pos, size = 34) => NGUI.node("Dot", pos, [NGUI.sprite("Common_Icon_Reddot2", size, size * 31 / 34, { type: 0, depth: 45 })]);
+export const DOT = (pos, size = 34) =>
+  NGUI.node("Dot", pos, [NGUI.sprite("Common_Icon_Reddot2", size, (size * 31) / 34, { type: 0, depth: 45 })]);
 
 export function fitStage() {
-  const stage = document.getElementById("stage"), header = globalThis.bamtHeaderGeometry;
+  const stage = document.getElementById("stage"),
+    header = globalThis.bamtHeaderGeometry;
   const scale = header?.contentScale ?? Math.min(innerWidth / 1920, innerHeight / 1080);
   stage.style.setProperty("--scale", scale);
   stage.style.visibility = "visible"; // hidden in app.css until the first fit: no unscaled stage on the black start screen
   stage.style.setProperty("--cover-bleed", `${stageCoverBleed(scale, globalThis.devicePixelRatio || 1)}px`);
   if (header) stage.style.top = `calc(50% + ${header.extra / 2}px)`;
   else stage.style.removeProperty("top");
-  const bar = document.querySelector?.('.topbar');
+  const bar = document.querySelector?.(".topbar");
   if (bar && !header) {
-    const box = stage.getBoundingClientRect(), scale = box.width / 1920;
-    Object.assign(bar.style, { left: `${-box.left / scale}px`, top: `${-box.top / scale}px`, width: `${innerWidth / scale}px` });
-  } else if (bar) { bar.style.removeProperty('left'); bar.style.removeProperty('top'); }
+    const box = stage.getBoundingClientRect(),
+      scale = box.width / 1920;
+    Object.assign(bar.style, {
+      left: `${-box.left / scale}px`,
+      top: `${-box.top / scale}px`,
+      width: `${innerWidth / scale}px`,
+    });
+  } else if (bar) {
+    bar.style.removeProperty("left");
+    bar.style.removeProperty("top");
+  }
   reflowCorners();
 }

@@ -1,32 +1,120 @@
 /* Built-in fallback shared by the no-game screen, loading cover and startup recovery. */
 /* black like the game's loading screen: from the first painted frame nothing but black shows until the indicator or a popup */
-.loading.neutral .loading-back { background: #000 !important; }
-.loading.neutral .loading-ind { background: none; }
-.loading.neutral { font-family: system-ui, sans-serif; }
-.loading.neutral .loading-progress { color: #444; background: #f4f4f4; border-radius: 0; }
-.loading-plain { position: absolute; right: 84px; bottom: 44px; padding: 10px 16px;
-  color: #444; background: #f4f4f4; font: 24px/1.4 system-ui, sans-serif; }
+.loading.neutral .loading-back {
+  background: #000 !important;
+}
+.loading.neutral .loading-ind {
+  background: none;
+}
+.loading.neutral {
+  font-family: system-ui, sans-serif;
+}
+.loading.neutral .loading-progress {
+  color: #444;
+  background: #f4f4f4;
+  border-radius: 0;
+}
+.loading-plain {
+  position: absolute;
+  right: 84px;
+  bottom: 44px;
+  padding: 10px 16px;
+  color: #444;
+  background: #f4f4f4;
+  font:
+    24px / 1.4 system-ui,
+    sans-serif;
+}
 /* nothing painted until its text is in: the light box must not show empty on the black start cover */
-.loading-plain:has(> span:empty) { visibility: hidden; }
-.loading.neutral .loading-progress { color: #444; background: #f4f4f4; font-family: system-ui, sans-serif; }
+.loading-plain:has(> span:empty) {
+  visibility: hidden;
+}
+.loading.neutral .loading-progress {
+  color: #444;
+  background: #f4f4f4;
+  font-family: system-ui, sans-serif;
+}
 
 /* message screen */
-.screen.message { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; }
-.screen.message[hidden] { display: none; }
-.screen.message h2, #bamt-recovery h1 { font: var(--w) 56px/1.2 var(--font); color: #2d4664; }
-.screen.message p, #bamt-recovery p { font: var(--w) 32px/1.4 var(--font); color: #5b6f86; }
+.screen.message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+}
+.screen.message[hidden] {
+  display: none;
+}
+.screen.message h2,
+#bamt-recovery h1 {
+  font: var(--w) 56px / 1.2 var(--font);
+  color: #2d4664;
+}
+.screen.message p,
+#bamt-recovery p {
+  font: var(--w) 32px / 1.4 var(--font);
+  color: #5b6f86;
+}
 /* a hint of several lines (the plain Check Game Files consent): its own lines, centred, inside the stage */
-.screen.message p { max-width: 1500px; white-space: pre-line; text-align: center; }
-.message-actions { display: flex; gap: 28px; margin-top: 18px; }
+.screen.message p {
+  max-width: 1500px;
+  white-space: pre-line;
+  text-align: center;
+}
+.message-actions {
+  display: flex;
+  gap: 28px;
+  margin-top: 18px;
+}
 /* the fallback button, one look with app.css's .plain-line-button: #8de4ff with #314665 ink on the game's Raius10px corner (6.49 px at
    the stage's scale), flat: no skew and no shadow */
-.message-button, #bamt-recovery button { min-width: 240px; padding: 22px 40px; border-radius: 6.49px; background: #8de4ff; color: #314665; font: var(--w) 34px/1 var(--font); }
+.message-button,
+#bamt-recovery button {
+  min-width: 240px;
+  padding: 22px 40px;
+  border-radius: 6.49px;
+  background: #8de4ff;
+  color: #314665;
+  font: var(--w) 34px / 1 var(--font);
+}
 
-#bamt-recovery { --w: 500; --font: system-ui, sans-serif; position: fixed; inset: 0; z-index: 2147483647;
-  background: #f4f4f4; color: #444; font: 24px/1.4 system-ui, sans-serif; overflow: auto; padding: 8vh 8vw;
-  box-sizing: border-box; text-align: center; user-select: text; }
-#bamt-recovery > * { box-sizing: border-box; margin: 0 0 22px; }
-#bamt-recovery button { border: 0; cursor: pointer; margin: 18px 14px; }
-#bamt-recovery button:disabled { opacity: .5; }
-#bamt-recovery p, #bamt-recovery pre { white-space: pre-wrap; overflow-wrap: anywhere; }
-#bamt-recovery pre { max-height: 50vh; overflow: auto; text-align: left; }
+#bamt-recovery {
+  --w: 500;
+  --font: system-ui, sans-serif;
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  background: #f4f4f4;
+  color: #444;
+  font:
+    24px / 1.4 system-ui,
+    sans-serif;
+  overflow: auto;
+  padding: 8vh 8vw;
+  box-sizing: border-box;
+  text-align: center;
+  user-select: text;
+}
+#bamt-recovery > * {
+  box-sizing: border-box;
+  margin: 0 0 22px;
+}
+#bamt-recovery button {
+  border: 0;
+  cursor: pointer;
+  margin: 18px 14px;
+}
+#bamt-recovery button:disabled {
+  opacity: 0.5;
+}
+#bamt-recovery p,
+#bamt-recovery pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+#bamt-recovery pre {
+  max-height: 50vh;
+  overflow: auto;
+  text-align: left;
+}

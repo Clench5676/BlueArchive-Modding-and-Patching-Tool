@@ -1,4 +1,4 @@
-import {segmentTree,segmentOrigin,segmentDensity,SEGMENT_SCALE} from './mod-switch-skin.js';
+import { segmentTree, segmentOrigin, segmentDensity, SEGMENT_SCALE } from "./mod-switch-skin.js";
 // The Enable Mods switch (docs/webui/mods-switch.md, "Enable Mods switch"): one switch for every game folder, in the top bar
 // (#mod-switch) and in Settings' Mods tab. A click on the current state does nothing; a click on the other state asks
 // first, and only the confirmation submits mods.toggle; the first toggle from any place explains it once instead (its
@@ -39,7 +39,8 @@ export function sizeText(bytes) {
 // an error's string; the free-space refusal names sizes
 export function errorText(code, params = {}) {
   const p = { ...(params || {}) };
-  if (code === "not_enough_space") for (const k of ["need", "free"]) if (typeof p[k] === "number") p[k] = sizeText(p[k]);
+  if (code === "not_enough_space")
+    for (const k of ["need", "free"]) if (typeof p[k] === "number") p[k] = sizeText(p[k]);
   return T(`error.${code || "internal"}`, p);
 }
 
@@ -110,7 +111,12 @@ export function explanation(state) {
 // the confirmation before a toggle, on the game's neutral notice: {title, lines, ok, cancel}; only ok toggles
 export function confirmation(state) {
   const on = state?.enabled !== false;
-  return { title: T("quit.title"), lines: [T(on ? "mods.offAsk" : "mods.onAsk")], ok: T(on ? "mods.offTitle" : "mods.onTitle"), cancel: T("popup.cancel") };
+  return {
+    title: T("quit.title"),
+    lines: [T(on ? "mods.offAsk" : "mods.onAsk")],
+    ok: T(on ? "mods.offTitle" : "mods.onTitle"),
+    cancel: T("popup.cancel"),
+  };
 }
 
 // helpLines(state): the "?" help's lines, [{text, button: {id, label}}]. Buttons: retry (pending and left entries), details
@@ -119,10 +125,13 @@ export function helpLines(state, { sep = listSep() } = {}) {
   const s = state || {};
   const lines = basics().map((text) => ({ text }));
   const installs = s.installs || [];
-  if (installs.length > 1) lines.push({ text: T("mods.helpFolders", { folders: installs.map((i) => i.label).join(sep) }) });
+  if (installs.length > 1)
+    lines.push({ text: T("mods.helpFolders", { folders: installs.map((i) => i.label).join(sep) }) });
   const notSwitched = (s.pending || 0) + (s.left || 0);
-  if (notSwitched > 0) lines.push({ text: T("mods.notSwitched", { n: notSwitched }), button: { id: "retry", label: T("mods.retry") } });
-  if (s.stuck > 0) lines.push({ text: T("mods.stuck", { n: s.stuck }), button: { id: "details", label: T("mods.details") } });
+  if (notSwitched > 0)
+    lines.push({ text: T("mods.notSwitched", { n: notSwitched }), button: { id: "retry", label: T("mods.retry") } });
+  if (s.stuck > 0)
+    lines.push({ text: T("mods.stuck", { n: s.stuck }), button: { id: "details", label: T("mods.details") } });
   if (s.held > 0) lines.push({ text: T("mods.held", { n: s.held }), button: { id: "held", label: T("mods.details") } });
   if (s.sourceMissing > 0) lines.push({ text: T("mods.sourceMissing", { n: s.sourceMissing }) });
   return lines;
@@ -134,7 +143,12 @@ export function entryLabel(entry, nameOf = (e) => e?.variant || e?.core || "", s
     const name = entry.files?.[0]?.file?.split(/[\\/]/).pop() || nameOf(entry);
     return `${name}${sep}${T("settings.mods.other")}`;
   }
-  const kind = entry?.kind === "model" ? "tab.model" : entry?.kind === "lobby" || (entry?.core && !/_spr$/i.test(entry.core)) ? "tab.lobby" : "tab.portrait";
+  const kind =
+    entry?.kind === "model"
+      ? "tab.model"
+      : entry?.kind === "lobby" || (entry?.core && !/_spr$/i.test(entry.core))
+        ? "tab.lobby"
+        : "tab.portrait";
   return `${nameOf(entry)}${sep}${T(kind)}`;
 }
 
@@ -145,8 +159,18 @@ const MAX_LISTED = 6; // failed entries a result names; the rest are counted
 export function resultSummary(result, nameOf) {
   const list = (k) => result?.[k] || [];
   const title = T(result?.enabled === false ? "mods.offState" : "mods.onState");
-  const kept = list("done").some((item) => item.kept_current), incomplete = list("done").some((item) => item.incomplete);
-  if (!list("adopted").length && !list("failed").length && !list("stuck").length && !list("left").length && !list("held").length && !kept && !incomplete) return null;
+  const kept = list("done").some((item) => item.kept_current),
+    incomplete = list("done").some((item) => item.incomplete);
+  if (
+    !list("adopted").length &&
+    !list("failed").length &&
+    !list("stuck").length &&
+    !list("left").length &&
+    !list("held").length &&
+    !kept &&
+    !incomplete
+  )
+    return null;
   const lines = [];
   if (kept) lines.push(T("mods.keptCurrent"));
   if (incomplete) lines.push(T("mods.incomplete"));
@@ -183,13 +207,20 @@ export function startDue(name, { info = {}, state = null, entries = [] } = {}) {
   const scanned = state?.scan === true && !PROMPT_BLOCKERS.includes(state?.reason);
   const open = (e) => !e.dismissed;
   switch (name) {
-    case "consent": return info.consent !== true;
-    case "spine": return info.spineConsent !== true;
-    case "scan": return !!state && state.scan == null && (state.installs || []).length > 0;
-    case "update": return !!info.compiled && info.startupUpdate !== false;
-    case "drift": return scanned && state.enabled !== false && entries.some((e) => open(e) && e.state === "reset");
-    case "untracked": return scanned && entries.some((e) => open(e) && ["untracked", "changed"].includes(e.state));
-    default: return false;
+    case "consent":
+      return info.consent !== true;
+    case "spine":
+      return info.spineConsent !== true;
+    case "scan":
+      return !!state && state.scan == null && (state.installs || []).length > 0;
+    case "update":
+      return !!info.compiled && info.startupUpdate !== false;
+    case "drift":
+      return scanned && state.enabled !== false && entries.some((e) => open(e) && e.state === "reset");
+    case "untracked":
+      return scanned && entries.some((e) => open(e) && ["untracked", "changed"].includes(e.state));
+    default:
+      return false;
   }
 }
 
@@ -201,7 +232,8 @@ export const untrackedButtons = (state) => ["add", ...(state?.enabled === false 
 export function driftChoice(button, entries, selected) {
   const keys = new Set(selected);
   const key = (e) => `${e.install}|${e.core}`;
-  if (button === "apply") return { restore: entries.filter((e) => keys.has(key(e))), dismiss: entries.filter((e) => !keys.has(key(e))) };
+  if (button === "apply")
+    return { restore: entries.filter((e) => keys.has(key(e))), dismiss: entries.filter((e) => !keys.has(key(e))) };
   return { restore: [], dismiss: [...entries] };
 }
 
@@ -213,7 +245,8 @@ let inFlight = false; // a toggle (or Retry) this page started runs
 let names = async () => (e) => e?.variant || e?.core || ""; // main.js gives the variants' names (the roster's data)
 let refreshPage = async () => {}; // main.js resolves this once the visible page has refreshed and drawn
 const REFRESH_CAP = 15000;
-let host = null, els = null;
+let host = null,
+  els = null;
 const listeners = new Set();
 let lastSignature = "";
 
@@ -222,7 +255,10 @@ export function relabel() {
   if (!els) return;
   els.label.textContent = T("mods.switch");
   els.help.setAttribute("aria-label", T("mods.guide"));
-  for (const [selector, key] of [[".ms-on b", "settings.post.on"], [".ms-off b", "settings.post.off"]]) {
+  for (const [selector, key] of [
+    [".ms-on b", "settings.post.on"],
+    [".ms-off b", "settings.post.off"],
+  ]) {
     const text = els.toggle.querySelector(selector);
     if (text) text.textContent = T(key);
   }
@@ -230,12 +266,35 @@ export function relabel() {
   return render();
 }
 // fn(state) when what Settings' Mods tab shows changed (not on every progress step)
-export function onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); }
+export function onChange(fn) {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
 
 // the parts of mods.state the switch and Settings draw
-const signature = (s) => JSON.stringify(s && [s.enabled, s.available, s.reason, s.busy, s.queued > 0, s.scan,
-  s.explained, s.pending, s.stuck, s.left, s.held, s.sourceMissing, s.drift, s.untracked,
-  s.damaged, s.tray, s.current, (s.installs || []).map((i) => [i.key, i.label, i.named])]);
+const signature = (s) =>
+  JSON.stringify(
+    s && [
+      s.enabled,
+      s.available,
+      s.reason,
+      s.busy,
+      s.queued > 0,
+      s.scan,
+      s.explained,
+      s.pending,
+      s.stuck,
+      s.left,
+      s.held,
+      s.sourceMissing,
+      s.drift,
+      s.untracked,
+      s.damaged,
+      s.tray,
+      s.current,
+      (s.installs || []).map((i) => [i.key, i.label, i.named]),
+    ],
+  );
 
 function update(next) {
   if (!next) return;
@@ -244,7 +303,13 @@ function update(next) {
   const sig = signature(next);
   if (sig === lastSignature) return;
   lastSignature = sig;
-  for (const fn of listeners) { try { fn(next); } catch (err) { console.error(err); } }
+  for (const fn of listeners) {
+    try {
+      fn(next);
+    } catch (err) {
+      console.error(err);
+    }
+  }
 }
 
 export async function refresh() {
@@ -269,14 +334,20 @@ let trayHeard = false;
 export function listenTray() {
   if (trayHeard) return;
   trayHeard = true;
-  on("tray.open", (data) => { trayOpen(data).catch((err) => console.error("tray", err)); });
-  on("tray.toggle", (data) => { trayToggle(data).catch((err) => console.error("tray", err)); });
+  on("tray.open", (data) => {
+    trayOpen(data).catch((err) => console.error("tray", err));
+  });
+  on("tray.toggle", (data) => {
+    trayToggle(data).catch((err) => console.error("tray", err));
+  });
   if (!state) refresh();
 }
 
 // the drift prompt (prompts.js), which the tray's Back to Official opens
 let driftPrompt = null;
-export function setDriftPrompt(fn) { driftPrompt = fn; }
+export function setDriftPrompt(fn) {
+  driftPrompt = fn;
+}
 
 // the top bar: the switch (ON and OFF, the game's filter segments), its label, the square "?"
 function build() {
@@ -308,7 +379,7 @@ function build() {
   help.addEventListener("click", () => openHelp());
   host.append(toggle, label, help);
   els = { toggle, dot, label, help };
-  globalThis.addEventListener?.("resize",render);
+  globalThis.addEventListener?.("resize", render);
   fitLabel(label);
 }
 
@@ -320,10 +391,11 @@ function fitLabel(el, max = 240) {
   }
 }
 
-let helpLayout,skinRevision=0;
+let helpLayout,
+  skinRevision = 0;
 async function render() {
   if (!host || !els) return;
-  const revision=++skinRevision;
+  const revision = ++skinRevision;
   const v = view(state);
   host.hidden = v.hidden;
   const { toggle, dot, help } = els;
@@ -332,31 +404,45 @@ async function render() {
   toggle.classList.toggle("unavailable", v.unavailable);
   toggle.setAttribute("aria-checked", String(v.on));
   toggle.setAttribute("aria-disabled", String(v.busy || v.unavailable));
-  if (v.unavailable) toggle.setAttribute("aria-description", reasonText(state)); else toggle.removeAttribute("aria-description");
+  if (v.unavailable) toggle.setAttribute("aria-description", reasonText(state));
+  else toggle.removeAttribute("aria-description");
   dot.hidden = !v.dot;
   if (v.hidden) return;
   try {
-    const segments=[...toggle.children].filter(child=>child.className?.includes('ms-seg'));
-    await Promise.all(segments.map(async(segment,index)=>{
-      const pressed=index===0?v.on:!v.on,width=segment.offsetWidth||110;
-      const skin=document.createElement('span');skin.className='ms-skin';
-      const stageScale=(segment.getBoundingClientRect?.().width||width)/width;
-      const rasterDensity=segmentDensity(globalThis.devicePixelRatio||1,stageScale);
-      await NGUI.render(segmentTree(width,pressed,index===1),skin,{scale:SEGMENT_SCALE,origin:segmentOrigin(width,pressed),rasterDensity});
-      if(revision!==skinRevision)return;
-      segment.querySelector?.('.ms-skin')?.remove();segment.appendChild(skin);
-    }));
-    if(revision!==skinRevision)return;
+    const segments = [...toggle.children].filter((child) => child.className?.includes("ms-seg"));
+    await Promise.all(
+      segments.map(async (segment, index) => {
+        const pressed = index === 0 ? v.on : !v.on,
+          width = segment.offsetWidth || 110;
+        const skin = document.createElement("span");
+        skin.className = "ms-skin";
+        const stageScale = (segment.getBoundingClientRect?.().width || width) / width;
+        const rasterDensity = segmentDensity(globalThis.devicePixelRatio || 1, stageScale);
+        await NGUI.render(segmentTree(width, pressed, index === 1), skin, {
+          scale: SEGMENT_SCALE,
+          origin: segmentOrigin(width, pressed),
+          rasterDensity,
+        });
+        if (revision !== skinRevision) return;
+        segment.querySelector?.(".ms-skin")?.remove();
+        segment.appendChild(skin);
+      }),
+    );
+    if (revision !== skinRevision) return;
     const collection = await (helpLayout ||= NGUI.layout("UICharacterCollection"));
     const information = NGUI.find(collection, "SeletControl/Top/BG_W/Bg/Label_Title/Btn_Information");
     if (information && !help.dataset.skinned) {
-      const tree = structuredClone(information); tree.pos = [0, 0];
+      const tree = structuredClone(information);
+      tree.pos = [0, 0];
       const skin = document.createElement("div");
       await NGUI.render(tree, skin, { scale: 0.55, origin: [20, 20] });
-      help.replaceChildren(...skin.childNodes); help.dataset.skinned = "true";
+      help.replaceChildren(...skin.childNodes);
+      help.dataset.skinned = "true";
     }
-  } catch (err) { helpLayout = null; console.warn("mod switch help layout", err); }
-
+  } catch (err) {
+    helpLayout = null;
+    console.warn("mod switch help layout", err);
+  }
 }
 
 // --- clicks ---
@@ -366,16 +452,26 @@ async function render() {
 export async function click(from = "top", want = null) {
   const s = state;
   switch (clickAction(s, explainedHere, want)) {
-    case "busy": notify(T("error.busy"), { kind: "error", error: { code: "busy" } }); return;
-    case "queued": classicModal({ queued: true }); return;
-    case "reason": notify(reasonText(s), { kind: "error", error: { code: s.reason, params: s.reasonParams } }); return;
+    case "busy":
+      notify(T("error.busy"), { kind: "error", error: { code: "busy" } });
+      return;
+    case "queued":
+      classicModal({ queued: true });
+      return;
+    case "reason":
+      notify(reasonText(s), { kind: "error", error: { code: s.reason, params: s.reasonParams } });
+      return;
     case "explain":
       // the toggle the explanation named; switched elsewhere meanwhile, the job refuses it (state_changed), and a
       // classic window opened meanwhile gives the classic modal
       if (await explain(s)) run(toggleParams(s));
       return;
-    case "classic": if (await confirm(s)) classicModal({ method: "mods.toggle", params: toggleParams(s) }); return;
-    case "confirm": if (await confirm(s)) run(toggleParams(s)); return;
+    case "classic":
+      if (await confirm(s)) classicModal({ method: "mods.toggle", params: toggleParams(s) });
+      return;
+    case "confirm":
+      if (await confirm(s)) run(toggleParams(s));
+      return;
     default:
   }
 }
@@ -383,7 +479,15 @@ export async function click(from = "top", want = null) {
 // the first toggle: the explanation once; closing it in any way counts as shown, only its button toggles
 async function explain(s) {
   const e = explanation(s);
-  const r = await Popup.message({ title: e.title, lines: e.lines, ok: e.ok, cancel: T("popup.cancel"), width: 2098, fitTogether: [0, 1], plain: true });
+  const r = await Popup.message({
+    title: e.title,
+    lines: e.lines,
+    ok: e.ok,
+    cancel: T("popup.cancel"),
+    width: 2098,
+    fitTogether: [0, 1],
+    plain: true,
+  });
   explainedHere = true;
   rpc("mods.explained").catch(() => {});
   return r.button === "ok";
@@ -399,21 +503,35 @@ async function confirm(s) {
 
 // a toggle or Retry: submitted at once; the indicator and the progress while it runs; the result at its end
 async function run(params) {
-  if (inFlight) { notify(T("error.busy"), { kind: "error", error: { code: "busy" } }); return; }
+  if (inFlight) {
+    notify(T("error.busy"), { kind: "error", error: { code: "busy" } });
+    return;
+  }
   inFlight = true;
   let refusal = null;
   try {
-    const result = await Loading.hold(async (update) => {
-      const id = await rpc("mods.toggle", params, { timeout: 30000 });
-      const result = await toggleJob(id, params, update);
-      // Flush the delayed library.changed refresh before input resumes or a result popup can defer it.
-      let timer;
-      try {
-        await Promise.race([Promise.resolve().then(refreshPage), new Promise((resolve) => { timer = setTimeout(resolve, REFRESH_CAP); })]);
-      } catch (err) { console.error("refresh after a switch", err); }
-      finally { clearTimeout(timer); }
-      return result;
-    }, { all: true });
+    const result = await Loading.hold(
+      async (update) => {
+        const id = await rpc("mods.toggle", params, { timeout: 30000 });
+        const result = await toggleJob(id, params, update);
+        // Flush the delayed library.changed refresh before input resumes or a result popup can defer it.
+        let timer;
+        try {
+          await Promise.race([
+            Promise.resolve().then(refreshPage),
+            new Promise((resolve) => {
+              timer = setTimeout(resolve, REFRESH_CAP);
+            }),
+          ]);
+        } catch (err) {
+          console.error("refresh after a switch", err);
+        } finally {
+          clearTimeout(timer);
+        }
+        return result;
+      },
+      { all: true },
+    );
     await finished(result);
   } catch (err) {
     refusal = err;
@@ -482,9 +600,18 @@ async function finished(result) {
   const nameOf = await names().catch(() => undefined);
   const summary = resultSummary(result, nameOf);
   if (!summary) return;
-  await Popup.message({ title: summary.title, lines: summary.lines, ok: T("picker.ok"),
-    error: (result?.failed?.length || result?.left?.length || result?.stuck?.length)
-      ? { code: result.failed?.[0]?.code || "internal", params: { failed: result.failed, left: result.left, stuck: result.stuck } } : null });
+  await Popup.message({
+    title: summary.title,
+    lines: summary.lines,
+    ok: T("picker.ok"),
+    error:
+      result?.failed?.length || result?.left?.length || result?.stuck?.length
+        ? {
+            code: result.failed?.[0]?.code || "internal",
+            params: { failed: result.failed, left: result.left, stuck: result.stuck },
+          }
+        : null,
+  });
 }
 
 // a refusal (at submit or from the job): the classic modal for the classic window, the untested build's confirmation
@@ -492,8 +619,14 @@ async function finished(result) {
 // redraws from mods.state
 export async function refused(err, method = null, params = null, retry = null) {
   const code = err?.code || "internal";
-  if (code === "untested_build" && retry) { if (await confirmUntested(err)) await retry(); return; }
-  if (code === "classic_open" && QUEUEABLE.includes(method)) { classicModal({ method, params }); return; }
+  if (code === "untested_build" && retry) {
+    if (await confirmUntested(err)) await retry();
+    return;
+  }
+  if (code === "classic_open" && QUEUEABLE.includes(method)) {
+    classicModal({ method, params });
+    return;
+  }
   notify(errorText(code, err?.params || { error: String(err) }), { kind: "error", error: err });
   if (code === "state_changed") refresh();
 }
@@ -508,16 +641,23 @@ export function untestedLines(params, nameOf = (e) => e?.variant || e?.core || "
   const entries = params?.entries || [];
   const listed = entries.slice(0, MAX_LISTED).map((e) => entryLabel(e, nameOf, " - "));
   if (entries.length > MAX_LISTED) listed.push(`+${entries.length - MAX_LISTED}`);
-  return [{ text: T("mods.untested.affected", { n: entries.length }) },
-    ...listed.map((text) => ({ text, marker: "\u2022", markerGap: 44, indent: 52 }))];
+  return [
+    { text: T("mods.untested.affected", { n: entries.length }) },
+    ...listed.map((text) => ({ text, marker: "\u2022", markerGap: 44, indent: 52 })),
+  ];
 }
 
 // confirmUntested(err): true once the user confirmed the writes an untested_build refusal named
 export async function confirmUntested(err) {
   try {
     const nameOf = await names().catch(() => undefined);
-    const answer = await Popup.message({ title: T("mods.untested.title"), lines: untestedLines(err?.params, nameOf),
-      ok: T("mods.untested.apply"), cancel: T("popup.cancel"), plain: true });
+    const answer = await Popup.message({
+      title: T("mods.untested.title"),
+      lines: untestedLines(err?.params, nameOf),
+      ok: T("mods.untested.apply"),
+      cancel: T("popup.cancel"),
+      plain: true,
+    });
     if (answer?.button !== "ok") return false;
     await rpc("mods.confirmUntested", { confirm: err?.params?.confirm || {} });
     return true;
@@ -540,8 +680,10 @@ export async function untestedRetry(err, retry) {
 // queued, the queue is emptied) ---
 export async function classicModal({ method = null, params = null, queued = false } = {}) {
   const r = await Popup.message({
-    title: T("classic.opened"), lines: [T("error.classic_open")],
-    cancel: T("classic.front"), ok: T("picker.ok"),
+    title: T("classic.opened"),
+    lines: [T("error.classic_open")],
+    cancel: T("classic.front"),
+    ok: T("picker.ok"),
     check: { label: T("classic.autoApply"), checked: queued },
   });
   if (r.button === "cancel") rpc("classic.front").catch(() => {});
@@ -562,7 +704,8 @@ export async function classicModal({ method = null, params = null, queued = fals
 async function queueDone({ submitted = [], dropped = [] } = {}) {
   for (const item of submitted) {
     if (!item.job) continue;
-    waitJob(item.job).then((result) => (item.method === "mods.toggle" ? finished(result) : null))
+    waitJob(item.job)
+      .then((result) => (item.method === "mods.toggle" ? finished(result) : null))
       .catch((err) => notify(errorText(err.code, err.params), { kind: "error", error: err }));
   }
   if (!dropped.length) return;
@@ -573,7 +716,8 @@ async function queueDone({ submitted = [], dropped = [] } = {}) {
     return entryLabel({ variant: d.params?.variant, kind: d.params?.kind }, nameOf);
   };
   await Popup.message({
-    title: T("classic.notApplied"), error: { code: dropped[0]?.error?.code || "internal", params: { dropped } },
+    title: T("classic.notApplied"),
+    error: { code: dropped[0]?.error?.code || "internal", params: { dropped } },
     lines: dropped.map((d) => `${what(d)} - ${errorText(d.error?.code, d.error?.params)}`),
     ok: T("picker.ok"),
   });
@@ -586,7 +730,10 @@ export async function openHelp() {
   const s = state || (await refresh());
   if (!s) return;
   const act = {
-    retry: ({ close }) => { close(null); run(retryParams(state || s)); },
+    retry: ({ close }) => {
+      close(null);
+      run(retryParams(state || s));
+    },
     details: () => overwritten(),
     // a Go To closes the help, then opens the mod's student page
     held: async ({ close }) => {
@@ -598,7 +745,9 @@ export async function openHelp() {
       else await Impact.repair(answer.fix);
     },
   };
-  const lines = helpLines(state || s).map((l) => (l.button ? { text: l.text, button: { label: l.button.label, fn: act[l.button.id] } } : l.text));
+  const lines = helpLines(state || s).map((l) =>
+    l.button ? { text: l.text, button: { label: l.button.label, fn: act[l.button.id] } } : l.text,
+  );
   await Popup.message({ title: T("mods.switch"), lines, width: 2098, fitTogether: [0, 1], plain: true });
 }
 
@@ -617,27 +766,46 @@ export async function clearBuilt() {
 // the scan consent popup, over Settings' Check Game Files; the consent is given
 // there, never by the button that opened it
 export function askScan() {
-  return Consent.scan($("consent"), { over: true }).then((granted) => { refresh(); return granted; });
+  return Consent.scan($("consent"), { over: true }).then((granted) => {
+    refresh();
+    return granted;
+  });
 }
 
 // the Overwritten message for the entries left as they are: their names (known from the last scan with the scan
 // consent) and the repair lines of their installs; no button starts a repair
 async function overwritten() {
   const s = state || {};
-  const entries = s.scan === true ? (await rpc("mods.entries").catch(() => [])).filter((e) => e.state === "pending" && e.overwritten) : [];
+  const entries =
+    s.scan === true
+      ? (await rpc("mods.entries").catch(() => [])).filter((e) => e.state === "pending" && e.overwritten)
+      : [];
   const nameOf = await names().catch(() => undefined);
-  const installs = entries.length ? (s.installs || []).filter((i) => entries.some((e) => e.install === i.key)) : s.installs || [];
+  const installs = entries.length
+    ? (s.installs || []).filter((i) => entries.some((e) => e.install === i.key))
+    : s.installs || [];
   const listed = entries.slice(0, MAX_LISTED).map((e) => entryLabel(e, nameOf));
   if (entries.length > MAX_LISTED) listed.push(`+${entries.length - MAX_LISTED}`);
-  await Popup.message({ title: T("mods.overwrittenTitle"), lines: overwrittenLines({ names: listed, installs }, T), ok: T("picker.ok") });
+  await Popup.message({
+    title: T("mods.overwrittenTitle"),
+    lines: overwrittenLines({ names: listed, installs }, T),
+    ok: T("picker.ok"),
+  });
 }
 
 // Settings' Game Files Check: a scan with the dismissed entries listed again; resolves once it is in (or after 60 s)
 export async function check() {
   const done = new Promise((resolve) => {
     let off = null;
-    const timer = setTimeout(() => { off?.(); resolve(null); }, 60000);
-    off = on("library.scanned", (data) => { clearTimeout(timer); off(); resolve(data); });
+    const timer = setTimeout(() => {
+      off?.();
+      resolve(null);
+    }, 60000);
+    off = on("library.scanned", (data) => {
+      clearTimeout(timer);
+      off();
+      resolve(data);
+    });
   });
   try {
     await rpc("mods.scan", { dismissed: true });

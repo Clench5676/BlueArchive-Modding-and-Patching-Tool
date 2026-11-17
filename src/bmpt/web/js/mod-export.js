@@ -33,14 +33,16 @@ export async function journey(request, deps) {
 
 function confirmation(initial) {
   return new Promise((resolve, reject) => {
-    const host = document.getElementById("dialog"), layer = document.createElement("div");
+    const host = document.getElementById("dialog"),
+      layer = document.createElement("div");
     layer.className = "popup-layer";
     layer.tabIndex = -1;
     host.appendChild(layer);
     host.hidden = false;
     const previous = document.activeElement;
     const draft = { ...initial };
-    let ended = false, generation = 0;
+    let ended = false,
+      generation = 0;
     const finish = (action) => {
       if (ended) return;
       ended = true;
@@ -54,44 +56,93 @@ function confirmation(initial) {
     const render = async () => {
       const mine = ++generation;
       await Popup.frameReady();
-      const tree = Popup.popupFrame(T("export.title"), EXPORT.w, EXPORT.h,
-        { ok: T("export.confirm"), cancel: T("export.chooseDirectory") });
+      const tree = Popup.popupFrame(T("export.title"), EXPORT.w, EXPORT.h, {
+        ok: T("export.confirm"),
+        cancel: T("export.chooseDirectory"),
+      });
       const popup = NGUI.find(tree, "Popup");
       // the cards one size under the Settings page's (POPUP_TYPE.card)
       const card = POPUP_TYPE.card;
-      const path = rowBase("Destination", EXPORT.rows.Destination.y, EXPORT.rows.Destination.h, T(draft.folder === draft.defaultFolder ? "export.defaultDestination" : "export.destination"), card);
+      const path = rowBase(
+        "Destination",
+        EXPORT.rows.Destination.y,
+        EXPORT.rows.Destination.h,
+        T(draft.folder === draft.defaultFolder ? "export.defaultDestination" : "export.destination"),
+        card,
+      );
       const fit = wrapPath(draft.folder, card.path.fs, card.path.min, 1400, 3);
-      path.children.push(NGUI.node("Path", [-718, -45], [NGUI.label(fit.text, fit.fs, "#2d4664/1.00", 1440,
-        fit.fs * fit.lines * 1.3 + 10, { pivot: 3, depth: 8 })]));
+      path.children.push(
+        NGUI.node(
+          "Path",
+          [-718, -45],
+          [NGUI.label(fit.text, fit.fs, "#2d4664/1.00", 1440, fit.fs * fit.lines * 1.3 + 10, { pivot: 3, depth: 8 })],
+        ),
+      );
       const targets = draft.targets?.length ? draft.targets : [{ server: draft.server, platform: draft.platform }];
       const servers = [...new Set(targets.map((target) => target.server))];
-      const platforms = [...new Set(targets.filter((target) => target.server === draft.server).map((target) => target.platform))];
-      const rows = [radioRow("Server", EXPORT.rows.Server.y, T("export.server"), servers.map((value) => [value, T(`settings.server.${value}`)]),
-        draft.server, (value) => {
-          draft.server = value;
-          if (!targets.some((target) => target.server === value && target.platform === draft.platform))
-            draft.platform = targets.find((target) => target.server === value).platform;
-          redraw();
-        }, { type: card }), radioRow("Platform", EXPORT.rows.Platform.y, T("export.platform"), platforms.map((value) => [value, T(`import.source.${value}`)]),
-        draft.platform, (value) => { draft.platform = value; redraw(); }, { type: card })];
+      const platforms = [
+        ...new Set(targets.filter((target) => target.server === draft.server).map((target) => target.platform)),
+      ];
+      const rows = [
+        radioRow(
+          "Server",
+          EXPORT.rows.Server.y,
+          T("export.server"),
+          servers.map((value) => [value, T(`settings.server.${value}`)]),
+          draft.server,
+          (value) => {
+            draft.server = value;
+            if (!targets.some((target) => target.server === value && target.platform === draft.platform))
+              draft.platform = targets.find((target) => target.server === value).platform;
+            redraw();
+          },
+          { type: card },
+        ),
+        radioRow(
+          "Platform",
+          EXPORT.rows.Platform.y,
+          T("export.platform"),
+          platforms.map((value) => [value, T(`import.source.${value}`)]),
+          draft.platform,
+          (value) => {
+            draft.platform = value;
+            redraw();
+          },
+          { type: card },
+        ),
+      ];
       popup.children.push(path, ...rows.map((row) => row.tree));
       const next = document.createElement("div");
       const view = await NGUI.render(tree, next, { scale: S, origin: [960, 540], z: 10 });
-      for (const row of rows) for (const hit of row.hits) {
-        const element = view.nodes.get(`Center/Popup/${hit.path}`)?.els[0];
-        if (!element) continue;
-        const [x, y, w, h] = NGUI.rect(element);
-        hitButton(next, [x, y, (hit.w || w / S) * S, h], hit.fn, hit.name, 80);
-      }
-      Popup.hit(next, view, "Center/Popup/Btn/Btn_Ok/BG (1)", () => finish("confirm"), { name: T("export.confirm"), action: "export-confirm" });
-      Popup.hit(next, view, "Center/Popup/Btn/Btn_Cancel/BG (1)", () => finish("choose"), { name: T("export.chooseDirectory"), action: "export-choose" });
-      Popup.hit(next, view, "Center/Popup/Base/BG/Btn_Close", () => finish(null), { name: T("display.close"), action: "close" });
+      for (const row of rows)
+        for (const hit of row.hits) {
+          const element = view.nodes.get(`Center/Popup/${hit.path}`)?.els[0];
+          if (!element) continue;
+          const [x, y, w, h] = NGUI.rect(element);
+          hitButton(next, [x, y, (hit.w || w / S) * S, h], hit.fn, hit.name, 80);
+        }
+      Popup.hit(next, view, "Center/Popup/Btn/Btn_Ok/BG (1)", () => finish("confirm"), {
+        name: T("export.confirm"),
+        action: "export-confirm",
+      });
+      Popup.hit(next, view, "Center/Popup/Btn/Btn_Cancel/BG (1)", () => finish("choose"), {
+        name: T("export.chooseDirectory"),
+        action: "export-choose",
+      });
+      Popup.hit(next, view, "Center/Popup/Base/BG/Btn_Close", () => finish(null), {
+        name: T("display.close"),
+        action: "close",
+      });
       if (ended || mine !== generation) return;
       Popup.closable(view, host, () => finish(null), { el: layer });
       layer.replaceChildren(...next.childNodes);
       layer.focus?.({ preventScroll: true });
     };
-    const redraw = () => render().catch((error) => { reject(error); finish(null); });
+    const redraw = () =>
+      render().catch((error) => {
+        reject(error);
+        finish(null);
+      });
     redraw();
   });
 }
@@ -101,18 +152,32 @@ export async function open(request) {
   active = true;
   try {
     return await journey(request, {
-      options: () => rpc("export.options"), confirm: confirmation,
+      options: () => rpc("export.options"),
+      confirm: confirmation,
       pick: (start) => rpc("settings.pickFolder", { start }),
-      run: (params) => Loading.task(async (update) => {
-        const id = await rpc("export.start", params);
-        return waitJob(id, (progress) => update({ ...progress, label: T("import.step.export") }));
-      }, { label: T("import.step.export") }),
-      success: async () => (await Popup.message({ title: T("export.title"), lines: [T("export.success")],
-        ok: T("export.openFolder"), cancel: T("popup.cancel") })).button === "ok",
+      run: (params) =>
+        Loading.task(
+          async (update) => {
+            const id = await rpc("export.start", params);
+            return waitJob(id, (progress) => update({ ...progress, label: T("import.step.export") }));
+          },
+          { label: T("import.step.export") },
+        ),
+      success: async () =>
+        (
+          await Popup.message({
+            title: T("export.title"),
+            lines: [T("export.success")],
+            ok: T("export.openFolder"),
+            cancel: T("popup.cancel"),
+          })
+        ).button === "ok",
       reveal: (path) => rpc("os.reveal", { path }),
     });
   } catch (error) {
     Popup.notify(errorText(error), { kind: "error", error });
     return null;
-  } finally { active = false; }
+  } finally {
+    active = false;
+  }
 }
