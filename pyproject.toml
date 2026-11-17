@@ -85,6 +85,8 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
+# The package's __init__ stays empty: importing bmpt must have no effect of its own.
+"src/bmpt/__init__.py" = ["D104"]
 # engine.py imports the engine's names for type checking and re-exports them.
 "src/bmpt/engine.py" = ["F401"]
 # The entry points register the locales before importing modules that translate at import time.
