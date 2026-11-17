@@ -1,7 +1,7 @@
-// Tests for the 3D tab's zoom and pan (web/js/model/model.js): how far a wheel notch and a pinch zoom, the target's
-// lift to the face, the pan's limits, and which input zooms or pans in WebKit (the macOS app's WKWebView), Chromium
-// (WebView2) and on a touch screen. Run by tests/test_chibi_materials.py with Node's test runner; "three" and
-// "three/addons/" resolve to the bundled copy.
+// Tests for the 3D tab's zoom and pan (web/js/model/model-camera.js): how far a wheel notch and a pinch zoom, the
+// target's lift to the face, the pan's limits, and which input zooms or pans in WebKit (the macOS app's WKWebView),
+// Chromium (WebView2) and on a touch screen. Run by tests/test_chibi_materials.py with Node's test runner; "three"
+// and "three/addons/" resolve to the bundled copy.
 import assert from "node:assert/strict";
 import { register } from "node:module";
 import { test } from "node:test";
@@ -24,7 +24,7 @@ const {
   saveZoom,
   wheelZoom,
   zoomShare,
-} = await import("../../src/bmpt/web/js/model/model.js");
+} = await import("../../src/bmpt/web/js/model/model-camera.js");
 
 const near = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) <= eps, `${a} != ${b}`);
 const TAN5 = Math.tan((5 * Math.PI) / 180);

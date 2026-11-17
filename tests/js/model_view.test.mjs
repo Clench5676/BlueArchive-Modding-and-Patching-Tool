@@ -1,5 +1,6 @@
-// Tests for web/js/model/model.js's camera (the 3D tab opens at the formation screen's view of one character). Run by
-// tests/test_chibi_materials.py with Node's test runner; "three" and "three/addons/" resolve to the bundled copy.
+// Tests for the 3D chibi's camera (web/js/model/model-camera.js; the 3D tab opens at the formation screen's view of one
+// character). Run by tests/test_chibi_materials.py with Node's test runner; "three" and "three/addons/" resolve to the
+// bundled copy.
 import assert from "node:assert/strict";
 import { register } from "node:module";
 import { test } from "node:test";
@@ -12,8 +13,10 @@ register(
   return next(spec, ctx); }`)}`,
 );
 const THREE = await import("three");
-const { FORMATION_VIEW, bustDistance, carryZoom, frameDistance, stillCamera, stillCrop, storyAction, storyActions } =
-  await import("../../src/bmpt/web/js/model/model.js");
+const { FORMATION_VIEW, bustDistance, carryZoom, frameDistance, stillCamera, stillCrop } = await import(
+  "../../src/bmpt/web/js/model/model-camera.js"
+);
+const { storyAction, storyActions } = await import("../../src/bmpt/web/js/model/model.js");
 
 const near = (a, b, eps = 1e-4) => assert.ok(Math.abs(a - b) <= eps, `${a} != ${b}`);
 const TAN5 = Math.tan((5 * Math.PI) / 180);
