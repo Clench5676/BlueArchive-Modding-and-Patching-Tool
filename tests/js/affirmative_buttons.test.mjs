@@ -1,57 +1,119 @@
-import {test} from 'node:test';
-import assert from 'node:assert/strict';
-import {hasAffirmative,skinAffirmatives} from '../../src/bmpt/web/js/affirmative-buttons.js';
-test('affirmative styling preserves secondary and disabled semantics',()=>{
- const make=(name,color='#77deff/1.00')=>({name,actionSemantic:name.startsWith('Save')?'save':'secondary',widgets:[{sprite:'Common_Btn_BG',w_:496,h_:177,color}],children:[{name:'Label_Locale',widgets:[{text:'Save',color:'#123456/1.00'}],children:[]}]});
- const gold=make('Btn','#f6e94b/1.00');gold.children[0].widgets[0].color='#4b2116/1.00';
- const input={name:'Root',widgets:[],children:[make('Save'),make('Btn_Cancel'),make('SaveSelection','#d6d6d6/1.00')]};
- assert.ok(hasAffirmative(input));
- const output=skinAffirmatives(input,gold);
- assert.equal(output.children[0].widgets[0].color,'#f6e94b/1.00');
- assert.equal(output.children[1].widgets[0].color,'#77deff/1.00');
- assert.equal(output.children[2].widgets[0].color,'#d6d6d6/1.00');
- assert.equal(input.children[0].widgets[0].color,'#77deff/1.00');
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { hasAffirmative, skinAffirmatives } from "../../src/bmpt/web/js/affirmative-buttons.js";
+test("affirmative styling preserves secondary and disabled semantics", () => {
+  const make = (name, color = "#77deff/1.00") => ({
+    name,
+    actionSemantic: name.startsWith("Save") ? "save" : "secondary",
+    widgets: [{ sprite: "Common_Btn_BG", w_: 496, h_: 177, color }],
+    children: [{ name: "Label_Locale", widgets: [{ text: "Save", color: "#123456/1.00" }], children: [] }],
+  });
+  const gold = make("Btn", "#f6e94b/1.00");
+  gold.children[0].widgets[0].color = "#4b2116/1.00";
+  const input = {
+    name: "Root",
+    widgets: [],
+    children: [make("Save"), make("Btn_Cancel"), make("SaveSelection", "#d6d6d6/1.00")],
+  };
+  assert.ok(hasAffirmative(input));
+  const output = skinAffirmatives(input, gold);
+  assert.equal(output.children[0].widgets[0].color, "#f6e94b/1.00");
+  assert.equal(output.children[1].widgets[0].color, "#77deff/1.00");
+  assert.equal(output.children[2].widgets[0].color, "#d6d6d6/1.00");
+  assert.equal(input.children[0].widgets[0].color, "#77deff/1.00");
 });
-test('styling retains asynchronous thumbnail sources without cloning them',()=>{
- const picture=Promise.resolve('thumbnail');
- const tree={name:'Save',actionSemantic:'save',widgets:[{sprite:'Common_Btn_BG',w_:100,h_:60}],children:[{name:'Thumb',widgets:[{clipImage:picture}],children:[]}]};
- const template={widgets:[{sprite:'Common_Btn_BG',w_:494,h_:162,color:'#f6e94b/1.00'}],children:[{name:'Label_Locale',widgets:[{text:'',color:'#4b2116/1.00'}]}]};
- assert.equal(skinAffirmatives(tree,template).children[0].widgets[0].clipImage,picture);
+test("styling retains asynchronous thumbnail sources without cloning them", () => {
+  const picture = Promise.resolve("thumbnail");
+  const tree = {
+    name: "Save",
+    actionSemantic: "save",
+    widgets: [{ sprite: "Common_Btn_BG", w_: 100, h_: 60 }],
+    children: [{ name: "Thumb", widgets: [{ clipImage: picture }], children: [] }],
+  };
+  const template = {
+    widgets: [{ sprite: "Common_Btn_BG", w_: 494, h_: 162, color: "#f6e94b/1.00" }],
+    children: [{ name: "Label_Locale", widgets: [{ text: "", color: "#4b2116/1.00" }] }],
+  };
+  assert.equal(skinAffirmatives(tree, template).children[0].widgets[0].clipImage, picture);
 });
 
-test('names and translated captions cannot imply an affirmative action',()=>{
-  for(const name of ['Save','Export','Update','Btn_Ok'])assert.equal(hasAffirmative({name,children:[]}),false);
-  for(const actionSemantic of ['save','confirm','apply'])assert.equal(hasAffirmative({name:'Arbitrary',actionSemantic}),true);
-  for(const actionSemantic of ['update','export','secondary'])assert.equal(hasAffirmative({name:'Save',actionSemantic}),false);
+test("names and translated captions cannot imply an affirmative action", () => {
+  for (const name of ["Save", "Export", "Update", "Btn_Ok"])
+    assert.equal(hasAffirmative({ name, children: [] }), false);
+  for (const actionSemantic of ["save", "confirm", "apply"])
+    assert.equal(hasAffirmative({ name: "Arbitrary", actionSemantic }), true);
+  for (const actionSemantic of ["update", "export", "secondary"])
+    assert.equal(hasAffirmative({ name: "Save", actionSemantic }), false);
 });
 
-test('the source picker, gallery and Settings use explicit treatment in all locales',async()=>{
-  const {readFile}=await import('node:fs/promises');
-  const popup=await readFile(new URL('../../src/bmpt/web/js/popup.js',import.meta.url),'utf8');
-  assert.match(popup,/child.actionSemantic = action.semantic \|\| \(action.primary \? "confirm" : "secondary"\)/);
-  assert.match(popup,/buttons: buttons.map/);
+test("the source picker, gallery and Settings use explicit treatment in all locales", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const popup = await readFile(new URL("../../src/bmpt/web/js/popup.js", import.meta.url), "utf8");
+  assert.match(popup, /child.actionSemantic = action.semantic \|\| \(action.primary \? "confirm" : "secondary"\)/);
+  assert.match(popup, /buttons: buttons.map/);
   assert.ok(!popup.includes('[T("popup.apply"),T("act.update")'));
-  const controller=await readFile(new URL('../../src/bmpt/web/js/photography/controller.js',import.meta.url),'utf8');
-  assert.match(controller,/\[P\('export'\),safe\(exportPhoto\),false,'export'\]/);
-  assert.match(controller,/label:P\('saveSelection'\),fn:safe\(saveSelection\),primary:true,semantic:'save'/);
-  for(const locale of ['en-US','zh-CN','zh-TW','ja-JP','ko-KR','th-TH']){
-    const data=JSON.parse(await readFile(new URL(`../../src/bmpt/locales/${locale}.json`,import.meta.url),'utf8'));
-    assert.ok(data.webui.export.applied.includes('Mod'));
-    if(locale==='zh-CN'){
-      assert.equal(data.webui.popup.save,'保存');assert.equal(data.webui.export.library,'导出Mod仓库');assert.equal(data.webui.export.applied,'导出已应用的Mod');
+  const controller = await readFile(
+    new URL("../../src/bmpt/web/js/photography/controller.js", import.meta.url),
+    "utf8",
+  );
+  assert.match(controller, /\[P\('export'\),safe\(exportPhoto\),false,'export'\]/);
+  assert.match(controller, /label:P\('saveSelection'\),fn:safe\(saveSelection\),primary:true,semantic:'save'/);
+  for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
+    const data = JSON.parse(await readFile(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8"));
+    assert.ok(data.webui.export.applied.includes("Mod"));
+    if (locale === "zh-CN") {
+      assert.equal(data.webui.popup.save, "保存");
+      assert.equal(data.webui.export.library, "导出Mod仓库");
+      assert.equal(data.webui.export.applied, "导出已应用的Mod");
     }
   }
 });
 
-test('the gold template\'s patterns are drawn: the renderer skips a node not marked active and a negative scale',async()=>{
-  const {goldTemplate}=await import('../../src/bmpt/web/js/affirmative-buttons.js');
-  const patterns=goldTemplate.children.filter(child=>child.widgets?.some(w=>/_Pt$/.test(w.sprite||'')));
-  assert.equal(patterns.length,2);
-  for(const pattern of patterns){assert.equal(pattern.active,true,pattern.name);assert.ok(pattern.scale.every(k=>k>0),'the renderer draws no negative scale');}
-  assert.deepEqual(patterns.map(pattern=>pattern.widgets[0].flip),[0,3],'the second one is the prefab\'s mirrored pattern');
-  const tree={name:'Btn_Ok',actionSemantic:'confirm',active:true,pos:[0,0],scale:[1,1],widgets:[],children:[
-    {name:'Label_Locale',active:true,pos:[0,0],scale:[1,1],widgets:[{text:'OK',color:'#2d4664/1.00'}],children:[]},
-    {name:'BG (1)',active:true,pos:[0,0],scale:[1,1],widgets:[{sprite:'Common_Btn_BG',w_:496,h_:177,color:'#77deff/1.00',pivot:4,depth:5}],children:[]}]};
-  const body=skinAffirmatives(tree,goldTemplate).children[1];
-  assert.deepEqual(body.children.map(child=>child.active),[true,true]);
+test("the gold template's patterns are drawn: the renderer skips a node not marked active and a negative scale", async () => {
+  const { goldTemplate } = await import("../../src/bmpt/web/js/affirmative-buttons.js");
+  const patterns = goldTemplate.children.filter((child) => child.widgets?.some((w) => /_Pt$/.test(w.sprite || "")));
+  assert.equal(patterns.length, 2);
+  for (const pattern of patterns) {
+    assert.equal(pattern.active, true, pattern.name);
+    assert.ok(
+      pattern.scale.every((k) => k > 0),
+      "the renderer draws no negative scale",
+    );
+  }
+  assert.deepEqual(
+    patterns.map((pattern) => pattern.widgets[0].flip),
+    [0, 3],
+    "the second one is the prefab's mirrored pattern",
+  );
+  const tree = {
+    name: "Btn_Ok",
+    actionSemantic: "confirm",
+    active: true,
+    pos: [0, 0],
+    scale: [1, 1],
+    widgets: [],
+    children: [
+      {
+        name: "Label_Locale",
+        active: true,
+        pos: [0, 0],
+        scale: [1, 1],
+        widgets: [{ text: "OK", color: "#2d4664/1.00" }],
+        children: [],
+      },
+      {
+        name: "BG (1)",
+        active: true,
+        pos: [0, 0],
+        scale: [1, 1],
+        widgets: [{ sprite: "Common_Btn_BG", w_: 496, h_: 177, color: "#77deff/1.00", pivot: 4, depth: 5 }],
+        children: [],
+      },
+    ],
+  };
+  const body = skinAffirmatives(tree, goldTemplate).children[1];
+  assert.deepEqual(
+    body.children.map((child) => child.active),
+    [true, true],
+  );
 });

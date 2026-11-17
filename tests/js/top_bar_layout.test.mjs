@@ -9,8 +9,13 @@ const ctx = {
   font: "",
   measureText(s) {
     const fs = parseFloat(/([\d.]+)px/.exec(this.font)[1]);
-    return { width: [...s].reduce((w, c) => w + (WIDE.test(c) ? fs : fs / 2), 0), actualBoundingBoxAscent: 0.72 * fs, actualBoundingBoxDescent: 0,
-      fontBoundingBoxAscent: 1.16 * fs, fontBoundingBoxDescent: 0.29 * fs };
+    return {
+      width: [...s].reduce((w, c) => w + (WIDE.test(c) ? fs : fs / 2), 0),
+      actualBoundingBoxAscent: 0.72 * fs,
+      actualBoundingBoxDescent: 0,
+      fontBoundingBoxAscent: 1.16 * fs,
+      fontBoundingBoxDescent: 0.29 * fs,
+    };
   },
 };
 globalThis.document = {
@@ -26,7 +31,7 @@ const near = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b
 
 test("the bar's centre is the fill's: the light rows of Common_Top_Menu_Bg, not the dark lip under them", () => {
   // rows 0 to 96 of 105 are the fill, drawn 64 px high; a centre on the whole height would be 32
-  near(Layout.barCentre(), 97 / 2 / 105 * 64);
+  near(Layout.barCentre(), (97 / 2 / 105) * 64);
   assert.ok(Layout.barCentre() < 32 && Layout.barCentre() > 29);
   near(Layout.barPadding(Layout.barCentre()), 64 - 2 * Layout.barCentre());
   // the fill's rows scale with the bar
@@ -41,7 +46,12 @@ test("a drawn bitmap's ink is its box scaled by the rows that draw something", (
   const ink = Layout.inkRect({ top: 12, bottom: 52 }, { top: 0, bottom: 76, height: 80 });
   near(ink.top, 12);
   near(ink.bottom, 12 + 38);
-  const union = Layout.extent([ink, Layout.inkRect({ top: 12, bottom: 50 }, { top: 0, bottom: 25, height: 25 }), null, { top: 3, bottom: 3 }]);
+  const union = Layout.extent([
+    ink,
+    Layout.inkRect({ top: 12, bottom: 50 }, { top: 0, bottom: 25, height: 25 }),
+    null,
+    { top: 3, bottom: 3 },
+  ]);
   assert.deepEqual(union, { top: 12, bottom: 50 });
   assert.equal(Layout.extent([]), null);
   assert.equal(Layout.extent([null]), null);
@@ -50,7 +60,12 @@ test("a drawn bitmap's ink is its box scaled by the rows that draw something", (
 test("moving an element puts the centre of its ink on the bar's centre", () => {
   const centre = Layout.barCentre();
   // the "?" badge: ink 12.2 to 43.6; Settings: ink is its whole box
-  for (const ink of [{ top: 12.2, bottom: 43.6 }, { top: 6.41, bottom: 46.62 }, { top: 7, bottom: 45.27 }, { top: 11.8, bottom: 43.6 }]) {
+  for (const ink of [
+    { top: 12.2, bottom: 43.6 },
+    { top: 6.41, bottom: 46.62 },
+    { top: 7, bottom: 45.27 },
+    { top: 11.8, bottom: 43.6 },
+  ]) {
     const dy = Layout.moveBy(centre, ink);
     near((ink.top + dy + ink.bottom + dy) / 2, centre);
   }
@@ -62,11 +77,18 @@ test("every element's ink lands on the bar's centre, from the prefab's geometry 
   // NUITop_Scenes/Top/Right: Lobby (Home) 62 x 59 at y -51.8, Option 60 x 62 at -52.4, Line (1) 4 x 49 at -54.2; nav.js puts
   // Home's top at 7 and the others at the prefab's offsets from it (units to stage px: 1920 / 2960). Their sprites are drawn
   // to the edge (alpha rows 0 to the last), so the ink is the box.
-  const home = { y: -51.8, h: 59 }, option = { y: -52.4, h: 62 }, line = { y: -54.2, h: 49 };
-  const box = (part) => { const top = 7 + (home.y - part.y + (home.h - part.h) / 2) * S, height = part.h * S; return { top, bottom: top + height }; };
+  const home = { y: -51.8, h: 59 },
+    option = { y: -52.4, h: 62 },
+    line = { y: -54.2, h: 49 };
+  const box = (part) => {
+    const top = 7 + (home.y - part.y + (home.h - part.h) / 2) * S,
+      height = part.h * S;
+    return { top, bottom: top + height };
+  };
   const expected = { home: 7 + 38.27 / 2, option: 6.42 + 40.2 / 2, line: 11.8 + 31.78 / 2 };
   for (const [name, part] of Object.entries({ home, option, line })) {
-    const ink = box(part), at = (ink.top + ink.bottom) / 2;
+    const ink = box(part),
+      at = (ink.top + ink.bottom) / 2;
     near(at, expected[name], 0.02);
     // before: Settings, Home and the divider sat above the centre by these ("a few pixels high")
     assert.ok(at < centre - 1.5, `${name} was ${(centre - at).toFixed(2)} above`);
@@ -75,17 +97,29 @@ test("every element's ink lands on the bar's centre, from the prefab's geometry 
   }
   // Left side: flex centres each box on the bar's centre; what is left to move is the ink's own offset inside its box.
   // The switch: segments 38 (pressed) and 40 (normal, its last 4 of 80 rows are shadow) high, all drawn from the box's top.
-  const toggle = Layout.extent([Layout.inkRect({ top: 12, bottom: 50 }, { top: 0, bottom: 25, height: 25 }), Layout.inkRect({ top: 12, bottom: 52 }, { top: 0, bottom: 76, height: 80 })]);
-  near(toggle.top, 12); near(toggle.bottom, 50);
+  const toggle = Layout.extent([
+    Layout.inkRect({ top: 12, bottom: 50 }, { top: 0, bottom: 25, height: 25 }),
+    Layout.inkRect({ top: 12, bottom: 52 }, { top: 0, bottom: 76, height: 80 }),
+  ]);
+  near(toggle.top, 12);
+  near(toggle.bottom, 50);
   const insideBox = (ink, boxTop, boxBottom) => (ink.top + ink.bottom) / 2 - (boxTop + boxBottom) / 2;
   near(insideBox(toggle, 12, 52), -1);
   // the "?" badge: Common_Btn_Information 70 x 72 (rows 0 to 57 drawn) and its 55 x 55 square, both at 0.55
-  const help = Layout.extent([Layout.inkRect({ top: 12.2, bottom: 12.2 + 39.6 }, { top: 0, bottom: 57, height: 72 }), Layout.inkRect({ top: 14.4, bottom: 14.4 + 27.5 }, { top: 0, bottom: 55, height: 55 })]);
-  near(help.top, 12.2); near(help.bottom, 12.2 + 57 / 72 * 39.6);
-  near(insideBox(help, 12, 52), (12.2 + 12.2 + 57 / 72 * 39.6) / 2 - 32);
-  for (const [ink, boxTop, boxBottom] of [[toggle, 12, 52], [help, 12, 52]]) {
+  const help = Layout.extent([
+    Layout.inkRect({ top: 12.2, bottom: 12.2 + 39.6 }, { top: 0, bottom: 57, height: 72 }),
+    Layout.inkRect({ top: 14.4, bottom: 14.4 + 27.5 }, { top: 0, bottom: 55, height: 55 }),
+  ]);
+  near(help.top, 12.2);
+  near(help.bottom, 12.2 + (57 / 72) * 39.6);
+  near(insideBox(help, 12, 52), (12.2 + 12.2 + (57 / 72) * 39.6) / 2 - 32);
+  for (const [ink, boxTop, boxBottom] of [
+    [toggle, 12, 52],
+    [help, 12, 52],
+  ]) {
     // the box is centred on `centre`; moving by -offset puts the ink there
-    const offset = insideBox(ink, boxTop, boxBottom), dy = Layout.moveBy(centre, { top: centre + offset - 1, bottom: centre + offset + 1 });
+    const offset = insideBox(ink, boxTop, boxBottom),
+      dy = Layout.moveBy(centre, { top: centre + offset - 1, bottom: centre + offset + 1 });
     near(dy, -offset);
   }
   // the two sit within a few pixels of the line, as the pill's and the badge's art are: they were not the ones far off
@@ -93,19 +127,28 @@ test("every element's ink lands on the bar's centre, from the prefab's geometry 
   assert.ok(Math.abs(insideBox(help, 12, 52)) < 4.5);
 });
 
-for (const locale of LOCALES) test(`the caption keeps its script reference baseline in ${locale}`, async () => {
-  const ui=JSON.parse(await readFile(new URL(`../../src/bmpt/locales/${locale}.json`,import.meta.url),'utf8')).webui;
-  document.documentElement.lang=locale;
-  for(const fs of [20,23,26]){
-    const shift=NGUI.inkShift(ui.mods.switch,fs,{reference:true});
-    // The deterministic font's ascent/descent place its reference ink 0.075 em
-    // below the line-box centre. Verify that the caption moves onto the fill.
-    for(const [width,height] of [[960,540],[1600,900],[2560,1080]])for(const density of [1,2,3]){
-      const scale=Math.min(width/1920,height/1080),centre=Layout.barCentre();
-      near((centre+0.075*fs+shift)*scale*density,centre*scale*density);
+for (const locale of LOCALES)
+  test(`the caption keeps its script reference baseline in ${locale}`, async () => {
+    const ui = JSON.parse(
+      await readFile(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8"),
+    ).webui;
+    document.documentElement.lang = locale;
+    for (const fs of [20, 23, 26]) {
+      const shift = NGUI.inkShift(ui.mods.switch, fs, { reference: true });
+      // The deterministic font's ascent/descent place its reference ink 0.075 em
+      // below the line-box centre. Verify that the caption moves onto the fill.
+      for (const [width, height] of [
+        [960, 540],
+        [1600, 900],
+        [2560, 1080],
+      ])
+        for (const density of [1, 2, 3]) {
+          const scale = Math.min(width / 1920, height / 1080),
+            centre = Layout.barCentre();
+          near((centre + 0.075 * fs + shift) * scale * density, centre * scale * density);
+        }
     }
-  }
-});
+  });
 
 test("the bar still measures its fill and aligns the remaining caption by script reference ink", async () => {
   const css = await readFile(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
@@ -113,7 +156,10 @@ test("the bar still measures its fill and aligns the remaining caption by script
   near(Layout.barPadding(Layout.barCentre()), 4.88, 0.01);
   const nav = await readFile(new URL("../../src/bmpt/web/js/nav.js", import.meta.url), "utf8");
   assert.match(nav, /watchTopBar\(\)/);
-  const bar=await readFile(new URL('../../src/bmpt/web/js/top-bar.js',import.meta.url),'utf8');
-  assert.match(bar,/querySelectorAll\("\.ms-label"\)/);
-  assert.match(bar,/inkShift\(el\.textContent, parseFloat\(getComputedStyle\(el\)\.fontSize\), \{ reference: true \}\)/);
+  const bar = await readFile(new URL("../../src/bmpt/web/js/top-bar.js", import.meta.url), "utf8");
+  assert.match(bar, /querySelectorAll\("\.ms-label"\)/);
+  assert.match(
+    bar,
+    /inkShift\(el\.textContent, parseFloat\(getComputedStyle\(el\)\.fontSize\), \{ reference: true \}\)/,
+  );
 });

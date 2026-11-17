@@ -5,11 +5,23 @@ import { register } from "node:module";
 import { test } from "node:test";
 
 const THREE_URL = new URL("../../src/bmpt/web/vendor/three-0.160.0/build/three.module.min.js", import.meta.url).href;
-register(`data:text/javascript,${encodeURIComponent(`export async function resolve(spec, ctx, next) {
-  return spec === "three" ? { url: ${JSON.stringify(THREE_URL)}, shortCircuit: true } : next(spec, ctx); }`)}`);
+register(
+  `data:text/javascript,${encodeURIComponent(`export async function resolve(spec, ctx, next) {
+  return spec === "three" ? { url: ${JSON.stringify(THREE_URL)}, shortCircuit: true } : next(spec, ctx); }`)}`,
+);
 const THREE = await import("three");
-const { AMBIENT, CHARACTER_LIGHT_DIR, EMPTY_SCENE_AMBIENT, LIGHT, ambientAt, characterLight, chibiMaterial, outlineMaterial,
-  slotSpace, trilightProbe } = await import("../../src/bmpt/web/js/chibi-materials.js");
+const {
+  AMBIENT,
+  CHARACTER_LIGHT_DIR,
+  EMPTY_SCENE_AMBIENT,
+  LIGHT,
+  ambientAt,
+  characterLight,
+  chibiMaterial,
+  outlineMaterial,
+  slotSpace,
+  trilightProbe,
+} = await import("../../src/bmpt/web/js/chibi-materials.js");
 
 const near = (a, b, eps = 1e-4) => assert.ok(Math.abs(a - b) <= eps, `${a} != ${b}`);
 const linear = (c) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
@@ -18,9 +30,15 @@ const transparent = { cull: 2, zwrite: 0, src: 5, dst: 10, queue: 3000 };
 
 test("Matcap: its own texture, colour and matcap, the colour's alpha, the vertex colour", () => {
   // police_valkyrie_sg's riot shield: a see-through shield, not a white disc
-  const ex = { shader: "DSFX/FX_SHADER_Matcap", kind: "matcap", outline: false, state: transparent,
-    colors: { _Color: [1, 1, 1, 1], _BaseColor: [1, 1, 1, 1], _Main_Color: [0.30189, 0.05561, 0, 0.77255] } };
-  const main = tex("Shield"), matcap = tex("Shield_Alpha");
+  const ex = {
+    shader: "DSFX/FX_SHADER_Matcap",
+    kind: "matcap",
+    outline: false,
+    state: transparent,
+    colors: { _Color: [1, 1, 1, 1], _BaseColor: [1, 1, 1, 1], _Main_Color: [0.30189, 0.05561, 0, 0.77255] },
+  };
+  const main = tex("Shield"),
+    matcap = tex("Shield_Alpha");
   const { material, outline, queue } = chibiMaterial(ex, { _Main_Tex: main, _Matcap_Tex: matcap });
   assert.ok("KIND_MATCAP" in material.defines && "VERTEX_TINT" in material.defines);
   assert.equal(material.uniforms.mainMap.value, main);
@@ -36,8 +54,13 @@ test("Matcap: its own texture, colour and matcap, the colour's alpha, the vertex
 
 test("E-Water: the surface colour and its alpha", () => {
   // ch0123's hot spring tub
-  const ex = { shader: "MX/E-Water-V2", kind: "water", outline: false, state: { ...transparent, queue: 2000 },
-    colors: { _Color: [1, 1, 1, 1], _BaseColor: [1, 1, 1, 1], _SurfaceColor: [0.77296, 0.84906, 0.81124, 0.36078] } };
+  const ex = {
+    shader: "MX/E-Water-V2",
+    kind: "water",
+    outline: false,
+    state: { ...transparent, queue: 2000 },
+    colors: { _Color: [1, 1, 1, 1], _BaseColor: [1, 1, 1, 1], _SurfaceColor: [0.77296, 0.84906, 0.81124, 0.36078] },
+  };
   const { material } = chibiMaterial(ex, {});
   assert.ok("KIND_WATER" in material.defines);
   near(material.uniforms.tint.value.y, linear(0.84906));
@@ -48,55 +71,112 @@ test("E-Water: the surface colour and its alpha", () => {
 test("unlit and effect shaders read their own slot and colour", () => {
   const map = tex("Main");
   // FX/General Unlit Texture: _MainTex x _Color (a stale _Tint is not read)
-  let r = chibiMaterial({ shader: "FX/General Unlit Texture", kind: "unlit", state: transparent,
-    colors: { _Color: [1, 1, 1, 0.65], _Tint: [1, 0.4, 0, 0.7] } }, { _MainTex: map });
+  let r = chibiMaterial(
+    {
+      shader: "FX/General Unlit Texture",
+      kind: "unlit",
+      state: transparent,
+      colors: { _Color: [1, 1, 1, 0.65], _Tint: [1, 0.4, 0, 0.7] },
+    },
+    { _MainTex: map },
+  );
   assert.equal(r.material.uniforms.mainMap.value, map);
   near(r.material.uniforms.tint.value.y, 1);
   near(r.material.uniforms.tint.value.w, 0.65);
   // Unlit/Texture draws its texture alone
-  r = chibiMaterial({ shader: "Unlit/Texture", kind: "unlit", colors: { _Color: [0.5, 0.5, 0.5, 1], _BaseColor: [0.5, 0.5, 0.5, 1] } },
-    { _MainTex: map });
+  r = chibiMaterial(
+    { shader: "Unlit/Texture", kind: "unlit", colors: { _Color: [0.5, 0.5, 0.5, 1], _BaseColor: [0.5, 0.5, 0.5, 1] } },
+    { _MainTex: map },
+  );
   assert.deepEqual(r.material.uniforms.tint.value.toArray(), [1, 1, 1, 1]);
   // MX/Unlit Outline: _MainTex x _Tint, with the outline its shader draws
-  r = chibiMaterial({ shader: "MX/Unlit Outline", kind: "unlit", outline: true,
-    colors: { _Color: [0.2, 0.2, 0.2, 1], _Tint: [1, 1, 1, 1] } }, { _MainTex: map });
+  r = chibiMaterial(
+    {
+      shader: "MX/Unlit Outline",
+      kind: "unlit",
+      outline: true,
+      colors: { _Color: [0.2, 0.2, 0.2, 1], _Tint: [1, 1, 1, 1] },
+    },
+    { _MainTex: map },
+  );
   near(r.material.uniforms.tint.value.x, 1);
   assert.equal(r.outline, true);
   // DSFX/FX_SHADER_AlphaBlend_Add: its _Texture slot, _Color x _Multiply, alpha from the red channel by default
   const glow = tex("Glow");
-  r = chibiMaterial({ shader: "DSFX/FX_SHADER_AlphaBlend_Add", kind: "unlit",
-    state: { cull: 2, zwrite: 0, src: 1, dst: 10, queue: 3000 }, colors: { _Color: [1, 1, 1, 0.5] }, floats: { _Multiply: 2 } },
-  { _Texture: glow });
+  r = chibiMaterial(
+    {
+      shader: "DSFX/FX_SHADER_AlphaBlend_Add",
+      kind: "unlit",
+      state: { cull: 2, zwrite: 0, src: 1, dst: 10, queue: 3000 },
+      colors: { _Color: [1, 1, 1, 0.5] },
+      floats: { _Multiply: 2 },
+    },
+    { _Texture: glow },
+  );
   assert.equal(r.material.uniforms.mainMap.value, glow);
   assert.ok(["ALPHA_BLEND_ADD", "VERTEX_TINT", "RED_ALPHA"].every((d) => d in r.material.defines));
   near(r.material.uniforms.tint.value.x, 2);
   near(r.material.uniforms.tint.value.w, 1);
   // a shader the table does not know: the first slot and colour it has
-  r = chibiMaterial({ shader: "FX/Something Else", kind: "unlit", colors: { _BaseColor: [1, 0, 0, 1] } }, { _BaseMap: map });
+  r = chibiMaterial(
+    { shader: "FX/Something Else", kind: "unlit", colors: { _BaseColor: [1, 0, 0, 1] } },
+    { _BaseMap: map },
+  );
   assert.equal(r.material.uniforms.mainMap.value, map);
   near(r.material.uniforms.tint.value.y, 0);
 });
 
 test("HDR Color properties as stored, other Color properties from sRGB, Vector properties as stored", () => {
   // Kurumi's hair (ch0173): the shadow tint is an HDR Color, used as stored (not darkened by an sRGB decode)
-  const hair = chibiMaterial({ shader: "MX/C-Hair", kind: "hair", hdr: ["_ShadowTint", "_Tint"],
-    colors: { _Tint: [1, 1, 1, 1], _ShadowTint: [0.72549, 0.61064, 0.5451, 1], _GlowTint: [0.2, 0.2, 0.2, 1] } }, {});
+  const hair = chibiMaterial(
+    {
+      shader: "MX/C-Hair",
+      kind: "hair",
+      hdr: ["_ShadowTint", "_Tint"],
+      colors: { _Tint: [1, 1, 1, 1], _ShadowTint: [0.72549, 0.61064, 0.5451, 1], _GlowTint: [0.2, 0.2, 0.2, 1] },
+    },
+    {},
+  );
   const s = hair.material.uniforms.shadowTint.value;
   near(s.x, 0.72549);
   near(s.z, 0.5451);
   // a Color without the HDR flag (here _GlowTint, as listed) is decoded
   near(hair.material.uniforms.glowTint.value.x, linear(0.2));
   // the weapon's _ShadowTint is a plain Color: decoded
-  const weapon = chibiMaterial({ shader: "MX/C-Weapon", kind: "weapon", hdr: ["_GlowTint0"],
-    colors: { _Color: [1, 1, 1, 1], _ShadowTint: [0.5, 0.5, 0.5, 1] } }, {});
+  const weapon = chibiMaterial(
+    {
+      shader: "MX/C-Weapon",
+      kind: "weapon",
+      hdr: ["_GlowTint0"],
+      colors: { _Color: [1, 1, 1, 1], _ShadowTint: [0.5, 0.5, 0.5, 1] },
+    },
+    {},
+  );
   near(weapon.material.uniforms.shadowTint.value.x, linear(0.5));
   // Aru's halo: an HDR tint above 1 keeps its hue (no 2.2 power that would push every channel past white)
-  const halo = chibiMaterial({ shader: "MX/C-Halo/UnlitTextured", kind: "halo", hdr: ["_Tint"],
-    colors: { _Tint: [3.68861, 1.7574, 1.52565, 1] } }, { _MainTex: tex("Halo") });
-  assert.deepEqual(halo.material.uniforms.tint.value.toArray().map((v) => +v.toFixed(5)), [3.68861, 1.7574, 1.52565, 1]);
+  const halo = chibiMaterial(
+    {
+      shader: "MX/C-Halo/UnlitTextured",
+      kind: "halo",
+      hdr: ["_Tint"],
+      colors: { _Tint: [3.68861, 1.7574, 1.52565, 1] },
+    },
+    { _MainTex: tex("Halo") },
+  );
+  assert.deepEqual(
+    halo.material.uniforms.tint.value.toArray().map((v) => +v.toFixed(5)),
+    [3.68861, 1.7574, 1.52565, 1],
+  );
   // Layer4's per-layer tints are Vector properties: as stored
-  const body = chibiMaterial({ shader: "MX/C-General/Layer4", kind: "body", vectors: ["_ShadowTintR4"],
-    colors: { _ShadowTintR4: [0.93333, 0.72307, 0.59434, 0.52661] } }, {});
+  const body = chibiMaterial(
+    {
+      shader: "MX/C-General/Layer4",
+      kind: "body",
+      vectors: ["_ShadowTintR4"],
+      colors: { _ShadowTintR4: [0.93333, 0.72307, 0.59434, 0.52661] },
+    },
+    {},
+  );
   near(body.material.uniforms.layerTintR.value.y, 0.72307);
 });
 
@@ -104,26 +184,61 @@ test("a halo without a texture: Unity's white x _Tint and the glow; MX/C-Halo/Si
   // Niya's halo (ch0109, as exported): MX/C-Halo/UnlitTextured with no _MainTex. Its fragment program is
   // tex x _Tint + (1 - sat(|tex - mask|^2 x strictness)) x strength x _GlowTint0, and the empty slot samples the
   // shader's default ("white"): the HDR _Tint as stored, not decoded from sRGB, and the glow on
-  const niya = chibiMaterial({ shader: "MX/C-Halo/UnlitTextured", kind: "halo", hdr: ["_GlowTint0", "_Tint"], keywords: ["_GLOW_0"],
-    colors: { _Color: [0.588, 0.588, 0.588, 1], _GlowMaskColor0: [0.84906, 0.84906, 0.84906, 1],
-      _GlowTint0: [0.82016, 0.78177, 0.90566, 1], _Tint: [0.9687, 0.92925, 1, 1] },
-    floats: { _GlowStrength0: 1, _GlowStrictness0: 1 } }, {});
+  const niya = chibiMaterial(
+    {
+      shader: "MX/C-Halo/UnlitTextured",
+      kind: "halo",
+      hdr: ["_GlowTint0", "_Tint"],
+      keywords: ["_GLOW_0"],
+      colors: {
+        _Color: [0.588, 0.588, 0.588, 1],
+        _GlowMaskColor0: [0.84906, 0.84906, 0.84906, 1],
+        _GlowTint0: [0.82016, 0.78177, 0.90566, 1],
+        _Tint: [0.9687, 0.92925, 1, 1],
+      },
+      floats: { _GlowStrength0: 1, _GlowStrictness0: 1 },
+    },
+    {},
+  );
   const m = niya.material;
   assert.ok("KIND_HALO" in m.defines && "GLOW" in m.defines && !("SIMPLE" in m.defines));
   assert.deepEqual([...m.uniforms.mainMap.value.image.data], [255, 255, 255, 255]);
-  assert.deepEqual(m.uniforms.tint.value.toArray().map((v) => +v.toFixed(5)), [0.9687, 0.92925, 1, 1]);
+  assert.deepEqual(
+    m.uniforms.tint.value.toArray().map((v) => +v.toFixed(5)),
+    [0.9687, 0.92925, 1, 1],
+  );
   near(m.uniforms.glowMask.value.x, linear(0.84906));
   near(m.uniforms.glow.value.z, 0.90566);
   near(m.uniforms.glow.value.w, 1);
   // EN0009's: an orange tint stays orange (decoded, it came out red: 0.88, 0.32, 0.01)
-  const en = chibiMaterial({ shader: "MX/C-Halo/UnlitTextured", kind: "halo", hdr: ["_GlowTint0", "_Tint"],
-    colors: { _Tint: [0.9434, 0.60301, 0.12015, 1] } }, {});
-  assert.deepEqual(en.material.uniforms.tint.value.toArray().map((v) => +v.toFixed(5)), [0.9434, 0.60301, 0.12015, 1]);
+  const en = chibiMaterial(
+    {
+      shader: "MX/C-Halo/UnlitTextured",
+      kind: "halo",
+      hdr: ["_GlowTint0", "_Tint"],
+      colors: { _Tint: [0.9434, 0.60301, 0.12015, 1] },
+    },
+    {},
+  );
+  assert.deepEqual(
+    en.material.uniforms.tint.value.toArray().map((v) => +v.toFixed(5)),
+    [0.9434, 0.60301, 0.12015, 1],
+  );
   // MX/C-Halo/Simple outputs _SimpleBaseColor (an HDR Color: as stored), with or without a stale _Tint
-  const simple = chibiMaterial({ shader: "MX/C-Halo/Simple", kind: "halo", hdr: ["_SimpleBaseColor"],
-    colors: { _SimpleBaseColor: [4.13675, 0.29269, 0.29269, 0.67843], _Tint: [1, 1, 1, 1] } }, {});
+  const simple = chibiMaterial(
+    {
+      shader: "MX/C-Halo/Simple",
+      kind: "halo",
+      hdr: ["_SimpleBaseColor"],
+      colors: { _SimpleBaseColor: [4.13675, 0.29269, 0.29269, 0.67843], _Tint: [1, 1, 1, 1] },
+    },
+    {},
+  );
   assert.ok("SIMPLE" in simple.material.defines);
-  assert.deepEqual(simple.material.uniforms.tint.value.toArray().map((v) => +v.toFixed(5)), [4.13675, 0.29269, 0.29269, 0.67843]);
+  assert.deepEqual(
+    simple.material.uniforms.tint.value.toArray().map((v) => +v.toFixed(5)),
+    [4.13675, 0.29269, 0.29269, 0.67843],
+  );
 });
 
 test("the character light ForwardLights derives from the main light", () => {
@@ -181,8 +296,10 @@ test("the formation screen's light falls on the character from its slot's side",
   const l = LIGHT.charLightDir.value;
   [0.087169, 0.995464, -0.03812].forEach((v, i) => near(l.getComponent(i), v));
   // the weapons' fixed light (_FakeLightDir, world space, not normalised) likewise
-  const weapon = chibiMaterial({ shader: "MX/C-Weapon", kind: "weapon", vectors: ["_FakeLightDir"],
-    colors: { _FakeLightDir: [0.1, 0.65, 0, 0] } }, {});
+  const weapon = chibiMaterial(
+    { shader: "MX/C-Weapon", kind: "weapon", vectors: ["_FakeLightDir"], colors: { _FakeLightDir: [0.1, 0.65, 0, 0] } },
+    {},
+  );
   [0.0905737, 0.6513804, 0].forEach((v, i) => near(weapon.material.uniforms.fakeLightDir.value.getComponent(i), v));
 });
 

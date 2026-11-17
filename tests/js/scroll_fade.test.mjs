@@ -16,6 +16,13 @@ test("an area fades at the edges with more past them, and stays sharp where ther
 });
 
 test("every kind of scrolling area takes part", () => {
-  for (const cls of [".popup-cards", ".settings-rows", ".import-list", ".import-dialog-content", ".plain-message-lines", ".log-text"])
+  for (const cls of [
+    ".popup-cards",
+    ".settings-rows",
+    ".import-list",
+    ".import-dialog-content",
+    ".plain-message-lines",
+    ".log-text",
+  ])
     assert.ok(SCROLLERS.includes(cls), cls);
 });

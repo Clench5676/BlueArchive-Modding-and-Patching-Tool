@@ -4,13 +4,24 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const main = readFileSync(new URL("../../src/bmpt/web/js/main.js", import.meta.url), "utf8");
-const block = main.slice(main.indexOf("  // Only Import Mod takes files dropped"), main.indexOf('  $("top-option").addEventListener'));
+const block = main.slice(
+  main.indexOf("  // Only Import Mod takes files dropped"),
+  main.indexOf('  $("top-option").addEventListener'),
+);
 
 function harness(hash) {
   const env = { location: { hash }, dropped: [], notified: [], listeners: {}, handlers: {} };
-  env.addEventListener = (type, fn) => { env.listeners[type] = fn; };
-  env.on = (type, fn) => { env.handlers[type] = fn; };
-  env.BatchImport = { drop: async (paths) => { env.dropped.push(paths); } };
+  env.addEventListener = (type, fn) => {
+    env.listeners[type] = fn;
+  };
+  env.on = (type, fn) => {
+    env.handlers[type] = fn;
+  };
+  env.BatchImport = {
+    drop: async (paths) => {
+      env.dropped.push(paths);
+    },
+  };
   env.notify = (...args) => env.notified.push(args);
   env.errorText = (err) => String(err);
   new Function("env", `const { location, addEventListener, on, BatchImport, notify, errorText } = env; ${block}`)(env);
@@ -19,7 +30,9 @@ function harness(hash) {
 
 const dragover = () => {
   const event = { prevented: false, dataTransfer: { dropEffect: "copy" } };
-  event.preventDefault = () => { event.prevented = true; };
+  event.preventDefault = () => {
+    event.prevented = true;
+  };
   return event;
 };
 

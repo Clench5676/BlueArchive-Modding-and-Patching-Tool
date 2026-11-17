@@ -3,13 +3,38 @@
 // cover the caption. Run by tests/test_ngui_fit.py's runner with the other JS tests: node --test tests/js/button_tiers.test.mjs
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { BUTTON_TIERS, CHIP_TIER_LIST, PILL, TAG, buttonTier, chipTier, inkBox, isPill, overlaps, tagBox, tagOf } from "../../src/bmpt/web/js/button-layout.js";
+import {
+  BUTTON_TIERS,
+  CHIP_TIER_LIST,
+  PILL,
+  TAG,
+  buttonTier,
+  chipTier,
+  inkBox,
+  isPill,
+  overlaps,
+  tagBox,
+  tagOf,
+} from "../../src/bmpt/web/js/button-layout.js";
 import { CHIP_TIERS, CONTROL, SMALL_BUTTON, XS_BUTTON } from "../../src/bmpt/web/js/ui-tokens.js";
 
 test("the presets are the controls' heights, XS under S under M under L", () => {
-  assert.deepEqual(BUTTON_TIERS.map(([tier, control]) => [tier, control.h]), [["XXS", 88], ["XS", 104], ["S", 136], ["M", 162], ["L", 176]]);
+  assert.deepEqual(
+    BUTTON_TIERS.map(([tier, control]) => [tier, control.h]),
+    [
+      ["XXS", 88],
+      ["XS", 104],
+      ["S", 136],
+      ["M", 162],
+      ["L", 176],
+    ],
+  );
   assert.equal(XS_BUTTON.h, CONTROL.buttonXS.h);
-  assert.equal(XS_BUTTON.h, CONTROL.toolbar.h, "the game's own toolbar and tab height (UILobby Able_Count/Bg, Common_Filter_Tab_Type1)");
+  assert.equal(
+    XS_BUTTON.h,
+    CONTROL.toolbar.h,
+    "the game's own toolbar and tab height (UILobby Able_Count/Bg, Common_Filter_Tab_Type1)",
+  );
   assert.equal(2 * CONTROL.buttonXS.pad, XS_BUTTON.glyphPad);
   assert.equal(XS_BUTTON.pitch - XS_BUTTON.w, XS_BUTTON.gap);
   assert.equal(SMALL_BUTTON.h, CONTROL.buttonS.h, "S is the prefab's small button");
@@ -31,7 +56,17 @@ test("only pills are tagged: low, and wider than high", () => {
   assert.ok(isPill(402, 136) && isPill(308, 104) && isPill(348, 162) && isPill(551, 176));
   assert.ok(isPill(191, 85) && isPill(150, 52), "compact bodies are pills too");
   // the cards, thumbnails and square action buttons that draw the same sprite
-  for (const [w, h] of [[293, 264], [200, 180], [205, 197], [242, 209], [250, 226], [444, 250], [780, 218], [320, 704], [854, 480]]) {
+  for (const [w, h] of [
+    [293, 264],
+    [200, 180],
+    [205, 197],
+    [242, 209],
+    [250, 226],
+    [444, 250],
+    [780, 218],
+    [320, 704],
+    [854, 480],
+  ]) {
     assert.ok(!isPill(w, h), `${w} x ${h}`);
     assert.equal(tagOf(w, h), null);
   }
@@ -49,7 +84,8 @@ test("a preset pill is tagged with its tier, any other pill with its measured he
 
 test("a tag that overlaps the caption's ink is told so, one that clears it is not", () => {
   // a caption centred in a 300 x 100 body, 120 wide and 30 high: its ink starts at x 90
-  const body = [0, 0, 300, 100], ink = inkBox(body, 120, 30, "center", "center");
+  const body = [0, 0, 300, 100],
+    ink = inkBox(body, 120, 30, "center", "center");
   assert.deepEqual(ink, [90, 35, 120, 30]);
   const tag = tagBox("XS", 0, 0);
   assert.deepEqual(tag, [0, 0, TAG.padX + TAG.perChar * 2, TAG.h]);
@@ -66,14 +102,29 @@ test("a tag that overlaps the caption's ink is told so, one that clears it is no
 
 // --- the render: a body in a tree gets a tag in a developer preview, none in a stable build ---
 class El {
-  children = []; attrs = {}; style = {}; dataset = {}; className = ""; textContent = "";
-  appendChild(el) { this.children.push(el); return el; }
-  setAttribute(k, v) { this.attrs[k] = v; }
+  children = [];
+  attrs = {};
+  style = {};
+  dataset = {};
+  className = "";
+  textContent = "";
+  appendChild(el) {
+    this.children.push(el);
+    return el;
+  }
+  setAttribute(k, v) {
+    this.attrs[k] = v;
+  }
   addEventListener() {}
-  getContext() { return { measureText: () => ({ width: 100 }) }; }
+  getContext() {
+    return { measureText: () => ({ width: 100 }) };
+  }
 }
 async function render(t, tree, { tags, scale } = {}) {
-  t.mock.method(globalThis, "fetch", async () => ({ ok: true, json: async () => ({ Common: { Test: { width: 1, height: 1 } } }) }));
+  t.mock.method(globalThis, "fetch", async () => ({
+    ok: true,
+    json: async () => ({ Common: { Test: { width: 1, height: 1 } } }),
+  }));
   t.mock.method(console, "error", () => {});
   const original = globalThis.document;
   globalThis.document = { createElement: () => new El(), documentElement: { lang: "en-US" } };
@@ -83,12 +134,54 @@ async function render(t, tree, { tags, scale } = {}) {
     const host = new El();
     await NGUI.render(tree, host, scale ? { scale } : {});
     return host.children.filter((el) => el.className.startsWith("ngui-tier"));
-  } finally { globalThis.document = original; }
+  } finally {
+    globalThis.document = original;
+  }
 }
-const pill = (w, h, caption = "OK", { sx = 1, sy = 1 } = {}) => ({ name: "Btn", active: true, pos: [0, 0], scale: [sx, sy], rotZ: 0,
-  widgets: [{ sprite: "Common_Btn_BG", atlas: "Common", type: 1, w_: w, h_: h, pivot: 4, depth: 5, color: "#ffffff/1.00", incline: 0, flip: 0 }],
-  children: [{ name: "Label", active: true, pos: [0, 0], scale: [1, 1], rotZ: 0, children: [],
-    widgets: [{ cls: "UILabel", text: caption, fontSize: 40, color: "#000000/1.00", w_: w - 20, h_: h - 20, pivot: 4, depth: 9, align: 0 }] }] });
+const pill = (w, h, caption = "OK", { sx = 1, sy = 1 } = {}) => ({
+  name: "Btn",
+  active: true,
+  pos: [0, 0],
+  scale: [sx, sy],
+  rotZ: 0,
+  widgets: [
+    {
+      sprite: "Common_Btn_BG",
+      atlas: "Common",
+      type: 1,
+      w_: w,
+      h_: h,
+      pivot: 4,
+      depth: 5,
+      color: "#ffffff/1.00",
+      incline: 0,
+      flip: 0,
+    },
+  ],
+  children: [
+    {
+      name: "Label",
+      active: true,
+      pos: [0, 0],
+      scale: [1, 1],
+      rotZ: 0,
+      children: [],
+      widgets: [
+        {
+          cls: "UILabel",
+          text: caption,
+          fontSize: 40,
+          color: "#000000/1.00",
+          w_: w - 20,
+          h_: h - 20,
+          pivot: 4,
+          depth: 9,
+          align: 0,
+        },
+      ],
+    },
+  ],
+});
 
 test("a developer preview tags each pill with its tier at the body's top left", async (t) => {
   const tags = await render(t, pill(308, 104), { tags: true });
@@ -133,7 +226,15 @@ test("a body that says it is a button is tagged whatever its shape; a chip by th
   // the details panel's five actions are 155 wide and 104 high: narrower than a pill, still buttons
   assert.equal(tagOf(155, 104), null);
   assert.deepEqual(tagOf(155, 104, "button"), { tier: "XS", text: "XS" });
-  assert.deepEqual(CHIP_TIER_LIST.map(([tier, chip]) => [tier, chip.h]), [["XS", 42], ["S", 54], ["M", 62], ["L", 72]]);
+  assert.deepEqual(
+    CHIP_TIER_LIST.map(([tier, chip]) => [tier, chip.h]),
+    [
+      ["XS", 42],
+      ["S", 54],
+      ["M", 62],
+      ["L", 72],
+    ],
+  );
   for (const [tier, chip] of CHIP_TIER_LIST) {
     assert.equal(chipTier(chip.h), tier);
     assert.deepEqual(tagOf(chip.minW, chip.h, "chip"), { tier, text: tier });
@@ -142,8 +243,29 @@ test("a body that says it is a button is tagged whatever its shape; a chip by th
   assert.equal(CHIP_TIERS.S.h, CONTROL.badge.h);
 });
 
-const chipBody = (w, h) => ({ name: "Chip", active: true, pos: [0, 0], scale: [1, 1], rotZ: 0, children: [],
-  widgets: [{ sprite: "Common_Bg_Raius10px", atlas: "Common", type: 1, w_: w, h_: h, pivot: 4, depth: 5, color: "#ffffff/1.00", incline: 10, flip: 0, tier: "chip" }] });
+const chipBody = (w, h) => ({
+  name: "Chip",
+  active: true,
+  pos: [0, 0],
+  scale: [1, 1],
+  rotZ: 0,
+  children: [],
+  widgets: [
+    {
+      sprite: "Common_Bg_Raius10px",
+      atlas: "Common",
+      type: 1,
+      w_: w,
+      h_: h,
+      pivot: 4,
+      depth: 5,
+      color: "#ffffff/1.00",
+      incline: 10,
+      flip: 0,
+      tier: "chip",
+    },
+  ],
+});
 test("a developer preview tags a chip with its size, marked as a chip", async (t) => {
   const tags = await render(t, chipBody(108, 54), { tags: true });
   assert.equal(tags.length, 1);

@@ -9,22 +9,64 @@ import { controls, insert } from "./control_prefabs.mjs";
 // --- a stand-in DOM: elements in a tree, ids, clicks, the focus and the window's key listeners ---
 class El {
   constructor(tag = "div") {
-    Object.assign(this, { tagName: tag.toUpperCase(), children: [], parentNode: null, style: {}, dataset: {}, attrs: {}, listeners: {}, captureListeners: {} });
-    Object.assign(this, { hidden: false, className: "", textContent: "", id: "", font: "", tabIndex: 0, title: "", scrollWidth: 0 });
+    Object.assign(this, {
+      tagName: tag.toUpperCase(),
+      children: [],
+      parentNode: null,
+      style: {},
+      dataset: {},
+      attrs: {},
+      listeners: {},
+      captureListeners: {},
+    });
+    Object.assign(this, {
+      hidden: false,
+      className: "",
+      textContent: "",
+      id: "",
+      font: "",
+      tabIndex: 0,
+      title: "",
+      scrollWidth: 0,
+    });
     const self = this;
     this.classList = {
       set: new Set(),
-      add(...c) { c.forEach((x) => this.set.add(x)); },
-      remove(...c) { c.forEach((x) => this.set.delete(x)); },
-      toggle(c, on = !this.set.has(c)) { if (on) this.set.add(c); else this.set.delete(c); return on; },
-      contains(c) { return this.set.has(c) || self.className.split(" ").includes(c); },
+      add(...c) {
+        c.forEach((x) => this.set.add(x));
+      },
+      remove(...c) {
+        c.forEach((x) => this.set.delete(x));
+      },
+      toggle(c, on = !this.set.has(c)) {
+        if (on) this.set.add(c);
+        else this.set.delete(c);
+        return on;
+      },
+      contains(c) {
+        return this.set.has(c) || self.className.split(" ").includes(c);
+      },
     };
   }
-  get childNodes() { return [...this.children]; }
-  get parentElement() { return this.parentNode; }
-  appendChild(child) { child.remove?.(); child.parentNode = this; this.children.push(child); return child; }
-  append(...kids) { for (const k of kids) this.appendChild(k); }
-  replaceChildren(...kids) { for (const c of [...this.children]) c.remove(); for (const k of kids) this.appendChild(k); }
+  get childNodes() {
+    return [...this.children];
+  }
+  get parentElement() {
+    return this.parentNode;
+  }
+  appendChild(child) {
+    child.remove?.();
+    child.parentNode = this;
+    this.children.push(child);
+    return child;
+  }
+  append(...kids) {
+    for (const k of kids) this.appendChild(k);
+  }
+  replaceChildren(...kids) {
+    for (const c of [...this.children]) c.remove();
+    for (const k of kids) this.appendChild(k);
+  }
   remove() {
     if (!this.parentNode) return;
     this.parentNode.children = this.parentNode.children.filter((c) => c !== this);
@@ -33,96 +75,305 @@ class El {
   set innerHTML(text) {
     for (const c of [...this.children]) c.remove();
     this.parts = {};
-    for (const key of text.includes("loading-back") ? [".loading-back", ".loading-ind"] : /loading-(fallback|plain)/.test(text) ? ["span"] : []) {
+    for (const key of text.includes("loading-back")
+      ? [".loading-back", ".loading-ind"]
+      : /loading-(fallback|plain)/.test(text)
+        ? ["span"]
+        : []) {
       this.parts[key] = this.appendChild(new El());
     }
   }
-  get firstChild() { return this.children[0]; }
-  contains(node) { for (let n = node; n; n = n.parentNode) if (n === this) return true; return false; }
-  get isConnected() { return document.body.contains(this); }
-  setAttribute(k, v) { this.attrs[k] = String(v); }
-  getAttribute(k) { return this.attrs[k] ?? null; }
-  removeAttribute(k) { delete this.attrs[k]; if (k === "title") this.title = ""; }
+  get firstChild() {
+    return this.children[0];
+  }
+  contains(node) {
+    for (let n = node; n; n = n.parentNode) if (n === this) return true;
+    return false;
+  }
+  get isConnected() {
+    return document.body.contains(this);
+  }
+  setAttribute(k, v) {
+    this.attrs[k] = String(v);
+  }
+  getAttribute(k) {
+    return this.attrs[k] ?? null;
+  }
+  removeAttribute(k) {
+    delete this.attrs[k];
+    if (k === "title") this.title = "";
+  }
   closest(selector) {
     for (let n = this; n; n = n.parentNode) {
-      if (selector === ".topbar .back" && n.classList.contains("back") && n.parentNode?.classList.contains("topbar")) return n;
-      if (selector.includes(":not([hidden])") && !n.hidden && ["popup-host", "consent-host"].some((c) => n.classList.contains(c))) return n;
+      if (selector === ".topbar .back" && n.classList.contains("back") && n.parentNode?.classList.contains("topbar"))
+        return n;
+      if (
+        selector.includes(":not([hidden])") &&
+        !n.hidden &&
+        ["popup-host", "consent-host"].some((c) => n.classList.contains(c))
+      )
+        return n;
     }
     return null;
   }
-  addEventListener(type, fn, capture = false) { ((capture ? this.captureListeners : this.listeners)[type] ||= []).push(fn); }
+  addEventListener(type, fn, capture = false) {
+    ((capture ? this.captureListeners : this.listeners)[type] ||= []).push(fn);
+  }
   dispatch(type, extra = {}) {
-    const ev = { type, target: this, defaultPrevented: false, stopped: false,
-      preventDefault() { this.defaultPrevented = true; }, stopImmediatePropagation() { this.stopped = true; }, ...extra };
-    const path = []; for (let n = this; n; n = n.parentNode) path.push(n);
-    for (const node of [...path].reverse()) for (const fn of node.captureListeners[type] || []) { fn(ev); if (ev.stopped) return ev; }
-    for (const node of path) for (const fn of node.listeners[type] || []) { fn(ev); if (ev.stopped) return ev; }
+    const ev = {
+      type,
+      target: this,
+      defaultPrevented: false,
+      stopped: false,
+      preventDefault() {
+        this.defaultPrevented = true;
+      },
+      stopImmediatePropagation() {
+        this.stopped = true;
+      },
+      ...extra,
+    };
+    const path = [];
+    for (let n = this; n; n = n.parentNode) path.push(n);
+    for (const node of [...path].reverse())
+      for (const fn of node.captureListeners[type] || []) {
+        fn(ev);
+        if (ev.stopped) return ev;
+      }
+    for (const node of path)
+      for (const fn of node.listeners[type] || []) {
+        fn(ev);
+        if (ev.stopped) return ev;
+      }
     if (type === "keydown") for (const fn of keyListeners) fn(ev);
     return ev;
   }
-  click() { return this.dispatch("click"); }
-  focus() { document.activeElement = this; }
-  querySelector(key) { return this.parts?.[key] || (key.startsWith(".") ? walk(this).find((e) => e.classList.contains(key.slice(1))) : null); }
-  getContext() { return { font: "", drawImage() {}, fillRect() {}, scale() {}, transform() {}, putImageData() {},
-    getImageData(_x, _y, width, height) { return { width, height, data: new Uint8ClampedArray(width * height * 4).fill(255) }; },
-    measureText(s) { return { width: s.length * 0.6 * parseFloat(/([\d.]+)px/.exec(this.font)?.[1] || 10) }; } }; }
-  toBlob(fn) { fn(new Blob()); }
-  toDataURL() { return "data:image/png;base64,c3ludGhldGljLW1hc2s="; }
+  click() {
+    return this.dispatch("click");
+  }
+  focus() {
+    document.activeElement = this;
+  }
+  querySelector(key) {
+    return (
+      this.parts?.[key] || (key.startsWith(".") ? walk(this).find((e) => e.classList.contains(key.slice(1))) : null)
+    );
+  }
+  getContext() {
+    return {
+      font: "",
+      drawImage() {},
+      fillRect() {},
+      scale() {},
+      transform() {},
+      putImageData() {},
+      getImageData(_x, _y, width, height) {
+        return { width, height, data: new Uint8ClampedArray(width * height * 4).fill(255) };
+      },
+      measureText(s) {
+        return { width: s.length * 0.6 * parseFloat(/([\d.]+)px/.exec(this.font)?.[1] || 10) };
+      },
+    };
+  }
+  toBlob(fn) {
+    fn(new Blob());
+  }
+  toDataURL() {
+    return "data:image/png;base64,c3ludGhldGljLW1hc2s=";
+  }
 }
 globalThis.Image = class {
-  naturalWidth = 8; naturalHeight = 8;
-  set src(value) { queueMicrotask(() => this.onload?.()); }
-  decode() { return Promise.resolve(); }
+  naturalWidth = 8;
+  naturalHeight = 8;
+  set src(value) {
+    queueMicrotask(() => this.onload?.());
+  }
+  decode() {
+    return Promise.resolve();
+  }
 };
 const body = new El("body");
-const walk = (n, out = []) => { out.push(n); for (const c of n.children) walk(c, out); return out; };
+const walk = (n, out = []) => {
+  out.push(n);
+  for (const c of n.children) walk(c, out);
+  return out;
+};
 globalThis.document = {
-  body, activeElement: body, documentElement: { lang: "en-US", appendChild() {} },
+  body,
+  activeElement: body,
+  documentElement: { lang: "en-US", appendChild() {} },
   createElement: (tag) => new El(tag),
   getElementById: (id) => walk(body).find((n) => n.id === id) || null,
   querySelector: () => null,
   addEventListener() {},
 };
 const keyListeners = [];
-globalThis.addEventListener = (type, fn) => { if (type === "keydown") keyListeners.push(fn); };
+globalThis.addEventListener = (type, fn) => {
+  if (type === "keydown") keyListeners.push(fn);
+};
 globalThis.removeEventListener = () => {};
 globalThis.requestAnimationFrame = (fn) => setTimeout(fn, 0);
-function press(key, target = document.activeElement) { return target.dispatch("keydown", { key }); }
-const stage = body.appendChild(new El()); stage.id = "stage";
-const host = (id) => { const h = stage.appendChild(new El()); h.id = id; h.hidden = true; return h; };
-const dialog = host("dialog"), consent = host("consent"), prompt = host("prompt"), settingsHost = host("settings");
-dialog.className = prompt.className = "popup-host"; consent.className = "consent-host";
+function press(key, target = document.activeElement) {
+  return target.dispatch("keydown", { key });
+}
+const stage = body.appendChild(new El());
+stage.id = "stage";
+const host = (id) => {
+  const h = stage.appendChild(new El());
+  h.id = id;
+  h.hidden = true;
+  return h;
+};
+const dialog = host("dialog"),
+  consent = host("consent"),
+  prompt = host("prompt"),
+  settingsHost = host("settings");
+dialog.className = prompt.className = "popup-host";
+consent.className = "consent-host";
 const switchHost = host("mod-switch");
 
 // --- the server: the popup frame's prefab, the RPC calls (recorded with their params) and the jobs ---
-const n = (name, pos, widgets = [], children = []) => ({ name, active: true, pos, scale: [1, 1], rotZ: 0, widgets, children });
-const spr = (name, w, h, extra = {}) => ({ sprite: name, atlas: "Common", type: 1, w_: w, h_: h, pivot: 4, depth: 5, color: "#ffffff/1.00", ...extra });
-const lbl = () => ({ cls: "UILabel", text: "text", fontSize: 72, color: "#2d4664/1.00", w_: 400, h_: 180, pivot: 4, depth: 9 });
-const SORT = n("UIPopup_Sort", [0, 0], [], [n("Center", [0, 0], [], [
-  n("BlackBg", [0, 0], [], [n("BlackBgClickArea", [0, 0], [spr("Common_Square_Bg", 2976, 2232, { color: "#000000/0.94" })])]),
-  n("Popup", [0, 0], [], [
-    n("Base", [0, -20], [], [n("BG", [0, 8], [spr("Common_Popup_Bg", 2458, 1355)], [
-      n("Texture_Top", [-977, 609], [{ texture: "Top", w_: 500, h_: 100, pivot: 4, depth: 6, color: "#ffffff/1.00" }]),
-      n("Label_Title_Locale", [0, 611], [lbl()], [n("Line", [0, -52], [spr("Common_Square_Bg", 160, 12)])]),
-      n("Btn_Close", [1144, 616], [spr("Common_Icon_Close", 60, 60, { type: 0 })]),
-    ])]),
-    n("Btn", [0, -499], [], [
-      n("Btn_Ok", [292, 0], [], [n("Label_Locale", [0, 2], [lbl()]), n("BG (1)", [0, -4], [spr("Common_Btn_BG", 496, 177)])]),
-      n("Btn_Cancel", [-292, 0], [], [n("BG (1)", [0, -4], [spr("Common_Btn_BG", 496, 177)]), n("Label_Locale", [0, 2], [lbl()])]),
-    ]),
-  ]),
-])]);
+const n = (name, pos, widgets = [], children = []) => ({
+  name,
+  active: true,
+  pos,
+  scale: [1, 1],
+  rotZ: 0,
+  widgets,
+  children,
+});
+const spr = (name, w, h, extra = {}) => ({
+  sprite: name,
+  atlas: "Common",
+  type: 1,
+  w_: w,
+  h_: h,
+  pivot: 4,
+  depth: 5,
+  color: "#ffffff/1.00",
+  ...extra,
+});
+const lbl = () => ({
+  cls: "UILabel",
+  text: "text",
+  fontSize: 72,
+  color: "#2d4664/1.00",
+  w_: 400,
+  h_: 180,
+  pivot: 4,
+  depth: 9,
+});
+const SORT = n(
+  "UIPopup_Sort",
+  [0, 0],
+  [],
+  [
+    n(
+      "Center",
+      [0, 0],
+      [],
+      [
+        n(
+          "BlackBg",
+          [0, 0],
+          [],
+          [n("BlackBgClickArea", [0, 0], [spr("Common_Square_Bg", 2976, 2232, { color: "#000000/0.94" })])],
+        ),
+        n(
+          "Popup",
+          [0, 0],
+          [],
+          [
+            n(
+              "Base",
+              [0, -20],
+              [],
+              [
+                n(
+                  "BG",
+                  [0, 8],
+                  [spr("Common_Popup_Bg", 2458, 1355)],
+                  [
+                    n(
+                      "Texture_Top",
+                      [-977, 609],
+                      [{ texture: "Top", w_: 500, h_: 100, pivot: 4, depth: 6, color: "#ffffff/1.00" }],
+                    ),
+                    n(
+                      "Label_Title_Locale",
+                      [0, 611],
+                      [lbl()],
+                      [n("Line", [0, -52], [spr("Common_Square_Bg", 160, 12)])],
+                    ),
+                    n("Btn_Close", [1144, 616], [spr("Common_Icon_Close", 60, 60, { type: 0 })]),
+                  ],
+                ),
+              ],
+            ),
+            n(
+              "Btn",
+              [0, -499],
+              [],
+              [
+                n(
+                  "Btn_Ok",
+                  [292, 0],
+                  [],
+                  [n("Label_Locale", [0, 2], [lbl()]), n("BG (1)", [0, -4], [spr("Common_Btn_BG", 496, 177)])],
+                ),
+                n(
+                  "Btn_Cancel",
+                  [-292, 0],
+                  [],
+                  [n("BG (1)", [0, -4], [spr("Common_Btn_BG", 496, 177)]), n("Label_Locale", [0, 2], [lbl()])],
+                ),
+              ],
+            ),
+          ],
+        ),
+      ],
+    ),
+  ],
+);
 const OPTIONS = structuredClone(SORT);
 OPTIONS.name = "UIPopup_Option_PC";
-OPTIONS.children[0].children.find((e) => e.name === "Popup").children.push(
-  n("TabBg", [0, 0], [], [n("Grid", [0, 0])]),
-  n("Game", [0, 0], [], ["Tab_On", "Tab_Off"].map((name) => n(name, [0, 0], [], [n("Label_Locale", [0, 0], [lbl()])]))),
-  n("List", [0, 0], [], [n("Sound_Setting", [0, 0], [], [n("Sound_Scroll View", [0, 0], [], [
-    n("Grid_2", [0, 0], [], [n("Master", [0, 0], [], [n("Type_3", [0, 0])])]),
-  ])])]),
-);
+OPTIONS.children[0].children
+  .find((e) => e.name === "Popup")
+  .children.push(
+    n("TabBg", [0, 0], [], [n("Grid", [0, 0])]),
+    n(
+      "Game",
+      [0, 0],
+      [],
+      ["Tab_On", "Tab_Off"].map((name) => n(name, [0, 0], [], [n("Label_Locale", [0, 0], [lbl()])])),
+    ),
+    n(
+      "List",
+      [0, 0],
+      [],
+      [
+        n(
+          "Sound_Setting",
+          [0, 0],
+          [],
+          [
+            n(
+              "Sound_Scroll View",
+              [0, 0],
+              [],
+              [n("Grid_2", [0, 0], [], [n("Master", [0, 0], [], [n("Type_3", [0, 0])])])],
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
 const controlLayouts = controls();
-insert(OPTIONS, "Center/Popup/List/Sound_Setting/ETCSetting/ButtonBg", controlLayouts.option.children[0].children[0].children[0].children[0].children[0].children[0]);
+insert(
+  OPTIONS,
+  "Center/Popup/List/Sound_Setting/ETCSetting/ButtonBg",
+  controlLayouts.option.children[0].children[0].children[0].children[0].children[0].children[0],
+);
 const calls = [];
 const answers = { "mods.sizes": ({ kind }) => ({ [`${kind}Size`]: 0 }) }; // method -> result (or a function of params)
 const jobs = {}; // id -> {state, result, error}
@@ -133,14 +384,26 @@ globalThis.fetch = async (url, opts = {}) => {
     calls.push([method, params]);
     if (method === "jobs.get") return reply({ result: jobs[params.id] || { state: "running" } });
     const a = answers[method];
-    const result = typeof a === "function" ? await a(params) : a ?? null;
+    const result = typeof a === "function" ? await a(params) : (a ?? null);
     if (result && result.error) return reply({ error: result.error });
     return reply({ result });
   }
-  if (url === "/asset/ui/atlases.json") return reply({ Common: Object.fromEntries([
-    "Common_Square_Bg", "Common_Popup_Bg", "Common_Icon_Close", "Common_Btn_BG", "Common_Line_Dot",
-    "Common_Btn_Normal_B_C_Pt", "Common_Filter_Tab_Type1", "Common_Filter_Tab_Type1_Pressed", "Common_Btn_Normal_Y_S_Pt",
-  ].map((name) => [name, { width: 8, height: 8 }])) });
+  if (url === "/asset/ui/atlases.json")
+    return reply({
+      Common: Object.fromEntries(
+        [
+          "Common_Square_Bg",
+          "Common_Popup_Bg",
+          "Common_Icon_Close",
+          "Common_Btn_BG",
+          "Common_Line_Dot",
+          "Common_Btn_Normal_B_C_Pt",
+          "Common_Filter_Tab_Type1",
+          "Common_Filter_Tab_Type1_Pressed",
+          "Common_Btn_Normal_Y_S_Pt",
+        ].map((name) => [name, { width: 8, height: 8 }]),
+      ),
+    });
   if (url === "/asset/ui/textures.json") return reply({});
   if (url === "/asset/ui/layout/UIPopup_Sort.json") return reply(SORT);
   if (url === "/asset/ui/layout/UIPopup_FilterSort.json") return reply(controlLayouts.filter);
@@ -149,15 +412,36 @@ globalThis.fetch = async (url, opts = {}) => {
 };
 // the event stream: the page subscribes; emit() sends an event as the server would
 const streams = [];
-globalThis.EventSource = class { constructor() { this.listeners = {}; streams.push(this); } addEventListener(type, fn) { this.listeners[type] = fn; } };
-const emit = (type, data) => { for (const stream of streams) stream.listeners[type]?.({ data: JSON.stringify(data) }); };
+globalThis.EventSource = class {
+  constructor() {
+    this.listeners = {};
+    streams.push(this);
+  }
+  addEventListener(type, fn) {
+    this.listeners[type] = fn;
+  }
+};
+const emit = (type, data) => {
+  for (const stream of streams) stream.listeners[type]?.({ data: JSON.stringify(data) });
+};
 const warn = console.warn;
-console.warn = (...args) => { if (!/^(popup layout|thumbnail failed)/.test(String(args[0]))) warn(...args); };
+console.warn = (...args) => {
+  if (!/^(popup layout|thumbnail failed)/.test(String(args[0]))) warn(...args);
+};
 
 // the en-US strings, as i18n.strings gives them (webui.* keys)
-const flat = (o, p = "", out = {}) => { for (const [k, v] of Object.entries(o)) { if (v && typeof v === "object") flat(v, `${p}${k}.`, out); else out[`${p}${k}`] = v; } return out; };
-const strings = Object.fromEntries(Object.entries(flat(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8"))))
-  .filter(([k]) => k.startsWith("webui.")));
+const flat = (o, p = "", out = {}) => {
+  for (const [k, v] of Object.entries(o)) {
+    if (v && typeof v === "object") flat(v, `${p}${k}.`, out);
+    else out[`${p}${k}`] = v;
+  }
+  return out;
+};
+const strings = Object.fromEntries(
+  Object.entries(
+    flat(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8"))),
+  ).filter(([k]) => k.startsWith("webui.")),
+);
 const I18n = await import("../../src/bmpt/web/js/i18n.js");
 I18n.setStrings("en-US", strings);
 const S = (key) => strings[`webui.${key}`];
@@ -169,18 +453,29 @@ const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 const actionsIn = (root) => walk(root).filter((e) => e.dataset?.action);
 const action = (root, name) => actionsIn(root).find((e) => e.dataset.action === name);
 async function drawn(root, name) {
-  for (let i = 0; i < 300; i++) { const b = action(root, name); if (b) return b; await tick(); }
+  for (let i = 0; i < 300; i++) {
+    const b = action(root, name);
+    if (b) return b;
+    await tick();
+  }
   throw new Error(`no ${name} button`);
 }
 async function until(fn, what) {
-  for (let i = 0; i < 300; i++) { if (fn()) return; await tick(); }
+  for (let i = 0; i < 300; i++) {
+    if (fn()) return;
+    await tick();
+  }
   throw new Error(`never: ${what}`);
 }
 const noticeDelay = globalThis.setTimeout;
 async function expectNotice(text) {
   for (let i = 0; i < 2000; i++) {
-    const layer = dialog.children.at(-1), ok = layer && action(layer, "ok");
-    if (ok && walk(layer).some((el) => el.textContent.replaceAll("\n", " ") === text)) { ok.click(); return; }
+    const layer = dialog.children.at(-1),
+      ok = layer && action(layer, "ok");
+    if (ok && walk(layer).some((el) => el.textContent.replaceAll("\n", " ") === text)) {
+      ok.click();
+      return;
+    }
     await new Promise((resolve) => noticeDelay(resolve, 1));
   }
   throw new Error(`message not shown: ${text}`);
@@ -190,16 +485,52 @@ afterEach(async () => {
   for (const layer of [...dialog.children].reverse()) action(layer, "close")?.click();
 });
 const called = (method) => calls.filter(([m]) => m === method).map(([, p]) => p);
-const labels = (root) => walk(root).map((e) => e.attrs?.["aria-label"]).filter(Boolean);
-function deferred() { let resolve; const promise = new Promise((r) => { resolve = r; }); return { promise, resolve }; }
+const labels = (root) =>
+  walk(root)
+    .map((e) => e.attrs?.["aria-label"])
+    .filter(Boolean);
+function deferred() {
+  let resolve;
+  const promise = new Promise((r) => {
+    resolve = r;
+  });
+  return { promise, resolve };
+}
 
 // a mods.state as the services answer it
-const install = (key, label, extra = {}) => ({ id: key.slice(-4), key, server: "global", folder: key, label, named: true, ...extra });
+const install = (key, label, extra = {}) => ({
+  id: key.slice(-4),
+  key,
+  server: "global",
+  folder: key,
+  label,
+  named: true,
+  ...extra,
+});
 const base = (over = {}) => ({
-  installs: [install("/games/BlueArchive", "Global")], current: "/games/BlueArchive", enabled: true,
-  available: true, reason: null, reasonParams: {}, scan: true, explained: true, configured: 2, pending: 0, stuck: 0,
-  left: 0, unfinished: { pending: 0, left: 0, stuck: 0 }, drift: 0, untracked: 0, damaged: 0, sourceMissing: 0,
-  queued: 0, scanned: null, tray: false, traySupported: false, busy: false, progress: null,
+  installs: [install("/games/BlueArchive", "Global")],
+  current: "/games/BlueArchive",
+  enabled: true,
+  available: true,
+  reason: null,
+  reasonParams: {},
+  scan: true,
+  explained: true,
+  configured: 2,
+  pending: 0,
+  stuck: 0,
+  left: 0,
+  unfinished: { pending: 0, left: 0, stuck: 0 },
+  drift: 0,
+  untracked: 0,
+  damaged: 0,
+  sourceMissing: 0,
+  queued: 0,
+  scanned: null,
+  tray: false,
+  traySupported: false,
+  busy: false,
+  progress: null,
   ...over,
 });
 
@@ -208,20 +539,42 @@ test("the switch's view from mods.state: on, off, busy, unavailable with its rea
   assert.equal(MS.view(base({ enabled: false })).on, false);
   // busy: a toggle queued or running, or writes waiting for the classic window; busy wins over unavailable
   assert.equal(MS.view(base({ busy: true })).busy, true);
-  assert.deepEqual([MS.view(base({ busy: true, queued: 2, available: false, reason: "classic_open" }))].map((v) => [v.busy, v.unavailable]), [[true, false]]);
-  for (const reason of ["game_running", "game_status_unavailable", "steam_busy", "classic_open", "game_not_found", "profiles_unreadable"]) {
+  assert.deepEqual(
+    [MS.view(base({ busy: true, queued: 2, available: false, reason: "classic_open" }))].map((v) => [
+      v.busy,
+      v.unavailable,
+    ]),
+    [[true, false]],
+  );
+  for (const reason of [
+    "game_running",
+    "game_status_unavailable",
+    "steam_busy",
+    "classic_open",
+    "game_not_found",
+    "profiles_unreadable",
+  ]) {
     const v = MS.view(base({ available: false, reason }));
     assert.equal(v.unavailable, true, reason);
     assert.equal(v.reason, reason);
-    assert.notEqual(MS.reasonText(base({ available: false, reason, reasonParams: { file: "profiles.json" } })), `error.${reason}`);
+    assert.notEqual(
+      MS.reasonText(base({ available: false, reason, reasonParams: { file: "profiles.json" } })),
+      `error.${reason}`,
+    );
   }
   assert.equal(MS.reasonText(base({ available: false, reason: "game_running" })), S("error.game_running"));
-  assert.equal(MS.reasonText(base({ available: false, reason: "profiles_unreadable", reasonParams: { file: "p.json" } })), "Unreadable mod settings: p.json");
+  assert.equal(
+    MS.reasonText(base({ available: false, reason: "profiles_unreadable", reasonParams: { file: "p.json" } })),
+    "Unreadable mod settings: p.json",
+  );
   // the red dot: entries not switched or left as is, as the services count them (the last scan with the scan consent,
   // the unfinished list's counts by why without it)
   assert.equal(MS.view(base()).dot, false);
   for (const k of ["pending", "stuck", "left"]) assert.equal(MS.view(base({ [k]: 1 })).dot, true, k);
-  assert.equal(MS.view(base({ scan: false, pending: 0, left: 1, unfinished: { pending: 0, left: 1, stuck: 0 } })).dot, true);
+  assert.equal(
+    MS.view(base({ scan: false, pending: 0, left: 1, unfinished: { pending: 0, left: 1, stuck: 0 } })).dot,
+    true,
+  );
   // Legacy visibility values cannot hide the switch; only the absence of a current install does.
   assert.equal(MS.view(base({ shown: false })).hidden, false);
   assert.equal(MS.view(base({ current: null })).hidden, true);
@@ -234,12 +587,22 @@ test("a click: the reason, busy, the classic modal, the first toggle's explanati
   assert.equal(MS.clickAction(base({ explained: false })), "explain");
   assert.equal(MS.clickAction(base({ explained: false }), true), "confirm", "explained in this page already");
   // the current state clicked: nothing, in any state; the other one as the switch as a whole
-  for (const over of [{}, { explained: false }, { busy: true }, { busy: true, queued: 1 }, { available: false, reason: "game_running" },
-    { available: false, reason: "classic_open" }]) {
+  for (const over of [
+    {},
+    { explained: false },
+    { busy: true },
+    { busy: true, queued: 1 },
+    { available: false, reason: "game_running" },
+    { available: false, reason: "classic_open" },
+  ]) {
     assert.equal(MS.clickAction(base(over), false, true), "none", JSON.stringify(over));
     assert.equal(MS.clickAction(base({ ...over, enabled: false }), false, false), "none", JSON.stringify(over));
     assert.equal(MS.clickAction(base(over), false, false), MS.clickAction(base(over)), JSON.stringify(over));
-    assert.equal(MS.clickAction(base({ ...over, enabled: false }), false, true), MS.clickAction(base({ ...over, enabled: false })), JSON.stringify(over));
+    assert.equal(
+      MS.clickAction(base({ ...over, enabled: false }), false, true),
+      MS.clickAction(base({ ...over, enabled: false })),
+      JSON.stringify(over),
+    );
   }
   assert.equal(MS.clickAction(base({ busy: true })), "busy");
   assert.equal(MS.clickAction(base({ busy: true, queued: 1 })), "queued");
@@ -254,9 +617,14 @@ test("a click: the reason, busy, the classic modal, the first toggle's explanati
 });
 
 test("the clicked state: the ON or OFF segment, or none for the switch as a whole", () => {
-  const toggle = new El("button"), on = new El("span"), off = new El("span"), text = new El("b");
-  on.className = "ms-seg ms-on"; off.className = "ms-seg ms-off";
-  off.appendChild(text); toggle.append(on, off);
+  const toggle = new El("button"),
+    on = new El("span"),
+    off = new El("span"),
+    text = new El("b");
+  on.className = "ms-seg ms-on";
+  off.className = "ms-seg ms-off";
+  off.appendChild(text);
+  toggle.append(on, off);
   assert.equal(MS.clickedState(on, toggle), true);
   assert.equal(MS.clickedState(text, toggle), false);
   assert.equal(MS.clickedState(toggle, toggle), null);
@@ -268,11 +636,25 @@ test("the confirmation: the neutral notice, the question and the action, in ever
     for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
       const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
       I18n.setStrings(lang, flat({ webui: ui }));
-      assert.deepEqual(MS.confirmation(base()), { title: ui.quit.title, lines: [ui.mods.offAsk], ok: ui.mods.offTitle, cancel: ui.popup.cancel }, lang);
-      assert.deepEqual(MS.confirmation(base({ enabled: false })), { title: ui.quit.title, lines: [ui.mods.onAsk], ok: ui.mods.onTitle, cancel: ui.popup.cancel }, lang);
-      for (const k of ["offAsk", "onAsk"]) assert.ok(typeof ui.mods[k] === "string" && ui.mods[k].length > 0 && !ui.mods[k].includes("\n"), `${lang} ${k}`);
+      assert.deepEqual(
+        MS.confirmation(base()),
+        { title: ui.quit.title, lines: [ui.mods.offAsk], ok: ui.mods.offTitle, cancel: ui.popup.cancel },
+        lang,
+      );
+      assert.deepEqual(
+        MS.confirmation(base({ enabled: false })),
+        { title: ui.quit.title, lines: [ui.mods.onAsk], ok: ui.mods.onTitle, cancel: ui.popup.cancel },
+        lang,
+      );
+      for (const k of ["offAsk", "onAsk"])
+        assert.ok(
+          typeof ui.mods[k] === "string" && ui.mods[k].length > 0 && !ui.mods[k].includes("\n"),
+          `${lang} ${k}`,
+        );
     }
-  } finally { I18n.setStrings("en-US", strings); }
+  } finally {
+    I18n.setStrings("en-US", strings);
+  }
   assert.equal(S("mods.offAsk"), "Turn off mods?");
   assert.equal(S("mods.onAsk"), "Turn on mods?");
 });
@@ -291,19 +673,31 @@ test("every locale gives the help and first toggle two separate opening lines", 
       const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
       I18n.setStrings(lang, flat({ webui: ui }));
       const opening = [ui.mods.helpOn, ui.mods.helpOff];
-      assert.ok(opening.every((s) => typeof s === "string" && s.length > 0 && !s.includes("\n")), lang);
+      assert.ok(
+        opening.every((s) => typeof s === "string" && s.length > 0 && !s.includes("\n")),
+        lang,
+      );
       assert.ok(!("help" in ui.mods), lang);
       assert.deepEqual(MS.basics(), opening, lang);
-      assert.deepEqual(MS.helpLines(base()).slice(0, 2), opening.map((text) => ({ text })), lang);
-      for (const enabled of [true, false]) assert.deepEqual(MS.explanation(base({ enabled })).lines,
-        [...opening, ui.mods.explainOnce], lang);
+      assert.deepEqual(
+        MS.helpLines(base()).slice(0, 2),
+        opening.map((text) => ({ text })),
+        lang,
+      );
+      for (const enabled of [true, false])
+        assert.deepEqual(MS.explanation(base({ enabled })).lines, [...opening, ui.mods.explainOnce], lang);
     }
-  } finally { I18n.setStrings("en-US", strings); }
+  } finally {
+    I18n.setStrings("en-US", strings);
+  }
 });
 
 test("the help's lines: game folders, Retry and Details, independent of scan consent", () => {
   const texts = (s, sizes) => MS.helpLines(s, sizes).map((l) => l.text);
-  const buttons = (s) => MS.helpLines(s).filter((l) => l.button).map((l) => [l.button.id, l.button.label]);
+  const buttons = (s) =>
+    MS.helpLines(s)
+      .filter((l) => l.button)
+      .map((l) => [l.button.id, l.button.label]);
   assert.deepEqual(texts(base()), [S("mods.helpOn"), S("mods.helpOff")]);
   assert.ok(!texts(base()).some((t) => t.startsWith("Game folders")));
   assert.ok(!texts(base()).some((t) => t.startsWith("Disk use:")));
@@ -311,31 +705,51 @@ test("the help's lines: game folders, Retry and Details, independent of scan con
   assert.deepEqual(buttons(base()), []);
   assert.deepEqual(buttons(base({ builtSize: 5 * 1073741824 })), []);
   // two game folders: their install labels, with the language's separator
-  const two = base({ installs: [install("/a/BlueArchive", "Global (BlueArchive)"), install("/b/Steam", "Global (Steam)")] });
+  const two = base({
+    installs: [install("/a/BlueArchive", "Global (BlueArchive)"), install("/b/Steam", "Global (Steam)")],
+  });
   assert.ok(texts(two).includes("Game folders: Global (BlueArchive), Global (Steam)"));
   assert.equal(texts(two)[2], "Game folders: Global (BlueArchive), Global (Steam)", "after the opening text");
-  assert.equal(MS.helpLines(two, { sep: "、" }).find((l) => l.text.startsWith("Game folders")).text, "Game folders: Global (BlueArchive)、Global (Steam)");
+  assert.equal(
+    MS.helpLines(two, { sep: "、" }).find((l) => l.text.startsWith("Game folders")).text,
+    "Game folders: Global (BlueArchive)、Global (Steam)",
+  );
   // Retry for the entries not switched (pending and left), Details for those left as is (stuck), never a Retry for them
   const counts = base({ pending: 2, left: 1, stuck: 3, sourceMissing: 1 });
   assert.ok(texts(counts).includes("Not switched: 3"));
   assert.ok(texts(counts).includes("Left as is, no official copy: 3"));
   assert.ok(texts(counts).includes("Gone from the library: 1"));
-  assert.deepEqual(buttons(counts), [["retry", S("mods.retry")], ["details", S("mods.details")]]);
+  assert.deepEqual(buttons(counts), [
+    ["retry", S("mods.retry")],
+    ["details", S("mods.details")],
+  ]);
   assert.deepEqual(buttons(base({ stuck: 2 })), [["details", S("mods.details")]]);
   // Without scan consent the unfinished list supplies the same counts and actions, with no extra consent row.
   for (const scan of [null, false]) {
     const s = base({ scan, pending: 1, left: 1, stuck: 1, unfinished: { pending: 1, left: 1, stuck: 1 } });
     assert.deepEqual(MS.helpLines(s), MS.helpLines({ ...s, scan: true }), String(scan));
-    assert.deepEqual(buttons(s), [["retry", S("mods.retry")], ["details", S("mods.details")]]);
+    assert.deepEqual(buttons(s), [
+      ["retry", S("mods.retry")],
+      ["details", S("mods.details")],
+    ]);
     assert.ok(texts(s).includes("Not switched: 2"));
   }
   for (const l of MS.helpLines(counts)) assert.ok(!/^mods\./.test(l.text), `a string for ${l.text}`);
 });
 
 test("entries a game update's rig change holds: their own help line and Details, never a Retry; counted by the dot", () => {
-  const s = base({ held: 2, heldEntries: [{ install: "/a", core: "a_spr", variant: "a", kind: "spr" }, { install: "/a", core: "b_home", variant: "b", kind: "lobby" }] });
+  const s = base({
+    held: 2,
+    heldEntries: [
+      { install: "/a", core: "a_spr", variant: "a", kind: "spr" },
+      { install: "/a", core: "b_home", variant: "b", kind: "lobby" },
+    ],
+  });
   const lines = MS.helpLines(s);
-  assert.deepEqual(lines.filter((l) => l.button).map((l) => [l.text, l.button.id]), [["Official .skel or .atlas file changed, not applied: 2", "held"]]);
+  assert.deepEqual(
+    lines.filter((l) => l.button).map((l) => [l.text, l.button.id]),
+    [["Official .skel or .atlas file changed, not applied: 2", "held"]],
+  );
   assert.equal(MS.view(s).dot, true);
   assert.equal(MS.view(base()).dot, false);
   // a toggle that held entries says so
@@ -344,15 +758,43 @@ test("entries a game update's rig change holds: their own help line and Details,
 });
 
 test("a toggle's end: silence, or the result popup naming each failed entry with its error string", () => {
-  assert.deepEqual(MS.resultSummary({ enabled: false, done: [{}, {}], adopted: [], failed: [], stuck: [], left: [], skipped: [{}] }), null);
+  assert.deepEqual(
+    MS.resultSummary({ enabled: false, done: [{}, {}], adopted: [], failed: [], stuck: [], left: [], skipped: [{}] }),
+    null,
+  );
   assert.deepEqual(MS.resultSummary({ enabled: true, done: [] }), null);
   const names = (e) => ({ airi: "Airi", ch0251: "Airi (Band)" })[e.variant] || e.variant;
-  const r = MS.resultSummary({
-    enabled: false, done: [{}, {}, {}], adopted: [{ variant: "airi" }],
-    failed: [{ entry: { install: "/g", core: "airi_spr", variant: "airi", kind: "spr" }, code: "game_file_locked", params: {} },
-      { entry: { install: "/g", core: "ch0251_home", variant: "ch0251", kind: "lobby" }, code: "not_enough_space", params: { need: 3 * 1048576, free: 1048576 } }],
-    stuck: [{ variant: "ch0251" }], left: [{ install: "/g", core: "zz_spr", variant: "zz", kind: "spr", code: "not_enough_space", params: { need: 2 * 1048576, free: 1048576 } }],
-  }, names);
+  const r = MS.resultSummary(
+    {
+      enabled: false,
+      done: [{}, {}, {}],
+      adopted: [{ variant: "airi" }],
+      failed: [
+        {
+          entry: { install: "/g", core: "airi_spr", variant: "airi", kind: "spr" },
+          code: "game_file_locked",
+          params: {},
+        },
+        {
+          entry: { install: "/g", core: "ch0251_home", variant: "ch0251", kind: "lobby" },
+          code: "not_enough_space",
+          params: { need: 3 * 1048576, free: 1048576 },
+        },
+      ],
+      stuck: [{ variant: "ch0251" }],
+      left: [
+        {
+          install: "/g",
+          core: "zz_spr",
+          variant: "zz",
+          kind: "spr",
+          code: "not_enough_space",
+          params: { need: 2 * 1048576, free: 1048576 },
+        },
+      ],
+    },
+    names,
+  );
   assert.equal(r.title, S("mods.offState"));
   assert.deepEqual(r.lines, [
     "Added to the library first: 1",
@@ -363,7 +805,13 @@ test("a toggle's end: silence, or the result popup naming each failed entry with
     "zz, Portrait - Not enough space: 2.0 MB needed, 1.0 MB free",
   ]);
   // many failures: the first ones named, the rest counted
-  const many = MS.resultSummary({ enabled: true, failed: Array.from({ length: 9 }, (_, i) => ({ entry: { core: `c${i}_spr`, variant: `c${i}` }, code: "game_file_locked" })) });
+  const many = MS.resultSummary({
+    enabled: true,
+    failed: Array.from({ length: 9 }, (_, i) => ({
+      entry: { core: `c${i}_spr`, variant: `c${i}` },
+      code: "game_file_locked",
+    })),
+  });
   assert.equal(many.lines.at(-1), "+3");
   assert.equal(many.lines[0], "Done: 0, failed: 9");
   assert.equal(many.lines.length, 1 + 6 + 1);
@@ -379,29 +827,72 @@ test("the classic modal's outcome follows its box however it closes", () => {
 
 test("the start prompts: their order, the scan consent, and no prompt from the scan while files may be written", () => {
   assert.deepEqual(MS.START, ["consent", "spine", "scan", "update", "drift", "untracked"]);
-  const due = (state, entries = [], info = { consent: true, spineConsent: true, compiled: false }) => MS.START.filter((name) => MS.startDue(name, { info, state, entries }));
-  assert.deepEqual(due(base({ scan: null }), [], { consent: null, spineConsent: null, compiled: true }), ["consent", "spine", "scan", "update"]);
+  const due = (state, entries = [], info = { consent: true, spineConsent: true, compiled: false }) =>
+    MS.START.filter((name) => MS.startDue(name, { info, state, entries }));
+  assert.deepEqual(due(base({ scan: null }), [], { consent: null, spineConsent: null, compiled: true }), [
+    "consent",
+    "spine",
+    "scan",
+    "update",
+  ]);
   assert.equal(MS.startDue("spine", { info: {} }), true);
   assert.equal(MS.startDue("spine", { info: { spineConsent: null } }), true);
-  assert.deepEqual(due(base({ scan: false }), [], { consent: true, spineConsent: true }), [], "a stored Yes skips the notice");
-  assert.deepEqual(due(base({ scan: false }), [], { consent: true, spineConsent: false }), ["spine"], "a stored No shows the notice");
+  assert.deepEqual(
+    due(base({ scan: false }), [], { consent: true, spineConsent: true }),
+    [],
+    "a stored Yes skips the notice",
+  );
+  assert.deepEqual(
+    due(base({ scan: false }), [], { consent: true, spineConsent: false }),
+    ["spine"],
+    "a stored No shows the notice",
+  );
   assert.deepEqual(due(base({ scan: null, installs: [] })), [], "no game folder known: no scan consent");
   assert.deepEqual(due(base({ scan: false })), [], "answered: not asked again");
-  const reset = { install: "/g", core: "airi_spr", state: "reset" }, untracked = { install: "/g", core: "ch0251_spr", state: "untracked" };
+  const reset = { install: "/g", core: "airi_spr", state: "reset" },
+    untracked = { install: "/g", core: "ch0251_spr", state: "untracked" };
   assert.deepEqual(due(base(), [reset, untracked]), ["drift", "untracked"]);
-  assert.deepEqual(due(base(), [{ ...reset, state: "updated" }, { ...untracked, state: "changed" }]), ["untracked"], "a game update's entries are the update summary's");
-  for (const reason of MS.PROMPT_BLOCKERS) assert.deepEqual(due(base({ available: false, reason }), [reset, untracked]), [], reason);
+  assert.deepEqual(
+    due(base(), [
+      { ...reset, state: "updated" },
+      { ...untracked, state: "changed" },
+    ]),
+    ["untracked"],
+    "a game update's entries are the update summary's",
+  );
+  for (const reason of MS.PROMPT_BLOCKERS)
+    assert.deepEqual(due(base({ available: false, reason }), [reset, untracked]), [], reason);
   assert.deepEqual(due(base({ available: false, reason: "game_status_unavailable" }), [reset]), ["drift"]);
-  assert.deepEqual(due(base({ scan: false }), [reset, untracked]), [], "no drift or untracked prompt without the scan consent");
-  assert.deepEqual(due(base(), [{ ...reset, dismissed: true }, { ...untracked, dismissed: true }]), [], "a dismissed set does not prompt");
-  assert.deepEqual(due(base({ enabled: false }), [reset, untracked]), ["untracked"], "mods off: official files are the intent");
+  assert.deepEqual(
+    due(base({ scan: false }), [reset, untracked]),
+    [],
+    "no drift or untracked prompt without the scan consent",
+  );
+  assert.deepEqual(
+    due(base(), [
+      { ...reset, dismissed: true },
+      { ...untracked, dismissed: true },
+    ]),
+    [],
+    "a dismissed set does not prompt",
+  );
+  assert.deepEqual(
+    due(base({ enabled: false }), [reset, untracked]),
+    ["untracked"],
+    "mods off: official files are the intent",
+  );
 });
 
 test("the prompts' buttons: Add and Turn On Mods only while off; Apply Mod Configuration and Keep as Is", () => {
   assert.deepEqual(MS.untrackedButtons(base()), ["add", "later"]);
   assert.deepEqual(MS.untrackedButtons(base({ enabled: false })), ["add", "addTurnOn", "later"]);
-  const a = { install: "/g", core: "airi_spr" }, b = { install: "/g", core: "ch0251_spr" }, c = { install: "/j", core: "airi_spr" };
-  assert.deepEqual(MS.driftChoice("apply", [a, b, c], ["/g|airi_spr", "/j|airi_spr"]), { restore: [a, c], dismiss: [b] });
+  const a = { install: "/g", core: "airi_spr" },
+    b = { install: "/g", core: "ch0251_spr" },
+    c = { install: "/j", core: "airi_spr" };
+  assert.deepEqual(MS.driftChoice("apply", [a, b, c], ["/g|airi_spr", "/j|airi_spr"]), {
+    restore: [a, c],
+    dismiss: [b],
+  });
   assert.deepEqual(MS.driftChoice("keep", [a, b, c], ["/g|airi_spr"]), { restore: [], dismiss: [a, b, c] });
 });
 
@@ -411,7 +902,10 @@ test("sizes and the free-space refusal's sizes", () => {
   assert.equal(MS.sizeText(200 * 1024), "200 KB");
   assert.equal(MS.sizeText(1.5 * 1048576), "1.5 MB");
   assert.equal(MS.sizeText(2.25 * 1073741824), "2.25 GB");
-  assert.equal(MS.errorText("not_enough_space", { need: 1073741824, free: 0 }), "Not enough space: 1.00 GB needed, 0 MB free");
+  assert.equal(
+    MS.errorText("not_enough_space", { need: 1073741824, free: 0 }),
+    "Not enough space: 1.00 GB needed, 0 MB free",
+  );
   assert.equal(MS.listSep("zh-CN"), "、");
   assert.equal(MS.listSep("ja-JP"), "、");
   assert.equal(MS.listSep("ko-KR"), ", ");
@@ -428,14 +922,23 @@ test("the top bar's switch follows mods.state, and the first toggle explains onc
   assert.equal(switchHost.hidden, false);
   assert.equal(toggle.getAttribute("role"), "switch");
   assert.equal(toggle.getAttribute("aria-checked"), "true");
-  assert.deepEqual(toggle.children.filter((e) => e.className.startsWith("ms-seg")).map((e) => e.className), ["ms-seg ms-on", "ms-seg ms-off"]);
+  assert.deepEqual(
+    toggle.children.filter((e) => e.className.startsWith("ms-seg")).map((e) => e.className),
+    ["ms-seg ms-on", "ms-seg ms-off"],
+  );
   assert.equal(switchHost.children.find((e) => e.className === "ms-help").getAttribute("aria-label"), S("mods.guide"));
   // the first click (here from Settings): the explanation; closing it any way but its button toggles nothing
   MS.click("settings");
   await drawn(dialog, "cancel");
   const explanation = walk(dialog).filter((e) => /^Center\/Popup\/Lines\/Line_\d+$/.test(e.dataset.path));
   assert.equal(explanation.length, 3);
-  assert.ok(Math.abs(parseFloat(walk(dialog).find(e => e.dataset.path === "Center/Popup/Base/BG").style.width) / (1920 / 2960) - 2098) < 0.02, "the explanation takes class L");
+  assert.ok(
+    Math.abs(
+      parseFloat(walk(dialog).find((e) => e.dataset.path === "Center/Popup/Base/BG").style.width) / (1920 / 2960) -
+        2098,
+    ) < 0.02,
+    "the explanation takes class L",
+  );
   assert.ok(explanation.every((e) => e.style.textAlign === "left"));
   assert.ok(!walk(dialog).some((e) => /Lines\/(Box|Dot_)/.test(e.dataset.path)));
   action(dialog, "cancel").click();
@@ -450,7 +953,11 @@ test("the top bar's switch follows mods.state, and the first toggle explains onc
   jobs["job-1"] = { state: "done", result: { enabled: false, done: [], adopted: [], failed: [], stuck: [], left: [] } };
   offSeg.click();
   await drawn(dialog, "cancel");
-  for (const text of [S("quit.title"), S("mods.offAsk")]) assert.ok(walk(dialog).some((e) => e.textContent === text), text);
+  for (const text of [S("quit.title"), S("mods.offAsk")])
+    assert.ok(
+      walk(dialog).some((e) => e.textContent === text),
+      text,
+    );
   assert.equal(action(dialog, "ok").getAttribute("aria-label"), S("mods.offTitle"));
   assert.ok(!walk(dialog).some((e) => e.textContent === S("mods.explainOnce")), "the explanation came once");
   action(dialog, "cancel").click();
@@ -463,7 +970,8 @@ test("the top bar's switch follows mods.state, and the first toggle explains onc
   await until(() => called("mods.toggle").length === 1, "mods.toggle");
   assert.deepEqual(called("mods.toggle")[0], { enabled: false, expect: true });
   assert.equal(called("mods.explained").length, 1, "no explanation the second time");
-  await tick(); assert.equal(dialog.hidden, true, "plain confirmations stay silent");
+  await tick();
+  assert.equal(dialog.hidden, true, "plain confirmations stay silent");
   // greyed with an accessible reason; a click says why and submits nothing
   answers["mods.state"] = base({ available: false, reason: "game_running" });
   await MS.refresh();
@@ -500,12 +1008,20 @@ test("state refresh, the first explanation and help never measure logical origin
 
 test("Settings measures built mods only when its Mods row is drawn, and remeasures after cleanup", async () => {
   const Settings = await import("../../src/bmpt/web/js/settings.js");
-  answers["settings.get"] = { languages: [{ code: "en-US", name: "English" }], language: "en-US", consent: false,
-    cacheDir: "/cache", native: false, version: "1.0", logPath: "/log" };
+  answers["settings.get"] = {
+    languages: [{ code: "en-US", name: "English" }],
+    language: "en-US",
+    consent: false,
+    cacheDir: "/cache",
+    native: false,
+    version: "1.0",
+    logPath: "/log",
+  };
   const count = called("mods.sizes").length;
   await Settings.open();
   assert.equal(called("mods.sizes").length, count, "General does not measure mods");
-  const button = (name) => walk(settingsHost).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === name);
+  const button = (name) =>
+    walk(settingsHost).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === name);
   const hasText = (text) => walk(settingsHost).some((e) => e.textContent === text);
   const pending = deferred();
   answers["mods.sizes"] = () => pending.promise;
@@ -528,7 +1044,8 @@ test("Settings measures built mods only when its Mods row is drawn, and remeasur
   assert.equal(called("mods.clearBuilt").length, 1);
   assert.equal(called("mods.sizes").length, count + 2);
   assert.equal(button(S("settings.mods.clear")), undefined, "cleanup disabled when empty");
-  await tick(); assert.equal(dialog.hidden, true, "plain confirmations stay silent");
+  await tick();
+  assert.equal(dialog.hidden, true, "plain confirmations stay silent");
   button(S("settings.tab.general")).click();
   await until(() => !!button(S("settings.tab.mods")), "General tab");
   assert.equal(called("mods.sizes").length, count + 2);
@@ -539,7 +1056,8 @@ test("Settings measures built mods only when its Mods row is drawn, and remeasur
   button(S("settings.tab.general")).click();
   await until(() => !!button(S("settings.tab.mods")), "General before the reply");
   stale.resolve({ builtSize: 9 * 1048576 });
-  await tick(); await tick();
+  await tick();
+  await tick();
   assert.ok(!hasText(S("mods.cache")), "late reply cannot restore the old tab");
   const error = { code: "internal", params: { error: "size failed" } };
   answers["mods.sizes"] = { error };
@@ -554,10 +1072,18 @@ test("Settings measures built mods only when its Mods row is drawn, and remeasur
 test("Troubleshoot Mods shows only in pre-release builds, and Apply Official to All confirms, runs and shows the check", async () => {
   const Settings = await import("../../src/bmpt/web/js/settings.js");
   const T = await import("../../src/bmpt/web/js/troubleshoot.js");
-  const button = (name) => walk(settingsHost).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === name);
+  const button = (name) =>
+    walk(settingsHost).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === name);
   const hasText = (text) => walk(settingsHost).some((e) => e.textContent === text);
-  const prefs = { languages: [{ code: "en-US", name: "English" }], language: "en-US", consent: false, cacheDir: "/cache",
-    native: false, version: "1.0", logPath: "/log" };
+  const prefs = {
+    languages: [{ code: "en-US", name: "English" }],
+    language: "en-US",
+    consent: false,
+    cacheDir: "/cache",
+    native: false,
+    version: "1.0",
+    logPath: "/log",
+  };
   answers["mods.other"] = [];
   // a stable build: no row, no state asked
   answers["settings.get"] = { ...prefs, prereleasePreviews: false };
@@ -583,8 +1109,27 @@ test("Troubleshoot Mods shows only in pre-release builds, and Apply Official to 
   await until(() => dialog.hidden, "confirmation closed");
   assert.equal(called("mods.applyOfficial").length, 0);
   answers["mods.applyOfficial"] = "job-official";
-  jobs["job-official"] = { state: "done", result: { enabled: true, done: [], adopted: [], failed: [], stuck: [], left: [],
-    held: [], check: { verified: true, checked: 3, changed: ["a.bundle"], changedCount: 1, missing: [], missingCount: 0, unverified: [] } } };
+  jobs["job-official"] = {
+    state: "done",
+    result: {
+      enabled: true,
+      done: [],
+      adopted: [],
+      failed: [],
+      stuck: [],
+      left: [],
+      held: [],
+      check: {
+        verified: true,
+        checked: 3,
+        changed: ["a.bundle"],
+        changedCount: 1,
+        missing: [],
+        missingCount: 0,
+        unverified: [],
+      },
+    },
+  };
   answers["mods.troubleshootState"] = { active: true, count: 2, since: "t" };
   button(S("settings.troubleshoot.apply")).click();
   await drawn(dialog, "ok");
@@ -599,9 +1144,17 @@ test("Troubleshoot Mods shows only in pre-release builds, and Apply Official to 
   // the check's lines
   assert.deepEqual(T.checkLines(null), []);
   assert.deepEqual(T.checkLines({ verified: false }), [S("settings.troubleshoot.unverified")]);
-  assert.deepEqual(T.checkLines({ verified: true, changedCount: 0, missingCount: 0 }), [S("settings.troubleshoot.match")]);
+  assert.deepEqual(T.checkLines({ verified: true, changedCount: 0, missingCount: 0 }), [
+    S("settings.troubleshoot.match"),
+  ]);
   const many = Array.from({ length: 12 }, (_, i) => `${i}.bundle`);
-  const lines = T.checkLines({ verified: true, changed: many.slice(0, 11), changedCount: 11, missing: ["m.bundle"], missingCount: 1 });
+  const lines = T.checkLines({
+    verified: true,
+    changed: many.slice(0, 11),
+    changedCount: 11,
+    missing: ["m.bundle"],
+    missingCount: 1,
+  });
   assert.deepEqual(lines, [S("settings.troubleshoot.differ").replace("{n}", "12"), ...many.slice(0, 10), "+2"]);
 });
 
@@ -612,68 +1165,96 @@ test("the help fits its opening lines together in every locale, with and without
     for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
       const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
       I18n.setStrings(lang, flat({ webui: ui }));
-      for (const scan of [true, false, null]) for (const counts of [{}, { pending: 2, left: 1, stuck: 1 }]) {
-        answers["mods.state"] = base({ scan, ...counts });
-        await MS.refresh();
-        const opened = MS.openHelp();
-        await drawn(dialog, "close");
-        const texts = [ui.mods.helpOn, ui.mods.helpOff];
-        const frame = walk(dialog).find(e => e.dataset.path === "Center/Popup/Base/BG");
-        assert.ok(Math.abs(parseFloat(frame.style.width) / scale - 2098) < 0.02, "help takes class L");
-        const fs = Math.max(40, Math.min(...texts.map((text) => NGUI.fitText(text, 48, 40, 2098 - 200, 6).fs)));  // POPUP_TYPE.text
-        const lines = texts.map((_, i) => walk(dialog).find((e) => e.dataset.path === `Center/Popup/Lines/Line_${i}`));
-        assert.equal(lines[0].style.fontSize, lines[1].style.fontSize, `${lang}, scan=${scan}`);
-        assert.ok(!walk(dialog).some((e) => /Lines\/(Box|Row_|Dot_)/.test(e.dataset.path)));
-        assert.ok(!("scanOff" in ui.mods) && !("allowCheck" in ui.mods), lang);
-        for (let i = 0; i < 2; i++) {
-          assert.equal(lines[i].style.textAlign, "left");
-          assert.equal(lines[i].style.fontSize, `${(NGUI.fontSizeFor(texts[i], fs) * scale).toFixed(2)}px`);
-          assert.equal(lines[i].textContent.replaceAll("\n", " ").replaceAll(" ", ""), texts[i].replaceAll(" ", ""));
+      for (const scan of [true, false, null])
+        for (const counts of [{}, { pending: 2, left: 1, stuck: 1 }]) {
+          answers["mods.state"] = base({ scan, ...counts });
+          await MS.refresh();
+          const opened = MS.openHelp();
+          await drawn(dialog, "close");
+          const texts = [ui.mods.helpOn, ui.mods.helpOff];
+          const frame = walk(dialog).find((e) => e.dataset.path === "Center/Popup/Base/BG");
+          assert.ok(Math.abs(parseFloat(frame.style.width) / scale - 2098) < 0.02, "help takes class L");
+          const fs = Math.max(40, Math.min(...texts.map((text) => NGUI.fitText(text, 48, 40, 2098 - 200, 6).fs))); // POPUP_TYPE.text
+          const lines = texts.map((_, i) =>
+            walk(dialog).find((e) => e.dataset.path === `Center/Popup/Lines/Line_${i}`),
+          );
+          assert.equal(lines[0].style.fontSize, lines[1].style.fontSize, `${lang}, scan=${scan}`);
+          assert.ok(!walk(dialog).some((e) => /Lines\/(Box|Row_|Dot_)/.test(e.dataset.path)));
+          assert.ok(!("scanOff" in ui.mods) && !("allowCheck" in ui.mods), lang);
+          for (let i = 0; i < 2; i++) {
+            assert.equal(lines[i].style.textAlign, "left");
+            assert.equal(lines[i].style.fontSize, `${(NGUI.fontSizeFor(texts[i], fs) * scale).toFixed(2)}px`);
+            assert.equal(lines[i].textContent.replaceAll("\n", " ").replaceAll(" ", ""), texts[i].replaceAll(" ", ""));
+          }
+          if (counts.pending)
+            for (const [i, caption] of [
+              [2, ui.mods.retry],
+              [3, ui.mods.details],
+            ]) {
+              const row = walk(dialog).find((e) => e.dataset.path === `Center/Popup/Lines/Line_${i}`);
+              const button = walk(dialog).find((e) => e.dataset.path === `Center/Popup/Lines/Btn_${i}`);
+              assert.equal(row.style.textAlign, "left");
+              assert.ok(labels(dialog).includes(caption));
+              assert.ok(parseFloat(button.style.left) > parseFloat(row.style.left) + parseFloat(row.style.width));
+              const center = (e) => parseFloat(e.style.top) + parseFloat(e.style.height) / 2;
+              assert.ok(Math.abs(center(row) - center(button)) < 1, "button at the line's right end");
+            }
+          action(dialog, "close").click();
+          await opened;
         }
-        if (counts.pending) for (const [i, caption] of [[2, ui.mods.retry], [3, ui.mods.details]]) {
-          const row = walk(dialog).find((e) => e.dataset.path === `Center/Popup/Lines/Line_${i}`);
-          const button = walk(dialog).find((e) => e.dataset.path === `Center/Popup/Lines/Btn_${i}`);
-          assert.equal(row.style.textAlign, "left");
-          assert.ok(labels(dialog).includes(caption));
-          assert.ok(parseFloat(button.style.left) > parseFloat(row.style.left) + parseFloat(row.style.width));
-          const center = (e) => parseFloat(e.style.top) + parseFloat(e.style.height) / 2;
-          assert.ok(Math.abs(center(row) - center(button)) < 1, "button at the line's right end");
-        }
-        action(dialog, "close").click();
-        await opened;
-      }
     }
-  } finally { I18n.setStrings("en-US", strings); }
+  } finally {
+    I18n.setStrings("en-US", strings);
+  }
 });
 
 test("Settings combines scan consent and automatic checks, preserving the consent popup from Off", async () => {
   const Settings = await import("../../src/bmpt/web/js/settings.js");
   const NGUI = await import("../../src/bmpt/web/js/ngui.js");
-  let prefs = { ...answers["settings.get"], native: true, traySupported: true, gameDirs: { global: "/game", japan: "" },
-    fileSource: "windows_global", libraryDir: "/library", outputDir: "/output" };
+  let prefs = {
+    ...answers["settings.get"],
+    native: true,
+    traySupported: true,
+    gameDirs: { global: "/game", japan: "" },
+    fileSource: "windows_global",
+    libraryDir: "/library",
+    outputDir: "/output",
+  };
   let state = base({ scan: false });
   answers["settings.get"] = () => prefs;
   answers["settings.set"] = ({ key, value }) => (prefs = { ...prefs, [key]: value });
   answers["mods.state"] = () => state;
-  answers["mods.consent"] = ({ granted }) => { state = { ...state, scan: granted }; return {}; };
+  answers["mods.consent"] = ({ granted }) => {
+    state = { ...state, scan: granted };
+    return {};
+  };
   await MS.refresh();
   await Settings.open();
-  const button = (name) => walk(settingsHost).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === name);
+  const button = (name) =>
+    walk(settingsHost).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === name);
   const hasPath = (path) => walk(settingsHost).some((e) => e.dataset.path === path);
   const selected = (i) => hasPath(`Rows/Scan/Opt_${i}/On`);
   const scanButton = (i) => {
     const bg = walk(settingsHost).find((e) => e.dataset.path === `Rows/Scan/Opt_${i}/BG`);
     const [l, t] = NGUI.rect(bg);
-    return walk(settingsHost).find((e) => e.tagName === "BUTTON" && e.style.left === `${l}px` && e.style.top === `${t}px`);
+    return walk(settingsHost).find(
+      (e) => e.tagName === "BUTTON" && e.style.left === `${l}px` && e.style.top === `${t}px`,
+    );
   };
   await until(() => selected(1), "Off selected");
   assert.ok(!hasPath("Rows/Scan/Opt_2/BG"), "the file check has exactly two radio options");
   assert.ok(!hasPath("Rows/StartupChecks/Title"));
   assert.ok(!hasPath("Rows/Folders/Title"));
-  const rowPaths = walk(settingsHost).map((e) => e.dataset.path).filter((p) => /^Rows\/[^/]+$/.test(p));
+  const rowPaths = walk(settingsHost)
+    .map((e) => e.dataset.path)
+    .filter((p) => /^Rows\/[^/]+$/.test(p));
   assert.ok(!rowPaths.includes("Rows/Shown"), "visibility is no longer a preference");
   assert.ok(rowPaths.includes("Rows/Tray"), "the tray row is shown on supported systems");
-  assert.equal(rowPaths[rowPaths.indexOf("Rows/Scan") + 1], "Rows/Files", "startup checks sit directly above manual Check");
+  assert.equal(
+    rowPaths[rowPaths.indexOf("Rows/Scan") + 1],
+    "Rows/Files",
+    "startup checks sit directly above manual Check",
+  );
   assert.ok(button(S("settings.mods.check")), "manual Check available without consent");
   const before = called("mods.consent").length;
   scanButton(0).click();
@@ -703,7 +1284,11 @@ test("Settings combines scan consent and automatic checks, preserving the consen
   assert.equal(title.textContent.replaceAll("\n", " "), S("settings.classic.ask"));
   button(S("settings.tab.folders")).click();
   await until(() => hasPath("Rows/Output/Title"), "folder rows");
-  assert.equal(walk(settingsHost).filter((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === S("settings.change")).length, 4);
+  assert.equal(
+    walk(settingsHost).filter((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === S("settings.change"))
+      .length,
+    4,
+  );
   assert.ok(walk(settingsHost).every((e) => !e.title && !e.getAttribute("title")));
   button(S("display.close")).click();
   assert.equal(settingsHost.hidden, true);
@@ -717,9 +1302,16 @@ test("Settings' manual Check asks for missing consent, stops on refusal, and che
   const saved = { ...answers };
   let state;
   answers["mods.state"] = () => state;
-  answers["mods.consent"] = ({ granted }) => { state = { ...state, scan: granted }; return {}; };
-  answers["mods.scan"] = () => { assert.equal(state.scan, true, "consent must be saved before scanning"); return { requested: true }; };
-  const button = (name) => walk(settingsHost).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === name);
+  answers["mods.consent"] = ({ granted }) => {
+    state = { ...state, scan: granted };
+    return {};
+  };
+  answers["mods.scan"] = () => {
+    assert.equal(state.scan, true, "consent must be saved before scanning");
+    return { requested: true };
+  };
+  const button = (name) =>
+    walk(settingsHost).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === name);
   const selected = (i) => walk(settingsHost).some((e) => e.dataset.path === `Rows/Scan/Opt_${i}/On`);
   try {
     for (const scan of [false, null]) {
@@ -729,10 +1321,13 @@ test("Settings' manual Check asks for missing consent, stops on refusal, and che
       await Settings.open();
       button(S("settings.tab.mods"))?.click();
       await until(() => selected(1), "automatic checks Off");
-      const rowPaths = walk(settingsHost).map((e) => e.dataset.path).filter((p) => /^Rows\/[^/]+$/.test(p));
+      const rowPaths = walk(settingsHost)
+        .map((e) => e.dataset.path)
+        .filter((p) => /^Rows\/[^/]+$/.test(p));
       assert.ok(!rowPaths.includes("Rows/Tray"));
       assert.equal(rowPaths[rowPaths.indexOf("Rows/Scan") + 1], "Rows/Files");
-      const scans = called("mods.scan").length, grants = called("mods.consent").length;
+      const scans = called("mods.scan").length,
+        grants = called("mods.consent").length;
       button(S("settings.mods.check")).click();
       await drawn(consent, "ok");
       assert.ok(consent.classList.contains("over"), "consent appears over Settings");
@@ -786,11 +1381,19 @@ test("the scan consent renders the two replacement sections in every locale and 
       assert.ok(consent.classList.contains("over"), "over Settings");
       assert.equal(called("mods.consent").length, before + index, "nothing granted yet");
       // Checked: Steam's records first, then the file checks; Never: one item
-      for (const [name, section, items] of [["Checked", ui.mods.scan.will, [ui.mods.scan.will.steam, ui.mods.scan.will.items]],
-        ["Never", ui.mods.scan.willNot, [ui.mods.scan.willNot.items]]]) {
+      for (const [name, section, items] of [
+        ["Checked", ui.mods.scan.will, [ui.mods.scan.will.steam, ui.mods.scan.will.items]],
+        ["Never", ui.mods.scan.willNot, [ui.mods.scan.willNot.items]],
+      ]) {
         const part = (path) => walk(consent).find((e) => e.dataset.path === `Center/Popup/${name}/${path}`);
         assert.equal(part("Title_Bg/Label").textContent, section.label, lang);
-        items.forEach((text, i) => assert.equal(part(`Item_${i}`).textContent.replaceAll("\n", " ").replaceAll(" ", ""), text.replaceAll(" ", ""), lang));
+        items.forEach((text, i) =>
+          assert.equal(
+            part(`Item_${i}`).textContent.replaceAll("\n", " ").replaceAll(" ", ""),
+            text.replaceAll(" ", ""),
+            lang,
+          ),
+        );
         assert.equal(part(`Item_${items.length}`), undefined, `${items.length} items in ${name}`);
       }
       assert.ok(press("Escape").defaultPrevented, "it must be answered");
@@ -800,20 +1403,34 @@ test("the scan consent renders the two replacement sections in every locale and 
       assert.deepEqual(called("mods.consent").at(-1), { granted: true });
       assert.equal(consent.classList.contains("over"), false);
     }
-  } finally { I18n.setStrings("en-US", strings); }
+  } finally {
+    I18n.setStrings("en-US", strings);
+  }
 });
 
 test("an untested game build: the confirmation names the entries, Apply Anyway confirms and calls again, Cancel leaves it", async () => {
-  const entries = Array.from({ length: 8 }, (_, i) => ({ install: "/g", core: `c${i}_spr`, variant: `c${i}`, kind: i ? "spr" : "lobby" }));
+  const entries = Array.from({ length: 8 }, (_, i) => ({
+    install: "/g",
+    core: `c${i}_spr`,
+    variant: `c${i}`,
+    kind: i ? "spr" : "lobby",
+  }));
   const lines = MS.untestedLines({ entries }, (e) => e.variant.toUpperCase());
   assert.equal(lines[0].text, "Affected by the game update: 8");
-  assert.deepEqual(lines.slice(1).map((l) => l.text), ["C0 - Memorial Lobby", "C1 - Portrait", "C2 - Portrait", "C3 - Portrait",
-    "C4 - Portrait", "C5 - Portrait", "+2"]);
+  assert.deepEqual(
+    lines.slice(1).map((l) => l.text),
+    ["C0 - Memorial Lobby", "C1 - Portrait", "C2 - Portrait", "C3 - Portrait", "C4 - Portrait", "C5 - Portrait", "+2"],
+  );
   assert.ok(lines.slice(1).every((l) => l.marker === "\u2022"));
-  const err = { code: "untested_build", params: { entries: entries.slice(1, 2), confirm: { "/g": { version: "v", cores: ["c1_spr"] } } } };
+  const err = {
+    code: "untested_build",
+    params: { entries: entries.slice(1, 2), confirm: { "/g": { version: "v", cores: ["c1_spr"] } } },
+  };
   const params = { enabled: true, expect: false };
   let retried = 0;
-  let refusal = MS.refused(err, "mods.toggle", params, () => { retried++; });
+  let refusal = MS.refused(err, "mods.toggle", params, () => {
+    retried++;
+  });
   await drawn(dialog, "ok");
   assert.ok(walk(dialog).some((e) => e.textContent === S("mods.untested.title")));
   assert.ok(labels(dialog).includes(S("mods.untested.apply")));
@@ -821,14 +1438,21 @@ test("an untested game build: the confirmation names the entries, Apply Anyway c
   await refusal;
   assert.deepEqual(called("mods.confirmUntested").at(-1), { confirm: err.params.confirm });
   assert.equal(retried, 1);
-  refusal = MS.refused(err, "mods.toggle", params, () => { retried++; });
+  refusal = MS.refused(err, "mods.toggle", params, () => {
+    retried++;
+  });
   await drawn(dialog, "cancel");
   action(dialog, "cancel").click();
   await refusal;
   assert.equal(called("mods.confirmUntested").length, 1);
   assert.equal(retried, 1, "Cancel: nothing confirmed, nothing written");
   // a caller with its own message: another refusal is left to it
-  assert.equal(await MS.untestedRetry({ code: "game_running" }, () => { retried++; }), false);
+  assert.equal(
+    await MS.untestedRetry({ code: "game_running" }, () => {
+      retried++;
+    }),
+    false,
+  );
   assert.equal(retried, 1);
 });
 
@@ -847,8 +1471,12 @@ test("the classic modal queues the refused write only when its box is ticked, on
   press("Escape");
   assert.equal(await m, "queue");
   await until(() => queued() === 1, "classic.queue");
-  await tick(); assert.equal(dialog.hidden, true, "plain confirmations stay silent");
-  assert.deepEqual(called("classic.queue")[0], { method: "actions.apply", params: { variant: "airi", source: "variant:ch0251", kind: "spr" } });
+  await tick();
+  assert.equal(dialog.hidden, true, "plain confirmations stay silent");
+  assert.deepEqual(called("classic.queue")[0], {
+    method: "actions.apply",
+    params: { variant: "airi", source: "variant:ch0251", kind: "spr" },
+  });
   // ticked, Bring to Front: raised and queued
   m = MS.classicModal({ method: "mods.toggle", params: { enabled: true, expect: false } });
   await drawn(dialog, "check");
@@ -856,7 +1484,8 @@ test("the classic modal queues the refused write only when its box is ticked, on
   action(dialog, "cancel").click();
   assert.equal(await m, "queue");
   await until(() => queued() === 2 && called("classic.front").length === 1, "front and queue");
-  await tick(); assert.equal(dialog.hidden, true, "plain confirmations stay silent");
+  await tick();
+  assert.equal(dialog.hidden, true, "plain confirmations stay silent");
   // opened on writes already queued (a click on the busy switch): the box ticked; unticked and closed, the queue empties
   answers["mods.state"] = base({ busy: true, queued: 2 });
   await MS.refresh();
@@ -874,8 +1503,17 @@ test("the classic modal queues the refused write only when its box is ticked, on
   await drawn(dialog, "ok");
   action(dialog, "ok").click();
   await drawn(dialog, "check");
-  assert.equal(walk(dialog).some((e) => e.attrs?.["aria-label"] === S("classic.front")), true);
-  assert.deepEqual(actionsIn(dialog).map((e) => e.dataset.action).filter((name) => /^line/.test(name)), [], "the classic modal is no failure: no Error Report row");
+  assert.equal(
+    walk(dialog).some((e) => e.attrs?.["aria-label"] === S("classic.front")),
+    true,
+  );
+  assert.deepEqual(
+    actionsIn(dialog)
+      .map((e) => e.dataset.action)
+      .filter((name) => /^line/.test(name)),
+    [],
+    "the classic modal is no failure: no Error Report row",
+  );
   press("Escape");
   await until(() => dialog.hidden, "closed");
   assert.equal(queued(), 2, "unticked: nothing queued");
@@ -884,23 +1522,64 @@ test("the classic modal queues the refused write only when its box is ticked, on
 // --- item 1's prompts (prompts.js) ---
 
 const P = await import("../../src/bmpt/web/js/prompts.js");
-const GLOBAL = "/games/BlueArchive", JAPAN = "/games/Japan";
-const gameFile = (core, extra = {}) => ({ file: `${GLOBAL}/${core}.bundle`, core, kind: /_spr$/.test(core) ? "spr" : "lobby", applied: "unknown", crc: "fixed",
-  original: false, date: "", size: 100, copy: "kept", restorable: true, official: false, ...extra });
+const GLOBAL = "/games/BlueArchive",
+  JAPAN = "/games/Japan";
+const gameFile = (core, extra = {}) => ({
+  file: `${GLOBAL}/${core}.bundle`,
+  core,
+  kind: /_spr$/.test(core) ? "spr" : "lobby",
+  applied: "unknown",
+  crc: "fixed",
+  original: false,
+  date: "",
+  size: 100,
+  copy: "kept",
+  restorable: true,
+  official: false,
+  ...extra,
+});
 const entry = (core, state, extra = {}) => ({
-  install: GLOBAL, core, variant: core.replace(/_spr$|_home.*$/, ""), names: null, kind: /_spr$/.test(core) ? "spr" : "lobby", source: "unknown",
-  configured: null, state, overwritten: false, fixed: true, size: 100, files: [gameFile(core)], dismissed: false, ...extra,
+  install: GLOBAL,
+  core,
+  variant: core.replace(/_spr$|_home.*$/, ""),
+  names: null,
+  kind: /_spr$/.test(core) ? "spr" : "lobby",
+  source: "unknown",
+  configured: null,
+  state,
+  overwritten: false,
+  fixed: true,
+  size: 100,
+  files: [gameFile(core)],
+  dismissed: false,
+  ...extra,
 });
 
 test("which entries each prompt lists: drift while mods are on, untracked and changed, the rest apart", () => {
-  const all = [entry("airi_spr", "reset"), entry("airi_home", "updated"), entry("hina_spr", "untracked"), entry("mika_spr", "changed", { configured: "mod:x" }),
-    entry("yuzu_spr", "damaged"), entry("aris_spr", "pending", { overwritten: true }), entry("noa_spr", "ok"), entry("kei_spr", "reset", { dismissed: true })];
+  const all = [
+    entry("airi_spr", "reset"),
+    entry("airi_home", "updated"),
+    entry("hina_spr", "untracked"),
+    entry("mika_spr", "changed", { configured: "mod:x" }),
+    entry("yuzu_spr", "damaged"),
+    entry("aris_spr", "pending", { overwritten: true }),
+    entry("noa_spr", "ok"),
+    entry("kei_spr", "reset", { dismissed: true }),
+  ];
   const keys = (list) => list.map((e) => e.core);
   const drift = P.promptEntries(all, "drift");
   assert.deepEqual(keys(drift.listed), ["airi_spr"], "a game update's (airi_home) are the update summary's");
   assert.deepEqual(keys(drift.apart), ["aris_spr"], "stuck: no repair brought it back");
-  assert.deepEqual(keys(P.promptEntries(all, "drift", { dismissed: true }).listed), ["airi_spr", "kei_spr"], "Settings' Check");
-  assert.deepEqual(P.promptEntries(all, "drift", { enabled: false }).listed, [], "mods off: official files are the intent");
+  assert.deepEqual(
+    keys(P.promptEntries(all, "drift", { dismissed: true }).listed),
+    ["airi_spr", "kei_spr"],
+    "Settings' Check",
+  );
+  assert.deepEqual(
+    P.promptEntries(all, "drift", { enabled: false }).listed,
+    [],
+    "mods off: official files are the intent",
+  );
   const untracked = P.promptEntries(all, "untracked");
   assert.deepEqual(keys(untracked.listed), ["hina_spr", "mika_spr"]);
   assert.deepEqual(keys(untracked.apart), ["yuzu_spr"], "damaged: never added");
@@ -914,7 +1593,10 @@ test("a prompt's cards: the name, the kind and install chips, No Official Copy, 
   const two = base({ installs: [install(GLOBAL, "Global"), install(JAPAN, "Japan", { id: "0123abcd4567" })] });
   const nameOf = (e) => ({ airi: "Airi", hina: "Hina" })[e.variant] || e.variant;
   const c = P.card(entry("airi_spr", "untracked"), { state: base(), nameOf });
-  assert.deepEqual([c.key, c.label, c.full, c.chips, c.disabled, c.size], [`${GLOBAL}|airi_spr`, "Airi", "Airi", [S("tab.portrait")], false, 100]);
+  assert.deepEqual(
+    [c.key, c.label, c.full, c.chips, c.disabled, c.size],
+    [`${GLOBAL}|airi_spr`, "Airi", "Airi", [S("tab.portrait")], false, 100],
+  );
   // the label is the name alone (the kind is the details panel's first chip); a portrait and a lobby are told apart there
   assert.equal(P.card(entry("hina_home", "reset"), { nameOf }).label, "Hina");
   assert.deepEqual(P.card(entry("hina_home", "reset"), { nameOf }).chips, [S("tab.lobby")]);
@@ -926,51 +1608,110 @@ test("a prompt's cards: the name, the kind and install chips, No Official Copy, 
   const d = P.card(entry("yuzu_spr", "damaged"), { state: base(), nameOf });
   assert.deepEqual([d.disabled, d.dim, d.size, d.badge.text], [true, true, 0, S("mods.damaged")]);
   // another install's card draws that install's own files (<core>@<id>), the current one's its plain core
-  assert.equal(P.entryBase(entry("hina_home_gl", "untracked", { install: JAPAN }), two), "/asset/spine/lobby/hina_home_gl@0123abcd4567/skeleton");
+  assert.equal(
+    P.entryBase(entry("hina_home_gl", "untracked", { install: JAPAN }), two),
+    "/asset/spine/lobby/hina_home_gl@0123abcd4567/skeleton",
+  );
   assert.equal(P.entryBase(entry("airi_spr", "untracked"), two), "/asset/spine/spr/airi_spr/skeleton");
   // the details: file, size, CRC state and where an official copy is
-  const det = P.details(entry("airi_spr", "untracked", { files: [gameFile("airi_spr", { copy: "backup", size: 2 * 1048576 })] }));
+  const det = P.details(
+    entry("airi_spr", "untracked", { files: [gameFile("airi_spr", { copy: "backup", size: 2 * 1048576 })] }),
+  );
   assert.equal(det.title, S("tab.portrait"));
-  assert.deepEqual(det.fields, [[S("field.file"), "airi_spr.bundle"], [S("field.size"), "2.0 MB"], [S("field.crc"), S("crc.fixed")], [S("field.copy"), S("mods.copy.backup")]]);
+  assert.deepEqual(det.fields, [
+    [S("field.file"), "airi_spr.bundle"],
+    [S("field.size"), "2.0 MB"],
+    [S("field.crc"), S("crc.fixed")],
+    [S("field.copy"), S("mods.copy.backup")],
+  ]);
   assert.equal(P.details(entry("yuzu_spr", "damaged")).repair, true);
-  assert.equal(P.copyText(entry("x_spr", "untracked", { files: [gameFile("x_spr", { copy: null, restorable: false })] })), S("mods.copy.none"));
-  assert.equal(P.copyText(entry("x_spr", "untracked", { files: [gameFile("x_spr", { copy: "elsewhere" })] })), S("mods.copy.elsewhere"));
+  assert.equal(
+    P.copyText(entry("x_spr", "untracked", { files: [gameFile("x_spr", { copy: null, restorable: false })] })),
+    S("mods.copy.none"),
+  );
+  assert.equal(
+    P.copyText(entry("x_spr", "untracked", { files: [gameFile("x_spr", { copy: "elsewhere" })] })),
+    S("mods.copy.elsewhere"),
+  );
   // the footer: the ticked cards and their size
-  const items = [P.card(entry("a_spr", "untracked", { size: 1048576 }), {}), P.card(entry("b_spr", "untracked", { size: 1048576 }), {})];
+  const items = [
+    P.card(entry("a_spr", "untracked", { size: 1048576 }), {}),
+    P.card(entry("b_spr", "untracked", { size: 1048576 }), {}),
+  ];
   assert.equal(P.footer(items, new Set([items[0].key]), { sep: ", " }), "Selected: 1, Total size: 1.0 MB");
-  assert.equal(P.footer(items, new Set([items[0].key]), { size: false }), "Selected: 1", "the drift prompt copies nothing");
+  assert.equal(
+    P.footer(items, new Set([items[0].key]), { size: false }),
+    "Selected: 1",
+    "the drift prompt copies nothing",
+  );
   // an entry back to official: its official files, with their size
-  const reset = P.details(entry("airi_spr", "reset", { files: [gameFile("airi_spr", { official: true, applied: "official", size: 1048576 })] }));
-  assert.deepEqual(reset.fields.slice(0, 2), [[S("field.file"), "airi_spr.bundle"], [S("field.size"), "1.0 MB"]]);
+  const reset = P.details(
+    entry("airi_spr", "reset", {
+      files: [gameFile("airi_spr", { official: true, applied: "official", size: 1048576 })],
+    }),
+  );
+  assert.deepEqual(reset.fields.slice(0, 2), [
+    [S("field.file"), "airi_spr.bundle"],
+    [S("field.size"), "1.0 MB"],
+  ]);
 });
 
 test("the untracked prompt's buttons: add the ticked cards, Don't Ask Again dismisses the others, Later adds nothing", () => {
-  const items = [P.card(entry("a_spr", "untracked"), {}), P.card(entry("b_spr", "untracked"), {}), P.card(entry("c_spr", "damaged"), {})];
+  const items = [
+    P.card(entry("a_spr", "untracked"), {}),
+    P.card(entry("b_spr", "untracked"), {}),
+    P.card(entry("c_spr", "damaged"), {}),
+  ];
   const ticked = new Set([items[0].key]);
-  const a = { install: GLOBAL, core: "a_spr" }, b = { install: GLOBAL, core: "b_spr" };
+  const a = { install: GLOBAL, core: "a_spr" },
+    b = { install: GLOBAL, core: "b_spr" };
   assert.deepEqual(P.untrackedOutcome("add", items, ticked, false), { adopt: [a], dismiss: [], turnOn: false });
   assert.deepEqual(P.untrackedOutcome("add", items, ticked, true), { adopt: [a], dismiss: [b], turnOn: false });
   assert.deepEqual(P.untrackedOutcome("addTurnOn", items, ticked, false), { adopt: [a], dismiss: [], turnOn: true });
   assert.deepEqual(P.untrackedOutcome("later", items, ticked, false), { adopt: [], dismiss: [], turnOn: false });
-  assert.deepEqual(P.untrackedOutcome("later", items, ticked, true), { adopt: [], dismiss: [a, b], turnOn: false }, "the damaged entry is never dismissed");
+  assert.deepEqual(
+    P.untrackedOutcome("later", items, ticked, true),
+    { adopt: [], dismiss: [a, b], turnOn: false },
+    "the damaged entry is never dismissed",
+  );
 });
 
 test("Apply Mod Configuration's result names the entries skipped because their files changed", () => {
   assert.deepEqual(P.driftSummary({ done: [{}], failed: [], skipped: [], stuck: [] }), null);
   const nameOf = (e) => e.variant;
-  const r = P.driftSummary({
-    done: [{}], stuck: [],
-    failed: [{ entry: { core: "airi_spr", variant: "Airi", kind: "spr" }, code: "game_file_locked", params: {} }],
-    skipped: [{ install: GLOBAL, core: "hina_home", variant: "Hina", kind: "lobby", why: "changed" }, { core: "x_spr", why: "missing" }],
-  }, nameOf);
+  const r = P.driftSummary(
+    {
+      done: [{}],
+      stuck: [],
+      failed: [{ entry: { core: "airi_spr", variant: "Airi", kind: "spr" }, code: "game_file_locked", params: {} }],
+      skipped: [
+        { install: GLOBAL, core: "hina_home", variant: "Hina", kind: "lobby", why: "changed" },
+        { core: "x_spr", why: "missing" },
+      ],
+    },
+    nameOf,
+  );
   assert.equal(r.title, S("mods.driftTitle"));
-  assert.deepEqual(r.lines, ["Done: 1, failed: 2", `Airi, Portrait - ${S("error.game_file_locked")}`, `Hina, Memorial Lobby - ${S("error.entry_changed")}`]);
+  assert.deepEqual(r.lines, [
+    "Done: 1, failed: 2",
+    `Airi, Portrait - ${S("error.game_file_locked")}`,
+    `Hina, Memorial Lobby - ${S("error.entry_changed")}`,
+  ]);
 });
 
 test("an overwritten entry's message: Add First until its mod is in the library, then the repair lines", () => {
   assert.equal(P.overwrittenKind([gameFile("airi_spr", { applied: "unknown" })]), "addFirst");
-  assert.equal(P.overwrittenKind([gameFile("airi_spr", { applied: "mod:abc" }), gameFile("airi_spr", { applied: "mod:abc", official: true })]), "overwritten");
-  assert.equal(P.overwrittenKind([gameFile("airi_spr", { applied: "mod:abc" }), gameFile("airi_spr", { applied: "unknown" })]), "addFirst");
+  assert.equal(
+    P.overwrittenKind([
+      gameFile("airi_spr", { applied: "mod:abc" }),
+      gameFile("airi_spr", { applied: "mod:abc", official: true }),
+    ]),
+    "overwritten",
+  );
+  assert.equal(
+    P.overwrittenKind([gameFile("airi_spr", { applied: "mod:abc" }), gameFile("airi_spr", { applied: "unknown" })]),
+    "addFirst",
+  );
   assert.equal(P.overwrittenKind([]), "addFirst");
 });
 
@@ -981,7 +1722,10 @@ test("the tray's first toggle explains once, and the explanation's button submit
   const Fresh = await import("../../src/bmpt/web/js/mod-switch.js?tray");
   answers["mods.state"] = base({ explained: false, enabled: true });
   answers["mods.toggle"] = "job-tray-1";
-  jobs["job-tray-1"] = { state: "done", result: { enabled: false, done: [], adopted: [], failed: [], stuck: [], left: [] } };
+  jobs["job-tray-1"] = {
+    state: "done",
+    result: { enabled: false, done: [], adopted: [], failed: [], stuck: [], left: [] },
+  };
   const before = called("mods.toggle").length;
   const shown = Fresh.trayOpen({ view: "explain", enabled: false, expect: true });
   await drawn(dialog, "ok");
@@ -989,7 +1733,8 @@ test("the tray's first toggle explains once, and the explanation's button submit
   action(dialog, "ok").click();
   await shown;
   assert.deepEqual(called("mods.toggle").slice(before), [{ enabled: false, expect: true }]);
-  await tick(); assert.equal(dialog.hidden, true, "plain confirmations stay silent");
+  await tick();
+  assert.equal(dialog.hidden, true, "plain confirmations stay silent");
   // closed any other way: shown, and nothing toggled
   const Other = await import("../../src/bmpt/web/js/mod-switch.js?tray-cancel");
   const explained = called("mods.explained").length;
@@ -1008,12 +1753,25 @@ test("the tray's refusal shows as the page's own, and its toggle is followed to 
   await MS.trayOpen({ view: "error", code: "classic_open", params: {} });
   await expectNotice(S("error.classic_open"));
   assert.equal(dialog.hidden, true);
-  jobs["job-tray-2"] = { state: "done", result: { enabled: true, done: [{}], adopted: [], failed: [], stuck: [], left: [] } };
+  jobs["job-tray-2"] = {
+    state: "done",
+    result: { enabled: true, done: [{}], adopted: [], failed: [], stuck: [], left: [] },
+  };
   emit("tray.toggle", { job: "job-tray-2", enabled: true, expect: false });
-  await tick(); assert.equal(dialog.hidden, true, "plain confirmations stay silent");
+  await tick();
+  assert.equal(dialog.hidden, true, "plain confirmations stay silent");
   // a result with failed entries: the result popup
-  jobs["job-tray-3"] = { state: "done", result: { enabled: false, done: [], adopted: [], stuck: [], left: [],
-    failed: [{ entry: { core: "airi_spr", variant: "airi", kind: "spr" }, code: "game_file_locked", params: {} }] } };
+  jobs["job-tray-3"] = {
+    state: "done",
+    result: {
+      enabled: false,
+      done: [],
+      adopted: [],
+      stuck: [],
+      left: [],
+      failed: [{ entry: { core: "airi_spr", variant: "airi", kind: "spr" }, code: "game_file_locked", params: {} }],
+    },
+  };
   const followed = MS.trayToggle({ job: "job-tray-3", enabled: false, expect: true });
   await drawn(dialog, "ok");
   action(dialog, "ok").click();
@@ -1028,12 +1786,27 @@ test("the tray's Back to Official opens the drift prompt: two buttons and no way
   P.init({ names: async () => (e) => ({ airi: "Airi", hina: "Hina" })[e.variant] || e.variant });
   answers["mods.state"] = base();
   await MS.refresh();
-  answers["mods.entries"] = [entry("airi_spr", "reset", { configured: "mod:a" }), entry("hina_home", "reset", { configured: "mod:b" }), entry("noa_spr", "untracked")];
+  answers["mods.entries"] = [
+    entry("airi_spr", "reset", { configured: "mod:a" }),
+    entry("hina_home", "reset", { configured: "mod:b" }),
+    entry("noa_spr", "untracked"),
+  ];
   answers["mods.restoreDrift"] = "job-drift";
-  jobs["job-drift"] = { state: "done", result: { done: [{ install: GLOBAL, core: "airi_spr" }], failed: [], skipped: [], stuck: [] } };
+  jobs["job-drift"] = {
+    state: "done",
+    result: { done: [{ install: GLOBAL, core: "airi_spr" }], failed: [], skipped: [], stuck: [] },
+  };
   // a game update changed the rig under Hina's mod: its card starts unticked
   answers["mods.impact"] = "job-impact";
-  jobs["job-impact"] = { state: "done", result: { mods: [{ id: "a", impact: "rebuilt" }, { id: "b", impact: "rig_changed" }] } };
+  jobs["job-impact"] = {
+    state: "done",
+    result: {
+      mods: [
+        { id: "a", impact: "rebuilt" },
+        { id: "b", impact: "rig_changed" },
+      ],
+    },
+  };
   const opened = MS.trayOpen({ view: "drift" });
   await drawn(prompt, "apply");
   assert.ok(action(prompt, "keep"), "Keep as Is");
@@ -1041,23 +1814,35 @@ test("the tray's Back to Official opens the drift prompt: two buttons and no way
   assert.ok(press("Escape").defaultPrevented, "Escape does nothing");
   assert.equal(prompt.hidden, false);
   const cards = () => walk(prompt).filter((e) => e.dataset?.key);
-  assert.deepEqual(cards().map((c) => [c.dataset.key, c.getAttribute("aria-checked")]), [[`${GLOBAL}|airi_spr`, "true"], [`${GLOBAL}|hina_home`, "false"]]);
+  assert.deepEqual(
+    cards().map((c) => [c.dataset.key, c.getAttribute("aria-checked")]),
+    [
+      [`${GLOBAL}|airi_spr`, "true"],
+      [`${GLOBAL}|hina_home`, "false"],
+    ],
+  );
   assert.deepEqual(called("mods.impact").at(-1), { ids: ["a", "b"] });
   action(prompt, "apply").click();
   await opened;
   await until(() => called("mods.restoreDrift").length === 1, "mods.restoreDrift");
-  assert.deepEqual(called("mods.restoreDrift")[0], { entries: [{ install: GLOBAL, core: "airi_spr", state: "reset" }] });
-  assert.deepEqual(called("mods.dismiss").at(-1), { kind: "drift", entries: [{ install: GLOBAL, core: "hina_home", state: "reset" }] });
+  assert.deepEqual(called("mods.restoreDrift")[0], {
+    entries: [{ install: GLOBAL, core: "airi_spr", state: "reset" }],
+  });
+  assert.deepEqual(called("mods.dismiss").at(-1), {
+    kind: "drift",
+    entries: [{ install: GLOBAL, core: "hina_home", state: "reset" }],
+  });
   assert.equal(prompt.hidden, true);
-  await tick(); assert.equal(dialog.hidden, true, "plain confirmations stay silent");
+  await tick();
+  assert.equal(dialog.hidden, true, "plain confirmations stay silent");
   // nothing back to official any more: the tray's item was stale, the page says so
   answers["mods.entries"] = [];
   await MS.trayOpen({ view: "drift" });
   await until(() => !Loading.busy(), "scan settled without a confirmation");
-      assert.equal(dialog.hidden, true);
+  assert.equal(dialog.hidden, true);
 });
 
-test("the Game Files row's \"?\": one definition of configuration drift", async () => {
+test('the Game Files row\'s "?": one definition of configuration drift', async () => {
   const Settings = await import("../../src/bmpt/web/js/settings.js");
   try {
     for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
@@ -1067,25 +1852,36 @@ test("the Game Files row's \"?\": one definition of configuration drift", async 
       assert.equal(Settings.driftLines()[0].includes("\n"), false);
       assert.deepEqual(Object.keys(ui.settings.mods.driftHelp), ["title", "what"]);
     }
-  } finally { I18n.setStrings("en-US", strings); }
+  } finally {
+    I18n.setStrings("en-US", strings);
+  }
 });
 
 test("held refusal prompts accept Overwritten, Add First and its result, and scan consent", async () => {
   answers["mods.state"] = base();
   await MS.refresh();
-  let held = Loading.hold(() => P.overwritten({ name: "Airi", core: "airi_spr", files: [gameFile("airi_spr", { applied: "mod:a" })] }));
+  let held = Loading.hold(() =>
+    P.overwritten({ name: "Airi", core: "airi_spr", files: [gameFile("airi_spr", { applied: "mod:a" })] }),
+  );
   await drawn(dialog, "ok");
   assert.equal(Loading.held(), true);
   assert.equal(action(dialog, "ok").click().stopped, false, "Overwritten can be answered inside the hold");
   assert.equal(await held, false);
 
   answers["mods.adopt"] = "job-held-adopt";
-  jobs["job-held-adopt"] = { state: "done", result: { added: [], failed: [{ entry: { variant: "airi", core: "airi_spr" }, code: "game_file_locked" }] } };
+  jobs["job-held-adopt"] = {
+    state: "done",
+    result: { added: [], failed: [{ entry: { variant: "airi", core: "airi_spr" }, code: "game_file_locked" }] },
+  };
   held = Loading.hold(() => P.overwritten({ name: "Airi", core: "airi_spr", files: [gameFile("airi_spr")] }));
   await drawn(dialog, "cancel");
   assert.equal(action(dialog, "ok").click().stopped, false, "Add First can submit adoption");
   await drawn(dialog, "ok");
-  assert.equal(action(dialog, "cancel").attrs["aria-label"], S("recovery.report"), "the failed adoption offers Error Report");
+  assert.equal(
+    action(dialog, "cancel").attrs["aria-label"],
+    S("recovery.report"),
+    "the failed adoption offers Error Report",
+  );
   assert.equal(Loading.held(), true);
   assert.equal(press("Escape", stage).stopped, false, "the follow-up result receives Escape from the page");
   assert.equal(await held, false);
@@ -1102,13 +1898,27 @@ test("held refusal prompts accept Overwritten, Add First and its result, and sca
 });
 
 test("a toggle holds page input through the refresh and drawing, then shows an answerable result", async () => {
-  const fetched = deferred(), drawnPage = deferred(), started = deferred();
+  const fetched = deferred(),
+    drawnPage = deferred(),
+    started = deferred();
   answers["mods.state"] = base();
   answers["mods.toggle"] = "job-refresh";
-  jobs["job-refresh"] = { state: "done", result: { enabled: false, failed: [{ entry: { variant: "airi", core: "airi_spr" }, code: "game_file_locked" }] } };
-  await MS.init({ refreshPage: async () => { started.resolve(); await fetched.promise; await drawnPage.promise; } });
+  jobs["job-refresh"] = {
+    state: "done",
+    result: { enabled: false, failed: [{ entry: { variant: "airi", core: "airi_spr" }, code: "game_file_locked" }] },
+  };
+  await MS.init({
+    refreshPage: async () => {
+      started.resolve();
+      await fetched.promise;
+      await drawnPage.promise;
+    },
+  });
   const chooser = stage.appendChild(new El("button"));
-  let opened = 0; chooser.addEventListener("click", () => { opened++; });
+  let opened = 0;
+  chooser.addEventListener("click", () => {
+    opened++;
+  });
   const toggled = MS.turn({ enabled: false, expect: true });
   assert.equal(Loading.held(), true, "held from submission");
   try {
@@ -1137,7 +1947,8 @@ test("a toggle holds page input through the refresh and drawing, then shows an a
     await again;
     assert.equal(dialog.hidden, true);
   } finally {
-    fetched.resolve(); drawnPage.resolve();
+    fetched.resolve();
+    drawnPage.resolve();
     action(dialog, "ok")?.click();
     await toggled;
     chooser.remove();
@@ -1151,14 +1962,24 @@ test("a failed or stalled page refresh releases the toggle hold within its bound
   jobs["job-refresh-failed"] = { state: "done", result: { enabled: true } };
   const errors = [];
   t.mock.method(console, "error", (...args) => errors.push(args));
-  await MS.init({ refreshPage: async () => { throw new Error("refresh failed"); } });
+  await MS.init({
+    refreshPage: async () => {
+      throw new Error("refresh failed");
+    },
+  });
   await MS.turn({ enabled: true, expect: false });
   assert.equal(Loading.held(), false);
-  await tick(); assert.equal(dialog.hidden, true, "plain confirmations stay silent");
+  await tick();
+  assert.equal(dialog.hidden, true, "plain confirmations stay silent");
   assert.match(String(errors[0]), /refresh failed/);
 
   const started = deferred();
-  await MS.init({ refreshPage: () => { started.resolve(); return new Promise(() => {}); } });
+  await MS.init({
+    refreshPage: () => {
+      started.resolve();
+      return new Promise(() => {});
+    },
+  });
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
     const toggled = MS.turn({ enabled: true, expect: false });
@@ -1182,46 +2003,63 @@ test("a failed or stalled page refresh releases the toggle hold within its bound
 });
 
 test("scan, cache cleanup and both switch directions name their action in every locale", async () => {
-  const progress = (label) => walk(stage).some((el) => el.classList.contains("loading-progress") && el.textContent === label);
+  const progress = (label) =>
+    walk(stage).some((el) => el.classList.contains("loading-progress") && el.textContent === label);
   try {
     await MS.init({ refreshPage: async () => {} });
     for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
-      const table = flat(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")));
+      const table = flat(
+        JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")),
+      );
       const ui = (key, vars = {}) => table[`webui.${key}`].replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "");
       I18n.setStrings(locale, table);
       const cache = `clear-${locale}`;
       answers["mods.clearBuilt"] = cache;
       jobs[cache] = { state: "running" };
       const cleared = MS.clearBuilt();
-      try { await until(() => progress(ui("progress.clear")), "cache action"); }
-      finally { jobs[cache] = { state: "done", result: { freed: 1 } }; emit("job.done", { id: cache, result: { freed: 1 } }); }
+      try {
+        await until(() => progress(ui("progress.clear")), "cache action");
+      } finally {
+        jobs[cache] = { state: "done", result: { freed: 1 } };
+        emit("job.done", { id: cache, result: { freed: 1 } });
+      }
       assert.equal(await cleared, true);
 
       answers["mods.scan"] = { requested: true };
       const checked = MS.check();
       const scanResult = { entries: [], counts: {} };
-      try { await until(() => progress(ui("progress.check")), "scan action"); }
-      finally { emit("library.scanned", scanResult); }
+      try {
+        await until(() => progress(ui("progress.check")), "scan action");
+      } finally {
+        emit("library.scanned", scanResult);
+      }
       assert.deepEqual(await checked, scanResult);
 
       for (const enabled of [false, true]) {
         answers["mods.state"] = base({ enabled: !enabled, explained: true });
         await MS.refresh();
-        const id = `toggle-${locale}-${enabled}`, action = enabled ? "apply" : "restore";
+        const id = `toggle-${locale}-${enabled}`,
+          action = enabled ? "apply" : "restore";
         const result = { enabled, done: [], failed: [], adopted: [], stuck: [], left: [] };
-        jobs[id] = { state: "running" }; answers["mods.toggle"] = id;
+        jobs[id] = { state: "running" };
+        answers["mods.toggle"] = id;
         const toggled = MS.turn({ enabled, expect: !enabled });
         try {
           await until(() => progress(ui(`progress.${action}`, { name: ui("progress.mods") })), "switch action");
           const label = ui(`progress.${action}`, { name: "test_spr" });
           emit("job.progress", { id, label, current: 0, total: 2 });
           assert.ok(progress(ui("progress.count", { label, current: 0, total: 2 })));
-        } finally { jobs[id] = { state: "done", result }; emit("job.done", { id, result }); }
+        } finally {
+          jobs[id] = { state: "done", result };
+          emit("job.done", { id, result });
+        }
         await toggled;
         assert.equal(dialog.hidden, true, "plain switch results stay silent");
       }
     }
-  } finally { I18n.setStrings("en-US", strings); }
+  } finally {
+    I18n.setStrings("en-US", strings);
+  }
 });
 
 test("the toggle flushes the event delay and awaits the visible detail or roster redraw", async () => {
@@ -1230,24 +2068,48 @@ test("the toggle flushes the event delay and awaits the visible detail or roster
   assert.match(main, /refreshPage: refreshAfterToggle/, "the switch uses the awaited refresh");
   for (const screen of ["detail", "roster"]) {
     const ready = deferred();
-    let refreshed = false, invalidated = 0, settled = false;
+    let refreshed = false,
+      invalidated = 0,
+      settled = false;
     const timers = new Set();
     const env = {
       $: (id) => ({ hidden: id !== `screen-${screen}` }),
-      ctx: { invalidateRoster: () => { invalidated++; } },
+      ctx: {
+        invalidateRoster: () => {
+          invalidated++;
+        },
+      },
       BatchImport: { invalidate() {} },
-      forget() {}, spinePrefix() {},
-      Detail: { filesChanged: async () => { refreshed = true; await ready.promise; } },
+      forget() {},
+      spinePrefix() {},
+      Detail: {
+        filesChanged: async () => {
+          refreshed = true;
+          await ready.promise;
+        },
+      },
       Popup: { whenIdle: async () => {} },
-      route: async () => { refreshed = true; await ready.promise; },
-      setTimeout: (fn) => { timers.add(fn); return fn; }, clearTimeout: (fn) => timers.delete(fn),
+      route: async () => {
+        refreshed = true;
+        await ready.promise;
+      },
+      setTimeout: (fn) => {
+        timers.add(fn);
+        return fn;
+      },
+      clearTimeout: (fn) => timers.delete(fn),
     };
-    const h = new Function("env", `let { ${Object.keys(env).join(", ")} } = env; let routeToken = 1;
+    const h = new Function(
+      "env",
+      `let { ${Object.keys(env).join(", ")} } = env; let routeToken = 1;
       ${changed}
-      return { libraryChanged, refreshAfterToggle };`)(env);
+      return { libraryChanged, refreshAfterToggle };`,
+    )(env);
     h.libraryChanged({ cores: ["airi_spr"] });
     assert.equal(refreshed, false, "the event is coalesced for 150 ms");
-    const refresh = h.refreshAfterToggle().then(() => { settled = true; });
+    const refresh = h.refreshAfterToggle().then(() => {
+      settled = true;
+    });
     await tick();
     assert.equal(timers.size, 0, "the pending delay is flushed");
     assert.equal(invalidated, 2, "also refreshes if the event has not arrived");
@@ -1262,14 +2124,37 @@ test("the toggle flushes the event delay and awaits the visible detail or roster
 test("main refreshes on external Enable Mods changes and keeps the awaited local toggle refresh", async () => {
   const main = readFileSync(new URL("../../src/bmpt/web/js/main.js", import.meta.url), "utf8");
   const setup = main.slice(main.indexOf('  await timed("mod-state"'), main.indexOf("  Prompts.init("));
-  let listener, options, changes = 0;
-  const names = async () => {}, refresh = async () => {};
+  let listener,
+    options,
+    changes = 0;
+  const names = async () => {},
+    refresh = async () => {};
   const ModSwitch = {
-    init: async (opts) => { options = opts; }, current: () => ({ enabled: true }),
-    onChange: (fn) => { listener = fn; },
+    init: async (opts) => {
+      options = opts;
+    },
+    current: () => ({ enabled: true }),
+    onChange: (fn) => {
+      listener = fn;
+    },
   };
-  await new Function("ModSwitch", "variantNames", "refreshAfterToggle", "libraryChanged", "timed", `return (async () => { ${setup} })();`)(
-    ModSwitch, names, refresh, (data) => { assert.equal(data, null); changes++; }, (_phase, work) => work());
+  await new Function(
+    "ModSwitch",
+    "variantNames",
+    "refreshAfterToggle",
+    "libraryChanged",
+    "timed",
+    `return (async () => { ${setup} })();`,
+  )(
+    ModSwitch,
+    names,
+    refresh,
+    (data) => {
+      assert.equal(data, null);
+      changes++;
+    },
+    (_phase, work) => work(),
+  );
   assert.equal(options.names, names);
   assert.equal(options.refreshPage, refresh);
   listener({ enabled: true, busy: true });
@@ -1289,22 +2174,34 @@ test("the startup update check can be disabled for compiled releases", () => {
 
 test("detail refresh callers await changes queued while an earlier refresh is drawing", async () => {
   const detail = readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8");
-  const changed = detail.slice(detail.indexOf("let heldChange;"), detail.indexOf("async function reloadChanged()")).replace("export function", "function");
-  const first = deferred(), second = deferred();
-  let reads = 0, settled = false;
+  const changed = detail
+    .slice(detail.indexOf("let heldChange;"), detail.indexOf("async function reloadChanged()"))
+    .replace("export function", "function");
+  const first = deferred(),
+    second = deferred();
+  let reads = 0,
+    settled = false;
   const env = {
-    popupOpen: () => false, Visual: { isOpen: () => false }, changing: () => false, Loading: { covering: () => false },
+    popupOpen: () => false,
+    Visual: { isOpen: () => false },
+    changing: () => false,
+    Loading: { covering: () => false },
     sleep: tick,
   };
-  const h = new Function("env", `let { ${Object.keys(env).join(", ")} } = env;
+  const h = new Function(
+    "env",
+    `let { ${Object.keys(env).join(", ")} } = env;
     let open = true, busy = false, fullscreen = false, fam = { variants: [{ spr: "airi_spr" }] };
     ${changed}
     async function reloadChanged() { heldChange = undefined; await env.draw(); }
-    return { filesChanged };`)({ ...env, draw: () => (++reads === 1 ? first.promise : second.promise) });
+    return { filesChanged };`,
+  )({ ...env, draw: () => (++reads === 1 ? first.promise : second.promise) });
   const a = h.filesChanged(null);
   const b = h.filesChanged({ cores: ["airi_spr"] });
   assert.equal(a, b, "both callers follow the same refresh queue");
-  b.then(() => { settled = true; });
+  b.then(() => {
+    settled = true;
+  });
   first.resolve();
   await tick();
   assert.equal(reads, 2);
@@ -1317,7 +2214,8 @@ test("detail refresh callers await changes queued while an earlier refresh is dr
 test("Spine notice is plain before asset consent and enables nothing until its acknowledgement is saved", async () => {
   const Consent = await import("../../src/bmpt/web/js/consent.js");
   const Runtime = await import("../../src/bmpt/web/js/spine-runtime.js");
-  const saved = answers["app.spineConsent"], save = deferred();
+  const saved = answers["app.spineConsent"],
+    save = deferred();
   Runtime.setSpineConsent(null);
   Consent.init({ consent: false });
   answers["app.spineConsent"] = () => save.promise;
@@ -1328,7 +2226,9 @@ test("Spine notice is plain before asset consent and enables nothing until its a
     assert.ok(walk(consent).some((e) => e.classList.contains("spine-license-plain")));
     assert.ok(!walk(consent).some((e) => e.dataset.path), "no game layout in the plain notice");
     assert.ok(press("Escape").defaultPrevented);
-    walk(consent).find((e) => e.className === "plain-popup-back").click();
+    walk(consent)
+      .find((e) => e.className === "plain-popup-back")
+      .click();
     assert.equal(consent.hidden, false, "Escape and backdrop cannot dismiss the notice");
     assert.equal(await Runtime.ensureSpine(), false);
     const before = called("app.spineConsent").length;
@@ -1344,7 +2244,10 @@ test("Spine notice is plain before asset consent and enables nothing until its a
     assert.equal(Runtime.runtimeLoaded(), false, "the notice itself never loads Spine");
     assert.equal(consent.hidden, true);
     assert.equal(consent.classList.contains("over"), false);
-  } finally { answers["app.spineConsent"] = saved; Runtime.setSpineConsent(null); }
+  } finally {
+    answers["app.spineConsent"] = saved;
+    Runtime.setSpineConsent(null);
+  }
 });
 
 test("Spine notice has the same title, legal body and lone Confirm in both paths in every locale", async () => {
@@ -1354,7 +2257,9 @@ test("Spine notice has the same title, legal body and lone Confirm in both paths
   answers["app.spineConsent"] = ({ granted }) => granted;
   try {
     for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"]) {
-      const table = flat(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")));
+      const table = flat(
+        JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")),
+      );
       I18n.setStrings(locale, table);
       const text = (key) => table[`webui.${key}`];
       for (const assets of [false, true]) {
@@ -1363,12 +2268,16 @@ test("Spine notice has the same title, legal body and lone Confirm in both paths
         const pending = Consent.spine(consent);
         await drawn(consent, "ok");
         assert.equal(called("app.spineConsent").length, before);
-        const title = walk(consent).find((e) => assets ? e.dataset.path === "Center/Popup/Base/BG/Label_Title_Locale" : e.tagName === "H2");
+        const title = walk(consent).find((e) =>
+          assets ? e.dataset.path === "Center/Popup/Base/BG/Label_Title_Locale" : e.tagName === "H2",
+        );
         assert.equal(title.textContent, text("spine.license.title"), locale);
         const buttons = walk(consent).filter((e) => e.tagName === "BUTTON");
         assert.equal(buttons.length, 1);
         assert.equal(buttons[0].getAttribute("aria-label"), text("picker.ok"));
-        const body = walk(consent).find((e) => assets ? e.dataset.path === "Center/Popup/Lines/Line_0" : e.tagName === "P");
+        const body = walk(consent).find((e) =>
+          assets ? e.dataset.path === "Center/Popup/Lines/Line_0" : e.tagName === "P",
+        );
         assert.equal(body.textContent.replace(/\s/g, ""), text("spine.license.notice").replace(/\s/g, ""));
         assert.ok(walk(consent).every((e) => !e.title && !e.getAttribute("title")));
         assert.ok(press("Escape").defaultPrevented);
@@ -1380,26 +2289,52 @@ test("Spine notice has the same title, legal body and lone Confirm in both paths
         assert.equal(Runtime.spineAllowed(), true);
       }
     }
-  } finally { I18n.setStrings("en-US", strings); answers["app.spineConsent"] = saved; Runtime.setSpineConsent(null); }
+  } finally {
+    I18n.setStrings("en-US", strings);
+    answers["app.spineConsent"] = saved;
+    Runtime.setSpineConsent(null);
+  }
 });
 
 test("startup shows the Spine notice after assets until it is acknowledged, re-renders, and skips an old Yes", async () => {
   const main = readFileSync(new URL("../../src/bmpt/web/js/main.js", import.meta.url), "utf8");
   const source = main.slice(main.indexOf("function startPopups()"), main.indexOf("async function start()"));
   for (const choice of [undefined, null, false, true]) {
-    const info = { consent: null, spineConsent: choice }, order = [];
+    const info = { consent: null, spineConsent: choice },
+      order = [];
     const env = {
-      info, $: () => consent,
+      info,
+      $: () => consent,
       ModSwitch: { startDue: MS.startDue, current: () => base({ scan: null }) },
       Consent: {
-        show: async () => { order.push("assets"); return true; },
-        spine: async () => { assert.equal(info.consent, true); order.push("spine"); return true; },
-        scan: async () => { order.push("scan"); return false; },
+        show: async () => {
+          order.push("assets");
+          return true;
+        },
+        spine: async () => {
+          assert.equal(info.consent, true);
+          order.push("spine");
+          return true;
+        },
+        scan: async () => {
+          order.push("scan");
+          return false;
+        },
       },
-      Prompts: { start: async (name) => { order.push(name); } },
-      Loading: { init() {} }, route: async () => { order.push("route"); },
+      Prompts: {
+        start: async (name) => {
+          order.push(name);
+        },
+      },
+      Loading: { init() {} },
+      route: async () => {
+        order.push("route");
+      },
     };
-    const steps = new Function("env", `const { ${Object.keys(env).join(", ")} } = env; ${source}; return startPopups();`)(env);
+    const steps = new Function(
+      "env",
+      `const { ${Object.keys(env).join(", ")} } = env; ${source}; return startPopups();`,
+    )(env);
     await (await import("../../src/bmpt/web/js/popup.js")).sequence(steps);
     assert.deepEqual(order, ["assets", ...(choice !== true ? ["spine", "route"] : []), "scan", "drift", "untracked"]);
     assert.equal(info.spineConsent, true);
@@ -1411,27 +2346,44 @@ test("Settings Spine value row opens the same read-only notice in every locale w
   const Consent = await import("../../src/bmpt/web/js/consent.js");
   const Settings = await import("../../src/bmpt/web/js/settings.js");
   const Runtime = await import("../../src/bmpt/web/js/spine-runtime.js");
-  const saved = { ...answers }, S = I18n.T;
-  const prefs = { languages: [{ code: "en-US", name: "English" }], language: "en-US", cacheDir: "/cache",
-    gameDirs: { global: "/game" }, fileSource: "windows_global", ...saved["settings.get"], spineConsent: false };
+  const saved = { ...answers },
+    S = I18n.T;
+  const prefs = {
+    languages: [{ code: "en-US", name: "English" }],
+    language: "en-US",
+    cacheDir: "/cache",
+    gameDirs: { global: "/game" },
+    fileSource: "windows_global",
+    ...saved["settings.get"],
+    spineConsent: false,
+  };
   const changes = [];
   answers["settings.get"] = () => prefs;
   answers["app.spineConsent"] = () => assert.fail("View never changes the acknowledgement");
   Consent.init({ consent: true });
   Runtime.setSpineConsent(false);
-  const button = (name) => walk(settingsHost).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === name);
+  const button = (name) =>
+    walk(settingsHost).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === name);
   try {
     for (const [index, locale] of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"].entries()) {
-      const table = flat(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")));
+      const table = flat(
+        JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")),
+      );
       I18n.setStrings(locale, table);
       prefs.spineConsent = [null, false, true][index % 3];
       Runtime.setSpineConsent(prefs.spineConsent);
-      const previous = JSON.stringify(prefs), allowed = Runtime.spineAllowed();
+      const previous = JSON.stringify(prefs),
+        allowed = Runtime.spineAllowed();
       await Settings.open((key) => changes.push(key));
       button(S("settings.tab.general"))?.click();
       // the General tab's own View (the Mods tab has a View of its own, Game Update Impact)
-      await until(() => button(S("settings.spine.view")) && walk(settingsHost).some((e) => e.dataset.path === "Rows/Spine/Title"), "Spine View");
-      const paths = walk(settingsHost).map((e) => e.dataset.path).filter(Boolean);
+      await until(
+        () => button(S("settings.spine.view")) && walk(settingsHost).some((e) => e.dataset.path === "Rows/Spine/Title"),
+        "Spine View",
+      );
+      const paths = walk(settingsHost)
+        .map((e) => e.dataset.path)
+        .filter(Boolean);
       const rows = paths.filter((p) => /^Rows\/[^/]+$/.test(p));
       assert.equal(rows[rows.indexOf("Rows/Cache") + 1], "Rows/PreviewCache");
       assert.equal(rows[rows.indexOf("Rows/PreviewCache") + 1], "Rows/Spine");
@@ -1464,39 +2416,94 @@ const Impact = await import("../../src/bmpt/web/js/update-impact.js");
 
 test("an update's impact as a list: only the mods to update, each a card with its details; the footer", () => {
   const mods = [
-    { id: "1", target: "hoshino", core: "ch0101_spr", kind: "spr", impact: "rig_changed", label: "Bunny Hoshino", configured: true,
-      changes: { repacked: true, animations: 3, textures: true } },
+    {
+      id: "1",
+      target: "hoshino",
+      core: "ch0101_spr",
+      kind: "spr",
+      impact: "rig_changed",
+      label: "Bunny Hoshino",
+      configured: true,
+      changes: { repacked: true, animations: 3, textures: true },
+    },
     { id: "2", target: "airi", core: "ch0200_spr", kind: "spr", impact: "rebuilt", label: "Airi", changes: {} },
     { id: "3", target: "hina", core: "ch0063_home", kind: "lobby", impact: "gone", label: "Night" },
     { id: "4", target: "aru", core: "aru_spr", kind: "spr", impact: "unchanged" },
-    { id: "5", target: "aris", core: "aris_spr", kind: "spr", impact: "rig_changed", repaired_id: "5r", configured: false },
+    {
+      id: "5",
+      target: "aris",
+      core: "aris_spr",
+      kind: "spr",
+      impact: "rig_changed",
+      repaired_id: "5r",
+      configured: false,
+    },
   ];
   const nameOf = (e) => e.variant[0].toUpperCase() + e.variant.slice(1);
   // what was handled by itself (rebuilt, new parts, gone) is never listed; a mod a repaired copy replaced neither
   const listed = Impact.heldOf({ due: true, mods });
-  assert.deepEqual(listed.map((m) => m.id), ["1"]);
+  assert.deepEqual(
+    listed.map((m) => m.id),
+    ["1"],
+  );
   assert.equal(Impact.TABS, undefined, "no segments");
   // a card: the student's name, its kind and Applied as chips, the Outdated badge, its own picture
   const held = Impact.card(listed[0], nameOf);
-  assert.deepEqual([held.key, held.label, held.full, held.chips, held.badge.text],
-    ["1", "Hoshino", "Bunny Hoshino", ["Portrait", "Applied", "Official"], "Outdated"]);
-  assert.deepEqual(Impact.card({ ...listed[0], configured: false, changes: {} }, nameOf).chips, ["Portrait"], "no changes known: no chip");
+  assert.deepEqual(
+    [held.key, held.label, held.full, held.chips, held.badge.text],
+    ["1", "Hoshino", "Bunny Hoshino", ["Portrait", "Applied", "Official"], "Outdated"],
+  );
+  assert.deepEqual(
+    Impact.card({ ...listed[0], configured: false, changes: {} }, nameOf).chips,
+    ["Portrait"],
+    "no changes known: no chip",
+  );
   assert.ok(held.thumb && typeof held.big === "function");
   // a generic mod's card names the mod itself, never its set's key
-  const generic = Impact.card({ id: "g", target: "other-set:0d9415b79fe5", core: "other-set:0d9415b79fe5", kind: "other", impact: "rig_changed",
-    label: "UI Font" }, (e) => e.variant);
+  const generic = Impact.card(
+    {
+      id: "g",
+      target: "other-set:0d9415b79fe5",
+      core: "other-set:0d9415b79fe5",
+      kind: "other",
+      impact: "rig_changed",
+      label: "UI Font",
+    },
+    (e) => e.variant,
+  );
   assert.deepEqual([generic.label, generic.full, generic.thumb], ["UI Font", "UI Font", null]);
-  assert.equal(Impact.card({ id: "g", target: "other-set:0d94", kind: "other", impact: "rig_changed" }, (e) => e.variant).label, "Other Mods");
+  assert.equal(
+    Impact.card({ id: "g", target: "other-set:0d94", kind: "other", impact: "rig_changed" }, (e) => e.variant).label,
+    "Other Mods",
+  );
   // the details: the mod's name, what changed (without the kind's prefix); Go To, the preview, Update and Apply
   const d = Impact.details(listed[0]);
   assert.equal(d.title, S("info.title.portrait"));
   // the changes alone, no caption: the chip above names them, the badge gives the state
   assert.deepEqual(d.fields, [[null, ".atlas file layout changed, 3 new animations in the .skel file"]]);
-  assert.deepEqual(d.actions.map(([id, caption]) => [id, caption]), [["go", "Go to"], ["preview", "Preview Update"], ["fix", "Update and Apply"]]);
-  assert.deepEqual(Impact.details({ ...generic.mod }).actions.map(([id]) => id), ["preview", "fix"], "a generic mod: no student page");
+  assert.deepEqual(
+    d.actions.map(([id, caption]) => [id, caption]),
+    [
+      ["go", "Go to"],
+      ["preview", "Preview Update"],
+      ["fix", "Update and Apply"],
+    ],
+  );
+  assert.deepEqual(
+    Impact.details({ ...generic.mod }).actions.map(([id]) => id),
+    ["preview", "fix"],
+    "a generic mod: no student page",
+  );
   // the footer: Close and Check Update Impact; Update and Apply only with mods to update, greyed with none ticked
-  assert.deepEqual(Impact.footer(0, 0), [["close", "Close"], ["check", "Check Update Impact"]]);
-  assert.deepEqual(Impact.footer(2, 1), [["close", "Close"], ["check", "Check Update Impact"], ["fix", "Update and Apply", false]]);
+  assert.deepEqual(Impact.footer(0, 0), [
+    ["close", "Close"],
+    ["check", "Check Update Impact"],
+  ]);
+  assert.deepEqual(Impact.footer(2, 1), [
+    ["close", "Close"],
+    ["check", "Check Update Impact"],
+    ["fix", "Update and Apply", false],
+  ]);
   assert.deepEqual(Impact.footer(2, 0).at(-1), ["fix", "Update and Apply", true]);
   // every string in every locale
   try {
@@ -1504,69 +2511,175 @@ test("an update's impact as a list: only the mods to update, each a card with it
       const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
       I18n.setStrings(lang, flat({ webui: ui }));
       const m = ui.mods.impact;
-      for (const k of ["title", "fix", "preview", "noPreview", "chipOfficial", "check", "checkAsk",
-        "gateTitle", "gateAsk", "gateCheck", "checking", "reapplying", "sep"]) assert.ok(typeof m[k] === "string" && m[k].length > 0, `${lang} ${k}`);
+      for (const k of [
+        "title",
+        "fix",
+        "preview",
+        "noPreview",
+        "chipOfficial",
+        "check",
+        "checkAsk",
+        "gateTitle",
+        "gateAsk",
+        "gateCheck",
+        "checking",
+        "reapplying",
+        "sep",
+      ])
+        assert.ok(typeof m[k] === "string" && m[k].length > 0, `${lang} ${k}`);
       assert.ok(m.partial.includes("{n}") && m.none.length > 0, lang);
-      assert.ok(!("fixSelected" in m), `${lang}: the footer's Fix and Apply carries no count (the list's footer has it)`);
+      assert.ok(
+        !("fixSelected" in m),
+        `${lang}: the footer's Fix and Apply carries no count (the list's footer has it)`,
+      );
       assert.ok(m.checkingMod.includes("{name}"), lang);
-      for (const gone of ["hint", "reset", "rigChanged", "fixAll", "reapplied", "others", "expand", "collapse", "gone", "newParts", "rebuilt", "unchanged", "unknown",
-        "tabHeld", "tabReapplied", "tabOthers", "kindRebuilt", "kindNewParts", "kindGone"])
+      for (const gone of [
+        "hint",
+        "reset",
+        "rigChanged",
+        "fixAll",
+        "reapplied",
+        "others",
+        "expand",
+        "collapse",
+        "gone",
+        "newParts",
+        "rebuilt",
+        "unchanged",
+        "unknown",
+        "tabHeld",
+        "tabReapplied",
+        "tabOthers",
+        "kindRebuilt",
+        "kindNewParts",
+        "kindGone",
+      ])
         assert.ok(!(gone in m), `${lang}: ${gone} no longer used`);
-      for (const k of ["held", "heldTitle", "heldBadge"]) assert.ok(typeof ui.mods[k] === "string" && ui.mods[k].length > 0, `${lang} ${k}`);
+      for (const k of ["held", "heldTitle", "heldBadge"])
+        assert.ok(typeof ui.mods[k] === "string" && ui.mods[k].length > 0, `${lang} ${k}`);
       const every = { repacked: true, animations: 2, rig: true, removed: true, added: true };
-      for (const [kind, changes] of [["spr", every], ["lobby", { animations: 1 }], ["model", { textures: true }], ["other", { removed: true }]]) {
+      for (const [kind, changes] of [
+        ["spr", every],
+        ["lobby", { animations: 1 }],
+        ["model", { textures: true }],
+        ["other", { removed: true }],
+      ]) {
         const text = Impact.changeText({ kind, changes });
         assert.ok(text && !/[{}]|mods\./.test(text), `${lang} ${kind} ${text}`);
       }
-      for (const k of ["impact", "view", "viewUpdates"]) assert.ok(typeof ui.settings.mods[k] === "string" && ui.settings.mods[k].length > 0, `${lang} ${k}`);
+      for (const k of ["impact", "view", "viewUpdates"])
+        assert.ok(typeof ui.settings.mods[k] === "string" && ui.settings.mods[k].length > 0, `${lang} ${k}`);
     }
     // Chinese: the changes after a comma, the new animations as xN
-    I18n.setStrings("zh-CN", flat({ webui: JSON.parse(readFileSync(new URL("../../src/bmpt/locales/zh-CN.json", import.meta.url))).webui }));
-    assert.equal(Impact.changeText({ kind: "spr", changes: { repacked: true, animations: 1 } }), "官方立绘变动：.atlas 文件布局改变，.skel 文件新增动画 x1");
-  } finally { I18n.setStrings("en-US", strings); }
+    I18n.setStrings(
+      "zh-CN",
+      flat({ webui: JSON.parse(readFileSync(new URL("../../src/bmpt/locales/zh-CN.json", import.meta.url))).webui }),
+    );
+    assert.equal(
+      Impact.changeText({ kind: "spr", changes: { repacked: true, animations: 1 } }),
+      "官方立绘变动：.atlas 文件布局改变，.skel 文件新增动画 x1",
+    );
+  } finally {
+    I18n.setStrings("en-US", strings);
+  }
 });
 
 test("what an update changed in a mod's official parts: each change once, a repack carrying its texture sizes", () => {
   assert.equal(Impact.changeText({ kind: "spr", changes: {} }), "");
   assert.equal(Impact.changeText({ kind: "spr" }), "");
-  assert.equal(Impact.changeText({ kind: "spr", changes: { animations: 1 } }), "Official Portrait changes: 1 new animation in the .skel file");
-  assert.equal(Impact.changeText({ kind: "lobby", changes: { repacked: true, textures: true, rig: true } }),
-    "Official Memorial Lobby changes: .atlas file layout changed, .skel file structure changed");
-  assert.equal(Impact.changeText({ kind: "model", changes: { textures: true, removed: true, added: true } }),
-    "Official Chibi changes: texture size changed, part removed, new parts");
+  assert.equal(
+    Impact.changeText({ kind: "spr", changes: { animations: 1 } }),
+    "Official Portrait changes: 1 new animation in the .skel file",
+  );
+  assert.equal(
+    Impact.changeText({ kind: "lobby", changes: { repacked: true, textures: true, rig: true } }),
+    "Official Memorial Lobby changes: .atlas file layout changed, .skel file structure changed",
+  );
+  assert.equal(
+    Impact.changeText({ kind: "model", changes: { textures: true, removed: true, added: true } }),
+    "Official Chibi changes: texture size changed, part removed, new parts",
+  );
   assert.equal(Impact.changeText({ kind: "other", changes: { removed: true } }), "Official files: part removed");
   // a generic mod: its own name and the kind, no Go To (no student page); a held one keeps Fix
   const other = Impact.modLines({ id: "9", kind: "other", label: "UI Font", target: "", changes: { removed: true } });
   assert.equal(other[0].text, "UI Font - Other Mods");
   assert.equal(other[0].button, undefined);
-  assert.equal(Impact.modLines({ id: "9", kind: "other", label: "UI Font", target: "" }, undefined, { fix: true })[0].button.label, "Update and Apply");
+  assert.equal(
+    Impact.modLines({ id: "9", kind: "other", label: "UI Font", target: "" }, undefined, { fix: true })[0].button.label,
+    "Update and Apply",
+  );
 });
 
 test("the held entries' Details name each mod with Go To and Fix where its mod is known, then how the hold ends", () => {
-  const entries = [{ install: "/a", core: "a_spr", variant: "a", kind: "spr", source: "mod:1", label: "Swim A" },
-    { install: "/a", core: "b_home", variant: "b", kind: "lobby", source: "variant:c" }];
+  const entries = [
+    { install: "/a", core: "a_spr", variant: "a", kind: "spr", source: "mod:1", label: "Swim A" },
+    { install: "/a", core: "b_home", variant: "b", kind: "lobby", source: "variant:c" },
+  ];
   const lines = Impact.heldLines(entries, (e) => e.variant.toUpperCase());
-  assert.deepEqual(lines.map((l) => [l.text, l.button?.label || null, (l.more || []).map((b) => b.label)]),
-    [["A - Portrait - Swim A - Applied", "Go to", ["Update and Apply"]], ["B - Memorial Lobby - Applied", null, []]]);
-  assert.deepEqual(Impact.heldMods(entries)[0], { id: "1", target: "a", core: "a_spr", kind: "spr", label: "Swim A", configured: true });
+  assert.deepEqual(
+    lines.map((l) => [l.text, l.button?.label || null, (l.more || []).map((b) => b.label)]),
+    [
+      ["A - Portrait - Swim A - Applied", "Go to", ["Update and Apply"]],
+      ["B - Memorial Lobby - Applied", null, []],
+    ],
+  );
+  assert.deepEqual(Impact.heldMods(entries)[0], {
+    id: "1",
+    target: "a",
+    core: "a_spr",
+    kind: "spr",
+    label: "Swim A",
+    configured: true,
+  });
 });
 
 test("the entries a game update overwrote that need no repair are applied again; the held ones wait for their fix", async () => {
-  const result = { mods: [{ id: "b", impact: "rig_changed" }, { id: "a", impact: "rebuilt" }] };
-  const entries = [entry("airi_spr", "updated", { configured: "mod:a" }), entry("hina_home", "updated", { configured: "mod:b" }),
-    entry("noa_spr", "updated", { configured: "mod:c", dismissed: true }), entry("aru_spr", "reset", { configured: "mod:d" })];
-  assert.deepEqual(Impact.reappliable(entries, result).map((e) => e.core), ["airi_spr"]);
+  const result = {
+    mods: [
+      { id: "b", impact: "rig_changed" },
+      { id: "a", impact: "rebuilt" },
+    ],
+  };
+  const entries = [
+    entry("airi_spr", "updated", { configured: "mod:a" }),
+    entry("hina_home", "updated", { configured: "mod:b" }),
+    entry("noa_spr", "updated", { configured: "mod:c", dismissed: true }),
+    entry("aru_spr", "reset", { configured: "mod:d" }),
+  ];
+  assert.deepEqual(
+    Impact.reappliable(entries, result).map((e) => e.core),
+    ["airi_spr"],
+  );
   // a repaired copy that took a mod's place: not held any more, unless its student is still configured with the mod
-  const fixed = { mods: [{ id: "x", impact: "rig_changed", repaired_id: "y", configured: false },
-    { id: "z", impact: "rig_changed", repaired_id: "w", configured: true }, { id: "v", impact: "rig_changed" }] };
-  assert.deepEqual(Impact.heldOf(fixed).map((m) => m.id), ["z", "v"]);
+  const fixed = {
+    mods: [
+      { id: "x", impact: "rig_changed", repaired_id: "y", configured: false },
+      { id: "z", impact: "rig_changed", repaired_id: "w", configured: true },
+      { id: "v", impact: "rig_changed" },
+    ],
+  };
+  assert.deepEqual(
+    Impact.heldOf(fixed).map((m) => m.id),
+    ["z", "v"],
+  );
   // with mods on, the scan's overwritten entries that need no repair are applied again by themselves, no prompt
   const saved = { ...answers };
   try {
     answers["mods.impact"] = "job-impact-reconcile";
-    jobs["job-impact-reconcile"] = { state: "done", result: { mods: [{ id: "a", impact: "rebuilt" }, { id: "b", impact: "rig_changed" }] } };
+    jobs["job-impact-reconcile"] = {
+      state: "done",
+      result: {
+        mods: [
+          { id: "a", impact: "rebuilt" },
+          { id: "b", impact: "rig_changed" },
+        ],
+      },
+    };
     answers["mods.restoreDrift"] = "job-reconcile";
-    jobs["job-reconcile"] = { state: "done", result: { done: [{ install: GLOBAL, core: "airi_spr" }], failed: [], skipped: [], stuck: [] } };
+    jobs["job-reconcile"] = {
+      state: "done",
+      result: { done: [{ install: GLOBAL, core: "airi_spr" }], failed: [], skipped: [], stuck: [] },
+    };
     assert.equal(await P.reconcile(entries, base({ enabled: false })), false, "mods off: nothing written");
     assert.equal(await P.reconcile(entries, base({ scan: false })), false, "no file check: nothing known");
     // the game update check still due (Later, or the question not answered yet): only the check applies them again
@@ -1580,7 +2693,9 @@ test("the entries a game update overwrote that need no repair are applied again;
     assert.equal(await P.reconcile(entries, base()), true, "another install's check due: this one's entries applied");
     answers["mods.updateDue"] = { due: false, install: GLOBAL, version: "v3", previous: "v3" };
     assert.equal(await P.reconcile(entries, base()), true);
-    assert.deepEqual(called("mods.restoreDrift").at(-1), { entries: [{ install: GLOBAL, core: "airi_spr", state: "updated" }] });
+    assert.deepEqual(called("mods.restoreDrift").at(-1), {
+      entries: [{ install: GLOBAL, core: "airi_spr", state: "updated" }],
+    });
     assert.equal(dialog.hidden, true, "silently");
   } finally {
     for (const key of Object.keys(answers)) delete answers[key];
@@ -1590,9 +2705,24 @@ test("the entries a game update overwrote that need no repair are applied again;
 
 test("the start asks before the first screen, checks under the loading screen, applies again what needs no repair", async () => {
   const saved = { ...answers };
-  const result = { due: true, install: GLOBAL, version: "v3", counts: { rig_changed: 1, rebuilt: 1 },
-    mods: [{ id: "b", target: "hina", core: "hina_home", kind: "lobby", impact: "rig_changed", label: "Night", configured: true },
-      { id: "a", target: "airi", core: "airi_spr", kind: "spr", impact: "rebuilt", label: "Band", configured: true }] };
+  const result = {
+    due: true,
+    install: GLOBAL,
+    version: "v3",
+    counts: { rig_changed: 1, rebuilt: 1 },
+    mods: [
+      {
+        id: "b",
+        target: "hina",
+        core: "hina_home",
+        kind: "lobby",
+        impact: "rig_changed",
+        label: "Night",
+        configured: true,
+      },
+      { id: "a", target: "airi", core: "airi_spr", kind: "spr", impact: "rebuilt", label: "Band", configured: true },
+    ],
+  };
   try {
     // nothing to ask: no popup
     answers["mods.updateDue"] = { due: false };
@@ -1601,12 +2731,21 @@ test("the start asks before the first screen, checks under the loading screen, a
     answers["mods.updateDue"] = { due: true, install: GLOBAL, version: "v3", previous: "v2" };
     answers["mods.state"] = base({ scanned: "2026-11-11T10:00:00Z" });
     await MS.refresh();
-    answers["mods.entries"] = [entry("airi_spr", "updated", { configured: "mod:a" }), entry("hina_home", "updated", { configured: "mod:b" })];
+    answers["mods.entries"] = [
+      entry("airi_spr", "updated", { configured: "mod:a" }),
+      entry("hina_home", "updated", { configured: "mod:b" }),
+    ];
     answers["mods.impact"] = "job-impact-gate";
     jobs["job-impact-gate"] = { state: "done", result };
-    answers["mods.scan"] = () => { setTimeout(() => emit("library.scanned", { entries: [] }), 0); return {}; };
+    answers["mods.scan"] = () => {
+      setTimeout(() => emit("library.scanned", { entries: [] }), 0);
+      return {};
+    };
     answers["mods.restoreDrift"] = "job-reapply-gate";
-    jobs["job-reapply-gate"] = { state: "done", result: { done: [{ install: GLOBAL, core: "airi_spr" }], failed: [], skipped: [], stuck: [] } };
+    jobs["job-reapply-gate"] = {
+      state: "done",
+      result: { done: [{ install: GLOBAL, core: "airi_spr" }], failed: [], skipped: [], stuck: [] },
+    };
     // Later: nothing checked, asked again next time
     let gated = Impact.gate();
     await drawn(dialog, "later");
@@ -1619,14 +2758,28 @@ test("the start asks before the first screen, checks under the loading screen, a
     action(dialog, "check").click();
     assert.equal(await gated, true);
     // the overwritten entry that needs no repair is applied again; the held one waits for its fix
-    assert.deepEqual(called("mods.restoreDrift").at(-1), { entries: [{ install: GLOBAL, core: "airi_spr", state: "updated" }] });
+    assert.deepEqual(called("mods.restoreDrift").at(-1), {
+      entries: [{ install: GLOBAL, core: "airi_spr", state: "updated" }],
+    });
     // the list once the first screen is in: the held mod first, ticked, the entry applied again under its segment
     const shown = Impact.check();
     await until(() => !prompt.hidden && walk(prompt).some((e) => e.dataset?.key === "b"), "the list");
     // ticked at first, by its corner's tick box; the card itself only shows it
-    assert.equal(walk(prompt).find((e) => e.dataset?.tick === "b").getAttribute("aria-checked"), "true");
-    assert.equal(walk(prompt).find((e) => e.dataset?.key === "b").getAttribute("role"), null);
-    walk(prompt).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === S("display.close")).click();
+    assert.equal(
+      walk(prompt)
+        .find((e) => e.dataset?.tick === "b")
+        .getAttribute("aria-checked"),
+      "true",
+    );
+    assert.equal(
+      walk(prompt)
+        .find((e) => e.dataset?.key === "b")
+        .getAttribute("role"),
+      null,
+    );
+    walk(prompt)
+      .find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === S("display.close"))
+      .click();
     await shown;
     assert.deepEqual(called("mods.impactSeen").at(-1), { install: GLOBAL, version: "v3" });
     assert.equal(await Impact.check(), null, "told once");
@@ -1642,7 +2795,8 @@ test("the start asks before the first screen, checks under the loading screen, a
   } finally {
     for (const key of Object.keys(answers)) delete answers[key];
     Object.assign(answers, saved);
-    await tick(); dialog.hidden = true;
+    await tick();
+    dialog.hidden = true;
   }
 });
 
@@ -1650,7 +2804,10 @@ test("the start builds costume builds of an older costume rule again before anyt
   const saved = { ...answers };
   try {
     answers["mods.refreshCostumes"] = "job-refresh-costumes";
-    jobs["job-refresh-costumes"] = { state: "done", result: { done: [{ id: "7", core: "hoshino_original", source: "mod:7" }], kept: [], left: [] } };
+    jobs["job-refresh-costumes"] = {
+      state: "done",
+      result: { done: [{ id: "7", core: "hoshino_original", source: "mod:7" }], kept: [], left: [] },
+    };
     // the same game version: built again, nothing asked or listed
     answers["mods.updateDue"] = { due: false, outdated: true, install: GLOBAL, version: "v3", previous: "v3" };
     const before = called("mods.refreshCostumes").length;
@@ -1673,7 +2830,8 @@ test("the start builds costume builds of an older costume rule again before anyt
   } finally {
     for (const key of Object.keys(answers)) delete answers[key];
     Object.assign(answers, saved);
-    await tick(); dialog.hidden = true;
+    await tick();
+    dialog.hidden = true;
   }
 });
 
@@ -1681,8 +2839,18 @@ test("the start writes entries whose last write failed again without asking, aft
   const saved = { ...answers };
   try {
     answers["mods.retryFailed"] = "job-retry-failed";
-    jobs["job-retry-failed"] = { state: "done", result: { done: [{ install: GLOBAL, core: "mashiro_home" }], failed: [] } };
-    answers["mods.updateDue"] = { due: false, outdated: false, retry: true, install: GLOBAL, version: "v3", previous: "v3" };
+    jobs["job-retry-failed"] = {
+      state: "done",
+      result: { done: [{ install: GLOBAL, core: "mashiro_home" }], failed: [] },
+    };
+    answers["mods.updateDue"] = {
+      due: false,
+      outdated: false,
+      retry: true,
+      install: GLOBAL,
+      version: "v3",
+      previous: "v3",
+    };
     const before = called("mods.retryFailed").length;
     assert.equal(await Impact.gate(), false);
     assert.equal(called("mods.retryFailed").length, before + 1);
@@ -1702,7 +2870,8 @@ test("the start writes entries whose last write failed again without asking, aft
   } finally {
     for (const key of Object.keys(answers)) delete answers[key];
     Object.assign(answers, saved);
-    await tick(); dialog.hidden = true;
+    await tick();
+    dialog.hidden = true;
   }
 });
 
@@ -1714,7 +2883,10 @@ test("the drift prompt asks the impacts of the mods its entries are configured w
     { install: "/b", core: "a_spr", configured: "mod:1" },
   ];
   assert.deepEqual(Impact.configuredMods(entries), ["1", "2"]);
-  const held = Impact.heldKeys(entries, [{ id: "1", impact: "rig_changed" }, { id: "2", impact: "rebuilt" }]);
+  const held = Impact.heldKeys(entries, [
+    { id: "1", impact: "rig_changed" },
+    { id: "2", impact: "rebuilt" },
+  ]);
   assert.deepEqual([...held], ["/a|a_spr", "/b|a_spr"]);
   const items = P.heldCards([{ key: "/a|a_spr" }, { key: "/a|b_spr" }, { key: "/b|a_spr", disabled: true }], held);
   assert.equal(items[0].badge.text, "Outdated");
@@ -1738,13 +2910,27 @@ test("the drift prompt asks the impacts of the mods its entries are configured w
           assert.equal(fit.text, ui.mods.heldBadge, `${lang} ${kind}: whole beside the tick box`);
           assert.ok(NGUI.glyphWidth(fit.text, fit.fs) + 24 <= room, `${lang} ${kind}: short of the tick box`);
           // drawn: the badge's right edge, held at the box's height along the slant, stops BADGE_GAP short of the box
-          const tree = Pop.listCard({ key: "k", label: "K", badge: { text: ui.mods.heldBadge, color: "#ff5a00", ink: "#ffffff" } }, 0, 0, false, card, kind, true);
-          const using = tree.children.find((n) => n.name === "Using"), box = tree.children.find((n) => n.name === "Tick");
+          const tree = Pop.listCard(
+            { key: "k", label: "K", badge: { text: ui.mods.heldBadge, color: "#ff5a00", ink: "#ffffff" } },
+            0,
+            0,
+            false,
+            card,
+            kind,
+            true,
+          );
+          const using = tree.children.find((n) => n.name === "Using"),
+            box = tree.children.find((n) => n.name === "Tick");
           const right = using.pos[0] + using.widgets[0].w_ / 2 + (box.pos[1] - using.pos[1]) * TAN10;
-          assert.ok(right + Pop.BADGE_GAP <= box.pos[0] - Pop.TICK_BOX.w / 2 + 1e-9, `${lang} ${kind}: drawn short of the tick box`);
+          assert.ok(
+            right + Pop.BADGE_GAP <= box.pos[0] - Pop.TICK_BOX.w / 2 + 1e-9,
+            `${lang} ${kind}: drawn short of the tick box`,
+          );
         }
       }
-    } finally { I18n.setStrings("en-US", strings); }
+    } finally {
+      I18n.setStrings("en-US", strings);
+    }
   }
   assert.equal(items[1].badge, undefined);
   assert.equal(items[2].badge, undefined, "a card that cannot be ticked keeps its own state");
@@ -1753,10 +2939,24 @@ test("the drift prompt asks the impacts of the mods its entries are configured w
 test("the impact list: a card's click shows it, its corner ticks it; Update and Apply runs over the list, which stays open", async () => {
   const saved = { ...answers };
   // memorial lobbies: the generic list (the portrait frame's prefab is not in this stand-in)
-  const held = (extra = {}) => ({ id: "r", target: "hina", core: "hina_home", kind: "lobby", impact: "rig_changed", label: "Night",
-    configured: true, repaired_id: "r2", ...extra });
-  const result = { due: true, install: GLOBAL, version: "v4", counts: { rig_changed: 2 },
-    mods: [held(), held({ id: "s", target: "airi", core: "airi_home", label: "Band", repaired_id: "" })] };
+  const held = (extra = {}) => ({
+    id: "r",
+    target: "hina",
+    core: "hina_home",
+    kind: "lobby",
+    impact: "rig_changed",
+    label: "Night",
+    configured: true,
+    repaired_id: "r2",
+    ...extra,
+  });
+  const result = {
+    due: true,
+    install: GLOBAL,
+    version: "v4",
+    counts: { rig_changed: 2 },
+    mods: [held(), held({ id: "s", target: "airi", core: "airi_home", label: "Band", repaired_id: "" })],
+  };
   try {
     answers["mods.updateDue"] = { due: true, install: GLOBAL, version: "v4", previous: "v3" };
     answers["mods.state"] = base({ scan: false });
@@ -1766,7 +2966,10 @@ test("the impact list: a card's click shows it, its corner ticks it; Update and 
     jobs["job-impact-list"] = { state: "done", result };
     // after an update the list reads the last check again, without the mods updated since (no new check)
     answers["mods.impactLast"] = () => ({ ...result, update: false, mods: fixed ? [result.mods[1]] : result.mods });
-    answers["actions.apply"] = (params) => { fixed = true; return "job-apply-list"; };
+    answers["actions.apply"] = (params) => {
+      fixed = true;
+      return "job-apply-list";
+    };
     jobs["job-apply-list"] = { state: "done", result: { files: [] } };
     const gated = Impact.gate();
     await drawn(dialog, "check");
@@ -1777,36 +2980,61 @@ test("the impact list: a card's click shows it, its corner ticks it; Update and 
     const tick = (key) => walk(prompt).find((e) => e.dataset?.tick === key);
     assert.equal(tick("s").getAttribute("aria-checked"), "true", "held mods start ticked");
     // the card's own click shows it, its tick stays
-    walk(prompt).find((e) => e.dataset?.key === "s").click();
+    walk(prompt)
+      .find((e) => e.dataset?.key === "s")
+      .click();
     await until(() => walk(prompt).some((e) => (e.textContent || "").includes("Band")), "the details show it");
     assert.equal(tick("s").getAttribute("aria-checked"), "true");
     // the corner's box unticks it
     tick("s").click();
     await until(() => tick("s")?.getAttribute("aria-checked") === "false", "unticked");
     // Update and Apply in the details of Hina's mod (a repaired copy made before): it takes the mod's place, the list stays
-    walk(prompt).find((e) => e.dataset?.key === "r").click();
+    walk(prompt)
+      .find((e) => e.dataset?.key === "r")
+      .click();
     await until(() => walk(prompt).some((e) => (e.textContent || "").includes("Night")), "Hina's details");
     const checks = called("mods.impact").length;
-    walk(prompt).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === "Update and Apply").click();
+    walk(prompt)
+      .find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === "Update and Apply")
+      .click();
     await until(() => called("actions.apply").length > 0, "applied");
     assert.deepEqual(called("actions.apply").at(-1), { variant: "hina", source: "mod:r2", kind: "lobby" });
-    await until(() => !prompt.hidden && !walk(prompt).some((e) => e.dataset?.key === "r"), "the list again, without the fixed mod");
+    await until(
+      () => !prompt.hidden && !walk(prompt).some((e) => e.dataset?.key === "r"),
+      "the list again, without the fixed mod",
+    );
     assert.equal(prompt.hidden, false, "never closed under the user");
     assert.equal(called("mods.impact").length, checks, "no new check");
-    walk(prompt).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === S("display.close")).click();
+    walk(prompt)
+      .find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === S("display.close"))
+      .click();
     await shown;
     assert.equal(prompt.hidden, true);
   } finally {
     for (const key of Object.keys(answers)) delete answers[key];
     Object.assign(answers, saved);
-    await tick?.(); dialog.hidden = true; prompt.hidden = true;
+    await tick?.();
+    dialog.hidden = true;
+    prompt.hidden = true;
   }
 });
 
 test("Settings' View Mods to Update opens the last check without checking; Check Update Impact asks first without a game update", async () => {
   const saved = { ...answers };
-  const footerButtons = () => walk(prompt).filter((e) => e.tagName === "BUTTON").map((e) => e.getAttribute("aria-label"));
-  const held = { id: "s", target: "airi", core: "airi_home", kind: "lobby", impact: "rig_changed", label: "Band", configured: true, repaired_id: "" };
+  const footerButtons = () =>
+    walk(prompt)
+      .filter((e) => e.tagName === "BUTTON")
+      .map((e) => e.getAttribute("aria-label"));
+  const held = {
+    id: "s",
+    target: "airi",
+    core: "airi_home",
+    kind: "lobby",
+    impact: "rig_changed",
+    label: "Band",
+    configured: true,
+    repaired_id: "",
+  };
   try {
     answers["mods.state"] = base({ scan: false });
     await MS.refresh();
@@ -1816,12 +3044,17 @@ test("Settings' View Mods to Update opens the last check without checking; Check
     jobs["job-impact-view"] = { state: "done", result: { due: true, install: GLOBAL, version: "v4", mods: [held] } };
     const before = called("mods.impact").length;
     const viewed = Impact.view();
-    await until(() => !prompt.hidden && walk(prompt).some((e) => (e.textContent || "").includes("No mods to update")), "the empty list");
+    await until(
+      () => !prompt.hidden && walk(prompt).some((e) => (e.textContent || "").includes("No mods to update")),
+      "the empty list",
+    );
     assert.equal(called("mods.impact").length, before, "opened without a check");
     assert.ok(footerButtons().includes("Check Update Impact"));
     assert.ok(!footerButtons().includes("Update and Apply"), "no Update and Apply without mods to update");
     // the same game version as the last check: asked first; Cancel checks nothing
-    walk(prompt).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === "Check Update Impact").click();
+    walk(prompt)
+      .find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === "Check Update Impact")
+      .click();
     await drawn(dialog, "cancel");
     assert.ok(walk(dialog).some((e) => (e.textContent || "").includes("No game update found")));
     action(dialog, "cancel").click();
@@ -1829,24 +3062,35 @@ test("Settings' View Mods to Update opens the last check without checking; Check
     await tick();
     assert.equal(called("mods.impact").length, before);
     // Check: the check whatever was seen, then the list as it stands, Update and Apply with it
-    walk(prompt).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === "Check Update Impact").click();
+    walk(prompt)
+      .find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === "Check Update Impact")
+      .click();
     await drawn(dialog, "ok");
     action(dialog, "ok").click();
     await until(() => walk(prompt).some((e) => e.dataset?.key === "s"), "the list after the check");
     assert.deepEqual(called("mods.impact").at(-1), { force: true });
     assert.ok(footerButtons().includes("Update and Apply"));
-    walk(prompt).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === S("display.close")).click();
+    walk(prompt)
+      .find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === S("display.close"))
+      .click();
     assert.equal(await viewed, false);
     assert.deepEqual(called("mods.impactSeen").at(-1), { install: GLOBAL, version: "v4" });
     // a game update since the last check: no question
     answers["mods.impactLast"] = { install: GLOBAL, version: "v5", checked: "v4", update: true, mods: [] };
     const asked = called("mods.impact").length;
     const again = Impact.view();
-    await until(() => !prompt.hidden && walk(prompt).some((e) => (e.textContent || "").includes("No mods to update")), "the empty list");
-    walk(prompt).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === "Check Update Impact").click();
+    await until(
+      () => !prompt.hidden && walk(prompt).some((e) => (e.textContent || "").includes("No mods to update")),
+      "the empty list",
+    );
+    walk(prompt)
+      .find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === "Check Update Impact")
+      .click();
     await until(() => called("mods.impact").length > asked, "checked at once");
     await until(() => walk(prompt).some((e) => e.dataset?.key === "s"), "the list after the check");
-    walk(prompt).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === S("display.close")).click();
+    walk(prompt)
+      .find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === S("display.close"))
+      .click();
     await again;
     // elsewhere (the tray, Settings' Check): only with mods to update
     answers["mods.impactLast"] = { install: GLOBAL, version: "v5", checked: "v5", update: false, mods: [] };
@@ -1855,6 +3099,8 @@ test("Settings' View Mods to Update opens the last check without checking; Check
   } finally {
     for (const key of Object.keys(answers)) delete answers[key];
     Object.assign(answers, saved);
-    await tick(); dialog.hidden = true; prompt.hidden = true;
+    await tick();
+    dialog.hidden = true;
+    prompt.hidden = true;
   }
 });

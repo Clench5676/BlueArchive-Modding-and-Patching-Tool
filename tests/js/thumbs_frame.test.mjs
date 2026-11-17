@@ -11,11 +11,18 @@ const part = (slot, b, expr = false, attachment = slot) => ({ slot, attachment, 
 
 test("the face: the parts named like one, else the parts the expressions switch", () => {
   // np0111 (Ako, Operator): its face slot is "0", switched by the expressions; the hair and the body are not
-  const ako = [part("NP111", box(-238, 300, 358, 1368)), part("front hair", box(-165, 200, 932, 1207)),
-    part("0", box(-81, 125, 972, 1127), true), part("halo", box(-243, 157, 1186, 1443), true)];
+  const ako = [
+    part("NP111", box(-238, 300, 358, 1368)),
+    part("front hair", box(-165, 200, 932, 1207)),
+    part("0", box(-81, 125, 972, 1127), true),
+    part("halo", box(-243, 157, 1186, 1443), true),
+  ];
   assert.deepEqual(faceOf(ako), box(-81, 125, 972, 1127));
   // a part named like a face wins over the switched ones, as before
-  const named = [part("01_Normal", box(-100, 100, 900, 1100), true, "default"), part("mouth", box(-40, 40, 950, 990), true)];
+  const named = [
+    part("01_Normal", box(-100, 100, 900, 1100), true, "default"),
+    part("mouth", box(-40, 40, 950, 990), true),
+  ];
   assert.deepEqual(faceOf(named), box(-100, 100, 900, 1100));
   // a whole body swapped per expression (citizen_animal1) is too large for a face: nothing is found
   assert.equal(faceOf([part("citizen_animal1", box(-239, 303, -300, 1158), true)]), null);
@@ -25,10 +32,21 @@ test("the face: the parts named like one, else the parts the expressions switch"
 });
 
 test("face parts: expression overlays and eyes, never halos", () => {
-  for (const [slot, att] of [["00_defalt", "00_defalt"], ["default", "00_default"], ["eyeclose", "eyeclose"],
-    ["01_Normal", "default"], ["face", "face"]]) assert.ok(isFacePart(slot, att), slot);
+  for (const [slot, att] of [
+    ["00_defalt", "00_defalt"],
+    ["default", "00_default"],
+    ["eyeclose", "eyeclose"],
+    ["01_Normal", "default"],
+    ["face", "face"],
+  ])
+    assert.ok(isFacePart(slot, att), slot);
   // Hina's halo slots are named like expression overlays
-  for (const [slot, att] of [["01_halo", "01_halo"], ["02_halo", "02_halo"], ["halo", "halo"], ["hina2", "hina_1"]]) {
+  for (const [slot, att] of [
+    ["01_halo", "01_halo"],
+    ["02_halo", "02_halo"],
+    ["halo", "halo"],
+    ["hina2", "hina_1"],
+  ]) {
     assert.ok(!isFacePart(slot, att), slot);
   }
 });
@@ -36,9 +54,16 @@ test("face parts: expression overlays and eyes, never halos", () => {
 test("a long weapon or wide wings never shrink the thumbnail", () => {
   // Hina: a 194-unit face in 3616-unit bounds (her gun and wings)
   const face = box(-93, 101, 857, 1004);
-  const narrow = { x: -560, y: -900, w: 1100, h: 2300 }, wide = { x: -1674, y: -923, w: 3616, h: 2439 };
-  for (const [frame, k] of [["bust", 3.8], ["roster", 3.8], ["card", 3.4], ["face", 3.3]]) {
-    const a = thumbFrame(face, narrow, frame, 1), b = thumbFrame(face, wide, frame, 1);
+  const narrow = { x: -560, y: -900, w: 1100, h: 2300 },
+    wide = { x: -1674, y: -923, w: 3616, h: 2439 };
+  for (const [frame, k] of [
+    ["bust", 3.8],
+    ["roster", 3.8],
+    ["card", 3.4],
+    ["face", 3.3],
+  ]) {
+    const a = thumbFrame(face, narrow, frame, 1),
+      b = thumbFrame(face, wide, frame, 1);
     assert.deepEqual(a, b, frame);
     near(a.width, 194 * k);
     near(a.x + a.width / 2, 4); // centred on the face
@@ -49,7 +74,7 @@ test("the face width is held within what faces measure", () => {
   const bounds = { x: -600, y: -1000, w: 1200, h: 2500 };
   near(thumbFrame(box(-20, 25, 1000, 1030), bounds, "bust", 1).width, FACE_W[0] * 3.8); // eyes alone
   near(thumbFrame(box(-110, 110, 900, 1100), bounds, "bust", 1).width, 220 * 3.8);
-  near(thumbFrame(box(-100, 290, 900, 1300), bounds, "bust", 1).width, 390 * 3.8);     // a face under a mask
+  near(thumbFrame(box(-100, 290, 900, 1300), bounds, "bust", 1).width, 390 * 3.8); // a face under a mask
   near(thumbFrame(box(-250, 250, 900, 1300), bounds, "bust", 1).width, FACE_W[1] * 3.8);
   // a body part named like a face (np0013's "Face_01"): the bounds stand in
   const body = thumbFrame(box(-624, 642, -1134, 1348), bounds, "bust", 1);

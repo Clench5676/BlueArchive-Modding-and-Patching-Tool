@@ -5,20 +5,45 @@ import { test } from "node:test";
 
 import { KEYS, deltaOf, pacer, typing } from "../../src/bmpt/web/js/step-keys.js";
 
-const key = (k, extra = {}) => ({ key: k, keyCode: 0, repeat: false, isComposing: false, defaultPrevented: false,
-  altKey: false, ctrlKey: false, metaKey: false, shiftKey: false, ...extra });
+const key = (k, extra = {}) => ({
+  key: k,
+  keyCode: 0,
+  repeat: false,
+  isComposing: false,
+  defaultPrevented: false,
+  altKey: false,
+  ctrlKey: false,
+  metaKey: false,
+  shiftKey: false,
+  ...extra,
+});
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 // a step that resolves when the test says the screen shows it
 function steps() {
-  const runs = [], pending = [];
-  let inFlight = 0, most = 0;
+  const runs = [],
+    pending = [];
+  let inFlight = 0,
+    most = 0;
   const run = (delta) => {
     runs.push(delta);
     inFlight += 1;
     most = Math.max(most, inFlight);
-    return new Promise((resolve) => pending.push(() => { inFlight -= 1; resolve(); }));
+    return new Promise((resolve) =>
+      pending.push(() => {
+        inFlight -= 1;
+        resolve();
+      }),
+    );
   };
-  return { run, runs, shown: async () => { pending.shift()?.(); await flush(); }, most: () => most };
+  return {
+    run,
+    runs,
+    shown: async () => {
+      pending.shift()?.();
+      await flush();
+    },
+    most: () => most,
+  };
 }
 
 test("the PC client's keys: the left and right arrows", () => {
@@ -33,7 +58,8 @@ test("the PC client's keys: the left and right arrows", () => {
 });
 
 test("a modifier, an input method or another handler keeps the key", () => {
-  for (const m of ["altKey", "ctrlKey", "metaKey", "shiftKey"]) assert.equal(deltaOf(key("ArrowRight", { [m]: true })), 0, m);
+  for (const m of ["altKey", "ctrlKey", "metaKey", "shiftKey"])
+    assert.equal(deltaOf(key("ArrowRight", { [m]: true })), 0, m);
   assert.equal(deltaOf(key("ArrowLeft", { isComposing: true })), 0);
   // WebKit's key that ends a conversion comes after compositionend, as keyCode 229
   assert.equal(deltaOf(key("ArrowLeft", { keyCode: 229 })), 0);
@@ -43,13 +69,15 @@ test("a modifier, an input method or another handler keeps the key", () => {
 test("text fields and controls with their own arrow keys", () => {
   for (const tagName of ["INPUT", "TEXTAREA", "SELECT"]) assert.equal(typing({ tagName }), true, tagName);
   assert.equal(typing({ tagName: "DIV", isContentEditable: true }), true);
-  for (const tagName of ["BUTTON", "BODY", "DIV", "CANVAS"]) assert.equal(typing({ tagName, isContentEditable: false }), false, tagName);
+  for (const tagName of ["BUTTON", "BODY", "DIV", "CANVAS"])
+    assert.equal(typing({ tagName, isContentEditable: false }), false, tagName);
   assert.equal(typing(null), false);
   assert.equal(typing(undefined), false);
 });
 
 test("a press steps at once; presses meanwhile wait, the latest one only", async () => {
-  const s = steps(), p = pacer(s.run);
+  const s = steps(),
+    p = pacer(s.run);
   assert.equal(p.busy, false);
   p.press(1);
   await flush();
@@ -72,7 +100,8 @@ test("a press steps at once; presses meanwhile wait, the latest one only", async
 });
 
 test("a held key steps at the screen's pace and stops when let go", async () => {
-  const s = steps(), p = pacer(s.run);
+  const s = steps(),
+    p = pacer(s.run);
   p.press(1, false);
   await flush();
   // the key repeats every 33 ms while the screen takes longer: one step per screen shown
@@ -90,7 +119,8 @@ test("a held key steps at the screen's pace and stops when let go", async () => 
 });
 
 test("letting go keeps a press of its own", async () => {
-  const s = steps(), p = pacer(s.run);
+  const s = steps(),
+    p = pacer(s.run);
   p.press(-1);
   await flush();
   p.press(-1, false); // a second tap while the first step loads
@@ -128,7 +158,10 @@ test("a step that fails or declines lets the next one go", async () => {
     const p = pacer(async (d) => {
       runs.push(d);
       await flush();
-      if (fail) { fail = false; throw new Error("rpc"); }
+      if (fail) {
+        fail = false;
+        throw new Error("rpc");
+      }
     });
     p.press(1);
     p.press(-1);

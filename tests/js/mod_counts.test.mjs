@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-globalThis.document = { documentElement: { lang: "en" }, createElement: () => ({ getContext: () => ({ measureText: (t) => ({ width: String(t).length * 20 }) }) }) };
+globalThis.document = {
+  documentElement: { lang: "en" },
+  createElement: () => ({ getContext: () => ({ measureText: (t) => ({ width: String(t).length * 20 }) }) }),
+};
 const { COUNT_ICONS, countNodes, countText, iconsOf } = await import("../../src/bmpt/web/js/mod-counts.js");
 
 test("count icons are the two named game sprites, found in the loaded atlases only", () => {
@@ -13,8 +16,11 @@ test("count icons are the two named game sprites, found in the loaded atlases on
   const icons = iconsOf(index);
   assert.deepEqual(icons.spr, { atlas: "Common", name: COUNT_ICONS.spr, ratio: 1.25 });
   assert.equal(icons.lobby.name, COUNT_ICONS.lobby);
-  assert.deepEqual(iconsOf({ Common: { [COUNT_ICONS.spr]: { width: 40, height: 40 } } }).lobby, undefined,
-    "a missing sprite is never replaced by a guess");
+  assert.deepEqual(
+    iconsOf({ Common: { [COUNT_ICONS.spr]: { width: 40, height: 40 } } }).lobby,
+    undefined,
+    "a missing sprite is never replaced by a guess",
+  );
   assert.deepEqual(iconsOf({}), {});
   const [portraits, lobbies] = countNodes({ spr: 3, lobby: 1 }, icons);
   assert.equal(portraits.children[0].widgets[0].text, "\u00d73");
@@ -60,8 +66,20 @@ test("the count nodes draw the roster icons and include models and generic asset
   const kinds = ["spr", "lobby", "model", "other"];
   const index = { Common: Object.fromEntries(kinds.map((kind) => [COUNT_ICONS[kind], { width: 40, height: 40 }])) };
   const nodes = countNodes({ spr: 2, lobby: 3, model: 4, other: 5 }, iconsOf(index), null, { kinds, width: 800 });
-  assert.deepEqual(nodes.map((node) => node.name), kinds);
-  assert.deepEqual(nodes.map((node) => node.children[0].widgets[0].text), ["×2", "×3", "×4", "×5"]);
-  assert.deepEqual(nodes.map((node) => node.pos[0]), [-300, -100, 100, 300]);
-  assert.deepEqual(nodes.map((node) => node.children[1].widgets[0].sprite), kinds.map((kind) => COUNT_ICONS[kind]));
+  assert.deepEqual(
+    nodes.map((node) => node.name),
+    kinds,
+  );
+  assert.deepEqual(
+    nodes.map((node) => node.children[0].widgets[0].text),
+    ["×2", "×3", "×4", "×5"],
+  );
+  assert.deepEqual(
+    nodes.map((node) => node.pos[0]),
+    [-300, -100, 100, 300],
+  );
+  assert.deepEqual(
+    nodes.map((node) => node.children[1].widgets[0].sprite),
+    kinds.map((kind) => COUNT_ICONS[kind]),
+  );
 });

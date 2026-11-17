@@ -9,15 +9,28 @@ const source = readFileSync(new URL("../../src/bmpt/web/js/roster.js", import.me
 const code = source.slice(source.indexOf("// dragging the list:"), source.indexOf("// --- toolbar layout"));
 
 function harness() {
-  const listeners = {}, timers = [];
+  const listeners = {},
+    timers = [];
   const env = {
-    addEventListener: (type, fn, options) => { listeners[type] = { fn, capture: options === true || !!options?.capture }; },
+    addEventListener: (type, fn, options) => {
+      listeners[type] = { fn, capture: options === true || !!options?.capture };
+    },
     document: { getElementById: () => ({ getBoundingClientRect: () => ({ width: 960 }) }) }, // the stage at half size
-    setTimeout: (fn) => timers.push(fn), ctx: { dragged: false }, view: { scroll: 100 }, scrolls: 0,
+    setTimeout: (fn) => timers.push(fn),
+    ctx: { dragged: false },
+    view: { scroll: 100 },
+    scrolls: 0,
   };
-  env.applyScroll = () => { env.scrolls++; };
-  vm.runInNewContext(`${code}\nglobalThis.press = (y) => { drag = { y, scroll: view.scroll }; ctx.dragged = false; };`, env);
-  const flush = () => { for (const fn of timers.splice(0)) fn(); };
+  env.applyScroll = () => {
+    env.scrolls++;
+  };
+  vm.runInNewContext(
+    `${code}\nglobalThis.press = (y) => { drag = { y, scroll: view.scroll }; ctx.dragged = false; };`,
+    env,
+  );
+  const flush = () => {
+    for (const fn of timers.splice(0)) fn();
+  };
   return { env, listeners, flush };
 }
 

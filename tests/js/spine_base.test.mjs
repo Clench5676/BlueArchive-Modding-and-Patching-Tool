@@ -14,7 +14,11 @@ test("a core's skeleton base and its prefix", () => {
   assert.equal(spineBase("lobby", "airi_home"), "/asset/spine/lobby/airi_home/skeleton");
   assert.equal(spinePrefix("mod", "a1b2"), "/asset/spine/mod/a1b2");
   // the base of the current install's core starts with the prefix the handler forgets
-  for (const [kind, core] of [["spr", "airi_spr"], ["lobby", "ch0251_home"], ["spr", "odd core/name"]]) {
+  for (const [kind, core] of [
+    ["spr", "airi_spr"],
+    ["lobby", "ch0251_home"],
+    ["spr", "odd core/name"],
+  ]) {
     assert.ok(spineBase(kind, core).startsWith(spinePrefix(kind, core)), core);
   }
   // escaped as one path segment
@@ -23,10 +27,15 @@ test("a core's skeleton base and its prefix", () => {
 
 test("another install's entry reads its own files through <core>@<id>, under the same prefix", () => {
   assert.equal(spineBase("spr", "CH0164_spr", "a1b2c3d4e5f6"), "/asset/spine/spr/CH0164_spr@a1b2c3d4e5f6/skeleton");
-  assert.equal(spineBase("lobby", "ch0251_home", null), "/asset/spine/lobby/ch0251_home/skeleton", "the current install's");
+  assert.equal(
+    spineBase("lobby", "ch0251_home", null),
+    "/asset/spine/lobby/ch0251_home/skeleton",
+    "the current install's",
+  );
   assert.equal(spineBase("lobby", "ch0251_home", ""), spineBase("lobby", "ch0251_home"));
   // the library.changed handler's prefix covers both installs' bases, so neither shows the other's picture after a switch
-  for (const id of [null, "a1b2c3d4e5f6"]) assert.ok(spineBase("spr", "CH0164_spr", id).startsWith(spinePrefix("spr", "CH0164_spr")), String(id));
+  for (const id of [null, "a1b2c3d4e5f6"])
+    assert.ok(spineBase("spr", "CH0164_spr", id).startsWith(spinePrefix("spr", "CH0164_spr")), String(id));
   assert.notEqual(spineBase("spr", "CH0164_spr", "a1b2c3d4e5f6"), spineBase("spr", "CH0164_spr"));
 });
 
@@ -38,7 +47,11 @@ test("forget drops the thumbnails under a prefix in any case (library.changed na
   globalThis.URL.revokeObjectURL = () => {};
   const Thumbs = await import("../../src/bmpt/web/js/thumbs.js");
   // a thumbnail being rendered (here a player that never loads) is kept: asking again gives the same promise
-  globalThis.spine = { SpinePlayer: class { dispose() {} } };
+  globalThis.spine = {
+    SpinePlayer: class {
+      dispose() {}
+    },
+  };
   const a = Thumbs.thumb(base("spr", "CH0164_spr"), "card");
   const other = Thumbs.thumb(base("spr", "CH0099_spr"), "card");
   assert.equal(Thumbs.thumb(base("spr", "CH0164_spr"), "card"), a);
@@ -50,8 +63,15 @@ test("forget drops the thumbnails under a prefix in any case (library.changed na
   try {
     await new Promise(setImmediate); // start the first queued player before advancing its deadline
     // A missing callback settles each request and releases the one-player queue for the next base.
-    for (let i = 0; i < 3; i++) { t.mock.timers.tick(15000); await new Promise(setImmediate); }
+    for (let i = 0; i < 3; i++) {
+      t.mock.timers.tick(15000);
+      await new Promise(setImmediate);
+    }
     assert.equal(await a, null);
     assert.equal(await other, null);
-  } finally { console.warn = warn; await new Promise(setImmediate); t.mock.timers.reset(); }
+  } finally {
+    console.warn = warn;
+    await new Promise(setImmediate);
+    t.mock.timers.reset();
+  }
 });

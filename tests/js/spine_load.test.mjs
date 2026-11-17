@@ -4,28 +4,53 @@ import { latestLoad, loadPlayer } from "../../src/bmpt/web/js/spine-load.js";
 
 const tick = () => new Promise(setImmediate);
 function runtime() {
-  const players = [], calls = [];
-  return { players, calls, create(config) {
-    const p = { config, disposed: false, dispose() { assert.equal(this.disposed, false); this.disposed = true; calls.push("dispose"); } };
-    players.push(p);
-    calls.push("create");
-    return p;
-  } };
+  const players = [],
+    calls = [];
+  return {
+    players,
+    calls,
+    create(config) {
+      const p = {
+        config,
+        disposed: false,
+        dispose() {
+          assert.equal(this.disposed, false);
+          this.disposed = true;
+          calls.push("dispose");
+        },
+      };
+      players.push(p);
+      calls.push("create");
+      return p;
+    },
+  };
 }
 
 test("only the newest view starts, and the old GPU owner is disposed before the next is created", async () => {
-  const queue = latestLoad(), r = runtime(), shown = [];
-  const show = (name) => queue.run(async (signal) => {
-    const load = loadPlayer(r.create, { skeleton: `${name}.skel`, atlas: `${name}.atlas`, success(p) {
-      assert.equal(p.disposed, false);
-      shown.push([p.config.skeleton, p.config.atlas]);
-    } }, { signal });
-    return load.ready;
-  });
+  const queue = latestLoad(),
+    r = runtime(),
+    shown = [];
+  const show = (name) =>
+    queue.run(async (signal) => {
+      const load = loadPlayer(
+        r.create,
+        {
+          skeleton: `${name}.skel`,
+          atlas: `${name}.atlas`,
+          success(p) {
+            assert.equal(p.disposed, false);
+            shown.push([p.config.skeleton, p.config.atlas]);
+          },
+        },
+        { signal },
+      );
+      return load.ready;
+    });
   const a = show("a");
   await tick();
   const old = r.players[0];
-  const b = show("b"), c = show("c");
+  const b = show("b"),
+    c = show("c");
   await tick();
   assert.deepEqual(r.calls, ["create", "dispose", "create"]);
   assert.equal(r.players[1].config.atlas, "c.atlas");
@@ -39,10 +64,13 @@ test("only the newest view starts, and the old GPU owner is disposed before the 
 });
 
 test("leaving ends a missing callback and queued metadata cannot resurrect a hidden view", async () => {
-  const queue = latestLoad(), r = runtime();
+  const queue = latestLoad(),
+    r = runtime();
   let finishMetadata;
   const old = queue.run(async (signal) => {
-    await new Promise((resolve) => { finishMetadata = resolve; });
+    await new Promise((resolve) => {
+      finishMetadata = resolve;
+    });
     if (signal.aborted) return null;
     return loadPlayer(r.create, {}, { signal }).ready;
   });
@@ -58,12 +86,21 @@ test("leaving ends a missing callback and queued metadata cannot resurrect a hid
 
 test("constructor, success hook, failed bundle and absent callbacks all settle, then a later load works", async () => {
   for (const fail of ["constructor", "success", "bundle", "missing"]) {
-    const queue = latestLoad(), r = runtime();
+    const queue = latestLoad(),
+      r = runtime();
     const failed = queue.run((signal) => {
-      const load = loadPlayer((config) => {
-        if (fail === "constructor") throw new Error("constructor");
-        return r.create(config);
-      }, { success() { throw new Error("success"); } }, { signal, timeout: 10 });
+      const load = loadPlayer(
+        (config) => {
+          if (fail === "constructor") throw new Error("constructor");
+          return r.create(config);
+        },
+        {
+          success() {
+            throw new Error("success");
+          },
+        },
+        { signal, timeout: 10 },
+      );
       if (fail === "success") load.player.config.success(load.player);
       if (fail === "bundle") load.player.config.error(load.player, "bundle");
       return load.ready;
@@ -77,12 +114,25 @@ test("constructor, success hook, failed bundle and absent callbacks all settle, 
 
 test("a timed-out async success and disposed frames cannot use freed textures", async () => {
   const r = runtime();
-  let finish, live, frames = 0;
-  const load = loadPlayer(r.create, { frame() { frames++; }, async success(_p, alive) {
-    live = alive;
-    await new Promise((resolve) => { finish = resolve; });
-    assert.equal(alive(), false);
-  } }, { timeout: 10 });
+  let finish,
+    live,
+    frames = 0;
+  const load = loadPlayer(
+    r.create,
+    {
+      frame() {
+        frames++;
+      },
+      async success(_p, alive) {
+        live = alive;
+        await new Promise((resolve) => {
+          finish = resolve;
+        });
+        assert.equal(alive(), false);
+      },
+    },
+    { timeout: 10 },
+  );
   load.player.config.success(load.player);
   await assert.rejects(load.ready, /timed out/);
   assert.equal(live(), false);
@@ -94,9 +144,21 @@ test("a timed-out async success and disposed frames cannot use freed textures", 
 
 test("runtime errors and hook exceptions after readiness notify the owner with URL and step", async () => {
   for (const step of ["render", "frame", "draw", "update", "updateWorldTransform"]) {
-    const r = runtime(), errors = [];
-    const hooks = step === "render" ? {} : { [step]() { throw new Error("Late failure"); } };
-    const load = loadPlayer(r.create, { skeleton: "/revision/shun_home.skel", ...hooks }, { onError: (err) => errors.push(err) });
+    const r = runtime(),
+      errors = [];
+    const hooks =
+      step === "render"
+        ? {}
+        : {
+            [step]() {
+              throw new Error("Late failure");
+            },
+          };
+    const load = loadPlayer(
+      r.create,
+      { skeleton: "/revision/shun_home.skel", ...hooks },
+      { onError: (err) => errors.push(err) },
+    );
     load.player.config.success(load.player);
     await load.ready;
     if (step === "render") load.player.config.error(load.player, "Late failure");
@@ -112,13 +174,29 @@ test("runtime errors and hook exceptions after readiness notify the owner with U
 
 test("a load whose own loop an owner stopped still reaches its success hook while the window is active", async () => {
   let draws = 0;
-  const load = loadPlayer((config) => {
-    const p = { config, stopRequestAnimationFrame: false, disposed: false, dispose() { this.disposed = true; },
-      stopRendering() { this.stopRequestAnimationFrame = true; },
-      // the runtime discovers its downloaded assets in drawFrame and only then calls success
-      drawFrame() { draws += 1; if (draws >= 2) config.success(p); } };
-    return p;
-  }, {}, { timeout: 2000 });
+  const load = loadPlayer(
+    (config) => {
+      const p = {
+        config,
+        stopRequestAnimationFrame: false,
+        disposed: false,
+        dispose() {
+          this.disposed = true;
+        },
+        stopRendering() {
+          this.stopRequestAnimationFrame = true;
+        },
+        // the runtime discovers its downloaded assets in drawFrame and only then calls success
+        drawFrame() {
+          draws += 1;
+          if (draws >= 2) config.success(p);
+        },
+      };
+      return p;
+    },
+    {},
+    { timeout: 2000 },
+  );
   load.player.stopRendering(); // e.g. the hall's setActive(false) while this player loads
   assert.equal(await load.ready, load.player);
   assert.ok(draws >= 2);
@@ -126,8 +204,18 @@ test("a load whose own loop an owner stopped still reaches its success hook whil
 
 test("a running load's own loop is not doubled by the bootstrap frames", async () => {
   let draws = 0;
-  const load = loadPlayer((config) => ({ config, stopRequestAnimationFrame: false, dispose() {},
-    drawFrame() { draws += 1; } }), {}, { timeout: 2000 });
+  const load = loadPlayer(
+    (config) => ({
+      config,
+      stopRequestAnimationFrame: false,
+      dispose() {},
+      drawFrame() {
+        draws += 1;
+      },
+    }),
+    {},
+    { timeout: 2000 },
+  );
   await new Promise((resolve) => setTimeout(resolve, 120));
   assert.equal(draws, 0);
   load.player.config.success(load.player);

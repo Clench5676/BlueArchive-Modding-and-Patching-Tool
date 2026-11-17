@@ -6,42 +6,113 @@ import { rpc } from "../../src/bmpt/web/js/api.js";
 
 const source = readFileSync(new URL("../../src/bmpt/web/js/recovery.js", import.meta.url), "utf8");
 class El {
-  children = []; style = {}; textContent = "";
-  constructor(tag) { this.tag = tag; }
-  append(...children) { for (const c of children) this.appendChild(c); }
-  appendChild(child) { this.children.push(child); child.parent = this; return child; }
-  remove() { if (this.parent) this.parent.children = this.parent.children.filter((c) => c !== this); }
+  children = [];
+  style = {};
+  textContent = "";
+  constructor(tag) {
+    this.tag = tag;
+  }
+  append(...children) {
+    for (const c of children) this.appendChild(c);
+  }
+  appendChild(child) {
+    this.children.push(child);
+    child.parent = this;
+    return child;
+  }
+  remove() {
+    if (this.parent) this.parent.children = this.parent.children.filter((c) => c !== this);
+  }
   setAttribute() {}
-  querySelector(tag) { return this.children.find((c) => c.tag === tag); }
-  getContext() { throw new Error("No GPU"); }
+  querySelector(tag) {
+    return this.children.find((c) => c.tag === tag);
+  }
+  getContext() {
+    throw new Error("No GPU");
+  }
 }
 function harness({ safeMode = false, canRestartSafe = true } = {}) {
-  let now = 0, timerId = 0;
-  const timers = new Map(), listeners = {}, calls = [], body = new El("body");
+  let now = 0,
+    timerId = 0;
+  const timers = new Map(),
+    listeners = {},
+    calls = [],
+    body = new El("body");
   const strings = JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url))).webui;
   const flat = {};
-  const flatten = (data, prefix = "") => { for (const [k, value] of Object.entries(data)) {
-    const key = prefix ? `${prefix}.${k}` : k;
-    if (typeof value === "string") flat[key] = value; else flatten(value, key);
-  } };
+  const flatten = (data, prefix = "") => {
+    for (const [k, value] of Object.entries(data)) {
+      const key = prefix ? `${prefix}.${k}` : k;
+      if (typeof value === "string") flat[key] = value;
+      else flatten(value, key);
+    }
+  };
   flatten(strings);
-  const ctx = { BAMT_CONFIG: { safeMode, canRestartSafe, language: "en-US", strings: flat },
-    document: { body, createElement: (tag) => new El(tag), addEventListener: (name, fn) => { listeners[name] = fn; } },
-    addEventListener: (name, fn) => { listeners[name] = fn; }, location: { hash: "#/student/old", reload() { calls.push(["reload"]); } },
-    navigator: { userAgent: "test" }, screen: { width: 1920, height: 1080 }, devicePixelRatio: 2,
-    Date: { now: () => now }, AbortController,
-    setTimeout: (fn, ms) => { timers.set(++timerId, { fn, due: now + ms }); return timerId; }, clearTimeout: (id) => timers.delete(id),
-    fetch: async (url, options) => { const { method, params } = JSON.parse(options.body); calls.push([method, params]);
-      return { ok: true, json: async () => ({ result: method === "app.report"
-        ? { path: "Desktop/BAMT-report.zip", summary: "summary", copied: true } : { text: "log" } }) }; },
+  const ctx = {
+    BAMT_CONFIG: { safeMode, canRestartSafe, language: "en-US", strings: flat },
+    document: {
+      body,
+      createElement: (tag) => new El(tag),
+      addEventListener: (name, fn) => {
+        listeners[name] = fn;
+      },
+    },
+    addEventListener: (name, fn) => {
+      listeners[name] = fn;
+    },
+    location: {
+      hash: "#/student/old",
+      reload() {
+        calls.push(["reload"]);
+      },
+    },
+    navigator: { userAgent: "test" },
+    screen: { width: 1920, height: 1080 },
+    devicePixelRatio: 2,
+    Date: { now: () => now },
+    AbortController,
+    setTimeout: (fn, ms) => {
+      timers.set(++timerId, { fn, due: now + ms });
+      return timerId;
+    },
+    clearTimeout: (id) => timers.delete(id),
+    fetch: async (url, options) => {
+      const { method, params } = JSON.parse(options.body);
+      calls.push([method, params]);
+      return {
+        ok: true,
+        json: async () => ({
+          result:
+            method === "app.report"
+              ? { path: "Desktop/BAMT-report.zip", summary: "summary", copied: true }
+              : { text: "log" },
+        }),
+      };
+    },
   };
   ctx.window = ctx;
   vm.runInNewContext(source, ctx);
   const walk = (node) => [node, ...node.children.flatMap(walk)];
-  return { api: ctx.BAMTRecovery, calls, listeners, ctx,
+  return {
+    api: ctx.BAMTRecovery,
+    calls,
+    listeners,
+    ctx,
     panel: () => body.children.find((c) => c.id === "bamt-recovery"),
-    click: async (text) => { const b = walk(body).find((c) => c.tag === "button" && c.textContent === text); assert.ok(b, text); await b.onclick(); },
-    advance: async (ms) => { now += ms; for (const [id, t] of [...timers]) if (t.due <= now) { timers.delete(id); t.fn(); } await Promise.resolve(); },
+    click: async (text) => {
+      const b = walk(body).find((c) => c.tag === "button" && c.textContent === text);
+      assert.ok(b, text);
+      await b.onclick();
+    },
+    advance: async (ms) => {
+      now += ms;
+      for (const [id, t] of [...timers])
+        if (t.due <= now) {
+          timers.delete(id);
+          t.fn();
+        }
+      await Promise.resolve();
+    },
   };
 }
 
@@ -75,8 +146,12 @@ test("boot exceptions, rejections and module or stylesheet load failures recover
   for (const mode of ["error", "rejection", "module", "style"]) {
     const h = harness();
     if (mode === "rejection") h.listeners.unhandledrejection({ reason: new Error("rejected") });
-    else h.listeners.error({ target: mode === "module" ? { src: "js/main.js" } : mode === "style" ? { href: "css/app.css" } : h.ctx,
-      message: mode === "error" ? "failed" : undefined, filename: "js/main.js" });
+    else
+      h.listeners.error({
+        target: mode === "module" ? { src: "js/main.js" } : mode === "style" ? { href: "css/app.css" } : h.ctx,
+        message: mode === "error" ? "failed" : undefined,
+        filename: "js/main.js",
+      });
     assert.ok(h.panel(), mode);
     assert.equal(h.api.failed(), true);
     assert.ok(h.calls.some(([name, p]) => name === "app.frontendError" && p.event?.phase === "modules"));
@@ -134,7 +209,8 @@ test("optional media load failures reach the log while their existing placeholde
 });
 
 test("normal report results use the game's shared presenter and repeated clicks create only one file", async () => {
-  const h = harness(), shown = [];
+  const h = harness(),
+    shown = [];
   h.api.ready();
   h.api.presentReport((result) => shown.push(result));
   await Promise.all([h.api.report(), h.api.report()]);
@@ -143,9 +219,9 @@ test("normal report results use the game's shared presenter and repeated clicks 
   assert.equal(h.panel(), undefined);
 });
 
-
 test("watchdog tracks progress beyond 45 seconds and late ready restores the app", async () => {
-  const h = harness(), stage = { hidden: false, inert: false };
+  const h = harness(),
+    stage = { hidden: false, inert: false };
   h.ctx.document.getElementById = () => stage;
   h.api.begin("boot");
   await h.advance(30000);
@@ -202,15 +278,18 @@ test("an unanswered request reaches recovery at the absolute 180-second deadline
   assert.equal(h.panel(), undefined);
   await h.advance(1);
   assert.ok(h.panel());
-  assert.ok(h.calls.some(([name, p]) => name === "app.frontendError"
-    && p.event?.message === "Boot timeout: first-screen"));
+  assert.ok(
+    h.calls.some(([name, p]) => name === "app.frontendError" && p.event?.message === "Boot timeout: first-screen"),
+  );
 });
 
 test("concurrent requests retain grace until the last body settles, then idle detection resumes", async () => {
   const h = harness();
-  const first = h.api.request(), second = h.api.request();
+  const first = h.api.request(),
+    second = h.api.request();
   await h.advance(45000);
-  first(); first(); // An owner may clean up twice without releasing another request.
+  first();
+  first(); // An owner may clean up twice without releasing another request.
   await h.advance(45000);
   assert.equal(h.panel(), undefined);
   second();
@@ -243,17 +322,23 @@ test("the update check's question and job hold the watchdog past both limits (a 
   h.api.begin("update-check");
   const release = h.api.hold();
   await h.advance(60000); // the question left open for a minute
-  for (let i = 0; i < 160; i++) { const done = h.api.request(); await h.advance(1500); done(); } // the job's polls
+  for (let i = 0; i < 160; i++) {
+    const done = h.api.request();
+    await h.advance(1500);
+    done();
+  } // the job's polls
   assert.equal(h.panel(), undefined);
-  release(); release(); // a second release is ignored
+  release();
+  release(); // a second release is ignored
   h.api.end("update-check", 300000);
   h.api.begin("first-screen");
   await h.advance(44999);
   assert.equal(h.panel(), undefined);
   await h.advance(1);
   assert.ok(h.panel());
-  assert.ok(h.calls.some(([name, p]) => name === "app.frontendError"
-    && p.event?.message === "Boot timeout: first-screen"));
+  assert.ok(
+    h.calls.some(([name, p]) => name === "app.frontendError" && p.event?.message === "Boot timeout: first-screen"),
+  );
 });
 
 test("held time counts toward neither limit; the clock runs again once the last hold is released", async () => {
@@ -261,7 +346,8 @@ test("held time counts toward neither limit; the clock runs again once the last 
   h.api.begin("first-screen");
   h.api.request();
   await h.advance(100000);
-  const outer = h.api.hold(), inner = h.api.hold();
+  const outer = h.api.hold(),
+    inner = h.api.hold();
   await h.advance(200000);
   outer();
   await h.advance(300000);
@@ -295,12 +381,17 @@ test("ready suppresses late request cleanup and requests made after boot", async
 
 test("boot RPC tracks the response body and releases grace on every failure", async (t) => {
   const saved = globalThis.BAMTRecovery;
-  t.after(() => { globalThis.BAMTRecovery = saved; });
+  t.after(() => {
+    globalThis.BAMTRecovery = saved;
+  });
   for (const mode of ["success", "transport", "http", "json", "rpc", "abort"]) {
     const h = harness();
     globalThis.BAMTRecovery = h.api;
     let resolveBody, rejectBody;
-    const body = new Promise((resolve, reject) => { resolveBody = resolve; rejectBody = reject; });
+    const body = new Promise((resolve, reject) => {
+      resolveBody = resolve;
+      rejectBody = reject;
+    });
     t.mock.method(globalThis, "fetch", async (url, options) => {
       if (mode === "transport" || mode === "http") return body;
       if (mode === "abort") {
@@ -311,7 +402,10 @@ test("boot RPC tracks the response body and releases grace on every failure", as
     });
     const controller = new AbortController();
     const call = rpc("app.info", {}, { signal: controller.signal });
-    const observed = call.then(value => ({ value }), error => ({ error }));
+    const observed = call.then(
+      (value) => ({ value }),
+      (error) => ({ error }),
+    );
     await h.advance(55400);
     assert.equal(h.panel(), undefined, mode);
     if (mode === "transport" || mode === "json") rejectBody(new Error(mode));

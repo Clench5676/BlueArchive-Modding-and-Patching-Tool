@@ -12,254 +12,574 @@ const switchLayouts = switchPrefabs();
 
 class El {
   constructor(tag = "div") {
-    Object.assign(this, { tagName: tag.toUpperCase(), children: [], parentNode: null, style: { setProperty(k, v) { this[k] = v; } },
-      dataset: {}, attrs: {}, listeners: {}, className: "", hidden: false, textContent: "", id: "", width: 8, height: 8 });
+    Object.assign(this, {
+      tagName: tag.toUpperCase(),
+      children: [],
+      parentNode: null,
+      style: {
+        setProperty(k, v) {
+          this[k] = v;
+        },
+      },
+      dataset: {},
+      attrs: {},
+      listeners: {},
+      className: "",
+      hidden: false,
+      textContent: "",
+      id: "",
+      width: 8,
+      height: 8,
+    });
     // Match the DOM's non-enumerable parent link so failed assertions cannot
     // recursively print the complete page through every sibling's parent.
     Object.defineProperty(this, "parentNode", { value: null, writable: true, enumerable: false });
     this.classList = {
       contains: (c) => this.className.split(" ").includes(c),
-      replace: (a, b) => { this.classList.remove(a); this.classList.add(b); },
-      add: (...cs) => { this.className = [...new Set([...this.className.split(" "), ...cs])].join(" "); },
-      remove: (...cs) => { this.className = this.className.split(" ").filter((c) => !cs.includes(c)).join(" "); },
-      toggle: (c, on) => on ? this.classList.add(c) : this.classList.remove(c),
+      replace: (a, b) => {
+        this.classList.remove(a);
+        this.classList.add(b);
+      },
+      add: (...cs) => {
+        this.className = [...new Set([...this.className.split(" "), ...cs])].join(" ");
+      },
+      remove: (...cs) => {
+        this.className = this.className
+          .split(" ")
+          .filter((c) => !cs.includes(c))
+          .join(" ");
+      },
+      toggle: (c, on) => (on ? this.classList.add(c) : this.classList.remove(c)),
     };
   }
   appendChild(child) {
-    if (child.tagName === "FRAGMENT") { this.append(...[...child.children]); return child; }
-    child.remove(); child.parentNode = this; this.children.push(child); return child;
+    if (child.tagName === "FRAGMENT") {
+      this.append(...[...child.children]);
+      return child;
+    }
+    child.remove();
+    child.parentNode = this;
+    this.children.push(child);
+    return child;
   }
-  append(...kids) { kids.forEach((k) => this.appendChild(k)); }
-  replaceChildren(...kids) { [...this.children].forEach((c) => c.remove()); this.append(...kids); }
-  remove() { if (this.parentNode) this.parentNode.children = this.parentNode.children.filter((c) => c !== this); this.parentNode = null; }
-  after(child) { this.parentNode?.appendChild(child); }
-  contains(n) { return walk(this).includes(n); }
-  get isConnected() { return body.contains(this); }
-  get parentElement() { return this.parentNode; }
-  get childNodes() { return [...this.children]; }
+  append(...kids) {
+    kids.forEach((k) => this.appendChild(k));
+  }
+  replaceChildren(...kids) {
+    [...this.children].forEach((c) => c.remove());
+    this.append(...kids);
+  }
+  remove() {
+    if (this.parentNode) this.parentNode.children = this.parentNode.children.filter((c) => c !== this);
+    this.parentNode = null;
+  }
+  after(child) {
+    this.parentNode?.appendChild(child);
+  }
+  contains(n) {
+    return walk(this).includes(n);
+  }
+  get isConnected() {
+    return body.contains(this);
+  }
+  get parentElement() {
+    return this.parentNode;
+  }
+  get childNodes() {
+    return [...this.children];
+  }
   set innerHTML(html) {
     this.replaceChildren();
     for (const m of html.matchAll(/<(div|canvas|span|i)\b([^>]*)>/g)) {
-      const child = new El(m[1]); child.className = /class="([^"]*)"/.exec(m[2])?.[1] || ""; this.appendChild(child);
+      const child = new El(m[1]);
+      child.className = /class="([^"]*)"/.exec(m[2])?.[1] || "";
+      this.appendChild(child);
     }
   }
   querySelectorAll(selector) {
-    if (selector === ".lobby-view .lobby-layer:not(.lobby-off) canvas") return walk(this)
-      .filter((n) => n.classList.contains("lobby-layer") && !n.classList.contains("lobby-off")).flatMap((n) => n.querySelectorAll("canvas"));
-    const match = (n) => selector === "*" ? true : selector.startsWith(".") ? n.classList.contains(selector.slice(1)) : n.tagName === selector.toUpperCase();
+    if (selector === ".lobby-view .lobby-layer:not(.lobby-off) canvas")
+      return walk(this)
+        .filter((n) => n.classList.contains("lobby-layer") && !n.classList.contains("lobby-off"))
+        .flatMap((n) => n.querySelectorAll("canvas"));
+    const match = (n) =>
+      selector === "*"
+        ? true
+        : selector.startsWith(".")
+          ? n.classList.contains(selector.slice(1))
+          : n.tagName === selector.toUpperCase();
     return walk(this).slice(1).filter(match);
   }
-  querySelector(s) { return this.querySelectorAll(s)[0] || null; }
-  addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); }
-  removeEventListener() {}
-  setAttribute(k, v) { this.attrs[k] = String(v); }
-  getAttribute(k) { return this.attrs[k] ?? null; }
-  removeAttribute(k) { delete this.attrs[k]; }
-  focus() { document.activeElement = this; }
-  blur() { if (document.activeElement === this) document.activeElement = body; }
-  closest(selector) { assert.equal(selector, "[inert]"); for (let n = this; n; n = n.parentNode) if (n.inert) return n; return null; }
-  getBoundingClientRect() { return { left: 0, top: 0, width: 1920, height: 1080 }; }
-  click() { return Promise.all((this.listeners.click || []).map((f) => f({ type: "click", stopPropagation() {} }))); }
-  getContext() {
-    return { font: "", measureText(s) {
-      const fs = parseFloat(/([\d.]+)px/.exec(this.font)?.[1] || 10);
-      return { width: [...s].reduce((w, c) => w + (/[\u2e80-\u9fff\u3000-\u303f\uff00-\uffef\uac00-\ud7af]/.test(c) ? fs : fs / 2), 0) };
-    }, drawImage() {}, fillRect() {}, clearRect() {}, scale() {}, transform() {}, putImageData() {}, getImageData(_x, _y, width, height) {
-      if (width === 30 && height === 30) return selectionFramePixels();
-      return { width, height, data: new Uint8ClampedArray(Array.from({ length: width * height }, () => [20, 40, 60, 255]).flat()) };
-    } };
+  querySelector(s) {
+    return this.querySelectorAll(s)[0] || null;
   }
-  toBlob(fn) { fn(new Blob()); }
-  toDataURL() { return "data:image/png;base64,c3ludGhldGljLW1hc2s="; }
+  addEventListener(type, fn) {
+    (this.listeners[type] ||= []).push(fn);
+  }
+  removeEventListener() {}
+  setAttribute(k, v) {
+    this.attrs[k] = String(v);
+  }
+  getAttribute(k) {
+    return this.attrs[k] ?? null;
+  }
+  removeAttribute(k) {
+    delete this.attrs[k];
+  }
+  focus() {
+    document.activeElement = this;
+  }
+  blur() {
+    if (document.activeElement === this) document.activeElement = body;
+  }
+  closest(selector) {
+    assert.equal(selector, "[inert]");
+    for (let n = this; n; n = n.parentNode) if (n.inert) return n;
+    return null;
+  }
+  getBoundingClientRect() {
+    return { left: 0, top: 0, width: 1920, height: 1080 };
+  }
+  click() {
+    return Promise.all((this.listeners.click || []).map((f) => f({ type: "click", stopPropagation() {} })));
+  }
+  getContext() {
+    return {
+      font: "",
+      measureText(s) {
+        const fs = parseFloat(/([\d.]+)px/.exec(this.font)?.[1] || 10);
+        return {
+          width: [...s].reduce(
+            (w, c) => w + (/[\u2e80-\u9fff\u3000-\u303f\uff00-\uffef\uac00-\ud7af]/.test(c) ? fs : fs / 2),
+            0,
+          ),
+        };
+      },
+      drawImage() {},
+      fillRect() {},
+      clearRect() {},
+      scale() {},
+      transform() {},
+      putImageData() {},
+      getImageData(_x, _y, width, height) {
+        if (width === 30 && height === 30) return selectionFramePixels();
+        return {
+          width,
+          height,
+          data: new Uint8ClampedArray(Array.from({ length: width * height }, () => [20, 40, 60, 255]).flat()),
+        };
+      },
+    };
+  }
+  toBlob(fn) {
+    fn(new Blob());
+  }
+  toDataURL() {
+    return "data:image/png;base64,c3ludGhldGljLW1hc2s=";
+  }
 }
 const walk = (el) => [el, ...el.children.flatMap(walk)];
-const body = new El("body"), header = new El("header"), back = new El("button");
-const hosts = Object.fromEntries(["stage", "screen-detail", "ngui", "ngui-bg", "ngui-chips", "ngui-expr", "portrait", "lobby", "model",
-  "popup", "picker", "dialog", "prompt", "consent", "notify", "fs-exit", "visual-ui", "visual-bg"].map((id) => {
-  const el = body.appendChild(new El()); el.id = id; el.hidden = /popup|picker|dialog|prompt|consent/.test(id); return [id, el];
-}));
+const body = new El("body"),
+  header = new El("header"),
+  back = new El("button");
+const hosts = Object.fromEntries(
+  [
+    "stage",
+    "screen-detail",
+    "ngui",
+    "ngui-bg",
+    "ngui-chips",
+    "ngui-expr",
+    "portrait",
+    "lobby",
+    "model",
+    "popup",
+    "picker",
+    "dialog",
+    "prompt",
+    "consent",
+    "notify",
+    "fs-exit",
+    "visual-ui",
+    "visual-bg",
+  ].map((id) => {
+    const el = body.appendChild(new El());
+    el.id = id;
+    el.hidden = /popup|picker|dialog|prompt|consent/.test(id);
+    return [id, el];
+  }),
+);
 const documentEvents = new EventTarget();
 globalThis.window = new EventTarget();
-globalThis.document = { hidden: false, hasFocus: () => true, body, documentElement: new El("html"), activeElement: body,
-  createElement: (tag) => new El(tag), createDocumentFragment: () => new El("fragment"), getElementById: (id) => hosts[id] || walk(body).find((el) => el.id === id),
-  querySelector: (s) => s === ".topbar" ? header : s === ".topbar .back" ? back : null,
-  querySelectorAll: () => [], addEventListener: (...args) => documentEvents.addEventListener(...args),
-  removeEventListener: (...args) => documentEvents.removeEventListener(...args) };
+globalThis.document = {
+  hidden: false,
+  hasFocus: () => true,
+  body,
+  documentElement: new El("html"),
+  activeElement: body,
+  createElement: (tag) => new El(tag),
+  createDocumentFragment: () => new El("fragment"),
+  getElementById: (id) => hosts[id] || walk(body).find((el) => el.id === id),
+  querySelector: (s) => (s === ".topbar" ? header : s === ".topbar .back" ? back : null),
+  querySelectorAll: () => [],
+  addEventListener: (...args) => documentEvents.addEventListener(...args),
+  removeEventListener: (...args) => documentEvents.removeEventListener(...args),
+};
 Object.defineProperty(globalThis, "navigator", { value: { platform: "Mac" }, configurable: true });
 globalThis.location = { hash: "#/student/ibuki/ibuki" };
 const globalListeners = {};
 globalThis.addEventListener = (type, fn) => (globalListeners[type] ||= new Set()).add(fn);
 globalThis.removeEventListener = (type, fn) => globalListeners[type]?.delete(fn);
-const keydown = (key) => { for (const fn of [...(globalListeners.keydown || [])]) fn({ key, preventDefault() {} }); };
-globalThis.Audio = class { constructor() { assert.fail("Audio must remain muted in tests"); } };
-globalThis.requestAnimationFrame = (fn) => { queueMicrotask(() => { for (const p of thumbnailPlayers) if (!p.disposed) p.config.draw?.(p); fn(performance.now()); }); return 1; };
+const keydown = (key) => {
+  for (const fn of [...(globalListeners.keydown || [])]) fn({ key, preventDefault() {} });
+};
+globalThis.Audio = class {
+  constructor() {
+    assert.fail("Audio must remain muted in tests");
+  }
+};
+globalThis.requestAnimationFrame = (fn) => {
+  queueMicrotask(() => {
+    for (const p of thumbnailPlayers) if (!p.disposed) p.config.draw?.(p);
+    fn(performance.now());
+  });
+  return 1;
+};
 globalThis.cancelAnimationFrame = () => {};
 globalThis.getComputedStyle = () => ({ opacity: "1" });
-globalThis.MutationObserver = class { observe() {} };
+globalThis.MutationObserver = class {
+  observe() {}
+};
 
-const imageRequests = [], pendingImages = [];
-let imageMode = "ready", playerMode = "ready", portraitRevision = "a", portraitStatus = 200;
+const imageRequests = [],
+  pendingImages = [];
+let imageMode = "ready",
+  playerMode = "ready",
+  portraitRevision = "a",
+  portraitStatus = 200;
 let blankThumbnailCore = "";
-let decodeMode = "ready", thumbMode = "pending", portraitExpressions = ["00", "01"];
-const thumbnailPlayers = [], pendingThumbnails = [];
-const pendingDecodes = [], pendingPlayers = [];
+let decodeMode = "ready",
+  thumbMode = "pending",
+  portraitExpressions = ["00", "01"];
+const thumbnailPlayers = [],
+  pendingThumbnails = [];
+const pendingDecodes = [],
+  pendingPlayers = [];
 globalThis.Image = class {
-  naturalWidth = 8; naturalHeight = 8;
+  naturalWidth = 8;
+  naturalHeight = 8;
   set src(url) {
-    if (url.includes('Common_Bg_Raius10px_Select')) this.naturalWidth = this.naturalHeight = 30;
+    if (url.includes("Common_Bg_Raius10px_Select")) this.naturalWidth = this.naturalHeight = 30;
     imageRequests.push(url);
     if (imageMode === "pending") pendingImages.push(this);
-    else queueMicrotask(() => imageMode === "error" ? this.onerror?.() : this.onload?.());
+    else queueMicrotask(() => (imageMode === "error" ? this.onerror?.() : this.onload?.()));
   }
   decode() {
     return decodeMode === "pending" ? new Promise((resolve) => pendingDecodes.push(resolve)) : Promise.resolve();
   }
 };
-const playerRequests = [], previewPlayers = [];
+const playerRequests = [],
+  previewPlayers = [];
 class RegionAttachment {
-  region = {}; color = { a: 1 };
-  computeWorldVertices(_slot, vertices) { vertices.set([-4000, -2000, 4000, -2000, 4000, 3000, -4000, 3000]); }
+  region = {};
+  color = { a: 1 };
+  computeWorldVertices(_slot, vertices) {
+    vertices.set([-4000, -2000, 4000, -2000, 4000, 3000, -4000, 3000]);
+  }
 }
 class Skeleton {
   constructor(data) {
-    this.data = data; this.color = { a: 1 };
-    this.drawOrder = [{ getAttachment: () => new RegionAttachment(), bone: { active: true }, data: { blendMode: 0 }, color: { a: 1 } }];
+    this.data = data;
+    this.color = { a: 1 };
+    this.drawOrder = [
+      { getAttachment: () => new RegionAttachment(), bone: { active: true }, data: { blendMode: 0 }, color: { a: 1 } },
+    ];
   }
-  setToSetupPose() {} updateWorldTransform() {} findBone() { return null; }
+  setToSetupPose() {}
+  updateWorldTransform() {}
+  findBone() {
+    return null;
+  }
 }
 class AnimationState {
-  constructor(data) { this.data = data; }
-  setAnimation(_track, name) { return this.entry = { animation: { name } }; }
-  setEmptyAnimation() { return this.setAnimation(0, "<empty>"); }
-  getCurrent() { return this.entry; }
-  update() {} apply() {} clearTracks() { this.entry = null; }
-}
-globalThis.spine = { Vector2: class {}, Physics: { update: 1 }, RegionAttachment, MeshAttachment: class {}, Skeleton,
-  AnimationState, AnimationStateData: class { constructor(data) { this.skeletonData = data; } }, BlendMode: { Normal: 0 }, SpinePlayer: class {
-  constructor(el, config) {
-    assert.equal(config.premultipliedAlpha, false, "portraits and thumbnails retain the 0.2.0 PMA flag");
-    playerRequests.push(config.skeleton);
-    this.dispose = () => { this.disposed = true; }; this.config = config;
-    this.currentViewport = { ...config.viewport };
-    this.canvas = new EventTarget(); this.stopRequestAnimationFrame = false;
-    this.stopRendering = () => { this.stopRequestAnimationFrame = true; };
-    this.startRendering = () => { this.stopRequestAnimationFrame = false; };
-    if (el.className !== "thumb-player") previewPlayers.push(this);
-    const animations = ["Idle_01", ...portraitExpressions].map((name) => ({ name, timelines: [] }));
-    this.skeleton = { data: { animations, findAnimation(name) {
-      if (playerMode === "broken") throw new Error("Mod skeleton setup failed");
-      return animations.find((a) => a.name === name);
-    } }, slots: [], setToSetupPose() {}, updateWorldTransform() {},
-      getBounds: (offset, size) => { Object.assign(offset, { x: 0, y: 0 }); Object.assign(size, { x: 800, y: 1600 }); },
-    };
-    this.trackNames = {};
-    this.animationState = { setAnimation: (track, name) => { this.trackNames[track] = name; return { animation: {} }; }, setEmptyAnimation: () => ({ animation: {} }), addEmptyAnimation() {}, clearTracks() {}, apply() {} };
-    if (playerMode === "lobby-ready" && el.className === "lobby-layer") {
-      this.skeleton.data.findBone = () => null;
-      this.skeleton = new Skeleton(this.skeleton.data);
-      this.animationState = new AnimationState({ skeletonData: this.skeleton.data });
-      this.canvas = el.appendChild(new El("canvas"));
-    }
-    this.setViewport = () => {};
-    this.drawFrame = () => config.draw?.(this);
-    if (el.className === "thumb-player") {
-      thumbnailPlayers.push(this);
-      this.context = { gl: { drawingBufferWidth: 2, drawingBufferHeight: 1, RGBA: 1, UNSIGNED_BYTE: 1,
-        readPixels: (_x, _y, _w, _h, _f, _t, pixels) => {
-          if (!blankThumbnailCore || !config.skeleton.includes(blankThumbnailCore)) pixels.set([0, 0, 0, 0, 200, 100, 50, 255]);
-        } } };
-      el.appendChild(new El("canvas"));
-      const done = () => config.success(this);
-      if (thumbMode === "ready") queueMicrotask(done); else pendingThumbnails.push(done);
-    } else if (playerMode !== "pending") {
-      if (playerMode === "stale") {
-        playerMode = "ready"; portraitRevision = "b";
-        queueMicrotask(() => config.error(this, `Couldn't load binary ${config.skeleton}: status 404`));
-      } else queueMicrotask(() => config.success(this));
-    } else if (el.className !== "thumb-player") pendingPlayers.push(() => config.success(this));
+  constructor(data) {
+    this.data = data;
   }
-} };
+  setAnimation(_track, name) {
+    return (this.entry = { animation: { name } });
+  }
+  setEmptyAnimation() {
+    return this.setAnimation(0, "<empty>");
+  }
+  getCurrent() {
+    return this.entry;
+  }
+  update() {}
+  apply() {}
+  clearTracks() {
+    this.entry = null;
+  }
+}
+globalThis.spine = {
+  Vector2: class {},
+  Physics: { update: 1 },
+  RegionAttachment,
+  MeshAttachment: class {},
+  Skeleton,
+  AnimationState,
+  AnimationStateData: class {
+    constructor(data) {
+      this.skeletonData = data;
+    }
+  },
+  BlendMode: { Normal: 0 },
+  SpinePlayer: class {
+    constructor(el, config) {
+      assert.equal(config.premultipliedAlpha, false, "portraits and thumbnails retain the 0.2.0 PMA flag");
+      playerRequests.push(config.skeleton);
+      this.dispose = () => {
+        this.disposed = true;
+      };
+      this.config = config;
+      this.currentViewport = { ...config.viewport };
+      this.canvas = new EventTarget();
+      this.stopRequestAnimationFrame = false;
+      this.stopRendering = () => {
+        this.stopRequestAnimationFrame = true;
+      };
+      this.startRendering = () => {
+        this.stopRequestAnimationFrame = false;
+      };
+      if (el.className !== "thumb-player") previewPlayers.push(this);
+      const animations = ["Idle_01", ...portraitExpressions].map((name) => ({ name, timelines: [] }));
+      this.skeleton = {
+        data: {
+          animations,
+          findAnimation(name) {
+            if (playerMode === "broken") throw new Error("Mod skeleton setup failed");
+            return animations.find((a) => a.name === name);
+          },
+        },
+        slots: [],
+        setToSetupPose() {},
+        updateWorldTransform() {},
+        getBounds: (offset, size) => {
+          Object.assign(offset, { x: 0, y: 0 });
+          Object.assign(size, { x: 800, y: 1600 });
+        },
+      };
+      this.trackNames = {};
+      this.animationState = {
+        setAnimation: (track, name) => {
+          this.trackNames[track] = name;
+          return { animation: {} };
+        },
+        setEmptyAnimation: () => ({ animation: {} }),
+        addEmptyAnimation() {},
+        clearTracks() {},
+        apply() {},
+      };
+      if (playerMode === "lobby-ready" && el.className === "lobby-layer") {
+        this.skeleton.data.findBone = () => null;
+        this.skeleton = new Skeleton(this.skeleton.data);
+        this.animationState = new AnimationState({ skeletonData: this.skeleton.data });
+        this.canvas = el.appendChild(new El("canvas"));
+      }
+      this.setViewport = () => {};
+      this.drawFrame = () => config.draw?.(this);
+      if (el.className === "thumb-player") {
+        thumbnailPlayers.push(this);
+        this.context = {
+          gl: {
+            drawingBufferWidth: 2,
+            drawingBufferHeight: 1,
+            RGBA: 1,
+            UNSIGNED_BYTE: 1,
+            readPixels: (_x, _y, _w, _h, _f, _t, pixels) => {
+              if (!blankThumbnailCore || !config.skeleton.includes(blankThumbnailCore))
+                pixels.set([0, 0, 0, 0, 200, 100, 50, 255]);
+            },
+          },
+        };
+        el.appendChild(new El("canvas"));
+        const done = () => config.success(this);
+        if (thumbMode === "ready") queueMicrotask(done);
+        else pendingThumbnails.push(done);
+      } else if (playerMode !== "pending") {
+        if (playerMode === "stale") {
+          playerMode = "ready";
+          portraitRevision = "b";
+          queueMicrotask(() => config.error(this, `Couldn't load binary ${config.skeleton}: status 404`));
+        } else queueMicrotask(() => config.success(this));
+      } else if (el.className !== "thumb-player") pendingPlayers.push(() => config.success(this));
+    }
+  },
+};
 
-const node = (name) => ({ name, pos: [0, 0], scale: [1, 1], active: true, widgets: [
-  { sprite: "Common_Bg_Raius10px", w_: 100, h_: 100, color: "#ffffff/1.00" },
-  { text: "text", w_: 100, h_: 100, fontSize: 40 },
-], children: [] });
-const detail = node("UICharacterDetail"), list = node("Inventory_ListControl"); detail.children.push(list);
+const node = (name) => ({
+  name,
+  pos: [0, 0],
+  scale: [1, 1],
+  active: true,
+  widgets: [
+    { sprite: "Common_Bg_Raius10px", w_: 100, h_: 100, color: "#ffffff/1.00" },
+    { text: "text", w_: 100, h_: 100, fontSize: 40 },
+  ],
+  children: [],
+});
+const detail = node("UICharacterDetail"),
+  list = node("Inventory_ListControl");
+detail.children.push(list);
 function add(path, root = list) {
   let at = root;
   for (const name of path.split("/")) {
     let child = at.children.find((n) => n.name === name);
-    if (!child) at.children.push(child = node(name));
+    if (!child) at.children.push((child = node(name)));
     at = child;
   }
   return at;
 }
-const INFO = "RightInfo/Target/Active/1_NormalInfo", PLATE = "LeftInfo/CharInfo/Char_Target";
-for (const path of ["BG", "CharacterPos", "Arrow_L/Left", "Arrow_R/Right", "RightInfo/Target/Active/Bg",
-  `${INFO}/Title_Bg/Label_Locale`, `${INFO}/Detail_Btn/Label_Locale`, `${INFO}/Equip`]) add(path);
+const INFO = "RightInfo/Target/Active/1_NormalInfo",
+  PLATE = "LeftInfo/CharInfo/Char_Target";
+for (const path of [
+  "BG",
+  "CharacterPos",
+  "Arrow_L/Left",
+  "Arrow_R/Right",
+  "RightInfo/Target/Active/Bg",
+  `${INFO}/Title_Bg/Label_Locale`,
+  `${INFO}/Detail_Btn/Label_Locale`,
+  `${INFO}/Equip`,
+])
+  add(path);
 // a button a game update added beside the panel's Target (2026-11: Btn_Engrave, untranslated prefab text)
 add("RightInfo/Btn_Engrave/Label").widgets = [{ text: "\uac01\uc778", w_: 62, h_: 40, fontSize: 39 }];
 add("BG").widgets = [{ texture: "Detail_Background", w_: 2960, h_: 1665, color: "#ffffff/1.00" }];
-for (const tab of ["Tab_1", "Tab_2", "Tab_3"]) for (const state of ["Tab_On", "Tab_Off"]) {
-  add(`RightInfo/Target/Active/CharacterTab/${tab}/${state}/Label`);
-  add(`RightInfo/Target/Active/CharacterTab/${tab}/${state}/BG`);
-}
-for (const [tab, dot] of [["Tab_1", "Dot"], ["Tab_2", "Dot (1)"], ["Tab_3", "Dot (2)"]]) {
+for (const tab of ["Tab_1", "Tab_2", "Tab_3"])
+  for (const state of ["Tab_On", "Tab_Off"]) {
+    add(`RightInfo/Target/Active/CharacterTab/${tab}/${state}/Label`);
+    add(`RightInfo/Target/Active/CharacterTab/${tab}/${state}/BG`);
+  }
+for (const [tab, dot] of [
+  ["Tab_1", "Dot"],
+  ["Tab_2", "Dot (1)"],
+  ["Tab_3", "Dot (2)"],
+]) {
   add(`RightInfo/Target/Active/CharacterTab/${tab}/${dot}`).widgets = [
     { sprite: "Common_Icon_Reddot2", w_: 34, h_: 31, color: "#ffffff/1.00" },
   ];
 }
 const sortPopup = node("UIPopup_Sort");
-for (const path of ["Center/BlackBg/BlackBgClickArea", "Center/Popup/Base/BG/Texture_Top",
-  "Center/Popup/Base/BG/Label_Title_Locale/Line", "Center/Popup/Base/BG/Btn_Close"]) add(path, sortPopup);
+for (const path of [
+  "Center/BlackBg/BlackBgClickArea",
+  "Center/Popup/Base/BG/Texture_Top",
+  "Center/Popup/Base/BG/Label_Title_Locale/Line",
+  "Center/Popup/Base/BG/Btn_Close",
+])
+  add(path, sortPopup);
 for (const button of ["Btn_Ok", "Btn_Cancel"]) {
   add(`Center/Popup/Btn/${button}/BG (1)`, sortPopup);
   add(`Center/Popup/Btn/${button}/Label_Locale`, sortPopup);
 }
 for (const stat of ["Label_Life", "Label_Attact", "Label_Defense", "Label_Healing"]) {
-  add(`${INFO}/Status/${stat}/Data_Widget/Data`); add(`${INFO}/Status/${stat}/Data`);
+  add(`${INFO}/Status/${stat}/Data_Widget/Data`);
+  add(`${INFO}/Status/${stat}/Data`);
 }
-for (const button of ["Status", "Weapon"]) for (const path of ["BG (1)/Corner", "Label_Locale"]) add(`${INFO}/${button}/Btn_Up_Wrapper/Btn_Up/${path}`);
+for (const button of ["Status", "Weapon"])
+  for (const path of ["BG (1)/Corner", "Label_Locale"]) add(`${INFO}/${button}/Btn_Up_Wrapper/Btn_Up/${path}`);
 for (const card of ["SkillData_EX", "SkillData_EX (1)", "SkillData_EX (2)", "SkillData_EX (3)"]) {
-  for (const path of ["Bg/Bg_Line", "Normal/Label_SkillType", "Normal/SkillIconBg/Texture"]) add(`${INFO}/Skill/${card}/${path}`);
-  for (const path of ["Normal/SkillIconBg/SkillIconBg (1)", "Normal/SkillIconBg/Deco", "Normal/SkillIconBg/Bg_Skill_Plus/IconPlus"]) add(`${INFO}/Skill/${card}/${path}`);
-  add(`${INFO}/Skill/${card}/Bg/Corner`).widgets = [{ sprite: "Common_Btn_Normal_B_C_Pt", w_: 20, h_: 10, pivot: 2,
-    anchors: { leftAnchor: [1, -23], rightAnchor: [1, -3], bottomAnchor: [1, -14], topAnchor: [1, -4] } }];
+  for (const path of ["Bg/Bg_Line", "Normal/Label_SkillType", "Normal/SkillIconBg/Texture"])
+    add(`${INFO}/Skill/${card}/${path}`);
+  for (const path of [
+    "Normal/SkillIconBg/SkillIconBg (1)",
+    "Normal/SkillIconBg/Deco",
+    "Normal/SkillIconBg/Bg_Skill_Plus/IconPlus",
+  ])
+    add(`${INFO}/Skill/${card}/${path}`);
+  add(`${INFO}/Skill/${card}/Bg/Corner`).widgets = [
+    {
+      sprite: "Common_Btn_Normal_B_C_Pt",
+      w_: 20,
+      h_: 10,
+      pivot: 2,
+      anchors: { leftAnchor: [1, -23], rightAnchor: [1, -3], bottomAnchor: [1, -14], topAnchor: [1, -4] },
+    },
+  ];
 }
 for (const path of ["BG/BG (1)", "Line/Line", "Label_WeaponType"]) add(`${INFO}/Weapon/WeaponType/${path}`);
-for (const path of ["Card_Bg/Deco", "Card_Level"]) add(`${INFO}/Weapon/Equip_1/UIEquipmentCard/Btn_Target/Normal/${path}`);
+for (const path of ["Card_Bg/Deco", "Card_Level"])
+  add(`${INFO}/Weapon/Equip_1/UIEquipmentCard/Btn_Target/Normal/${path}`);
 add(`${INFO}/Weapon/Equip_1/UIEquipmentCard/Dot`).widgets = [
   { sprite: "Common_Icon_Reddot2", w_: 34, h_: 31, color: "#ffffff/1.00" },
 ];
-for (const path of ["BG/Deco", "Label_Name", "Char_CVCollectionBtn/Sprite", "Char_ZoomBtn/Sprite",
-  "Pin/Pin_On/Bg/Icon/Label_Locale", "Pin/Pin_Off/Bg/Icon/Label_Locale"]) add(`${PLATE}/${path}`);
+for (const path of [
+  "BG/Deco",
+  "Label_Name",
+  "Char_CVCollectionBtn/Sprite",
+  "Char_ZoomBtn/Sprite",
+  "Pin/Pin_On/Bg/Icon/Label_Locale",
+  "Pin/Pin_Off/Bg/Icon/Label_Locale",
+])
+  add(`${PLATE}/${path}`);
 // These synthetic holders now supply the dimensions the composed layouts measure from their prefab widgets.
 Object.assign(add(`${PLATE}/BG`).widgets[0], { w_: 1000, h_: 120, pivot: 6, incline: 10 });
 add(`${PLATE}/BG`).pos = [0, 234];
 Object.assign(add(`${INFO}/Weapon/Equip_1/UIEquipmentCard/Btn_Target/Normal/Card_Bg`).widgets[0], { w_: 778, h_: 209 });
 
-const atlas = { Common: Object.fromEntries([...new Set([
-  ...[...readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8").matchAll(/"(Common_[A-Za-z0-9_]+)"/g)].map((m) => m[1]),
-  "Common_Bg_Raius10px_Select", "Common_Icon_Check_Y_Off", "Common_Icon_Mulligan_1", "Common_Icon_Mulligan_2", "Card_Select_Line_Blue", "Cafe_Icon_NameEdit", "Common_Icon_Reddot2", "School_Icon_Schedule",
-  "Common_UIHide_Icon", "Common_Icon_Change", "Common_Icon_Back", "Common_Empty", "Cafe_Icon_Rotate",
-])].map((name) => [name, name === 'Common_Bg_Raius10px_Select' ? selectionSprite : { width: 8, height: 8 }])), Event: { Event_Icon_ClueSearch_857: { width: 8, height: 8 } } };
+const atlas = {
+  Common: Object.fromEntries(
+    [
+      ...new Set([
+        ...[
+          ...readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8").matchAll(
+            /"(Common_[A-Za-z0-9_]+)"/g,
+          ),
+        ].map((m) => m[1]),
+        "Common_Bg_Raius10px_Select",
+        "Common_Icon_Check_Y_Off",
+        "Common_Icon_Mulligan_1",
+        "Common_Icon_Mulligan_2",
+        "Card_Select_Line_Blue",
+        "Cafe_Icon_NameEdit",
+        "Common_Icon_Reddot2",
+        "School_Icon_Schedule",
+        "Common_UIHide_Icon",
+        "Common_Icon_Change",
+        "Common_Icon_Back",
+        "Common_Empty",
+        "Cafe_Icon_Rotate",
+      ]),
+    ].map((name) => [name, name === "Common_Bg_Raius10px_Select" ? selectionSprite : { width: 8, height: 8 }]),
+  ),
+  Event: { Event_Icon_ClueSearch_857: { width: 8, height: 8 } },
+};
 atlas.Common.Common_Icon_Change = { width: 80, height: 80 };
 const reply = (data, status = 200) => ({ ok: status === 200, status, json: async () => data });
-let family, indexMode = "ready", layoutMode = "ready", lobbyMode = "pending", optionalPending = false, modsEnabled = true;
-let modsInstall = null, modelAdoption = null;
+let family,
+  indexMode = "ready",
+  layoutMode = "ready",
+  lobbyMode = "pending",
+  optionalPending = false,
+  modsEnabled = true;
+let modsInstall = null,
+  modelAdoption = null;
 let seenReply = async () => ({ result: null });
 const saveAlias = async ({ id, label }) => {
   const mod = family.variants.flatMap((v) => v.modList || []).find((m) => m.id === id);
   mod.defaultLabel ||= mod.label;
-  mod.alias = label.trim(); mod.label = mod.alias || mod.defaultLabel;
+  mod.alias = label.trim();
+  mod.label = mod.alias || mod.defaultLabel;
   return { result: mod };
 };
 let renameReply = saveAlias;
-const textureReplies = [], layoutReplies = [], rpcRequests = [], assetRequests = [];
+const textureReplies = [],
+  layoutReplies = [],
+  rpcRequests = [],
+  assetRequests = [];
 const textures = { Detail_Background: "/asset/ui/texture/Detail_Background.png" };
 globalThis.fetch = async (url, opts = {}) => {
   if (url === "/api/rpc") {
-    const request = JSON.parse(opts.body), { method } = request;
+    const request = JSON.parse(opts.body),
+      { method } = request;
     rpcRequests.push(request);
     if (method === "mods.seen") return reply(await seenReply(request.params));
     if (method === "mods.rename") return reply(await renameReply(request.params));
@@ -282,7 +602,10 @@ globalThis.fetch = async (url, opts = {}) => {
     if (method === "mods.adopt" && modelAdoption) return reply({ result: "model-adoption" });
     if (method === "jobs.get" && request.params.id === "model-adoption")
       return reply({ result: { state: "done", result: modelAdoption() } });
-    return reply({ result: method === "family.get" ? family : method === "mods.state" ? { enabled: modsEnabled, ...modsInstall } : null });
+    return reply({
+      result:
+        method === "family.get" ? family : method === "mods.state" ? { enabled: modsEnabled, ...modsInstall } : null,
+    });
   }
   assetRequests.push(url);
   if (url === "/asset/ui/atlases.json") {
@@ -310,7 +633,8 @@ globalThis.fetch = async (url, opts = {}) => {
     if (url.endsWith("UIPopup_Option_PC.json")) return reply(controlLayouts.option);
     if (url.endsWith("UIPopup_FilterSort.json")) return reply(controlLayouts.filter);
     if (url.endsWith("UICharacterVisualMode.json")) return reply(visualPrefab());
-    if (url.endsWith("UICharacterCollection.json") || url.endsWith("UIPopup_GachaCharList.Btn_Checkbox.json")) return reply(null, 404);
+    if (url.endsWith("UICharacterCollection.json") || url.endsWith("UIPopup_GachaCharList.Btn_Checkbox.json"))
+      return reply(null, 404);
     return reply(node("Empty"));
   }
   if (url.startsWith("/asset/spine/") && url.endsWith("manifest.json")) {
@@ -326,7 +650,8 @@ globalThis.fetch = async (url, opts = {}) => {
   }
   throw new Error(`Unexpected fetch ${url}`);
 };
-const errors = [], warnings = [];
+const errors = [],
+  warnings = [];
 console.error = (...args) => errors.push(args);
 console.warn = (...args) => warnings.push(args);
 const flat = (obj, prefix = "", out = {}) => {
@@ -339,28 +664,51 @@ const flat = (obj, prefix = "", out = {}) => {
 const { setStrings } = await import("../../src/bmpt/web/js/i18n.js");
 const { setSpineConsent } = await import("../../src/bmpt/web/js/spine-runtime.js");
 setSpineConsent(true);
-setStrings("en-US", flat(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8"))));
-const modelRequests = [], modelStillRequests = [];
+setStrings(
+  "en-US",
+  flat(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8"))),
+);
+const modelRequests = [],
+  modelStillRequests = [];
 let modelPreview = null;
 globalThis.__detailModel = {
   createStillView() {
     let source;
-    return { async load(url) { source = url; modelStillRequests.push(url); },
-      async renderStill() { return `blob:rendered-${source}`; }, dispose() {} };
+    return {
+      async load(url) {
+        source = url;
+        modelStillRequests.push(url);
+      },
+      async renderStill() {
+        return `blob:rendered-${source}`;
+      },
+      dispose() {},
+    };
   },
   async show(key, host, options) {
     modelRequests.push({ key, ...options });
     modelPreview = options;
-    const canvas = document.createElement("canvas"); canvas.className = "model-view ready";
+    const canvas = document.createElement("canvas");
+    canvas.className = "model-view ready";
     host.replaceChildren(canvas);
     return ["idle"];
   },
-  hide(host) { host?.replaceChildren(); }, frame() {}, settled: async () => {}, current: () => "idle", play() {},
+  hide(host) {
+    host?.replaceChildren();
+  },
+  frame() {},
+  settled: async () => {},
+  current: () => "idle",
+  play() {},
   snapshot: () => `blob:model-${modelPreview?.source}`,
 };
-const modelStub = `data:text/javascript,${encodeURIComponent(Object.keys(globalThis.__detailModel)
-  .map((name) => `export const ${name} = (...args) => globalThis.__detailModel.${name}(...args);`).join("\n"))}`;
-register(`data:text/javascript,${encodeURIComponent(`export async function load(url, ctx, next) {
+const modelStub = `data:text/javascript,${encodeURIComponent(
+  Object.keys(globalThis.__detailModel)
+    .map((name) => `export const ${name} = (...args) => globalThis.__detailModel.${name}(...args);`)
+    .join("\n"),
+)}`;
+register(
+  `data:text/javascript,${encodeURIComponent(`export async function load(url, ctx, next) {
   const result = await next(url, ctx);
   if (url.endsWith("/web/js/detail.js")) {
     const source = typeof result.source === "string" ? result.source : new TextDecoder().decode(result.source);
@@ -371,28 +719,38 @@ register(`data:text/javascript,${encodeURIComponent(`export async function load(
 export async function resolve(spec, ctx, next) {
   if (spec === "./model.js" && (ctx.parentURL?.endsWith("/detail.js") || ctx.parentURL?.endsWith("/model-still.js"))) return { url: ${JSON.stringify(modelStub)}, shortCircuit: true };
   return next(spec, ctx);
-}`)}`);
+}`)}`,
+);
 await import(modelStub);
 const Detail = await import("../../src/bmpt/web/js/detail.js");
-const localeTable = (lang) => flat(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url), "utf8")));
+const localeTable = (lang) =>
+  flat(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url), "utf8")));
 
 test("disabled action cards never enable the dark lock cover", () => {
-  const card = node("SkillData_EX"), normal = node("Normal"), cover = node("Lock_Cover"), empty = node("Empty");
-  const icon = node("SkillIconBg"); icon.widgets[0].color = "#bb3421/1.00";
-  normal.children.push(icon); cover.children.push(node("Bg"), node("Icon"), node("Icon_Star"), node("Label_StarNum"));
+  const card = node("SkillData_EX"),
+    normal = node("Normal"),
+    cover = node("Lock_Cover"),
+    empty = node("Empty");
+  const icon = node("SkillIconBg");
+  icon.widgets[0].color = "#bb3421/1.00";
+  normal.children.push(icon);
+  cover.children.push(node("Bg"), node("Icon"), node("Icon_Star"), node("Label_StarNum"));
   card.children.push(normal, cover, empty);
   const original = structuredClone(cover.children);
   for (const enabled of [false, true, false]) {
     Detail.actionState(card, enabled);
-    assert.equal(normal.active, true); assert.equal(cover.active, false); assert.equal(empty.active, false);
+    assert.equal(normal.active, true);
+    assert.equal(cover.active, false);
+    assert.equal(empty.active, false);
     assert.equal(icon.widgets[0].color, "#bb3421/1.00");
     assert.deepEqual(cover.children, original);
   }
 });
 
-
 test("disabled actions use the game's grey button body without changing its donor", () => {
-  const card = node("SkillData_EX"), normal = node("Normal"), bg = node("Bg");
+  const card = node("SkillData_EX"),
+    normal = node("Normal"),
+    bg = node("Bg");
   card.children.push(bg, normal, node("Lock_Cover"));
   const template = walk(controlLayouts.filter).find((node) => node.name === "Btn_Disable");
   const before = structuredClone(template);
@@ -407,32 +765,74 @@ const ModSwitch = await import("../../src/bmpt/web/js/mod-switch.js");
 const ModAlias = await import("../../src/bmpt/web/js/mod-alias.js");
 const Popup = await import("../../src/bmpt/web/js/popup.js");
 let invalidations = 0;
-const context = { prefs: { voiceMuted: true, voiceVolume: 0 }, info: {}, invalidateRoster() { invalidations++; }, step() {}, go() {} };
+const context = {
+  prefs: { voiceMuted: true, voiceVolume: 0 },
+  info: {},
+  invalidateRoster() {
+    invalidations++;
+  },
+  step() {},
+  go() {},
+};
 function modFamily(kind = "spr", id = "test") {
-  return { key: "ibuki", version: id, variants: [{ key: "ibuki", spr: "ibuki_spr", lobby: "ibuki_home", names: { en: { full: "Ibuki", short: "Ibuki" } },
-    modList: [{ id, target: "ibuki", kind, label: id }], state: { files: [{ kind, applied: `mod:${id}`, official: false, restorable: true, crc: "fixed" }] } }] };
+  return {
+    key: "ibuki",
+    version: id,
+    variants: [
+      {
+        key: "ibuki",
+        spr: "ibuki_spr",
+        lobby: "ibuki_home",
+        names: { en: { full: "Ibuki", short: "Ibuki" } },
+        modList: [{ id, target: "ibuki", kind, label: id }],
+        state: { files: [{ kind, applied: `mod:${id}`, official: false, restorable: true, crc: "fixed" }] },
+      },
+    ],
+  };
 }
-const flush = async () => { for (let i = 0; i < 160; i++) await Promise.resolve(); };
+const flush = async () => {
+  for (let i = 0; i < 160; i++) await Promise.resolve();
+};
 const finish = async (t, promise) => {
   let settled = false;
-  promise.finally(() => { settled = true; }).catch(() => {});
-  for (let i = 0; i < 90 && !settled; i++) { t.mock.timers.tick(1000); await flush(); }
+  promise
+    .finally(() => {
+      settled = true;
+    })
+    .catch(() => {});
+  for (let i = 0; i < 90 && !settled; i++) {
+    t.mock.timers.tick(1000);
+    await flush();
+  }
   assert.ok(settled, "asset failures must settle the readiness barrier");
   return promise;
 };
-const switchButton = () => walk(hosts.ngui).find((e) => e.dataset.part === `${INFO}/Weapon/Equip_1/UIEquipmentCard/Btn_Target/Normal/Card_Bg`);
-const switchDot = () => walk(hosts.ngui).find((e) => e.dataset.path?.endsWith(`${INFO}/Weapon/Equip_1/UIEquipmentCard/Dot`));
-const tabDot = (i) => walk(hosts.ngui).find((e) => e.dataset.path?.endsWith(`CharacterTab/Tab_${i}/${i === 1 ? "Dot" : `Dot (${i - 1})`}`));
+const switchButton = () =>
+  walk(hosts.ngui).find((e) => e.dataset.part === `${INFO}/Weapon/Equip_1/UIEquipmentCard/Btn_Target/Normal/Card_Bg`);
+const switchDot = () =>
+  walk(hosts.ngui).find((e) => e.dataset.path?.endsWith(`${INFO}/Weapon/Equip_1/UIEquipmentCard/Dot`));
+const tabDot = (i) =>
+  walk(hosts.ngui).find((e) => e.dataset.path?.endsWith(`CharacterTab/Tab_${i}/${i === 1 ? "Dot" : `Dot (${i - 1})`}`));
 const chipDot = (key) => walk(hosts["ngui-chips"]).find((e) => e.dataset.path?.endsWith(`/Chip_${key}/Dot`));
 const tabButton = (i) => walk(hosts.ngui).find((e) => e.dataset.part?.endsWith(`Tab_${i}/Tab_Off/Label`));
-const closeSwitch = async () => { await walk(hosts.popup).find((e) => e.dataset.action === "close").click(); await flush(); };
+const closeSwitch = async () => {
+  await walk(hosts.popup)
+    .find((e) => e.dataset.action === "close")
+    .click();
+  await flush();
+};
 // a message an earlier test left open (a preview error) takes Escape before the fullscreen view under it
-const closeLeftMessages = () => { hosts.dialog.replaceChildren(); hosts.dialog.hidden = true; };
+const closeLeftMessages = () => {
+  hosts.dialog.replaceChildren();
+  hosts.dialog.hidden = true;
+};
 async function showPortrait(t, key = "ibuki") {
-  const showing = Detail.show(context, family, key); await flush();
+  const showing = Detail.show(context, family, key);
+  await flush();
   await finish(t, showing);
   if (tabButton(1)) {
-    const switching = tabButton(1).click(); await flush();
+    const switching = tabButton(1).click();
+    await flush();
     await finish(t, switching);
   }
 }
@@ -440,96 +840,174 @@ async function showPortrait(t, key = "ibuki") {
 test("a failed detail layout cannot prevent the installed portrait from loading", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    errors.length = 0; layoutMode = "error"; imageMode = "pending"; family = modFamily();
+    errors.length = 0;
+    layoutMode = "error";
+    imageMode = "pending";
+    family = modFamily();
     const start = playerRequests.length;
-    const showing = Detail.show(context, family, "ibuki"); await flush();
-    t.mock.timers.tick(1300); await flush(); await finish(t, showing);
+    const showing = Detail.show(context, family, "ibuki");
+    await flush();
+    t.mock.timers.tick(1300);
+    await flush();
+    await finish(t, showing);
     assert.ok(playerRequests.slice(start).some((url) => url.includes("/spr/ibuki_spr/")));
     assert.ok(errors.some((args) => args.some((err) => String(err).includes("layout UICharacterDetail: HTTP 500"))));
     assert.ok(!hosts.portrait.classList.contains("pending"));
-  } finally { Detail.hide(); layoutMode = "ready"; await flush(); t.mock.timers.reset(); }
+  } finally {
+    Detail.hide();
+    layoutMode = "ready";
+    await flush();
+    t.mock.timers.reset();
+  }
 });
 
 test("the installed portrait starts while the detail layout is pending", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    errors.length = 0; layoutMode = "pending"; family = modFamily();
+    errors.length = 0;
+    layoutMode = "pending";
+    family = modFamily();
     const start = playerRequests.length;
-    const showing = Detail.show(context, family, "ibuki"); await flush();
+    const showing = Detail.show(context, family, "ibuki");
+    await flush();
     assert.ok(layoutReplies.length, "the layout has not answered yet");
     assert.ok(playerRequests.slice(start).some((url) => url.includes("/spr/ibuki_spr/")));
-    layoutReplies.splice(0).forEach((resolve) => resolve()); layoutMode = "ready"; await flush();
-    t.mock.timers.tick(1300); await flush(); await finish(t, showing);
+    layoutReplies.splice(0).forEach((resolve) => resolve());
+    layoutMode = "ready";
+    await flush();
+    t.mock.timers.tick(1300);
+    await flush();
+    await finish(t, showing);
     assert.ok(switchButton(), "panels finish when the layout arrives");
-  } finally { Detail.hide(); layoutMode = "ready"; await flush(); t.mock.timers.reset(); }
+  } finally {
+    Detail.hide();
+    layoutMode = "ready";
+    await flush();
+    t.mock.timers.reset();
+  }
 });
 
 test("detail waits for UI images and bounds optional thumbnails before reveal", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    imageMode = "pending"; optionalPending = true; family = modFamily();
+    imageMode = "pending";
+    optionalPending = true;
+    family = modFamily();
     const showing = Detail.show(context, family, "ibuki");
     await flush();
-    assert.ok(switchButton()?.listeners.click.length, `the switch has a hit target before any image completes: ${errors.map((a) => a.map((e) => e?.stack || String(e)).join(" ")).join("; ")}`);
-    assert.ok(playerRequests.some((p) => p.includes("/spr/ibuki_spr/")), "installed mod bytes come from the current game source");
-    assert.ok(!playerRequests.some((p) => p.includes("/mod/test/")), "the installed portrait needs no library preview or kept originals");
-    assert.ok(imageRequests.some((p) => p.includes("Common_Bg_Raius10px")), "panel sprites are requested independently of mod previews");
-    optionalPending = false; textureReplies.splice(0).forEach((reply) => reply()); await flush();
-    t.mock.timers.tick(1300); await flush(); await finish(t, showing);
+    assert.ok(
+      switchButton()?.listeners.click.length,
+      `the switch has a hit target before any image completes: ${errors.map((a) => a.map((e) => e?.stack || String(e)).join(" ")).join("; ")}`,
+    );
+    assert.ok(
+      playerRequests.some((p) => p.includes("/spr/ibuki_spr/")),
+      "installed mod bytes come from the current game source",
+    );
+    assert.ok(
+      !playerRequests.some((p) => p.includes("/mod/test/")),
+      "the installed portrait needs no library preview or kept originals",
+    );
+    assert.ok(
+      imageRequests.some((p) => p.includes("Common_Bg_Raius10px")),
+      "panel sprites are requested independently of mod previews",
+    );
+    optionalPending = false;
+    textureReplies.splice(0).forEach((reply) => reply());
+    await flush();
+    t.mock.timers.tick(1300);
+    await flush();
+    await finish(t, showing);
     const panel = walk(hosts.ngui).find((e) => e.dataset.path?.endsWith("Active/Bg"));
     assert.equal(panel.style.backgroundColor, "#0c284b", "a missing sprite leaves a panel placeholder");
     imageMode = "ready";
-    pendingImages.splice(0).forEach((img) => img.onload?.()); await flush();
+    pendingImages.splice(0).forEach((img) => img.onload?.());
+    await flush();
     family = modFamily("spr", "recovered");
-    const retry = Detail.show(context, family, "ibuki"); await flush(); await finish(t, retry);
+    const retry = Detail.show(context, family, "ibuki");
+    await flush();
+    await finish(t, retry);
     const recovered = walk(hosts.ngui).find((e) => e.dataset.path?.endsWith("Active/Bg"));
     assert.ok(recovered.style.backgroundImage, "a fresh render retries failed sprites");
     assert.equal(recovered.style.backgroundColor, "");
-    back.onclick(); assert.equal(location.hash, "#/roster");
-  } finally { Detail.hide(); await flush(); t.mock.timers.reset(); imageMode = "ready"; optionalPending = false; }
+    back.onclick();
+    assert.equal(location.hash, "#/roster");
+  } finally {
+    Detail.hide();
+    await flush();
+    t.mock.timers.reset();
+    imageMode = "ready";
+    optionalPending = false;
+  }
 });
 
 test("ready detail controls publish while optional thumbnails continue filling locally", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    family = modFamily(); family.variants[0].spr = "late_spr";
+    family = modFamily();
+    family.variants[0].spr = "late_spr";
     portraitExpressions = ["00", "01", "02", "03", "04", "05"];
     imageMode = "ready";
-    const previous = [...hosts.ngui.children], previousExpressions = [...hosts["ngui-expr"].children];
+    const previous = [...hosts.ngui.children],
+      previousExpressions = [...hosts["ngui-expr"].children];
     let ready = false;
-    const showing = Detail.show(context, family, "ibuki").then(() => { ready = true; });
-    await flush(); t.mock.timers.tick(3000); await flush();
+    const showing = Detail.show(context, family, "ibuki").then(() => {
+      ready = true;
+    });
+    await flush();
+    t.mock.timers.tick(3000);
+    await flush();
     assert.equal(ready, true, "never-settling optional thumbnails cannot hold the ready primary preview");
     assert.notDeepEqual(hosts.ngui.children, previous);
     assert.notDeepEqual(hosts["ngui-expr"].children, previousExpressions);
-    thumbMode = "ready"; pendingThumbnails.splice(0).forEach((done) => done()); await flush();
+    thumbMode = "ready";
+    pendingThumbnails.splice(0).forEach((done) => done());
+    await flush();
     await finish(t, showing);
     const pictures = [hosts.ngui, hosts["ngui-expr"]].flatMap(walk).filter((e) => e.dataset.thumbnail === "true");
     assert.ok(pictures.length >= 5);
-    assert.ok(pictures.every((e) => e.style.backgroundImage), "all entry pictures are present at publication");
-    assert.ok(pictures.every((e) => e.style.transition === "none"), "publication cannot start thumbnail fades");
+    assert.ok(
+      pictures.every((e) => e.style.backgroundImage),
+      "all entry pictures are present at publication",
+    );
+    assert.ok(
+      pictures.every((e) => e.style.transition === "none"),
+      "publication cannot start thumbnail fades",
+    );
   } finally {
-    Detail.hide(); thumbMode = "pending"; portraitExpressions = ["00", "01"];
-    await flush(); t.mock.timers.reset();
+    Detail.hide();
+    thumbMode = "pending";
+    portraitExpressions = ["00", "01"];
+    await flush();
+    t.mock.timers.reset();
   }
 });
 
 test("leaving a page revealed at its deadline cancels thumbnail players, retries and late DOM writes", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    family = modFamily(); family.variants[0].spr = "cancelled_spr";
+    family = modFamily();
+    family.variants[0].spr = "cancelled_spr";
     const start = thumbnailPlayers.length;
-    const showing = Detail.show(context, family, "ibuki"); await flush();
-    t.mock.timers.tick(15000); await flush(); await showing;
+    const showing = Detail.show(context, family, "ibuki");
+    await flush();
+    t.mock.timers.tick(15000);
+    await flush();
+    await showing;
     const pictures = walk(body).filter((e) => e.dataset.thumbnail === "true");
     Detail.hide();
     assert.ok(thumbnailPlayers.slice(start).every((p) => p.disposed));
     const count = thumbnailPlayers.length;
-    pendingThumbnails.splice(0).forEach((done) => done()); await flush();
-    t.mock.timers.tick(60000); await flush();
+    pendingThumbnails.splice(0).forEach((done) => done());
+    await flush();
+    t.mock.timers.tick(60000);
+    await flush();
     assert.equal(thumbnailPlayers.length, count, "cancelled queued work cannot start another player");
     assert.ok(pictures.every((e) => !e.style.backgroundImage));
-  } finally { Detail.hide(); await flush(); t.mock.timers.reset(); }
+  } finally {
+    Detail.hide();
+    await flush();
+    t.mock.timers.reset();
+  }
 });
 
 test("NGUI keeps a queued thumbnail beyond fifteen seconds and cancels abandoned pictures", async (t) => {
@@ -538,63 +1016,111 @@ test("NGUI keeps a queued thumbnail beyond fifteen seconds and cancels abandoned
   let finish, abandoned;
   try {
     const host = new El();
-    const pending = Object.assign(new Promise((resolve) => { finish = resolve; }), { thumbnail: true, signal: controller.signal });
-    const gone = Object.assign(new Promise((resolve) => { abandoned = resolve; }), { thumbnail: true, signal: controller.signal });
+    const pending = Object.assign(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+      { thumbnail: true, signal: controller.signal },
+    );
+    const gone = Object.assign(
+      new Promise((resolve) => {
+        abandoned = resolve;
+      }),
+      { thumbnail: true, signal: controller.signal },
+    );
     const view = await NGUI.render(NGUI.node("Late", [0, 0], [{ clipImage: pending, w_: 10, h_: 10 }]), host);
     const cancelledHost = new El();
-    const cancelled = await NGUI.render(NGUI.node("Gone", [0, 0], [{ clipImage: gone, w_: 10, h_: 10 }]), cancelledHost);
-    t.mock.timers.tick(20000); await flush();
-    finish("blob:late"); await Promise.all(view.pictures);
+    const cancelled = await NGUI.render(
+      NGUI.node("Gone", [0, 0], [{ clipImage: gone, w_: 10, h_: 10 }]),
+      cancelledHost,
+    );
+    t.mock.timers.tick(20000);
+    await flush();
+    finish("blob:late");
+    await Promise.all(view.pictures);
     assert.equal(walk(host).find((e) => e.dataset.thumbnail).style.backgroundImage, 'url("blob:late")');
-    controller.abort(); await Promise.all(cancelled.pictures);
-    abandoned("blob:abandoned"); await flush();
+    controller.abort();
+    await Promise.all(cancelled.pictures);
+    abandoned("blob:abandoned");
+    await flush();
     assert.ok(!walk(cancelledHost).find((e) => e.dataset.thumbnail).style.backgroundImage);
-  } finally { controller.abort(); await flush(); t.mock.timers.reset(); }
+  } finally {
+    controller.abort();
+    await flush();
+    t.mock.timers.reset();
+  }
 });
 
 test("the first detail reveal waits for its preview and decoded background", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    family = modFamily(); imageMode = "ready"; playerMode = "pending"; decodeMode = "pending";
+    family = modFamily();
+    imageMode = "ready";
+    playerMode = "pending";
+    decodeMode = "pending";
     let ready = false;
-    const showing = Detail.show(context, family, "ibuki").then(() => { ready = true; });
-    await flush(); t.mock.timers.tick(1300); await flush();
+    const showing = Detail.show(context, family, "ibuki").then(() => {
+      ready = true;
+    });
+    await flush();
+    t.mock.timers.tick(1300);
+    await flush();
     assert.ok(pendingPlayers.length, "the main preview is still loading");
     assert.equal(ready, false);
-    playerMode = "ready"; pendingPlayers.splice(0).forEach((done) => done()); await flush();
+    playerMode = "ready";
+    pendingPlayers.splice(0).forEach((done) => done());
+    await flush();
     assert.ok(pendingDecodes.length, "the detached UI backgrounds are decoded before reveal");
     assert.equal(ready, false);
-    decodeMode = "ready"; pendingDecodes.splice(0).forEach((done) => done());
+    decodeMode = "ready";
+    pendingDecodes.splice(0).forEach((done) => done());
     await finish(t, showing);
     assert.equal(ready, true);
   } finally {
     playerMode = decodeMode = "ready";
     pendingDecodes.splice(0).forEach((done) => done());
-    Detail.hide(); await flush(); t.mock.timers.reset();
+    Detail.hide();
+    await flush();
+    t.mock.timers.reset();
   }
 });
 
 test("main preview and decoded UI remain required while optional thumbnails do not", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    family = modFamily(); family.variants[0].spr = "slow_main_spr";
+    family = modFamily();
+    family.variants[0].spr = "slow_main_spr";
     playerMode = decodeMode = "pending";
     let ready = false;
-    const showing = Detail.show(context, family, "ibuki").then(() => { ready = true; });
-    await flush(); t.mock.timers.tick(5000); await flush();
+    const showing = Detail.show(context, family, "ibuki").then(() => {
+      ready = true;
+    });
+    await flush();
+    t.mock.timers.tick(5000);
+    await flush();
     assert.equal(ready, false, "the main portrait must still be ready");
-    playerMode = "ready"; pendingPlayers.splice(0).forEach((done) => done()); await flush();
+    playerMode = "ready";
+    pendingPlayers.splice(0).forEach((done) => done());
+    await flush();
     assert.equal(ready, false, "decoded panel backgrounds remain required");
-    decodeMode = "ready"; pendingDecodes.splice(0).forEach((done) => done()); await flush();
+    decodeMode = "ready";
+    pendingDecodes.splice(0).forEach((done) => done());
+    await flush();
     assert.equal(ready, true, "entry thumbnails cannot extend the required-image barrier");
-    thumbMode = "ready"; pendingThumbnails.splice(0).forEach((done) => done()); await flush();
+    thumbMode = "ready";
+    pendingThumbnails.splice(0).forEach((done) => done());
+    await flush();
     await finish(t, showing);
     assert.equal(ready, true);
     await showing;
   } finally {
-    playerMode = decodeMode = "ready"; thumbMode = "pending";
-    pendingPlayers.splice(0).forEach((done) => done()); pendingDecodes.splice(0).forEach((done) => done());
-    Detail.hide(); await flush(); t.mock.timers.reset();
+    playerMode = decodeMode = "ready";
+    thumbMode = "pending";
+    pendingPlayers.splice(0).forEach((done) => done());
+    pendingDecodes.splice(0).forEach((done) => done());
+    Detail.hide();
+    await flush();
+    t.mock.timers.reset();
   }
 });
 
@@ -605,147 +1131,285 @@ test("abandoning thumbnail colour sampling cancels its image deadline and permit
     imageMode = "pending";
     const pending = NGUI.load("blob:cancel-colours", { signal: controller.signal });
     const cancelled = assert.rejects(pending, { name: "AbortError" });
-    controller.abort(); await cancelled;
-    t.mock.timers.tick(60000); await flush();
+    controller.abort();
+    await cancelled;
+    t.mock.timers.tick(60000);
+    await flush();
     imageMode = "ready";
     assert.ok(await NGUI.load("blob:cancel-colours", { signal: new AbortController().signal }));
-  } finally { controller.abort(); imageMode = "ready"; await flush(); t.mock.timers.reset(); }
+  } finally {
+    controller.abort();
+    imageMode = "ready";
+    await flush();
+    t.mock.timers.reset();
+  }
 });
 
 test("a mod portrait setup exception is observed, settled and reported", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    errors.length = 0; playerMode = "broken"; family = modFamily("spr", "broken");
-    const showing = Detail.show(context, family, "ibuki"); await flush();
-    t.mock.timers.tick(1300); await flush(); await finish(t, showing);
+    errors.length = 0;
+    playerMode = "broken";
+    family = modFamily("spr", "broken");
+    const showing = Detail.show(context, family, "ibuki");
+    await flush();
+    t.mock.timers.tick(1300);
+    await flush();
+    await finish(t, showing);
     assert.ok(switchButton());
     assert.ok(errors.some((a) => a.some((e) => String(e).includes("Mod skeleton setup failed"))));
     assert.ok(walk(hosts.dialog).some((el) => el.textContent === "Preview unavailable"));
     assert.ok(!hosts.portrait.classList.contains("pending"));
-  } finally { Detail.hide(); await flush(); t.mock.timers.reset(); playerMode = "ready"; }
+  } finally {
+    Detail.hide();
+    await flush();
+    t.mock.timers.reset();
+    playerMode = "ready";
+  }
 });
 
 test("the main portrait retries a rejected live revision after a cold load", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    errors.length = 0; family = modFamily(); playerMode = "stale";
+    errors.length = 0;
+    family = modFamily();
+    playerMode = "stale";
     const start = playerRequests.length;
-    const showing = Detail.show(context, family, "ibuki"); await flush();
-    t.mock.timers.tick(1300); await flush(); await finish(t, showing);
+    const showing = Detail.show(context, family, "ibuki");
+    await flush();
+    t.mock.timers.tick(1300);
+    await flush();
+    await finish(t, showing);
     const live = playerRequests.slice(start).filter((url) => url.includes("/spr/ibuki_spr/"));
     assert.ok(live.some((url) => url.includes(`/${"a".repeat(64)}/`)));
     assert.ok(live.some((url) => url.includes(`/${"b".repeat(64)}/`)));
     assert.ok(!errors.some((args) => args[0] === "Detail render failed"), errors.map(String).join("\n"));
     assert.ok(warnings.some((args) => args[0] === "Spine source changed during load"));
-  } finally { Detail.hide(); playerMode = "ready"; portraitRevision = "a"; await flush(); t.mock.timers.reset(); }
+  } finally {
+    Detail.hide();
+    playerMode = "ready";
+    portraitRevision = "a";
+    await flush();
+    t.mock.timers.reset();
+  }
 });
 
-for (const status of [404, 500]) test(`the main portrait logs the cause of a failed manifest (${status})`, async (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout"] });
-  try {
-    errors.length = 0; warnings.length = 0; family = modFamily(); portraitStatus = status;
-    const showing = Detail.show(context, family, "ibuki"); await flush();
-    t.mock.timers.tick(1300); await flush(); await finish(t, showing);
-    assert.ok(walk(hosts.dialog).some((el) => el.textContent === "Preview unavailable"));
-    assert.ok(errors.some((args) => args.includes("/asset/spine/spr/ibuki_spr/skeleton")), "the console names the current source");
-    assert.ok([...errors, ...warnings].some((args) => args.some((value) => String(value).includes(`HTTP ${status}`))));
-    assert.ok(switchButton(), "the panels stay usable");
-  } finally { Detail.hide(); portraitStatus = 200; await flush(); t.mock.timers.reset(); }
-});
+for (const status of [404, 500])
+  test(`the main portrait logs the cause of a failed manifest (${status})`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    try {
+      errors.length = 0;
+      warnings.length = 0;
+      family = modFamily();
+      portraitStatus = status;
+      const showing = Detail.show(context, family, "ibuki");
+      await flush();
+      t.mock.timers.tick(1300);
+      await flush();
+      await finish(t, showing);
+      assert.ok(walk(hosts.dialog).some((el) => el.textContent === "Preview unavailable"));
+      assert.ok(
+        errors.some((args) => args.includes("/asset/spine/spr/ibuki_spr/skeleton")),
+        "the console names the current source",
+      );
+      assert.ok(
+        [...errors, ...warnings].some((args) => args.some((value) => String(value).includes(`HTTP ${status}`))),
+      );
+      assert.ok(switchButton(), "the panels stay usable");
+    } finally {
+      Detail.hide();
+      portraitStatus = 200;
+      await flush();
+      t.mock.timers.reset();
+    }
+  });
 
 test("a lobby switch stays covered until its failed preview settles and can retry", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    errors.length = 0; family = modFamily("lobby", "lobby");
-    const showing = Detail.show(context, family, "ibuki"); await flush();
-    t.mock.timers.tick(1300); await flush(); await finish(t, showing);
+    errors.length = 0;
+    family = modFamily("lobby", "lobby");
+    const showing = Detail.show(context, family, "ibuki");
+    await flush();
+    t.mock.timers.tick(1300);
+    await flush();
+    await finish(t, showing);
     const lobbyTab = walk(hosts.ngui).find((e) => e.dataset.part?.endsWith("Tab_2/Tab_Off/Label"));
-    const switching = lobbyTab.click(); await flush();
+    const switching = lobbyTab.click();
+    await flush();
     assert.equal(Loading.covering(), false, "in-page preview waits keep the current screen visible");
     assert.equal(Loading.held(), true);
-    for (let i = 0; i < 4; i++) { t.mock.timers.tick(1300); await flush(); }
+    for (let i = 0; i < 4; i++) {
+      t.mock.timers.tick(1300);
+      await flush();
+    }
     await finish(t, switching);
     assert.equal(Loading.covering(), false);
     assert.ok(switchButton(), "the new panel commits even though Lobby.show is pending");
     assert.equal(switchButton().getAttribute("aria-label"), "Switch Memorial Lobby");
-    t.mock.timers.tick(16000); await flush();
+    t.mock.timers.tick(16000);
+    await flush();
     assert.ok(errors.some((a) => a.some((e) => String(e).includes("Detail lobby: timed out"))));
     assert.equal(hosts.lobby.querySelector(".lobby-unavailable")?.textContent, "Preview unavailable");
     assert.ok(!hosts.lobby.classList.contains("pending"));
-    assert.ok(rpcRequests.some((r) => r.method === "preview.failed" && r.params.url.includes("/lobby/ibuki_home/") && r.params.step));
+    assert.ok(
+      rpcRequests.some(
+        (r) => r.method === "preview.failed" && r.params.url.includes("/lobby/ibuki_home/") && r.params.step,
+      ),
+    );
     const before = assetRequests.filter((url) => url.includes("/lobby/") && url.endsWith("manifest.json")).length;
     const portraitTab = walk(hosts.ngui).find((e) => e.dataset.part?.endsWith("Tab_1/Tab_Off/Label"));
-    const portrait = portraitTab.click(); await flush();
-    t.mock.timers.tick(1300); await flush(); await finish(t, portrait);
+    const portrait = portraitTab.click();
+    await flush();
+    t.mock.timers.tick(1300);
+    await flush();
+    await finish(t, portrait);
     const retryTab = walk(hosts.ngui).find((e) => e.dataset.part?.endsWith("Tab_2/Tab_Off/Label"));
-    const retry = retryTab.click(); await flush();
-    for (let i = 0; i < 4; i++) { t.mock.timers.tick(1300); await flush(); }
+    const retry = retryTab.click();
+    await flush();
+    for (let i = 0; i < 4; i++) {
+      t.mock.timers.tick(1300);
+      await flush();
+    }
     await finish(t, retry);
-    assert.ok(assetRequests.filter((url) => url.includes("/lobby/") && url.endsWith("manifest.json")).length > before,
-      "showing the lobby tab again asks for a new source after failure");
-    t.mock.timers.tick(16000); await flush();
-    back.onclick(); assert.equal(location.hash, "#/roster");
-  } finally { Detail.hide(); await flush(); t.mock.timers.reset(); }
+    assert.ok(
+      assetRequests.filter((url) => url.includes("/lobby/") && url.endsWith("manifest.json")).length > before,
+      "showing the lobby tab again asks for a new source after failure",
+    );
+    t.mock.timers.tick(16000);
+    await flush();
+    back.onclick();
+    assert.equal(location.hash, "#/roster");
+  } finally {
+    Detail.hide();
+    await flush();
+    t.mock.timers.reset();
+  }
 });
 
-for (const core of ["arona_workpage_daytime", "np0032_npc"]) for (const category of ["spinebackground", null]) test(`a special L2D ${core} keeps its labels, aliases, repair tags and unseen dots with category ${category}`, async (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout"] });
-  try {
-    errors.length = 0; lobbyMode = "pending";
-    const v = { key: `special:${core}`, spr: null, lobby: core, spineCategory: category,
-      names: { en: { full: "Arona - Work Page - Daytime", short: "Work Page - Daytime" } },
-      modList: [{ id: "special-day", target: `special:${core}`, core, kind: "lobby", label: "Day", alias: "Painted L2D - Repaired", repaired_from: "original-special", fresh: true }],
-      state: { files: [{ kind: "lobby", applied: "mod:special-day", official: false, restorable: true, crc: "fixed" }] } };
-    family = { key: "arona", version: "special", variants: [modFamily().variants[0], v] };
-    const start = playerRequests.length, fetchStart = assetRequests.length, rpcStart = rpcRequests.length;
-    let ready = false;
-    const showing = Detail.show(context, family, v.key).then(() => { ready = true; }); await flush();
-    t.mock.timers.tick(1300); await flush();
-    assert.equal(ready, false, "a pending background cannot release the loading cover early");
-    await finish(t, showing);
-    assert.equal(Detail.currentVariant(), v.key, "the requested background stays selected alongside a portrait variant");
-    assert.equal(switchButton().getAttribute("aria-label"), "Switch L2D");
-    assert.ok(switchButton().listeners.click.length);
-    for (const path of [`${INFO}/Title_Bg/Label_Locale`, "RightInfo/Target/Active/CharacterTab/Tab_2/Tab_On/Label"]) {
-      assert.ok(walk(hosts.ngui).some((e) => e.dataset.path?.endsWith(path) && walk(e).some((n) => n.textContent === "L2D")), `${path} uses the L2D label`);
-    }
-    const add = walk(hosts.ngui).find((e) => e.dataset.part === `${INFO}/Weapon/Btn_Up_Wrapper/Btn_Up/BG (1)`);
-    assert.equal(add.getAttribute("aria-label"), "Add L2D");
-    assert.ok(add.listeners.click.length);
-    assert.ok(!walk(hosts.ngui).some((e) => e.dataset.part?.endsWith("Tab_1/Tab_Off/Label")), "there is no portrait tab hit target");
-    assert.ok(assetRequests.slice(fetchStart).some((url) => url.includes(`/lobby/${core}/`)));
-    assert.ok(!playerRequests.slice(start).some((url) => url.includes("/spr/")), "no missing portrait player is started");
-    assert.equal(hosts.lobby.querySelector(".lobby-unavailable")?.textContent, "Preview unavailable");
-    assert.ok(!hosts.lobby.classList.contains("pending"));
-    assert.equal(switchButton().getAttribute("aria-label"), "Switch L2D");
-    assert.ok(switchButton().listeners.click.length, "apply and restore still have a switch card");
-    assert.ok(!rpcRequests.slice(rpcStart).some((r) => r.method === "lobby.lines"));
-    assert.equal(tabDot(2), undefined); assert.equal(chipDot(v.key), undefined);
-    assert.ok(rpcRequests.slice(rpcStart).some((r) => r.method === "mods.seen"), "showing the configured asset's tab marks it seen");
-    await switchButton().click(); await flush();
-    assert.deepEqual(rpcRequests.filter((r) => r.method === "mods.seen").at(-1).params, { ids: ["special-day"] });
-    assert.equal(tabDot(2), undefined); assert.equal(chipDot(v.key), undefined);
-    const part = (path) => walk(hosts.popup).find((el) => el.dataset.path === path);
-    assert.equal(part("Details/Name").getAttribute("aria-label"), "Painted L2D - Repaired");
-    assert.equal(part("Card_m:special-day/Tag/Text").textContent, "Repaired");
-    assert.ok(walk(hosts.popup).some((el) => el.dataset.action === "alias:details"));
-    await walk(hosts.popup).find((el) => el.dataset.action === "alias:m:special-day").click(); await flush();
-    assert.equal(aliasInput().value, "Painted L2D - Repaired");
-    aliasInput().value = "Evening L2D";
-    await finish(t, aliasKey(aliasInput()));
-    assert.equal(part("Details/Name").getAttribute("aria-label"), "Evening L2D");
-    assert.equal(part("Card_m:special-day/Tag/Text").textContent, "Repaired");
-    assert.equal(walk(part("Details/Chip_0/Text/Text")).map((el) => el.textContent).join(""), "Repaired");
-    assert.ok(!walk(hosts.popup).some((el) => el.getAttribute("aria-label") === "Remap to current version"));
-    await closeSwitch();
-    back.onclick(); assert.equal(location.hash, "#/roster");
-  } finally { Detail.hide(); await flush(); t.mock.timers.reset(); }
-});
+for (const core of ["arona_workpage_daytime", "np0032_npc"])
+  for (const category of ["spinebackground", null])
+    test(`a special L2D ${core} keeps its labels, aliases, repair tags and unseen dots with category ${category}`, async (t) => {
+      t.mock.timers.enable({ apis: ["setTimeout"] });
+      try {
+        errors.length = 0;
+        lobbyMode = "pending";
+        const v = {
+          key: `special:${core}`,
+          spr: null,
+          lobby: core,
+          spineCategory: category,
+          names: { en: { full: "Arona - Work Page - Daytime", short: "Work Page - Daytime" } },
+          modList: [
+            {
+              id: "special-day",
+              target: `special:${core}`,
+              core,
+              kind: "lobby",
+              label: "Day",
+              alias: "Painted L2D - Repaired",
+              repaired_from: "original-special",
+              fresh: true,
+            },
+          ],
+          state: {
+            files: [{ kind: "lobby", applied: "mod:special-day", official: false, restorable: true, crc: "fixed" }],
+          },
+        };
+        family = { key: "arona", version: "special", variants: [modFamily().variants[0], v] };
+        const start = playerRequests.length,
+          fetchStart = assetRequests.length,
+          rpcStart = rpcRequests.length;
+        let ready = false;
+        const showing = Detail.show(context, family, v.key).then(() => {
+          ready = true;
+        });
+        await flush();
+        t.mock.timers.tick(1300);
+        await flush();
+        assert.equal(ready, false, "a pending background cannot release the loading cover early");
+        await finish(t, showing);
+        assert.equal(
+          Detail.currentVariant(),
+          v.key,
+          "the requested background stays selected alongside a portrait variant",
+        );
+        assert.equal(switchButton().getAttribute("aria-label"), "Switch L2D");
+        assert.ok(switchButton().listeners.click.length);
+        for (const path of [
+          `${INFO}/Title_Bg/Label_Locale`,
+          "RightInfo/Target/Active/CharacterTab/Tab_2/Tab_On/Label",
+        ]) {
+          assert.ok(
+            walk(hosts.ngui).some(
+              (e) => e.dataset.path?.endsWith(path) && walk(e).some((n) => n.textContent === "L2D"),
+            ),
+            `${path} uses the L2D label`,
+          );
+        }
+        const add = walk(hosts.ngui).find((e) => e.dataset.part === `${INFO}/Weapon/Btn_Up_Wrapper/Btn_Up/BG (1)`);
+        assert.equal(add.getAttribute("aria-label"), "Add L2D");
+        assert.ok(add.listeners.click.length);
+        assert.ok(
+          !walk(hosts.ngui).some((e) => e.dataset.part?.endsWith("Tab_1/Tab_Off/Label")),
+          "there is no portrait tab hit target",
+        );
+        assert.ok(assetRequests.slice(fetchStart).some((url) => url.includes(`/lobby/${core}/`)));
+        assert.ok(
+          !playerRequests.slice(start).some((url) => url.includes("/spr/")),
+          "no missing portrait player is started",
+        );
+        assert.equal(hosts.lobby.querySelector(".lobby-unavailable")?.textContent, "Preview unavailable");
+        assert.ok(!hosts.lobby.classList.contains("pending"));
+        assert.equal(switchButton().getAttribute("aria-label"), "Switch L2D");
+        assert.ok(switchButton().listeners.click.length, "apply and restore still have a switch card");
+        assert.ok(!rpcRequests.slice(rpcStart).some((r) => r.method === "lobby.lines"));
+        assert.equal(tabDot(2), undefined);
+        assert.equal(chipDot(v.key), undefined);
+        assert.ok(
+          rpcRequests.slice(rpcStart).some((r) => r.method === "mods.seen"),
+          "showing the configured asset's tab marks it seen",
+        );
+        await switchButton().click();
+        await flush();
+        assert.deepEqual(rpcRequests.filter((r) => r.method === "mods.seen").at(-1).params, { ids: ["special-day"] });
+        assert.equal(tabDot(2), undefined);
+        assert.equal(chipDot(v.key), undefined);
+        const part = (path) => walk(hosts.popup).find((el) => el.dataset.path === path);
+        assert.equal(part("Details/Name").getAttribute("aria-label"), "Painted L2D - Repaired");
+        assert.equal(part("Card_m:special-day/Tag/Text").textContent, "Repaired");
+        assert.ok(walk(hosts.popup).some((el) => el.dataset.action === "alias:details"));
+        await walk(hosts.popup)
+          .find((el) => el.dataset.action === "alias:m:special-day")
+          .click();
+        await flush();
+        assert.equal(aliasInput().value, "Painted L2D - Repaired");
+        aliasInput().value = "Evening L2D";
+        await finish(t, aliasKey(aliasInput()));
+        assert.equal(part("Details/Name").getAttribute("aria-label"), "Evening L2D");
+        assert.equal(part("Card_m:special-day/Tag/Text").textContent, "Repaired");
+        assert.equal(
+          walk(part("Details/Chip_0/Text/Text"))
+            .map((el) => el.textContent)
+            .join(""),
+          "Repaired",
+        );
+        assert.ok(!walk(hosts.popup).some((el) => el.getAttribute("aria-label") === "Remap to current version"));
+        await closeSwitch();
+        back.onclick();
+        assert.equal(location.hash, "#/roster");
+      } finally {
+        Detail.hide();
+        await flush();
+        t.mock.timers.reset();
+      }
+    });
 
 test("NGUI logs missing atlas metadata and keeps placeholder geometry for controls", async () => {
   errors.length = 0;
   const host = new El();
-  const tree = node("Missing"); tree.widgets[0].sprite = "MissingSprite";
+  const tree = node("Missing");
+  tree.widgets[0].sprite = "MissingSprite";
   const view = await NGUI.render(tree, host, { deferImages: true });
   await Promise.all(view.pictures);
   assert.equal(view.nodes.get("Missing").els.length, 2);
@@ -755,73 +1419,128 @@ test("NGUI logs missing atlas metadata and keeps placeholder geometry for contro
 test("a lobby player setup exception settles its layer instead of hanging Lobby.show", async () => {
   const Lobby = await import("../../src/bmpt/web/js/lobby.js");
   try {
-    errors.length = 0; lobbyMode = "ready"; playerMode = "broken";
+    errors.length = 0;
+    lobbyMode = "ready";
+    playerMode = "broken";
     await assert.rejects(Lobby.show("ibuki_home", hosts.lobby, "ibuki"), /Mod skeleton setup failed/);
     assert.ok(errors.some((a) => a[0] === "Lobby player setup failed"));
-  } finally { Lobby.hide(hosts.lobby); lobbyMode = "pending"; playerMode = "ready"; }
+  } finally {
+    Lobby.hide(hosts.lobby);
+    lobbyMode = "pending";
+    playerMode = "ready";
+  }
 });
 
-for (const mode of ["pending", "error", "empty", "partial", "invalid"]) test(`panels survive a ${mode} atlas index, report it and retry`, async (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout"] });
-  try {
-    errors.length = 0; indexMode = mode;
-    const Renderer = await import(`../../src/bmpt/web/js/ngui.js?index=${mode}`);
-    const host = new El();
-    const view = await Renderer.render(node("Panel"), host, { deferImages: true });
-    assert.equal(view.nodes.get("Panel").els[0].style.backgroundColor, "#ffffff");
-    await flush();
-    t.mock.timers.tick(15000); await flush(); await Promise.all(view.pictures);
-    const cause = mode === "pending" ? "timed out" : mode === "error" ? "HTTP 500"
-      : mode === "partial" ? "Missing sprite Common/Common_Bg_Raius10px" : "empty or invalid atlas index";
-    assert.ok(errors.some((a) => a.some((e) => String(e).includes(cause))));
-    indexMode = "ready";
-    const retry = await Renderer.render(node("Panel"), new El(), { deferImages: true });
-    await Promise.all(retry.pictures);
-    assert.ok(retry.nodes.get("Panel").els[0].style.backgroundImage);
-  } finally { indexMode = "ready"; await flush(); t.mock.timers.reset(); }
-});
+for (const mode of ["pending", "error", "empty", "partial", "invalid"])
+  test(`panels survive a ${mode} atlas index, report it and retry`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    try {
+      errors.length = 0;
+      indexMode = mode;
+      const Renderer = await import(`../../src/bmpt/web/js/ngui.js?index=${mode}`);
+      const host = new El();
+      const view = await Renderer.render(node("Panel"), host, { deferImages: true });
+      assert.equal(view.nodes.get("Panel").els[0].style.backgroundColor, "#ffffff");
+      await flush();
+      t.mock.timers.tick(15000);
+      await flush();
+      await Promise.all(view.pictures);
+      const cause =
+        mode === "pending"
+          ? "timed out"
+          : mode === "error"
+            ? "HTTP 500"
+            : mode === "partial"
+              ? "Missing sprite Common/Common_Bg_Raius10px"
+              : "empty or invalid atlas index";
+      assert.ok(errors.some((a) => a.some((e) => String(e).includes(cause))));
+      indexMode = "ready";
+      const retry = await Renderer.render(node("Panel"), new El(), { deferImages: true });
+      await Promise.all(retry.pictures);
+      assert.ok(retry.nodes.get("Panel").els[0].style.backgroundImage);
+    } finally {
+      indexMode = "ready";
+      await flush();
+      t.mock.timers.reset();
+    }
+  });
 
-for (const configured of ["mod:configured", "variant:dress"]) test(`mods off keeps the configured portrait source ${configured}`, async (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout"] });
-  try {
-    modsEnabled = false; await ModSwitch.refresh();
-    family = modFamily("spr", "configured");
-    const v = family.variants[0];
-    delete v.lobby;
-    v.state.files[0].applied = "official"; v.state.files[0].official = true;
-    v.configured = { spr: configured };
-    family.variants.push({ key: "dress", spr: "dress_spr", names: v.names });
-    const start = playerRequests.length;
-    const showing = Detail.show(context, family, "ibuki"); await flush();
-    t.mock.timers.tick(1300); await flush(); await finish(t, showing);
-    const requested = playerRequests.slice(start);
-    const source = configured.startsWith("mod:") ? "/mod/configured/" : "/official-spr/dress_spr/";
-    assert.ok(requested.some((url) => url.includes(source)), source);
-    assert.ok(requested.every((url) => !url.includes("/spr/ibuki_spr/")), "current official files do not replace the configured preview");
-    assert.ok(requested.every((url) => url.includes(`/${"a".repeat(64)}/`)), "all players use revisioned assets");
-  } finally { Detail.hide(); modsEnabled = true; await ModSwitch.refresh(); await flush(); t.mock.timers.reset(); }
-});
+for (const configured of ["mod:configured", "variant:dress"])
+  test(`mods off keeps the configured portrait source ${configured}`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    try {
+      modsEnabled = false;
+      await ModSwitch.refresh();
+      family = modFamily("spr", "configured");
+      const v = family.variants[0];
+      delete v.lobby;
+      v.state.files[0].applied = "official";
+      v.state.files[0].official = true;
+      v.configured = { spr: configured };
+      family.variants.push({ key: "dress", spr: "dress_spr", names: v.names });
+      const start = playerRequests.length;
+      const showing = Detail.show(context, family, "ibuki");
+      await flush();
+      t.mock.timers.tick(1300);
+      await flush();
+      await finish(t, showing);
+      const requested = playerRequests.slice(start);
+      const source = configured.startsWith("mod:") ? "/mod/configured/" : "/official-spr/dress_spr/";
+      assert.ok(
+        requested.some((url) => url.includes(source)),
+        source,
+      );
+      assert.ok(
+        requested.every((url) => !url.includes("/spr/ibuki_spr/")),
+        "current official files do not replace the configured preview",
+      );
+      assert.ok(
+        requested.every((url) => url.includes(`/${"a".repeat(64)}/`)),
+        "all players use revisioned assets",
+      );
+    } finally {
+      Detail.hide();
+      modsEnabled = true;
+      await ModSwitch.refresh();
+      await flush();
+      t.mock.timers.reset();
+    }
+  });
 
 test("NGUI image callbacks have a deadline and a later request can retry", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
     imageMode = "pending";
     const failed = assert.rejects(NGUI.load("/asset/ui/stuck.png"), /timed out/);
-    t.mock.timers.tick(15000); await failed;
+    t.mock.timers.tick(15000);
+    await failed;
     imageMode = "ready";
     assert.ok(await NGUI.load("/asset/ui/stuck.png"));
     pendingImages.splice(0).forEach((img) => img.onload?.());
-  } finally { imageMode = "ready"; await flush(); t.mock.timers.reset(); }
+  } finally {
+    imageMode = "ready";
+    await flush();
+    t.mock.timers.reset();
+  }
 });
 
 test("long portrait and lobby names only resize their own info cell in every locale", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
-  const paths = ["Label_Life/Data_Widget/Data", "Label_Attact/Data_Widget/Data", "Label_Defense/Data", "Label_Healing/Data_Widget/Data"];
-  const cell = (path) => walk(hosts.ngui).find((el) => el.dataset.path?.endsWith(`${INFO}/Status/${path}`) && el.style.fontSize);
-  const size = (str, fs) => `${(NGUI.fontSizeFor(str, fs) * 1920 / 2960).toFixed(2)}px`;
+  const paths = [
+    "Label_Life/Data_Widget/Data",
+    "Label_Attact/Data_Widget/Data",
+    "Label_Defense/Data",
+    "Label_Healing/Data_Widget/Data",
+  ];
+  const cell = (path) =>
+    walk(hosts.ngui).find((el) => el.dataset.path?.endsWith(`${INFO}/Status/${path}`) && el.style.fontSize);
+  const size = (str, fs) => `${((NGUI.fontSizeFor(str, fs) * 1920) / 2960).toFixed(2)}px`;
   try {
     for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
-      setStrings(lang, flat(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url), "utf8"))));
+      setStrings(
+        lang,
+        flat(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url), "utf8"))),
+      );
       for (const kind of ["spr", "lobby"]) {
         const snapshots = [];
         for (const name of ["ibuki_spr", "azusa_swimsuit_spr", "azusa_swimsuit_spr".repeat(20), "ibuki_spr"]) {
@@ -829,12 +1548,19 @@ test("long portrait and lobby names only resize their own info cell in every loc
           const v = family.variants[0];
           v.date = v.state.files[0].date = "2024-11-18";
           if (kind === "spr") delete v.lobby;
-          const showing = Detail.show(context, family, "ibuki"); await flush();
-          t.mock.timers.tick(16000); await flush(); await finish(t, showing);
-          const lobbyTab = kind === "lobby" && walk(hosts.ngui).find((el) => el.dataset.part?.endsWith("Tab_2/Tab_Off/Label"));
+          const showing = Detail.show(context, family, "ibuki");
+          await flush();
+          t.mock.timers.tick(16000);
+          await flush();
+          await finish(t, showing);
+          const lobbyTab =
+            kind === "lobby" && walk(hosts.ngui).find((el) => el.dataset.part?.endsWith("Tab_2/Tab_Off/Label"));
           if (lobbyTab) {
-            const switching = lobbyTab.click(); await flush();
-            t.mock.timers.tick(16000); await flush(); await finish(t, switching);
+            const switching = lobbyTab.click();
+            await flush();
+            t.mock.timers.tick(16000);
+            await flush();
+            await finish(t, switching);
           }
           const cells = paths.map(cell);
           assert.ok(cells.every(Boolean), `${lang} ${kind}: all four value cells render`);
@@ -846,20 +1572,36 @@ test("long portrait and lobby names only resize their own info cell in every loc
           assert.ok(parseFloat(cells[0].style.fontSize) >= parseFloat(size(name, 28)));
           if (name.length > 100) assert.equal(cells[0].style.fontSize, size(name, 28));
           const labels = paths.map((path) => cell(path.split("/")[0]).style.fontSize);
-          snapshots.push({ current: cells[0].style.fontSize, others: cells.slice(1).map((el) => [el.getAttribute("aria-label"), el.style.fontSize]), labels });
+          snapshots.push({
+            current: cells[0].style.fontSize,
+            others: cells.slice(1).map((el) => [el.getAttribute("aria-label"), el.style.fontSize]),
+            labels,
+          });
           Detail.hide();
         }
-        assert.ok(parseFloat(snapshots[1].current) < parseFloat(snapshots[0].current), `${lang} ${kind}: the long name fits on its own`);
+        assert.ok(
+          parseFloat(snapshots[1].current) < parseFloat(snapshots[0].current),
+          `${lang} ${kind}: the long name fits on its own`,
+        );
         for (const snapshot of snapshots.slice(1)) {
-          assert.deepEqual(snapshot.others, snapshots[0].others, `${lang} ${kind}: status, date and CRC keep their sizes`);
+          assert.deepEqual(
+            snapshot.others,
+            snapshots[0].others,
+            `${lang} ${kind}: status, date and CRC keep their sizes`,
+          );
           assert.deepEqual(snapshot.labels, snapshots[0].labels, `${lang} ${kind}: labels keep their sizes`);
         }
         assert.equal(snapshots[3].current, snapshots[0].current, "returning to a short name restores its normal size");
       }
     }
   } finally {
-    Detail.hide(); await flush(); t.mock.timers.reset();
-    setStrings("en-US", flat(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8"))));
+    Detail.hide();
+    await flush();
+    t.mock.timers.reset();
+    setStrings(
+      "en-US",
+      flat(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8"))),
+    );
   }
 });
 
@@ -868,7 +1610,10 @@ const aliasKey = (input, extra = {}) => {
   return Promise.all(input.listeners.keydown.map((fn) => fn(ev)));
 };
 const aliasInput = () => hosts.dialog.querySelector(".alias-input");
-const currentCell = () => walk(hosts.ngui).find((el) => el.dataset.path?.endsWith(`${INFO}/Status/Label_Life/Data_Widget/Data`) && el.style.fontSize);
+const currentCell = () =>
+  walk(hosts.ngui).find(
+    (el) => el.dataset.path?.endsWith(`${INFO}/Status/Label_Life/Data_Widget/Data`) && el.style.fontSize,
+  );
 
 test("student aliases lead the existing name band, keep the variant's original, and update on save and clear in every locale", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
@@ -876,7 +1621,8 @@ test("student aliases lead the existing name band, keep the variant's original, 
     for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
       const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url), "utf8"));
       setStrings(lang, flat(ui));
-      family = modFamily(); family.variants[0].custom = ["My <Ibuki> & friend", "Search nickname"];
+      family = modFamily();
+      family.variants[0].custom = ["My <Ibuki> & friend", "Search nickname"];
       const base = structuredClone(family.variants[0]);
       base.custom = ["Original nickname"];
       family.variants[0].key = "ibuki_dress";
@@ -884,77 +1630,136 @@ test("student aliases lead the existing name band, keep the variant's original, 
       const original = "Ibuki (Dress) ".repeat(10);
       family.variants[0].names = { en: { full: original, short: "Dress" } };
       await showPortrait(t, "ibuki_dress");
-      const part = (name) => walk(hosts.ngui).find((el) => el.dataset.path?.endsWith(`${PLATE}/${name}`) && el.style.fontSize);
-      const main = part("Label_Name"), secondary = part("Label_OriginalName");
+      const part = (name) =>
+        walk(hosts.ngui).find((el) => el.dataset.path?.endsWith(`${PLATE}/${name}`) && el.style.fontSize);
+      const main = part("Label_Name"),
+        secondary = part("Label_OriginalName");
       assert.equal(main.getAttribute("aria-label"), family.variants[0].custom[0]);
       assert.equal(secondary.getAttribute("aria-label"), original);
       assert.ok(parseFloat(main.style.fontSize) > parseFloat(secondary.style.fontSize));
-      const a = NGUI.rect(main), b = NGUI.rect(secondary);
+      const a = NGUI.rect(main),
+        b = NGUI.rect(secondary);
       assert.ok(a[1] + a[3] <= b[1], "the two name lines do not overlap");
       assert.equal(secondary.children[0].style.textOverflow, "ellipsis");
-      const pencil = () => walk(hosts.ngui).find((el) => el.tagName === "BUTTON" && el.getAttribute("aria-label")?.startsWith(ui.webui.alias.title));
+      const pencil = () =>
+        walk(hosts.ngui).find(
+          (el) => el.tagName === "BUTTON" && el.getAttribute("aria-label")?.startsWith(ui.webui.alias.title),
+        );
       assert.ok(pencil().getAttribute("aria-label").includes("Search nickname"));
-      await pencil().click(); await flush();
+      await pencil().click();
+      await flush();
       hosts.popup.querySelectorAll(".alias-input")[0].value = "Changed name";
       const invalidated = invalidations;
-      await walk(hosts.popup).find((el) => el.dataset.action === "ok").click(); await flush();
+      await walk(hosts.popup)
+        .find((el) => el.dataset.action === "ok")
+        .click();
+      await flush();
       assert.equal(part("Label_Name").getAttribute("aria-label"), "Changed name");
       assert.equal(part("Label_Name").children.length, 0, "a name that fits never ends in an ellipsis");
       assert.equal(rpcRequests.findLast((r) => r.method === "aliases.set").params.variant, "ibuki_dress");
       assert.deepEqual(base.custom, ["Original nickname"]);
       assert.equal(invalidations, invalidated + 1, "roster will reload aliases and name order");
-      await pencil().click(); await flush();
+      await pencil().click();
+      await flush();
       for (const input of hosts.popup.querySelectorAll(".alias-input")) input.value = "";
-      await walk(hosts.popup).find((el) => el.dataset.action === "ok").click(); await flush();
+      await walk(hosts.popup)
+        .find((el) => el.dataset.action === "ok")
+        .click();
+      await flush();
       assert.equal(part("Label_Name").getAttribute("aria-label"), original);
       assert.equal(part("Label_OriginalName"), undefined);
-      assert.equal(part("Label_Name").children[0]?.style.textOverflow, "ellipsis", "a name beyond the room still ends in an ellipsis");
+      assert.equal(
+        part("Label_Name").children[0]?.style.textOverflow,
+        "ellipsis",
+        "a name beyond the room still ends in an ellipsis",
+      );
       await showPortrait(t, "ibuki");
       assert.equal(part("Label_Name").getAttribute("aria-label"), "Original nickname");
       Detail.hide();
     }
   } finally {
-    Detail.hide(); await flush(); t.mock.timers.reset();
-    setStrings("en-US", flat(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8"))));
+    Detail.hide();
+    await flush();
+    t.mock.timers.reset();
+    setStrings(
+      "en-US",
+      flat(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8"))),
+    );
   }
 });
 
 test("variant aliases name detail chips, switch cards and variant picker cards in every locale", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
-  const labelled = (host, caption) => walk(host).some((el) => el.style.fontSize &&
-    (el.textContent === caption || el.getAttribute("aria-label") === caption));
+  const labelled = (host, caption) =>
+    walk(host).some(
+      (el) => el.style.fontSize && (el.textContent === caption || el.getAttribute("aria-label") === caption),
+    );
   try {
     for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
-      setStrings(lang, flat(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url), "utf8"))));
+      setStrings(
+        lang,
+        flat(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url), "utf8"))),
+      );
       family = modFamily();
       family.variants[0].custom = ["Base Ink"];
-      family.variants.push(...Array.from({ length: 8 }, (_, i) => ({
-        key: `skin_${i}`, spr: `skin_${i}_spr`, order: i + 1, recruitable: true, modList: [],
-        custom: i === 0 ? ["Skin Ink"] : [], names: { en: { full: `Variant ${i}`, short: `Skin ${i}` } },
-      })));
+      family.variants.push(
+        ...Array.from({ length: 8 }, (_, i) => ({
+          key: `skin_${i}`,
+          spr: `skin_${i}_spr`,
+          order: i + 1,
+          recruitable: true,
+          modList: [],
+          custom: i === 0 ? ["Skin Ink"] : [],
+          names: { en: { full: `Variant ${i}`, short: `Skin ${i}` } },
+        })),
+      );
       await showPortrait(t);
       assert.ok(labelled(hosts["ngui-chips"], "Base Ink"), `${lang}: base chip`);
       assert.ok(labelled(hosts["ngui-chips"], "Skin Ink"), `${lang}: skin chip`);
-      await switchButton().click(); await flush();
+      await switchButton().click();
+      await flush();
       assert.ok(labelled(hosts.popup, "Base Ink"), `${lang}: own switch card`);
       assert.ok(labelled(hosts.popup, "Skin Ink"), `${lang}: skin switch card`);
       const skin = walk(hosts.popup).find((el) => el.dataset.key === "v:skin_0");
-      assert.ok(skin); await skin.click(); await flush();
-      assert.equal(walk(hosts.popup).find((el) => el.dataset.path === "Details/Name").getAttribute("aria-label"), "Skin Ink");
+      assert.ok(skin);
+      await skin.click();
+      await flush();
+      assert.equal(
+        walk(hosts.popup)
+          .find((el) => el.dataset.path === "Details/Name")
+          .getAttribute("aria-label"),
+        "Skin Ink",
+      );
       await closeSwitch();
       assert.ok(walk(hosts["ngui-chips"]).some((el) => el.dataset.path?.endsWith("/Chip_more")));
-      await walk(hosts["ngui-chips"]).filter((el) => el.tagName === "BUTTON").at(-1).click(); await flush();
+      await walk(hosts["ngui-chips"])
+        .filter((el) => el.tagName === "BUTTON")
+        .at(-1)
+        .click();
+      await flush();
       assert.ok(labelled(hosts.picker, "Base Ink"), `${lang}: own picker card`);
       assert.ok(labelled(hosts.picker, "Skin Ink"), `${lang}: skin picker card`);
       const selected = walk(hosts.picker).find((el) => el.dataset.key === "skin_0");
-      assert.ok(selected); await selected.click(); await flush();
-      assert.equal(walk(hosts.picker).find((el) => el.dataset.path === "Details/Name").getAttribute("aria-label"), "Skin Ink");
+      assert.ok(selected);
+      await selected.click();
+      await flush();
+      assert.equal(
+        walk(hosts.picker)
+          .find((el) => el.dataset.path === "Details/Name")
+          .getAttribute("aria-label"),
+        "Skin Ink",
+      );
       assert.ok(labelled(hosts.picker, "Skin 1"), "an unaliased sibling retains its original short name");
       Detail.hide();
     }
   } finally {
-    Detail.hide(); await flush(); t.mock.timers.reset();
-    setStrings("en-US", flat(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8"))));
+    Detail.hide();
+    await flush();
+    t.mock.timers.reset();
+    setStrings(
+      "en-US",
+      flat(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8"))),
+    );
   }
 });
 
@@ -972,8 +1777,10 @@ test("mod aliases save and clear from the current value and both switch pencils 
         await showPortrait(t);
         const pencil = walk(hosts.ngui).find((e) => e.dataset.part?.endsWith("/ModAliasBtn"));
         assert.equal(pencil.getAttribute("aria-label"), ui.webui.modAlias.title);
-        await pencil.click(); await flush();
-        const input = aliasInput(), start = rpcRequests.length;
+        await pencil.click();
+        await flush();
+        const input = aliasInput(),
+          start = rpcRequests.length;
         assert.equal(input.value, "");
         input.value = "Alias <paint> & colors";
         await aliasKey(input, { isComposing: true });
@@ -985,25 +1792,54 @@ test("mod aliases save and clear from the current value and both switch pencils 
         const original = walk(hosts.ngui).find((e) => e.dataset.path?.endsWith("Data_Widget/OriginalName"));
         assert.equal(original.getAttribute("aria-label"), core);
         assert.ok(parseFloat(original.style.fontSize) < parseFloat(currentCell().style.fontSize));
-        assert.deepEqual(rpcRequests.findLast((r) => r.method === "mods.rename").params, { id: "test", label: input.value });
-        await switchButton().click(); await flush();
+        assert.deepEqual(rpcRequests.findLast((r) => r.method === "mods.rename").params, {
+          id: "test",
+          label: input.value,
+        });
+        await switchButton().click();
+        await flush();
         const card = walk(hosts.popup).find((e) => e.dataset.action === "alias:m:test");
         const details = walk(hosts.popup).find((e) => e.dataset.action === "alias:details");
         assert.ok(card && details, `${lang} ${kind}: both names have pencils`);
-        assert.equal(walk(hosts.popup).filter((e) => e.dataset.action?.startsWith("alias:")).length, 2, "official names have no pencil");
-        assert.equal(walk(hosts.popup).find((e) => e.dataset.path === "Details/Name").getAttribute("aria-label"), input.value);
-        assert.equal(walk(hosts.popup).find((e) => e.dataset.path === "Details/OriginalName").getAttribute("aria-label"), core);
-        await card.click(); await flush();
+        assert.equal(
+          walk(hosts.popup).filter((e) => e.dataset.action?.startsWith("alias:")).length,
+          2,
+          "official names have no pencil",
+        );
+        assert.equal(
+          walk(hosts.popup)
+            .find((e) => e.dataset.path === "Details/Name")
+            .getAttribute("aria-label"),
+          input.value,
+        );
+        assert.equal(
+          walk(hosts.popup)
+            .find((e) => e.dataset.path === "Details/OriginalName")
+            .getAttribute("aria-label"),
+          core,
+        );
+        await card.click();
+        await flush();
         assert.equal(aliasInput().value, input.value);
         aliasInput().value = "";
         await finish(t, aliasKey(aliasInput()));
         assert.equal(currentCell().getAttribute("aria-label"), "test");
         assert.ok(!walk(hosts.ngui).some((e) => e.dataset.path?.endsWith("Data_Widget/OriginalName")));
-        assert.equal(walk(hosts.popup).find((e) => e.dataset.path === "Details/Name").getAttribute("aria-label"), "test");
+        assert.equal(
+          walk(hosts.popup)
+            .find((e) => e.dataset.path === "Details/Name")
+            .getAttribute("aria-label"),
+          "test",
+        );
         assert.ok(!walk(hosts.popup).some((e) => e.dataset.path === "Details/OriginalName"));
-        await walk(hosts.popup).find((e) => e.dataset.action === "alias:details").click(); await flush();
+        await walk(hosts.popup)
+          .find((e) => e.dataset.action === "alias:details")
+          .click();
+        await flush();
         assert.equal(aliasInput().value, "");
-        await walk(aliasInput().parentNode).find((e) => e.dataset.action === "cancel").click();
+        await walk(aliasInput().parentNode)
+          .find((e) => e.dataset.action === "cancel")
+          .click();
         assert.equal(aliasInput(), null, "cancel closes the alias editor");
         assert.equal(hosts.popup.hidden, false, "cancel keeps the source picker open");
         await closeSwitch();
@@ -1011,8 +1847,13 @@ test("mod aliases save and clear from the current value and both switch pencils 
       }
     }
   } finally {
-    Detail.hide(); await flush(); t.mock.timers.reset();
-    setStrings("en-US", flat(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8"))));
+    Detail.hide();
+    await flush();
+    t.mock.timers.reset();
+    setStrings(
+      "en-US",
+      flat(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8"))),
+    );
   }
 });
 
@@ -1022,16 +1863,36 @@ test("an alias on another variant's mod replaces the entire display name", async
     family = modFamily();
     const mod = family.variants[0].modList[0];
     Object.assign(mod, { alias: "Only alias", label: "Original name", core: "ibuki_dress_spr", target: "dress" });
-    family.variants.push({ key: "dress", spr: "ibuki_dress_spr", names: { en: { full: "Ibuki Dress", short: "Dress" } }, modList: [] });
+    family.variants.push({
+      key: "dress",
+      spr: "ibuki_dress_spr",
+      names: { en: { full: "Ibuki Dress", short: "Dress" } },
+      modList: [],
+    });
     await showPortrait(t);
-    await switchButton().click(); await flush();
-    const texts = walk(hosts.popup).filter((e) => e.style.fontSize).map((e) => e.textContent || e.children[0]?.textContent);
+    await switchButton().click();
+    await flush();
+    const texts = walk(hosts.popup)
+      .filter((e) => e.style.fontSize)
+      .map((e) => e.textContent || e.children[0]?.textContent);
     assert.ok(texts.includes("Only alias"));
     assert.ok(!texts.some((s) => s?.includes("Dress - Only alias") || s?.includes("Original name")));
-    assert.equal(walk(hosts.popup).find((e) => e.dataset.path === "Details/OriginalName").getAttribute("aria-label"), "ibuki_dress_spr");
+    assert.equal(
+      walk(hosts.popup)
+        .find((e) => e.dataset.path === "Details/OriginalName")
+        .getAttribute("aria-label"),
+      "ibuki_dress_spr",
+    );
     assert.equal(currentCell().getAttribute("aria-label"), "Only alias");
-    assert.ok(!walk(hosts["ngui-chips"]).some((e) => e.dataset.path?.endsWith("/ModAliasBtn")), "variant chips show student names");
-  } finally { Detail.hide(); await flush(); t.mock.timers.reset(); }
+    assert.ok(
+      !walk(hosts["ngui-chips"]).some((e) => e.dataset.path?.endsWith("/ModAliasBtn")),
+      "variant chips show student names",
+    );
+  } finally {
+    Detail.hide();
+    await flush();
+    t.mock.timers.reset();
+  }
 });
 
 test("repaired names and own aliases keep a separate repair tag in every locale", async (t) => {
@@ -1040,117 +1901,209 @@ test("repaired names and own aliases keep a separate repair tag in every locale"
     for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
       const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url), "utf8"));
       setStrings(lang, flat(ui));
-      for (const enabled of [true, false]) for (const alias of ["", "Own alias"]) {
-        modsEnabled = enabled;
-        await ModSwitch.refresh();
-        family = modFamily("spr", "fixed");
-        const v = family.variants[0], mod = v.modList[0];
-        const name = alias || ui.webui.remap.name.replace("{name}", "Painted");
-        Object.assign(mod, { alias, label: name, repaired_from: "original" });
-        v.modList.push({ id: "original", target: v.key, kind: "spr", alias: "Painted", label: "Painted", repaired_id: mod.id });
-        v.configured = { spr: "mod:fixed" };
-        v.selection = { spr: { source: "mod:fixed", installed: enabled } };
-        await showPortrait(t);
-        assert.equal(currentCell().getAttribute("aria-label"), name);
-        await switchButton().click(); await flush();
-        const part = (path) => walk(hosts.popup).find((el) => el.dataset.path === path);
-        assert.equal(part("Details/Name").getAttribute("aria-label"), name);
-        assert.equal(walk(part("Details/Chip_0/Text/Text")).map((el) => el.textContent).join(""), ui.webui.remap.repaired);
-        assert.equal((part("Card_m:fixed/Tag/Text").textContent || part("Card_m:fixed/Tag/Text").children[0].textContent), ui.webui.remap.repaired);
-        assert.ok(part("Card_m:fixed/Select/AppliedBadge"));
-        assert.equal(part("Card_m:fixed/Select/Check"), undefined, "the badge sprite draws the only check");
-        assert.equal((part("Card_m:fixed/Select/AppliedLabel").textContent || part("Card_m:fixed/Select/AppliedLabel").children[0].textContent), ui.webui.status.applied);
-        assert.ok(walk(hosts.popup).find(el => el.dataset.key === "m:fixed").getAttribute("aria-label").includes(ui.webui.status.applied));
-        assert.ok(walk(hosts.popup).some((el) => el.dataset.action === "alias:m:fixed"));
-        assert.equal(walk(hosts.popup).filter((el) => el.getAttribute("aria-label") === ui.webui.act.update).length, 1);
-        await closeSwitch();
-        Detail.hide();
-      }
+      for (const enabled of [true, false])
+        for (const alias of ["", "Own alias"]) {
+          modsEnabled = enabled;
+          await ModSwitch.refresh();
+          family = modFamily("spr", "fixed");
+          const v = family.variants[0],
+            mod = v.modList[0];
+          const name = alias || ui.webui.remap.name.replace("{name}", "Painted");
+          Object.assign(mod, { alias, label: name, repaired_from: "original" });
+          v.modList.push({
+            id: "original",
+            target: v.key,
+            kind: "spr",
+            alias: "Painted",
+            label: "Painted",
+            repaired_id: mod.id,
+          });
+          v.configured = { spr: "mod:fixed" };
+          v.selection = { spr: { source: "mod:fixed", installed: enabled } };
+          await showPortrait(t);
+          assert.equal(currentCell().getAttribute("aria-label"), name);
+          await switchButton().click();
+          await flush();
+          const part = (path) => walk(hosts.popup).find((el) => el.dataset.path === path);
+          assert.equal(part("Details/Name").getAttribute("aria-label"), name);
+          assert.equal(
+            walk(part("Details/Chip_0/Text/Text"))
+              .map((el) => el.textContent)
+              .join(""),
+            ui.webui.remap.repaired,
+          );
+          assert.equal(
+            part("Card_m:fixed/Tag/Text").textContent || part("Card_m:fixed/Tag/Text").children[0].textContent,
+            ui.webui.remap.repaired,
+          );
+          assert.ok(part("Card_m:fixed/Select/AppliedBadge"));
+          assert.equal(part("Card_m:fixed/Select/Check"), undefined, "the badge sprite draws the only check");
+          assert.equal(
+            part("Card_m:fixed/Select/AppliedLabel").textContent ||
+              part("Card_m:fixed/Select/AppliedLabel").children[0].textContent,
+            ui.webui.status.applied,
+          );
+          assert.ok(
+            walk(hosts.popup)
+              .find((el) => el.dataset.key === "m:fixed")
+              .getAttribute("aria-label")
+              .includes(ui.webui.status.applied),
+          );
+          assert.ok(walk(hosts.popup).some((el) => el.dataset.action === "alias:m:fixed"));
+          assert.equal(
+            walk(hosts.popup).filter((el) => el.getAttribute("aria-label") === ui.webui.act.update).length,
+            1,
+          );
+          await closeSwitch();
+          Detail.hide();
+        }
     }
   } finally {
     modsEnabled = true;
     await ModSwitch.refresh();
-    Detail.hide(); await flush(); t.mock.timers.reset();
-    setStrings("en-US", flat(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8"))));
+    Detail.hide();
+    await flush();
+    t.mock.timers.reset();
+    setStrings(
+      "en-US",
+      flat(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8"))),
+    );
   }
 });
 
-for (const parentPresent of [true, false]) test(`a loaded repaired Mod relocalizes its name with its source ${parentPresent ? "present" : "removed"}`, async (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout"] });
-  try {
-    setStrings("en-US", localeTable("en-US"));
-    thumbMode = playerMode = "ready";
-    family = modFamily("spr", "locale-repair");
-    const v = family.variants[0], repaired = v.modList[0], sourceName = parentPresent ? "Source alias" : "Stored source";
-    Object.assign(repaired, { repaired_from: "original", label_base: "Stored source",
-      label: localeTable("en-US")["webui.remap.name"].replace("{name}", sourceName) });
-    if (parentPresent) v.modList.push({ id: "original", target: v.key, kind: "spr", label: "Source alias", alias: "Source alias", repaired_id: repaired.id });
-    v.previewSources = { spr: `mod:${repaired.id}` };
-    await showPortrait(t); await switchButton().click(); await flush();
-    const players = previewPlayers.length, before = rpcRequests.length;
-    for (const alias of ["", "Own repaired alias"]) {
-      repaired.alias = alias;
-      for (const lang of ["ja-JP", "zh-CN", "en-US"]) {
-        setStrings(lang, localeTable(lang)); await Detail.relabel(); await flush();
-        const expected = alias || localeTable(lang)["webui.remap.name"].replace("{name}", sourceName);
-        assert.equal(currentCell().getAttribute("aria-label"), expected);
-        assert.equal(walk(hosts.popup).find((e) => e.dataset.path === "Details/Name").getAttribute("aria-label"), expected);
-        assert.equal(previewPlayers.length, players);
+for (const parentPresent of [true, false])
+  test(`a loaded repaired Mod relocalizes its name with its source ${parentPresent ? "present" : "removed"}`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    try {
+      setStrings("en-US", localeTable("en-US"));
+      thumbMode = playerMode = "ready";
+      family = modFamily("spr", "locale-repair");
+      const v = family.variants[0],
+        repaired = v.modList[0],
+        sourceName = parentPresent ? "Source alias" : "Stored source";
+      Object.assign(repaired, {
+        repaired_from: "original",
+        label_base: "Stored source",
+        label: localeTable("en-US")["webui.remap.name"].replace("{name}", sourceName),
+      });
+      if (parentPresent)
+        v.modList.push({
+          id: "original",
+          target: v.key,
+          kind: "spr",
+          label: "Source alias",
+          alias: "Source alias",
+          repaired_id: repaired.id,
+        });
+      v.previewSources = { spr: `mod:${repaired.id}` };
+      await showPortrait(t);
+      await switchButton().click();
+      await flush();
+      const players = previewPlayers.length,
+        before = rpcRequests.length;
+      for (const alias of ["", "Own repaired alias"]) {
+        repaired.alias = alias;
+        for (const lang of ["ja-JP", "zh-CN", "en-US"]) {
+          setStrings(lang, localeTable(lang));
+          await Detail.relabel();
+          await flush();
+          const expected = alias || localeTable(lang)["webui.remap.name"].replace("{name}", sourceName);
+          assert.equal(currentCell().getAttribute("aria-label"), expected);
+          assert.equal(
+            walk(hosts.popup)
+              .find((e) => e.dataset.path === "Details/Name")
+              .getAttribute("aria-label"),
+            expected,
+          );
+          assert.equal(previewPlayers.length, players);
+        }
       }
+      assert.ok(!rpcRequests.slice(before).some((r) => ["family.get", "roster.list"].includes(r.method)));
+    } finally {
+      Detail.hide();
+      thumbMode = "pending";
+      setStrings("en-US", localeTable("en-US"));
+      await flush();
+      t.mock.timers.reset();
     }
-    assert.ok(!rpcRequests.slice(before).some((r) => ["family.get", "roster.list"].includes(r.method)));
-  } finally {
-    Detail.hide(); thumbMode = "pending";
-    setStrings("en-US", localeTable("en-US")); await flush(); t.mock.timers.reset();
-  }
-});
+  });
 
 test("cancel, close, backdrop and Escape discard an alias draft without saving", async () => {
   const start = rpcRequests.length;
   for (const how of ["cancel", "close", "backdrop", "escape"]) {
-    await ModAlias.open({ mod: { id: "test", alias: "Saved alias" }, onSaved: () => assert.fail("cancel cannot save") });
+    await ModAlias.open({
+      mod: { id: "test", alias: "Saved alias" },
+      onSaved: () => assert.fail("cancel cannot save"),
+    });
     aliasInput().value = "Draft";
     // the editor is a layer of its own: other layers of the host (a stray message) are not the buttons under test
     const layer = aliasInput().parentNode;
     if (how === "escape") Popup.onKey({ key: "Escape", preventDefault() {} });
-    else if (how === "backdrop") await walk(layer).find((e) => e.dataset.path === "Center/BlackBg/BlackBgClickArea").click();
-    else await walk(layer).find((e) => e.dataset.action === how).click();
+    else if (how === "backdrop")
+      await walk(layer)
+        .find((e) => e.dataset.path === "Center/BlackBg/BlackBgClickArea")
+        .click();
+    else
+      await walk(layer)
+        .find((e) => e.dataset.action === how)
+        .click();
     assert.equal(aliasInput(), null, "the alias editor is closed"); // its own layer: other layers of the host are not its to clear
   }
   assert.equal(rpcRequests.length, start);
 });
 
 test("failed alias saves keep the draft, and repeated Enter submits once", async () => {
-  let saved = null, resolve;
+  let saved = null,
+    resolve;
   try {
     renameReply = async () => ({ error: { code: "library_io_error", params: {} } });
-    await ModAlias.open({ mod: { id: "test", alias: "Saved alias" }, onSaved: (m) => { saved = m; } });
-    const input = aliasInput(); input.value = "Retry alias";
+    await ModAlias.open({
+      mod: { id: "test", alias: "Saved alias" },
+      onSaved: (m) => {
+        saved = m;
+      },
+    });
+    const input = aliasInput();
+    input.value = "Retry alias";
     await aliasKey(input);
     assert.equal(hosts.dialog.hidden, false);
     assert.equal(input.value, "Retry alias");
     assert.equal(input.disabled, false);
     assert.equal(saved, null);
-    renameReply = () => new Promise((r) => { resolve = r; });
-    const start = rpcRequests.length, pending = aliasKey(input);
+    renameReply = () =>
+      new Promise((r) => {
+        resolve = r;
+      });
+    const start = rpcRequests.length,
+      pending = aliasKey(input);
     await aliasKey(input);
     assert.equal(rpcRequests.length - start, 1);
     resolve({ result: { id: "test", alias: input.value } });
     await pending;
     assert.equal(saved.alias, "Retry alias");
     assert.equal(aliasInput(), null, "the alias editor is closed"); // its own layer: other layers of the host are not its to clear
-  } finally { ModAlias.close(); renameReply = saveAlias; }
+  } finally {
+    ModAlias.close();
+    renameReply = saveAlias;
+  }
 });
 
 test("leaving detail closes the mod alias editor", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    family = modFamily(); await showPortrait(t);
-    await walk(hosts.ngui).find((e) => e.dataset.part?.endsWith("/ModAliasBtn")).click();
+    family = modFamily();
+    await showPortrait(t);
+    await walk(hosts.ngui)
+      .find((e) => e.dataset.part?.endsWith("/ModAliasBtn"))
+      .click();
     assert.ok(aliasInput());
     Detail.hide();
     assert.equal(aliasInput(), null, "the alias editor is closed"); // its own layer: other layers of the host are not its to clear
-  } finally { Detail.hide(); await flush(); t.mock.timers.reset(); }
+  } finally {
+    Detail.hide();
+    await flush();
+    t.mock.timers.reset();
+  }
 });
 
 test("new mod dots survive visits and tab changes, then clear for the switch's offered mods", async (t) => {
@@ -1160,147 +2113,257 @@ test("new mod dots survive visits and tab changes, then clear for the switch's o
     const v = family.variants[0];
     v.model = "ibuki_model";
     v.modList = ["spr", "lobby"].map((kind) => ({ id: kind, target: v.key, kind, fresh: true }));
-    family.variants.push({ ...v, key: "dress", spr: "dress_spr", lobby: "dress_home", modList: [
-      { id: "dress-spr", target: "dress", kind: "spr", fresh: true },
-      { id: "dress-lobby", target: "dress", kind: "lobby", fresh: true },
-    ] });
-    const start = rpcRequests.length, invalidated = invalidations;
+    family.variants.push({
+      ...v,
+      key: "dress",
+      spr: "dress_spr",
+      lobby: "dress_home",
+      modList: [
+        { id: "dress-spr", target: "dress", kind: "spr", fresh: true },
+        { id: "dress-lobby", target: "dress", kind: "lobby", fresh: true },
+      ],
+    });
+    const start = rpcRequests.length,
+      invalidated = invalidations;
     await showPortrait(t);
-    assert.ok(tabDot(1)); assert.ok(tabDot(2)); assert.equal(tabDot(3), undefined);
+    assert.ok(tabDot(1));
+    assert.ok(tabDot(2));
+    assert.equal(tabDot(3), undefined);
     assert.ok(switchDot(), "unapplied portrait assets mark the switch card");
-    assert.ok(chipDot(v.key)); assert.ok(chipDot("dress"));
-    assert.ok(rpcRequests.slice(start).every((r) => r.method !== "mods.seen"), "visiting leaves the marks alone");
-    const switching = tabButton(2).click(); await flush();
+    assert.ok(chipDot(v.key));
+    assert.ok(chipDot("dress"));
+    assert.ok(
+      rpcRequests.slice(start).every((r) => r.method !== "mods.seen"),
+      "visiting leaves the marks alone",
+    );
+    const switching = tabButton(2).click();
+    await flush();
     await finish(t, switching);
-    assert.ok(tabDot(1)); assert.ok(tabDot(2), "selecting a tab leaves its mods new");
-    const lobby = switchButton().click(); await flush(); await lobby;
-    assert.equal(tabDot(2), undefined); assert.ok(tabDot(1)); assert.ok(chipDot(v.key));
+    assert.ok(tabDot(1));
+    assert.ok(tabDot(2), "selecting a tab leaves its mods new");
+    const lobby = switchButton().click();
+    await flush();
+    await lobby;
+    assert.equal(tabDot(2), undefined);
+    assert.ok(tabDot(1));
+    assert.ok(chipDot(v.key));
     assert.deepEqual(rpcRequests.filter((r) => r.method === "mods.seen").at(-1).params, { ids: ["lobby"] });
     assert.equal(v.modList.find((m) => m.kind === "spr").fresh, true);
     await closeSwitch();
-    const portrait = tabButton(1).click(); await flush();
+    const portrait = tabButton(1).click();
+    await flush();
     await finish(t, portrait);
-    const popup = switchButton().click(); await flush(); await popup;
-    assert.equal(tabDot(1), undefined); assert.equal(tabDot(2), undefined); assert.equal(chipDot(v.key), undefined);
+    const popup = switchButton().click();
+    await flush();
+    await popup;
+    assert.equal(tabDot(1), undefined);
+    assert.equal(tabDot(2), undefined);
+    assert.equal(chipDot(v.key), undefined);
     assert.ok(chipDot("dress"), "the other variant still has an unseen lobby mod");
     assert.deepEqual(rpcRequests.filter((r) => r.method === "mods.seen").at(-1).params, { ids: ["spr", "dress-spr"] });
     assert.equal(family.variants[1].modList[1].fresh, true);
     assert.equal(invalidations - invalidated, 2, "Back fetches the roster's updated marks immediately");
     await closeSwitch();
     const before = rpcRequests.filter((r) => r.method === "mods.seen").length;
-    const again = switchButton().click(); await flush(); await again;
-    assert.equal(rpcRequests.filter((r) => r.method === "mods.seen").length, before, "seen mods need no further state writes");
+    const again = switchButton().click();
+    await flush();
+    await again;
+    assert.equal(
+      rpcRequests.filter((r) => r.method === "mods.seen").length,
+      before,
+      "seen mods need no further state writes",
+    );
     await closeSwitch();
-  } finally { Detail.hide(); await flush(); t.mock.timers.reset(); }
+  } finally {
+    Detail.hide();
+    await flush();
+    t.mock.timers.reset();
+  }
 });
 
-for (const kind of ["spr", "portrait", "lobby"]) for (const enabled of [true, false]) test(`opening the ${kind} result tab sees the ${enabled ? "applied" : "configured"} import without opening its switch`, async (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout"] });
-  try {
-    const assetKind = kind === "portrait" ? "spr" : kind;
-    family = modFamily(assetKind, `import-${assetKind}`);
-    const v = family.variants[0], imported = v.modList[0];
-    imported.fresh = true; v.fresh = true;
-    v.configured = { [assetKind]: `mod:${imported.id}` };
-    if (!enabled) Object.assign(v.state.files[0], { applied: "official", official: true });
-    modsEnabled = enabled; await ModSwitch.refresh();
-    const invalidated = invalidations, start = rpcRequests.length;
-    const showing = Detail.show(context, family, v.key, { kind }); await flush(); await finish(t, showing); await flush();
-    const tabNumber = assetKind === "lobby" ? 2 : 1;
-    assert.equal(tabButton(tabNumber), undefined, "the requested asset tab is active immediately");
-    assert.equal(tabDot(tabNumber), undefined); assert.equal(chipDot(v.key), undefined); assert.equal(switchDot(), undefined);
-    assert.equal(imported.fresh, false); assert.equal(v.fresh, false);
-    assert.deepEqual(rpcRequests.slice(start).filter((r) => r.method === "mods.seen").map((r) => r.params), [{ ids: [imported.id] }]);
-    assert.equal(invalidations, invalidated + 1, "returning to the roster refreshes its cleared mark");
-    assert.equal(hosts.popup.hidden, true);
-  } finally { Detail.hide(); modsEnabled = true; await ModSwitch.refresh(); await flush(); t.mock.timers.reset(); }
-});
+for (const kind of ["spr", "portrait", "lobby"])
+  for (const enabled of [true, false])
+    test(`opening the ${kind} result tab sees the ${enabled ? "applied" : "configured"} import without opening its switch`, async (t) => {
+      t.mock.timers.enable({ apis: ["setTimeout"] });
+      try {
+        const assetKind = kind === "portrait" ? "spr" : kind;
+        family = modFamily(assetKind, `import-${assetKind}`);
+        const v = family.variants[0],
+          imported = v.modList[0];
+        imported.fresh = true;
+        v.fresh = true;
+        v.configured = { [assetKind]: `mod:${imported.id}` };
+        if (!enabled) Object.assign(v.state.files[0], { applied: "official", official: true });
+        modsEnabled = enabled;
+        await ModSwitch.refresh();
+        const invalidated = invalidations,
+          start = rpcRequests.length;
+        const showing = Detail.show(context, family, v.key, { kind });
+        await flush();
+        await finish(t, showing);
+        await flush();
+        const tabNumber = assetKind === "lobby" ? 2 : 1;
+        assert.equal(tabButton(tabNumber), undefined, "the requested asset tab is active immediately");
+        assert.equal(tabDot(tabNumber), undefined);
+        assert.equal(chipDot(v.key), undefined);
+        assert.equal(switchDot(), undefined);
+        assert.equal(imported.fresh, false);
+        assert.equal(v.fresh, false);
+        assert.deepEqual(
+          rpcRequests
+            .slice(start)
+            .filter((r) => r.method === "mods.seen")
+            .map((r) => r.params),
+          [{ ids: [imported.id] }],
+        );
+        assert.equal(invalidations, invalidated + 1, "returning to the roster refreshes its cleared mark");
+        assert.equal(hosts.popup.hidden, true);
+      } finally {
+        Detail.hide();
+        modsEnabled = true;
+        await ModSwitch.refresh();
+        await flush();
+        t.mock.timers.reset();
+      }
+    });
 
-for (const kind of ["spr", "lobby"]) test(`an auto-applied ${kind} mod has no card dot when another source is picked`, async (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout"] });
-  try {
-    family = modFamily(kind); family.variants[0].modList[0].fresh = true;
-    family.variants[0].configured = { [kind]: "mod:test" };
-    family.variants[0].selection = { [kind]: { source: "mod:test", installed: true } };
-    seenReply = async () => ({ error: { code: "internal" } });
-    await showPortrait(t);
-    const tab = kind === "lobby" ? 2 : 1;
-    if (tab === 2) {
-      const switching = tabButton(tab).click(); await flush(); await finish(t, switching);
+for (const kind of ["spr", "lobby"])
+  test(`an auto-applied ${kind} mod has no card dot when another source is picked`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    try {
+      family = modFamily(kind);
+      family.variants[0].modList[0].fresh = true;
+      family.variants[0].configured = { [kind]: "mod:test" };
+      family.variants[0].selection = { [kind]: { source: "mod:test", installed: true } };
+      seenReply = async () => ({ error: { code: "internal" } });
+      await showPortrait(t);
+      const tab = kind === "lobby" ? 2 : 1;
+      if (tab === 2) {
+        const switching = tabButton(tab).click();
+        await flush();
+        await finish(t, switching);
+      }
+      assert.ok(tabDot(tab));
+      assert.ok(chipDot("ibuki"));
+      assert.equal(switchDot(), undefined, "applied assets never mark the switch card");
+      const popup = switchButton().click();
+      await flush();
+      await popup;
+      const own = walk(hosts.popup).find((e) => e.dataset.key === "self");
+      assert.ok(own);
+      await own.click();
+      await flush();
+      assert.ok(walk(hosts.popup).some((e) => e.dataset.path?.endsWith("Card_m:test/Select/AppliedBadge")));
+      assert.equal(
+        walk(hosts.popup).find((e) => e.dataset.path?.match(/Card_m:test\/(?:Dot|NewIcon)$/)),
+        undefined,
+      );
+      assert.ok(tabDot(tab));
+      assert.ok(chipDot("ibuki"), "card rendering leaves the unread marks intact");
+      await closeSwitch();
+    } finally {
+      Detail.hide();
+      seenReply = async () => ({ result: null });
+      await flush();
+      t.mock.timers.reset();
     }
-    assert.ok(tabDot(tab)); assert.ok(chipDot("ibuki"));
-    assert.equal(switchDot(), undefined, "applied assets never mark the switch card");
-    const popup = switchButton().click(); await flush(); await popup;
-    const own = walk(hosts.popup).find((e) => e.dataset.key === "self");
-    assert.ok(own); await own.click(); await flush();
-    assert.ok(walk(hosts.popup).some((e) => e.dataset.path?.endsWith("Card_m:test/Select/AppliedBadge")));
-    assert.equal(walk(hosts.popup).find((e) => e.dataset.path?.match(/Card_m:test\/(?:Dot|NewIcon)$/)), undefined);
-    assert.ok(tabDot(tab)); assert.ok(chipDot("ibuki"), "card rendering leaves the unread marks intact");
-    await closeSwitch();
-  } finally { Detail.hide(); seenReply = async () => ({ result: null }); await flush(); t.mock.timers.reset(); }
-});
+  });
 
 test("a failed seen write keeps the dots and can be retried by opening the mod card", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    family = modFamily(); family.variants[0].modList[0].fresh = true;
+    family = modFamily();
+    family.variants[0].modList[0].fresh = true;
     seenReply = async () => ({ error: { code: "internal" } });
     await showPortrait(t);
-    const popup = switchButton().click(); await flush(); await popup;
-    assert.ok(tabDot(1)); assert.ok(chipDot("ibuki"));
+    const popup = switchButton().click();
+    await flush();
+    await popup;
+    assert.ok(tabDot(1));
+    assert.ok(chipDot("ibuki"));
     seenReply = async () => ({ result: null });
     const card = walk(hosts.popup).find((e) => e.dataset.key === "m:test");
     assert.ok(card);
-    await card.click(); await flush();
-    assert.equal(tabDot(1), undefined); assert.equal(chipDot("ibuki"), undefined);
+    await card.click();
+    await flush();
+    assert.equal(tabDot(1), undefined);
+    assert.equal(chipDot("ibuki"), undefined);
     await closeSwitch();
-  } finally { Detail.hide(); seenReply = async () => ({ result: null }); await flush(); t.mock.timers.reset(); }
+  } finally {
+    Detail.hide();
+    seenReply = async () => ({ result: null });
+    await flush();
+    t.mock.timers.reset();
+  }
 });
 
-for (const after of ["closed", "aliases", "reopened", "left"]) test(`a delayed seen save respects a switch that was ${after}`, async (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout"] });
-  let finish;
-  try {
-    family = modFamily(); family.variants[0].modList[0].fresh = true;
-    Object.assign(family.variants[0].state.files[0], { applied: "official", official: true });
-    await showPortrait(t);
-    seenReply = () => new Promise((resolve) => { finish = resolve; });
-    const start = rpcRequests.length, invalidated = invalidations;
-    const popup = switchButton().click(); await flush();
-    assert.ok(finish, "the switch shows while its seen state is being saved");
-    assert.ok(walk(hosts.popup).some((e) => e.dataset.key === "m:test"));
-    assert.ok(walk(hosts.popup).some((e) => e.dataset.path?.match(/Card_m:test\/(?:Dot|NewIcon)$/)));
-    assert.ok(tabDot(1));
-    await closeSwitch();
-    let input;
-    if (after === "aliases") {
-      const pencil = walk(hosts.ngui).find((e) => e.getAttribute("aria-label") === "Aliases");
-      assert.ok(pencil);
-      await pencil.click(); await flush();
-      input = hosts.popup.querySelector(".alias-input");
-      assert.ok(input);
-      input.value = "Draft alias";
-    } else if (after === "reopened") {
-      await switchButton().click(); await flush();
-    } else if (after === "left") Detail.hide();
-    finish({ result: null }); await popup; await flush();
-    assert.equal(invalidations - invalidated, 1);
-    assert.equal(family.variants[0].modList[0].fresh, false);
-    assert.equal(rpcRequests.slice(start).filter((r) => r.method === "mods.seen").length, 1);
-    if (after === "aliases") {
-      assert.equal(hosts.popup.querySelector(".alias-input"), input, "the alias editor keeps its unsaved input");
-      assert.equal(input.value, "Draft alias");
-    } else if (after === "reopened") {
-      assert.equal(hosts.popup.hidden, false);
+for (const after of ["closed", "aliases", "reopened", "left"])
+  test(`a delayed seen save respects a switch that was ${after}`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    let finish;
+    try {
+      family = modFamily();
+      family.variants[0].modList[0].fresh = true;
+      Object.assign(family.variants[0].state.files[0], { applied: "official", official: true });
+      await showPortrait(t);
+      seenReply = () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        });
+      const start = rpcRequests.length,
+        invalidated = invalidations;
+      const popup = switchButton().click();
+      await flush();
+      assert.ok(finish, "the switch shows while its seen state is being saved");
       assert.ok(walk(hosts.popup).some((e) => e.dataset.key === "m:test"));
-      assert.equal(walk(hosts.popup).find((e) => e.dataset.path?.match(/Card_m:test\/(?:Dot|NewIcon)$/)), undefined);
-    } else {
-      assert.equal(hosts.popup.hidden, true);
-      assert.equal(hosts.popup.children.length, 0);
+      assert.ok(walk(hosts.popup).some((e) => e.dataset.path?.match(/Card_m:test\/(?:Dot|NewIcon)$/)));
+      assert.ok(tabDot(1));
+      await closeSwitch();
+      let input;
+      if (after === "aliases") {
+        const pencil = walk(hosts.ngui).find((e) => e.getAttribute("aria-label") === "Aliases");
+        assert.ok(pencil);
+        await pencil.click();
+        await flush();
+        input = hosts.popup.querySelector(".alias-input");
+        assert.ok(input);
+        input.value = "Draft alias";
+      } else if (after === "reopened") {
+        await switchButton().click();
+        await flush();
+      } else if (after === "left") Detail.hide();
+      finish({ result: null });
+      await popup;
+      await flush();
+      assert.equal(invalidations - invalidated, 1);
+      assert.equal(family.variants[0].modList[0].fresh, false);
+      assert.equal(rpcRequests.slice(start).filter((r) => r.method === "mods.seen").length, 1);
+      if (after === "aliases") {
+        assert.equal(hosts.popup.querySelector(".alias-input"), input, "the alias editor keeps its unsaved input");
+        assert.equal(input.value, "Draft alias");
+      } else if (after === "reopened") {
+        assert.equal(hosts.popup.hidden, false);
+        assert.ok(walk(hosts.popup).some((e) => e.dataset.key === "m:test"));
+        assert.equal(
+          walk(hosts.popup).find((e) => e.dataset.path?.match(/Card_m:test\/(?:Dot|NewIcon)$/)),
+          undefined,
+        );
+      } else {
+        assert.equal(hosts.popup.hidden, true);
+        assert.equal(hosts.popup.children.length, 0);
+      }
+      if (after !== "left") {
+        assert.equal(tabDot(1), undefined);
+        assert.equal(chipDot("ibuki"), undefined);
+      }
+    } finally {
+      finish?.({ result: null });
+      Detail.hide();
+      seenReply = async () => ({ result: null });
+      await flush();
+      t.mock.timers.reset();
     }
-    if (after !== "left") { assert.equal(tabDot(1), undefined); assert.equal(chipDot("ibuki"), undefined); }
-  } finally { finish?.({ result: null }); Detail.hide(); seenReply = async () => ({ result: null }); await flush(); t.mock.timers.reset(); }
-});
+  });
 
 test("the 3D tab dot only follows mods of its own kind", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
@@ -1309,44 +2372,68 @@ test("the 3D tab dot only follows mods of its own kind", async (t) => {
     family.variants[0].model = "ibuki_model";
     family.variants[0].modList[0].fresh = true;
     await showPortrait(t);
-    assert.equal(tabDot(1), undefined); assert.equal(tabDot(2), undefined);
-    assert.ok(tabDot(3)); assert.ok(chipDot("ibuki"));
-  } finally { Detail.hide(); await flush(); t.mock.timers.reset(); }
+    assert.equal(tabDot(1), undefined);
+    assert.equal(tabDot(2), undefined);
+    assert.ok(tabDot(3));
+    assert.ok(chipDot("ibuki"));
+  } finally {
+    Detail.hide();
+    await flush();
+    t.mock.timers.reset();
+  }
 });
 
 test("a variant with only a field or NPC model draws it on the 3D tab", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    errors.length = 0; closeLeftMessages();
+    errors.length = 0;
+    closeLeftMessages();
     family = modFamily("model");
     const v = family.variants[0];
-    v.model = null; v.fieldModel = "np0143"; v.state.files = [];
+    v.model = null;
+    v.fieldModel = "np0143";
+    v.state.files = [];
     modelRequests.length = 0;
     await showPortrait(t);
     const switching = tabButton(3).click();
-    for (let i = 0; i < 20; i++) { await new Promise(setImmediate); await flush(); }
+    for (let i = 0; i < 20; i++) {
+      await new Promise(setImmediate);
+      await flush();
+    }
     await finish(t, switching);
     assert.equal(modelRequests.at(-1)?.key, v.key, "the model viewer was asked for the variant's model");
-  } finally { closeLeftMessages(); Detail.hide(); await flush(); t.mock.timers.reset(); }
+  } finally {
+    closeLeftMessages();
+    Detail.hide();
+    await flush();
+    t.mock.timers.reset();
+  }
 });
 
 test("an official 3D model with no official copy left opens the overwritten message, not the generic failure", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const show = globalThis.__detailModel.show;
   try {
-    errors.length = 0; closeLeftMessages();
+    errors.length = 0;
+    closeLeftMessages();
     family = modFamily("model");
     const v = family.variants[0];
     v.model = "ibuki_model";
     v.state.files = [{ kind: "model", applied: "official", official: true, restorable: true, crc: "ok" }];
-    modsEnabled = false; await ModSwitch.refresh();
+    modsEnabled = false;
+    await ModSwitch.refresh();
     globalThis.__detailModel.show = async (key, host, options) => {
       modelRequests.push({ key, ...options });
-      throw Object.assign(new Error(`/asset/model/${key}.glb?source=official: HTTP 404`), { code: "original_unavailable" });
+      throw Object.assign(new Error(`/asset/model/${key}.glb?source=official: HTTP 404`), {
+        code: "original_unavailable",
+      });
     };
     await showPortrait(t);
     const switching = tabButton(3).click();
-    for (let i = 0; i < 20; i++) { await new Promise(setImmediate); await flush(); }
+    for (let i = 0; i < 20; i++) {
+      await new Promise(setImmediate);
+      await flush();
+    }
     await finish(t, switching);
     assert.equal(modelRequests.at(-1).source, "official");
     const texts = walk(hosts.dialog).map((el) => el.textContent);
@@ -1354,33 +2441,59 @@ test("an official 3D model with no official copy left opens the overwritten mess
     assert.ok(texts.includes("No official copy left"), texts.join(" | "));
     assert.ok(!texts.includes("Chibi unavailable"), texts.join(" | "));
   } finally {
-    globalThis.__detailModel.show = show; closeLeftMessages(); Detail.hide();
-    modsEnabled = true; await ModSwitch.refresh(); await flush(); t.mock.timers.reset();
+    globalThis.__detailModel.show = show;
+    closeLeftMessages();
+    Detail.hide();
+    modsEnabled = true;
+    await ModSwitch.refresh();
+    await flush();
+    t.mock.timers.reset();
   }
 });
 
 test("the detail portrait resumes focus and rebuilds after a hidden context loss", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    errors.length = 0; family = modFamily(); playerMode = thumbMode = "ready";
+    errors.length = 0;
+    family = modFamily();
+    playerMode = thumbMode = "ready";
     await showPortrait(t);
-    const p = previewPlayers.at(-1), count = previewPlayers.length;
+    const p = previewPlayers.at(-1),
+      count = previewPlayers.length;
     const failStart = rpcRequests.filter((r) => r.method === "preview.failed").length;
-    window.dispatchEvent(new Event("blur")); assert.equal(p.stopRequestAnimationFrame, true);
-    t.mock.timers.tick(60000); await flush();
-    window.dispatchEvent(new Event("focus")); await flush(); assert.equal(p.stopRequestAnimationFrame, false);
-    const lost = new Event("webglcontextlost", { cancelable: true }); p.canvas.dispatchEvent(lost);
+    window.dispatchEvent(new Event("blur"));
+    assert.equal(p.stopRequestAnimationFrame, true);
+    t.mock.timers.tick(60000);
+    await flush();
+    window.dispatchEvent(new Event("focus"));
+    await flush();
+    assert.equal(p.stopRequestAnimationFrame, false);
+    const lost = new Event("webglcontextlost", { cancelable: true });
+    p.canvas.dispatchEvent(lost);
     assert.equal(lost.defaultPrevented, true);
-    document.hidden = true; documentEvents.dispatchEvent(new Event("visibilitychange"));
-    p.config.error(p, "Context lost"); p.canvas.dispatchEvent(new Event("webglcontextrestored"));
-    await flush(); assert.equal(previewPlayers.length, count, "no GPU rebuild while the page is hidden");
-    document.hidden = false; documentEvents.dispatchEvent(new Event("visibilitychange")); await flush();
-    assert.equal(previewPlayers.length, count + 1); assert.equal(p.disposed, true);
+    document.hidden = true;
+    documentEvents.dispatchEvent(new Event("visibilitychange"));
+    p.config.error(p, "Context lost");
+    p.canvas.dispatchEvent(new Event("webglcontextrestored"));
+    await flush();
+    assert.equal(previewPlayers.length, count, "no GPU rebuild while the page is hidden");
+    document.hidden = false;
+    documentEvents.dispatchEvent(new Event("visibilitychange"));
+    await flush();
+    assert.equal(previewPlayers.length, count + 1);
+    assert.equal(p.disposed, true);
     assert.equal(previewPlayers.at(-1).config.skeleton, p.config.skeleton);
     assert.equal(rpcRequests.filter((r) => r.method === "preview.failed").length, failStart);
-    p.canvas.dispatchEvent(new Event("webglcontextrestored")); await flush();
+    p.canvas.dispatchEvent(new Event("webglcontextrestored"));
+    await flush();
     assert.equal(previewPlayers.length, count + 1, "a disposed portrait cannot restart again");
-  } finally { document.hidden = false; Detail.hide(); thumbMode = "pending"; await flush(); t.mock.timers.reset(); }
+  } finally {
+    document.hidden = false;
+    Detail.hide();
+    thumbMode = "pending";
+    await flush();
+    t.mock.timers.reset();
+  }
 });
 
 test("detail action patterns follow their resized bodies", async (t) => {
@@ -1392,100 +2505,176 @@ test("detail action patterns follow their resized bodies", async (t) => {
     const near = (a, b) => assert.ok(Math.abs(a - b) < 0.02, `${a} != ${b}`);
     const scale = 1920 / 2960;
     for (const card of ["SkillData_EX", "SkillData_EX (1)", "SkillData_EX (2)", "SkillData_EX (3)"]) {
-      const base = `${INFO}/Skill/${card}/Bg`, body = part(base), corner = part(`${base}/Corner`);
+      const base = `${INFO}/Skill/${card}/Bg`,
+        body = part(base),
+        corner = part(`${base}/Corner`);
       const num = (el, key) => parseFloat(el.style[key]);
       near(num(body, "left") + num(body, "width") - num(corner, "left") - num(corner, "width"), 3 * scale);
       near(num(corner, "top") - num(body, "top"), 4 * scale);
       near(num(corner, "width"), 20 * scale);
       near(num(corner, "height"), 10 * scale);
     }
-  } finally { Detail.hide(); await flush(); t.mock.timers.reset(); }
+  } finally {
+    Detail.hide();
+    await flush();
+    t.mock.timers.reset();
+  }
 });
 
-for (const background of ["/asset/art/bg/Original_Collection", null]) test(`the portrait switch keeps the prefab card without ${background ? "the student's" : "the prefab's"} artwork under its bust`, async (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout"] });
-  try {
-    family = modFamily(); family.variants[0].bg = background;
-    await showPortrait(t);
-    const bust = walk(hosts.ngui).find((e) => e.dataset.path?.endsWith("Normal/Bust"));
-    assert.ok(!bust.style.backgroundImage, "no background picture on the portrait card");
-    assert.equal(bust.children.length, 1, "the portrait thumbnail draws above the card artwork");
-    assert.ok(bust.children[0].style.maskImage.includes("#000 70%"));
-    const screen = walk(hosts["ngui-bg"]).find((e) => e.dataset.path?.endsWith("/BG"));
-  } finally { Detail.hide(); await flush(); t.mock.timers.reset(); }
-});
+for (const background of ["/asset/art/bg/Original_Collection", null])
+  test(`the portrait switch keeps the prefab card without ${background ? "the student's" : "the prefab's"} artwork under its bust`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    try {
+      family = modFamily();
+      family.variants[0].bg = background;
+      await showPortrait(t);
+      const bust = walk(hosts.ngui).find((e) => e.dataset.path?.endsWith("Normal/Bust"));
+      assert.ok(!bust.style.backgroundImage, "no background picture on the portrait card");
+      assert.equal(bust.children.length, 1, "the portrait thumbnail draws above the card artwork");
+      assert.ok(bust.children[0].style.maskImage.includes("#000 70%"));
+      const screen = walk(hosts["ngui-bg"]).find((e) => e.dataset.path?.endsWith("/BG"));
+    } finally {
+      Detail.hide();
+      await flush();
+      t.mock.timers.reset();
+    }
+  });
 
-for (const core of ["ibuki_home", "arona_workpage_daytime", "np0032_npc"]) test(`the ${core} switch continues its still's colours through the text area`, async (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout"] });
-  try {
-    errors.length = 0; warnings.length = 0; lobbyMode = "ready"; playerMode = "lobby-ready";
-    family = modFamily("lobby");
-    const v = family.variants[0];
-    v.bg = "/asset/art/bg/Portrait_Only";
-    if (core !== "ibuki_home") { v.key = `special:${core}`; v.spr = null; v.lobby = core; }
-    const showing = Detail.show(context, family, v.key); await flush(); await finish(t, showing);
-    if (tabButton(2)) { const switching = tabButton(2).click(); await flush(); await finish(t, switching); }
-    const bust = walk(hosts.ngui).find((e) => e.dataset.path?.endsWith("Normal/Bust"));
-    assert.ok(bust.children[0].style.backgroundImage?.startsWith('url("blob:'), "a generated lobby still fills the thumbnail");
-    assert.ok(bust.style.backgroundImage?.includes("rgb(20.000, 40.000, 60.000)"), `the text area takes the still's edge colours: ${errors.flat().join(" ")}`);
-    assert.ok(bust.style.backgroundImage.includes("rgb(239.000, 243.000, 247.000) 100%"));
-    assert.ok(!bust.style.backgroundImage.includes("Portrait_Only"));
-    const text = walk(hosts.ngui).find((e) => e.className === "switch-text");
-    assert.equal(text.style.color, "#000000");
-    assert.ok(!warnings.some((args) => args[0] === "Switch card colours unavailable"));
-  } finally { Detail.hide(); lobbyMode = "pending"; playerMode = "ready"; await flush(); t.mock.timers.reset(); }
-});
+for (const core of ["ibuki_home", "arona_workpage_daytime", "np0032_npc"])
+  test(`the ${core} switch continues its still's colours through the text area`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    try {
+      errors.length = 0;
+      warnings.length = 0;
+      lobbyMode = "ready";
+      playerMode = "lobby-ready";
+      family = modFamily("lobby");
+      const v = family.variants[0];
+      v.bg = "/asset/art/bg/Portrait_Only";
+      if (core !== "ibuki_home") {
+        v.key = `special:${core}`;
+        v.spr = null;
+        v.lobby = core;
+      }
+      const showing = Detail.show(context, family, v.key);
+      await flush();
+      await finish(t, showing);
+      if (tabButton(2)) {
+        const switching = tabButton(2).click();
+        await flush();
+        await finish(t, switching);
+      }
+      const bust = walk(hosts.ngui).find((e) => e.dataset.path?.endsWith("Normal/Bust"));
+      assert.ok(
+        bust.children[0].style.backgroundImage?.startsWith('url("blob:'),
+        "a generated lobby still fills the thumbnail",
+      );
+      assert.ok(
+        bust.style.backgroundImage?.includes("rgb(20.000, 40.000, 60.000)"),
+        `the text area takes the still's edge colours: ${errors.flat().join(" ")}`,
+      );
+      assert.ok(bust.style.backgroundImage.includes("rgb(239.000, 243.000, 247.000) 100%"));
+      assert.ok(!bust.style.backgroundImage.includes("Portrait_Only"));
+      const text = walk(hosts.ngui).find((e) => e.className === "switch-text");
+      assert.equal(text.style.color, "#000000");
+      assert.ok(!warnings.some((args) => args[0] === "Switch card colours unavailable"));
+    } finally {
+      Detail.hide();
+      lobbyMode = "pending";
+      playerMode = "ready";
+      await flush();
+      t.mock.timers.reset();
+    }
+  });
 
 test("re-entering a torn-down lobby rebuilds its players and keeps the Portrait tab usable", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    lobbyMode = "ready"; playerMode = "lobby-ready"; family = modFamily("lobby", "route-recovery");
+    lobbyMode = "ready";
+    playerMode = "lobby-ready";
+    family = modFamily("lobby", "route-recovery");
     await showPortrait(t);
-    const switching = tabButton(2).click(); await flush(); await finish(t, switching);
+    const switching = tabButton(2).click();
+    await flush();
+    await finish(t, switching);
     const before = previewPlayers.filter((p) => !p.disposed);
-    assert.ok(before.length); assert.equal(hosts.lobby.hidden, false);
+    assert.ok(before.length);
+    assert.equal(hosts.lobby.hidden, false);
     Detail.hide();
-    assert.equal(Detail.currentVariant(), null); assert.ok(before.every((p) => p.disposed));
+    assert.equal(Detail.currentVariant(), null);
+    assert.ok(before.every((p) => p.disposed));
     const requests = playerRequests.length;
-    const returning = Detail.show(context, family, "ibuki"); await flush(); await finish(t, returning);
+    const returning = Detail.show(context, family, "ibuki");
+    await flush();
+    await finish(t, returning);
     assert.ok(playerRequests.length > requests, "the same variant gets fresh lobby players after hide");
-    assert.equal(hosts.lobby.hidden, false); assert.equal(Detail.currentVariant(), "ibuki");
-    const portrait = tabButton(1).click(); await flush(); await finish(t, portrait);
-    t.mock.timers.tick(360); await flush();
-    assert.equal(hosts.portrait.hidden, false); assert.equal(hosts.lobby.hidden, true);
-  } finally { Detail.hide(); lobbyMode = "pending"; playerMode = "ready"; await flush(); t.mock.timers.reset(); }
-});
-
-for (const kind of ["portrait", "lobby", "model"]) test(`repeated locale changes preserve the active ${kind} player and route`, async (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout"] });
-  try {
-    family = modFamily("spr", `locale-${kind}`);
-    family.variants[0].model = "ibuki_model";
-    family.variants[0].names.ja = { full: "Localized Ibuki", short: "Localized" };
-    lobbyMode = "ready"; playerMode = "lobby-ready"; thumbMode = "ready";
-    const showing = Detail.show(context, family, "ibuki", { kind }); await flush(); await finish(t, showing);
-    const players = previewPlayers.filter((p) => !p.disposed), modelCount = modelRequests.length;
-    const liveCount = previewPlayers.length, before = rpcRequests.length, hash = location.hash;
-    const canvases = hosts[kind].children.slice();
-    for (const lang of ["ja-JP", "en-US", "ja-JP"]) {
-      setStrings(lang, localeTable(lang));
-      await Detail.relabel(); await flush();
-      assert.equal(previewPlayers.length, liveCount, "localization cannot create a new live Spine player");
-      assert.equal(modelRequests.length, modelCount, "localization cannot reload a model");
-      assert.ok(players.every((p) => !p.disposed));
-      assert.deepEqual(hosts[kind].children, canvases, "the media DOM remains mounted");
-      assert.equal(hosts[kind].hidden, false); assert.equal(location.hash, hash);
-      const apply = walk(hosts.ngui).find((e) => e.dataset.part === `${INFO}/Skill/SkillData_EX (3)/Bg`);
-      assert.ok(apply, "the existing action remains available");
-      assert.equal(apply.attrs["aria-label"], localeTable(lang)["webui.popup.apply"]);
-    }
-    assert.ok(!rpcRequests.slice(before).some((r) => ["roster.list", "family.get", "ui.visit"].includes(r.method)), "locale refresh reuses loaded family data");
-    if (kind === "lobby") assert.equal(rpcRequests.filter((r) => r.method === "lobby.lines").at(-1).params.lang, "ja");
+    assert.equal(hosts.lobby.hidden, false);
+    assert.equal(Detail.currentVariant(), "ibuki");
+    const portrait = tabButton(1).click();
+    await flush();
+    await finish(t, portrait);
+    t.mock.timers.tick(360);
+    await flush();
+    assert.equal(hosts.portrait.hidden, false);
+    assert.equal(hosts.lobby.hidden, true);
   } finally {
-    Detail.hide(); lobbyMode = "pending"; playerMode = "ready"; thumbMode = "pending";
-    setStrings("en-US", localeTable("en-US")); await flush(); t.mock.timers.reset();
+    Detail.hide();
+    lobbyMode = "pending";
+    playerMode = "ready";
+    await flush();
+    t.mock.timers.reset();
   }
 });
+
+for (const kind of ["portrait", "lobby", "model"])
+  test(`repeated locale changes preserve the active ${kind} player and route`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    try {
+      family = modFamily("spr", `locale-${kind}`);
+      family.variants[0].model = "ibuki_model";
+      family.variants[0].names.ja = { full: "Localized Ibuki", short: "Localized" };
+      lobbyMode = "ready";
+      playerMode = "lobby-ready";
+      thumbMode = "ready";
+      const showing = Detail.show(context, family, "ibuki", { kind });
+      await flush();
+      await finish(t, showing);
+      const players = previewPlayers.filter((p) => !p.disposed),
+        modelCount = modelRequests.length;
+      const liveCount = previewPlayers.length,
+        before = rpcRequests.length,
+        hash = location.hash;
+      const canvases = hosts[kind].children.slice();
+      for (const lang of ["ja-JP", "en-US", "ja-JP"]) {
+        setStrings(lang, localeTable(lang));
+        await Detail.relabel();
+        await flush();
+        assert.equal(previewPlayers.length, liveCount, "localization cannot create a new live Spine player");
+        assert.equal(modelRequests.length, modelCount, "localization cannot reload a model");
+        assert.ok(players.every((p) => !p.disposed));
+        assert.deepEqual(hosts[kind].children, canvases, "the media DOM remains mounted");
+        assert.equal(hosts[kind].hidden, false);
+        assert.equal(location.hash, hash);
+        const apply = walk(hosts.ngui).find((e) => e.dataset.part === `${INFO}/Skill/SkillData_EX (3)/Bg`);
+        assert.ok(apply, "the existing action remains available");
+        assert.equal(apply.attrs["aria-label"], localeTable(lang)["webui.popup.apply"]);
+      }
+      assert.ok(
+        !rpcRequests.slice(before).some((r) => ["roster.list", "family.get", "ui.visit"].includes(r.method)),
+        "locale refresh reuses loaded family data",
+      );
+      if (kind === "lobby")
+        assert.equal(rpcRequests.filter((r) => r.method === "lobby.lines").at(-1).params.lang, "ja");
+    } finally {
+      Detail.hide();
+      lobbyMode = "pending";
+      playerMode = "ready";
+      thumbMode = "pending";
+      setStrings("en-US", localeTable("en-US"));
+      await flush();
+      t.mock.timers.reset();
+    }
+  });
 
 test("an open source picker relabels while keeping its unsaved selection and scroll", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
@@ -1494,12 +2683,17 @@ test("an open source picker relabels while keeping its unsaved selection and scr
     family.variants[0].previewSources = { spr: "official" };
     thumbMode = playerMode = "ready";
     await showPortrait(t);
-    await switchButton().click(); await flush();
-    await walk(hosts.popup).find((e) => e.dataset.key === "m:localized-picker").click(); await flush();
+    await switchButton().click();
+    await flush();
+    await walk(hosts.popup)
+      .find((e) => e.dataset.key === "m:localized-picker")
+      .click();
+    await flush();
     hosts.popup.querySelector(".popup-cards").scrollLeft = 185;
     const players = previewPlayers.length;
     setStrings("ja-JP", localeTable("ja-JP"));
-    await Detail.relabel(); await flush();
+    await Detail.relabel();
+    await flush();
     assert.equal(hosts.popup.querySelector(".popup-cards").scrollLeft, 185);
     const save = walk(hosts.popup).find((e) => e.dataset.action === "ok");
     assert.equal(save.getAttribute("aria-label"), localeTable("ja-JP")["webui.popup.save"]);
@@ -1507,74 +2701,105 @@ test("an open source picker relabels while keeping its unsaved selection and scr
     await finish(t, save.click());
     assert.equal(family.variants[0].previewSources.spr, "mod:localized-picker");
   } finally {
-    Detail.hide(); thumbMode = "pending";
-    setStrings("en-US", localeTable("en-US")); await flush(); t.mock.timers.reset();
+    Detail.hide();
+    thumbMode = "pending";
+    setStrings("en-US", localeTable("en-US"));
+    await flush();
+    t.mock.timers.reset();
   }
 });
 
-
-for (const enabled of [true, false]) test(`model switching reuses the detail controls and previews its source with mods ${enabled ? "on" : "off"}`, async (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout"] });
-  try {
-    errors.length = 0;
-    family = modFamily("model");
-    const v = family.variants[0];
-    v.model = "ibuki_model";
-    v.configured = { model: "mod:test" };
-    v.selection = { model: { source: "mod:test", installed: enabled } };
-    v.modList[0].fresh = true;
-    if (!enabled) v.state.files = [{ kind: "model", applied: "official", official: true, restorable: true, crc: "ok" }];
-    modsEnabled = enabled; await ModSwitch.refresh();
-    await showPortrait(t);
-    const switching = tabButton(3).click();
-    for (let i = 0; i < 20; i++) { await new Promise(setImmediate); await flush(); }
-    await finish(t, switching);
-    assert.equal(modelRequests.at(-1)?.key, "ibuki", errors.map((args) => args.map(String).join(" ")).join("\n"));
-    assert.equal(modelRequests.at(-1).source, "mod:test");
-    assert.ok(switchButton(), "the model switch opens the shared popup");
-    const add = walk(hosts.ngui).find((e) => e.dataset.part === `${INFO}/Weapon/Btn_Up_Wrapper/Btn_Up/BG (1)`);
-    assert.ok(add && add.getAttribute("aria-label") === "Add Chibi");
-    const text = walk(hosts.ngui).find((e) => e.className === "switch-text");
-    assert.ok(text.children.some((e) => e.className === "switch-go"));
-    assert.ok(text.children.some((e) => e.innerText?.startsWith("test - ")));
-    assert.equal(tabDot(3), undefined, "showing the model tab marks its configured asset seen");
-    assert.equal(v.fresh, false);
-    await switchButton().click(); await flush();
-    assert.ok(walk(hosts.popup).some((e) => e.dataset.key === "self"));
-    assert.ok(walk(hosts.popup).some((e) => e.dataset.key === "m:test"));
-    const picture = (host, path) => walk(host).find((e) => e.dataset.path === path)?.children[0].style.backgroundImage;
-    for (let i = 0; i < 5; i++) { await new Promise(setImmediate); await flush(); }
-    const original = picture(hosts.popup, "Card_self/Thumb"), mod = picture(hosts.popup, "Card_m:test/Thumb");
-    assert.match(original, /blob:rendered-.*source=official/);
-    assert.match(mod, /blob:rendered-.*source=mod%3Atest/);
-    assert.equal(picture(hosts.popup, "Details/Picture/Thumb"), mod);
-    const switchImage = walk(hosts.ngui).find((e) => e.dataset.path?.endsWith("/Bust") && e.children[0]?.style.backgroundImage?.includes("blob:rendered"));
-    assert.equal(switchImage?.children[0].style.backgroundImage, mod, "detail and popup share the source's 3D still");
-    const info = walk(hosts.popup).find((e) => e.dataset.path === "Details/Picture/Thumb");
-    assert.equal(info.style.width, info.style.height, "the model info preview is square");
-    assert.equal(tabDot(3), undefined, "opening the model switch marks its offered mods seen");
-    assert.equal(v.modList[0].fresh, false);
-    assert.ok(!errors.flat().some((e) => String(e).includes("Spine source unavailable")));
-    await closeSwitch();
-  } finally { Detail.hide(); modsEnabled = true; await ModSwitch.refresh(); await flush(); t.mock.timers.reset(); }
-});
+for (const enabled of [true, false])
+  test(`model switching reuses the detail controls and previews its source with mods ${enabled ? "on" : "off"}`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    try {
+      errors.length = 0;
+      family = modFamily("model");
+      const v = family.variants[0];
+      v.model = "ibuki_model";
+      v.configured = { model: "mod:test" };
+      v.selection = { model: { source: "mod:test", installed: enabled } };
+      v.modList[0].fresh = true;
+      if (!enabled)
+        v.state.files = [{ kind: "model", applied: "official", official: true, restorable: true, crc: "ok" }];
+      modsEnabled = enabled;
+      await ModSwitch.refresh();
+      await showPortrait(t);
+      const switching = tabButton(3).click();
+      for (let i = 0; i < 20; i++) {
+        await new Promise(setImmediate);
+        await flush();
+      }
+      await finish(t, switching);
+      assert.equal(modelRequests.at(-1)?.key, "ibuki", errors.map((args) => args.map(String).join(" ")).join("\n"));
+      assert.equal(modelRequests.at(-1).source, "mod:test");
+      assert.ok(switchButton(), "the model switch opens the shared popup");
+      const add = walk(hosts.ngui).find((e) => e.dataset.part === `${INFO}/Weapon/Btn_Up_Wrapper/Btn_Up/BG (1)`);
+      assert.ok(add && add.getAttribute("aria-label") === "Add Chibi");
+      const text = walk(hosts.ngui).find((e) => e.className === "switch-text");
+      assert.ok(text.children.some((e) => e.className === "switch-go"));
+      assert.ok(text.children.some((e) => e.innerText?.startsWith("test - ")));
+      assert.equal(tabDot(3), undefined, "showing the model tab marks its configured asset seen");
+      assert.equal(v.fresh, false);
+      await switchButton().click();
+      await flush();
+      assert.ok(walk(hosts.popup).some((e) => e.dataset.key === "self"));
+      assert.ok(walk(hosts.popup).some((e) => e.dataset.key === "m:test"));
+      const picture = (host, path) =>
+        walk(host).find((e) => e.dataset.path === path)?.children[0].style.backgroundImage;
+      for (let i = 0; i < 5; i++) {
+        await new Promise(setImmediate);
+        await flush();
+      }
+      const original = picture(hosts.popup, "Card_self/Thumb"),
+        mod = picture(hosts.popup, "Card_m:test/Thumb");
+      assert.match(original, /blob:rendered-.*source=official/);
+      assert.match(mod, /blob:rendered-.*source=mod%3Atest/);
+      assert.equal(picture(hosts.popup, "Details/Picture/Thumb"), mod);
+      const switchImage = walk(hosts.ngui).find(
+        (e) => e.dataset.path?.endsWith("/Bust") && e.children[0]?.style.backgroundImage?.includes("blob:rendered"),
+      );
+      assert.equal(switchImage?.children[0].style.backgroundImage, mod, "detail and popup share the source's 3D still");
+      const info = walk(hosts.popup).find((e) => e.dataset.path === "Details/Picture/Thumb");
+      assert.equal(info.style.width, info.style.height, "the model info preview is square");
+      assert.equal(tabDot(3), undefined, "opening the model switch marks its offered mods seen");
+      assert.equal(v.modList[0].fresh, false);
+      assert.ok(!errors.flat().some((e) => String(e).includes("Spine source unavailable")));
+      await closeSwitch();
+    } finally {
+      Detail.hide();
+      modsEnabled = true;
+      await ModSwitch.refresh();
+      await flush();
+      t.mock.timers.reset();
+    }
+  });
 
 test("detail action cards remove skill bases and plus badges and contain their replacement icons", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    family = modFamily(); await showPortrait(t);
+    family = modFamily();
+    await showPortrait(t);
     for (const card of ["SkillData_EX", "SkillData_EX (1)", "SkillData_EX (2)", "SkillData_EX (3)"]) {
       const prefix = `${INFO}/Skill/${card}/Normal/SkillIconBg`;
       const picture = walk(hosts.ngui).find((e) => e.dataset.path?.endsWith(`${prefix}/Texture`));
-      assert.ok(picture); assert.equal(picture.style.width, picture.style.height); assert.equal(picture.style.backgroundSize, "contain");
+      assert.ok(picture);
+      assert.equal(picture.style.width, picture.style.height);
+      assert.equal(picture.style.backgroundSize, "contain");
       assert.ok(!walk(hosts.ngui).some((e) => e.dataset.path?.endsWith(prefix)));
-      assert.ok(!walk(hosts.ngui).some((e) => e.dataset.path?.endsWith(`${prefix}/Deco`)), "action icons have no decoration ring");
+      assert.ok(
+        !walk(hosts.ngui).some((e) => e.dataset.path?.endsWith(`${prefix}/Deco`)),
+        "action icons have no decoration ring",
+      );
       assert.ok(!walk(hosts.ngui).some((e) => e.dataset.path?.includes(`${prefix}/Bg_Skill_Plus`)));
       assert.ok(!walk(hosts.ngui).some((e) => e.dataset.path?.includes(`${prefix}/SkillIconBg (1)`)));
     }
-  } finally { Detail.hide(); await flush(); t.mock.timers.reset(); }
+  } finally {
+    Detail.hide();
+    await flush();
+    t.mock.timers.reset();
+  }
 });
-
 
 test("switch subtitles retain the selected name and use a plain separator in all six locales", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
@@ -1589,55 +2814,87 @@ test("switch subtitles retain the selected name and use a plain separator in all
         v.selection = { spr: { source: "mod:hina_spr", installed } };
         await showPortrait(t);
         const text = walk(hosts.ngui).find((e) => e.className === "switch-text");
-        const subtitle = text.children.find((e) => e.tagName === "SPAN").innerText.replace(/\n/g, "").replace(/\s*-\s*/g, " - ");
+        const subtitle = text.children
+          .find((e) => e.tagName === "SPAN")
+          .innerText.replace(/\n/g, "")
+          .replace(/\s*-\s*/g, " - ");
         assert.equal(subtitle, `hina_spr - ${ui.webui.status.applied}`);
         assert.ok(!/[·•・]/u.test(subtitle));
         Detail.hide();
       }
     }
   } finally {
-    Detail.hide(); await flush(); t.mock.timers.reset();
-    setStrings("en-US", flat(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8"))));
+    Detail.hide();
+    await flush();
+    t.mock.timers.reset();
+    setStrings(
+      "en-US",
+      flat(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8"))),
+    );
   }
 });
 
 test("a failed portrait capture keeps the shared placeholder and reports the exact source and frame", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    thumbMode = "ready"; blankThumbnailCore = "pajamas_missing_spr";
+    thumbMode = "ready";
+    blankThumbnailCore = "pajamas_missing_spr";
     family = modFamily();
-    family.variants.push({ key: "pajamas", spr: blankThumbnailCore,
-      portrait: "/asset/art/portrait/pajamas", names: { en: { full: "Ibuki (Pajamas)", short: "Pajamas" } }, modList: [], state: { files: [] } });
+    family.variants.push({
+      key: "pajamas",
+      spr: blankThumbnailCore,
+      portrait: "/asset/art/portrait/pajamas",
+      names: { en: { full: "Ibuki (Pajamas)", short: "Pajamas" } },
+      modList: [],
+      state: { files: [] },
+    });
     const v = family.variants[0];
     v.portrait = "/asset/art/portrait/original";
     v.configured = { spr: "variant:pajamas" };
     v.selection = { spr: { source: "variant:pajamas", installed: false } };
     await showPortrait(t);
-    await switchButton().click(); await flush();
+    await switchButton().click();
+    await flush();
     const picture = (path) => walk(hosts.popup).find((e) => e.dataset.path === path).children[0].style.backgroundImage;
     assert.equal(picture("Card_v:pajamas/Thumb"), undefined);
     for (const path of ["Card_v:pajamas/Thumb/Placeholder", "Details/Picture/Texture/Placeholder"]) {
       const note = walk(hosts.popup).find((e) => e.dataset.path === path);
-      assert.ok(note?.textContent); assert.equal(note.hidden, false);
+      assert.ok(note?.textContent);
+      assert.equal(note.hidden, false);
     }
-    assert.ok(errors.some((args) => args[0] === "Preview failed" && args[1].url.includes("official-spr/pajamas_missing_spr/")
-      && args[1].step === "thumbnail:portrait" && args[1].error.includes("No visible pixels")));
+    assert.ok(
+      errors.some(
+        (args) =>
+          args[0] === "Preview failed" &&
+          args[1].url.includes("official-spr/pajamas_missing_spr/") &&
+          args[1].step === "thumbnail:portrait" &&
+          args[1].error.includes("No visible pixels"),
+      ),
+    );
     assert.equal(picture("Details/Picture/Texture"), picture("Card_v:pajamas/Thumb"));
     await closeSwitch();
   } finally {
-    Detail.hide(); blankThumbnailCore = ""; thumbMode = "pending"; await flush(); t.mock.timers.reset();
+    Detail.hide();
+    blankThumbnailCore = "";
+    thumbMode = "pending";
+    await flush();
+    t.mock.timers.reset();
   }
 });
-
 
 test("a failed Mod portrait never displays the variant's official collection art", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    thumbMode = "ready"; blankThumbnailCore = "/mod/test/"; portraitRevision = "f";
+    thumbMode = "ready";
+    blankThumbnailCore = "/mod/test/";
+    portraitRevision = "f";
     family = modFamily();
-    const v = family.variants[0]; v.portrait = "/asset/art/portrait/official-hina";
+    const v = family.variants[0];
+    v.portrait = "/asset/art/portrait/official-hina";
     v.configured = { spr: "mod:test" };
-    await showPortrait(t); await switchButton().click(); await flush();
+    await showPortrait(t);
+    await switchButton().click();
+    await flush();
     for (const path of ["Card_m:test/Thumb", "Details/Picture/Texture"]) {
       const preview = walk(hosts.popup).find((e) => e.dataset.path === path);
       assert.equal(preview.children[0].style.backgroundImage, undefined);
@@ -1645,141 +2902,256 @@ test("a failed Mod portrait never displays the variant's official collection art
     }
     assert.ok(playerRequests.some((url) => url.includes("/mod/test/")));
     await closeSwitch();
-  } finally { Detail.hide(); blankThumbnailCore = ""; thumbMode = "pending"; portraitRevision = "a"; await flush(); t.mock.timers.reset(); }
+  } finally {
+    Detail.hide();
+    blankThumbnailCore = "";
+    thumbMode = "pending";
+    portraitRevision = "a";
+    await flush();
+    t.mock.timers.reset();
+  }
 });
 
 test("switch and detail captures can recover after the detail thumbnail reveal deadline", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    family = modFamily(); family.variants[0].spr = "popup_after_deadline_spr";
-    const showing = Detail.show(context, family, "ibuki"); await flush();
-    t.mock.timers.tick(15000); await flush(); await showing;
+    family = modFamily();
+    family.variants[0].spr = "popup_after_deadline_spr";
+    const showing = Detail.show(context, family, "ibuki");
+    await flush();
+    t.mock.timers.tick(15000);
+    await flush();
+    await showing;
     const detailPictures = walk(hosts.ngui).filter((e) => e.dataset.thumbnail === "true");
     assert.ok(detailPictures.length);
     const before = thumbnailPlayers.length;
     thumbMode = "ready";
-    await switchButton().click(); await flush();
+    await switchButton().click();
+    await flush();
     assert.ok(thumbnailPlayers.length > before, "popup owns a fresh capture scope");
     for (const path of ["Card_self/Thumb", "Details/Picture/Texture"]) {
       assert.ok(walk(hosts.popup).find((e) => e.dataset.path === path).children[0].style.backgroundImage);
-      assert.equal(walk(hosts.popup).find((e) => e.dataset.path === `${path}/Placeholder`), undefined);
+      assert.equal(
+        walk(hosts.popup).find((e) => e.dataset.path === `${path}/Placeholder`),
+        undefined,
+      );
     }
-    pendingThumbnails.splice(0).forEach((done) => done()); await flush();
+    pendingThumbnails.splice(0).forEach((done) => done());
+    await flush();
     const captures = thumbnailPlayers.length;
-    t.mock.timers.tick(60000); await flush();
+    t.mock.timers.tick(60000);
+    await flush();
     assert.equal(thumbnailPlayers.length, captures, "background retries wait while the switch popup owns the renderer");
     await closeSwitch();
-    t.mock.timers.tick(2000); await flush();
-    assert.ok(detailPictures.every((e) => e.style.backgroundImage), "page pictures resume after the popup closes, even after the reveal deadline");
-  } finally { Detail.hide(); thumbMode = "pending"; await flush(); t.mock.timers.reset(); }
+    t.mock.timers.tick(2000);
+    await flush();
+    assert.ok(
+      detailPictures.every((e) => e.style.backgroundImage),
+      "page pictures resume after the popup closes, even after the reveal deadline",
+    );
+  } finally {
+    Detail.hide();
+    thumbMode = "pending";
+    await flush();
+    t.mock.timers.reset();
+  }
 });
 
 test("a timed-out switch candidate logs its source and updates both card and panel after an idle retry", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
     family = modFamily();
-    family.variants.push({ key: "swimsuit", spr: "hina_swimsuit_retry_spr",
-      names: { en: { full: "Hina (Swimsuit)", short: "Swimsuit" } }, modList: [], state: { files: [] } });
+    family.variants.push({
+      key: "swimsuit",
+      spr: "hina_swimsuit_retry_spr",
+      names: { en: { full: "Hina (Swimsuit)", short: "Swimsuit" } },
+      modList: [],
+      state: { files: [] },
+    });
     family.variants[0].configured = { spr: "variant:swimsuit" };
     await showPortrait(t);
     const start = rpcRequests.length;
-    await switchButton().click(); await flush();
+    await switchButton().click();
+    await flush();
     const paths = ["Card_v:swimsuit/Thumb", "Details/Picture/Texture"];
     const element = (path) => walk(hosts.popup).find((e) => e.dataset.path === path);
     for (const path of paths) assert.ok(element(`${path}/Placeholder`));
-    t.mock.timers.tick(15000); await flush();
-    assert.ok(rpcRequests.slice(start).some((r) => r.method === "preview.failed"
-      && r.params.url.includes("hina_swimsuit_retry_spr") && /timed out/.test(r.params.error)));
+    t.mock.timers.tick(15000);
+    await flush();
+    assert.ok(
+      rpcRequests
+        .slice(start)
+        .some(
+          (r) =>
+            r.method === "preview.failed" &&
+            r.params.url.includes("hina_swimsuit_retry_spr") &&
+            /timed out/.test(r.params.error),
+        ),
+    );
     thumbMode = "ready";
-    pendingThumbnails.splice(0).forEach((done) => done()); await flush();
-    t.mock.timers.tick(2000); await flush();
+    pendingThumbnails.splice(0).forEach((done) => done());
+    await flush();
+    t.mock.timers.tick(2000);
+    await flush();
     for (const path of paths) {
       assert.ok(element(path).children[0].style.backgroundImage, path);
       assert.equal(element(`${path}/Placeholder`), undefined, path);
     }
-    assert.equal(element(paths[0]).children[0].style.backgroundImage, element(paths[1]).children[0].style.backgroundImage);
+    assert.equal(
+      element(paths[0]).children[0].style.backgroundImage,
+      element(paths[1]).children[0].style.backgroundImage,
+    );
     await closeSwitch();
-  } finally { Detail.hide(); thumbMode = "pending"; await flush(); t.mock.timers.reset(); }
+  } finally {
+    Detail.hide();
+    thumbMode = "pending";
+    await flush();
+    t.mock.timers.reset();
+  }
 });
 
-for (const enabled of [false, true]) test(`Save changes only the preview and both Apply buttons follow intent with Mods ${enabled ? "on" : "off"}`, async (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout"] });
-  try {
-    thumbMode = playerMode = imageMode = decodeMode = "ready";
-    family = modFamily();
-    const v = family.variants[0]; v.configured = {}; v.previewSources = { spr: "official" };
-    modsEnabled = enabled; await ModSwitch.refresh();
-    await showPortrait(t);
-    const before = structuredClone(v.state.files), start = rpcRequests.length;
-    await switchButton().click(); await flush();
-    await walk(hosts.popup).find((e) => e.dataset.key === "m:test").click(); await flush();
-    const save = walk(hosts.popup).find((e) => e.dataset.action === "ok");
-    assert.equal(save.getAttribute("aria-label"), "Save");
-    await finish(t, save.click());
-    assert.deepEqual(v.previewSources, { spr: "mod:test" });
-    assert.deepEqual(v.configured, {});
-    assert.deepEqual(v.state.files, before);
-    assert.equal(rpcRequests.slice(start).filter((r) => r.method === "actions.apply").length, 0);
-    const detailApply = () => walk(hosts.ngui).find((e) => e.dataset.part?.endsWith("SkillData_EX (3)/Bg"));
-    assert.equal(detailApply().getAttribute("aria-label"), "Apply");
-    assert.equal(detailApply().disabled, false);
-    await finish(t, detailApply().click());
-    assert.equal(v.configured.spr, "mod:test");
-    if (!enabled) assert.deepEqual(v.state.files, before);
-    assert.equal(detailApply().disabled, true);
-    await switchButton().click(); await flush();
-    const popupApply = () => walk(hosts.popup).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === "Apply");
-    assert.equal(popupApply().disabled, true);
-    await walk(hosts.popup).find((e) => e.dataset.key === "self").click(); await flush();
-    assert.equal(popupApply().disabled, false);
-    await finish(t, popupApply().click());
-    assert.equal(v.configured.spr, null);
-    assert.equal(v.previewSources.spr, "mod:test", "Apply does not overwrite the saved preview");
-    assert.equal(popupApply().disabled, true);
-    assert.equal(detailApply().disabled, false);
-  } finally { Detail.hide(); modsEnabled = true; await ModSwitch.refresh(); await flush(); t.mock.timers.reset(); }
-});
-
-for (const kind of ["spr", "lobby", "model"]) for (const selected of [false, true]) {
-  test(`library-only ${kind} remains selectable and preview ${selected ? "uses its saved Mod" : "stays unselected"}`, async (t) => {
+for (const enabled of [false, true])
+  test(`Save changes only the preview and both Apply buttons follow intent with Mods ${enabled ? "on" : "off"}`, async (t) => {
     t.mock.timers.enable({ apis: ["setTimeout"] });
     try {
-      lobbyMode = "ready"; playerMode = "lobby-ready";
-      family = modFamily(kind, `library-only-${kind}`);
+      thumbMode = playerMode = imageMode = decodeMode = "ready";
+      family = modFamily();
       const v = family.variants[0];
-      Object.assign(v, { spr: null, lobby: null, model: null, storedKinds: [kind], localKinds: [],
-        configured: {}, previewSources: selected ? { [kind]: `mod:library-only-${kind}` } : {}, state: { files: [] } });
-      const assetsBefore = assetRequests.length, modelsBefore = modelRequests.length, rpcsBefore = rpcRequests.length;
-      const showing = Detail.show(context, family, v.key); await flush(); await finish(t, showing);
-      assert.equal(Detail.currentVariant(), v.key);
-      assert.ok(switchButton(), "the own Mod can still be selected for preview");
-      const apply = walk(hosts.ngui).find((e) => e.dataset.part?.endsWith("SkillData_EX (3)/Bg"));
-      assert.equal(apply.disabled, true);
-      assert.equal(apply.getAttribute("aria-description"), "No Matching Game File");
-      await apply.click(); await flush();
-      assert.equal(rpcRequests.slice(rpcsBefore).some((r) => r.method === "actions.apply"), false);
-      assert.equal(assetRequests.slice(assetsBefore).some((url) => url.includes("/null/")), false);
-      if (kind === "model") {
-        assert.equal(modelRequests.length - modelsBefore, selected ? 1 : 0);
-        if (selected) assert.equal(modelRequests.at(-1).source, "mod:library-only-model");
-      } else {
-        assert.equal(assetRequests.slice(assetsBefore).some((url) => url.includes(`/mod/library-only-${kind}/`)), selected);
-      }
-      assert.deepEqual(v.previewSources, selected ? { [kind]: `mod:library-only-${kind}` } : {});
-    } finally { Detail.hide(); lobbyMode = "pending"; playerMode = "ready"; await flush(); t.mock.timers.reset(); }
+      v.configured = {};
+      v.previewSources = { spr: "official" };
+      modsEnabled = enabled;
+      await ModSwitch.refresh();
+      await showPortrait(t);
+      const before = structuredClone(v.state.files),
+        start = rpcRequests.length;
+      await switchButton().click();
+      await flush();
+      await walk(hosts.popup)
+        .find((e) => e.dataset.key === "m:test")
+        .click();
+      await flush();
+      const save = walk(hosts.popup).find((e) => e.dataset.action === "ok");
+      assert.equal(save.getAttribute("aria-label"), "Save");
+      await finish(t, save.click());
+      assert.deepEqual(v.previewSources, { spr: "mod:test" });
+      assert.deepEqual(v.configured, {});
+      assert.deepEqual(v.state.files, before);
+      assert.equal(rpcRequests.slice(start).filter((r) => r.method === "actions.apply").length, 0);
+      const detailApply = () => walk(hosts.ngui).find((e) => e.dataset.part?.endsWith("SkillData_EX (3)/Bg"));
+      assert.equal(detailApply().getAttribute("aria-label"), "Apply");
+      assert.equal(detailApply().disabled, false);
+      await finish(t, detailApply().click());
+      assert.equal(v.configured.spr, "mod:test");
+      if (!enabled) assert.deepEqual(v.state.files, before);
+      assert.equal(detailApply().disabled, true);
+      await switchButton().click();
+      await flush();
+      const popupApply = () =>
+        walk(hosts.popup).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === "Apply");
+      assert.equal(popupApply().disabled, true);
+      await walk(hosts.popup)
+        .find((e) => e.dataset.key === "self")
+        .click();
+      await flush();
+      assert.equal(popupApply().disabled, false);
+      await finish(t, popupApply().click());
+      assert.equal(v.configured.spr, null);
+      assert.equal(v.previewSources.spr, "mod:test", "Apply does not overwrite the saved preview");
+      assert.equal(popupApply().disabled, true);
+      assert.equal(detailApply().disabled, false);
+    } finally {
+      Detail.hide();
+      modsEnabled = true;
+      await ModSwitch.refresh();
+      await flush();
+      t.mock.timers.reset();
+    }
   });
-}
+
+for (const kind of ["spr", "lobby", "model"])
+  for (const selected of [false, true]) {
+    test(`library-only ${kind} remains selectable and preview ${selected ? "uses its saved Mod" : "stays unselected"}`, async (t) => {
+      t.mock.timers.enable({ apis: ["setTimeout"] });
+      try {
+        lobbyMode = "ready";
+        playerMode = "lobby-ready";
+        family = modFamily(kind, `library-only-${kind}`);
+        const v = family.variants[0];
+        Object.assign(v, {
+          spr: null,
+          lobby: null,
+          model: null,
+          storedKinds: [kind],
+          localKinds: [],
+          configured: {},
+          previewSources: selected ? { [kind]: `mod:library-only-${kind}` } : {},
+          state: { files: [] },
+        });
+        const assetsBefore = assetRequests.length,
+          modelsBefore = modelRequests.length,
+          rpcsBefore = rpcRequests.length;
+        const showing = Detail.show(context, family, v.key);
+        await flush();
+        await finish(t, showing);
+        assert.equal(Detail.currentVariant(), v.key);
+        assert.ok(switchButton(), "the own Mod can still be selected for preview");
+        const apply = walk(hosts.ngui).find((e) => e.dataset.part?.endsWith("SkillData_EX (3)/Bg"));
+        assert.equal(apply.disabled, true);
+        assert.equal(apply.getAttribute("aria-description"), "No Matching Game File");
+        await apply.click();
+        await flush();
+        assert.equal(
+          rpcRequests.slice(rpcsBefore).some((r) => r.method === "actions.apply"),
+          false,
+        );
+        assert.equal(
+          assetRequests.slice(assetsBefore).some((url) => url.includes("/null/")),
+          false,
+        );
+        if (kind === "model") {
+          assert.equal(modelRequests.length - modelsBefore, selected ? 1 : 0);
+          if (selected) assert.equal(modelRequests.at(-1).source, "mod:library-only-model");
+        } else {
+          assert.equal(
+            assetRequests.slice(assetsBefore).some((url) => url.includes(`/mod/library-only-${kind}/`)),
+            selected,
+          );
+        }
+        assert.deepEqual(v.previewSources, selected ? { [kind]: `mod:library-only-${kind}` } : {});
+      } finally {
+        Detail.hide();
+        lobbyMode = "pending";
+        playerMode = "ready";
+        await flush();
+        t.mock.timers.reset();
+      }
+    });
+  }
 
 test("detail Back calls the session history callback", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   let returned = 0;
   try {
     family = modFamily();
-    const showing = Detail.show({ ...context, back: () => { returned += 1; } }, family, "ibuki");
-    await flush(); await finish(t, showing);
+    const showing = Detail.show(
+      {
+        ...context,
+        back: () => {
+          returned += 1;
+        },
+      },
+      family,
+      "ibuki",
+    );
+    await flush();
+    await finish(t, showing);
     back.onclick();
     assert.equal(returned, 1);
-  } finally { Detail.hide(); await flush(); t.mock.timers.reset(); }
+  } finally {
+    Detail.hide();
+    await flush();
+    t.mock.timers.reset();
+  }
 });
 
 test("an unselected library-only Mod can be saved for preview without applying", async (t) => {
@@ -1787,285 +3159,515 @@ test("an unselected library-only Mod can be saved for preview without applying",
   try {
     family = modFamily("spr", "library-only-pick");
     const v = family.variants[0];
-    Object.assign(v, { spr: null, lobby: null, model: null, storedKinds: ["spr"], localKinds: [],
-      configured: {}, previewSources: {}, state: { files: [] } });
+    Object.assign(v, {
+      spr: null,
+      lobby: null,
+      model: null,
+      storedKinds: ["spr"],
+      localKinds: [],
+      configured: {},
+      previewSources: {},
+      state: { files: [] },
+    });
     await showPortrait(t);
     const before = rpcRequests.length;
-    await switchButton().click(); await flush();
-    await walk(hosts.popup).find((e) => e.dataset.key === "m:library-only-pick").click(); await flush();
+    await switchButton().click();
+    await flush();
+    await walk(hosts.popup)
+      .find((e) => e.dataset.key === "m:library-only-pick")
+      .click();
+    await flush();
     const save = walk(hosts.popup).find((e) => e.dataset.action === "ok");
     await finish(t, save.click());
     assert.deepEqual(v.previewSources, { spr: "mod:library-only-pick" });
-    assert.equal(rpcRequests.slice(before).some((r) => r.method === "actions.apply"), false);
+    assert.equal(
+      rpcRequests.slice(before).some((r) => r.method === "actions.apply"),
+      false,
+    );
     const apply = walk(hosts.ngui).find((e) => e.dataset.part?.endsWith("SkillData_EX (3)/Bg"));
     assert.equal(apply.disabled, true);
-  } finally { Detail.hide(); await flush(); t.mock.timers.reset(); }
+  } finally {
+    Detail.hide();
+    await flush();
+    t.mock.timers.reset();
+  }
 });
 
-const visualButton = (name) => walk(hosts['visual-ui']).find((el) => el.dataset.visualAction === name);
+const visualButton = (name) => walk(hosts["visual-ui"]).find((el) => el.dataset.visualAction === name);
 const zoomButton = () => walk(hosts.ngui).find((el) => el.dataset.part === `${PLATE}/Char_ZoomBtn`);
 function assertPhotographyCorner(mode) {
-  const launcher = document.getElementById('photo-launcher');
-  const hit = walk(launcher).find((el) => el.tagName === 'BUTTON'), scale = 1920 / 2960;
+  const launcher = document.getElementById("photo-launcher");
+  const hit = walk(launcher).find((el) => el.tagName === "BUTTON"),
+    scale = 1920 / 2960;
   // the fullscreen views' one button size
-  const width = 171 * scale, height = 126 * scale;
-  const expected = [960 + 1352 * scale - width / 2 - (mode === 'portrait' ? width + 20 * scale : 0), // SPACE.m apart
-    540 - (-112.5 - 658 + 61.1) * scale - height / 2, width, height];
-  ['left', 'top', 'width', 'height'].forEach((key, index) => assert.ok(Math.abs(parseFloat(hit.style[key]) - expected[index]) < 0.02, `Photography ${key} follows the existing ${mode} corner`));
+  const width = 171 * scale,
+    height = 126 * scale;
+  const expected = [
+    960 + 1352 * scale - width / 2 - (mode === "portrait" ? width + 20 * scale : 0), // SPACE.m apart
+    540 - (-112.5 - 658 + 61.1) * scale - height / 2,
+    width,
+    height,
+  ];
+  ["left", "top", "width", "height"].forEach((key, index) =>
+    assert.ok(
+      Math.abs(parseFloat(hit.style[key]) - expected[index]) < 0.02,
+      `Photography ${key} follows the existing ${mode} corner`,
+    ),
+  );
 }
 async function clickFullscreen(t, button) {
-  assert.ok(button, 'The fullscreen action must exist');
-  const result = button.click(); await flush(); await finish(t, result);
+  assert.ok(button, "The fullscreen action must exist");
+  const result = button.click();
+  await flush();
+  await finish(t, result);
 }
 
-for (const enabled of [true, false]) test(`fullscreen switches both ways on the selected skin with mods ${enabled ? 'on' : 'off'} and keeps preview state`, async (t) => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
-  closeLeftMessages();
-  try {
-    errors.length = 0; lobbyMode = 'ready'; playerMode = 'lobby-ready';
-    setStrings('en-US', localeTable('en-US'));
-    modsEnabled = enabled; await ModSwitch.refresh();
-    family = modFamily('spr', `fullscreen-${enabled}`);
-    const selected = structuredClone(family.variants[0]); selected.key = 'selected-skin'; selected.spr = 'selected_skin_spr'; selected.lobby = 'selected_skin_home';
-    selected.previewSources = { spr: 'mod:portrait-preview', lobby: 'mod:library-only-lobby' };
-    selected.configured = { spr: 'mod:configured-portrait', lobby: 'mod:configured-lobby' };
-    selected.modList = [{ id: 'portrait-preview', target: selected.key, kind: 'spr' }, { id: 'library-only-lobby', target: selected.key, kind: 'lobby' }];
-    family.variants.push(selected);
-    await showPortrait(t, selected.key);
-    await walk(hosts['ngui-expr']).filter((el) => el.tagName === 'BUTTON')[1].click(); await flush();
-    const saved = structuredClone(selected), start = rpcRequests.length, assets = playerRequests.length, requests = assetRequests.length;
-    const origin = zoomButton(); origin.focus();
-    await clickFullscreen(t, origin);
-    assert.equal(hosts.stage.classList.contains('fullscreen'), true);
-    assert.equal(visualButton('Btn_HideUI').getAttribute('aria-label'), 'Switch Memorial Lobby');
-    assert.equal(visualButton('Btn_Back').hidden, false);
-    assert.equal(hosts.ngui.inert, true);
-    assertPhotographyCorner('portrait');
-    visualButton('Btn_HideUI').focus();
-    await clickFullscreen(t, visualButton('Btn_HideUI'));
-    assert.equal(hosts.stage.classList.contains('fullscreen'), true);
-    assert.equal(Detail.currentVariant(), selected.key);
-    assert.equal(hosts.lobby.hidden, false);
-    assert.equal(hosts['visual-ui'].querySelector('.visual-touch'), null, 'Lobby input has no portrait overlay');
-    assert.equal(visualButton('Btn_HideUI').getAttribute('aria-label'), 'Switch Portrait');
-    assert.equal(document.activeElement, visualButton('Btn_HideUI'), 'The replacement switch retains keyboard focus');
-    assert.equal(hosts['fs-exit'].hidden, false, 'Back remains available in the lobby');
-    const s = 1920 / 2960, backBounds = [960 + (-1354 - 171 / 2) * s, 540 - (650 + 126 / 2) * s, 171 * s, 126 * s]; // the Back button's size
-    ['left', 'top', 'width', 'height'].forEach((key, index) => assert.ok(Math.abs(parseFloat(hosts['fs-exit'].style[key]) - backBounds[index]) < 0.02, `Lobby Back ${key} keeps its existing position`));
-    assertPhotographyCorner('lobby');
-    await clickFullscreen(t, visualButton('Btn_HideUI'));
-    assert.equal(hosts.portrait.hidden, false);
-    assert.equal(hosts['fs-exit'].hidden, true, 'The portrait keeps its own Back control');
-    assert.equal(visualButton('Btn_HideUI').getAttribute('aria-label'), 'Switch Memorial Lobby');
-    const player = [...hosts.portrait.querySelectorAll('.layer')].at(-1).player;
-    assert.equal(player.trackNames[1], '01', 'The selected expression survives the round trip');
-    assert.equal(document.activeElement, visualButton('Btn_HideUI'));
-    assertPhotographyCorner('portrait');
-    assert.ok(playerRequests.slice(assets).some((url) => url.includes('/mod/library-only-lobby/')));
-    assert.ok(assetRequests.slice(requests).some((url) => url.includes('/lobby/selected_skin_home/')));
-    assert.ok(!assetRequests.slice(requests).some((url) => url.includes('/lobby/ibuki_home/')), 'No other skin supplies the lobby');
-    assert.ok(playerRequests.slice(assets).some((url) => url.includes('/mod/portrait-preview/')));
-    await clickFullscreen(t, visualButton('Btn_Back'));
-    assert.equal(hosts.stage.classList.contains('fullscreen'), false);
-    await clickFullscreen(t, zoomButton()); keydown('Escape'); await flush();
-    assert.equal(hosts.stage.classList.contains('fullscreen'), false);
-    assert.equal(hosts.ngui.inert, false);
-    assert.equal(document.activeElement, zoomButton(), 'Back returns focus to the rebuilt detail launcher');
-    assert.deepEqual(selected, saved);
-    assert.equal(ModSwitch.current().enabled, enabled);
-    assert.ok(!rpcRequests.slice(start).some((r) => /^(actions\.|ui\.preview|mods\.(set|toggle))/.test(r.method)), 'Fullscreen navigation performs no game or preview writes');
-    assert.ok(!errors.some((args) => args[0] === 'Detail render failed'), errors.map(String).join('\n'));
-  } finally { Detail.hide(); modsEnabled = true; await ModSwitch.refresh(); lobbyMode = 'pending'; playerMode = 'ready'; await flush(); t.mock.timers.reset(); }
-});
+for (const enabled of [true, false])
+  test(`fullscreen switches both ways on the selected skin with mods ${enabled ? "on" : "off"} and keeps preview state`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    closeLeftMessages();
+    try {
+      errors.length = 0;
+      lobbyMode = "ready";
+      playerMode = "lobby-ready";
+      setStrings("en-US", localeTable("en-US"));
+      modsEnabled = enabled;
+      await ModSwitch.refresh();
+      family = modFamily("spr", `fullscreen-${enabled}`);
+      const selected = structuredClone(family.variants[0]);
+      selected.key = "selected-skin";
+      selected.spr = "selected_skin_spr";
+      selected.lobby = "selected_skin_home";
+      selected.previewSources = { spr: "mod:portrait-preview", lobby: "mod:library-only-lobby" };
+      selected.configured = { spr: "mod:configured-portrait", lobby: "mod:configured-lobby" };
+      selected.modList = [
+        { id: "portrait-preview", target: selected.key, kind: "spr" },
+        { id: "library-only-lobby", target: selected.key, kind: "lobby" },
+      ];
+      family.variants.push(selected);
+      await showPortrait(t, selected.key);
+      await walk(hosts["ngui-expr"])
+        .filter((el) => el.tagName === "BUTTON")[1]
+        .click();
+      await flush();
+      const saved = structuredClone(selected),
+        start = rpcRequests.length,
+        assets = playerRequests.length,
+        requests = assetRequests.length;
+      const origin = zoomButton();
+      origin.focus();
+      await clickFullscreen(t, origin);
+      assert.equal(hosts.stage.classList.contains("fullscreen"), true);
+      assert.equal(visualButton("Btn_HideUI").getAttribute("aria-label"), "Switch Memorial Lobby");
+      assert.equal(visualButton("Btn_Back").hidden, false);
+      assert.equal(hosts.ngui.inert, true);
+      assertPhotographyCorner("portrait");
+      visualButton("Btn_HideUI").focus();
+      await clickFullscreen(t, visualButton("Btn_HideUI"));
+      assert.equal(hosts.stage.classList.contains("fullscreen"), true);
+      assert.equal(Detail.currentVariant(), selected.key);
+      assert.equal(hosts.lobby.hidden, false);
+      assert.equal(hosts["visual-ui"].querySelector(".visual-touch"), null, "Lobby input has no portrait overlay");
+      assert.equal(visualButton("Btn_HideUI").getAttribute("aria-label"), "Switch Portrait");
+      assert.equal(document.activeElement, visualButton("Btn_HideUI"), "The replacement switch retains keyboard focus");
+      assert.equal(hosts["fs-exit"].hidden, false, "Back remains available in the lobby");
+      const s = 1920 / 2960,
+        backBounds = [960 + (-1354 - 171 / 2) * s, 540 - (650 + 126 / 2) * s, 171 * s, 126 * s]; // the Back button's size
+      ["left", "top", "width", "height"].forEach((key, index) =>
+        assert.ok(
+          Math.abs(parseFloat(hosts["fs-exit"].style[key]) - backBounds[index]) < 0.02,
+          `Lobby Back ${key} keeps its existing position`,
+        ),
+      );
+      assertPhotographyCorner("lobby");
+      await clickFullscreen(t, visualButton("Btn_HideUI"));
+      assert.equal(hosts.portrait.hidden, false);
+      assert.equal(hosts["fs-exit"].hidden, true, "The portrait keeps its own Back control");
+      assert.equal(visualButton("Btn_HideUI").getAttribute("aria-label"), "Switch Memorial Lobby");
+      const player = [...hosts.portrait.querySelectorAll(".layer")].at(-1).player;
+      assert.equal(player.trackNames[1], "01", "The selected expression survives the round trip");
+      assert.equal(document.activeElement, visualButton("Btn_HideUI"));
+      assertPhotographyCorner("portrait");
+      assert.ok(playerRequests.slice(assets).some((url) => url.includes("/mod/library-only-lobby/")));
+      assert.ok(assetRequests.slice(requests).some((url) => url.includes("/lobby/selected_skin_home/")));
+      assert.ok(
+        !assetRequests.slice(requests).some((url) => url.includes("/lobby/ibuki_home/")),
+        "No other skin supplies the lobby",
+      );
+      assert.ok(playerRequests.slice(assets).some((url) => url.includes("/mod/portrait-preview/")));
+      await clickFullscreen(t, visualButton("Btn_Back"));
+      assert.equal(hosts.stage.classList.contains("fullscreen"), false);
+      await clickFullscreen(t, zoomButton());
+      keydown("Escape");
+      await flush();
+      assert.equal(hosts.stage.classList.contains("fullscreen"), false);
+      assert.equal(hosts.ngui.inert, false);
+      assert.equal(document.activeElement, zoomButton(), "Back returns focus to the rebuilt detail launcher");
+      assert.deepEqual(selected, saved);
+      assert.equal(ModSwitch.current().enabled, enabled);
+      assert.ok(
+        !rpcRequests.slice(start).some((r) => /^(actions\.|ui\.preview|mods\.(set|toggle))/.test(r.method)),
+        "Fullscreen navigation performs no game or preview writes",
+      );
+      assert.ok(!errors.some((args) => args[0] === "Detail render failed"), errors.map(String).join("\n"));
+    } finally {
+      Detail.hide();
+      modsEnabled = true;
+      await ModSwitch.refresh();
+      lobbyMode = "pending";
+      playerMode = "ready";
+      await flush();
+      t.mock.timers.reset();
+    }
+  });
 
-test('a skin without a lobby omits the switch even when another skin has a lobby', async (t) => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
+test("a skin without a lobby omits the switch even when another skin has a lobby", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
     family = modFamily();
-    const selected = { ...structuredClone(family.variants[0]), key: 'portrait-only', lobby: null };
+    const selected = { ...structuredClone(family.variants[0]), key: "portrait-only", lobby: null };
     family.variants.push(selected);
     await showPortrait(t, selected.key);
     await clickFullscreen(t, zoomButton());
-    assert.equal(visualButton('Btn_HideUI'), undefined);
-    assert.ok(visualButton('Btn_Back'));
-    assert.ok(walk(hosts['visual-ui']).some((el) => el.dataset.path?.includes('Btn_RefreshPos_Disable')));
-    assert.ok(document.getElementById('photo-launcher'), 'Photography remains available');
-    await clickFullscreen(t, visualButton('Btn_Back'));
-    assert.equal(hosts.stage.classList.contains('fullscreen'), false);
-  } finally { Detail.hide(); await flush(); t.mock.timers.reset(); }
+    assert.equal(visualButton("Btn_HideUI"), undefined);
+    assert.ok(visualButton("Btn_Back"));
+    assert.ok(walk(hosts["visual-ui"]).some((el) => el.dataset.path?.includes("Btn_RefreshPos_Disable")));
+    assert.ok(document.getElementById("photo-launcher"), "Photography remains available");
+    await clickFullscreen(t, visualButton("Btn_Back"));
+    assert.equal(hosts.stage.classList.contains("fullscreen"), false);
+  } finally {
+    Detail.hide();
+    await flush();
+    t.mock.timers.reset();
+  }
 });
 
-for (const viaSwitch of [true, false]) test(`Back and Escape leave the lobby fullscreen ${viaSwitch ? 'after the portrait switch' : 'from the lobby detail tab'}`, async (t) => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
-  closeLeftMessages();
-  try {
-    lobbyMode = 'ready'; playerMode = 'lobby-ready'; family = modFamily();
-    await showPortrait(t);
-    if (!viaSwitch) await clickFullscreen(t, tabButton(2));
-    zoomButton().focus(); await clickFullscreen(t, zoomButton());
-    if (viaSwitch) await clickFullscreen(t, visualButton('Btn_HideUI'));
-    await clickFullscreen(t, hosts['fs-exit']);
-    assert.equal(hosts.stage.classList.contains('fullscreen'), false);
-    assert.equal(hosts['visual-ui'].hidden, true);
-    assert.equal(document.activeElement, zoomButton());
-    await clickFullscreen(t, zoomButton()); keydown('Escape'); await flush();
-    assert.equal(hosts.stage.classList.contains('fullscreen'), false);
-    assert.equal(hosts['visual-ui'].hidden, true);
-    assert.equal(hosts.ngui.inert, false);
-  } finally { Detail.hide(); lobbyMode = 'pending'; playerMode = 'ready'; await flush(); t.mock.timers.reset(); }
-});
-
-test('Escape while a fullscreen switch is loading cannot reopen fullscreen with stale controls', async (t) => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
-  closeLeftMessages();
-  try {
-    family = modFamily(); lobbyMode = 'pending'; await showPortrait(t);
-    await clickFullscreen(t, zoomButton());
-    const switching = visualButton('Btn_HideUI').click(); await flush();
-    keydown('Escape'); await flush();
-    await finish(t, switching);
-    assert.equal(hosts.stage.classList.contains('fullscreen'), false);
-    assert.equal(hosts['visual-ui'].hidden, true);
-    assert.equal(hosts['fs-exit'].hidden, true);
-    assert.equal(hosts.ngui.inert, false);
-  } finally { Detail.hide(); await flush(); t.mock.timers.reset(); }
-});
-
-for (const lang of ['en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'th-TH']) test(`fullscreen prefab corners and native switch buttons preserve geometry in ${lang}`, async () => {
-  const Visual = await import('../../src/bmpt/web/js/visual-mode.js');
-  const strings = localeTable(lang), scale = 1920 / 2960, layout = visualPrefab();
-  const labels = { back: strings['webui.lobby.exit'], reset: strings['webui.visual.reset'], switch: strings['webui.row.switch.lobby'] };
-  const before = structuredClone(layout);
-  const parts = await Visual.prepare({ layout, strings: labels });
-  let switched = 0;
-  const lobby = await Visual.prepareSwitch({ layout, label: strings['webui.row.switch.portrait'], onSwitch: () => { switched++; } });
-  let leftCamera = 0;
-  const cameraBack = await Visual.prepareBack({ layout, label: strings['webui.photo.back'], onBack: () => { leftCamera++; } });
-  const button = (group) => walk(group).find((el) => el.tagName === 'BUTTON');
-  const portraitSwitch = button(parts.groups.Btn_HideUI), lobbySwitch = button(lobby);
-  for (const key of ['left', 'top', 'width', 'height', 'zIndex']) assert.equal(lobbySwitch.style[key], portraitSwitch.style[key], 'Both views use the identical hit area');
-  assert.equal(portraitSwitch.getAttribute('aria-label'), strings['webui.row.switch.lobby']);
-  assert.equal(lobbySwitch.getAttribute('aria-label'), strings['webui.row.switch.portrait']);
-  for (const control of [portraitSwitch, lobbySwitch]) {
-    assert.equal(control.tagName, 'BUTTON', 'Native buttons support Tab, Enter and Space');
-    assert.notEqual(control.tabIndex, -1);
-    assert.equal(control.disabled, undefined);
-    assert.equal(control.closest('[inert]'), null);
-  }
-  await lobbySwitch.click(); assert.equal(switched, 1);
-  for (const key of ['left', 'top', 'width', 'height', 'zIndex']) assert.equal(button(cameraBack).style[key], button(parts.groups.Btn_Back).style[key], 'Camera Back uses the complete fullscreen collider');
-  assert.equal(button(cameraBack).getAttribute('aria-label'), strings['webui.photo.back']);
-  await button(cameraBack).click(); assert.equal(leftCamera, 1, 'Camera Back calls its leave action');
-  const backIcon = (group) => walk(group).find(el => el.dataset.path?.endsWith('LeftTop/Btn_Back/Icon'));
-  for (const key of ['left', 'top', 'width', 'height', 'backgroundImage']) assert.equal(backIcon(cameraBack).style[key], backIcon(parts.groups.Btn_Back).style[key], 'Camera Back retains the fullscreen icon geometry');
-  assert.equal(parts.groups.Btn_ShowUI, undefined, 'No Hide/Show UI alternate remains');
-  const near = (a, b) => assert.ok(Math.abs(a - b) < 0.02, `${a} != ${b}`);
-  const bounds = (el) => ['left', 'top', 'width', 'height'].map((key) => parseFloat(el.style[key]));
-  const switchBox = bounds(portraitSwitch);
-  const backBox = bounds(button(parts.groups.Btn_Back));
-  const resetBox = bounds(button(parts.groups.Btn_RefreshPos));
-  const expected = [
-    // the prefab's colliders, grown with the bodies' fullscreen height (116 to 126)
-    [switchBox, [960 + (1352 - 228.83 / 2) * scale, 540 - (78.5 + 650 + 175 / 2) * scale, 228.83 * scale, 175 * scale]],
-    [backBox, [960 + (-1354 - 228.83 / 2) * scale, switchBox[1], 228.83 * scale, 175 * scale]],
-    [resetBox, [switchBox[0], 540 - (-112.5 - 658 + 32 + 205.2 / 2) * scale, 228.83 * scale, 205.2 * scale]],
-  ];
-  for (const [width, height] of [[960, 540], [1600, 900], [2560, 1440], [2560, 1080], [960, 1200]]) for (const density of [1, 2]) {
-    const factor = Math.min(width / 1920, height / 1080) * density;
-    for (const [actual, reference] of expected) actual.forEach((value, index) => near(value * factor, reference[index] * factor));
-  }
-  for (const group of [parts.groups.Btn_HideUI, lobby]) {
-    const icon = walk(group).find((el) => el.dataset.path?.endsWith('RightTop/Btn_HideUI/Icon'));
-    near(parseFloat(icon.style.width), 79 * scale); near(parseFloat(icon.style.height), 67 * scale);
-    near(parseFloat(icon.style.left) + 79 * scale / 2, switchBox[0] + switchBox[2] / 2);
-    near(parseFloat(icon.style.top) + 67 * scale / 2, switchBox[1] + switchBox[3] / 2 - 8 * scale);
-    assert.equal(icon.style.backgroundSize, 'contain', 'The square cycle arrows fit inside the existing icon slot');
-    const fit = Math.min(79 / atlas.Common.Common_Icon_Change.width, 67 / atlas.Common.Common_Icon_Change.height);
-    near(atlas.Common.Common_Icon_Change.width * fit, 67); near(atlas.Common.Common_Icon_Change.height * fit, 67);
-    assert.ok(imageRequests.some((url) => url.includes('/Common_Icon_Change.png')), 'The Student Hall Flip sprite is rendered');
-  }
-  assert.deepEqual(layout, before, 'The source prefab is unchanged');
-  const { CORNER_MARGIN, reflowCorners } = await import('../../src/bmpt/web/js/corner-layout.js');
-  const { headerGeometry } = await import('../../src/bmpt/web/js/window-layout.js');
-  const oldRect = hosts.stage.getBoundingClientRect;
-  const old = Object.fromEntries(['innerWidth', 'innerHeight', 'bamtWindowChrome', 'bamtHeaderGeometry'].map(k => [k, globalThis[k]]));
-  const holder = body.appendChild(new El());
-  holder.append(...Object.values(parts.groups), lobby, cameraBack);
-  const exit = holder.appendChild(new El('button'));
-  try {
-    await Visual.exitControl(exit, layout);
-    for (const platform of [null, 'darwin', 'win32']) for (const [width, height] of [[960, 540], [1600, 900], [2560, 1440], [2560, 1080], [960, 1200]]) {
-      const k = Math.min(width / 1920, height / 1080), stageLeft = (width - 1920 * k) / 2, stageTop = (height - 1080 * k) / 2, native = platform ? { active: true, platform, bounds: platform === 'darwin'
-        ? { left: 12, right: 80, top: 8, bottom: 30 } : { left: width - 148, right: width, top: 8, bottom: 40 } } : null;
-      Object.assign(globalThis, { innerWidth: width, innerHeight: height, bamtWindowChrome: native,
-        bamtHeaderGeometry: platform ? headerGeometry(width, height, platform === 'win32' ? 40 : 0, true) : null });
-      hosts.stage.getBoundingClientRect = () => ({ left: stageLeft, top: stageTop, width: 1920 * k, height: 1080 * k });
-      reflowCorners();
-      const checks = [[parts.groups.Btn_Back, 'LeftTop/Btn_Back', 'top-left'], [cameraBack, 'LeftTop/Btn_Back', 'top-left'], [parts.groups.Btn_HideUI, 'RightTop/Btn_HideUI', 'top-right'],
-        [lobby, 'RightTop/Btn_HideUI', 'top-right'], [parts.groups.Btn_RefreshPos, 'RightBottom/Btn_RefreshPos/Btn_RefreshPos', 'bottom-right'],
-        [parts.groups.Btn_RefreshPos_Disable, 'RightBottom/Btn_RefreshPos_Disable/Btn_RefreshPos', 'bottom-right']];
-      const topEdges = [];
-      const overlap = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
-      for (const [group, path, corner] of checks) {
-        const sprite = walk(group).find(el => el.dataset.path === `Inventory_ListControl_PC/${path}`);
-        assert.ok(sprite, path);
-        const [dx, dy] = group.style.translate.split(' ').map(parseFloat), box = bounds(sprite);
-        const right = corner.endsWith('right'), bottom = corner.startsWith('bottom');
-        const margin = CORNER_MARGIN * k;
-        const actual = { left: stageLeft + (box[0] + dx) * k, top: stageTop + (box[1] + dy) * k };
-        actual.right = actual.left + box[2] * k; actual.bottom = actual.top + box[3] * k;
-        const candidate = { left: right ? width - margin - box[2] * k : margin,
-          top: actual.top, bottom: actual.bottom };
-        candidate.right = candidate.left + box[2] * k;
-        const moved = !bottom && native && overlap(candidate, native.bounds);
-        near(moved ? (right ? native.bounds.left - actual.right : actual.left - native.bounds.right)
-          : (right ? width - stageLeft - (box[0] + dx + box[2]) * k : stageLeft + (box[0] + dx) * k), margin);
-        near(bottom ? height - stageTop - (box[1] + dy + box[3]) * k : stageTop + (box[1] + dy) * k, margin);
-        if (!bottom) topEdges.push(stageTop + (box[1] + dy) * k);
-        if (native) assert.ok(!overlap(actual, native.bounds), 'Visible fullscreen controls clear native bounds');
-      }
-      topEdges.forEach(y => near(y, topEdges[0]));
-      const [dx, dy] = exit.style.translate.split(' ').map(parseFloat);
-      const margin = CORNER_MARGIN * k, x = stageLeft + (parseFloat(exit.style.left) + dx) * k;
-      const candidate = { left: margin, right: margin + parseFloat(exit.style.width) * k,
-        top: margin, bottom: margin + parseFloat(exit.style.height) * k };
-      near(x, native && overlap(candidate, native.bounds) ? native.bounds.right + margin : margin);
-      near(stageTop + (parseFloat(exit.style.top) + dy) * k, margin);
-      for (const group of [parts.groups.Btn_Back, cameraBack]) {
-        const sprite = walk(group).find(el => el.dataset.path === 'Inventory_ListControl_PC/LeftTop/Btn_Back');
-        const [bx, by] = group.style.translate.split(' ').map(parseFloat), box = bounds(sprite);
-        [stageLeft + (box[0] + bx) * k, stageTop + (box[1] + by) * k, box[2] * k, box[3] * k]
-          .forEach((value, i) => near(value, [x, margin, parseFloat(exit.style.width) * k, parseFloat(exit.style.height) * k][i]));
-      }
-      if (platform === 'win32' && width === 2560 && height === 1440) {
-        for (const group of [parts.groups.Btn_HideUI, lobby]) {
-          const [tx, ty] = group.style.translate.split(' ').map(parseFloat), box = bounds(button(group));
-          const hit = { left: stageLeft + (box[0] + tx) * k, top: stageTop + (box[1] + ty) * k };
-          hit.right = hit.left + box[2] * k; hit.bottom = hit.top + box[3] * k;
-          assert.ok(overlap(hit, native.bounds), 'A collider-only overlap with Windows controls keeps the prefab hit area');
-          const sprite = walk(group).find(el => el.dataset.path === 'Inventory_ListControl_PC/RightTop/Btn_HideUI');
-          near(width - stageLeft - (parseFloat(sprite.style.left) + tx + parseFloat(sprite.style.width)) * k, margin);
-        }
-      }
+for (const viaSwitch of [true, false])
+  test(`Back and Escape leave the lobby fullscreen ${viaSwitch ? "after the portrait switch" : "from the lobby detail tab"}`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    closeLeftMessages();
+    try {
+      lobbyMode = "ready";
+      playerMode = "lobby-ready";
+      family = modFamily();
+      await showPortrait(t);
+      if (!viaSwitch) await clickFullscreen(t, tabButton(2));
+      zoomButton().focus();
+      await clickFullscreen(t, zoomButton());
+      if (viaSwitch) await clickFullscreen(t, visualButton("Btn_HideUI"));
+      await clickFullscreen(t, hosts["fs-exit"]);
+      assert.equal(hosts.stage.classList.contains("fullscreen"), false);
+      assert.equal(hosts["visual-ui"].hidden, true);
+      assert.equal(document.activeElement, zoomButton());
+      await clickFullscreen(t, zoomButton());
+      keydown("Escape");
+      await flush();
+      assert.equal(hosts.stage.classList.contains("fullscreen"), false);
+      assert.equal(hosts["visual-ui"].hidden, true);
+      assert.equal(hosts.ngui.inert, false);
+    } finally {
+      Detail.hide();
+      lobbyMode = "pending";
+      playerMode = "ready";
+      await flush();
+      t.mock.timers.reset();
     }
-  } finally { holder.remove(); hosts.stage.getBoundingClientRect = oldRect; Object.assign(globalThis, old); }
+  });
+
+test("Escape while a fullscreen switch is loading cannot reopen fullscreen with stale controls", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  closeLeftMessages();
+  try {
+    family = modFamily();
+    lobbyMode = "pending";
+    await showPortrait(t);
+    await clickFullscreen(t, zoomButton());
+    const switching = visualButton("Btn_HideUI").click();
+    await flush();
+    keydown("Escape");
+    await flush();
+    await finish(t, switching);
+    assert.equal(hosts.stage.classList.contains("fullscreen"), false);
+    assert.equal(hosts["visual-ui"].hidden, true);
+    assert.equal(hosts["fs-exit"].hidden, true);
+    assert.equal(hosts.ngui.inert, false);
+  } finally {
+    Detail.hide();
+    await flush();
+    t.mock.timers.reset();
+  }
 });
+
+for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
+  test(`fullscreen prefab corners and native switch buttons preserve geometry in ${lang}`, async () => {
+    const Visual = await import("../../src/bmpt/web/js/visual-mode.js");
+    const strings = localeTable(lang),
+      scale = 1920 / 2960,
+      layout = visualPrefab();
+    const labels = {
+      back: strings["webui.lobby.exit"],
+      reset: strings["webui.visual.reset"],
+      switch: strings["webui.row.switch.lobby"],
+    };
+    const before = structuredClone(layout);
+    const parts = await Visual.prepare({ layout, strings: labels });
+    let switched = 0;
+    const lobby = await Visual.prepareSwitch({
+      layout,
+      label: strings["webui.row.switch.portrait"],
+      onSwitch: () => {
+        switched++;
+      },
+    });
+    let leftCamera = 0;
+    const cameraBack = await Visual.prepareBack({
+      layout,
+      label: strings["webui.photo.back"],
+      onBack: () => {
+        leftCamera++;
+      },
+    });
+    const button = (group) => walk(group).find((el) => el.tagName === "BUTTON");
+    const portraitSwitch = button(parts.groups.Btn_HideUI),
+      lobbySwitch = button(lobby);
+    for (const key of ["left", "top", "width", "height", "zIndex"])
+      assert.equal(lobbySwitch.style[key], portraitSwitch.style[key], "Both views use the identical hit area");
+    assert.equal(portraitSwitch.getAttribute("aria-label"), strings["webui.row.switch.lobby"]);
+    assert.equal(lobbySwitch.getAttribute("aria-label"), strings["webui.row.switch.portrait"]);
+    for (const control of [portraitSwitch, lobbySwitch]) {
+      assert.equal(control.tagName, "BUTTON", "Native buttons support Tab, Enter and Space");
+      assert.notEqual(control.tabIndex, -1);
+      assert.equal(control.disabled, undefined);
+      assert.equal(control.closest("[inert]"), null);
+    }
+    await lobbySwitch.click();
+    assert.equal(switched, 1);
+    for (const key of ["left", "top", "width", "height", "zIndex"])
+      assert.equal(
+        button(cameraBack).style[key],
+        button(parts.groups.Btn_Back).style[key],
+        "Camera Back uses the complete fullscreen collider",
+      );
+    assert.equal(button(cameraBack).getAttribute("aria-label"), strings["webui.photo.back"]);
+    await button(cameraBack).click();
+    assert.equal(leftCamera, 1, "Camera Back calls its leave action");
+    const backIcon = (group) => walk(group).find((el) => el.dataset.path?.endsWith("LeftTop/Btn_Back/Icon"));
+    for (const key of ["left", "top", "width", "height", "backgroundImage"])
+      assert.equal(
+        backIcon(cameraBack).style[key],
+        backIcon(parts.groups.Btn_Back).style[key],
+        "Camera Back retains the fullscreen icon geometry",
+      );
+    assert.equal(parts.groups.Btn_ShowUI, undefined, "No Hide/Show UI alternate remains");
+    const near = (a, b) => assert.ok(Math.abs(a - b) < 0.02, `${a} != ${b}`);
+    const bounds = (el) => ["left", "top", "width", "height"].map((key) => parseFloat(el.style[key]));
+    const switchBox = bounds(portraitSwitch);
+    const backBox = bounds(button(parts.groups.Btn_Back));
+    const resetBox = bounds(button(parts.groups.Btn_RefreshPos));
+    const expected = [
+      // the prefab's colliders, grown with the bodies' fullscreen height (116 to 126)
+      [
+        switchBox,
+        [960 + (1352 - 228.83 / 2) * scale, 540 - (78.5 + 650 + 175 / 2) * scale, 228.83 * scale, 175 * scale],
+      ],
+      [backBox, [960 + (-1354 - 228.83 / 2) * scale, switchBox[1], 228.83 * scale, 175 * scale]],
+      [resetBox, [switchBox[0], 540 - (-112.5 - 658 + 32 + 205.2 / 2) * scale, 228.83 * scale, 205.2 * scale]],
+    ];
+    for (const [width, height] of [
+      [960, 540],
+      [1600, 900],
+      [2560, 1440],
+      [2560, 1080],
+      [960, 1200],
+    ])
+      for (const density of [1, 2]) {
+        const factor = Math.min(width / 1920, height / 1080) * density;
+        for (const [actual, reference] of expected)
+          actual.forEach((value, index) => near(value * factor, reference[index] * factor));
+      }
+    for (const group of [parts.groups.Btn_HideUI, lobby]) {
+      const icon = walk(group).find((el) => el.dataset.path?.endsWith("RightTop/Btn_HideUI/Icon"));
+      near(parseFloat(icon.style.width), 79 * scale);
+      near(parseFloat(icon.style.height), 67 * scale);
+      near(parseFloat(icon.style.left) + (79 * scale) / 2, switchBox[0] + switchBox[2] / 2);
+      near(parseFloat(icon.style.top) + (67 * scale) / 2, switchBox[1] + switchBox[3] / 2 - 8 * scale);
+      assert.equal(icon.style.backgroundSize, "contain", "The square cycle arrows fit inside the existing icon slot");
+      const fit = Math.min(79 / atlas.Common.Common_Icon_Change.width, 67 / atlas.Common.Common_Icon_Change.height);
+      near(atlas.Common.Common_Icon_Change.width * fit, 67);
+      near(atlas.Common.Common_Icon_Change.height * fit, 67);
+      assert.ok(
+        imageRequests.some((url) => url.includes("/Common_Icon_Change.png")),
+        "The Student Hall Flip sprite is rendered",
+      );
+    }
+    assert.deepEqual(layout, before, "The source prefab is unchanged");
+    const { CORNER_MARGIN, reflowCorners } = await import("../../src/bmpt/web/js/corner-layout.js");
+    const { headerGeometry } = await import("../../src/bmpt/web/js/window-layout.js");
+    const oldRect = hosts.stage.getBoundingClientRect;
+    const old = Object.fromEntries(
+      ["innerWidth", "innerHeight", "bamtWindowChrome", "bamtHeaderGeometry"].map((k) => [k, globalThis[k]]),
+    );
+    const holder = body.appendChild(new El());
+    holder.append(...Object.values(parts.groups), lobby, cameraBack);
+    const exit = holder.appendChild(new El("button"));
+    try {
+      await Visual.exitControl(exit, layout);
+      for (const platform of [null, "darwin", "win32"])
+        for (const [width, height] of [
+          [960, 540],
+          [1600, 900],
+          [2560, 1440],
+          [2560, 1080],
+          [960, 1200],
+        ]) {
+          const k = Math.min(width / 1920, height / 1080),
+            stageLeft = (width - 1920 * k) / 2,
+            stageTop = (height - 1080 * k) / 2,
+            native = platform
+              ? {
+                  active: true,
+                  platform,
+                  bounds:
+                    platform === "darwin"
+                      ? { left: 12, right: 80, top: 8, bottom: 30 }
+                      : { left: width - 148, right: width, top: 8, bottom: 40 },
+                }
+              : null;
+          Object.assign(globalThis, {
+            innerWidth: width,
+            innerHeight: height,
+            bamtWindowChrome: native,
+            bamtHeaderGeometry: platform ? headerGeometry(width, height, platform === "win32" ? 40 : 0, true) : null,
+          });
+          hosts.stage.getBoundingClientRect = () => ({
+            left: stageLeft,
+            top: stageTop,
+            width: 1920 * k,
+            height: 1080 * k,
+          });
+          reflowCorners();
+          const checks = [
+            [parts.groups.Btn_Back, "LeftTop/Btn_Back", "top-left"],
+            [cameraBack, "LeftTop/Btn_Back", "top-left"],
+            [parts.groups.Btn_HideUI, "RightTop/Btn_HideUI", "top-right"],
+            [lobby, "RightTop/Btn_HideUI", "top-right"],
+            [parts.groups.Btn_RefreshPos, "RightBottom/Btn_RefreshPos/Btn_RefreshPos", "bottom-right"],
+            [parts.groups.Btn_RefreshPos_Disable, "RightBottom/Btn_RefreshPos_Disable/Btn_RefreshPos", "bottom-right"],
+          ];
+          const topEdges = [];
+          const overlap = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+          for (const [group, path, corner] of checks) {
+            const sprite = walk(group).find((el) => el.dataset.path === `Inventory_ListControl_PC/${path}`);
+            assert.ok(sprite, path);
+            const [dx, dy] = group.style.translate.split(" ").map(parseFloat),
+              box = bounds(sprite);
+            const right = corner.endsWith("right"),
+              bottom = corner.startsWith("bottom");
+            const margin = CORNER_MARGIN * k;
+            const actual = { left: stageLeft + (box[0] + dx) * k, top: stageTop + (box[1] + dy) * k };
+            actual.right = actual.left + box[2] * k;
+            actual.bottom = actual.top + box[3] * k;
+            const candidate = {
+              left: right ? width - margin - box[2] * k : margin,
+              top: actual.top,
+              bottom: actual.bottom,
+            };
+            candidate.right = candidate.left + box[2] * k;
+            const moved = !bottom && native && overlap(candidate, native.bounds);
+            near(
+              moved
+                ? right
+                  ? native.bounds.left - actual.right
+                  : actual.left - native.bounds.right
+                : right
+                  ? width - stageLeft - (box[0] + dx + box[2]) * k
+                  : stageLeft + (box[0] + dx) * k,
+              margin,
+            );
+            near(bottom ? height - stageTop - (box[1] + dy + box[3]) * k : stageTop + (box[1] + dy) * k, margin);
+            if (!bottom) topEdges.push(stageTop + (box[1] + dy) * k);
+            if (native) assert.ok(!overlap(actual, native.bounds), "Visible fullscreen controls clear native bounds");
+          }
+          topEdges.forEach((y) => near(y, topEdges[0]));
+          const [dx, dy] = exit.style.translate.split(" ").map(parseFloat);
+          const margin = CORNER_MARGIN * k,
+            x = stageLeft + (parseFloat(exit.style.left) + dx) * k;
+          const candidate = {
+            left: margin,
+            right: margin + parseFloat(exit.style.width) * k,
+            top: margin,
+            bottom: margin + parseFloat(exit.style.height) * k,
+          };
+          near(x, native && overlap(candidate, native.bounds) ? native.bounds.right + margin : margin);
+          near(stageTop + (parseFloat(exit.style.top) + dy) * k, margin);
+          for (const group of [parts.groups.Btn_Back, cameraBack]) {
+            const sprite = walk(group).find((el) => el.dataset.path === "Inventory_ListControl_PC/LeftTop/Btn_Back");
+            const [bx, by] = group.style.translate.split(" ").map(parseFloat),
+              box = bounds(sprite);
+            [stageLeft + (box[0] + bx) * k, stageTop + (box[1] + by) * k, box[2] * k, box[3] * k].forEach((value, i) =>
+              near(value, [x, margin, parseFloat(exit.style.width) * k, parseFloat(exit.style.height) * k][i]),
+            );
+          }
+          if (platform === "win32" && width === 2560 && height === 1440) {
+            for (const group of [parts.groups.Btn_HideUI, lobby]) {
+              const [tx, ty] = group.style.translate.split(" ").map(parseFloat),
+                box = bounds(button(group));
+              const hit = { left: stageLeft + (box[0] + tx) * k, top: stageTop + (box[1] + ty) * k };
+              hit.right = hit.left + box[2] * k;
+              hit.bottom = hit.top + box[3] * k;
+              assert.ok(
+                overlap(hit, native.bounds),
+                "A collider-only overlap with Windows controls keeps the prefab hit area",
+              );
+              const sprite = walk(group).find(
+                (el) => el.dataset.path === "Inventory_ListControl_PC/RightTop/Btn_HideUI",
+              );
+              near(
+                width - stageLeft - (parseFloat(sprite.style.left) + tx + parseFloat(sprite.style.width)) * k,
+                margin,
+              );
+            }
+          }
+        }
+    } finally {
+      holder.remove();
+      hosts.stage.getBoundingClientRect = oldRect;
+      Object.assign(globalThis, old);
+    }
+  });
 
 // --- UI-13: accessible names and pressed states of the detail screen's controls, from the locale files ---
-const named = (host, pattern) => walk(host).filter((e) => e.tagName === "BUTTON" && pattern.test(e.dataset.part || e.getAttribute("aria-label") || ""));
+const named = (host, pattern) =>
+  walk(host).filter(
+    (e) => e.tagName === "BUTTON" && pattern.test(e.dataset.part || e.getAttribute("aria-label") || ""),
+  );
 const everyLocale = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"];
 
 test("the student arrows, the copy button and the variant chips are named, and the shown chip is pressed, in every locale", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
     for (const lang of everyLocale) {
-      const table = localeTable(lang); setStrings(lang, table);
+      const table = localeTable(lang);
+      setStrings(lang, table);
       family = modFamily();
       family.variants[0].state.files[0].file = "/game/ibuki_spr.bundle";
-      family.variants.push(...["alt", "dress"].map((key, i) => ({ key, spr: `${key}_spr`, order: i + 1, recruitable: true, modList: [], names: { en: { full: key, short: `Skin ${key}` } } })));
+      family.variants.push(
+        ...["alt", "dress"].map((key, i) => ({
+          key,
+          spr: `${key}_spr`,
+          order: i + 1,
+          recruitable: true,
+          modList: [],
+          names: { en: { full: key, short: `Skin ${key}` } },
+        })),
+      );
       await showPortrait(t);
       const part = (suffix) => walk(body).find((e) => e.tagName === "BUTTON" && e.dataset.part?.endsWith(suffix));
-      assert.equal(part("Arrow_L/Left").getAttribute("aria-label"), table["webui.hall.previous"], `${lang}: previous student`);
+      assert.equal(
+        part("Arrow_L/Left").getAttribute("aria-label"),
+        table["webui.hall.previous"],
+        `${lang}: previous student`,
+      );
       assert.equal(part("Arrow_R/Right").getAttribute("aria-label"), table["webui.hall.next"], `${lang}: next student`);
       const copy = part("Char_CVCollectionBtn").getAttribute("aria-label");
       assert.ok(copy.startsWith(table["webui.window.copy"]), `${lang}: the copy button says Copy: ${copy}`);
@@ -2073,38 +3675,73 @@ test("the student arrows, the copy button and the variant chips are named, and t
       // chips: the caption names each, the shown variant's is pressed, the others are not
       const chips = walk(hosts["ngui-chips"]).filter((e) => e.tagName === "BUTTON");
       assert.equal(chips.length, 3);
-      assert.ok(chips.every((chip) => chip.getAttribute("aria-label")), `${lang}: every chip has a name`);
-      assert.deepEqual(chips.map((chip) => chip.getAttribute("aria-pressed")), ["true", "false", "false"], `${lang}: the shown variant is pressed`);
+      assert.ok(
+        chips.every((chip) => chip.getAttribute("aria-label")),
+        `${lang}: every chip has a name`,
+      );
+      assert.deepEqual(
+        chips.map((chip) => chip.getAttribute("aria-pressed")),
+        ["true", "false", "false"],
+        `${lang}: the shown variant is pressed`,
+      );
       assert.ok(chips[1].getAttribute("aria-label").includes("Skin alt"));
       Detail.hide();
     }
-  } finally { Detail.hide(); await flush(); t.mock.timers.reset(); setStrings("en-US", localeTable("en-US")); }
+  } finally {
+    Detail.hide();
+    await flush();
+    t.mock.timers.reset();
+    setStrings("en-US", localeTable("en-US"));
+  }
 });
 
 test("a variant list with more chips than fit names its More chip with the count", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
     for (const lang of everyLocale) {
-      const table = localeTable(lang); setStrings(lang, table);
+      const table = localeTable(lang);
+      setStrings(lang, table);
       family = modFamily();
-      family.variants.push(...Array.from({ length: 12 }, (_, i) => ({ key: `skin_${i}`, spr: `skin_${i}_spr`, order: i + 1, recruitable: true, modList: [], names: { en: { full: `Variant ${i}`, short: `Skin ${i}` } } })));
+      family.variants.push(
+        ...Array.from({ length: 12 }, (_, i) => ({
+          key: `skin_${i}`,
+          spr: `skin_${i}_spr`,
+          order: i + 1,
+          recruitable: true,
+          modList: [],
+          names: { en: { full: `Variant ${i}`, short: `Skin ${i}` } },
+        })),
+      );
       await showPortrait(t);
       const chips = walk(hosts["ngui-chips"]).filter((e) => e.tagName === "BUTTON");
-      const more = chips.at(-1), count = chips.length - 1, hidden = 13 - count;
+      const more = chips.at(-1),
+        count = chips.length - 1,
+        hidden = 13 - count;
       assert.ok(hidden > 0);
-      assert.equal(more.getAttribute("aria-label"), table["webui.chips.more"].replace("{n}", String(hidden)), `${lang}: More chip`);
+      assert.equal(
+        more.getAttribute("aria-label"),
+        table["webui.chips.more"].replace("{n}", String(hidden)),
+        `${lang}: More chip`,
+      );
       assert.equal(more.getAttribute("aria-pressed"), null, "More opens a picker: it is not a toggle");
       Detail.hide();
     }
-  } finally { Detail.hide(); await flush(); t.mock.timers.reset(); setStrings("en-US", localeTable("en-US")); }
+  } finally {
+    Detail.hide();
+    await flush();
+    t.mock.timers.reset();
+    setStrings("en-US", localeTable("en-US"));
+  }
 });
 
 test("the expression strip's cards, its pile and Collapse are named, and the picked face is pressed, in every locale", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    portraitExpressions = ["00", "01", "02", "03", "04", "05"]; playerMode = thumbMode = "ready";
+    portraitExpressions = ["00", "01", "02", "03", "04", "05"];
+    playerMode = thumbMode = "ready";
     for (const lang of everyLocale) {
-      const table = localeTable(lang); setStrings(lang, table);
+      const table = localeTable(lang);
+      setStrings(lang, table);
       family = modFamily();
       await showPortrait(t);
       const cards = () => walk(hosts["ngui-expr"]).filter((e) => e.tagName === "BUTTON");
@@ -2114,27 +3751,54 @@ test("the expression strip's cards, its pile and Collapse are named, and the pic
       assert.equal(natural.getAttribute("aria-label"), table["webui.photo.natural"], `${lang}: the plain face`);
       assert.equal(second.getAttribute("aria-label"), `${table["webui.photo.expressions"]} 01`);
       assert.equal(third.getAttribute("aria-label"), `${table["webui.photo.expressions"]} 02`);
-      assert.deepEqual([natural, second, third].map((card) => card.getAttribute("aria-pressed")), ["true", "false", "false"], `${lang}: the picked face`);
+      assert.deepEqual(
+        [natural, second, third].map((card) => card.getAttribute("aria-pressed")),
+        ["true", "false", "false"],
+        `${lang}: the picked face`,
+      );
       assert.equal(pile.getAttribute("aria-label"), table["webui.chips.more"].replace("{n}", "3"), `${lang}: the pile`);
       assert.equal(pile.getAttribute("aria-pressed"), null);
       // picking another face moves the pressed state
-      await second.click(); await flush();
-      assert.deepEqual(cards().slice(0, 3).map((card) => card.getAttribute("aria-pressed")), ["false", "true", "false"], `${lang}: pressed follows the pick`);
+      await second.click();
+      await flush();
+      assert.deepEqual(
+        cards()
+          .slice(0, 3)
+          .map((card) => card.getAttribute("aria-pressed")),
+        ["false", "true", "false"],
+        `${lang}: pressed follows the pick`,
+      );
       // the pile unfolds every face and Collapse
-      await cards().at(-1).click(); await flush();
+      await cards().at(-1).click();
+      await flush();
       const unfolded = cards();
       assert.equal(unfolded.length, 7, `${lang}: six faces and Collapse`);
       assert.equal(unfolded.at(-1).getAttribute("aria-label"), table["webui.fold.label"], `${lang}: Collapse`);
       assert.equal(unfolded.at(-1).getAttribute("aria-pressed"), null);
-      assert.ok(unfolded.slice(0, 6).every((card) => card.getAttribute("aria-label")), `${lang}: every face has a name`);
-      assert.equal(new Set(unfolded.slice(0, 6).map((card) => card.getAttribute("aria-label"))).size, 6, `${lang}: no two faces share a name`);
-      await unfolded[0].click(); await flush(); // the plain face again, and folded, for the next language
-      await cards().at(-1).click(); await flush();
+      assert.ok(
+        unfolded.slice(0, 6).every((card) => card.getAttribute("aria-label")),
+        `${lang}: every face has a name`,
+      );
+      assert.equal(
+        new Set(unfolded.slice(0, 6).map((card) => card.getAttribute("aria-label"))).size,
+        6,
+        `${lang}: no two faces share a name`,
+      );
+      await unfolded[0].click();
+      await flush(); // the plain face again, and folded, for the next language
+      await cards().at(-1).click();
+      await flush();
       assert.equal(cards().length, 4);
       Detail.hide();
     }
   } finally {
-    Detail.hide(); portraitExpressions = ["00", "01"]; playerMode = "ready"; thumbMode = "pending"; await flush(); t.mock.timers.reset(); setStrings("en-US", localeTable("en-US"));
+    Detail.hide();
+    portraitExpressions = ["00", "01"];
+    playerMode = "ready";
+    thumbMode = "pending";
+    await flush();
+    t.mock.timers.reset();
+    setStrings("en-US", localeTable("en-US"));
   }
 });
 
@@ -2142,23 +3806,34 @@ test("the expression strip's cards, its pile and Collapse are named, and the pic
 test("the unfolded expression strip takes the wheel and a drag picks no face", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    portraitExpressions = ["00", "01", "02", "03", "04", "05", "06", "07", "08"]; playerMode = thumbMode = "ready";
+    portraitExpressions = ["00", "01", "02", "03", "04", "05", "06", "07", "08"];
+    playerMode = thumbMode = "ready";
     family = modFamily();
     await showPortrait(t);
     const clip = () => walk(hosts["ngui-expr"]).find((e) => e.classList.contains("expr-clip"));
     const cards = () => walk(hosts["ngui-expr"]).filter((e) => e.tagName === "BUTTON");
     assert.equal(clip().listeners.wheel, undefined, "the folded strip has nothing to scroll");
-    await cards().at(-1).click(); await flush();
-    const strip = clip(), track = strip.children[0];
+    await cards().at(-1).click();
+    await flush();
+    const strip = clip(),
+      track = strip.children[0];
     assert.ok(strip.classList.contains("expanded"));
-    const room = parseFloat(strip.style.width), content = parseFloat(track.style.width);
+    const room = parseFloat(strip.style.width),
+      content = parseFloat(track.style.width);
     assert.ok(content > room, "nine faces and Collapse run past the row");
     assert.equal(strip.listeners.wheel.length, 1);
     assert.equal(strip.style.touchAction, "pan-x", "touch scrolls the strip natively");
     // a mouse wheel notch moves the strip sideways, stopping at either end
     strip.scrollLeft = 0;
     let prevented = false;
-    strip.listeners.wheel[0]({ deltaX: 0, deltaY: 100, deltaMode: 1, preventDefault() { prevented = true; } });
+    strip.listeners.wheel[0]({
+      deltaX: 0,
+      deltaY: 100,
+      deltaMode: 1,
+      preventDefault() {
+        prevented = true;
+      },
+    });
     assert.equal(strip.scrollLeft, 40 * 100 > content - room ? content - room : 4000);
     assert.ok(prevented, "the page does not scroll as well");
     strip.listeners.wheel[0]({ deltaX: 0, deltaY: -1, deltaMode: 1, preventDefault() {} });
@@ -2166,16 +3841,34 @@ test("the unfolded expression strip takes the wheel and a drag picks no face", a
     strip.listeners.wheel[0]({ deltaX: 0, deltaY: -100, deltaMode: 1, preventDefault() {} });
     assert.equal(strip.scrollLeft, 0);
     // a drag scrolls it and the click that ends it picks nothing
-    const pointer = (type, clientX) => strip.listeners[type].forEach((fn) => fn({ button: 0, pointerId: 1, pointerType: "mouse", clientX, preventDefault() {} }));
-    pointer("pointerdown", 500); pointer("pointermove", 400); pointer("pointerup", 400);
+    const pointer = (type, clientX) =>
+      strip.listeners[type].forEach((fn) =>
+        fn({ button: 0, pointerId: 1, pointerType: "mouse", clientX, preventDefault() {} }),
+      );
+    pointer("pointerdown", 500);
+    pointer("pointermove", 400);
+    pointer("pointerup", 400);
     assert.ok(strip.scrollLeft > 0);
     let stopped = false;
-    for (const fn of strip.listeners.click) fn({ detail: 1, preventDefault() {}, stopImmediatePropagation() { stopped = true; } });
+    for (const fn of strip.listeners.click)
+      fn({
+        detail: 1,
+        preventDefault() {},
+        stopImmediatePropagation() {
+          stopped = true;
+        },
+      });
     assert.ok(stopped, "the drag's click is taken before the face under it");
-    await cards().at(-1).click(); await flush(); // folded again
+    await cards().at(-1).click();
+    await flush(); // folded again
     Detail.hide();
   } finally {
-    Detail.hide(); portraitExpressions = ["00", "01"]; playerMode = "ready"; thumbMode = "pending"; await flush(); t.mock.timers.reset();
+    Detail.hide();
+    portraitExpressions = ["00", "01"];
+    playerMode = "ready";
+    thumbMode = "pending";
+    await flush();
+    t.mock.timers.reset();
   }
 });
 
@@ -2185,94 +3878,146 @@ test("the Show in Finder button's caption and folder icon are placed by the expl
   const { explorerLayout } = await import("../../src/bmpt/web/js/explorer-button.js");
   try {
     for (const lang of everyLocale) {
-      const table = localeTable(lang); setStrings(lang, table);
+      const table = localeTable(lang);
+      setStrings(lang, table);
       family = modFamily();
       await showPortrait(t);
-      const at = (suffix) => walk(hosts.ngui).find((e) => e.dataset.path?.endsWith(suffix) && (e.textContent || e.dataset.tex));
+      const at = (suffix) =>
+        walk(hosts.ngui).find((e) => e.dataset.path?.endsWith(suffix) && (e.textContent || e.dataset.tex));
       const expected = explorerLayout(table["webui.open.mac"]);
-      const label = at("Status/Btn_Up_Wrapper/Btn_Up/Label_Locale"), folder = at("Status/Btn_Up_Wrapper/Btn_Up/Folder");
+      const label = at("Status/Btn_Up_Wrapper/Btn_Up/Label_Locale"),
+        folder = at("Status/Btn_Up_Wrapper/Btn_Up/Folder");
       assert.equal(label.textContent, expected.text, `${lang}: the caption`);
-      assert.equal(label.style.fontSize, `${(NGUI.fontSizeFor(expected.text, expected.fs) * (1920 / 2960)).toFixed(2)}px`, `${lang}: its size`);
+      assert.equal(
+        label.style.fontSize,
+        `${(NGUI.fontSizeFor(expected.text, expected.fs) * (1920 / 2960)).toFixed(2)}px`,
+        `${lang}: its size`,
+      );
       assert.equal(folder?.dataset.tex, "svg:folder", `${lang}: the folder icon`);
       Detail.hide();
     }
-  } finally { Detail.hide(); await flush(); t.mock.timers.reset(); setStrings("en-US", localeTable("en-US")); }
+  } finally {
+    Detail.hide();
+    await flush();
+    t.mock.timers.reset();
+    setStrings("en-US", localeTable("en-US"));
+  }
 });
 
 // --- Job E: composed detail parts at the default 1920 x 1080 viewport ---
-for (const lang of ["en-US", "zh-CN"]) test(`detail keeps its prefab cards and composes the edit row, chips and expression pile in ${lang}`, async (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout"] });
-  const { SPACE, CONTROL, CHIP } = await import("../../src/bmpt/web/js/ui-tokens.js");
-  const { centreOf, toNode } = await import("../../src/bmpt/web/js/ui-grid.js");
-  const S = 1920 / 2960, near = (a, b, eps = 0.025) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b}`);
-  try {
-    setStrings(lang, localeTable(lang));
-    portraitExpressions = ["00", "01", "02", "03", "04", "05"]; playerMode = thumbMode = "ready";
-    family = modFamily("spr", `detail-layout-${lang}`);
-    const localizedName = localeTable(lang)["webui.field.folder"];
-    family.variants[0].names = { en: { full: localizedName, short: localizedName } };
-    await showPortrait(t);
-    const tree = Detail.screenTree();
-    assert.equal(NGUI.find(tree, "RightInfo/Btn_Engrave").active, false, "a game button beside the Target is not drawn");
-    assert.notEqual(NGUI.find(tree, "RightInfo/Target").active, false);
-    for (const [i, card] of ["SkillData_EX", "SkillData_EX (1)", "SkillData_EX (2)", "SkillData_EX (3)"].entries()) {
-      const base = NGUI.find(tree, `${INFO}/Skill/${card}`);
-      near(base.pos[0], [39.25, 337.75, 636.25, 934.75][i]);
-      assert.equal(NGUI.find(base, "Bg").widgets[0].w_, 292.5, "the existing action bodies keep their width");
+for (const lang of ["en-US", "zh-CN"])
+  test(`detail keeps its prefab cards and composes the edit row, chips and expression pile in ${lang}`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const { SPACE, CONTROL, CHIP } = await import("../../src/bmpt/web/js/ui-tokens.js");
+    const { centreOf, toNode } = await import("../../src/bmpt/web/js/ui-grid.js");
+    const S = 1920 / 2960,
+      near = (a, b, eps = 0.025) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b}`);
+    try {
+      setStrings(lang, localeTable(lang));
+      portraitExpressions = ["00", "01", "02", "03", "04", "05"];
+      playerMode = thumbMode = "ready";
+      family = modFamily("spr", `detail-layout-${lang}`);
+      const localizedName = localeTable(lang)["webui.field.folder"];
+      family.variants[0].names = { en: { full: localizedName, short: localizedName } };
+      await showPortrait(t);
+      const tree = Detail.screenTree();
+      assert.equal(
+        NGUI.find(tree, "RightInfo/Btn_Engrave").active,
+        false,
+        "a game button beside the Target is not drawn",
+      );
+      assert.notEqual(NGUI.find(tree, "RightInfo/Target").active, false);
+      for (const [i, card] of ["SkillData_EX", "SkillData_EX (1)", "SkillData_EX (2)", "SkillData_EX (3)"].entries()) {
+        const base = NGUI.find(tree, `${INFO}/Skill/${card}`);
+        near(base.pos[0], [39.25, 337.75, 636.25, 934.75][i]);
+        assert.equal(NGUI.find(base, "Bg").widgets[0].w_, 292.5, "the existing action bodies keep their width");
+      }
+      const addPath = `${INFO}/Weapon/Btn_Up_Wrapper/Btn_Up/BG (1)`;
+      assert.deepEqual(NGUI.find(tree, addPath).pos, NGUI.find(list, addPath).pos);
+      assert.equal(NGUI.find(tree, addPath).widgets[0].w_, NGUI.find(list, addPath).widgets[0].w_);
+      const name = walk(hosts.ngui).find((e) => e.dataset.path?.endsWith(`${PLATE}/Label_Name`) && e.style.fontSize);
+      const pencil = walk(hosts.ngui).find((e) => e.dataset.path?.endsWith(`${PLATE}/Char_AliasBtn`));
+      const [nx, ny, nw, nh] = NGUI.rect(name),
+        [px, py, pw, ph] = NGUI.rect(pencil);
+      near(px - nx - nw, SPACE.xs * S);
+      near(py + ph / 2, ny + nh / 2);
+      near(pw, CONTROL.icon.h * S);
+      near(ph, CONTROL.icon.h * S);
+      const edit = Detail.nameplateRow(NGUI.find(tree, PLATE), "Name with descenders", false, {
+        ...NGUI,
+        inkShift: () => 5,
+      });
+      near(edit.boxes[0].y + centreOf(edit.boxes[0]), edit.boxes[1].y + edit.boxes[1].h / 2);
+      const boxes = Detail.chipBoxes([
+        { row: 0, col: 0, span: 1 },
+        { row: 0, col: 1, span: 2 },
+        { row: 1, col: 0, span: 1 },
+      ]).map((c) => c.box);
+      near(boxes[1].x - boxes[0].x, CHIP.pitch);
+      near(boxes[2].y - boxes[0].y, CHIP.rowPitch);
+      near(boxes[2].x - boxes[0].x, -CHIP.rowPitch * Math.tan(Math.PI / 18));
+      assert.deepEqual(
+        boxes.map((b) => [b.w, b.h]),
+        [
+          [272, 72],
+          [562, 72],
+          [272, 72],
+        ],
+      );
+      const native = Detail.expressionBoxes(3, true),
+        unfolded = Detail.expressionBoxes(7);
+      const frame = { cx: 0, cy: 0, w: 0, h: 0 };
+      assert.deepEqual(
+        native.map((b) => toNode(b, 4, frame)[0]),
+        [461.9, 707.5, 953.2],
+      );
+      for (let i = 1; i < unfolded.length; i++) near(unfolded[i].x - unfolded[i - 1].x - 242, 245.7 - 242);
+      assert.ok([...native, ...unfolded].every((b) => b.w === 242 && b.h === 209));
+      const pile = Detail.pileBoxes();
+      assert.deepEqual(
+        pile.map((b) => b.h),
+        [209, 197, 185],
+      );
+      for (const box of pile) {
+        assert.ok(box.x >= 1079.8 && box.x + box.w <= 1284.8 + 1e-9, "the pile stays in its retained column");
+        assert.equal(box.w, 205 - SPACE.l);
+        near(box.y + box.h / 2, pile[0].y + pile[0].h / 2);
+      }
+      near(pile[1].x - pile[0].x, SPACE.s);
+      near(pile[2].x - pile[1].x, SPACE.s);
+      const cards = walk(hosts["ngui-expr"]).filter((e) => e.tagName === "BUTTON");
+      assert.equal(cards.length, 4);
+      await cards.at(-1).click();
+      await flush();
+      const rendered = walk(hosts["ngui-expr"]).filter((e) => /^Item_\d+$/.test(e.dataset.path || ""));
+      for (let i = 1; i < rendered.length; i++)
+        near(NGUI.rect(rendered[i])[0] - NGUI.rect(rendered[i - 1])[0], 245.7 * S);
+      family.variants[0].state.files[0].file = "C:/synthetic/ibuki_spr.bundle";
+      const detailsButton = walk(hosts.ngui).find((e) => e.dataset.part === `${INFO}/Detail_Btn`);
+      await detailsButton.click();
+      await flush();
+      const frameEl = walk(hosts.popup).find((e) => e.dataset.path === "Center/Popup/Base/BG");
+      const area = walk(hosts.popup).find((e) => e.classList.contains("popup-cards"));
+      const [fx, , fw] = NGUI.rect(frameEl);
+      near(parseFloat(area.style.left) - fx, SPACE.xl * S);
+      near(fx + fw - parseFloat(area.style.left) - parseFloat(area.style.width), SPACE.xl * S);
+      for (const cell of walk(area).filter((e) => /^Details\/(H_\d+|R_\d+_\d+)$/.test(e.dataset.path || ""))) {
+        const [x, , w] = NGUI.rect(cell);
+        assert.ok(
+          x >= 0 && x + w <= parseFloat(area.style.width) + 0.025,
+          "table columns stay inside the popup content box",
+        );
+      }
+    } finally {
+      Detail.hide();
+      portraitExpressions = ["00", "01"];
+      playerMode = "ready";
+      thumbMode = "pending";
+      await flush();
+      t.mock.timers.reset();
+      setStrings("en-US", localeTable("en-US"));
     }
-    const addPath = `${INFO}/Weapon/Btn_Up_Wrapper/Btn_Up/BG (1)`;
-    assert.deepEqual(NGUI.find(tree, addPath).pos, NGUI.find(list, addPath).pos);
-    assert.equal(NGUI.find(tree, addPath).widgets[0].w_, NGUI.find(list, addPath).widgets[0].w_);
-    const name = walk(hosts.ngui).find(e => e.dataset.path?.endsWith(`${PLATE}/Label_Name`) && e.style.fontSize);
-    const pencil = walk(hosts.ngui).find(e => e.dataset.path?.endsWith(`${PLATE}/Char_AliasBtn`));
-    const [nx, ny, nw, nh] = NGUI.rect(name), [px, py, pw, ph] = NGUI.rect(pencil);
-    near(px - nx - nw, SPACE.xs * S);
-    near(py + ph / 2, ny + nh / 2);
-    near(pw, CONTROL.icon.h * S); near(ph, CONTROL.icon.h * S);
-    const edit = Detail.nameplateRow(NGUI.find(tree, PLATE), "Name with descenders", false, { ...NGUI, inkShift: () => 5 });
-    near(edit.boxes[0].y + centreOf(edit.boxes[0]), edit.boxes[1].y + edit.boxes[1].h / 2);
-    const boxes = Detail.chipBoxes([
-      { row: 0, col: 0, span: 1 }, { row: 0, col: 1, span: 2 }, { row: 1, col: 0, span: 1 },
-    ]).map(c => c.box);
-    near(boxes[1].x - boxes[0].x, CHIP.pitch);
-    near(boxes[2].y - boxes[0].y, CHIP.rowPitch);
-    near(boxes[2].x - boxes[0].x, -CHIP.rowPitch * Math.tan(Math.PI / 18));
-    assert.deepEqual(boxes.map(b => [b.w, b.h]), [[272, 72], [562, 72], [272, 72]]);
-    const native = Detail.expressionBoxes(3, true), unfolded = Detail.expressionBoxes(7);
-    const frame = { cx: 0, cy: 0, w: 0, h: 0 };
-    assert.deepEqual(native.map(b => toNode(b, 4, frame)[0]), [461.9, 707.5, 953.2]);
-    for (let i = 1; i < unfolded.length; i++) near(unfolded[i].x - unfolded[i - 1].x - 242, 245.7 - 242);
-    assert.ok([...native, ...unfolded].every(b => b.w === 242 && b.h === 209));
-    const pile = Detail.pileBoxes();
-    assert.deepEqual(pile.map(b => b.h), [209, 197, 185]);
-    for (const box of pile) {
-      assert.ok(box.x >= 1079.8 && box.x + box.w <= 1284.8 + 1e-9, "the pile stays in its retained column");
-      assert.equal(box.w, 205 - SPACE.l);
-      near(box.y + box.h / 2, pile[0].y + pile[0].h / 2);
-    }
-    near(pile[1].x - pile[0].x, SPACE.s); near(pile[2].x - pile[1].x, SPACE.s);
-    const cards = walk(hosts["ngui-expr"]).filter(e => e.tagName === "BUTTON");
-    assert.equal(cards.length, 4);
-    await cards.at(-1).click(); await flush();
-    const rendered = walk(hosts["ngui-expr"]).filter(e => /^Item_\d+$/.test(e.dataset.path || ""));
-    for (let i = 1; i < rendered.length; i++) near(NGUI.rect(rendered[i])[0] - NGUI.rect(rendered[i - 1])[0], 245.7 * S);
-    family.variants[0].state.files[0].file = "C:/synthetic/ibuki_spr.bundle";
-    const detailsButton = walk(hosts.ngui).find(e => e.dataset.part === `${INFO}/Detail_Btn`);
-    await detailsButton.click(); await flush();
-    const frameEl = walk(hosts.popup).find(e => e.dataset.path === "Center/Popup/Base/BG");
-    const area = walk(hosts.popup).find(e => e.classList.contains("popup-cards"));
-    const [fx, , fw] = NGUI.rect(frameEl);
-    near(parseFloat(area.style.left) - fx, SPACE.xl * S);
-    near(fx + fw - parseFloat(area.style.left) - parseFloat(area.style.width), SPACE.xl * S);
-    for (const cell of walk(area).filter(e => /^Details\/(H_\d+|R_\d+_\d+)$/.test(e.dataset.path || ""))) {
-      const [x, , w] = NGUI.rect(cell);
-      assert.ok(x >= 0 && x + w <= parseFloat(area.style.width) + 0.025, "table columns stay inside the popup content box");
-    }
-  } finally {
-    Detail.hide(); portraitExpressions = ["00", "01"]; playerMode = "ready"; thumbMode = "pending";
-    await flush(); t.mock.timers.reset(); setStrings("en-US", localeTable("en-US"));
-  }
-});
+  });
 
 // --- design tokens, item E: the nameplate's chips are the prefab chip (Char_Target/Type/MainType/BG): 272 x 72, caption 40 down to 28 ---
 test("variant chips are 272 x 72 with the caption at 40 down to 28, the second column 290 on", async (t) => {
@@ -2282,10 +4027,17 @@ test("variant chips are 272 x 72 with the caption at 40 down to 28, the second c
   try {
     setStrings("en-US", localeTable("en-US"));
     family = modFamily();
-    family.variants.push(...Array.from({ length: 3 }, (_, i) => ({
-      key: `skin_${i}`, spr: `skin_${i}_spr`, order: i + 1, recruitable: true, modList: [],
-      custom: [], names: { en: { full: `Variant ${i}`, short: `Skin ${i}` } },
-    })));
+    family.variants.push(
+      ...Array.from({ length: 3 }, (_, i) => ({
+        key: `skin_${i}`,
+        spr: `skin_${i}_spr`,
+        order: i + 1,
+        recruitable: true,
+        modList: [],
+        custom: [],
+        names: { en: { full: `Variant ${i}`, short: `Skin ${i}` } },
+      })),
+    );
     await showPortrait(t);
     const chips = walk(hosts["ngui-chips"]).filter((e) => /\/Chip_[^/]+$/.test(e.dataset.path || ""));
     assert.ok(chips.length >= 3, "the chips are drawn");
@@ -2293,16 +4045,29 @@ test("variant chips are 272 x 72 with the caption at 40 down to 28, the second c
       const [, , w, h] = NGUI.rect(chip);
       assert.ok(Math.abs(h - CHIP.h * S) < 0.02, `${chip.dataset.path}: ${h / S} high`);
       // one cell, or two with the pitch between (a long name takes two columns)
-      assert.ok([CHIP.w, CHIP.w + CHIP.pitch].some((width) => Math.abs(w - width * S) < 0.02), `${chip.dataset.path}: ${w / S} wide`);
+      assert.ok(
+        [CHIP.w, CHIP.w + CHIP.pitch].some((width) => Math.abs(w - width * S) < 0.02),
+        `${chip.dataset.path}: ${w / S} wide`,
+      );
     }
     // a short caption fits at the prefab's 40 (Latin text is drawn 1.12 larger)
-    const caption = walk(hosts["ngui-chips"]).find((e) => /\/Chip_[^/]+\/Label\/Text$/.test(e.dataset.path || "") && e.textContent);
-    assert.ok(Math.abs(parseFloat(caption.style.fontSize) - NGUI.fontSizeFor(caption.textContent, CHIP.fs) * S) < 0.02, "caption size 40");
+    const caption = walk(hosts["ngui-chips"]).find(
+      (e) => /\/Chip_[^/]+\/Label\/Text$/.test(e.dataset.path || "") && e.textContent,
+    );
+    assert.ok(
+      Math.abs(parseFloat(caption.style.fontSize) - NGUI.fontSizeFor(caption.textContent, CHIP.fs) * S) < 0.02,
+      "caption size 40",
+    );
     const source = readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8");
     assert.match(source, /const CHIP_FS = CHIP\.fs, CHIP_W = CHIP\.w, CHIP_PITCH = CHIP\.pitch;/);
     assert.doesNotMatch(source, /CHIP_FS = 38/);
     Detail.hide();
-  } finally { Detail.hide(); await flush(); t.mock.timers.reset(); setStrings("en-US", localeTable("en-US")); }
+  } finally {
+    Detail.hide();
+    await flush();
+    t.mock.timers.reset();
+    setStrings("en-US", localeTable("en-US"));
+  }
 });
 
 // --- the chips are drawn in their own layer, in Char_Target's frame read from the prefab; with the plate where
@@ -2311,12 +4076,17 @@ test("variant chips stay under the nameplate's band, in the plate's prefab frame
   t.mock.timers.enable({ apis: ["setTimeout"] });
   // UICharacterDetail of the 2026-11 game build: LeftInfo at (0, 1) and CharInfo at (-1480, -743) put Char_Target at
   // (-1480, -742); its BG (906 x 171, bottom-left pivot) ends at y 226 and BG2 (886 x 202, top-centre pivot) starts at 234
-  const leftInfo = add("LeftInfo"), charInfo = add("LeftInfo/CharInfo"), plate = add(PLATE), band = add(`${PLATE}/BG`);
+  const leftInfo = add("LeftInfo"),
+    charInfo = add("LeftInfo/CharInfo"),
+    plate = add(PLATE),
+    band = add(`${PLATE}/BG`);
   const before = { left: leftInfo.pos, info: charInfo.pos, band: band.pos, body: { ...band.widgets[0] } };
   const panel = node("BG2");
   panel.pos = [514, 234];
   panel.widgets = [{ sprite: "Common_Bg_Raius10px", w_: 886, h_: 202, pivot: 1, incline: 10, color: "#ffffff/0.80" }];
-  leftInfo.pos = [0, 1]; charInfo.pos = [-1480, -743]; band.pos = [71, 226];
+  leftInfo.pos = [0, 1];
+  charInfo.pos = [-1480, -743];
+  band.pos = [71, 226];
   Object.assign(band.widgets[0], { w_: 906, h_: 171, pivot: 6, incline: 10 });
   plate.children.push(panel);
   const names = {
@@ -2328,48 +4098,83 @@ test("variant chips stay under the nameplate's band, in the plate's prefab frame
     "th-TH": ["อาซึสะ", "ชิโรโกะ*เทอร์เรอร์", "โฮชิโนะ (ปีหนึ่ง, ชุดว่ายน้ำโรงเรียน) โฮชิโนะ (ปีหนึ่ง, ชุดว่ายน้ำโรงเรียน)"],
   };
   const nameKey = { "en-US": "en", "zh-CN": "zh-CN", "zh-TW": "zh-TW", "ja-JP": "ja", "ko-KR": "ko", "th-TH": "th" };
-  const eps = 0.02, bottom = (r) => r[1] + r[3];
-  const part = (host, suffix, text) => walk(host).find((e) => e.dataset.path?.endsWith(suffix) && !!e.style.fontSize === text);
+  const eps = 0.02,
+    bottom = (r) => r[1] + r[3];
+  const part = (host, suffix, text) =>
+    walk(host).find((e) => e.dataset.path?.endsWith(suffix) && !!e.style.fontSize === text);
   try {
     for (const [lang, own] of Object.entries(names)) {
       setStrings(lang, localeTable(lang));
-      for (const [i, name] of own.entries()) for (const aliased of [false, true]) {
-        family = modFamily();
-        family.variants[0].names = { [nameKey[lang]]: { full: name, short: name } };
-        family.variants[0].custom = aliased ? [name] : [];
-        family.variants.push(...Array.from({ length: 5 }, (_, k) => ({
-          key: `skin_${k}`, spr: `skin_${k}_spr`, order: k + 1, recruitable: true, modList: [], custom: [],
-          names: { en: { full: `Variant ${k}`, short: `Skin ${k}` } },
-        })));
-        await showPortrait(t);
-        const where = `${lang}, ${aliased ? "alias " : ""}"${name}"`;
-        const dark = NGUI.rect(part(hosts.ngui, `${PLATE}/BG`, false)), white = NGUI.rect(part(hosts.ngui, `${PLATE}/BG2`, false));
-        const chips = walk(hosts["ngui-chips"]).filter((e) => /\/Chip_[^/]+$/.test(e.dataset.path || "")).map((e) => NGUI.rect(e));
-        assert.ok(chips.length >= 4, `${where}: two rows of chips are drawn`);
-        for (const chip of chips) {
-          assert.ok(chip[1] >= bottom(dark) - eps, `${where}: a chip (top ${chip[1]}) reaches into the dark band (bottom ${bottom(dark)})`);
-          assert.ok(chip[1] >= white[1] - eps && bottom(chip) <= bottom(white) + eps, `${where}: the chips stay in the white panel`);
+      for (const [i, name] of own.entries())
+        for (const aliased of [false, true]) {
+          family = modFamily();
+          family.variants[0].names = { [nameKey[lang]]: { full: name, short: name } };
+          family.variants[0].custom = aliased ? [name] : [];
+          family.variants.push(
+            ...Array.from({ length: 5 }, (_, k) => ({
+              key: `skin_${k}`,
+              spr: `skin_${k}_spr`,
+              order: k + 1,
+              recruitable: true,
+              modList: [],
+              custom: [],
+              names: { en: { full: `Variant ${k}`, short: `Skin ${k}` } },
+            })),
+          );
+          await showPortrait(t);
+          const where = `${lang}, ${aliased ? "alias " : ""}"${name}"`;
+          const dark = NGUI.rect(part(hosts.ngui, `${PLATE}/BG`, false)),
+            white = NGUI.rect(part(hosts.ngui, `${PLATE}/BG2`, false));
+          const chips = walk(hosts["ngui-chips"])
+            .filter((e) => /\/Chip_[^/]+$/.test(e.dataset.path || ""))
+            .map((e) => NGUI.rect(e));
+          assert.ok(chips.length >= 4, `${where}: two rows of chips are drawn`);
+          for (const chip of chips) {
+            assert.ok(
+              chip[1] >= bottom(dark) - eps,
+              `${where}: a chip (top ${chip[1]}) reaches into the dark band (bottom ${bottom(dark)})`,
+            );
+            assert.ok(
+              chip[1] >= white[1] - eps && bottom(chip) <= bottom(white) + eps,
+              `${where}: the chips stay in the white panel`,
+            );
+          }
+          // the name lines and the pencil stay inside the dark band
+          for (const suffix of ["Label_Name", "Label_OriginalName"]) {
+            const label = part(hosts.ngui, `${PLATE}/${suffix}`, true);
+            if (!label) {
+              assert.equal(suffix === "Label_OriginalName" && !aliased, true, `${where}: ${suffix} drawn`);
+              continue;
+            }
+            const r = NGUI.rect(label);
+            assert.ok(r[1] >= dark[1] - eps && bottom(r) <= bottom(dark) + eps, `${where}: ${suffix} inside the band`);
+          }
+          const pencil = NGUI.rect(part(hosts.ngui, `${PLATE}/Char_AliasBtn`, false));
+          assert.ok(
+            pencil[1] >= dark[1] - eps && bottom(pencil) <= bottom(dark) + eps,
+            `${where}: the pencil inside the band`,
+          );
+          // a name that fits is drawn whole; only one longer than the room ends in an ellipsis
+          const main = part(hosts.ngui, `${PLATE}/Label_Name`, true);
+          assert.equal(main.getAttribute("aria-label"), name);
+          assert.equal(
+            main.children[0]?.style.textOverflow === "ellipsis",
+            i === 2,
+            `${where}: ellipsis only for the long name`,
+          );
+          Detail.hide();
+          await flush();
         }
-        // the name lines and the pencil stay inside the dark band
-        for (const suffix of ["Label_Name", "Label_OriginalName"]) {
-          const label = part(hosts.ngui, `${PLATE}/${suffix}`, true);
-          if (!label) { assert.equal(suffix === "Label_OriginalName" && !aliased, true, `${where}: ${suffix} drawn`); continue; }
-          const r = NGUI.rect(label);
-          assert.ok(r[1] >= dark[1] - eps && bottom(r) <= bottom(dark) + eps, `${where}: ${suffix} inside the band`);
-        }
-        const pencil = NGUI.rect(part(hosts.ngui, `${PLATE}/Char_AliasBtn`, false));
-        assert.ok(pencil[1] >= dark[1] - eps && bottom(pencil) <= bottom(dark) + eps, `${where}: the pencil inside the band`);
-        // a name that fits is drawn whole; only one longer than the room ends in an ellipsis
-        const main = part(hosts.ngui, `${PLATE}/Label_Name`, true);
-        assert.equal(main.getAttribute("aria-label"), name);
-        assert.equal(main.children[0]?.style.textOverflow === "ellipsis", i === 2, `${where}: ellipsis only for the long name`);
-        Detail.hide(); await flush();
-      }
     }
   } finally {
-    Detail.hide(); await flush(); t.mock.timers.reset(); setStrings("en-US", localeTable("en-US"));
-    Object.assign(leftInfo, { pos: before.left }); Object.assign(charInfo, { pos: before.info });
-    band.pos = before.band; band.widgets[0] = before.body;
+    Detail.hide();
+    await flush();
+    t.mock.timers.reset();
+    setStrings("en-US", localeTable("en-US"));
+    Object.assign(leftInfo, { pos: before.left });
+    Object.assign(charInfo, { pos: before.info });
+    band.pos = before.band;
+    band.widgets[0] = before.body;
     plate.children.splice(plate.children.indexOf(panel), 1);
   }
 });
@@ -2384,8 +4189,11 @@ test("incomplete mods use the existing card and popup status widgets in all loca
       family.variants[0].modList[0].incomplete = true;
       family.variants[0].configured = { spr: "mod:test" };
       await showPortrait(t);
-      await switchButton().click(); await flush();
-      const texts = walk(hosts.popup).filter((e) => e.style.fontSize).map((e) => e.textContent || e.children[0]?.textContent);
+      await switchButton().click();
+      await flush();
+      const texts = walk(hosts.popup)
+        .filter((e) => e.style.fontSize)
+        .map((e) => e.textContent || e.children[0]?.textContent);
       assert.ok(texts.includes(ui.webui.mods.incomplete), lang);
       const badge = walk(hosts.popup).find((e) => e.dataset.path === "Card_m:test/Using/Text");
       assert.ok(badge, lang);
@@ -2393,11 +4201,17 @@ test("incomplete mods use the existing card and popup status widgets in all loca
       assert.equal(text.replace(/\s/g, ""), ui.webui.mods.incomplete.replace(/\s/g, ""));
       const fitted = NGUI.fitText(ui.webui.mods.incomplete, 26, 20, 320 - 70, 1);
       assert.ok(NGUI.glyphWidth(fitted.text, fitted.fs) <= 320 - 70, lang);
-      await closeSwitch(); Detail.hide();
+      await closeSwitch();
+      Detail.hide();
     }
   } finally {
-    Detail.hide(); await flush(); t.mock.timers.reset();
-    setStrings("en-US", flat(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8"))));
+    Detail.hide();
+    await flush();
+    t.mock.timers.reset();
+    setStrings(
+      "en-US",
+      flat(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8"))),
+    );
   }
 });
 
@@ -2405,10 +4219,14 @@ test("the overwritten model message adds the model core with Mods off and refres
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const show = globalThis.__detailModel.show;
   const eventSource = globalThis.EventSource;
-  globalThis.EventSource = class extends EventTarget { close() {} };
+  globalThis.EventSource = class extends EventTarget {
+    close() {}
+  };
   try {
-    closeLeftMessages(); family = modFamily("model");
-    const v = family.variants[0]; v.model = "ibuki_model";
+    closeLeftMessages();
+    family = modFamily("model");
+    const v = family.variants[0];
+    v.model = "ibuki_model";
     v.state.files = [{ kind: "model", applied: "unknown", official: false, restorable: false, crc: "fixed" }];
     modsEnabled = false;
     modsInstall = { current: "install", installs: [{ key: "install", folder: "/synthetic/game" }] };
@@ -2417,22 +4235,36 @@ test("the overwritten model message adds the model core with Mods off and refres
       v.state.files[0].applied = "mod:kept";
       return { added: [{ id: "kept", kind: "model", target: v.key }], failed: [], skipped: [] };
     };
-    globalThis.__detailModel.show = async () => { throw Object.assign(new Error("No official model"), { code: "original_unavailable" }); };
+    globalThis.__detailModel.show = async () => {
+      throw Object.assign(new Error("No official model"), { code: "original_unavailable" });
+    };
     await showPortrait(t);
     await finish(t, tabButton(3).click());
-    for (let i = 0; i < 10; i++) { await new Promise(setImmediate); await flush(); }
+    for (let i = 0; i < 10; i++) {
+      await new Promise(setImmediate);
+      await flush();
+    }
     const button = walk(hosts.dialog).find((e) => e.getAttribute("aria-label") === "Add to Library");
     assert.ok(button);
     const before = invalidations;
     await button.click();
-    for (let i = 0; i < 20; i++) { t.mock.timers.tick(1000); await new Promise(setImmediate); await flush(); }
+    for (let i = 0; i < 20; i++) {
+      t.mock.timers.tick(1000);
+      await new Promise(setImmediate);
+      await flush();
+    }
     const request = rpcRequests.findLast((r) => r.method === "mods.adopt");
     assert.deepEqual(request.params.entries, [{ install: "install", core: "ibuki_model" }]);
     assert.ok(invalidations > before);
   } finally {
-    modelAdoption = modsInstall = null; globalThis.__detailModel.show = show;
+    modelAdoption = modsInstall = null;
+    globalThis.__detailModel.show = show;
     globalThis.EventSource = eventSource;
-    closeLeftMessages(); Detail.hide(); modsEnabled = true;
-    await ModSwitch.refresh(); await flush(); t.mock.timers.reset();
+    closeLeftMessages();
+    Detail.hide();
+    modsEnabled = true;
+    await ModSwitch.refresh();
+    await flush();
+    t.mock.timers.reset();
   }
 });

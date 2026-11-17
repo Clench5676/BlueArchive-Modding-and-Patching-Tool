@@ -11,11 +11,29 @@ globalThis.document ??= { addEventListener() {}, removeEventListener() {} };
 // WebKit's DOM event for a wheel (NSEvent line deltas: lines x 40 px, ticks x 120) and for a trackpad (pixels)
 const FIXED = 65536;
 const webkitWheel = (tenths, { round = Math.round } = {}) => {
-  const lines = round(Math.abs(tenths) * 0.1 * FIXED) / FIXED * Math.sign(tenths);
-  return { deltaMode: 0, deltaX: 0, deltaY: Math.fround(-lines * 40), wheelDeltaX: 0, wheelDeltaY: Math.trunc(lines * 120) };
+  const lines = (round(Math.abs(tenths) * 0.1 * FIXED) / FIXED) * Math.sign(tenths);
+  return {
+    deltaMode: 0,
+    deltaX: 0,
+    deltaY: Math.fround(-lines * 40),
+    wheelDeltaX: 0,
+    wheelDeltaY: Math.trunc(lines * 120),
+  };
 };
-const webkitPad = (dy, dx = 0) => ({ deltaMode: 0, deltaX: dx, deltaY: dy, wheelDeltaX: Math.trunc(-3 * dx), wheelDeltaY: Math.trunc(-3 * dy) });
-const chromium = (notches) => ({ deltaMode: 0, deltaX: 0, deltaY: -100 * notches, wheelDeltaX: 0, wheelDeltaY: 120 * notches });
+const webkitPad = (dy, dx = 0) => ({
+  deltaMode: 0,
+  deltaX: dx,
+  deltaY: dy,
+  wheelDeltaX: Math.trunc(-3 * dx),
+  wheelDeltaY: Math.trunc(-3 * dy),
+});
+const chromium = (notches) => ({
+  deltaMode: 0,
+  deltaX: 0,
+  deltaY: -100 * notches,
+  wheelDeltaX: 0,
+  wheelDeltaY: 120 * notches,
+});
 
 test("one event: notches, trackpad steps and the ones that could be either", () => {
   // a slow notch is a tenth of a line, rounded or cut to 16.16 fixed point: 4.000244 or 3.99963 px, wheelDeltaY 12 or 11
@@ -43,21 +61,40 @@ function rig() {
   const calls = [];
   let target = { x: 0, y: 0, w: 2960, h: 1665 };
   const lobby = {
-    zoomAt: (f, sx, sy) => { calls.push(["zoom", f]); target = { ...target, w: target.w / f }; },
+    zoomAt: (f, sx, sy) => {
+      calls.push(["zoom", f]);
+      target = { ...target, w: target.w / f };
+    },
     panBy: (dx, dy) => calls.push(["pan", dx, dy]),
     viewTarget: () => target,
-    setViewTarget: (v) => { calls.push(["restore", v.w]); target = v; },
+    setViewTarget: (v) => {
+      calls.push(["restore", v.w]);
+      target = v;
+    },
   };
   const handlers = {};
-  const host = { addEventListener: (type, fn) => { handlers[type] = fn; }, removeEventListener() {},
-    getBoundingClientRect: () => ({ left: 0, top: 0, width: 1920, height: 1080 }), classList: { toggle() {}, remove() {} } };
+  const host = {
+    addEventListener: (type, fn) => {
+      handlers[type] = fn;
+    },
+    removeEventListener() {},
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 1920, height: 1080 }),
+    classList: { toggle() {}, remove() {} },
+  };
   Touch.setup(lobby);
   Touch.attach(host);
   let now = 10000;
   const real = performance.now;
   performance.now = () => now;
-  const send = (e, after = 16) => { now += after; handlers.wheel({ clientX: 960, clientY: 540, ctrlKey: false, preventDefault() {}, ...e }); };
-  const done = () => { Touch.detach(); Touch.setup(null); performance.now = real; };
+  const send = (e, after = 16) => {
+    now += after;
+    handlers.wheel({ clientX: 960, clientY: 540, ctrlKey: false, preventDefault() {}, ...e });
+  };
+  const done = () => {
+    Touch.detach();
+    Touch.setup(null);
+    performance.now = real;
+  };
   return { calls, send, done, width: () => target.w };
 }
 
@@ -67,7 +104,10 @@ test("WebKit: a wheel spin zooms, a notch at least a line's worth", () => {
     r.send(webkitWheel(1), 1000);
     r.send(webkitWheel(3), 40);
     r.send(webkitWheel(12), 40);
-    assert.deepEqual(r.calls.map((c) => c[0]), ["zoom", "zoom", "zoom"]);
+    assert.deepEqual(
+      r.calls.map((c) => c[0]),
+      ["zoom", "zoom", "zoom"],
+    );
     // 4 px and 12 px zoom like a line (40 px), 48 px is 48 px
     assert.ok(Math.abs(r.calls[0][1] - Math.exp(40 * 0.0015)) < 1e-6);
     assert.ok(Math.abs(r.calls[1][1] - Math.exp(40 * 0.0015)) < 1e-6);
@@ -75,15 +115,22 @@ test("WebKit: a wheel spin zooms, a notch at least a line's worth", () => {
     // the other way zooms out
     r.send(webkitWheel(-1), 1000);
     assert.ok(r.calls[3][1] < 1);
-  } finally { r.done(); }
+  } finally {
+    r.done();
+  }
 });
 
 test("WebKit: a trackpad swipe and its momentum pan", () => {
   const r = rig();
   try {
     for (const dy of [1, 3, 6, 10, 14, 12, 8, 4, 4, 8, 2, 1]) r.send(webkitPad(dy));
-    assert.ok(r.calls.every((c) => c[0] === "pan"), JSON.stringify(r.calls));
-  } finally { r.done(); }
+    assert.ok(
+      r.calls.every((c) => c[0] === "pan"),
+      JSON.stringify(r.calls),
+    );
+  } finally {
+    r.done();
+  }
 });
 
 test("WebKit: a swipe that starts like a whole line zooms back to where it was and pans", () => {
@@ -93,9 +140,14 @@ test("WebKit: a swipe that starts like a whole line zooms back to where it was a
     r.send(webkitPad(40), 1000);
     r.send(webkitPad(37));
     r.send(webkitPad(31));
-    assert.deepEqual(r.calls.map((c) => c[0]), ["zoom", "restore", "pan", "pan"]);
+    assert.deepEqual(
+      r.calls.map((c) => c[0]),
+      ["zoom", "restore", "pan", "pan"],
+    );
     assert.equal(r.width(), start);
-  } finally { r.done(); }
+  } finally {
+    r.done();
+  }
 });
 
 test("WebKit: a wheel without acceleration (whole lines) zooms on every notch", () => {
@@ -103,8 +155,13 @@ test("WebKit: a wheel without acceleration (whole lines) zooms on every notch", 
   try {
     for (let i = 0; i < 3; i++) r.send(webkitWheel(10), 300);
     for (let i = 0; i < 3; i++) r.send(webkitWheel(30), 40);
-    assert.ok(r.calls.every((c) => c[0] === "zoom"), JSON.stringify(r.calls));
-  } finally { r.done(); }
+    assert.ok(
+      r.calls.every((c) => c[0] === "zoom"),
+      JSON.stringify(r.calls),
+    );
+  } finally {
+    r.done();
+  }
 });
 
 test("Chromium: a touchpad swipe whose first step is exactly a notch zooms back to where it was and pans", () => {
@@ -117,17 +174,27 @@ test("Chromium: a touchpad swipe whose first step is exactly a notch zooms back 
     r.send(pad(100), 1000);
     r.send(pad(37));
     r.send(pad(21));
-    assert.deepEqual(r.calls.map((c) => c[0]), ["zoom", "restore", "pan", "pan"]);
+    assert.deepEqual(
+      r.calls.map((c) => c[0]),
+      ["zoom", "restore", "pan", "pan"],
+    );
     assert.equal(r.width(), start);
-  } finally { r.done(); }
+  } finally {
+    r.done();
+  }
 });
 
 test("Chromium: a wheel spun notch after notch keeps every zoom", () => {
   const r = rig();
   try {
     for (let i = 0; i < 4; i++) r.send(chromium(-1), 40);
-    assert.deepEqual(r.calls.map((c) => c[0]), ["zoom", "zoom", "zoom", "zoom"]);
-  } finally { r.done(); }
+    assert.deepEqual(
+      r.calls.map((c) => c[0]),
+      ["zoom", "zoom", "zoom", "zoom"],
+    );
+  } finally {
+    r.done();
+  }
 });
 
 test("Chromium: notches zoom, a horizontal notch pans", () => {
@@ -137,5 +204,7 @@ test("Chromium: notches zoom, a horizontal notch pans", () => {
     assert.ok(Math.abs(r.calls[0][1] - Math.exp(100 * 0.0015)) < 1e-6);
     r.send({ deltaMode: 0, deltaX: 100, deltaY: 0, wheelDeltaX: -120, wheelDeltaY: 0 }, 1000);
     assert.deepEqual(r.calls[1], ["pan", -100, 0]);
-  } finally { r.done(); }
+  } finally {
+    r.done();
+  }
 });

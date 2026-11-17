@@ -7,13 +7,24 @@ import { register } from "node:module";
 import { test } from "node:test";
 
 const VENDOR = new URL("../../src/bmpt/web/vendor/three-0.160.0/", import.meta.url).href;
-register(`data:text/javascript,${encodeURIComponent(`export async function resolve(spec, ctx, next) {
+register(
+  `data:text/javascript,${encodeURIComponent(`export async function resolve(spec, ctx, next) {
   if (spec === "three") return { url: ${JSON.stringify(VENDOR + "build/three.module.min.js")}, shortCircuit: true };
   if (spec.startsWith("three/addons/")) return { url: ${JSON.stringify(VENDOR + "examples/jsm/")} + spec.slice(13), shortCircuit: true };
-  return next(spec, ctx); }`)}`);
-const { attachInput, bustDistance, clampPan, frameDistance, liftShare, pinchZoom, restoreZoom, saveZoom, wheelZoom,
-  zoomShare } =
-  await import("../../src/bmpt/web/js/model.js");
+  return next(spec, ctx); }`)}`,
+);
+const {
+  attachInput,
+  bustDistance,
+  clampPan,
+  frameDistance,
+  liftShare,
+  pinchZoom,
+  restoreZoom,
+  saveZoom,
+  wheelZoom,
+  zoomShare,
+} = await import("../../src/bmpt/web/js/model.js");
 
 const near = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) <= eps, `${a} != ${b}`);
 const TAN5 = Math.tan((5 * Math.PI) / 180);
@@ -22,13 +33,21 @@ const LEFT = { x: 490, y: 500, w: 1000, h: 1080, floor: 700 };
 // Koharu's box with its halo around the orbit target (0.44 above the feet), her face 0.34 above the target
 const KOHARU = { min: { x: -0.5, y: -0.4426, z: -0.3 }, max: { x: 0.45, y: 0.68, z: 0.3 } };
 const FACE = 0.34;
-const rangeOf = (frame) => { const fit = frameDistance(KOHARU, frame); return { fit, min: bustDistance(KOHARU, FACE, frame, fit) }; };
+const rangeOf = (frame) => {
+  const fit = frameDistance(KOHARU, frame);
+  return { fit, min: bustDistance(KOHARU, FACE, frame, fit) };
+};
 const spanOf = ({ fit, min }) => Math.log(fit / min);
 
 test("five notches from the front view to the bust, whatever sends them", () => {
   for (const frame of [LEFT, FULL]) {
-    const range = rangeOf(frame), span = spanOf(range);
-    const after = (px, n) => { let d = range.fit; for (let i = 0; i < n; i++) d *= wheelZoom(px, span); return d; };
+    const range = rangeOf(frame),
+      span = spanOf(range);
+    const after = (px, n) => {
+      let d = range.fit;
+      for (let i = 0; i < n; i++) d *= wheelZoom(px, span);
+      return d;
+    };
     // a Chromium / WebView2 notch (100 px), Firefox's 3 lines (120 px), a slow macOS notch (a tenth of a line: 4 px,
     // zoomed as far as a Chromium notch) and a whole line (40 px)
     for (const px of [-100, -4.000244140625, -40]) {
@@ -58,7 +77,8 @@ test("a pinch zooms half as far again as the fingers spread: one pinch to the bu
 
 test("closing in brings the face to the frame point evenly, notch by notch", () => {
   for (const frame of [LEFT, FULL]) {
-    const range = rangeOf(frame), span = spanOf(range);
+    const range = rangeOf(frame),
+      span = spanOf(range);
     // the face's height above the frame point (the lifted target), in stage px
     const facePx = (d) => FACE * (1 - liftShare(d, range)) * (frame.h / (2 * d * TAN5));
     const start = facePx(range.fit);
@@ -79,7 +99,9 @@ test("closing in brings the face to the frame point evenly, notch by notch", () 
 
 test("the pan stays inside the chibi's box as far as the zoom allows", () => {
   const p = (x, y, z) => ({ x, y, z });
-  const same = (a, b) => { for (const k of ["x", "y", "z"]) near(a[k], b[k]); };
+  const same = (a, b) => {
+    for (const k of ["x", "y", "z"]) near(a[k], b[k]);
+  };
   // at the fit (and further back) nothing moves
   same(clampPan(p(1, -2, 0.5), 0, KOHARU, 0), p(0, 0, 0));
   same(clampPan(p(1, -2, 0.5), -0.3, KOHARU, 0), p(0, 0, 0));
@@ -98,31 +120,70 @@ test("the pan stays inside the chibi's box as far as the zoom allows", () => {
 const FIXED = 65536;
 const webkitWheel = (tenths) => {
   const lines = (Math.round(Math.abs(tenths) * 0.1 * FIXED) / FIXED) * Math.sign(tenths);
-  return { deltaMode: 0, deltaX: 0, deltaY: Math.fround(-lines * 40), wheelDeltaX: 0, wheelDeltaY: Math.trunc(lines * 120) };
+  return {
+    deltaMode: 0,
+    deltaX: 0,
+    deltaY: Math.fround(-lines * 40),
+    wheelDeltaX: 0,
+    wheelDeltaY: Math.trunc(lines * 120),
+  };
 };
-const webkitPad = (dy, dx = 0) => ({ deltaMode: 0, deltaX: dx, deltaY: dy, wheelDeltaX: Math.trunc(-3 * dx), wheelDeltaY: Math.trunc(-3 * dy) });
-const chromium = (notches) => ({ deltaMode: 0, deltaX: 0, deltaY: -100 * notches, wheelDeltaX: 0, wheelDeltaY: 120 * notches });
+const webkitPad = (dy, dx = 0) => ({
+  deltaMode: 0,
+  deltaX: dx,
+  deltaY: dy,
+  wheelDeltaX: Math.trunc(-3 * dx),
+  wheelDeltaY: Math.trunc(-3 * dy),
+});
+const chromium = (notches) => ({
+  deltaMode: 0,
+  deltaX: 0,
+  deltaY: -100 * notches,
+  wheelDeltaX: 0,
+  wheelDeltaY: 120 * notches,
+});
 const SPAN = 1.2;
 
 // an element whose listeners the test calls, a view that records the zoom and pan, and a clock the test moves
 function rig() {
-  const calls = [], handlers = {};
+  const calls = [],
+    handlers = {};
   let goal = 10;
   const sink = {
-    zoom: (f) => { calls.push(["zoom", f]); goal *= f; },
+    zoom: (f) => {
+      calls.push(["zoom", f]);
+      goal *= f;
+    },
     zoomSave: () => goal,
-    zoomRestore: (d) => { calls.push(["restore", d]); goal = d; },
+    zoomRestore: (d) => {
+      calls.push(["restore", d]);
+      goal = d;
+    },
     span: () => SPAN,
     pan: (dx, dy) => calls.push(["pan", dx, dy]),
   };
-  const el = { addEventListener: (type, fn) => { handlers[type] = fn; }, removeEventListener: (type) => { delete handlers[type]; } };
+  const el = {
+    addEventListener: (type, fn) => {
+      handlers[type] = fn;
+    },
+    removeEventListener: (type) => {
+      delete handlers[type];
+    },
+  };
   const detach = attachInput(el, sink);
   let now = 10000;
   const real = performance.now;
   performance.now = () => now;
-  const fire = (type, e, after = 16) => { now += after; handlers[type]({ preventDefault() {}, ctrlKey: false, ...e }); };
+  const fire = (type, e, after = 16) => {
+    now += after;
+    handlers[type]({ preventDefault() {}, ctrlKey: false, ...e });
+  };
   const wheel = (e, after) => fire("wheel", e, after);
-  const done = () => { detach(); performance.now = real; assert.deepEqual(Object.keys(handlers), []); };
+  const done = () => {
+    detach();
+    performance.now = real;
+    assert.deepEqual(Object.keys(handlers), []);
+  };
   return { calls, fire, wheel, done, goal: () => goal };
 }
 
@@ -132,7 +193,10 @@ test("WebKit: a wheel zooms by notches, a trackpad swipe pans as far as the fing
     r.wheel(webkitWheel(1), 1000);
     r.wheel(webkitWheel(3), 40);
     r.wheel(webkitWheel(-1), 1000);
-    assert.deepEqual(r.calls.map((c) => c[0]), ["zoom", "zoom", "zoom"]);
+    assert.deepEqual(
+      r.calls.map((c) => c[0]),
+      ["zoom", "zoom", "zoom"],
+    );
     near(r.calls[0][1], wheelZoom(-100, SPAN));
     near(r.calls[1][1], wheelZoom(-100, SPAN));
     near(r.calls[2][1], wheelZoom(100, SPAN));
@@ -140,13 +204,21 @@ test("WebKit: a wheel zooms by notches, a trackpad swipe pans as far as the fing
     const swipe = [1, 3, 6, 10, 14, 12, 8, 4, 4, 8, 2, 1];
     r.wheel(webkitPad(swipe[0]), 1000);
     for (const dy of swipe.slice(1)) r.wheel(webkitPad(dy));
-    assert.ok(r.calls.every((c) => c[0] === "pan"), JSON.stringify(r.calls));
-    assert.equal(r.calls.reduce((s, c) => s - c[2], 0), swipe.reduce((a, b) => a + b));
+    assert.ok(
+      r.calls.every((c) => c[0] === "pan"),
+      JSON.stringify(r.calls),
+    );
+    assert.equal(
+      r.calls.reduce((s, c) => s - c[2], 0),
+      swipe.reduce((a, b) => a + b),
+    );
     // sideways too
     r.calls.length = 0;
     r.wheel(webkitPad(2, 5), 1000);
     assert.deepEqual(r.calls, [["pan", -5, -2]]);
-  } finally { r.done(); }
+  } finally {
+    r.done();
+  }
 });
 
 test("WebKit: a swipe that starts like a whole line takes its zoom back and pans", () => {
@@ -156,14 +228,27 @@ test("WebKit: a swipe that starts like a whole line takes its zoom back and pans
     r.wheel(webkitPad(40), 1000);
     r.wheel(webkitPad(37));
     r.wheel(webkitPad(31));
-    assert.deepEqual(r.calls.map((c) => c[0]), ["zoom", "restore", "pan", "pan"]);
+    assert.deepEqual(
+      r.calls.map((c) => c[0]),
+      ["zoom", "restore", "pan", "pan"],
+    );
     assert.equal(r.goal(), start);
-  } finally { r.done(); }
+  } finally {
+    r.done();
+  }
 });
 
 // a view's zoom state as ChibiView keeps it: the goal a zoom eases to, the glide (tween) and the camera's distance
 function view(distance, tween = null, goal = null) {
-  return { goal, tween, distance: () => distance, setZoomGoal(d) { if (this.tween) this.tween.zoomed = true; this.goal = d; } };
+  return {
+    goal,
+    tween,
+    distance: () => distance,
+    setZoomGoal(d) {
+      if (this.tween) this.tween.zoomed = true;
+      this.goal = d;
+    },
+  };
 }
 
 test("a swipe that starts like a notch during a glide gives the distance back to the glide", () => {
@@ -198,7 +283,8 @@ test("a swipe that outlives the glide ends where the glide headed; a new glide k
   const before = saveZoom(w);
   w.setZoomGoal(9);
   const next = { dist0: 9.5, dist1: 14.6 };
-  w.tween = next; w.goal = null; // a change of framing began a glide of its own
+  w.tween = next;
+  w.goal = null; // a change of framing began a glide of its own
   restoreZoom(w, before);
   assert.equal(w.goal, null);
   assert.equal(next.zoomed, undefined);
@@ -219,12 +305,17 @@ test("WebKit: a trackpad pinch zooms by its gesture events, and its ctrl + wheel
     r.fire("gesturechange", { scale: 2 });
     r.fire("gestureend", { scale: 2 });
     r.wheel({ ...webkitPad(-3), ctrlKey: true }, 100);
-    assert.deepEqual(r.calls.map((c) => c[0]), ["zoom", "zoom"]);
+    assert.deepEqual(
+      r.calls.map((c) => c[0]),
+      ["zoom", "zoom"],
+    );
     near(r.calls[0][1] * r.calls[1][1], pinchZoom(2));
     // later, ctrl + wheel zooms again
     r.wheel({ ...webkitPad(-3), ctrlKey: true }, 400);
     assert.equal(r.calls.length, 3);
-  } finally { r.done(); }
+  } finally {
+    r.done();
+  }
 });
 
 test("Chromium: notches zoom, a horizontal notch pans, a pinch (ctrl + wheel) zooms by its scale", () => {
@@ -236,20 +327,33 @@ test("Chromium: notches zoom, a horizontal notch pans, a pinch (ctrl + wheel) zo
     assert.deepEqual(r.calls[1], ["pan", -100, 0]);
     // a pinch to 2 x in fractional steps: deltaY = -100 ln(scale) in all
     r.calls.length = 0;
-    for (let i = 0; i < 10; i++) r.wheel({ deltaMode: 0, deltaX: 0, deltaY: (-100 * Math.log(2)) / 10, wheelDeltaY: 3, ctrlKey: true });
-    near(r.calls.reduce((f, c) => f * c[1], 1), pinchZoom(2));
+    for (let i = 0; i < 10; i++)
+      r.wheel({ deltaMode: 0, deltaX: 0, deltaY: (-100 * Math.log(2)) / 10, wheelDeltaY: 3, ctrlKey: true });
+    near(
+      r.calls.reduce((f, c) => f * c[1], 1),
+      pinchZoom(2),
+    );
     // ctrl + a mouse wheel notch zooms by notches; Firefox's lines too
     r.calls.length = 0;
     r.wheel({ ...chromium(1), ctrlKey: true }, 1000);
     r.wheel({ deltaMode: 1, deltaX: 0, deltaY: -3 }, 1000);
     near(r.calls[0][1], wheelZoom(-100, SPAN));
     near(r.calls[1][1], wheelZoom(-120, SPAN));
-  } finally { r.done(); }
+  } finally {
+    r.done();
+  }
 });
 
 test("touch: two fingers pinch, a right- or middle-button drag pans, a left drag is the orbit's", () => {
   const r = rig();
-  const p = (id, x, y, extra = {}) => ({ pointerId: id, pointerType: "touch", clientX: x, clientY: y, button: 0, ...extra });
+  const p = (id, x, y, extra = {}) => ({
+    pointerId: id,
+    pointerType: "touch",
+    clientX: x,
+    clientY: y,
+    button: 0,
+    ...extra,
+  });
   try {
     r.fire("pointerdown", p(1, 100, 100));
     r.fire("pointermove", p(1, 110, 100)); // one finger: the orbit's
@@ -259,7 +363,10 @@ test("touch: two fingers pinch, a right- or middle-button drag pans, a left drag
     r.fire("pointerup", p(1, 10, 100));
     r.fire("pointermove", p(2, 400, 100)); // a lone finger again
     r.fire("pointerup", p(2, 400, 100));
-    assert.deepEqual(r.calls.map((c) => c[0]), ["zoom", "zoom"]);
+    assert.deepEqual(
+      r.calls.map((c) => c[0]),
+      ["zoom", "zoom"],
+    );
     near(r.calls[0][1] * r.calls[1][1], pinchZoom(3));
     // WebKit on a touch screen sends gesture events for the pinch too: it zooms once
     r.calls.length = 0;
@@ -287,6 +394,13 @@ test("touch: two fingers pinch, a right- or middle-button drag pans, a left drag
       r.fire("pointerup", m(15, 25, button));
       r.fire("pointermove", m(50, 50, -1));
     }
-    assert.deepEqual(r.calls, [["pan", 5, 20], ["pan", 10, 5], ["pan", 5, 20], ["pan", 10, 5]]);
-  } finally { r.done(); }
+    assert.deepEqual(r.calls, [
+      ["pan", 5, 20],
+      ["pan", 10, 5],
+      ["pan", 5, 20],
+      ["pan", 10, 5],
+    ]);
+  } finally {
+    r.done();
+  }
 });

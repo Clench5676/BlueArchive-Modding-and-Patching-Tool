@@ -10,27 +10,50 @@ const el = (backgroundImage) => ({ style: { backgroundImage } });
 
 test("cssUrls reads the URLs of a background-image value as the browsers write it", () => {
   assert.deepEqual(cssUrls('url("blob:http://127.0.0.1:8790/0f3a-11")'), ["blob:http://127.0.0.1:8790/0f3a-11"]);
-  assert.deepEqual(cssUrls("url(/asset/ui/sprite/Common/Common_Collect_CardBG.png)"), ["/asset/ui/sprite/Common/Common_Collect_CardBG.png"]);
+  assert.deepEqual(cssUrls("url(/asset/ui/sprite/Common/Common_Collect_CardBG.png)"), [
+    "/asset/ui/sprite/Common/Common_Collect_CardBG.png",
+  ]);
   assert.deepEqual(cssUrls("url('a.png'), url(\"b.png\"), url(c.png)"), ["a.png", "b.png", "c.png"]);
   // escaped quotes and brackets inside a quoted URL
   assert.deepEqual(cssUrls('url("/asset/art/portrait/A \\"B\\" (1).png")'), ['/asset/art/portrait/A "B" (1).png']);
   // a data URL keeps its brackets and commas
-  assert.deepEqual(cssUrls('url("data:image/svg+xml,<svg viewBox=\'0 0 1 1\'></svg>")'), ["data:image/svg+xml,<svg viewBox='0 0 1 1'></svg>"]);
+  assert.deepEqual(cssUrls("url(\"data:image/svg+xml,<svg viewBox='0 0 1 1'></svg>\")"), [
+    "data:image/svg+xml,<svg viewBox='0 0 1 1'></svg>",
+  ]);
 });
 
 test("cssUrls finds nothing in a value without a picture", () => {
-  for (const value of ["", "none", undefined, null, "linear-gradient(red, blue)", 'url("")']) assert.deepEqual(cssUrls(value), []);
+  for (const value of ["", "none", undefined, null, "linear-gradient(red, blue)", 'url("")'])
+    assert.deepEqual(cssUrls(value), []);
 });
 
 test("imageUrls gives each picture once, in the elements' order, and skips elements without one", () => {
-  const els = [el('url("blob:x/1")'), el(""), el("none"), el('url("blob:x/2")'), el('url("blob:x/1")'), { style: {} }, {}, null];
+  const els = [
+    el('url("blob:x/1")'),
+    el(""),
+    el("none"),
+    el('url("blob:x/2")'),
+    el('url("blob:x/1")'),
+    { style: {} },
+    {},
+    null,
+  ];
   assert.deepEqual(imageUrls(els), ["blob:x/1", "blob:x/2"]);
   assert.deepEqual(imageUrls([]), []);
 });
 
 test("decodeAll waits for every picture and resolves with true", async () => {
   const done = [];
-  const decode = (url) => new Promise((resolve) => setTimeout(() => { done.push(url); resolve(); }, url === "slow" ? 30 : 1));
+  const decode = (url) =>
+    new Promise((resolve) =>
+      setTimeout(
+        () => {
+          done.push(url);
+          resolve();
+        },
+        url === "slow" ? 30 : 1,
+      ),
+    );
   assert.equal(await decodeAll(["slow", "a", "b"], decode, 1000), true);
   assert.deepEqual(done.sort(), ["a", "b", "slow"]);
 });
@@ -44,24 +67,59 @@ test("decodeAll settles failed pictures without claiming complete readiness", as
 });
 
 test("image decoding shares in-flight work, retains images and rechecks later readiness", async () => {
-  let made = 0, calls = 0, finish;
-  const decode = imageDecoder(() => { made++; return { naturalWidth: 10, naturalHeight: 10,
-    decode() { calls++; return new Promise((resolve) => { finish = resolve; }); } }; });
-  const a = decode("a"), b = decode("a");
+  let made = 0,
+    calls = 0,
+    finish;
+  const decode = imageDecoder(() => {
+    made++;
+    return {
+      naturalWidth: 10,
+      naturalHeight: 10,
+      decode() {
+        calls++;
+        return new Promise((resolve) => {
+          finish = resolve;
+        });
+      },
+    };
+  });
+  const a = decode("a"),
+    b = decode("a");
   assert.equal(a, b);
-  await Promise.resolve(); finish(); await a;
-  const next = decode("a"); await Promise.resolve(); finish(); await next;
-  assert.equal(made, 1); assert.equal(calls, 2);
+  await Promise.resolve();
+  finish();
+  await a;
+  const next = decode("a");
+  await Promise.resolve();
+  finish();
+  await next;
+  assert.equal(made, 1);
+  assert.equal(calls, 2);
 });
 
 test("decoded image retention has a byte budget and failed sources can retry", async () => {
-  let made = 0, failed = true;
-  const decode = imageDecoder(() => { made++; return { naturalWidth: 10, naturalHeight: 10,
-    decode() { return this.src === "bad" && failed ? Promise.reject(new Error("decode")) : Promise.resolve(); } }; }, { maxBytes: 400 });
-  await decode("a"); await decode("b"); await decode("a");
+  let made = 0,
+    failed = true;
+  const decode = imageDecoder(
+    () => {
+      made++;
+      return {
+        naturalWidth: 10,
+        naturalHeight: 10,
+        decode() {
+          return this.src === "bad" && failed ? Promise.reject(new Error("decode")) : Promise.resolve();
+        },
+      };
+    },
+    { maxBytes: 400 },
+  );
+  await decode("a");
+  await decode("b");
+  await decode("a");
   assert.equal(made, 3, "old unreferenced images leave the retention cache");
   await assert.rejects(decode("bad"), /decode/);
-  failed = false; await decode("bad");
+  failed = false;
+  await decode("bad");
   assert.equal(made, 5);
 });
 
@@ -85,5 +143,7 @@ test("navigation cancels pending decode deadlines before mock timers are reset",
     controller.abort();
     assert.equal(await pending, false);
     t.mock.timers.tick(60000);
-  } finally { t.mock.timers.reset(); }
+  } finally {
+    t.mock.timers.reset();
+  }
 });

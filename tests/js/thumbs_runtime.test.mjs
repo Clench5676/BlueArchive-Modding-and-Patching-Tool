@@ -8,27 +8,62 @@ import { thumb, thumbnailScope, THUMB_LOAD_TIMEOUT } from "../../src/bmpt/web/js
 import { setSpineConsent } from "../../src/bmpt/web/js/spine-runtime.js";
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const events = [], players = [], images = [], encoded = [];
-let focused = true, hidden = false, blank = false, stall = false, expressionOnly = false, missingBackground = false, nextBlob = 0, scheduledFrames = 0;
+const events = [],
+  players = [],
+  images = [],
+  encoded = [];
+let focused = true,
+  hidden = false,
+  blank = false,
+  stall = false,
+  expressionOnly = false,
+  missingBackground = false,
+  nextBlob = 0,
+  scheduledFrames = 0;
 const docEvents = new EventTarget();
 class Canvas extends EventTarget {
-  width = 2; height = 1; ink = false; background = null;
+  width = 2;
+  height = 1;
+  ink = false;
+  background = null;
   getContext() {
-    return { measureText: () => ({ width: 0 }), drawImage: (image, ...rect) => {
-      if (image instanceof Canvas) this.ink = image.ink;
-      else { this.background = image.src; events.push(["background", ...rect]); }
-    } };
+    return {
+      measureText: () => ({ width: 0 }),
+      drawImage: (image, ...rect) => {
+        if (image instanceof Canvas) this.ink = image.ink;
+        else {
+          this.background = image.src;
+          events.push(["background", ...rect]);
+        }
+      },
+    };
   }
-  toBlob(done) { encoded.push({ ink: this.ink, background: this.background }); done({}); }
+  toBlob(done) {
+    encoded.push({ ink: this.ink, background: this.background });
+    done({});
+  }
 }
 globalThis.document = {
-  get hidden() { return hidden; }, hasFocus: () => focused,
+  get hidden() {
+    return hidden;
+  },
+  hasFocus: () => focused,
   addEventListener: (...args) => docEvents.addEventListener(...args),
   removeEventListener: (...args) => docEvents.removeEventListener(...args),
   body: { appendChild() {} },
-  createElement: (tag) => tag === "canvas" ? new Canvas() : {
-    style: {}, appendChild(child) { this.canvas = child; }, querySelector() { return this.canvas; }, remove() {},
-  },
+  createElement: (tag) =>
+    tag === "canvas"
+      ? new Canvas()
+      : {
+          style: {},
+          appendChild(child) {
+            this.canvas = child;
+          },
+          querySelector() {
+            return this.canvas;
+          },
+          remove() {},
+        },
 };
 globalThis.window = new EventTarget();
 globalThis.requestAnimationFrame = (done) => {
@@ -39,63 +74,134 @@ globalThis.requestAnimationFrame = (done) => {
 globalThis.URL.createObjectURL = () => `blob:runtime-${++nextBlob}`;
 globalThis.URL.revokeObjectURL = () => {};
 globalThis.Image = class {
-  naturalWidth = 1024; naturalHeight = 768;
+  naturalWidth = 1024;
+  naturalHeight = 768;
   set src(url) {
-    this.url = url; images.push(url);
+    this.url = url;
+    images.push(url);
     // The frozen still must already exist before image I/O yields to a later runtime frame.
     for (const player of players) if (!player.disposed) player.canvas.ink = false;
     setTimeout(() => {
-      focused = true; window.dispatchEvent(new Event("focus"));
-      if (missingBackground) this.onerror?.(new Error("Missing background")); else this.onload?.();
+      focused = true;
+      window.dispatchEvent(new Event("focus"));
+      if (missingBackground) this.onerror?.(new Error("Missing background"));
+      else this.onload?.();
     }, 20);
   }
-  get src() { return this.url; }
+  get src() {
+    return this.url;
+  }
   removeAttribute() {}
 };
 const runtime = vm.createContext({ console, document, performance, requestAnimationFrame });
-vm.runInContext(readFileSync(new URL("../../src/bmpt/web/vendor/spine-player-4.2.120/spine-player.min.js", import.meta.url), "utf8"), runtime);
+vm.runInContext(
+  readFileSync(new URL("../../src/bmpt/web/vendor/spine-player-4.2.120/spine-player.min.js", import.meta.url), "utf8"),
+  runtime,
+);
 const S = runtime.spine;
 class Player {
   constructor(el, config) {
-    Object.assign(this, { config: { debug: {}, controlBones: [], ...config }, skeleton: null, disposed: false,
-      paused: true, stopRequestAnimationFrame: false, time: { delta: 0, update() {} }, viewport: {},
-      previousViewport: null, currentViewport: { ...config.viewport }, bg: {}, bgFullscreen: {}, canvas: new Canvas(),
-      draws: 0, assets: false });
-    players.push(this); el.appendChild(this.canvas);
-    this.context = { gl: { drawingBufferWidth: 2, drawingBufferHeight: 1, RGBA: 1, UNSIGNED_BYTE: 1,
-      clearColor() {}, clear: () => { this.canvas.ink = false; },
-      readPixels: (_x, _y, _w, _h, _format, _type, pixels) => {
-        if (this.canvas.ink) pixels.set([80, 80, 80, 0, 80, 80, 80, 255]);
-      } } };
-    this.sceneRenderer = { camera: { position: {} }, skeletonDebugRenderer: {}, resize() {}, begin() {}, end() {},
-      drawSkeleton: () => { this.canvas.ink = !blank && (!expressionOnly || this.animationState.getCurrent(1)?.animation.name === "00"); } };
+    Object.assign(this, {
+      config: { debug: {}, controlBones: [], ...config },
+      skeleton: null,
+      disposed: false,
+      paused: true,
+      stopRequestAnimationFrame: false,
+      time: { delta: 0, update() {} },
+      viewport: {},
+      previousViewport: null,
+      currentViewport: { ...config.viewport },
+      bg: {},
+      bgFullscreen: {},
+      canvas: new Canvas(),
+      draws: 0,
+      assets: false,
+    });
+    players.push(this);
+    el.appendChild(this.canvas);
+    this.context = {
+      gl: {
+        drawingBufferWidth: 2,
+        drawingBufferHeight: 1,
+        RGBA: 1,
+        UNSIGNED_BYTE: 1,
+        clearColor() {},
+        clear: () => {
+          this.canvas.ink = false;
+        },
+        readPixels: (_x, _y, _w, _h, _format, _type, pixels) => {
+          if (this.canvas.ink) pixels.set([80, 80, 80, 0, 80, 80, 80, 255]);
+        },
+      },
+    };
+    this.sceneRenderer = {
+      camera: { position: {} },
+      skeletonDebugRenderer: {},
+      resize() {},
+      begin() {},
+      end() {},
+      drawSkeleton: () => {
+        this.canvas.ink = !blank && (!expressionOnly || this.animationState.getCurrent(1)?.animation.name === "00");
+      },
+    };
     this.assetManager = { isLoadingComplete: () => this.assets };
     // The constructor's queued first frame precedes asynchronous texture/atlas completion. Finishing assets
     // alone cannot invoke success; another real drawFrame must discover them.
     queueMicrotask(() => this.drawFrame());
-    if (!stall) this.assetTimer = setTimeout(() => { this.assets = true; events.push(["assets"]); }, 25);
+    if (!stall)
+      this.assetTimer = setTimeout(() => {
+        this.assets = true;
+        events.push(["assets"]);
+      }, 25);
   }
   drawFrame(loop = true) {
     this.draws++;
     S.SpinePlayer.prototype.drawFrame.call(this, loop);
   }
   loadSkeleton() {
-    const data = new S.SkeletonJson({}).readSkeletonData({ bones: [{ name: "root" }], animations: expressionOnly ? { "00": {} } : { Idle_01: {} } });
+    const data = new S.SkeletonJson({}).readSkeletonData({
+      bones: [{ name: "root" }],
+      animations: expressionOnly ? { "00": {} } : { Idle_01: {} },
+    });
     this.skeleton = new S.Skeleton(data);
-    this.skeleton.getBounds = (offset, size) => { Object.assign(offset, { x: 0, y: 0 }); Object.assign(size, { x: 800, y: 1600 }); };
+    this.skeleton.getBounds = (offset, size) => {
+      Object.assign(offset, { x: 0, y: 0 });
+      Object.assign(size, { x: 800, y: 1600 });
+    };
     this.animationState = new S.AnimationState(new S.AnimationStateData(data));
-    events.push(["success"]); this.config.success(this);
+    events.push(["success"]);
+    this.config.success(this);
   }
-  setViewport() { this.currentViewport = { ...this.config.viewport }; }
-  stopRendering() { S.SpinePlayer.prototype.stopRendering.call(this); }
-  startRendering() { assert.fail("focus changes must not restart a still during background composition"); }
-  showError(message) { this.config.error(this, message); }
-  dispose() { clearTimeout(this.assetTimer); this.disposed = true; this.canvas.width = 0; }
+  setViewport() {
+    this.currentViewport = { ...this.config.viewport };
+  }
+  stopRendering() {
+    S.SpinePlayer.prototype.stopRendering.call(this);
+  }
+  startRendering() {
+    assert.fail("focus changes must not restart a still during background composition");
+  }
+  showError(message) {
+    this.config.error(this, message);
+  }
+  dispose() {
+    clearTimeout(this.assetTimer);
+    this.disposed = true;
+    this.canvas.width = 0;
+  }
 }
 globalThis.spine = { ...S, SpinePlayer: Player };
 setSpineConsent(true);
 const base = (name) => `/asset/spine/spr/${name}/${"a".repeat(64)}/skeleton`;
-afterEach(async () => { await wait(25); focused = true; hidden = false; blank = false; stall = false; expressionOnly = false; missingBackground = false; });
+afterEach(async () => {
+  await wait(25);
+  focused = true;
+  hidden = false;
+  blank = false;
+  stall = false;
+  expressionOnly = false;
+  missingBackground = false;
+});
 
 test("an expression-only story portrait applies 00 before capture instead of encoding an empty setup pose", async () => {
   expressionOnly = true;
@@ -111,7 +217,8 @@ test("a missing background retains the already validated portrait still", async 
 });
 
 test("a cold background key loads and composes after plain card/bust cache hits with an inactive lifecycle", async () => {
-  const source = base("shiroko_spr"), background = "/asset/art/bg/BG_Abydos_Collection";
+  const source = base("shiroko_spr"),
+    background = "/asset/art/bg/BG_Abydos_Collection";
   const count = players.length;
   assert.ok(await thumb(source, "card"));
   await wait(25);
@@ -133,35 +240,42 @@ test("a cold background key loads and composes after plain card/bust cache hits 
   assert.equal(players.length, count + 2);
 });
 
-for (const mode of ["unfocused", "hidden"]) test(`delayed asset readiness and blank rejection work while ${mode}`, async () => {
-  focused = mode !== "unfocused"; hidden = mode === "hidden";
-  blank = true;
-  const at = encoded.length;
-  assert.equal(await thumb(base(`blank_${mode}`), "face", null, false, null, "/bg/blank"), null);
-  assert.equal(encoded.length, at, "a background cannot make a blank portrait pass validation");
-  blank = false;
-  assert.ok(await thumb(base(`healthy_${mode}`), "face"));
-  await wait(0);
-  assert.ok(players.at(-1).disposed);
-});
+for (const mode of ["unfocused", "hidden"])
+  test(`delayed asset readiness and blank rejection work while ${mode}`, async () => {
+    focused = mode !== "unfocused";
+    hidden = mode === "hidden";
+    blank = true;
+    const at = encoded.length;
+    assert.equal(await thumb(base(`blank_${mode}`), "face", null, false, null, "/bg/blank"), null);
+    assert.equal(encoded.length, at, "a background cannot make a blank portrait pass validation");
+    blank = false;
+    assert.ok(await thumb(base(`healthy_${mode}`), "face"));
+    await wait(0);
+    assert.ok(players.at(-1).disposed);
+  });
 
 test("cancellation retires manual loading frames and lets the next skeleton run", async () => {
-  focused = false; stall = true;
-  const scope = thumbnailScope(), pending = scope.thumb(base("cancel_loading"), "face");
+  focused = false;
+  stall = true;
+  const scope = thumbnailScope(),
+    pending = scope.thumb(base("cancel_loading"), "face");
   await wait(20);
   const retired = players.at(-1);
-  scope.cancel(); assert.equal(await pending, null);
+  scope.cancel();
+  assert.equal(await pending, null);
   await wait(20);
   const draws = retired.draws;
   stall = false;
   assert.ok(await thumb(base("after_cancel"), "face"));
-  assert.equal(retired.draws, draws); assert.equal(retired.disposed, true);
+  assert.equal(retired.draws, draws);
+  assert.equal(retired.disposed, true);
 });
 
 test("a stalled inactive runtime has four bounded attempts and disposes every manual clock", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    hidden = true; stall = true;
+    hidden = true;
+    stall = true;
     const pending = thumb(base("deadline_loading"), "face");
     await new Promise(setImmediate);
     const retired = players.at(-1);
@@ -170,29 +284,39 @@ test("a stalled inactive runtime has four bounded attempts and disposes every ma
     assert.equal(retired.disposed, true);
     const draws = retired.draws;
     for (const delay of [2000, 5000, 15000]) {
-      t.mock.timers.tick(delay); await new Promise(setImmediate);
-      t.mock.timers.tick(THUMB_LOAD_TIMEOUT); await new Promise(setImmediate);
+      t.mock.timers.tick(delay);
+      await new Promise(setImmediate);
+      t.mock.timers.tick(THUMB_LOAD_TIMEOUT);
+      await new Promise(setImmediate);
       assert.equal(players.at(-1).disposed, true);
     }
     assert.equal(await pending, null);
     t.mock.timers.tick(60000);
     assert.equal(retired.draws, draws);
-  } finally { t.mock.timers.reset(); }
+  } finally {
+    t.mock.timers.reset();
+  }
 });
 
 test("every memorial lobby still uses revisioned prefab framing before its first encoded draw", async () => {
-  const previous = globalThis.fetch, urls = [];
+  const previous = globalThis.fetch,
+    urls = [];
   globalThis.fetch = async (url) => {
     urls.push(url);
-    return { ok: true, json: async () => ({ view: { x: -1480, y: -832.5, w: 2960, h: 1665 },
-      layer: { x: 37.5, y: -880, scale: .72 } }) };
+    return {
+      ok: true,
+      json: async () => ({ view: { x: -1480, y: -832.5, w: 2960, h: 1665 }, layer: { x: 37.5, y: -880, scale: 0.72 } }),
+    };
   };
   try {
     assert.ok(await thumb(base("lobby_camera"), "landscape", null, true));
     const view = players.at(-1).config.viewport;
     assert.ok(urls[0].endsWith(`/${"a".repeat(64)}/framing.json`));
-    assert.ok(Math.abs(view.x * .72 + 37.5 + 1480) < 1e-8);
-    assert.ok(Math.abs(view.y * .72 - 880 + 832.5) < 1e-8);
-    assert.equal(view.width * .72, 2960); assert.equal(view.height * .72, 1665);
-  } finally { globalThis.fetch = previous; }
+    assert.ok(Math.abs(view.x * 0.72 + 37.5 + 1480) < 1e-8);
+    assert.ok(Math.abs(view.y * 0.72 - 880 + 832.5) < 1e-8);
+    assert.equal(view.width * 0.72, 2960);
+    assert.equal(view.height * 0.72, 1665);
+  } finally {
+    globalThis.fetch = previous;
+  }
 });

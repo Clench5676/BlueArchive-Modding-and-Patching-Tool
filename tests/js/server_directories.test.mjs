@@ -1,90 +1,151 @@
-import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { test } from 'node:test';
-import { controls } from './control_prefabs.mjs';
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { test } from "node:test";
+import { controls } from "./control_prefabs.mjs";
 
-const web = new URL('../../src/bmpt/web/js/', import.meta.url);
-const source = readFileSync(new URL('settings.js', web), 'utf8');
-const locales = ['en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'th-TH'];
-const strip = s => s.replace(/^import .*;\n/gm, '').replace(/^export /gm, '');
+const web = new URL("../../src/bmpt/web/js/", import.meta.url);
+const source = readFileSync(new URL("settings.js", web), "utf8");
+const locales = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"];
+const strip = (s) => s.replace(/^import .*;\n/gm, "").replace(/^export /gm, "");
 class El {
-  style = {}; children = []; lang = '';
-  appendChild(el) { this.children.push(el); }
+  style = {};
+  children = [];
+  lang = "";
+  appendChild(el) {
+    this.children.push(el);
+  }
   remove() {}
-  getContext() { return { font: '', measureText(s) {
-    const fs = Number(this.font.match(/([\d.]+)px/)?.[1] || 40);
-    return { width: [...s].reduce((w, c) => w + (/\s/.test(c) ? .3 : c.charCodeAt(0) < 128 ? .58 : 1) * fs, 0) };
-  } }; }
+  getContext() {
+    return {
+      font: "",
+      measureText(s) {
+        const fs = Number(this.font.match(/([\d.]+)px/)?.[1] || 40);
+        return { width: [...s].reduce((w, c) => w + (/\s/.test(c) ? 0.3 : c.charCodeAt(0) < 128 ? 0.58 : 1) * fs, 0) };
+      },
+    };
+  }
 }
 const original = globalThis.document;
 globalThis.document = { documentElement: new El(), createElement: () => new El() };
-const NGUI = await import(new URL('ngui.js', web));
-const { wrapPath, S } = await import(new URL('util.js', web));
-const Rows = await import(new URL('settings-rows.js', web));
-const ButtonsModule = await import(new URL('game-buttons.js', web));
-const { errorText } = await import(new URL('i18n.js', web));
-const { BACKDROP, XS_BUTTON, TYPE } = await import(new URL('ui-tokens.js', web));
+const NGUI = await import(new URL("ngui.js", web));
+const { wrapPath, S } = await import(new URL("util.js", web));
+const Rows = await import(new URL("settings-rows.js", web));
+const ButtonsModule = await import(new URL("game-buttons.js", web));
+const { errorText } = await import(new URL("i18n.js", web));
+const { BACKDROP, XS_BUTTON, TYPE } = await import(new URL("ui-tokens.js", web));
 const { option, filter } = controls();
 const Buttons = { smallButton: (...args) => ButtonsModule.optionButton(option, filter, ...args) };
 
-function harness(locale, { native = true, sourceValue = 'windows_global', error = null, pathLength = 1 } = {}) {
-  const strings = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), 'utf8')).webui;
-  const T = (key, values = {}) => key.split('.').reduce((v, k) => v[k], strings).replace(/\{(\w+)\}/g, (_, k) => values[k]);
-  const prefs = { fileSource: sourceValue, gameDirs: { global: '/test/global/'.repeat(pathLength), japan: '/test/japan/'.repeat(pathLength) }, native, libraryDir: '/test/library', outputDir: '/test/output' };
-  const requests = [], messages = [], failures = [], changed = [];
-  const deps = { NGUI, T, wrapPath, S, ...Rows, Buttons, BACKDROP, XS_BUTTON, TYPE, platform: 'mac', errorText: err => errorText(err, T),
+function harness(locale, { native = true, sourceValue = "windows_global", error = null, pathLength = 1 } = {}) {
+  const strings = JSON.parse(
+    readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8"),
+  ).webui;
+  const T = (key, values = {}) =>
+    key
+      .split(".")
+      .reduce((v, k) => v[k], strings)
+      .replace(/\{(\w+)\}/g, (_, k) => values[k]);
+  const prefs = {
+    fileSource: sourceValue,
+    gameDirs: { global: "/test/global/".repeat(pathLength), japan: "/test/japan/".repeat(pathLength) },
+    native,
+    libraryDir: "/test/library",
+    outputDir: "/test/output",
+  };
+  const requests = [],
+    messages = [],
+    failures = [],
+    changed = [];
+  const deps = {
+    NGUI,
+    T,
+    wrapPath,
+    S,
+    ...Rows,
+    Buttons,
+    BACKDROP,
+    XS_BUTTON,
+    TYPE,
+    platform: "mac",
+    errorText: (err) => errorText(err, T),
     notify: (...args) => failures.push(args),
     // Popup.notice is message() with the notice caption and Confirm only (popup.js, tested in refusal_notice.test.mjs)
-    Popup: { notice: async text => messages.push({ title: T('quit.title'), lines: [text], ok: T('picker.ok') }) },
+    Popup: { notice: async (text) => messages.push({ title: T("quit.title"), lines: [text], ok: T("picker.ok") }) },
     // consent.js detectGame with the consent given (its consent path is tested in popup.test.mjs)
-    Consent: { detectGame: (region) => deps.rpc('settings.detectGame', { region }) }, ModSwitch: { askScan: async () => true },
+    Consent: { detectGame: (region) => deps.rpc("settings.detectGame", { region }) },
+    ModSwitch: { askScan: async () => true },
     rpc: async (method, args) => {
       requests.push([method, args]);
-      if (error && method === 'settings.set') throw error;
-      if (method === 'settings.detectGame') return [`/detected/${args.region}`];
-      if (method === 'settings.pickFolder') return `/chosen${args.start}`;
+      if (error && method === "settings.set") throw error;
+      if (method === "settings.detectGame") return [`/detected/${args.region}`];
+      if (method === "settings.pickFolder") return `/chosen${args.start}`;
       return prefs;
     },
   };
-  const api = new Function('deps', 'initial', `const {${Object.keys(deps)}} = deps; ${strip(source)};
+  const api = new Function(
+    "deps",
+    "initial",
+    `const {${Object.keys(deps)}} = deps; ${strip(source)};
     prefs=initial;tab='folders';onChange=async(...args)=>deps.changed.push(args);render=async()=>{};
-    return {rows, set, current};` )({ ...deps, changed }, prefs);
+    return {rows, set, current};`,
+  )({ ...deps, changed }, prefs);
   return { ...api, prefs, requests, messages, failures, changed, T };
 }
 
 for (const locale of locales) {
   test(`${locale}: both server rows are visible and every choose/detect action targets its own server`, async () => {
-    for (const sourceValue of ['windows_global', 'windows_japan']) {
+    for (const sourceValue of ["windows_global", "windows_japan"]) {
       const h = harness(locale, { sourceValue });
       const { rows } = h.rows();
-      assert.deepEqual(rows.map(r => r.tree.name), ['Server', 'Game_global', 'Game_japan', 'Library', 'Output']);
-      for (const region of ['global', 'japan']) {
-        const row = rows.find(r => r.tree.name === `Game_${region}`);
-        assert.equal(NGUI.find(row.tree, 'Title').widgets[0].text, h.T(`settings.gameDirLabel.${region}`));
-        await row.hits[0].fn(); await row.hits[1].fn();
-        assert.ok(h.requests.some(([method, p]) => method === 'settings.detectGame' && p.region === region));
-        assert.ok(h.requests.some(([method, p]) => method === 'settings.pickFolder' && p.start === h.prefs.gameDirs[region]));
-        assert.ok(h.requests.some(([method, p]) => method === 'settings.set' && p.key === `gameDir.${region}` && p.value === `/detected/${region}`));
-        assert.ok(h.requests.some(([method, p]) => method === 'settings.set' && p.key === `gameDir.${region}` && p.value === `/chosen${h.prefs.gameDirs[region]}`));
+      assert.deepEqual(
+        rows.map((r) => r.tree.name),
+        ["Server", "Game_global", "Game_japan", "Library", "Output"],
+      );
+      for (const region of ["global", "japan"]) {
+        const row = rows.find((r) => r.tree.name === `Game_${region}`);
+        assert.equal(NGUI.find(row.tree, "Title").widgets[0].text, h.T(`settings.gameDirLabel.${region}`));
+        await row.hits[0].fn();
+        await row.hits[1].fn();
+        assert.ok(h.requests.some(([method, p]) => method === "settings.detectGame" && p.region === region));
+        assert.ok(
+          h.requests.some(([method, p]) => method === "settings.pickFolder" && p.start === h.prefs.gameDirs[region]),
+        );
+        assert.ok(
+          h.requests.some(
+            ([method, p]) =>
+              method === "settings.set" && p.key === `gameDir.${region}` && p.value === `/detected/${region}`,
+          ),
+        );
+        assert.ok(
+          h.requests.some(
+            ([method, p]) =>
+              method === "settings.set" &&
+              p.key === `gameDir.${region}` &&
+              p.value === `/chosen${h.prefs.gameDirs[region]}`,
+          ),
+        );
       }
       assert.deepEqual(h.failures, []);
     }
   });
 
   test(`${locale}: missing directory uses the notice caption and Confirm only, with no preference refresh`, async () => {
-    for (const region of ['global', 'japan']) {
-      const h = harness(locale, { error: { code: 'game_directory_missing', params: { region } } });
-      await h.set('fileSource', `windows_${region}`);
-      assert.deepEqual(h.messages, [{ title: h.T('quit.title'), lines: [h.T(`settings.gameDirMissing.${region}`)], ok: h.T('picker.ok') }]);
+    for (const region of ["global", "japan"]) {
+      const h = harness(locale, { error: { code: "game_directory_missing", params: { region } } });
+      await h.set("fileSource", `windows_${region}`);
+      assert.deepEqual(h.messages, [
+        { title: h.T("quit.title"), lines: [h.T(`settings.gameDirMissing.${region}`)], ok: h.T("picker.ok") },
+      ]);
       assert.deepEqual(h.failures, []);
       assert.deepEqual(h.changed, []);
       assert.equal(h.current(), h.prefs);
-      if (locale === 'zh-CN') assert.equal(h.messages[0].lines[0], region === 'japan' ? '未设置日服游戏目录' : '未设置国际服游戏目录');
+      if (locale === "zh-CN")
+        assert.equal(h.messages[0].lines[0], region === "japan" ? "未设置日服游戏目录" : "未设置国际服游戏目录");
     }
-    const h = harness(locale, { error: { code: 'busy', params: {} } });
-    await h.set('fileSource', 'windows_japan');
+    const h = harness(locale, { error: { code: "busy", params: {} } });
+    await h.set("fileSource", "windows_japan");
     assert.equal(h.messages.length, 0);
-    assert.equal(h.failures[0][1].kind, 'error');
+    assert.equal(h.failures[0][1].kind, "error");
   });
 
   test(`${locale}: folder row geometry stays within the native scrolling panel at narrow and wide window scales`, () => {
@@ -94,40 +155,54 @@ for (const locale of locales) {
       const { rows, height } = h.rows();
       let previousBottom = 0;
       for (const { tree, h: rowHeight } of rows) {
-        const top = -tree.pos[1] - rowHeight / 2, bottom = top + rowHeight;
-        assert.ok(Math.abs(top - previousBottom - (previousBottom ? 12 : 20)) < 1e-9 && bottom <= height, 'rows stand 12 apart (the Game tab), the first 20 under the panel top');
+        const top = -tree.pos[1] - rowHeight / 2,
+          bottom = top + rowHeight;
+        assert.ok(
+          Math.abs(top - previousBottom - (previousBottom ? 12 : 20)) < 1e-9 && bottom <= height,
+          "rows stand 12 apart (the Game tab), the first 20 under the panel top",
+        );
         previousBottom = bottom;
-        if (!tree.name.startsWith('Game_')) continue;
-        const value = NGUI.find(tree, 'Value'), widget = value.widgets[0];
-        const title = NGUI.find(tree, 'Title').widgets[0];
+        if (!tree.name.startsWith("Game_")) continue;
+        const value = NGUI.find(tree, "Value"),
+          widget = value.widgets[0];
+        const title = NGUI.find(tree, "Title").widgets[0];
         assert.ok(NGUI.glyphWidth(title.text, title.fontSize) <= title.w_);
         assert.ok(title.fontSize >= 40 && title.fontSize <= 50);
-        assert.ok(widget.fontSize >= TYPE.caption.min && widget.fontSize <= TYPE.caption.fs, 'the value is a caption');
-        assert.ok(widget.text.split('\n').every(line => NGUI.glyphWidth(line, widget.fontSize) <= widget.w_));
-        const valueTop = value.pos[1] + widget.h_ / 2, valueBottom = value.pos[1] - widget.h_ / 2;
+        assert.ok(widget.fontSize >= TYPE.caption.min && widget.fontSize <= TYPE.caption.fs, "the value is a caption");
+        assert.ok(widget.text.split("\n").every((line) => NGUI.glyphWidth(line, widget.fontSize) <= widget.w_));
+        const valueTop = value.pos[1] + widget.h_ / 2,
+          valueBottom = value.pos[1] - widget.h_ / 2;
         assert.ok(valueTop <= rowHeight / 2 - 109 && valueBottom > -rowHeight / 2);
-        const buttons = [NGUI.find(tree, 'Btn_0'), NGUI.find(tree, 'Btn_1')];
-        const labels = buttons.map(b => NGUI.find(b, 'Label_Locale').widgets[0]);
+        const buttons = [NGUI.find(tree, "Btn_0"), NGUI.find(tree, "Btn_1")];
+        const labels = buttons.map((b) => NGUI.find(b, "Label_Locale").widgets[0]);
         assert.equal(labels[0].fontSize, labels[1].fontSize);
         buttons.forEach((button, i) => {
-          const body = button.widgets.find(w => w.sprite === 'Common_Btn_BG');
-          assert.ok(body, 'UIPopup_Option_PC ETCSetting/ButtonBg body');
+          const body = button.widgets.find((w) => w.sprite === "Common_Btn_BG");
+          assert.ok(body, "UIPopup_Option_PC ETCSetting/ButtonBg body");
           const [x, y] = button.pos;
           assert.ok(value.pos[0] + widget.w_ < x - body.w_ / 2);
           assert.ok(x + body.w_ / 2 < 1552 / 2);
           assert.ok(y + body.h_ / 2 <= rowHeight / 2 - 109 && y - body.h_ / 2 >= -rowHeight / 2);
-          assert.ok(labels[i].text.split('\n').every(line => NGUI.glyphWidth(line, labels[i].fontSize) <= labels[i].w_));
-          assert.ok(labels[i].fontSize >= 28 && labels[i].fontSize <= 40, 'the XS small button range');
+          assert.ok(
+            labels[i].text.split("\n").every((line) => NGUI.glyphWidth(line, labels[i].fontSize) <= labels[i].w_),
+          );
+          assert.ok(labels[i].fontSize >= 28 && labels[i].fontSize <= 40, "the XS small button range");
         });
-        const halfBody = (b) => b.widgets.find(w => w.sprite === 'Common_Btn_BG').w_ / 2;
+        const halfBody = (b) => b.widgets.find((w) => w.sprite === "Common_Btn_BG").w_ / 2;
         assert.ok(buttons[0].pos[0] + halfBody(buttons[0]) < buttons[1].pos[0] - halfBody(buttons[1]));
-        for (const [width, windowHeight] of [[640, 480], [960, 540], [1920, 1080], [2560, 1440]]) {
+        for (const [width, windowHeight] of [
+          [640, 480],
+          [960, 540],
+          [1920, 1080],
+          [2560, 1440],
+        ]) {
           const scale = Math.min(width / 1920, windowHeight / 1080);
-          const panelTop = (540 - 375 * S) * scale, panelBottom = panelTop + 854 * S * scale;
+          const panelTop = (540 - 375 * S) * scale,
+            panelBottom = panelTop + 854 * S * scale;
           assert.ok(panelTop >= 0 && panelBottom <= windowHeight);
           const scrollMax = Math.max(0, height - 854);
           const controlBottom = (bottom - scrollMax) * S * scale + panelTop;
-          assert.ok(controlBottom <= panelBottom, 'last row reachable by scrolling');
+          assert.ok(controlBottom <= panelBottom, "last row reachable by scrolling");
         }
       }
     }
@@ -137,7 +212,7 @@ for (const locale of locales) {
   });
 }
 
-test('browser mode offers detection for both directories and omits native picker hit targets', () => {
-  const h = harness('en-US', { native: false });
-  for (const row of h.rows().rows.filter(r => r.tree.name.startsWith('Game_'))) assert.equal(row.hits.length, 1);
+test("browser mode offers detection for both directories and omits native picker hit targets", () => {
+  const h = harness("en-US", { native: false });
+  for (const row of h.rows().rows.filter((r) => r.tree.name.startsWith("Game_"))) assert.equal(row.hits.length, 1);
 });

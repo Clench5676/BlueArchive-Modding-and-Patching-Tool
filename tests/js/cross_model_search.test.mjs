@@ -13,194 +13,435 @@ const functionSource = (name) => {
   const at = source.indexOf(`function ${name}(`);
   return source.slice(source.lastIndexOf("\n", at) + 1, source.indexOf("\n}\n", at) + 2);
 };
-const flush = async () => { for (let i = 0; i < 100; i++) await Promise.resolve(); };
+const flush = async () => {
+  for (let i = 0; i < 100; i++) await Promise.resolve();
+};
 
-for (const locale of LOCALES) test(`past-limit own cards allow Apply and Optimize Physics with their caution (${locale})`, async () => {
-  const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
-  const v = { key: "slot", family: "own", model: "slot" };
-  const sibling = (key) => ({ key, family: "own", model: key });
-  const fam = { variants: [v, sibling("past"), sibling("refused"), sibling("unchecked")] };
-  const cards = [...Sources.candidates(fam, v, "model", { past: "preview", refused: "refused" }),
-    Sources.crossCard({ key: "cross", family: "other", model: "cross" }, { cross: "preview" })];
-  const applied = [], optimized = [];
-  let popup;
-  const ctx = vm.createContext({ ...Sources, fam, otherStudents: [], switchThumbnails: {}, switchPopupPage: 1, pageToken: 1,
-    popupKind: "model", popupSeg: 0, pending: "v:past", busy: false, platform: "mac", variant: () => v, modsOn: () => true,
-    candidates: () => cards, lazyThumbnail: () => ({ start: () => null }), candidateLabel: (c) => c.variant.key,
-    fullName: (o) => o.key, originalName: (o) => o.key, isSpecial: () => false, gameFile: () => "model.bundle",
-    baseName: (s) => s, sizeText: () => "0", crcOf: () => null, appliedKey: Sources.appliedKey,
-    T: (key) => key.split(".").reduce((o, part) => o?.[part], ui), COLOUR: { success: "green" },
-    optimizeSource: (c) => c.kind === "variant" ? `variant:${c.variant.key}` : "official", optimizedCopy: () => null,
-    listPopup: async (options) => { popup = options; }, applyCandidate: (key) => applied.push(key),
-    runOptimize: (c) => optimized.push(c.key), costumeChecking: () => false,
-  });
-  vm.runInContext(functionSource("drawPopup"), ctx);
-  await ctx.drawPopup();
-  const item = (key) => popup.items.find((it) => it.key === `v:${key}`);
-  const actions = (key) => popup.details(item(key)).actions.filter(([label]) => [ui.popup.apply, ui.model.optimize].includes(label));
-  assert.equal(item("past").hint, ui.model.beyondFit);
-  assert.equal(item("cross").hint, ui.model.crossCharacter);
-  for (const key of ["past", "cross"]) {
-    assert.equal(actions(key).length, 2);
-    for (const [, run, disabled, , hint] of actions(key)) {
-      assert.equal(disabled, false);
-      if (key === "past") assert.equal(hint, ui.model.beyondFit);
-      run();
+for (const locale of LOCALES)
+  test(`past-limit own cards allow Apply and Optimize Physics with their caution (${locale})`, async () => {
+    const ui = JSON.parse(
+      readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8"),
+    ).webui;
+    const v = { key: "slot", family: "own", model: "slot" };
+    const sibling = (key) => ({ key, family: "own", model: key });
+    const fam = { variants: [v, sibling("past"), sibling("refused"), sibling("unchecked")] };
+    const cards = [
+      ...Sources.candidates(fam, v, "model", { past: "preview", refused: "refused" }),
+      Sources.crossCard({ key: "cross", family: "other", model: "cross" }, { cross: "preview" }),
+    ];
+    const applied = [],
+      optimized = [];
+    let popup;
+    const ctx = vm.createContext({
+      ...Sources,
+      fam,
+      otherStudents: [],
+      switchThumbnails: {},
+      switchPopupPage: 1,
+      pageToken: 1,
+      popupKind: "model",
+      popupSeg: 0,
+      pending: "v:past",
+      busy: false,
+      platform: "mac",
+      variant: () => v,
+      modsOn: () => true,
+      candidates: () => cards,
+      lazyThumbnail: () => ({ start: () => null }),
+      candidateLabel: (c) => c.variant.key,
+      fullName: (o) => o.key,
+      originalName: (o) => o.key,
+      isSpecial: () => false,
+      gameFile: () => "model.bundle",
+      baseName: (s) => s,
+      sizeText: () => "0",
+      crcOf: () => null,
+      appliedKey: Sources.appliedKey,
+      T: (key) => key.split(".").reduce((o, part) => o?.[part], ui),
+      COLOUR: { success: "green" },
+      optimizeSource: (c) => (c.kind === "variant" ? `variant:${c.variant.key}` : "official"),
+      optimizedCopy: () => null,
+      listPopup: async (options) => {
+        popup = options;
+      },
+      applyCandidate: (key) => applied.push(key),
+      runOptimize: (c) => optimized.push(c.key),
+      costumeChecking: () => false,
+    });
+    vm.runInContext(functionSource("drawPopup"), ctx);
+    await ctx.drawPopup();
+    const item = (key) => popup.items.find((it) => it.key === `v:${key}`);
+    const actions = (key) =>
+      popup.details(item(key)).actions.filter(([label]) => [ui.popup.apply, ui.model.optimize].includes(label));
+    assert.equal(item("past").hint, ui.model.beyondFit);
+    assert.equal(item("cross").hint, ui.model.crossCharacter);
+    for (const key of ["past", "cross"]) {
+      assert.equal(actions(key).length, 2);
+      for (const [, run, disabled, , hint] of actions(key)) {
+        assert.equal(disabled, false);
+        if (key === "past") assert.equal(hint, ui.model.beyondFit);
+        run();
+      }
     }
-  }
-  assert.deepEqual(applied, ["v:past", "v:cross"]);
-  assert.deepEqual(optimized, ["v:past", "v:cross"]);
-  for (const key of ["refused", "unchecked"]) for (const [, , disabled, , hint] of actions(key)) {
-    assert.equal(disabled, true);
-    assert.equal(hint, ui.model.unfit);
-  }
-});
+    assert.deepEqual(applied, ["v:past", "v:cross"]);
+    assert.deepEqual(optimized, ["v:past", "v:cross"]);
+    for (const key of ["refused", "unchecked"])
+      for (const [, , disabled, , hint] of actions(key)) {
+        assert.equal(disabled, true);
+        assert.equal(hint, ui.model.unfit);
+      }
+  });
 
 // A costume whose check is still under way does not only grey its Apply and Optimize Physics: both show the game's
 // loading ring in their caption's place (the sixth action field), with no "unfit" reason on hover, until its verdict
 // lands; a refused costume keeps its reason and shows no ring.
-for (const locale of LOCALES) test(`a costume being checked shows the loading ring on Apply and Optimize Physics (${locale})`, async () => {
-  const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
-  const v = { key: "slot", family: "own", model: "slot" };
-  const sibling = (key) => ({ key, family: "own", model: key });
-  const fam = { variants: [v, sibling("refused"), sibling("unchecked"), sibling("greyed")] };
-  const cards = [...Sources.candidates(fam, v, "model", { refused: "refused" }).map((c) => c.key === "v:greyed" ? { ...c, greyed: true } : c),
-    Sources.crossCard({ key: "cross", family: "other", model: "cross" }, {})];
-  const checking = new Set(["v:unchecked", "v:cross", "v:greyed"]);
-  let popup;
-  const ctx = vm.createContext({ ...Sources, fam, otherStudents: [], switchThumbnails: {}, switchPopupPage: 1, pageToken: 1,
-    popupKind: "model", popupSeg: 0, pending: "v:unchecked", busy: false, platform: "mac", variant: () => v, modsOn: () => true,
-    candidates: () => cards, lazyThumbnail: () => ({ start: () => null }), candidateLabel: (c) => c.variant.key,
-    fullName: (o) => o.key, originalName: (o) => o.key, isSpecial: () => false, gameFile: () => "model.bundle",
-    baseName: (s) => s, sizeText: () => "0", crcOf: () => null, appliedKey: Sources.appliedKey,
-    T: (key) => key.split(".").reduce((o, part) => o?.[part], ui), COLOUR: { success: "green" },
-    optimizeSource: (c) => `variant:${c.variant.key}`, optimizedCopy: () => null, listPopup: async (options) => { popup = options; },
-    applyCandidate: () => null, runOptimize: () => null, costumeChecking: (_v, kind, key) => kind === "model" && checking.has(key),
-    GREYED_BADGE: () => ({}),
-  });
-  vm.runInContext(functionSource("drawPopup"), ctx);
-  await ctx.drawPopup();
-  const actions = (key) => popup.details(popup.items.find((it) => it.key === `v:${key}`)).actions
-    .filter(([label]) => [ui.popup.apply, ui.model.optimize].includes(label));
-  for (const key of ["unchecked", "cross"]) {
-    assert.equal(actions(key).length, 2);
-    for (const [label, , disabled, , hint, loading] of actions(key)) {
-      assert.equal(disabled, true, `${key} ${label} waits for its check`);
-      assert.equal(loading, true, `${key} ${label} shows the ring`);
-      assert.equal(hint, null, `${key} ${label} gives no reason while it is checked`);
+for (const locale of LOCALES)
+  test(`a costume being checked shows the loading ring on Apply and Optimize Physics (${locale})`, async () => {
+    const ui = JSON.parse(
+      readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8"),
+    ).webui;
+    const v = { key: "slot", family: "own", model: "slot" };
+    const sibling = (key) => ({ key, family: "own", model: key });
+    const fam = { variants: [v, sibling("refused"), sibling("unchecked"), sibling("greyed")] };
+    const cards = [
+      ...Sources.candidates(fam, v, "model", { refused: "refused" }).map((c) =>
+        c.key === "v:greyed" ? { ...c, greyed: true } : c,
+      ),
+      Sources.crossCard({ key: "cross", family: "other", model: "cross" }, {}),
+    ];
+    const checking = new Set(["v:unchecked", "v:cross", "v:greyed"]);
+    let popup;
+    const ctx = vm.createContext({
+      ...Sources,
+      fam,
+      otherStudents: [],
+      switchThumbnails: {},
+      switchPopupPage: 1,
+      pageToken: 1,
+      popupKind: "model",
+      popupSeg: 0,
+      pending: "v:unchecked",
+      busy: false,
+      platform: "mac",
+      variant: () => v,
+      modsOn: () => true,
+      candidates: () => cards,
+      lazyThumbnail: () => ({ start: () => null }),
+      candidateLabel: (c) => c.variant.key,
+      fullName: (o) => o.key,
+      originalName: (o) => o.key,
+      isSpecial: () => false,
+      gameFile: () => "model.bundle",
+      baseName: (s) => s,
+      sizeText: () => "0",
+      crcOf: () => null,
+      appliedKey: Sources.appliedKey,
+      T: (key) => key.split(".").reduce((o, part) => o?.[part], ui),
+      COLOUR: { success: "green" },
+      optimizeSource: (c) => `variant:${c.variant.key}`,
+      optimizedCopy: () => null,
+      listPopup: async (options) => {
+        popup = options;
+      },
+      applyCandidate: () => null,
+      runOptimize: () => null,
+      costumeChecking: (_v, kind, key) => kind === "model" && checking.has(key),
+      GREYED_BADGE: () => ({}),
+    });
+    vm.runInContext(functionSource("drawPopup"), ctx);
+    await ctx.drawPopup();
+    const actions = (key) =>
+      popup
+        .details(popup.items.find((it) => it.key === `v:${key}`))
+        .actions.filter(([label]) => [ui.popup.apply, ui.model.optimize].includes(label));
+    for (const key of ["unchecked", "cross"]) {
+      assert.equal(actions(key).length, 2);
+      for (const [label, , disabled, , hint, loading] of actions(key)) {
+        assert.equal(disabled, true, `${key} ${label} waits for its check`);
+        assert.equal(loading, true, `${key} ${label} shows the ring`);
+        assert.equal(hint, null, `${key} ${label} gives no reason while it is checked`);
+      }
     }
-  }
-  for (const key of ["refused", "greyed"]) for (const [label, , disabled, , , loading] of actions(key)) {
-    assert.equal(disabled, true);
-    assert.ok(!loading, `${key} ${label} shows no ring`);
-  }
-  checking.clear();
-  for (const [, , , , hint, loading] of actions("unchecked")) { assert.ok(!loading); assert.equal(hint, ui.model.unfit); }
-});
-
-for (const locale of LOCALES) test(`an offered pair shows what the game may draw differently on hover (${locale})`, async () => {
-  const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
-  const v = { key: "slot", family: "own", model: "slot" };
-  const sibling = (key) => ({ key, family: "own", model: key });
-  const fam = { variants: [v, sibling("ex"), sibling("shader"), sibling("both"), sibling("past"), sibling("plain")] };
-  const costumes = { ex: "ok", shader: "ok", both: "ok", past: "preview", plain: "ok", cross: "ok",
-    [Sources.CAUTIONS]: { ex: ["ex_parts"], shader: ["carried_shader"], both: ["carried_shader", "ex_parts"],
-      past: ["ex_parts"], cross: ["carried_shader"], plain: ["something new"] } };
-  const cards = [...Sources.candidates(fam, v, "model", { ...costumes }),
-    Sources.crossCard({ key: "cross", family: "other", model: "cross" }, costumes)];
-  let popup;
-  const ctx = vm.createContext({ ...Sources, fam, otherStudents: [], switchThumbnails: {}, switchPopupPage: 1, pageToken: 1,
-    popupKind: "model", popupSeg: 0, pending: "v:ex", busy: false, platform: "mac", variant: () => v, modsOn: () => true,
-    candidates: () => cards, lazyThumbnail: () => ({ start: () => null }), candidateLabel: (c) => c.variant.key,
-    fullName: (o) => o.key, originalName: (o) => o.key, isSpecial: () => false, gameFile: () => "model.bundle",
-    baseName: (s) => s, sizeText: () => "0", crcOf: () => null, appliedKey: Sources.appliedKey,
-    T: (key) => key.split(".").reduce((o, part) => o?.[part], ui), COLOUR: { success: "green" },
-    optimizeSource: () => "official", optimizedCopy: () => null, listPopup: async (options) => { popup = options; },
-    applyCandidate: () => null, runOptimize: () => null, costumeChecking: () => false,
+    for (const key of ["refused", "greyed"])
+      for (const [label, , disabled, , , loading] of actions(key)) {
+        assert.equal(disabled, true);
+        assert.ok(!loading, `${key} ${label} shows no ring`);
+      }
+    checking.clear();
+    for (const [, , , , hint, loading] of actions("unchecked")) {
+      assert.ok(!loading);
+      assert.equal(hint, ui.model.unfit);
+    }
   });
-  vm.runInContext(functionSource("drawPopup"), ctx);
-  await ctx.drawPopup();
-  const item = (key) => popup.items.find((it) => it.key === `v:${key}`);
-  const applyHint = (key) => popup.details(item(key)).actions.find(([label]) => label === ui.popup.apply)[4];
-  assert.equal(item("ex").hint, ui.model.exParts);
-  assert.equal(item("shader").hint, ui.model.carriedShader);
-  assert.equal(item("both").hint, ui.model.exParts, "the first caution");
-  assert.equal(item("past").hint, ui.model.beyondFit, "past the limit says more");
-  assert.equal(item("cross").hint, ui.model.crossCharacter, "another student's model says more");
-  assert.equal(item("plain").hint, undefined, "an unknown caution shows none");
-  assert.equal(applyHint("ex"), ui.model.exParts);
-  assert.equal(applyHint("shader"), ui.model.carriedShader);
-  assert.equal(applyHint("past"), ui.model.beyondFit);
-  assert.equal(applyHint("plain"), null);
-});
 
-for (const locale of LOCALES) test(`the model search shares picker matching and appends roster-ordered hits (${locale})`, () => {
-  const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
-  const v = { key: "slot", family: "own", model: "slot" };
-  const npc = { key: "ch0171", family: "other", model: "ch0171_enemy", label: ui.model.unfit, full: ui.model.unfit, recruitable: false };
-  const field = { key: "field", family: "other", fieldModel: "field_npc", label: "A field NPC", full: "A field NPC", recruitable: false };
-  const recruit = { key: "recruit", family: "other", model: "recruit", label: "Z recruit", full: "Z recruit", recruitable: true };
-  const calls = [];
-  const ctx = vm.createContext({ ...Sources, pickerItems, Intl, otherStudents: [{ variants: [recruit, npc, field] }], popupSeg: 0,
-    costumeState: new Map(), crossShown: [], language: () => locale, shortName: (o) => o.label, crossLabel: (o) => o.label, fullName: (o) => o.full,
-    originalName: (o) => o.original || o.full, isFav: (o) => !!o.favorite, named: (c) => c,
-    judgeCross: (_v, keys = []) => calls.push([...keys]), v,
+for (const locale of LOCALES)
+  test(`an offered pair shows what the game may draw differently on hover (${locale})`, async () => {
+    const ui = JSON.parse(
+      readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8"),
+    ).webui;
+    const v = { key: "slot", family: "own", model: "slot" };
+    const sibling = (key) => ({ key, family: "own", model: key });
+    const fam = { variants: [v, sibling("ex"), sibling("shader"), sibling("both"), sibling("past"), sibling("plain")] };
+    const costumes = {
+      ex: "ok",
+      shader: "ok",
+      both: "ok",
+      past: "preview",
+      plain: "ok",
+      cross: "ok",
+      [Sources.CAUTIONS]: {
+        ex: ["ex_parts"],
+        shader: ["carried_shader"],
+        both: ["carried_shader", "ex_parts"],
+        past: ["ex_parts"],
+        cross: ["carried_shader"],
+        plain: ["something new"],
+      },
+    };
+    const cards = [
+      ...Sources.candidates(fam, v, "model", { ...costumes }),
+      Sources.crossCard({ key: "cross", family: "other", model: "cross" }, costumes),
+    ];
+    let popup;
+    const ctx = vm.createContext({
+      ...Sources,
+      fam,
+      otherStudents: [],
+      switchThumbnails: {},
+      switchPopupPage: 1,
+      pageToken: 1,
+      popupKind: "model",
+      popupSeg: 0,
+      pending: "v:ex",
+      busy: false,
+      platform: "mac",
+      variant: () => v,
+      modsOn: () => true,
+      candidates: () => cards,
+      lazyThumbnail: () => ({ start: () => null }),
+      candidateLabel: (c) => c.variant.key,
+      fullName: (o) => o.key,
+      originalName: (o) => o.key,
+      isSpecial: () => false,
+      gameFile: () => "model.bundle",
+      baseName: (s) => s,
+      sizeText: () => "0",
+      crcOf: () => null,
+      appliedKey: Sources.appliedKey,
+      T: (key) => key.split(".").reduce((o, part) => o?.[part], ui),
+      COLOUR: { success: "green" },
+      optimizeSource: () => "official",
+      optimizedCopy: () => null,
+      listPopup: async (options) => {
+        popup = options;
+      },
+      applyCandidate: () => null,
+      runOptimize: () => null,
+      costumeChecking: () => false,
+    });
+    vm.runInContext(functionSource("drawPopup"), ctx);
+    await ctx.drawPopup();
+    const item = (key) => popup.items.find((it) => it.key === `v:${key}`);
+    const applyHint = (key) => popup.details(item(key)).actions.find(([label]) => label === ui.popup.apply)[4];
+    assert.equal(item("ex").hint, ui.model.exParts);
+    assert.equal(item("shader").hint, ui.model.carriedShader);
+    assert.equal(item("both").hint, ui.model.exParts, "the first caution");
+    assert.equal(item("past").hint, ui.model.beyondFit, "past the limit says more");
+    assert.equal(item("cross").hint, ui.model.crossCharacter, "another student's model says more");
+    assert.equal(item("plain").hint, undefined, "an unknown caution shows none");
+    assert.equal(applyHint("ex"), ui.model.exParts);
+    assert.equal(applyHint("shader"), ui.model.carriedShader);
+    assert.equal(applyHint("past"), ui.model.beyondFit);
+    assert.equal(applyHint("plain"), null);
   });
-  vm.runInContext(functionSource("crossItems"), ctx);
-  const hits = (query, own = []) => [...ctx.crossItems(v, query, own, (c) => ({ ...c, label: c.variant.label }))];
-  assert.deepEqual(hits(""), []);
-  assert.deepEqual(calls.at(-1), [], "empty search checks only saved choices");
-  assert.deepEqual(hits(ui.model.unfit).map((c) => c.key), ["v:ch0171"], "localized label and full name");
-  assert.deepEqual(hits("CH0171_ENEMY").map((c) => c.key), ["v:ch0171"], "dev id matching is case insensitive");
-  assert.deepEqual(hits("v:ch0171").map((c) => c.key), ["v:ch0171"], "variant key");
-  assert.deepEqual(hits("field_npc").map((c) => c.key), ["v:field"], "field-only NPCs are reachable");
-  const ordered = hits(" ").map((c) => c.key);
-  assert.deepEqual(ordered, [], "whitespace stays off");
-  npc.label = "B NPC"; npc.full = "B NPC";
-  field.label = "A NPC"; field.full = "A NPC"; recruit.label = "Z NPC"; recruit.full = "Z NPC";
-  assert.deepEqual(hits("NPC").map((c) => c.key), ["v:field", "v:ch0171", "v:recruit"]);
-  recruit.favorite = true;
-  assert.deepEqual(hits("NPC").map((c) => c.key), ["v:recruit", "v:field", "v:ch0171"], "the roster puts favourites first");
-  recruit.favorite = false;
-  assert.deepEqual(hits("NPC", ["v:ch0171"]).map((c) => c.key), ["v:field", "v:recruit"], "saved cards are not duplicated");
-  ctx.popupSeg = 1;
-  assert.deepEqual(hits("NPC").map((c) => c.key), ["v:recruit"]);
-  ctx.popupSeg = 2;
-  assert.deepEqual(hits("NPC").map((c) => c.key), ["v:field", "v:ch0171"]);
-  npc.original = npc.full; npc.label = "User alias"; npc.full = "User alias";
-  assert.deepEqual(hits("B NPC").map((c) => c.key), ["v:ch0171"], "original name remains searchable with an alias");
-});
+
+for (const locale of LOCALES)
+  test(`the model search shares picker matching and appends roster-ordered hits (${locale})`, () => {
+    const ui = JSON.parse(
+      readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8"),
+    ).webui;
+    const v = { key: "slot", family: "own", model: "slot" };
+    const npc = {
+      key: "ch0171",
+      family: "other",
+      model: "ch0171_enemy",
+      label: ui.model.unfit,
+      full: ui.model.unfit,
+      recruitable: false,
+    };
+    const field = {
+      key: "field",
+      family: "other",
+      fieldModel: "field_npc",
+      label: "A field NPC",
+      full: "A field NPC",
+      recruitable: false,
+    };
+    const recruit = {
+      key: "recruit",
+      family: "other",
+      model: "recruit",
+      label: "Z recruit",
+      full: "Z recruit",
+      recruitable: true,
+    };
+    const calls = [];
+    const ctx = vm.createContext({
+      ...Sources,
+      pickerItems,
+      Intl,
+      otherStudents: [{ variants: [recruit, npc, field] }],
+      popupSeg: 0,
+      costumeState: new Map(),
+      crossShown: [],
+      language: () => locale,
+      shortName: (o) => o.label,
+      crossLabel: (o) => o.label,
+      fullName: (o) => o.full,
+      originalName: (o) => o.original || o.full,
+      isFav: (o) => !!o.favorite,
+      named: (c) => c,
+      judgeCross: (_v, keys = []) => calls.push([...keys]),
+      v,
+    });
+    vm.runInContext(functionSource("crossItems"), ctx);
+    const hits = (query, own = []) => [...ctx.crossItems(v, query, own, (c) => ({ ...c, label: c.variant.label }))];
+    assert.deepEqual(hits(""), []);
+    assert.deepEqual(calls.at(-1), [], "empty search checks only saved choices");
+    assert.deepEqual(
+      hits(ui.model.unfit).map((c) => c.key),
+      ["v:ch0171"],
+      "localized label and full name",
+    );
+    assert.deepEqual(
+      hits("CH0171_ENEMY").map((c) => c.key),
+      ["v:ch0171"],
+      "dev id matching is case insensitive",
+    );
+    assert.deepEqual(
+      hits("v:ch0171").map((c) => c.key),
+      ["v:ch0171"],
+      "variant key",
+    );
+    assert.deepEqual(
+      hits("field_npc").map((c) => c.key),
+      ["v:field"],
+      "field-only NPCs are reachable",
+    );
+    const ordered = hits(" ").map((c) => c.key);
+    assert.deepEqual(ordered, [], "whitespace stays off");
+    npc.label = "B NPC";
+    npc.full = "B NPC";
+    field.label = "A NPC";
+    field.full = "A NPC";
+    recruit.label = "Z NPC";
+    recruit.full = "Z NPC";
+    assert.deepEqual(
+      hits("NPC").map((c) => c.key),
+      ["v:field", "v:ch0171", "v:recruit"],
+    );
+    recruit.favorite = true;
+    assert.deepEqual(
+      hits("NPC").map((c) => c.key),
+      ["v:recruit", "v:field", "v:ch0171"],
+      "the roster puts favourites first",
+    );
+    recruit.favorite = false;
+    assert.deepEqual(
+      hits("NPC", ["v:ch0171"]).map((c) => c.key),
+      ["v:field", "v:recruit"],
+      "saved cards are not duplicated",
+    );
+    ctx.popupSeg = 1;
+    assert.deepEqual(
+      hits("NPC").map((c) => c.key),
+      ["v:recruit"],
+    );
+    ctx.popupSeg = 2;
+    assert.deepEqual(
+      hits("NPC").map((c) => c.key),
+      ["v:field", "v:ch0171"],
+    );
+    npc.original = npc.full;
+    npc.label = "User alias";
+    npc.full = "User alias";
+    assert.deepEqual(
+      hits("B NPC").map((c) => c.key),
+      ["v:ch0171"],
+      "original name remains searchable with an alias",
+    );
+  });
 
 function queue({ saved = [], read, check, cautions } = {}) {
-  const v = { key: "slot", family: "own", model: "slot" }, calls = [], cautionCalls = [], changed = [], failures = [];
-  const ctx = vm.createContext({ ...Sources, otherStudents: [], othersEpoch: 0, costumeState: new Map(), open: true, current: v,
-    tab: "model", costumeChecks: new Map(), variant: () => ctx.current, candidates: () => saved.map((key) => ({ cross: true, variant: { key } })),
-    costumesChecked: (v) => changed.push(v.key), console: { error: (...args) => failures.push(args) },
+  const v = { key: "slot", family: "own", model: "slot" },
+    calls = [],
+    cautionCalls = [],
+    changed = [],
+    failures = [];
+  const ctx = vm.createContext({
+    ...Sources,
+    otherStudents: [],
+    othersEpoch: 0,
+    costumeState: new Map(),
+    open: true,
+    current: v,
+    tab: "model",
+    costumeChecks: new Map(),
+    variant: () => ctx.current,
+    candidates: () => saved.map((key) => ({ cross: true, variant: { key } })),
+    costumesChecked: (v) => changed.push(v.key),
+    console: { error: (...args) => failures.push(args) },
     rpc: async (method, params) => {
       // the cautions are read aside from the queue: ``calls`` holds the queue's own, the verdicts' and the checks'
-      if (method === "model.costumeCautions") { cautionCalls.push({ method, ...params }); return cautions ? cautions(params) : {}; }
+      if (method === "model.costumeCautions") {
+        cautionCalls.push({ method, ...params });
+        return cautions ? cautions(params) : {};
+      }
       calls.push({ method, ...params });
-      if (method === "model.costumes") return read ? read(params) : Object.fromEntries(params.others.map((key) => [key, null]));
+      if (method === "model.costumes")
+        return read ? read(params) : Object.fromEntries(params.others.map((key) => [key, null]));
       return check ? check(params) : Object.fromEntries(params.others.map((key) => [key, "preview"]));
-    }, waitJob: async (result) => result,
+    },
+    waitJob: async (result) => result,
   });
-  const start = source.indexOf("let crossWanted ="), end = source.indexOf("// what keeps a 3D source", start);
+  const start = source.indexOf("let crossWanted ="),
+    end = source.indexOf("// what keeps a 3D source", start);
   vm.runInContext(source.slice(start, end), ctx);
-  return { ctx, v, calls, cautionCalls, changed, failures, want: (keys, target = ctx.current) => ctx.judgeCross(target, keys) };
+  return {
+    ctx,
+    v,
+    calls,
+    cautionCalls,
+    changed,
+    failures,
+    want: (keys, target = ctx.current) => ctx.judgeCross(target, keys),
+  };
 }
 
 test("the cross queue checks only current hits and stops old query work after the in-flight pair", async () => {
   let release;
-  const q = queue({ check: ({ others }) => others[0] === "first"
-    ? new Promise((resolve) => { release = resolve; }) : { [others[0]]: "preview" } });
-  q.want(["first", "old-hit"]); await flush();
+  const q = queue({
+    check: ({ others }) =>
+      others[0] === "first"
+        ? new Promise((resolve) => {
+            release = resolve;
+          })
+        : { [others[0]]: "preview" },
+  });
+  q.want(["first", "old-hit"]);
+  await flush();
   assert.ok(release);
   q.want(["new-hit"]);
-  release({ first: "ok" }); await flush();
-  assert.deepEqual(q.calls.filter((c) => c.method === "model.checkCostumes").map((c) => [...c.others]), [["first"], ["new-hit"]]);
+  release({ first: "ok" });
+  await flush();
+  assert.deepEqual(
+    q.calls.filter((c) => c.method === "model.checkCostumes").map((c) => [...c.others]),
+    [["first"], ["new-hit"]],
+  );
   assert.equal(q.ctx.costumeState.get(q.v.key)["new-hit"], "preview");
   assert.equal(q.ctx.costumeState.get(q.v.key)["old-hit"], null);
-  q.want([]); await flush();
+  q.want([]);
+  await flush();
   assert.equal(q.calls.filter((c) => c.method === "model.checkCostumes").length, 2);
   assert.deepEqual(q.failures, []);
 });
@@ -208,33 +449,61 @@ test("the cross queue checks only current hits and stops old query work after th
 test("64 search hits plus saved choices respect the RPC key limit and reuse saved verdicts", async () => {
   const q = queue({ saved: ["saved"], read: ({ others }) => Object.fromEntries(others.map((key) => [key, "ok"])) });
   const hits = Array.from({ length: 64 }, (_, i) => `hit${i}`);
-  q.want(hits); await flush();
-  assert.deepEqual(q.calls.map((c) => c.others.length), [64, 1]);
+  q.want(hits);
+  await flush();
+  assert.deepEqual(
+    q.calls.map((c) => c.others.length),
+    [64, 1],
+  );
   assert.ok(q.calls.every((c) => c.method === "model.costumes"));
-  q.want(hits); await flush();
+  q.want(hits);
+  await flush();
   assert.equal(q.calls.length, 2, "known hits are not checked again");
 });
 
 test("a different destination takes over the queue and leaving the screen stops queued checks", async () => {
   let release;
-  const q = queue({ check: ({ variant, others }) => variant === "slot"
-    ? new Promise((resolve) => { release = resolve; }) : { [others[0]]: "ok" } });
-  q.want(["first", "old-hit"]); await flush();
+  const q = queue({
+    check: ({ variant, others }) =>
+      variant === "slot"
+        ? new Promise((resolve) => {
+            release = resolve;
+          })
+        : { [others[0]]: "ok" },
+  });
+  q.want(["first", "old-hit"]);
+  await flush();
   q.ctx.current = { key: "next-slot", model: "next-slot" };
-  q.want(["next-hit"]); release({ first: "ok" }); await flush();
-  assert.deepEqual(q.calls.filter((c) => c.method === "model.checkCostumes").map((c) => [c.variant, ...c.others]),
-    [["slot", "first"], ["next-slot", "next-hit"]]);
+  q.want(["next-hit"]);
+  release({ first: "ok" });
+  await flush();
+  assert.deepEqual(
+    q.calls.filter((c) => c.method === "model.checkCostumes").map((c) => [c.variant, ...c.others]),
+    [
+      ["slot", "first"],
+      ["next-slot", "next-hit"],
+    ],
+  );
   const start = q.calls.length;
-  q.ctx.open = false; q.want(["unseen"]); await flush();
+  q.ctx.open = false;
+  q.want(["unseen"]);
+  await flush();
   assert.equal(q.calls.length, start);
 });
 
 test("the offered pairs' cautions are read beside their verdicts without holding the queue", async () => {
-  const q = queue({ read: ({ others }) => Object.fromEntries(others.map((key) => [key, key === "known" ? "ok" : null])),
-    check: ({ others }) => ({ [others[0]]: "preview" }), cautions: ({ others }) => Object.fromEntries(
-      others.filter((key) => key !== "plain").map((key) => [key, ["ex_parts"]])) });
-  q.want(["known", "fresh", "plain"]); await flush();
-  assert.deepEqual(q.cautionCalls.map((c) => [...c.others]), [["known"], ["fresh"], ["plain"]]);
+  const q = queue({
+    read: ({ others }) => Object.fromEntries(others.map((key) => [key, key === "known" ? "ok" : null])),
+    check: ({ others }) => ({ [others[0]]: "preview" }),
+    cautions: ({ others }) =>
+      Object.fromEntries(others.filter((key) => key !== "plain").map((key) => [key, ["ex_parts"]])),
+  });
+  q.want(["known", "fresh", "plain"]);
+  await flush();
+  assert.deepEqual(
+    q.cautionCalls.map((c) => [...c.others]),
+    [["known"], ["fresh"], ["plain"]],
+  );
   const state = q.ctx.costumeState.get(q.v.key);
   assert.deepEqual(JSON.parse(JSON.stringify(state[Sources.CAUTIONS])), { known: ["ex_parts"], fresh: ["ex_parts"] });
   assert.equal(state.plain, "preview");
@@ -244,80 +513,168 @@ test("the offered pairs' cautions are read beside their verdicts without holding
 
 test("a failed saved-verdict read can be retried on the next search", async () => {
   let fail = true;
-  const q = queue({ read: ({ others }) => {
-    if (fail) throw new Error("read failed");
-    return Object.fromEntries(others.map((key) => [key, "preview"]));
-  } });
-  q.want(["hit"]); await flush();
+  const q = queue({
+    read: ({ others }) => {
+      if (fail) throw new Error("read failed");
+      return Object.fromEntries(others.map((key) => [key, "preview"]));
+    },
+  });
+  q.want(["hit"]);
+  await flush();
   assert.equal(q.failures.length, 1);
-  fail = false; q.want(["hit"]); await flush();
+  fail = false;
+  q.want(["hit"]);
+  await flush();
   assert.equal(q.ctx.costumeState.get(q.v.key).hit, "preview");
 });
 
 test("Apply uses the verdict gate for cross previews, same-student previews and refusals", async () => {
-  for (const key of ["sibling", "cross"]) for (const verdict of ["ok", "preview", "refused", null]) {
-    const v = { key: "slot", family: "own", model: "slot" }, calls = [];
-    const ctx = vm.createContext({ ...Sources, variant: () => v, fam: { variants: [v, { key: "sibling" }] },
-      costumeState: new Map([[v.key, { [key]: verdict }]]), busy: false, isApplied: () => false,
-      job: async (method, params) => calls.push({ method, ...params }), switchPopupPage: null, pageToken: 1,
-    });
-    const at = source.indexOf("const costumeBlock ="), end = source.indexOf("// After a background check", at);
-    vm.runInContext(source.slice(at, end) + functionSource("applyCandidate"), ctx);
-    await ctx.applyCandidate(`v:${key}`, "model");
-    const allowed = verdict === "ok" || verdict === "preview" || (key === "sibling" && verdict == null);
-    assert.equal(calls.length, Number(allowed), `${key}: ${verdict}`);
-    if (allowed) assert.deepEqual(calls[0], { method: "actions.apply", variant: "slot", kind: "model", source: `variant:${key}` });
-  }
+  for (const key of ["sibling", "cross"])
+    for (const verdict of ["ok", "preview", "refused", null]) {
+      const v = { key: "slot", family: "own", model: "slot" },
+        calls = [];
+      const ctx = vm.createContext({
+        ...Sources,
+        variant: () => v,
+        fam: { variants: [v, { key: "sibling" }] },
+        costumeState: new Map([[v.key, { [key]: verdict }]]),
+        busy: false,
+        isApplied: () => false,
+        job: async (method, params) => calls.push({ method, ...params }),
+        switchPopupPage: null,
+        pageToken: 1,
+      });
+      const at = source.indexOf("const costumeBlock ="),
+        end = source.indexOf("// After a background check", at);
+      vm.runInContext(source.slice(at, end) + functionSource("applyCandidate"), ctx);
+      await ctx.applyCandidate(`v:${key}`, "model");
+      const allowed = verdict === "ok" || verdict === "preview" || (key === "sibling" && verdict == null);
+      assert.equal(calls.length, Number(allowed), `${key}: ${verdict}`);
+      if (allowed)
+        assert.deepEqual(calls[0], {
+          method: "actions.apply",
+          variant: "slot",
+          kind: "model",
+          source: `variant:${key}`,
+        });
+    }
 });
 
 test("a stale cross verdict cannot populate the cache after game resources change", async () => {
   let release;
-  const q = queue({ check: () => new Promise((resolve) => { release = resolve; }) });
-  q.want(["hit"]); await flush();
+  const q = queue({
+    check: () =>
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+  });
+  q.want(["hit"]);
+  await flush();
   q.ctx.othersEpoch++;
   q.ctx.open = false;
   q.ctx.costumeState.clear();
-  release({ hit: "ok" }); await flush();
+  release({ hit: "ok" });
+  await flush();
   assert.equal(q.ctx.costumeState.size, 0);
 });
 
 // --- Show other students: every other student's model listed, judged as it comes into view ---
 const makeSearch = (others, { seg = 0, shown = [] } = {}) => {
-  const v = { key: "slot", family: "own", model: "slot" }, calls = [];
+  const v = { key: "slot", family: "own", model: "slot" },
+    calls = [];
   const roster = [{ variants: others }];
-  const ctx = vm.createContext({ ...Sources, pickerItems, Intl, otherStudents: roster, popupSeg: seg, crossShown: shown,
-    costumeState: new Map(), language: () => "en-US", shortName: (o) => o.label, crossLabel: (o) => o.label, fullName: (o) => o.label,
-    originalName: (o) => o.label, isFav: (o) => !!o.favorite, named: (c) => c, judgeCross: (_v, keys = []) => calls.push([...keys]), v });
+  const ctx = vm.createContext({
+    ...Sources,
+    pickerItems,
+    Intl,
+    otherStudents: roster,
+    popupSeg: seg,
+    crossShown: shown,
+    costumeState: new Map(),
+    language: () => "en-US",
+    shortName: (o) => o.label,
+    crossLabel: (o) => o.label,
+    fullName: (o) => o.label,
+    originalName: (o) => o.label,
+    isFav: (o) => !!o.favorite,
+    named: (c) => c,
+    judgeCross: (_v, keys = []) => calls.push([...keys]),
+    v,
+  });
   vm.runInContext(functionSource("crossItems"), ctx);
-  return { ctx, v, calls, hits: (query = "", own = []) => [...ctx.crossItems(v, query, own, (c) => ({ ...c, label: c.variant.label }))] };
+  return {
+    ctx,
+    v,
+    calls,
+    hits: (query = "", own = []) => [...ctx.crossItems(v, query, own, (c) => ({ ...c, label: c.variant.label }))],
+  };
 };
-const student = (key, label, extra = {}) => ({ key, family: `family-${key}`, model: key, label, recruitable: true, ...extra });
+const student = (key, label, extra = {}) => ({
+  key,
+  family: `family-${key}`,
+  model: key,
+  label,
+  recruitable: true,
+  ...extra,
+});
 
 test("with Show other students on, every other student's model follows the own cards, in the roster's order", () => {
-  const others = [student("c", "Charlie"), student("a", "Alpha", { favorite: true }), student("b", "Bravo", { recruitable: false }),
-    student("f", "Field NPC", { model: undefined, fieldModel: "np1", recruitable: false }), { ...student("own", "Mine"), family: "own" }];
+  const others = [
+    student("c", "Charlie"),
+    student("a", "Alpha", { favorite: true }),
+    student("b", "Bravo", { recruitable: false }),
+    student("f", "Field NPC", { model: undefined, fieldModel: "np1", recruitable: false }),
+    { ...student("own", "Mine"), family: "own" },
+  ];
   const q = makeSearch(others);
   try {
     assert.deepEqual(q.hits(), [], "off: an empty query lists the own cards only");
     assert.deepEqual(q.calls.at(-1), []);
     Sources.setShowOthers(true);
-    assert.deepEqual(q.hits().map((c) => c.key), ["v:a", "v:b", "v:c", "v:f"], "favourites first, then the roster's name order; the student's own family is not among them");
-    assert.deepEqual(q.hits("", ["v:b"]).map((c) => c.key), ["v:a", "v:c", "v:f"], "a card the popup lists already is not repeated");
+    assert.deepEqual(
+      q.hits().map((c) => c.key),
+      ["v:a", "v:b", "v:c", "v:f"],
+      "favourites first, then the roster's name order; the student's own family is not among them",
+    );
+    assert.deepEqual(
+      q.hits("", ["v:b"]).map((c) => c.key),
+      ["v:a", "v:c", "v:f"],
+      "a card the popup lists already is not repeated",
+    );
     assert.ok(q.hits().every((c) => c.cross && c.variant.label === c.label));
     q.ctx.popupSeg = 1;
-    assert.deepEqual(q.hits().map((c) => c.key), ["v:a", "v:c"], "the segment applies to them");
+    assert.deepEqual(
+      q.hits().map((c) => c.key),
+      ["v:a", "v:c"],
+      "the segment applies to them",
+    );
     q.ctx.popupSeg = 2;
-    assert.deepEqual(q.hits().map((c) => c.key), ["v:b", "v:f"]);
+    assert.deepEqual(
+      q.hits().map((c) => c.key),
+      ["v:b", "v:f"],
+    );
     q.ctx.popupSeg = 0;
-    assert.deepEqual(q.hits("NPC").map((c) => c.key), ["v:f"], "so does the search");
+    assert.deepEqual(
+      q.hits("NPC").map((c) => c.key),
+      ["v:f"],
+      "so does the search",
+    );
     assert.deepEqual(q.hits("zzz"), []);
     q.ctx.costumeState.set("slot", { a: "refused" });
-    assert.deepEqual(q.hits().map((c) => c.key), ["v:b", "v:c", "v:f"], "a refused pair is left out");
-  } finally { Sources.setShowOthers(false); }
+    assert.deepEqual(
+      q.hits().map((c) => c.key),
+      ["v:b", "v:c", "v:f"],
+      "a refused pair is left out",
+    );
+  } finally {
+    Sources.setShowOthers(false);
+  }
 });
 
 test("with Show other students on there is no 64 cap, and only the cards in view are judged", () => {
-  const others = Array.from({ length: 150 }, (_, i) => student(`s${String(i).padStart(3, "0")}`, `Student ${String(i).padStart(3, "0")}`));
+  const others = Array.from({ length: 150 }, (_, i) =>
+    student(`s${String(i).padStart(3, "0")}`, `Student ${String(i).padStart(3, "0")}`),
+  );
   const q = makeSearch(others);
   try {
     // a search's hits: at most 64, all judged at once (the round-one behaviour)
@@ -335,13 +692,23 @@ test("with Show other students on there is no 64 cap, and only the cards in view
     Sources.setShowOthers(false);
     assert.deepEqual(q.hits(), []);
     assert.deepEqual(q.calls.at(-1), [], "unchecked again: today's cards only");
-  } finally { Sources.setShowOthers(false); }
+  } finally {
+    Sources.setShowOthers(false);
+  }
 });
 
 function viewing({ variants = [{ key: "sibling" }], on = true, kind = "model" } = {}) {
-  const v = { key: "slot", model: "slot" }, calls = [];
-  const ctx = vm.createContext({ ...Sources, fam: { variants: [v, ...variants] }, crossShown: [], popupKind: kind, variant: () => ctx.current,
-    current: v, judgeCross: (_v, keys) => calls.push([...keys]) });
+  const v = { key: "slot", model: "slot" },
+    calls = [];
+  const ctx = vm.createContext({
+    ...Sources,
+    fam: { variants: [v, ...variants] },
+    crossShown: [],
+    popupKind: kind,
+    variant: () => ctx.current,
+    current: v,
+    judgeCross: (_v, keys) => calls.push([...keys]),
+  });
   vm.runInContext(functionSource("viewCross"), ctx);
   Sources.setShowOthers(on);
   return { ctx, v, calls, view: (keys) => ctx.viewCross(v, keys) };
@@ -351,14 +718,20 @@ test("the cards in view are what the verdict queue is given, and a scroll replac
   const w = viewing();
   try {
     w.view(["self", "m:mod", "v:sibling", "v:x1", "v:x2"]);
-    assert.deepEqual(w.calls, [["x1", "x2"]], "only other students' models: not the own card, a mod, or the student's sibling");
+    assert.deepEqual(
+      w.calls,
+      [["x1", "x2"]],
+      "only other students' models: not the own card, a mod, or the student's sibling",
+    );
     w.view(["self", "v:sibling", "v:x1", "v:x2"]);
     assert.equal(w.calls.length, 1, "the same cards again: nothing new to ask");
     w.view(["v:x2", "v:x3"]);
     assert.deepEqual(w.calls.at(-1), ["x2", "x3"], "scrolled on: x1 is dropped, x3 queued");
     w.view([]);
     assert.deepEqual(w.calls.at(-1), [], "nothing in view");
-  } finally { Sources.setShowOthers(false); }
+  } finally {
+    Sources.setShowOthers(false);
+  }
   const off = viewing({ on: false });
   off.view(["v:x1"]);
   assert.deepEqual(off.calls, [], "unchecked: a search's hits are judged by the search, not by the view");
@@ -371,16 +744,32 @@ test("the cards in view are what the verdict queue is given, and a scroll replac
 
 test("in-view cards are read in calls of at most 64 keys, then checked one pair at a time; scrolling drops the rest", async () => {
   let release;
-  const q = queue({ check: ({ others }) => others[0] === "v000" ? new Promise((resolve) => { release = resolve; }) : { [others[0]]: "preview" } });
+  const q = queue({
+    check: ({ others }) =>
+      others[0] === "v000"
+        ? new Promise((resolve) => {
+            release = resolve;
+          })
+        : { [others[0]]: "preview" },
+  });
   const first = Array.from({ length: 150 }, (_, i) => `v${String(i).padStart(3, "0")}`);
-  q.want(first); await flush();
-  assert.deepEqual(q.calls.filter((c) => c.method === "model.costumes").map((c) => c.others.length), [64, 64, 22]);
+  q.want(first);
+  await flush();
+  assert.deepEqual(
+    q.calls.filter((c) => c.method === "model.costumes").map((c) => c.others.length),
+    [64, 64, 22],
+  );
   assert.ok(release, "the first pair is being checked");
   const second = ["w0", "w1"];
   q.want(second);
-  release({ v000: "ok" }); await flush();
+  release({ v000: "ok" });
+  await flush();
   const checked = q.calls.filter((c) => c.method === "model.checkCostumes").map((c) => [...c.others]);
-  assert.deepEqual(checked, [["v000"], ["w0"], ["w1"]], "the cards scrolled out are not checked; the new ones are, one at a time");
+  assert.deepEqual(
+    checked,
+    [["v000"], ["w0"], ["w1"]],
+    "the cards scrolled out are not checked; the new ones are, one at a time",
+  );
   assert.ok(checked.every((others) => others.length === 1));
 });
 
@@ -392,30 +781,60 @@ test("another student's card is drawn like any card: no grey filter anywhere in 
 
 // --- Optimize Physics answers: the official model needs none; a costume no physics rule improves has no gain ---
 const LOCALE_FILES = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"];
-const ui = (locale) => JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
+const ui = (locale) =>
+  JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
 async function optimizeAnswer(result, locale = "en-US") {
-  const web = ui(locale), messages = [];
-  const ctx = vm.createContext({ busy: false, open: true, switchPopupPage: 1, pageToken: 1, pending: "v:x", variant: () => ({ key: "slot" }),
-    shortName: () => "Slot", candidateLabel: () => "Costume", $: () => ({ hidden: false, querySelector: () => null }),
-    T: (key) => key.split(".").reduce((o, part) => o?.[part], web), renderPopup: async () => {},
-    message: async (opts) => { messages.push(opts); }, job: async (_method, _params, { onDone }) => { onDone(result); return true; } });
-  const start = source.indexOf("const optimizeSource ="), end = source.indexOf("\n", start);
+  const web = ui(locale),
+    messages = [];
+  const ctx = vm.createContext({
+    busy: false,
+    open: true,
+    switchPopupPage: 1,
+    pageToken: 1,
+    pending: "v:x",
+    variant: () => ({ key: "slot" }),
+    shortName: () => "Slot",
+    candidateLabel: () => "Costume",
+    $: () => ({ hidden: false, querySelector: () => null }),
+    T: (key) => key.split(".").reduce((o, part) => o?.[part], web),
+    renderPopup: async () => {},
+    message: async (opts) => {
+      messages.push(opts);
+    },
+    job: async (_method, _params, { onDone }) => {
+      onDone(result);
+      return true;
+    },
+  });
+  const start = source.indexOf("const optimizeSource ="),
+    end = source.indexOf("\n", start);
   vm.runInContext(`${source.slice(start, end)}\n${functionSource("runOptimize")}`, ctx);
   await ctx.runOptimize({ kind: "variant", variant: { key: "costume" }, key: "v:costume" });
   return { messages, pending: ctx.pending, web };
 }
 
-for (const locale of LOCALE_FILES) test(`Optimize Physics says why there is nothing to build, in ${locale}`, async () => {
-  const official = await optimizeAnswer({ unneeded: true, reason: "official" }, locale);
-  assert.deepEqual(official.messages.map((m) => [...m.lines]), [[official.web.model.optimizeUnneeded]]);
-  const noGain = await optimizeAnswer({ unneeded: true, reason: "no_gain" }, locale);
-  assert.deepEqual(noGain.messages.map((m) => [...m.lines]), [[noGain.web.model.optimizeNoGain]]);
-  assert.notEqual(noGain.web.model.optimizeNoGain, noGain.web.model.optimizeUnneeded);
-  const older = await optimizeAnswer({ unneeded: true }, locale);
-  assert.deepEqual(older.messages.map((m) => [...m.lines]), [[older.web.model.optimizeUnneeded]], "no reason: the old answer");
-  const made = await optimizeAnswer({ mod: "copy" }, locale);
-  assert.deepEqual([made.messages.length, made.pending], [0, "m:copy"]);
-});
+for (const locale of LOCALE_FILES)
+  test(`Optimize Physics says why there is nothing to build, in ${locale}`, async () => {
+    const official = await optimizeAnswer({ unneeded: true, reason: "official" }, locale);
+    assert.deepEqual(
+      official.messages.map((m) => [...m.lines]),
+      [[official.web.model.optimizeUnneeded]],
+    );
+    const noGain = await optimizeAnswer({ unneeded: true, reason: "no_gain" }, locale);
+    assert.deepEqual(
+      noGain.messages.map((m) => [...m.lines]),
+      [[noGain.web.model.optimizeNoGain]],
+    );
+    assert.notEqual(noGain.web.model.optimizeNoGain, noGain.web.model.optimizeUnneeded);
+    const older = await optimizeAnswer({ unneeded: true }, locale);
+    assert.deepEqual(
+      older.messages.map((m) => [...m.lines]),
+      [[older.web.model.optimizeUnneeded]],
+      "no reason: the old answer",
+    );
+    const made = await optimizeAnswer({ mod: "copy" }, locale);
+    assert.deepEqual([made.messages.length, made.pending], [0, "m:copy"]);
+  });
 
 test("the new Optimize Physics answer reads as agreed in zh-CN and en-US", () => {
   assert.equal(ui("zh-CN").model.optimizeNoGain, "暂无可用的物理优化");
@@ -429,8 +848,19 @@ test("the new Optimize Physics answer reads as agreed in zh-CN and en-US", () =>
 // never once a verdict landed; a queue that ends without a verdict draws again, so a ring never turns for good.
 test("a pair shows the loading ring only while its check runs or is queued", async () => {
   let release;
-  const q = queue({ check: ({ others }) => others[0] === "slow" ? new Promise((resolve) => { release = resolve; }) : {} });
-  Object.assign(q.ctx, { fam: { variants: [q.v, { key: "own2", family: "own", model: "own2" }] }, costumeChecks: new Map(), othersLoad: null });
+  const q = queue({
+    check: ({ others }) =>
+      others[0] === "slow"
+        ? new Promise((resolve) => {
+            release = resolve;
+          })
+        : {},
+  });
+  Object.assign(q.ctx, {
+    fam: { variants: [q.v, { key: "own2", family: "own", model: "own2" }] },
+    costumeChecks: new Map(),
+    othersLoad: null,
+  });
   const checking = (key, kind = "model") => q.ctx.costumeChecking(q.v, kind, key);
   assert.equal(checking("v:own2"), false, "no check of the family under way");
   q.ctx.costumeChecks.set("slot|own2", Promise.resolve());
@@ -442,17 +872,20 @@ test("a pair shows the loading ring only while its check runs or is queued", asy
   q.ctx.costumeState.delete(q.v.key);
   q.ctx.costumeChecks.clear();
 
-  q.want(["slow", "never"]); await flush();
+  q.want(["slow", "never"]);
+  await flush();
   assert.equal(checking("v:slow"), true, "another student's model in the running queue");
   assert.equal(checking("v:never"), true, "queued behind it");
   assert.equal(checking("v:other"), false, "not wanted");
   q.changed.length = 0;
-  release({ slow: "ok" }); await flush();
+  release({ slow: "ok" });
+  await flush();
   assert.equal(checking("v:slow"), false, "its verdict landed");
   assert.equal(checking("v:never"), false, "the queue ended without its verdict");
   assert.ok(q.changed.includes(q.v.key), "the screen is drawn again once the queue ends without a verdict");
 
-  q.ctx.otherStudents = null; q.ctx.othersLoad = Promise.resolve();
+  q.ctx.otherStudents = null;
+  q.ctx.othersLoad = Promise.resolve();
   assert.equal(checking("v:slow2"), true, "the roster that queues it is being read");
   q.ctx.othersLoad = null;
   assert.equal(checking("v:slow2"), false, "a roster that could not be read leaves no ring");
@@ -466,20 +899,46 @@ test("leaving the 3D tab cancels its costume checks and coming back starts them 
   const v = { key: "slot", family: "own", model: "slot" };
   const own = (key) => ({ key, family: "own", model: key });
   const fam = { variants: [v, own("a"), own("b")] };
-  const submitted = [], cancelled = [], waiting = new Map(), failures = [];
-  let jobs = 0, clipStops = 0;
-  const ctx = vm.createContext({ ...Sources, fam, otherStudents: [], othersEpoch: 0, othersLoad: null, open: true,
+  const submitted = [],
+    cancelled = [],
+    waiting = new Map(),
+    failures = [];
+  let jobs = 0,
+    clipStops = 0;
+  const ctx = vm.createContext({
+    ...Sources,
+    fam,
+    otherStudents: [],
+    othersEpoch: 0,
+    othersLoad: null,
+    open: true,
     // an action's clips being fetched for the 3D tab are given up with the checks
-    stopActionLoad: () => { clipStops += 1; },
-    tab: "model", busy: false, switchPopupPage: null, pageToken: 1, $: () => ({ hidden: true }),
-    variant: () => fam.variants[0], costumeCandidates: (f, x) => f.variants.filter((o) => o !== x),
-    candidates: () => [], readOthers: async () => null, costumesChecked: () => {},
-    console: { error: (...args) => failures.push(args) }, Loading: { held: () => false },
-    changeInPlace: (work) => work(), renderAll: async () => {}, renderLeft: async () => {},
+    stopActionLoad: () => {
+      clipStops += 1;
+    },
+    tab: "model",
+    busy: false,
+    switchPopupPage: null,
+    pageToken: 1,
+    $: () => ({ hidden: true }),
+    variant: () => fam.variants[0],
+    costumeCandidates: (f, x) => f.variants.filter((o) => o !== x),
+    candidates: () => [],
+    readOthers: async () => null,
+    costumesChecked: () => {},
+    console: { error: (...args) => failures.push(args) },
+    Loading: { held: () => false },
+    changeInPlace: (work) => work(),
+    renderAll: async () => {},
+    renderLeft: async () => {},
     rpc: async (method, params) => {
-      if (method === "model.costumes") return Object.fromEntries(params.others.map((key) => [key, ctx.saved?.[key] ?? null]));
+      if (method === "model.costumes")
+        return Object.fromEntries(params.others.map((key) => [key, ctx.saved?.[key] ?? null]));
       if (method === "model.costumeCautions") return {};
-      if (method === "model.checkCostumes") { submitted.push(params.others[0]); return `j${++jobs}`; }
+      if (method === "model.checkCostumes") {
+        submitted.push(params.others[0]);
+        return `j${++jobs}`;
+      }
       if (method === "jobs.cancel") {
         cancelled.push(params.id);
         waiting.get(params.id)?.reject(Object.assign(new Error("cancelled"), { code: "cancelled" }));
@@ -489,26 +948,32 @@ test("leaving the 3D tab cancels its costume checks and coming back starts them 
     },
     waitJob: (id) => new Promise((resolve, reject) => waiting.set(id, { resolve, reject })),
   });
-  const start = source.indexOf("const costumeState = new Map()"), end = source.indexOf("// what keeps a 3D source", start);
+  const start = source.indexOf("const costumeState = new Map()"),
+    end = source.indexOf("// what keeps a 3D source", start);
   vm.runInContext(source.slice(start, end) + functionSource("showTab"), ctx);
   const ring = (key) => ctx.costumeChecking(v, "model", `v:${key}`);
 
-  void ctx.costumesReady(v); await flush();
+  void ctx.costumesReady(v);
+  await flush();
   assert.deepEqual(submitted, ["a"], "one pair at a time");
   assert.ok(ring("a") && ring("b"), "the ring turns for the pairs being checked");
-  ctx.showTab("portrait"); await flush();
+  ctx.showTab("portrait");
+  await flush();
   assert.deepEqual(cancelled, ["j1"], "the check under way is cancelled");
   assert.ok(clipStops > 0, "an action's clips being fetched are given up too");
   assert.deepEqual(submitted, ["a"], "no further pair is submitted");
   assert.equal(vm.runInContext("costumeChecks.size", ctx), 0);
   assert.ok(!ring("a") && !ring("b"), "the ring stops");
 
-  ctx.showTab("model"); await flush();
+  ctx.showTab("model");
+  await flush();
   assert.deepEqual(submitted, ["a", "a"], "coming back checks the pairs still without a verdict");
   assert.ok(ring("a") && ring("b"), "the ring turns again");
-  waiting.get("j2").resolve({ a: "ok" }); await flush();
+  waiting.get("j2").resolve({ a: "ok" });
+  await flush();
   assert.deepEqual(submitted, ["a", "a", "b"]);
-  waiting.get("j3").resolve({ b: "refused" }); await flush();
+  waiting.get("j3").resolve({ b: "refused" });
+  await flush();
   assert.ok(!ring("a") && !ring("b"));
   assert.deepEqual(cancelled, ["j1"]);
 
@@ -516,10 +981,14 @@ test("leaving the 3D tab cancels its costume checks and coming back starts them 
   ctx.saved = { a: "ok" };
   vm.runInContext("costumeState.clear()", ctx);
   ctx.rpc = ((rpc) => async (method, params) => {
-    if (method === "model.checkCostumes") { ctx.tab = "lobby"; ctx.stopCostumeChecks(); }
+    if (method === "model.checkCostumes") {
+      ctx.tab = "lobby";
+      ctx.stopCostumeChecks();
+    }
     return rpc(method, params);
   })(ctx.rpc);
-  void ctx.costumesReady(v); await flush();
+  void ctx.costumesReady(v);
+  await flush();
   assert.deepEqual(submitted, ["a", "a", "b", "b"]);
   assert.deepEqual(cancelled, ["j1", "j4"]);
   assert.ok(!waiting.has("j4"), "never waited for");

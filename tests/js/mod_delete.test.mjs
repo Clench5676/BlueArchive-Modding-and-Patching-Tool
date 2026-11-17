@@ -5,15 +5,38 @@ import { test } from "node:test";
 const source = readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8");
 const removeSource = source.slice(source.indexOf("async function removeMod("), source.indexOf("// the Add First"));
 function harness({ locale = "en-US", used = true, button = "ok", error = null } = {}) {
-  const strings = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
-  const calls = [], messages = [];
-  const T = (key, values = {}) => key.split(".").reduce((v, part) => v[part], strings).replace(/\{(\w+)\}/g, (_, k) => values[k]);
+  const strings = JSON.parse(
+    readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8"),
+  ).webui;
+  const calls = [],
+    messages = [];
+  const T = (key, values = {}) =>
+    key
+      .split(".")
+      .reduce((v, part) => v[part], strings)
+      .replace(/\{(\w+)\}/g, (_, k) => values[k]);
   const deps = {
-    T, rpc: async (...args) => { calls.push(args); if (error) throw error; return { name: "My portrait", used }; },
-    message: async (opts) => { messages.push(opts); return { button }; },
-    job: async (...args) => { calls.push(args); return true; }, notify: (text) => calls.push(["notify", text]), errorText: String,
+    T,
+    rpc: async (...args) => {
+      calls.push(args);
+      if (error) throw error;
+      return { name: "My portrait", used };
+    },
+    message: async (opts) => {
+      messages.push(opts);
+      return { button };
+    },
+    job: async (...args) => {
+      calls.push(args);
+      return true;
+    },
+    notify: (text) => calls.push(["notify", text]),
+    errorText: String,
   };
-  const remove = new Function("deps", `const {${Object.keys(deps).join(",")}} = deps; ${removeSource}; return removeMod;`)(deps);
+  const remove = new Function(
+    "deps",
+    `const {${Object.keys(deps).join(",")}} = deps; ${removeSource}; return removeMod;`,
+  )(deps);
   return { remove, calls, messages, T };
 }
 
@@ -50,19 +73,33 @@ test("a failed confirmation lookup shows the error and cannot delete", async () 
   assert.match(h.calls[1][1], /lookup failed/);
 });
 
-test("failed restoration cannot report a successful deletion",async()=>{
-  const h=harness();await h.remove('m1');
-  assert.throws(()=>h.calls[1][2].onDone({failed:[{code:'game_running',params:{}}]}),{code:'game_running'});
-  assert.doesNotThrow(()=>h.calls[1][2].onDone({failed:[]}));
+test("failed restoration cannot report a successful deletion", async () => {
+  const h = harness();
+  await h.remove("m1");
+  assert.throws(() => h.calls[1][2].onDone({ failed: [{ code: "game_running", params: {} }] }), {
+    code: "game_running",
+  });
+  assert.doesNotThrow(() => h.calls[1][2].onDone({ failed: [] }));
 });
 
 test("applying the manifest's current source does not start another job", async () => {
-  const applySource = source.slice(source.indexOf("async function applyCandidate("), source.indexOf("// --- variant chips"));
+  const applySource = source.slice(
+    source.indexOf("async function applyCandidate("),
+    source.indexOf("// --- variant chips"),
+  );
   const messages = [];
-  const apply = new Function("deps", `const {${["variant", "busy", "coreOf", "isApplied", "notify", "T", "job"].join(",")}} = deps;
-    ${applySource}; return applyCandidate;`)({
-    variant: () => ({ key: "test", spr: "test_spr" }), coreOf: (v, kind) => v[kind], busy: false, isApplied: (_variant, _kind, key) => key === "m:m1",
-    T: (s) => s, notify: (s) => messages.push(s), job: () => assert.fail("must not submit a job"),
+  const apply = new Function(
+    "deps",
+    `const {${["variant", "busy", "coreOf", "isApplied", "notify", "T", "job"].join(",")}} = deps;
+    ${applySource}; return applyCandidate;`,
+  )({
+    variant: () => ({ key: "test", spr: "test_spr" }),
+    coreOf: (v, kind) => v[kind],
+    busy: false,
+    isApplied: (_variant, _kind, key) => key === "m:m1",
+    T: (s) => s,
+    notify: (s) => messages.push(s),
+    job: () => assert.fail("must not submit a job"),
   });
   await apply("m:m1", "spr");
   assert.deepEqual(messages, []);
