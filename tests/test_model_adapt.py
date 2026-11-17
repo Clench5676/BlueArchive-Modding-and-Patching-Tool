@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 
 from bmpt.gameassets import model_adapt as ma
+from module_patches import patch_everywhere
 
 # the real-install tests run only on an official game folder named by BAMT_TEST_GAME_DIR
 GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-game")
@@ -712,7 +713,7 @@ def test_official_rule_b_clip_edit_is_read_back_and_a_changed_curve_is_refused(v
         checked.append((problem, added))
         return problem
 
-    monkeypatch.setattr(ma, "clip_edit_error", watched)
+    patch_everywhere(monkeypatch, [ma], "clip_edit_error", watched)
     result = build()
     assert result.hems.skirt.clips >= 20 and len(checked) == result.hems.skirt.clips
     # each clip: the skirt's first bones and the face bones it moves (face_retarget), 7 curves each
@@ -730,7 +731,7 @@ def test_official_rule_b_clip_edit_is_read_back_and_a_changed_curve_is_refused(v
             tree["m_MuscleClip"]["m_Clip"]["data"]["m_ConstantClip"]["data"][0] += 0.25
         return done
 
-    monkeypatch.setattr(ma, "skirt_curves", damaging)
+    patch_everywhere(monkeypatch, [ma], "skirt_curves", damaging)
     with pytest.raises(ServiceError) as caught:
         build()
     assert caught.value.code == "source_unsupported"

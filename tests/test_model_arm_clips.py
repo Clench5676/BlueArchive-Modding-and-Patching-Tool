@@ -8,6 +8,7 @@ import pytest
 
 from bmpt.gameassets import model_arm_clips as ac, model_skirts as ms
 from bmpt.gameassets.model_glb import decode_clip, read_streamed
+from module_patches import patch_everywhere
 
 
 def _binding(path, attr=1, type_id=4):
@@ -301,7 +302,7 @@ def test_synthetic_copy_and_repoint_keeps_original_clip_enemy_and_timeline_bytes
     rotations = _rotations()
     ac.encode_rotations(edited, rotations)
     change = SimpleNamespace(clip=original, tree=edited, rotations=rotations)
-    monkeypatch.setattr(ma, "saved_tree", lambda obj: copy.deepcopy(obj.tree))
+    patch_everywhere(monkeypatch, [ma], "saved_tree", lambda obj: copy.deepcopy(obj.tree))
     copies = ac.write_copies(Writer(), {("cab-slot", 1): change}, {("cab-slot", 1): "cab-slot"}, [controller], None, {})
     assert copies == {("cab-slot", 1): ("cab-slot", 10)}
     assert controller.tree["m_Clips"][0]["m_OverrideClip"] == ptr(10)

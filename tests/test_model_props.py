@@ -13,6 +13,7 @@ import pytest
 
 from bmpt.gameassets import model_adapt as ma
 from bmpt.gameassets import model_props as mp
+from module_patches import patch_everywhere
 
 # the real-install tests run only on an official game folder named by BAMT_TEST_GAME_DIR
 GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-game")
@@ -193,9 +194,11 @@ def _made_up_model(monkeypatch):
         np.array([[0, 1, 2], [3, 4, 5]]),
     )
     bones["hat"] = [11]
-    monkeypatch.setattr(ma, "skin_of", lambda mesh: skins[mesh])
+    patch_everywhere(monkeypatch, [ma], "skin_of", lambda mesh: skins[mesh])
     # bindposes: each bone's inverse rest (the mesh in the root's space)
-    monkeypatch.setattr(ma, "bindposes", lambda graph, mesh: np.array([np.linalg.inv(rest[b]) for b in bones[mesh]]))
+    patch_everywhere(
+        monkeypatch, [ma], "bindposes", lambda graph, mesh: np.array([np.linalg.inv(rest[b]) for b in bones[mesh]])
+    )
     s.graph = SimpleNamespace(tree=lambda obj: {"m_Enabled": 1}, script=lambda b: None)
     parts = [
         ma.Part(12, "r1", _Mesh("props"), [], ["general"], bones["props"], 18, role="prop"),
@@ -232,7 +235,7 @@ def _with_bag(monkeypatch, s, parts, centre, half=0.15):
     bag = ma.Skin(corners, np.full((8, 4), 0), np.tile([1.0, 0, 0, 0], (8, 1)), np.zeros((0, 2), int), tris)
     skin_of, bindposes = ma.skin_of, ma.bindposes
     pelvis = np.linalg.inv(ma.Skeleton.world(s)[2])
-    monkeypatch.setattr(ma, "skin_of", lambda mesh: bag if mesh == "bag" else skin_of(mesh))
+    patch_everywhere(monkeypatch, [ma], "skin_of", lambda mesh: bag if mesh == "bag" else skin_of(mesh))
     monkeypatch.setattr(
         ma, "bindposes", lambda graph, mesh: np.array([pelvis]) if mesh == "bag" else bindposes(graph, mesh)
     )

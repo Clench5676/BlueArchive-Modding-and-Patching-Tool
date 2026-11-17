@@ -12,6 +12,7 @@ from bmpt.gameassets import model_skirts as ms
 from bmpt.gameassets.model_glb import bind_tracks, decode_clip
 from bmpt.gameassets import model_adapt as ma
 from bmpt.gameassets.model_adapt import trs
+from module_patches import patch_everywhere
 
 
 def _rotation(axis, angle):
@@ -150,7 +151,7 @@ def test_judged_sequence_reuse_writes_identical_clip_curves(monkeypatch):
     def unexpected(*args, **kwargs):
         raise AssertionError("judged sequence was solved again")
 
-    monkeypatch.setattr(ma, "skirt_sequence", unexpected)
+    patch_everywhere(monkeypatch, [ma], "skirt_sequence", unexpected)
     assert ma.skirt_curves(skeleton, skirt, tree, ("clip", 1)) == 1
     assert tree == old
 
