@@ -45,8 +45,9 @@
         "useArrowFunction": "off",
         // CSS: !important overrides inline styles set by the prefab layout.
         "noImportantStyles": "off",
-        // Not yet met by the existing code: set back to the preset once the code passes it.
+        // a && a.b keeps a's own falsy value, which a?.b does not: the two are not interchangeable.
         "useOptionalChain": "off",
+        // Comma expressions in loop heads and one-line swaps are house style.
         "noCommaOperator": "off",
         "useMathMinMax": "off"
       },
