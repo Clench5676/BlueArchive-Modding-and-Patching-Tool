@@ -1,30 +1,26 @@
 // The memorial lobby's intro (lobby.json "intro", gameassets/intro.py): the Timeline the lobby prefab's
-// PlayableDirector plays when the lobby is entered. Played on the lobby's own clock (the players' frame time, GameTime
-// like the director) from the first frame the lobby is on screen:
-// - its Spine tracks set their clips on the skeleton's AnimationState as spine-unity's SpineAnimationStateMixerBehaviour
-//   does at run time: a clip that starts (weight 0 to above 0) is set with its mix and its time in the clip, and the
-//   AnimationState runs on its own; a clip that ends with no other clip of its track playing leaves the track empty
-//   unless it says not to (Idle_01, which keeps playing after the intro);
-// - its recorded clips' curves switch GameObjects on and off (the flash sprite, intro-only effects, the depth of field
-//   volume, scene skeletons), move transforms (skeletons sliding in, the background zoom, bokeh), colour the flash
-//   sprites, weigh the post-processing volumes and set particle and renderer properties, evaluated at the time;
-// - its control clips switch their GameObject on for the clip and its particle systems play from the clip's start
-//   (ParticleControlPlayable: stopped and cleared when the timeline is built, simulated from the clip's start, its
-//   clip-in seconds in); its activation clips switch theirs;
-// - its sounds play at their times, at the app's voice volume, never when muted.
-// A tap on the lobby skips it, as the game's does: the timeline jumps to its end. At its end the director's wrap mode
-// None puts back what it changed (Unity reverts a stopped timeline's bindings); Hold (Shiroko) keeps its last frame.
-// The idle, its clips and the random idle clips start as the lobby's SpineCharacter starts them (lobby.js); the intro
-// takes over the track its Spine clips play on.
+// PlayableDirector plays when the lobby is entered, played on the lobby's own clock from the first frame the
+// lobby is on screen. Its Spine tracks set their clips on the skeleton's AnimationState; its recorded clips'
+// curves switch GameObjects on and off, move transforms, colour the flash sprites, weigh the post-processing
+// volumes and set particle and renderer properties; its control and activation clips switch GameObjects on and
+// play their particle systems; its sounds play at their times at the app's voice volume, never when muted.
+// A tap on the lobby skips it, as the game's does: the timeline jumps to its end, where the wrap mode None puts
+// back what it changed and Hold (Shiroko) keeps its last frame. The idle, its clips and the random idle clips
+// start as lobby.js starts them; the intro takes over the track its Spine clips play on.
 import * as Linear from "./linear.js";
 import * as Dof from "./lobby-dof.js";
 import { IDENTITY, mul, euler } from "./particles.js";
 
 // --- curves --------------------------------------------------------------------------------------------------------
 
-// a curve at time t (intro.py evaluate): a streamed curve's last key at or before t ({"s": [[time, a, b, c, d]]},
-// ((a x + b) x + c) x + d with x the time since the key), a dense curve's frames lerped ({"d": [begin, rate, values]}),
-// a constant ({"k": v})
+/**
+ * A curve at a time (intro.py evaluate): a streamed curve's last key at or before t ({"s": [[time, a, b, c,
+ * d]]}, ((a x + b) x + c) x + d with x the time since the key), a dense curve's frames lerped ({"d": [begin,
+ * rate, values]}), a constant ({"k": v}).
+ * @param {{k?: number, s?: number[][], d?: [number, number, number[]]}|null|undefined} c The curve.
+ * @param {number} t The time in seconds.
+ * @returns {number} The value; 0 without a curve.
+ */
 export function evaluate(c, t) {
   if (!c) return 0;
   if (c.k !== undefined) return c.k;
@@ -45,9 +41,14 @@ export function evaluate(c, t) {
 
 // --- GameObjects ---------------------------------------------------------------------------------------------------
 
-// a GameObject's own activity at time t: as at rest, else its animated m_IsActive (on above 0.5), else its activation
-// clips (on during one, off outside: ActivationMixerPlayable); a control clip switches it on for the clip and off once
-// it has ended (ActivationControlPlayable)
+/**
+ * A GameObject's own activity at a time: as at rest, else its animated m_IsActive (on above 0.5), else its
+ * activation clips (on during one, off outside: ActivationMixerPlayable); a control clip switches it on for the
+ * clip and off once it has ended (ActivationControlPlayable).
+ * @param {object} n The intro node, as nodesOf makes it.
+ * @param {number} t The time in seconds.
+ * @returns {boolean} True when the object is on.
+ */
 export function activeAt(n, t) {
   let on = n.own;
   if (n.curve) on = evaluate(n.curve, t) > 0.5;
@@ -59,7 +60,13 @@ export function activeAt(n, t) {
   return on;
 }
 
-// a 3 x 4 matrix from position, rotation (quaternion) and scale, as particles.py trs
+/**
+ * A 3 x 4 matrix from position, rotation (quaternion) and scale, as particles.py trs.
+ * @param {number[]} p The position [x, y, z].
+ * @param {number[]} q The rotation quaternion [x, y, z, w].
+ * @param {number[]} s The scale [x, y, z].
+ * @returns {number[]} The 12 numbers of the matrix, row by row.
+ */
 export function trs(p, q, s) {
   let [x, y, z, w] = q;
   const n = Math.hypot(x, y, z, w) || 1;
@@ -82,8 +89,13 @@ export function trs(p, q, s) {
     p[2],
   ];
 }
-// a moved GameObject's local matrix at time t: its animated position, rotation (quaternion or Euler angles in
-// degrees) and scale, the rest from its rest transform
+/**
+ * A moved GameObject's local matrix at a time: its animated position, rotation (quaternion or Euler angles in
+ * degrees) and scale, the rest from its rest transform.
+ * @param {object} n The intro node, as nodesOf makes it.
+ * @param {number} t The time in seconds.
+ * @returns {number[]} The 3 x 4 matrix.
+ */
 export function localAt(n, t) {
   const r = n.trs,
     pick = (curves, k, rest) => (curves?.[k] ? evaluate(curves[k], t) : rest);
@@ -96,7 +108,13 @@ export function localAt(n, t) {
   const q = [0, 1, 2, 3].map((k) => pick(n.rotation, k, r[3 + k]));
   return trs(p, q, s);
 }
-// M0 L(i1) M1 ... L(ik) Mk (intro.py moves) with the nodes' local matrices now
+/**
+ * Compose a moved skeleton's world matrix: M0 L(i1) M1 ... L(ik) Mk (intro.py moves) with the nodes' local
+ * matrices at the time.
+ * @param {{m: number[][], nodes: number[]}} moves The fixed matrices and the node indices between them.
+ * @param {(i: number) => number[]} local Gives a node's local matrix.
+ * @returns {number[]} The 3 x 4 world matrix.
+ */
 export function compose(moves, local) {
   let W = moves.m[0];
   moves.nodes.forEach((i, k) => {
@@ -135,11 +153,16 @@ const KEYS = {
 };
 const lerp = (a, b, t) => (Array.isArray(a) ? a.map((x, i) => x + (b[i] - x) * t) : a + (b - a) * t);
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-// What the volumes leave on screen, blended as URP's VolumeManager does (lobby.py post_processing): the enabled,
-// active, global volumes on the camera's layers with a weight above 0, by priority (equal ones in hierarchy order),
-// each active component's overridden parameters lerped from the stack's by the volume's weight. volumes: [{weight,
-// priority, global, enabled, active, layer, components: [{name, active, params}]}]. Returns lobby.json's "post" form,
-// with "dof": {radius} while Gaussian depth of field is on.
+/**
+ * Blend the post-processing volumes into what stays on screen, as URP's VolumeManager does (lobby.py
+ * post_processing): the enabled, active, global volumes on the camera's layers with a weight above 0, by
+ * priority (equal ones in hierarchy order), each active component's overridden parameters lerped from the
+ * stack's by the volume's weight.
+ * @param
+ *     {{weight: number, priority: number, global: boolean, enabled: boolean, active: boolean, layer: boolean, components: {name: string, active: boolean, params: object}[]}[]}
+ *     volumes The volumes.
+ * @returns {object} lobby.json's "post" form, with "dof": {radius} while Gaussian depth of field is on.
+ */
 export function blend(volumes) {
   const stack = JSON.parse(JSON.stringify(DEFAULTS));
   const ordered = volumes
@@ -179,12 +202,26 @@ export function blend(volumes) {
 
 // --- Spine tracks --------------------------------------------------------------------------------------------------
 
-// the clips of a Spine track that play at time t (weight above 0: from their start to their end)
+/**
+ * The clips of a Spine track that play at a time (weight above 0: from their start to their end).
+ * @param {{t: number, d: number}[]} clips The track's clips: start and duration.
+ * @param {number} t The time in seconds.
+ * @returns {object[]} The clips playing.
+ */
 export const playingAt = (clips, t) => clips.filter((c) => t >= c.t && t < c.t + c.d);
 
-// a clip starts on the skeleton's AnimationState (SpineAnimationStateMixerBehaviour.ProcessFrame at run time): its
-// animation with the clip's mix (the skeleton's default without a custom one; an empty track first fades in from
-// the setup pose), at its time in the clip; `delta`: the frame time the AnimationState adds right after
+/**
+ * Start a clip on the skeleton's AnimationState (SpineAnimationStateMixerBehaviour.ProcessFrame at run time):
+ * its animation with the clip's mix (the skeleton's default without a custom one; an empty track first fades in
+ * from the setup pose), at its time in the clip.
+ * @param {object} st The spine AnimationState.
+ * @param {object} data The skeleton data.
+ * @param {number} track The track index.
+ * @param {object} c The clip.
+ * @param {number} t The time in seconds.
+ * @param {number} delta The frame time the AnimationState adds right after.
+ * @returns {object|null} The track entry; null for an empty or unknown animation.
+ */
 export function startClip(st, data, track, c, t, delta) {
   if (!c.anim) {
     st.setEmptyAnimation(track, c.mix ?? st.data.defaultMix);
@@ -211,7 +248,11 @@ export function startClip(st, data, track, c, t, delta) {
 
 // --- the intro's GameObjects and skeletons at a time, for measuring -------------------------------------------------
 
-// the intro's GameObjects with their curves (activity, transform), control and activation clips
+/**
+ * The intro's GameObjects with their curves (activity, transform), control and activation clips.
+ * @param {object} intro The intro, as lobby.json holds it.
+ * @returns {object[]} The nodes.
+ */
 export function nodesOf(intro) {
   const nodes = (intro.nodes || []).map((n) => ({
     ...n,
@@ -234,9 +275,17 @@ const restLocalOf = (n) => {
   const r = n?.trs;
   return r ? trs(r.slice(0, 3), r.slice(3, 7), r.slice(7, 10)) : IDENTITY;
 };
-// where the intro has its skeletons at time t, without playing it: sample(t) gives, for each layer ({def, introOnly,
-// x, y, scale}: def the player's bamtLayer, the rest its resting place), whether it is shown, its place and the intro
-// clips its tracks play then ([track, animation, time in it, loop]), as create() would set them (no mixes)
+/**
+ * Make a function that gives where the intro has its skeletons at a time, without playing it. The clips are
+ * those its tracks play then, as create() would set them (no mixes).
+ * @param {object} intro The intro, as lobby.json holds it.
+ * @param {{def?: object, introOnly?: boolean, x: number, y: number, scale: number}[]} layers The layers: def is
+ *     the player's bamtLayer, the rest its resting place.
+ * @returns
+ *     {(t: number) => {shown: boolean, x: number, y: number, scale: number, clips: Array<[number, string, number, boolean]>}[]}
+ *     For each layer, whether it is shown, its place and the clips its tracks play then: [track, animation,
+ *     time in it, loop].
+ */
 export function sampler(intro, layers) {
   const nodes = nodesOf(intro),
     moved = nodes.filter((n) => n.trs);
@@ -275,12 +324,26 @@ export function sampler(intro, layers) {
 
 // --- the intro -----------------------------------------------------------------------------------------------------
 
-// Plays a lobby's intro. env: {layers: [{name, player, introOnly}] in stacking order, fx (particles-gl.js), post (the
-// rest post-processing), host, sfx(id, set) (plays a sound event by the app's sound settings; its audio joins `set`),
-// screen(player) (the layer moved: its post-processing screen again), clear(player, on), show(player, on) (a scene
-// shown or hidden; without it, its element), bone(skeleton, bone),
-// visible() (the lobby is on screen), now() (the frame's time stamp, for tests)}. Returns {frame(player, delta), skip(),
-// running(), pending(), done(), state(), dispose()}.
+/**
+ * Play a lobby's intro.
+ * @param {object} intro The intro, as lobby.json holds it.
+ * @param {object} env What the intro acts on.
+ * @returns
+ *     {{frame: (player: object, delta: number) => void, skip: () => void, running: () => boolean, pending: () => boolean, done: () => boolean, state: () => object, dispose: () => void}}
+ *     The intro's controls: frame is each player's frame hook, before its animation update.
+ * @param {{name: string, player: object, introOnly?: boolean}[]} env.layers The layers in stacking order.
+ * @param {object} [env.fx] The lobby's effects (particles-gl.js).
+ * @param {object} [env.post] The rest post-processing.
+ * @param {object} [env.host] The host player.
+ * @param {(id: string, set: Set<object>) => void} [env.sfx] Plays a sound event by the app's sound settings;
+ *     its audio joins `set`.
+ * @param {(player: object) => void} [env.screen] The layer moved: its post-processing screen again.
+ * @param {(player: object, on: boolean) => void} [env.clear] Clears a player.
+ * @param {(player: object, on: boolean) => void} [env.show] A scene shown or hidden; without it, its element.
+ * @param {(skeleton: object, bone: object) => *} [env.bone] Reads a bone.
+ * @param {() => boolean} [env.visible] Whether the lobby is on screen.
+ * @param {() => number} [env.now] The frame's time stamp, for tests.
+ */
 export function create(intro, env) {
   const D = intro.duration || 0,
     hold = intro.wrap === "hold";

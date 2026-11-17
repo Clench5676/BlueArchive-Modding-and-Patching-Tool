@@ -7,6 +7,14 @@ import { captureRetries } from "./capture-retries.js";
 import { previewCache } from "./preview-cache.js";
 import { onCapturePriorityChange, popupCapturesOpen, popupItem, captureEligible } from "./capture-priority.js";
 
+/**
+ * The version of a variant's 3D stills: it changes when the model's files or any model mod of the family
+ * change.
+ * @param {object} family The family.
+ * @param {object} variant The variant.
+ * @param {number} [generation] A number the caller raises to make every still new.
+ * @returns {string} The version.
+ */
 export const modelStillVersion = (family, variant, generation = 0) =>
   JSON.stringify([
     family.version,
@@ -18,8 +26,29 @@ export const modelStillVersion = (family, variant, generation = 0) =>
       .map(({ alias, label, fresh, ...source }) => source),
     generation,
   ]);
-export const modelStillKey = (key, source, version) => JSON.stringify([key, source, version, "square-640-v3"]); // v3: the halo's particles
+/**
+ * The key of a 3D still in the caches.
+ * @param {string} key The variant's key.
+ * @param {string} source The model's source.
+ * @param {string|null} version The still's version (modelStillVersion).
+ * @returns {string} The key.
+ */
+// the key names the still's schema: change it when the picture changes
+export const modelStillKey = (key, source, version) => JSON.stringify([key, source, version, "square-640-v3"]);
 
+/**
+ * Make the 3D stills' queue: one extra 3D context at a time. Stills share the detail renderer but never its
+ * live camera or lifecycle. A failed attempt can be tried again.
+ * @param {object} [options] Replaceable parts, for the tests.
+ * @param {() => Promise<object>} [options.renderer] Loads the model renderer.
+ * @param {(error: Error, source: string, kind: string) => void} [options.report] Reports a failure.
+ * @param {number} [options.timeout] The most milliseconds one still may take.
+ * @param {object} [options.persistent] The persistent preview cache.
+ * @returns
+ *     {(variant: object, source: string, options?: {version?: string|null, signal?: AbortSignal}) => Promise<string|null>}
+ *     Asks for a variant's still: a promise of its URL, with `thumbnail`, `signal`, `failure()` and `bump()`
+ *     for the screen's scheduling; null when it fails or is cancelled.
+ */
 export function createModelStills({
   renderer = () => import("./model.js"),
   report = previewError,

@@ -9,7 +9,7 @@ import { validRect } from "../../src/bmpt/web/js/lobby-health.js";
 
 const source = readFileSync(new URL("../../src/bmpt/web/js/lobby.js", import.meta.url), "utf8");
 const loading = source
-  .slice(source.indexOf("const lobbyLoads ="), source.indexOf("// the input trace"))
+  .slice(source.indexOf("const lobbyLoads ="), source.indexOf("export const setTrace"))
   .replaceAll("export function", "function")
   .replaceAll("export async function", "async function");
 const tick = () => new Promise(setImmediate);

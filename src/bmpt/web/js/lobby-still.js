@@ -1,5 +1,11 @@
-// The same NGUI camera and skeleton placement as lobby.js / gameassets.lobby.
-// Card aspects crop inside that camera; skeleton bounds never reveal off-camera art.
+/**
+ * The viewport of a lobby's still for a card aspect: the same NGUI camera and skeleton placement as lobby.js /
+ * gameassets.lobby. Card aspects crop inside that camera; skeleton bounds never reveal off-camera art.
+ * @param {{view?: object, layer?: object}|undefined} info The lobby's information: the camera view and the
+ *     skeleton's placement.
+ * @param {number} aspect The card's width over its height.
+ * @returns {object} The spine-player viewport.
+ */
 export function lobbyStillViewport(info, aspect) {
   const view = info?.view || { x: -1480, y: -832.5, w: 2960, h: 1665 };
   const layer = info?.layer || { x: 0, y: -962, scale: 1 };

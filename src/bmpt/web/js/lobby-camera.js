@@ -1,10 +1,10 @@
 // The memorial lobby's camera framing: in the fullscreen lobby a video camera button (the game's
-// Cafe_Icon_Video) enters a framing mode: the lobby rests (no intro), the view zooms at the pointer and moves up and
-// down, kept where no pose of the lobby (its intro, idle and every clip) shows past the art (lobby.js framingView).
-// The shutter keeps the view as the lobby's camera: the lobby scaled about the
-// screen centre and moved (lobby.js cameraParams), saved as a new Memorial Lobby choice of the student (lobby.camera.save,
-// a job; docs/webui/lobby-and-photography.md), its art the source the lobby shows; its still flies into the album at the
-// bottom left, which opens the student's Switch Memorial Lobby (detail.js) over the framing.
+// Cafe_Icon_Video) enters a framing mode: the lobby rests (no intro), the view zooms at the pointer and moves up
+// and down, kept where no pose of the lobby (its intro, idle and every clip) shows past the art (lobby.js
+// framingView). The shutter keeps the view as the lobby's camera: the lobby scaled about the screen centre and
+// moved (lobby.js cameraParams), saved as a new Memorial Lobby choice of the student (lobby.camera.save, a job;
+// docs/webui/lobby-and-photography.md), its art the source the lobby shows; its still flies into the album at
+// the bottom left, which opens the student's Switch Memorial Lobby (detail.js) over the framing.
 import { rpc, waitJob } from "./api.js";
 import { T } from "./i18n.js";
 import * as NGUI from "./ngui.js";
@@ -32,8 +32,14 @@ let hooks = null,
   generation = 0;
 const stage = () => document.getElementById("stage");
 
-// the entry: beside the photography button, in the fullscreen lobby only, and not in a lobby without a prefab (nothing
-// to keep the camera in)
+/**
+ * Show the framing button beside the photography button: in the fullscreen lobby only, and not in a lobby
+ * without a prefab (nothing to keep the camera in).
+ * @param {boolean} on Whether the fullscreen lobby is shown.
+ * @param {object} [bridge] The detail screen's hooks (lobby(), the shown variant and the actions the camera
+ *     needs); the last given ones are kept.
+ * @returns {Promise<void>} Settles when the button is drawn.
+ */
 export async function entry(on, bridge) {
   document.getElementById("camera-launcher")?.remove();
   hooks = bridge || hooks;
@@ -182,8 +188,8 @@ async function save() {
   let still = null;
   try {
     // Now Loading locks the screen until the saved choice is in and the student's choices are refreshed; the new
-    // choice's still (its Switch Memorial Lobby card, framed by the camera) starts drawing behind it; its line:
-    // Saving, the student and the memorial lobby (job-progress.js modJob)
+    // choice's still (its Switch Memorial Lobby card, framed by the camera) starts drawing behind it. Its line:
+    // Saving, the student and the memorial lobby (job-progress.js modJob).
     const line = modJob(
       { variant: hooks.variant(), kind: "lobby" },
       { nameOf: Loading.variantName, action: "progress.actionSave" },
@@ -227,7 +233,10 @@ function viewPicture() {
   return canvas.toDataURL("image/png");
 }
 
-// leaves the framing (Back, leaving fullscreen or the page): the view goes back to the game's
+/**
+ * Leave the framing (Back, leaving fullscreen or the page): the view goes back to the game's.
+ * @param {boolean} [reenter] Whether the framing button comes back.
+ */
 export function close(reenter = true) {
   if (!active) return;
   active = false;
@@ -240,4 +249,8 @@ export function close(reenter = true) {
   Lobby.camera(false);
   if (reenter) void entry(true);
 }
+/**
+ * Whether the framing mode is on.
+ * @returns {boolean} True when it is.
+ */
 export const isOpen = () => active;

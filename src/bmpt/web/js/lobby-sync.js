@@ -1,32 +1,57 @@
 // Clips the memorial lobby plays at random times and the sounds its clips carry, as the game does.
-// lobby.js starts them with a skeleton's idle and feeds them
-// its frames; nothing here touches the page.
-// - A clip of PlayMode 2 (masked at random times: snow, clouds, petals, stars, Shigure's train) waits, plays once on
-//   its own track, plus the extra plays its loops add, and, when it loops, waits again from that start for its
-//   playing time plus a random min to max. The first wait depends on its RandomTimingIntroDelayMode: none, min to
-//   max, or its preDelay plus min to max. It starts at full weight on an empty track and mixes in from its own last
-//   frame after that; between plays the track holds that last frame.
-// - A clip's sound keys play their events when the track entry's animation time reaches them, each once (every loop
-//   on a looping entry), and no more once the entry is interrupted, ends or completes.
+// lobby.js starts them with a skeleton's idle and feeds them its frames; nothing here touches the page.
+// A clip of PlayMode 2 (masked at random times: snow, clouds, petals, stars, Shigure's train) waits, plays once
+// on its own track, plus the extra plays its loops add, and, when it loops, waits again from that start for its
+// playing time plus a random min to max (the first wait follows its RandomTimingIntroDelayMode). A clip's sound
+// keys play their events when the track entry's animation time reaches them, each once (every loop on a looping
+// entry), and no more once the entry is interrupted, ends or completes.
 
-// UnityEngine.Random.Range: a float in [min, max], an int in [min, max) (min when the range is empty)
+/**
+ * UnityEngine.Random.Range: a float in [min, max].
+ * @param {number} min The lower bound.
+ * @param {number} max The upper bound.
+ * @param {() => number} [rnd] A random number in [0, 1).
+ * @returns {number} The number.
+ */
 export const range = (min, max, rnd = Math.random) => min + (max - min) * rnd();
+/**
+ * UnityEngine.Random.Range for ints: an int in [min, max) (min when the range is empty).
+ * @param {number} min The lower bound.
+ * @param {number} max The bound the result stays under.
+ * @param {() => number} [rnd] A random number in [0, 1).
+ * @returns {number} The number.
+ */
 export const rangeInt = (min, max, rnd = Math.random) => (max > min ? min + Math.floor(rnd() * (max - min)) : min);
 
-// the wait before a random-timing clip first plays (SpineClip.RandomTimingIntroDelayMode: 0 none, 1 min to max,
-// 2 delay plus min to max)
+/**
+ * The wait before a random-timing clip first plays (SpineClip.RandomTimingIntroDelayMode: 0 none, 1
+ * min to max, 2 delay plus min to max).
+ * @param {{pre?: number, preDelay?: number, min?: number, max?: number}|null} r The clip's random timing.
+ * @param {() => number} [rnd] A random number in [0, 1).
+ * @returns {number} The wait in seconds.
+ */
 export function firstWait(r, rnd = Math.random) {
   if (!r || !r.pre) return 0;
   return (r.pre === 2 ? r.preDelay || 0 : 0) + range(r.min || 0, r.max || 0, rnd);
 }
-// the plays queued after the first one (a random count from min to max when max is above 0)
+/**
+ * The plays queued after the first one (a random count from min to max when max is above 0).
+ * @param {{loops?: number[]}|null} r The clip's random timing.
+ * @param {() => number} [rnd] A random number in [0, 1).
+ * @returns {number} The number of extra plays.
+ */
 export function extraPlays(r, rnd = Math.random) {
   const [lo, hi] = r?.loops || [0, 0];
   return hi > 0 ? Math.max(0, rangeInt(lo, hi + 1, rnd)) : 0;
 }
 
-// handlers on a track entry's events, added to any it has (spine-ts calls entry.listener; entries are pooled, so a
-// handler must let go of the entry on dispose)
+/**
+ * Add handlers to a track entry's events, keeping any it has (spine-ts calls entry.listener). Entries are
+ * pooled, so a handler must let go of the entry on dispose.
+ * @param {object} entry The track entry.
+ * @param {Object<string, Function>} handlers The handlers by event kind.
+ * @returns {object} The entry.
+ */
 export function listen(entry, handlers) {
   const old = entry.listener || {};
   const merged = { ...old };

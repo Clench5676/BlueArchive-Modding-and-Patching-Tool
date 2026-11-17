@@ -1,11 +1,32 @@
-// Measure the art that can actually draw, rather than the export header's bounds or a prefab's old scale.
+// Measure the art that can actually draw, rather than the export header's bounds or a prefab's scale.
 import { lobbyIdles } from "./rest-pose.js";
 
 // Runtime helpers run only after their preview entry awaits ensureSpine().
 
+/**
+ * A rectangle by its edges.
+ * @typedef {{x0: number, y0: number, x1: number, y1: number}} Rect
+ */
+
+/**
+ * Whether a rectangle has finite edges and some area.
+ * @param {Rect|null|undefined} r The rectangle.
+ * @returns {boolean} True when it is valid.
+ */
 export const validRect = (r) => r && [r.x0, r.y0, r.x1, r.y1].every(Number.isFinite) && r.x1 > r.x0 && r.y1 > r.y0;
+/**
+ * Whether two valid rectangles overlap.
+ * @param {Rect} a The first rectangle.
+ * @param {Rect} b The second rectangle.
+ * @returns {boolean} True when they share area.
+ */
 export const overlaps = (a, b) =>
   validRect(a) && validRect(b) && a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
+/**
+ * The bounds of the visible attachments of a posed skeleton.
+ * @param {object} sk The spine skeleton, with its world transform updated.
+ * @returns {Rect|null} The bounds in skeleton units, or null when nothing draws. Throws on non-finite vertices.
+ */
 export function artBounds(sk) {
   const out = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
   for (const slot of sk.drawOrder) {
@@ -30,6 +51,12 @@ export function artBounds(sk) {
   return validRect(out) ? out : null;
 }
 
+/**
+ * Move skeleton bounds into the lobby's world by a layer's placement.
+ * @param {Rect|null} r The skeleton bounds.
+ * @param {{x: number, y: number, scale: number, name?: string}} layer The layer's placement.
+ * @returns {Rect|null} The bounds in lobby units; null for invalid bounds.
+ */
 export function worldBounds(r, layer) {
   if (!validRect(r)) return null;
   const { x, y, scale } = layer;
@@ -38,12 +65,22 @@ export function worldBounds(r, layer) {
   return out;
 }
 
+/**
+ * The smallest 16:9 view that contains a rectangle.
+ * @param {Rect} r The rectangle; it must be valid.
+ * @returns {{x: number, y: number, w: number, h: number}} The view.
+ */
 export function containingView(r) {
   if (!validRect(r)) throw new Error("No drawable lobby bounds");
   const w = Math.max(r.x1 - r.x0, ((r.y1 - r.y0) * 16) / 9);
   return { x: (r.x0 + r.x1 - w) / 2, y: (r.y0 + r.y1 - (w * 9) / 16) / 2, w, h: (w * 9) / 16 };
 }
 
+/**
+ * Put a layer's rest animation back on track 0 when the track is empty.
+ * @param {object} player The spine-player.
+ * @param {{rest?: {name: string, time: number}}} layer The layer.
+ */
 export function resumeRest(player, layer) {
   const rest = layer.rest,
     entry = player.animationState?.getCurrent(0);
@@ -51,8 +88,18 @@ export function resumeRest(player, layer) {
     player.animationState.setAnimation(0, rest.name, true).trackTime = rest.time;
 }
 
-// The player runtime needs a track even for a static setup pose. Test candidate poses on a separate skeleton so
-// a rejected empty/hiding idle never leaks into the live tracks. Intro-only scenes may legitimately be empty.
+/**
+ * Choose the pose a layer rests in and apply it to the live player: the first idle (or the setup pose) that
+ * draws something. The player runtime needs a track even for a static setup pose. Candidate poses are tested on
+ * a separate skeleton, so a rejected empty or hiding idle never leaks into the live tracks. Intro-only scenes
+ * may legitimately be empty.
+ * @param {object} player The spine-player.
+ * @param {object} layer The layer; its `rest` and `skin` are set.
+ * @param {object} info The lobby's information (idles, pins).
+ * @param {(skeleton: object, name: string, pins?: object[]|null) => void} pin Applies the pins to a posed
+ *     skeleton.
+ * @returns {string|null} The animation name of the pose; null for the setup pose. Throws when no pose draws.
+ */
 export function settle(player, layer, info, pin) {
   const data = player.skeleton.data;
   if (data.version && !/^4\.2(?:\.|$)/.test(data.version))

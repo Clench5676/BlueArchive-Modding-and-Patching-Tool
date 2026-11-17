@@ -1,27 +1,19 @@
 import { lobbyCaptureView, lobbyMaximumWidth } from "./photography/camera.js";
-// Memorial lobby for the detail screen's second tab, framed and played like the game.
-// The lobby's UILobbyElement prefab (lobby.json, read by the server) places every skeleton in NGUI units around the
-// prefab root, the screen centre; at 16:9 the game shows the 2960 x 1665 units G around it. Fullscreen shows exactly G.
-// The left view puts the head-pat point (Touch_Point) left of the panel and stays inside the painted rect P, the
-// largest rectangle around G that the lobby's opaque art covers, so neither view shows a blank edge; switching between
-// them crossfades. Dialogues play the talk clips with the game's own tracks and mixes, their voices and one subtitle
-// line per voice cue; lobby-touch.js adds the game's touch interaction and the wheel zoom in fullscreen. The lines and
-// voices come from Kivo (setLines), matched by the voice clip names the talk animations carry in their events.
-// The edge extension (border pixels stretched outwards and blurred) is only a fallback for mods whose art does not
-// cover the view. Fullscreen zooms out as far as the zoom-out setting allows (zoomBounds); past the painted art
-// (Unlocked, Custom) it shows what the game's lobby camera clears to, black, through the lobby's grade with PP on.
-// The prefab's particle systems (bokeh, dust, glints, Michiru's sparkler) are simulated and drawn into the lobby's
-// frame by particles-gl.js, in their sorting order relative to the skeletons and following the bones they hang on.
-// A skeleton whose atlas pages sit in several render queues draws in one part per queue (skeleton-parts.js), the
-// effects that sort between two of them in between: Hibiki's river surface over the river, under her. The skeletons
-// of one lobby all draw in the bottom one's context, their parts and the effects interleaved in the game's order
-// (lobby-stage.js): Wakamo's fire over her lobby's scenery, under her.
-// Each skeleton's idle starts the clips the game's does (Shigure's train, snow, clouds, stars), some of them at random
-// times (lobby-sync.js), and the clips' sound keys play the game's sounds at the voice volume.
-// The skeletons draw with the game's materials (skeleton-materials.js: the multiply, noise and glitch pages, slot
-// blend modes as the materials give them, no dark colour) and keep the bones the prefab pins (skeleton-pins.js).
-// Entered, the lobby plays its intro timeline (lobby-intro.js) from the first frame it is on screen: a tap or a
-// dialogue skips it, and with the setting off the lobby starts as the intro leaves it.
+// Memorial lobby for the detail screen's second tab, framed and played like the game. The lobby's UILobbyElement
+// prefab (lobby.json, read by the server) places every skeleton in NGUI units around the prefab root, the screen
+// centre; at 16:9 the game shows the 2960 x 1665 units G around it. Fullscreen shows exactly G; the left view
+// puts the head-pat point (Touch_Point) left of the panel and stays inside the painted rect P, the largest
+// rectangle around G that the lobby's opaque art covers, so neither view shows a blank edge; switching between
+// them crossfades.
+// Dialogues play the talk clips with the game's own tracks and mixes, their voices and one subtitle line per
+// voice cue (lines and voices come from Kivo, setLines); lobby-touch.js adds the touch interaction and the wheel
+// zoom in fullscreen. Fullscreen zooms out as far as the zoom-out setting allows (zoomBounds); past the painted
+// art it shows what the game's lobby camera clears to, black. The skeletons of one lobby all draw in the bottom
+// one's context with the prefab's particle systems (lobby-stage.js, particles-gl.js), with the game's materials
+// (skeleton-materials.js) and the bones the prefab pins (skeleton-pins.js). Each skeleton's idle starts the
+// clips the game's does, some at random times (lobby-sync.js). Entered, the lobby plays its intro timeline
+// (lobby-intro.js) from the first frame it is on screen: a tap or a dialogue skips it, and with the setting off
+// the lobby starts as the intro leaves it.
 import { specialFramingOf, specialView } from "./special-view.js";
 import { latestLoad, loadPlayer } from "./spine-load.js";
 import { ensureSpine } from "./spine-runtime.js";
@@ -76,11 +68,29 @@ let introOn = true; // the intro setting (setIntro): off shows the lobby as its 
 const listeners = new Set();
 let ownsTouch = false;
 let dialogueFullscreen = null;
+/**
+ * A view in NGUI units: a 16:9 window onto the lobby.
+ * @typedef {{x: number, y: number, w: number, h: number}} ViewRect
+ */
+
+/**
+ * A rectangle of cells of the painted-rect grid, edges inclusive.
+ * @typedef {{i0: number, i1: number, j0: number, j1: number}} CellRect
+ */
+
+/**
+ * Tell the lobby whether the dialogue is shown for the fullscreen view.
+ * @param {boolean} on True in fullscreen.
+ */
 export function setDialogueFullscreen(on) {
   dialogueFullscreen = on;
   current?.caption?.reposition();
 }
 let dialogueViewBounds = { left: 0, top: 0, right: STAGE.w, bottom: STAGE.h };
+/**
+ * Set the bounds the subtitle is kept inside, and place it again.
+ * @param {object|null} bounds The bounds.
+ */
 export function setDialogueBounds(bounds) {
   dialogueViewBounds = bounds;
   current?.caption?.reposition();
@@ -204,8 +214,21 @@ async function sourcesOf(core, mod, refresh = false, signal = null, official = f
   return { artBase: dir(artBase), base: dir(base), official };
 }
 
-// the layers of a lobby in the prefab's draw order with its offsets and scales; skeletons the prefab keeps inactive
-// (talk-only scenes) are left out. Without prefab data every skeleton sits at the standard place, backgrounds first.
+// the layers of a lobby in the prefab's draw order with its offsets and scales; skeletons the prefab keeps
+// inactive (talk-only scenes) are left out. Without prefab data every skeleton sits at the standard place,
+// backgrounds first.
+/**
+ * Read the layers of a lobby.
+ * @param {string} core The lobby's core.
+ * @param {object|null} [mod] The mod to preview.
+ * @param {object|null} [sources] The sources already resolved.
+ * @param {object|null} [framing] The framing of a special lobby.
+ * @param {object} [options] Options.
+ * @param {AbortSignal} [options.signal] Cancels the read.
+ * @param {boolean} [options.official] Read the official files.
+ * @param {boolean} [options.camera] Read the camera's art.
+ * @returns {Promise<object[]>} The layers: name, offset, scale, data and files.
+ */
 export async function layersOf(
   core,
   mod = null,
@@ -273,9 +296,14 @@ export async function layersOf(
     })),
   };
 }
-// skeleton name -> atlas name for a lobby's files: the atlas of the same name, else of the same name in another case
-// (Juri: juri_home.skel, Juri_home.atlas), else the one atlas left for the one skeleton left (CH9996_home.skel with
-// CH0996_home.atlas); the game pairs them through the SkeletonDataAsset, not by name. Skeletons without one are left out.
+/**
+ * Pair a lobby's skeleton files with their atlases: the atlas of the same name, else of the same name in
+ * another case (Juri: juri_home.skel, Juri_home.atlas), else the one atlas left for the one skeleton left
+ * (CH9996_home.skel with CH0996_home.atlas); the game pairs them through the SkeletonDataAsset, not by name.
+ * Skeletons without one are left out.
+ * @param {string[]} files The file names.
+ * @returns {Map<string, string>} Skeleton name to atlas name.
+ */
 export function pairAtlases(files) {
   const skels = files.filter((f) => f.endsWith(".skel")).map((f) => f.slice(0, -5));
   const atlases = files.filter((f) => f.endsWith(".atlas")).map((f) => f.slice(0, -6));
@@ -308,15 +336,28 @@ const clipId = (name) =>
     .pop()
     .replace(/\.(ogg|wav|mp3)$/, "")
     .replace(/_new$/, "");
-// the looping idle (rest-pose.js, which the thumbnails choose with too)
+/**
+ * The looping idle of a layer (rest-pose.js, which the thumbnails choose with too).
+ * @param {object} data The skeleton data.
+ * @param {object} layer The layer.
+ * @param {object} [info] The lobby's information.
+ * @returns {string|null} The animation name.
+ */
 export function idleOf(data, layer, info = current?.info) {
   if (layer.rest) return layer.rest.name;
   return lobbyIdle(data, { idle: info?.idle?.[layer.name], animation: layer.animation });
 }
-// the clips a skeleton's idle starts besides itself (the game plays every clip of the SpineCharacter's
-// idle pool, each with its sync clips): the idle's sync clips and the rest of its pool, when the idle is the pool's
-// first clip. clip(name) gives a clip (lobby.json clips): Shigure's Train_00_R, Hoshino's whale, the snow, clouds,
-// petals, stars and sweat of other lobbies.
+/**
+ * The clips a skeleton's idle starts besides itself (the game plays every clip of the
+ * SpineCharacter's idle pool, each with its sync clips): the idle's sync clips and the rest of its pool, when
+ * the idle is the pool's first clip. Examples: Shigure's Train_00_R, Hoshino's whale, the snow, clouds, petals,
+ * stars and sweat of other lobbies.
+ * @param {object} info The lobby's information.
+ * @param {string} name The skeleton's name.
+ * @param {string|null} idle The idle animation.
+ * @param {(name: string) => object|undefined} clip Gives a clip (lobby.json clips).
+ * @returns {string[]} The clip names.
+ */
 export function idleClips(info, name, idle, clip) {
   const pool = info?.idles?.[name] || [];
   if (!idle || pool[0] !== idle) return [];
@@ -402,7 +443,8 @@ function poser(l) {
       st.update(0);
       st.apply(sk);
     }
-    Pins.pin(sk, l.name, l.ignorePins ? null : current?.info?.pins); // the bones the prefab pins, as the players draw them
+    // the bones the prefab pins, as the players draw them
+    Pins.pin(sk, l.name, l.ignorePins ? null : current?.info?.pins);
     sk.updateWorldTransform(spine.Physics.reset); // physics at rest, as a new skeleton's: no state from the last pose
     return sk;
   };
@@ -458,6 +500,15 @@ function paint(grid, l, sk, targets) {
 // the bounding box (cells, inclusive) of the cell rect P and the set cells of `mask` joined to it across gaps of at
 // most `gap` cells: the scene's art, without the parts parked away from it (a talk's close-up, a second stage set)
 const GAP = 2;
+/**
+ * The box of the scene's art over its poses, grown from the painted rect through cells the poses paint.
+ * @param {Uint8Array} mask The painted cells.
+ * @param {number} gw The grid's width in cells.
+ * @param {number} gh The grid's height in cells.
+ * @param {CellRect} P The painted rect.
+ * @param {number} [gap] The gap in cells that may be bridged.
+ * @returns {CellRect} The box.
+ */
 export function sceneBox(mask, gw, gh, P, gap = GAP) {
   const seen = new Uint8Array(gw * gh),
     queue = new Int32Array(gw * gh),
@@ -488,8 +539,13 @@ export function sceneBox(mask, gw, gh, P, gap = GAP) {
   }
   return b;
 }
-// the cells of the cell rect R outside the cell rect P inside it, as up to four cell rects (below, above, left and
-// right of P)
+/**
+ * The cells of the cell rect R outside the cell rect P inside it, as up to four cell rects (below, above, left
+ * and right of P).
+ * @param {CellRect} P The inner rect.
+ * @param {CellRect} R The outer rect.
+ * @returns {number[][]} Each as [i0, i1, j0, j1].
+ */
 export function around(P, R) {
   return [
     [R.i0, R.i1, R.j0, P.j0 - 1],
@@ -576,10 +632,17 @@ const SLICE_MS = 8; // the measurement runs in slices of the main thread, after 
 const DRAG_CLIP = /^(Pat|Look|Pinch|HandFollow|Touch)(End)?_\d+_M$/;
 const safeRects = rectCache(2 * 1024 * 1024); // the same source and geometry identity as the initial painted rect
 
-// The poses to check, [layer index, tracks]: every clip the lobby plays (its dialogues, the drag clips and their ends,
-// the clips the idle starts, the random idle clips and the clips they chain to) every CLIP_STEP, on its own track over
-// the idle and with its sync clips, as playClip plays them. layers: {name, data, idle, main}; clip(layer, name) gives
-// the clip's track, next, sync.
+/**
+ * The poses to check, [layer index, tracks]: every clip the lobby plays (its dialogues, the drag clips and
+ * their ends, the clips the idle starts, the random idle clips and the clips they chain to) every CLIP_STEP, on
+ * its own track over the idle and with its sync clips, as playClip plays them.
+ * @param {{name: string, data: object, idle: string|null, main?: boolean}[]} layers The layers.
+ * @param {object} info The lobby's information.
+ * @param {string[]} talks The talk clips' names.
+ * @param {(layer: object, name: string) => {track: number, next?: string, sync?: string[]}} clip Gives the
+ *     clip's track, next and sync.
+ * @returns {Array<[number, object]>} The poses.
+ */
 export function clipPoses(layers, info, talks, clip) {
   const out = [];
   layers.forEach((l, index) => {
@@ -617,8 +680,15 @@ export function clipPoses(layers, info, talks, clip) {
   });
   return out;
 }
-// P (cells, inclusive) shrunk while the outer column or row of a side has a cell some pose left unpainted (`bad`, set
-// within `band` cells of P's sides only)
+/**
+ * Shrink P (in cells, inclusive) while the outer column or row of a side has a cell some pose left unpainted
+ * (`bad`, set within `band` cells of P's sides only).
+ * @param {CellRect} P The rect.
+ * @param {Uint8Array} bad The unpainted cells.
+ * @param {number} gw The grid's width in cells.
+ * @param {number} [band] How far from P's sides the cells are checked.
+ * @returns {CellRect} The shrunk rect.
+ */
 export function shrinkRect(P, bad, gw, band = BAND) {
   const r = { ...P };
   const clear = (i0, i1, j0, j1) => {
@@ -788,11 +858,11 @@ function boundsRect(loaded) {
 
 // --- the camera framing: a 16:9 view, centred across, zoomed and moved up or down, that the shutter keeps as
 // the lobby's resting view; it may go wider than the game's view as far as no pose shows past the art ---
-// Every pose the lobby rests in is painted: the idle and every clip (clipPoses). The intro does not count:
-// some intros move the whole scene (Mika (Swimsuit)'s lifts it off her feet for seconds), and the view the
-// owner frames is the lobby at rest; such an intro may show the camera's clear colour past the art. A cell outside the
-// game's view that some pose leaves unpainted is `bad`: a view may take in no bad cell. Cells inside the game's view never count: what the game
-// itself shows there is the lobby as made.
+// Every pose the lobby rests in is painted: the idle and every clip (clipPoses). The intro does not count: some
+// intros move the whole scene (Mika (Swimsuit)'s lifts it off her feet for seconds) and the view the user frames
+// is the lobby at rest, so such an intro may show the camera's clear colour past the art. A cell outside the
+// game's view that some pose leaves unpainted is `bad`: a view may take in no bad cell. Cells inside the game's
+// view never count: what the game itself shows there is the lobby as made.
 function* measureFraming(all, loaded, meta, G, info) {
   const grid = gridOf(G),
     { gw, gh, X0, Y0 } = grid,
@@ -842,8 +912,14 @@ function* measureFraming(all, loaded, meta, G, info) {
   }
   return { ...framingLimits(G, grid, bad), poses };
 }
-// the camera's limits from the bad cells of a grid ({X0, Y0, gw, gh}, cells of CELL units): a summed-area table of
-// them for the view checks, and the widest view that fits
+/**
+ * The camera's limits from the bad cells of a grid: a summed-area table of them for the view checks, and the
+ * widest view that fits.
+ * @param {ViewRect} G The game's view.
+ * @param {{X0: number, Y0: number, gw: number, gh: number}} grid The grid, in cells of CELL units.
+ * @param {Uint8Array} bad The bad cells.
+ * @returns {object} The limits: G, grid, sum and wMax.
+ */
 export function framingLimits(G, grid, bad) {
   const { gw, gh } = grid,
     sum = new Int32Array((gw + 1) * (gh + 1));
@@ -870,8 +946,14 @@ function badIn(lim, x0, y0, x1, y1) {
     S = lim.sum;
   return S[(j1 + 1) * W + i1 + 1] - S[j0 * W + i1 + 1] - S[(j1 + 1) * W + i0] + S[j0 * W + i0];
 }
-// whether a view of width w, centred across on the game's view, with its bottom at y, shows nothing past the art;
-// before the measurement is done only views inside the game's view do
+/**
+ * Whether a view of a width, centred across on the game's view, with its bottom at y, shows nothing past the
+ * art; before the measurement is done only views inside the game's view do.
+ * @param {object} lim The limits, as framingLimits gives them.
+ * @param {number} w The view's width.
+ * @param {number} y The view's bottom.
+ * @returns {boolean} True when it fits.
+ */
 export function framingFits(lim, w, y) {
   const G = lim.G,
     h = (w * 9) / 16,
@@ -898,8 +980,13 @@ function widestFraming(lim) {
   }
   return G.w;
 }
-// a view brought inside the camera's limits: centred across, ZOOM_IN x the game's view at most, as wide as fits at
-// most, then the nearest height at which it shows nothing past the art (narrower if none)
+/**
+ * Bring a view inside the camera's limits: centred across, ZOOM_IN x the game's view at most, as wide as fits
+ * at most, then the nearest height at which it shows nothing past the art (narrower if none).
+ * @param {ViewRect} v The view.
+ * @param {object} lim The limits.
+ * @returns {ViewRect} The view.
+ */
 export function framingView(v, lim) {
   const G = lim.G,
     cx = G.x + G.w / 2;
@@ -911,8 +998,14 @@ export function framingView(v, lim) {
     w = Math.max(G.w / ZOOM_IN, w - CELL / 2);
   }
 }
-// what the shutter keeps for a view V: the lobby scaled by k about the screen centre and moved by `offset` (NGUI
-// units), so that V fills the screen as the game's view did: the root's new place r1 = k (r0 - c) with c V's centre
+/**
+ * What the shutter keeps for a view V: the lobby scaled by k about the screen centre and moved by `offset`
+ * (NGUI units), so that V fills the screen as the game's view did: the root's new place r1 = k (r0 - c) with c
+ * V's centre.
+ * @param {ViewRect} V The kept view.
+ * @param {ViewRect} G The game's view.
+ * @returns {{scale: number, offset: number[]}} The scale and the offset.
+ */
 export function cameraParams(V, G) {
   const k = G.w / V.w,
     cx = V.x + V.w / 2 - (G.x + G.w / 2),
@@ -964,8 +1057,11 @@ function measureCamera() {
   };
   setTimeout(slice, 0);
 }
-// the camera framing on or off: on, the lobby rests in fullscreen (no intro), the view starts at the game's and
-// measures how far it may go; off, the view goes back to the game's
+/**
+ * Turn the camera framing on or off: on, the lobby rests in fullscreen (no intro), the view starts at the
+ * game's and measures how far it may go; off, the view goes back to the game's.
+ * @param {boolean} on Whether the framing is on.
+ */
 export function camera(on) {
   cameraOn = !!on;
   if (!current?.meta) return;
@@ -978,7 +1074,11 @@ export function camera(on) {
   openEdge();
   resetZoom();
 }
-// for the camera's controls and checks: the view, the game's view, the limits and what the shutter would keep
+/**
+ * The state for the camera's controls and checks: the view, the game's view, the limits and what the shutter
+ * would keep.
+ * @returns {object|null} The state; null before a lobby is shown.
+ */
 export const cameraState = () => {
   if (!current?.meta) return null;
   const G = game(),
@@ -1030,8 +1130,13 @@ function leftView(P, T, G) {
   return { x: clamp(T.x - 0.28 * W, P.x0, P.x1 - W), y: clamp(T.y - 0.66 * H, P.y0, P.y1 - H), w: W, h: H };
 }
 const viewOf = (m, md = mode) => ({ ...(md === "full" ? m.full : m.left) });
-// a layer's spine-player viewport for a view: the view in that skeleton's own units (also the game's view, for the
-// post-processing's screen)
+/**
+ * A layer's spine-player viewport for a view: the view in that skeleton's own units (also the game's view, for
+ * the post-processing's screen).
+ * @param {ViewRect} v The view.
+ * @param {{x: number, y: number, scale: number}} l The layer's placement.
+ * @returns {object} The viewport.
+ */
 export const layerViewport = (v, l) => ({
   x: (v.x - l.x) / l.scale,
   y: (v.y - l.y) / l.scale,
@@ -1206,8 +1311,11 @@ function measureSpecial(loaded) {
   };
 }
 
-// switch between the left view and fullscreen: the old framing fades out over the new one, in step with the UI slide;
-// the zoom resets
+/**
+ * Switch between the left view and fullscreen: the old framing fades out over the new one, in step with the UI
+ * slide; the zoom resets.
+ * @param {"left"|"full"} m The view to show.
+ */
 export function frame(m) {
   const changed = m !== mode;
   mode = m;
@@ -1260,10 +1368,16 @@ function centred(R, w) {
   return { x0: cx - w / 2, x1: cx + w / 2, y0: cy - h / 2, y1: cy + h / 2 };
 }
 export const ZOOM_MODES = ["game", "art", "unlocked", "custom"];
-// the rect a fullscreen view stays inside for the zoom-out setting {mode, custom}: the game's view ("game"), the art
-// every clip keeps painted ("art"), the box of the scene's art over its poses ("unlocked"), or `custom` game views
-// across around the game's view ("custom", 1 to ZOOM_OUT_MAX); never less than the game's view, never more than
-// ZOOM_OUT_MAX game views across. m: the lobby's rects (measure), G: the game's view.
+/**
+ * The rect a fullscreen view stays inside for the zoom-out setting: the game's view ("game"), the art every
+ * clip keeps painted ("art"), the box of the scene's art over its poses ("unlocked"), or `custom` game views
+ * across around the game's view ("custom", 1 to ZOOM_OUT_MAX); never less than the game's view, never more than
+ * ZOOM_OUT_MAX game views across.
+ * @param {{mode: string, custom?: number}} zoom The setting.
+ * @param {object} m The lobby's rects (measure).
+ * @param {ViewRect} G The game's view.
+ * @returns {ViewRect} The bounds.
+ */
 export function zoomBounds(zoom, m, G) {
   const full = rectOf(m.full),
     f = clamp(Number(zoom?.custom) || ZOOM_CUSTOM, 1, ZOOM_OUT_MAX);
@@ -1280,6 +1394,10 @@ export function zoomBounds(zoom, m, G) {
 const bounds = () => zoomBounds({ mode: zoomMode, custom: zoomCustom }, current.meta, game());
 const widest = (B) => Math.min(B.x1 - B.x0, ((B.y1 - B.y0) * 16) / 9);
 let photoFrame = null;
+/**
+ * Tell the lobby the photography frame, or none, so the view stays inside it.
+ * @param {object|null} frame The frame.
+ */
 export function photography(frame) {
   photoFrame = frame;
   const el = current?.host?.querySelector(".lobby-view");
@@ -1293,6 +1411,12 @@ function clampView(v) {
   if (photoFrame) return lobbyCaptureView(v, B, photoFrame);
   return { x: clamp(v.x, B.x0, B.x1 - v.w), y: clamp(v.y, B.y0, B.y1 - v.h), w: v.w, h: v.h };
 }
+/**
+ * Zoom the fullscreen view at a point.
+ * @param {number} factor The factor; above 1 zooms in.
+ * @param {number} sx The pointer's x in stage pixels.
+ * @param {number} sy The pointer's y in stage pixels.
+ */
 export function zoomAt(factor, sx, sy) {
   if (mode !== "full" || !current?.meta || !(factor > 0)) return;
   current.userFramed = true;
@@ -1317,8 +1441,12 @@ export function zoomAt(factor, sx, sy) {
     h = (w * 9) / 16;
   setView(clampView({ x: ux - fx * w, y: uy - fy * h, w, h }), false);
 }
-// the zoom-out setting {mode, custom} (ZOOM_MODES; custom in game views across): a view wider than the new limit comes
-// back inside it, around the same centre; Full Art and Unlocked measure the lobby's clips (once)
+// the zoom-out setting {mode, custom} (ZOOM_MODES; custom in game views across): a view wider than the new limit
+// comes back inside it, around the same centre; Full Art and Unlocked measure the lobby's clips (once).
+/**
+ * Set the zoom-out limit.
+ * @param {{mode: string, custom?: number}} zoom The setting.
+ */
 export function setZoomLimit(zoom) {
   zoomMode = ZOOM_MODES.includes(zoom?.mode) ? zoom.mode : "art";
   zoomCustom = clamp(Number(zoom?.custom) || ZOOM_CUSTOM, 1, ZOOM_OUT_MAX);
@@ -1335,7 +1463,10 @@ function openEdge() {
     (cameraOn || zoomMode === "unlocked" || zoomMode === "custom") && !!current?.meta && !current.meta.sparse;
   current?.host?.classList.toggle("open-edge", open);
 }
-// the game's PP option: off draws the lobby without its post-processing volumes (the next frame shows it)
+/**
+ * Set the game's PP option: off draws the lobby without its post-processing volumes (the next frame shows it).
+ * @param {boolean} on Whether post-processing is on.
+ */
 export function setPostProcessing(on) {
   Linear.setPostEnabled(on);
 }
@@ -1358,7 +1489,11 @@ function reclamp() {
     h = (w * 9) / 16;
   setView(clampView({ x: cx - w / 2, y: cy - h / 2, w, h }), false);
 }
-// pan by a stage-pixel drag (content follows the pointer); only moves while zoomed in
+/**
+ * Pan by a stage-pixel drag (the content follows the pointer); it only moves while zoomed in.
+ * @param {number} dx The horizontal drag.
+ * @param {number} dy The vertical drag.
+ */
 export function panBy(dx, dy) {
   if (mode !== "full" || !current?.meta) return;
   current.userFramed = true;
@@ -1374,13 +1509,20 @@ function setViewTarget(v) {
   current.userFramed = true;
   setView(clampView(v), false);
 }
+/**
+ * Reset the zoom to the game's view.
+ */
 export function resetZoom() {
   if (!current?.meta) return;
   current.userFramed = false;
   setView(viewOf(current.meta), true);
   feather(current.view);
 }
-// for checks: the rects involved, the current view, the zoom relative to the game's view, the character's tracks
+/**
+ * For checks: the rects involved, the current view, the zoom relative to the game's view and the character's
+ * tracks.
+ * @returns {object|undefined} The measurements; undefined before a lobby is shown.
+ */
 export const limits = () =>
   current?.meta && {
     game: game(),
@@ -1401,8 +1543,13 @@ export const limits = () =>
     tracks: mainPlayer()?.animationState?.tracks.map((t) => t?.animation?.name || null) || [],
   };
 
-// the switch card's still: a 450 x 253 crop around the face inside the left view (so fully painted), returned in
-// canvas pixels; the card's mask fades its edges, and its text covers the right third
+/**
+ * The switch card's still: a 450 x 253 crop around the face inside the left view (so fully painted), returned
+ * in canvas pixels; the card's mask fades its edges, and its text covers the right third.
+ * @param {number} canvasW The canvas width.
+ * @param {number} canvasH The canvas height.
+ * @returns {{x: number, y: number, w: number, h: number}|null} The crop; null before a lobby is shown.
+ */
 export function stillRect(canvasW, canvasH) {
   const m = current?.meta;
   if (!m) return null;
@@ -1646,6 +1793,19 @@ function feather(view) {
 const lobbyLoads = latestLoad(),
   sourceLoads = latestLoad(),
   playerLoads = new WeakMap();
+/**
+ * Show a lobby in a host: load every layer, frame it and start it.
+ * @param {string} core The lobby's core.
+ * @param {HTMLElement} host The element to draw in.
+ * @param {object} variant The variant the lobby belongs to.
+ * @param {object} [options] Options.
+ * @param {object|null} [options.mod] The mod to preview.
+ * @param {object|null} [options.framing] The framing of a special lobby.
+ * @param {boolean} [options.official] Show the official art.
+ * @param {boolean} [options.camera] Show the camera's art.
+ * @param {boolean} [options.deferPlayback] Do not start playback until reveal().
+ * @returns {Promise<object>} The lobby's meta (frames, sequences); settles once every layer is in and framed.
+ */
 export function show(
   core,
   host,
@@ -1967,6 +2127,13 @@ function failView(err, host, url, step) {
   message.textContent = T("detail.failed");
   host.appendChild(message);
 }
+/**
+ * Show that the lobby cannot be shown.
+ * @param {Error} err The error.
+ * @param {HTMLElement} host The element it was to be drawn in.
+ * @param {string} url The lobby's URL.
+ * @param {string} [step] The step that failed.
+ */
 export function unavailable(err, host, url, step = "detail") {
   sourceLoads.cancel();
   lobbyLoads.cancel();
@@ -1996,6 +2163,10 @@ function dropPlayers() {
   players = [];
 }
 
+/**
+ * Hide the lobby in a host and free its players.
+ * @param {HTMLElement} host The host it was shown in.
+ */
 export function hide(host) {
   sourceLoads.cancel();
   lobbyLoads.cancel();
@@ -2027,7 +2198,10 @@ function clearView(host) {
   }
 }
 
-// the input trace of the fullscreen interaction (lobby-touch.js): sink(events) gets batches, null turns it off
+/**
+ * The input trace of the fullscreen interaction (lobby-touch.js).
+ * @param {((events: object[]) => void)|null} sink Gets batches of events; null turns the trace off.
+ */
 export const setTrace = (sink) => Touch.setTrace(sink);
 
 function freezePlayer(player, c) {
@@ -2087,13 +2261,19 @@ function resumeScene(c) {
       }
   });
 }
-// Hall keeps an attached instance while another mode is visible. All clocks and audio resume from this point.
+/**
+ * Pause the lobby while Hall keeps an attached instance and another mode is visible. All clocks and audio
+ * resume from this point.
+ */
 export function suspend() {
   const c = current;
   if (!c || c.suspended) return;
   c.suspended = true;
   freezeScene(c);
 }
+/**
+ * Resume the lobby after suspend().
+ */
 export function resume() {
   const c = current;
   if (!c) return;
@@ -2101,7 +2281,12 @@ export function resume() {
   resumeScene(c);
 }
 // Resolve only after every optional FX/material image is in and an actual complete composite has been drawn.
-// Preparing the intro's frame zero queues its time-zero sounds for activation instead of consuming them silently.
+// Preparing the intro's frame zero queues its time-zero sounds for activation instead of consuming them
+// silently.
+/**
+ * Draw the lobby's first complete frame.
+ * @returns {Promise<boolean>} True when it is drawn; false when the lobby changed meanwhile.
+ */
 export async function prepareFrame() {
   const c = current;
   if (!c) return false;
@@ -2134,7 +2319,11 @@ export async function prepareFrame() {
 }
 
 // --- the intro (lobby-intro.js) ---
-// the lobby is on screen (the detail screen has committed it): its intro starts with the next frame it is visible
+/**
+ * The lobby is on screen (the detail screen has committed it): its intro starts with the next frame it is
+ * visible.
+ * @param {boolean} [restart] Whether the intro starts from the beginning.
+ */
 export function reveal(restart = true) {
   const c = current;
   if (!c || c.suspended || c.backgroundPaused || c.loadingPaused) return;
@@ -2210,24 +2399,45 @@ export function reveal(restart = true) {
   };
   c.watchdog = setTimeout(check, 5000);
 }
-// the intro setting: on plays it when the lobby is entered, off shows the lobby as the intro leaves it (Shiroko's holds
-// its last frame); a lobby shown now keeps what it does
+/**
+ * The intro setting: on plays it when the lobby is entered, off shows the lobby as the intro leaves it
+ * (Shiroko's holds its last frame); a lobby shown now keeps what it does.
+ * @param {boolean} on Whether the intro plays.
+ */
 export function setIntro(on) {
   introOn = on !== false;
 }
-// resolves once the lobby's intro has ended, been skipped or is not there (the switch card's still waits for it)
+/**
+ * Wait for the lobby's intro to end, be skipped or be missing (the switch card's still waits for it).
+ * @returns {Promise<void>} Settles then.
+ */
 export function introDone() {
   const c = current;
   return c?.ready ? c.ready.then(() => c.intro?.done()) : Promise.resolve();
 }
+/**
+ * Skip the lobby's intro.
+ */
 export const skipIntro = () => current?.intro?.skip();
+/**
+ * Whether the intro is waiting to start.
+ * @returns {boolean} True when it is.
+ */
 export const introPending = () => !!current?.intro?.pending();
-// for checks: the intro's time and state
+/**
+ * For checks: the intro's time and state.
+ * @returns {object|null} The state; null without an intro.
+ */
 export const introState = () => current?.intro?.state() || null;
 // for checks: every player's frame advances by a fixed `dt` seconds (0 holds the lobby still), or by the real time
 // again (null); advance(dt) gives each player one frame of dt
 let fixedDt = null;
 const stepDt = new Map();
+/**
+ * For checks: every player's frame advances by a fixed `dt` seconds (0 holds the lobby still), or by the real
+ * time again (null).
+ * @param {number|null} dt The step in seconds.
+ */
 export function setClock(dt) {
   fixedDt = dt == null ? null : Math.max(0, Number(dt) || 0);
   for (const p of players) clocked(p);
@@ -2257,11 +2467,18 @@ function freshClock(p) {
   p.time.delta = 0;
   p.time.totalTime = total;
 }
+/**
+ * For checks: give each player one frame of dt.
+ * @param {number} dt The step in seconds.
+ */
 export function advance(dt) {
   for (const p of players) stepDt.set(p, Math.max(0, Number(dt) || 0));
 }
 
-// fullscreen interaction on or off (lobby-touch.js); it only runs in the fullscreen framing
+/**
+ * Switch the fullscreen interaction on or off (lobby-touch.js); it only runs in the fullscreen framing.
+ * @param {boolean} on Whether it is on.
+ */
 export function interactive(on) {
   wantTouch = !!on;
   if (wantTouch && mode === "full" && current?.meta && !paused()) {
@@ -2361,9 +2578,16 @@ function boneOf(skeleton, name) {
   const bone = players.find((p) => p.bamtLayer?.name === skeleton)?.skeleton?.findBone(name);
   return bone && bone.active !== false ? bone : null;
 }
-// for checks: the particle effects' live particles, systems, loaded textures, GL contexts and time per frame
+/**
+ * For checks: the particle effects' live particles, systems, loaded textures, GL contexts and time per frame.
+ * @param {object} [opts] Options for the statistics.
+ * @returns {object|null} The statistics; null without effects.
+ */
 export const effects = (opts) => current?.fx?.stats(opts) || null;
-// for checks: the layers' players, bottom first
+/**
+ * For checks: the layers' players, bottom first.
+ * @returns {object[]} The players.
+ */
 export const layerPlayers = () => players.filter((p) => p.bamtLayer);
 
 // --- random idle clips (SpineCharacter.idleBaseRandomClipPool): blinks, ear twitches, expression changes, each
@@ -2436,7 +2660,14 @@ const Idle = {
 };
 
 // --- dialogues: the talk clip (Talk_NN_M, its sync Talk_NN_A) with the game's mixes, the voices and one subtitle line
-// per voice cue; then back to idle. A dialogue starts at once, cutting off whatever was playing. ---
+/**
+ * Play a dialogue: the talk clip (Talk_NN_M, its sync Talk_NN_A) with the game's mixes, the voices and one
+ * subtitle line per voice cue, then back to idle. A dialogue starts at once, cutting off whatever was playing.
+ * @param {string} anim The talk animation's name.
+ * @param {object} [options] Options.
+ * @param {boolean} [options.fromChain] The dialogue follows another in play all.
+ * @returns {object|null} The dialogue's sequence; null when it cannot play (no lobby, or suspended).
+ */
 export function play(anim, { fromChain = false } = {}) {
   const m = current?.meta;
   if (!m || current?.suspended || current?.backgroundPaused || current?.loadingPaused) return null;
@@ -2500,7 +2731,9 @@ function endTalk(fade) {
   talk = null;
 }
 
-// stop at once: the talk tracks fade back to idle, voices and subtitle go
+/**
+ * Stop at once: the talk tracks fade back to idle, voices and subtitle go.
+ */
 export function stop() {
   const was = !!talk || !!chain; // play all may sit between two dialogues
   chain = null;
@@ -2509,7 +2742,10 @@ export function stop() {
   if (talking) returnToIdle(mainPlayer());
   if (was) emit();
 }
-// the next dialogue after the last one played (a tap on the body); a dialogue that has only just started is not cut
+/**
+ * Play the next dialogue after the last one played (a tap on the body); a dialogue that has only just started
+ * is not cut.
+ */
 export function next() {
   const seqs = current?.meta?.sequences;
   if (
@@ -2523,7 +2759,10 @@ export function next() {
   chain = null;
   play(seqs[(talkIndex + 1) % seqs.length].anim);
 }
-// every dialogue in order, each starting when the previous one ends
+/**
+ * Play every dialogue in order, each starting when the previous one ends.
+ * @param {string|null} [selected] The dialogue to start from.
+ */
 export function playAll(selected = null) {
   const seqs = current?.meta?.sequences;
   if (!seqs?.length || current?.suspended || current?.backgroundPaused || current?.loadingPaused) return;
@@ -2536,10 +2775,26 @@ export function playAll(selected = null) {
   chain = run;
   play(seqs[run.i].anim, { fromChain: true });
 }
+/**
+ * Whether play all is running.
+ * @returns {boolean} True when it is.
+ */
 export const playingAll = () => !!chain;
+/**
+ * The dialogue in play.
+ * @returns {string|null} Its talk animation, or null.
+ */
 export const playing = () => talk?.seq.anim || null;
+/**
+ * The shown lobby's meta (frames, sequences).
+ * @returns {object|null} The meta, or null.
+ */
 export const meta = () => current?.meta || null;
-// onTalk(cb): cb(anim or null, playingAll) whenever a dialogue starts, ends or stops; returns an unsubscribe function
+/**
+ * Subscribe to dialogues: cb(anim or null, playingAll) is called whenever a dialogue starts, ends or stops.
+ * @param {(anim: string|null, playingAll: boolean) => void} cb The listener.
+ * @returns {() => void} Unsubscribes the listener.
+ */
 export function onTalk(cb) {
   listeners.add(cb);
   return () => listeners.delete(cb);
@@ -2563,9 +2818,13 @@ function silence() {
   audios = [];
 }
 
-// lines by clip id ({clip: {lang: text, voice}}: Kivo's Chinese and Japanese, the Global server's English and others)
-// and the picker of the UI language's line ("" when it has none: a cue without one leaves the subtitle as it is, since
-// one row of the game's text can cover two clips)
+/**
+ * Set the lines by clip id ({clip: {lang: text, voice}}: Kivo's Chinese and Japanese, the Global server's
+ * English and others) and the picker of the UI language's line ("" when it has none: a cue without one leaves
+ * the subtitle as it is, since one row of the game's text can cover two clips).
+ * @param {Object<string, object>} table The lines by clip id.
+ * @param {(line: object) => string} pick Picks the UI language's text.
+ */
 export function setLines(table, pick) {
   // Undefined changes only the picker while translated rows load; keep voice availability for upcoming cues.
   if (table !== undefined) lines = table || {};
@@ -2576,7 +2835,11 @@ export function setLines(table, pick) {
   for (const clip of talk?.cues || []) text = lineOf(lines[clip]) || text;
   subtitle(text, true);
 }
-// the voice volume (0 to 1), which the clips' sounds follow too; muted never plays voices or sounds
+/**
+ * Set the voice volume, which the clips' sounds follow too; muted never plays voices or sounds.
+ * @param {number} value The volume, 0 to 1.
+ * @param {boolean} mute Whether it is muted.
+ */
 export function setVolume(value, mute) {
   volume = Math.max(0, Math.min(1, value));
   muted = !!mute;
@@ -2671,8 +2934,11 @@ function soundsOf(p, entry, c) {
   p.bamtSounds.watch(entry, c.sounds);
   if (!muted && volume > 0) for (const [, id] of c.sounds) Sfx.prefetch(id);
 }
-// for checks: each layer's random-timing clips (seconds until each plays next) and tracks, and the sound keys played
-// lately (also while muted)
+/**
+ * For checks: each layer's random-timing clips (seconds until each plays next) and tracks, and the sound keys
+ * played lately (also while muted).
+ * @returns {object[]} The runs.
+ */
 export const clipRuns = () =>
   players
     .filter((p) => p.bamtLayer)
@@ -2682,8 +2948,16 @@ export const clipRuns = () =>
       runs: p.bamtRuns?.list() || [],
       tracks: p.animationState?.tracks.map((t) => t?.animation?.name || null) || [],
     }));
+/**
+ * For checks: the sound keys played lately.
+ * @returns {object[]} The log entries.
+ */
 export const soundLog = () => Sfx.log.slice();
-// a sequence's lines, one per voice clip
+/**
+ * A sequence's lines, one per voice clip.
+ * @param {{cues: {clip: string}[]}} seq The dialogue sequence.
+ * @returns {string[]} The lines.
+ */
 export const textOf = (seq) => seq.cues.map((c) => lineOf(lines[c.clip])).filter(Boolean);
 
 // one subtitle line at a time: the old one leaves upwards and the next rises in from below

@@ -1,13 +1,13 @@
-// The depth of field a memorial lobby's intro turns on (its PPV_D volume), as URP 12 draws Gaussian depth of field
-// (PostProcessPass.DoGaussianDepthOfField, GaussianDepthOfField.shader), before the colour steps of the camera's
-// post-processing (linear.js setPrepass). The lobby's Spine art is transparent and writes no depth, so the depth
-// texture holds the far plane everywhere: past the volume's far blur end (0 in every lobby's profile) the circle of
-// confusion is 1 all over the screen, and the whole picture is blurred: downsampled to half size, blurred across and
-// then down with the 3-tap kernel (taps 1.333 radii apart, weights 0.353, 0.294, 0.353), and taken instead of the
-// sharp picture (the composite's non-linear blend is 1 at that circle of confusion). The radius is the volume's max
-// radius (blended by its weight) at 1080p: taps 1.333 x radius x (the game screen's width / 1080) pixels apart, here
-// in canvas pixels of the game's screen, so the blur keeps its size on the art in the left view and when zoomed.
-// No lobby uses Bokeh depth of field: the five profiles that set its lens leave the mode Off.
+// The depth of field a memorial lobby's intro turns on (its PPV_D volume), as URP 12 draws Gaussian depth of
+// field (PostProcessPass.DoGaussianDepthOfField, GaussianDepthOfField.shader), before the colour steps of the
+// camera's post-processing (linear.js setPrepass). The lobby's Spine art is transparent and writes no depth, so
+// the depth texture holds the far plane everywhere: past the volume's far blur end (0 in every lobby's profile)
+// the circle of confusion is 1 all over the screen and the whole picture is blurred: downsampled to half size,
+// blurred across and then down with the 3-tap kernel (taps 1.333 radii apart, weights 0.353, 0.294, 0.353) and
+// taken instead of the sharp picture (the composite's non-linear blend is 1 at that circle of confusion). The
+// radius is the volume's max radius (blended by its weight) at 1080p, in canvas pixels of the game's screen, so
+// the blur keeps its size on the art in the left view and when zoomed. No lobby uses Bokeh depth of field: the
+// five profiles that set its lens leave the mode Off.
 
 const VS = `#version 300 es
 in vec2 p;
@@ -108,8 +108,13 @@ function targets(gl, r, w, h) {
   return true;
 }
 
-// the blur's tap spacing in canvas pixels for a game screen `screenW` canvas pixels wide (URP: 1.333 taps of a half
-// resolution texel times the max radius scaled from 1080p)
+/**
+ * The blur's tap spacing in canvas pixels for a game screen of a width (URP: 1.333 taps of a half resolution
+ * texel times the max radius scaled from 1080p).
+ * @param {number} radius The volume's max radius.
+ * @param {number} screenW The game screen's width in canvas pixels.
+ * @returns {number} The tap spacing.
+ */
 export const tapPixels = (radius, screenW) => 1.33333333 * radius * (screenW / 1080);
 
 function pass(gl, src, st, w, h, screen) {
@@ -152,7 +157,12 @@ function pass(gl, src, st, w, h, screen) {
   return res.tex[0];
 }
 
-// the depth of field on a player ({radius}: the volume's max radius) or off (null); Linear's pass draws with it
+/**
+ * Turn the depth of field on for a player, or off; Linear's pass draws with it.
+ * @param {object} player The spine-player.
+ * @param {{radius: number}|null} dof The volume's max radius; null for off.
+ * @param {object} Linear The linear.js module, whose pass hook is used.
+ */
 export function set(player, dof, Linear) {
   const gl = player?.context?.gl;
   if (!gl || typeof WebGL2RenderingContext === "undefined" || !(gl instanceof WebGL2RenderingContext)) return;
@@ -181,7 +191,11 @@ export function set(player, dof, Linear) {
   }
 }
 
-// before the player is disposed: its targets and programs
+/**
+ * Free a player's depth of field targets and programs; called before the player is disposed.
+ * @param {object} player The spine-player.
+ * @param {object} [Linear] The linear.js module.
+ */
 export function detach(player, Linear) {
   const st = states.get(player);
   if (!st) return;

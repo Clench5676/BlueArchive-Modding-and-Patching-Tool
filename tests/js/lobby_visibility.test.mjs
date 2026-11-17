@@ -5,7 +5,7 @@ import { overlaps, worldBounds } from "../../src/bmpt/web/js/lobby-health.js";
 
 const source = readFileSync(new URL("../../src/bmpt/web/js/lobby.js", import.meta.url), "utf8");
 const code = source
-  .slice(source.indexOf("export function reveal("), source.indexOf("// the intro setting:"))
+  .slice(source.indexOf("export function reveal("), source.indexOf("export function setIntro("))
   .replace("export function", "function");
 function harness(mode = "left") {
   let now = 1,

@@ -2,14 +2,15 @@ import * as Photo from "./photography/controller.js";
 import * as Camera from "./lobby-camera.js";
 import { notify } from "./popup.js";
 import { modJob, progressName } from "./job-progress.js";
-// Detail screen, built from the game's own prefab (UICharacterDetail) by ngui.js. The prefab supplies every frame,
-// sprite, tint, incline and position; this file swaps labels and textures, hides what the tool has no use for, and adds
-// what the game has no screen for: variant chips, the expression strip and the portrait and lobby switchers. A family
-// is one base character with all of its variant portraits; each variant's game file carries one portrait (its own
-// skeleton, another variant's skeleton or an added portrait), and likewise one memorial lobby (its own or an added
-// one). Added portraits and lobbies belong to the variant whose game file they replace (mod.target); added portraits
-// can be worn by the other variants of the family, lobbies are not offered to them. Switching writes the chosen one
-// into the game files (switch-sources.js, actions.apply).
+// Detail screen, built from the game's own prefab (UICharacterDetail) by ngui.js: the prefab supplies every
+// frame, sprite, tint, incline and position; this file swaps labels and textures, hides what the tool has no use
+// for, and adds what the game has no screen for (variant chips, the expression strip, the portrait and lobby
+// switchers).
+// A family is one base character with all of its variant portraits. Each variant's game file carries one
+// portrait (its own skeleton, another variant's or an added one) and one memorial lobby (its own or an added
+// one). Added portraits and lobbies belong to the variant whose game file they replace (mod.target); added
+// portraits can be worn by the other variants of the family, lobbies are not offered to them. Switching writes
+// the chosen one into the game files (switch-sources.js, actions.apply).
 // A change inside the screen (another variant, a tab, an applied portrait) prepares its parts behind the loading
 // cover and swaps them in one frame, after the primary preview and required UI images settle.
 import { isSpecial, specialFraming } from "./special-view.js";
@@ -349,9 +350,9 @@ const baseOf = (c, kind = "spr") =>
   c.kind === "mod" ? spineBase("mod", c.id) : c.core ? spineBase(`official-${kind}`, c.core) : null;
 // The installed portrait comes from the current game files; with mods off, preview the configured source.
 const currentBase = () => variantBase(variant());
-// no deadline: the read waits for a job that holds the library lock, as the route's does (main.js), and the screen stays as
-// it is meanwhile. A caller drops the result when the screen was read anew in the meantime (left and entered again, or
-// reloaded by another action), so that an old read never replaces a newer family.
+// no deadline: the read waits for a job that holds the library lock, as the route's does (main.js), and the
+// screen stays as it is meanwhile. A caller drops the result when the screen was read anew in the meantime (left
+// and entered again, or reloaded by another action), so that an old read never replaces a newer family.
 const readFamily = (key) => rpc("family.get", { key });
 
 // what the switch card of a kind offers (switch-sources.js), with the names and marks the cards show: the variant's
@@ -451,8 +452,8 @@ function crossItems(v, query, own, item) {
   judgeCross(v, all ? keys.filter((key) => inView.has(key)) : keys);
   return hits.map((c) => item(named(c)));
 }
-// the list's cards in view (popup.js onView): with "Show other students" the models of other students among them are the
-// ones to judge, the others dropped from the queue; a scroll brings the next ones in
+// the list's cards in view (popup.js onView): with "Show other students" the models of other students among them
+// are the ones to judge, the others dropped from the queue; a scroll brings the next ones in
 let crossShown = [];
 function viewCross(v, keys) {
   const shown = keys
@@ -576,11 +577,11 @@ function runCross() {
       else if (handled?.variant && unjudged(handled.variant, handled.keys)) costumesChecked(handled.variant);
     });
 }
-// Costume checks run only while they are wanted: the screen open on the same variant with its 3D tab shown (the
-// Switch 3D Model popup opens from that tab). Leaving it (another tab, another variant, the screen closed) stops them
-// (stopCostumeChecks): no further pair is submitted, the checks already submitted are cancelled (jobs.cancel: a queued
-// one never runs, a running one stops between its steps and saves no verdict), and the loading ring stops. Coming
-// back starts them again for the pairs still without a verdict.
+// Costume checks run only while the screen is open on the same variant with its 3D tab shown (the Switch 3D
+// Model popup opens from that tab). Leaving it (another tab, another variant, the screen closed) stops them
+// (stopCostumeChecks): no further pair is submitted, the submitted checks are cancelled (jobs.cancel: a queued
+// one never runs, a running one stops between its steps and saves no verdict) and the loading ring stops. Coming
+// back restarts the pairs still without a verdict.
 let costumeRun = 0;
 const costumeJobs = new Set();
 const costumesWanted = (v, run) => run === costumeRun && open && !!v && variant().key === v.key && tab === "model";
@@ -676,7 +677,8 @@ function crcOf(v, kind = "spr") {
 }
 const appliedKey = (v = variant(), kind = primaryKind(v)) => keyOf(v, kind);
 const shownSource = (v = variant(), kind = primaryKind(v)) => previewKey(v, kind, modsOn());
-// the left side draws a kind it can preview: a variant's own files, a field or NPC model without a slot (// Shown, never switched), or an added mod
+// the left side draws a kind it can preview: a variant's own files, a field or NPC model without a slot (//
+// Shown, never switched), or an added mod
 const previewAvailable = (v, kind) =>
   !!coreOf(v, kind) || (kind === "model" && !!v?.fieldModel) || shownSource(v, kind).startsWith("m:");
 const variantBase = (v, kind = "spr") =>
@@ -687,7 +689,8 @@ const current = (kind = "spr") =>
 // another student's costume, named after the student: "Yukino (Original)" (the family's base name from the roster read)
 const crossLabel = (o) => {
   const base = L(otherStudents?.find((f) => f.key === o.family)?.base);
-  return base ? crossName(o, base, L(o.names)?.short ?? o.key, T) : fullName(o); // no family read: the variant's full name
+  // no family read: the variant's full name
+  return base ? crossName(o, base, L(o.names)?.short ?? o.key, T) : fullName(o);
 };
 // a candidate's name on the cards: another variant's mod with that variant's name first, another student's model with
 // the student's name first
@@ -718,7 +721,12 @@ const TEXTURES = {
   ),
 };
 
-// Keep the card readable; disabled colours come from FilterSort's disabled button.
+/**
+ * Show an action card in its normal state; a disabled card takes the colour of FilterSort's disabled button.
+ * @param {NguiNode} card The action card.
+ * @param {boolean} enabled Whether the action is enabled.
+ * @param {NguiNode|null} [disabledTemplate] FilterSort's disabled button.
+ */
 export function actionState(card, enabled, disabledTemplate = null) {
   find(card, "Normal").active = true;
   const lock = find(card, "Lock_Cover");
@@ -953,7 +961,7 @@ function screenTree() {
     resizeButton(bg, CW);
     find(t, `${base}/Bg/Bg_Line`).widgets[0].w_ = CW - 10;
   });
-  off(t, `${INFO}/Skill/Btn_Up_Wrapper`); // the install button, removed for now
+  off(t, `${INFO}/Skill/Btn_Up_Wrapper`); // the install button is not used
   // the four titles share one size: the largest at which every one fits its card after wrapping onto two lines
   const titles = NGUI.fitGroup(
     actions.map(([, key]) => T(key)),
@@ -1032,7 +1040,8 @@ function screenTree() {
     `${card}/Normal/Card_Bg/Deco`,
   );
   text(t, `${card}/Normal/Card_Level`, "");
-  // window = the card's inner line (Common_Line_Raius20px 766 x 201 at (1, 6)); the decoration and the picture are clipped to it
+  // window = the card's inner line (Common_Line_Raius20px 766 x 201 at (1, 6)); the decoration and the picture are
+  // clipped to it
   const win = { w: 766, h: 201, r: 20 };
   const deco = layouts.textures.Img_Deco_Weapon;
   at(t, `${card}/Normal`).children.push(
@@ -1068,7 +1077,8 @@ function screenTree() {
   const keep = switchKind() ? 1 : 2;
   let bodies = 0,
     labels = 0;
-  const add = fitIn(T(isSpecial(v) && tab === "lobby" ? "special.add" : `row.add.${tab}`), 52, 30, 160, 3); // the cyan body is 205 wide, slanted
+  // the cyan body is 205 wide, slanted
+  const add = fitIn(T(isSpecial(v) && tab === "lobby" ? "special.add" : `row.add.${tab}`), 52, 30, 160, 3);
   for (const k of at(t, `${INFO}/Weapon/Btn_Up_Wrapper/Btn_Up`).children) {
     if (k.name === "BG (1)") {
       resizeButton(k);
@@ -1670,7 +1680,7 @@ async function job(method, params, options = {}) {
         await refused(refusal, method, params, page === pageToken && open ? () => job(method, params, options) : null);
       else notify(errorText(refusal), { kind: "error", error: refusal });
     } else if (ok) {
-      // an apply while mods are off only saves the choice, without a notice, like any other saved choice (owner)
+      // an apply while mods are off only saves the choice, without a notice, like any other saved choice
       const lines = [result?.kept_current && T("mods.keptCurrent"), result?.incomplete && T("mods.incomplete")].filter(
         Boolean,
       );
@@ -1777,9 +1787,19 @@ async function jumpRepaired(c) {
 // did not reach soon (a hall that kept the screen, another route) is dropped.
 let wanted = null;
 const WANTED_MS = 30000;
+/**
+ * Remember a Go To request from the update summary, for takeWanted().
+ * @param {{variant: string, kind?: string, id: string}|null} request The mod to show: its variant, the kind of
+ *     its page and its id; null forgets the request.
+ */
 export function want(request) {
   wanted = request ? { ...request, at: Date.now() } : null;
 }
+/**
+ * Act on the remembered Go To request once the mod's student page is in: open the switch of the mod's kind with
+ * its card selected and in view. A request the page did not reach in time is dropped.
+ * @returns {Promise<void>} Settles when the switch is open or the request is dropped.
+ */
 export async function takeWanted() {
   const w = wanted;
   wanted = null;
@@ -1979,8 +1999,9 @@ function chipBoxes(chips) {
     box: { ...slots[chip.row][chip.col], w: CHIP_W + (chip.span - 1) * CHIP_PITCH },
   }));
 }
-// Char_Target's frame in the screen: the prefab's offsets down to it, summed as NGUI.render does. The chips are drawn in
-// their own layer and take the plate's frame from the layout, so they stay in its white panel wherever the game puts it.
+// Char_Target's frame in the screen: the prefab's offsets down to it, summed as NGUI.render does. The chips are
+// drawn in their own layer and take the plate's frame from the layout, so they stay in its white panel wherever
+// the game puts it.
 const PLATE_PATH = "LeftInfo/CharInfo/Char_Target";
 function plateFrame(list) {
   let x = list.pos[0],
@@ -2280,12 +2301,11 @@ function toggleGroup(item) {
     },
   }).catch(renderFailed);
 }
-// An action picked on the bar plays at once when its clips are there (the model's GLB carries today's actions;
-// others added before). Else they are fetched (model.js loadClips: the model route's ?clip=, from the shown model's
-// source) while its group card shows the loading ring, then it plays. The fetch is the shown page's preview (class 1):
-// its deadline counts only its own time in the foreground (withPreviewTimeout), and leaving the 3D tab, the variant
-// or the screen gives it up with the costume checks (stopCostumeChecks). A failure leaves the action that played
-// before and says the preview is unavailable, for that action only.
+// An action picked on the bar plays at once when its clips are there (the model's GLB carries today's actions).
+// Otherwise they are fetched (model.js loadClips: the model route's ?clip=) while its group card shows the
+// loading ring, then it plays. The fetch counts only its own foreground time (withPreviewTimeout); leaving the
+// 3D tab, the variant or the screen gives it up. A failure leaves the previous action playing and says the
+// preview is unavailable.
 const CLIP_CAP = 15000;
 async function pickAction(a) {
   stopActionLoad();
@@ -2506,7 +2526,8 @@ async function drawExpressions() {
     const width = (Rx - Lx) * S,
       contentW = (last.pos[0] + CARD.w / 2 + SPACE.m - Lx) * S;
     track.style.width = `${contentW}px`;
-    // the wheel, a mouse drag and touch scroll the strip as the popups' card rows do (Popup.scrollArea); a drag picks nothing
+    // the wheel, a mouse drag and touch scroll the strip as the popups' card rows do (Popup.scrollArea); a drag
+    // picks nothing
     horizontalScroll(clip, width, contentW);
     // an open action list follows its card; it closes once the card has left the row
     if (bar)
@@ -2531,10 +2552,10 @@ const keepScroll = () => {
 };
 
 // --- main Spine portrait ---
-// loadSpine(base) -> Promise, resolved once the portrait's first frame is drawn and the expression strip shows its
-// faces (also on an error, after the message popup). The new layer stays transparent until committed; then it fades in over
-// the old one, which goes. A portrait that cannot be shown takes the old one away too: the left side stays empty
-// rather than showing another variant under this one's name.
+// loadSpine(base) resolves once the portrait's first frame is drawn and the expression strip shows its faces
+// (also on an error, after the message popup). The new layer stays transparent until committed, then fades in
+// over the old one, which goes. A portrait that cannot be shown takes the old one away too: the left side stays
+// empty rather than showing another variant under this one's name.
 const portraitLoads = latestLoad();
 function loadSpine(base) {
   const my = ++spineToken;
@@ -2621,9 +2642,10 @@ async function showSpine(base, my, signal) {
             // the visual mode (visual-mode.js) frames it while it is open
             frame: (p) => Visual.frame(p),
             success: async (player, live) => {
-              // before the first await: once this returns, spine-player frames the view on track 0's animation and plays.
-              // With nothing on track 0 it would pause (no face, no blink): a skeleton without an idle gets an empty
-              // animation there that never ends, so it keeps its setup pose and the faces on tracks 1-2 still play.
+              // before the first await: once this returns, spine-player frames the view on track 0's animation and
+              // plays. With nothing on track 0 it would pause (no face, no blink): a skeleton without an idle gets an
+              // empty animation there that never ends, so it keeps its setup pose and the faces on tracks 1-2 still
+              // play.
               const idle = idleAnimation(player.skeleton.data);
               if (idle) player.animationState.setAnimation(0, idle, true);
               else player.animationState.setEmptyAnimation(0, 0).trackEnd = Number.MAX_VALUE;
@@ -3236,16 +3258,17 @@ async function openPicker(scroll = 0) {
   });
 }
 
-// --- the alias editor (the nameplate's pencil): the user's own aliases of the variant on the popup frame, one input
-// row each, drawn like the game's input row (UIPopup_Input's Input_NickName: a grey box with a line round it, a dark
-// icon at its end), the cross removing it, then an empty row with the pencil to add one while there is room. OK keeps
-// them (aliases.set); Cancel, the close button, the backdrop or Escape drop the changes. Enter in the empty row adds
-// what it holds, in another row goes to the next one, in an empty one at the end keeps them; never while an input
-// method is composing (isComposing, or keyCode 229, which WebKit sends for the key that ends a conversion). ---
+// --- the alias editor (the nameplate's pencil) --- The user's own aliases of the variant on the popup frame,
+// one input row each (like UIPopup_Input's Input_NickName), a cross removing it, then an empty row with the
+// pencil to add one while there is room. OK keeps them (aliases.set); Cancel, the close button, the backdrop and
+// Escape drop the changes. Enter in the empty row adds what it holds, in another row goes to the next one, in an
+// empty last one keeps them; not while an input method composes (isComposing, or keyCode 229, which WebKit sends
+// for the key that ends a conversion).
 const AL = ALIAS;
 let aliasToken = 0;
-// draft: the rows; focusAt: the row to focus (the empty one when null); carry: the empty row of the editor drawn before,
-// which keeps the focus while this one is drawn: what is typed there meanwhile goes into the new empty row
+// draft: the rows; focusAt: the row to focus (the empty one when null); carry: the empty row of the editor drawn
+// before, which keeps the focus while this one is drawn: what is typed there meanwhile goes into the new empty
+// row
 async function openAliases(draft = customAliases(), focusAt = null, key = variantKey, carry = null) {
   const my = ++aliasToken;
   await Loading.wait(frameReady(), { immediate: true, cap: null });
@@ -3431,8 +3454,9 @@ function detailsInfo() {
 function detailsBody({ fields, rows }) {
   const W = popupContent(DT.w, DT.h).w,
     kids = [];
-  // summary: captions, then values that wrap (paths), never cut; on the game's light stats box, as wide as the file table under
-  // it. A mod's value leaves room at the right for its edit icon, and its original name stands under it.
+  // summary: captions, then values that wrap (paths), never cut; on the game's light stats box, as wide as the
+  // file table under it. A mod's value leaves room at the right for its edit icon, and its original name stands
+  // under it.
   const TOP = SPACE.s;
   // The light stats box retains STATS_BOX's own geometry and typography (stats-box.js).
   const box = statsBox({
@@ -4190,7 +4214,14 @@ const filesSig = (v, kind) =>
   );
 const quiet = () => !fullscreen && !Visual.isOpen() && !popupOpen() && !changing() && !Loading.covering();
 
-// filesChanged({cores} | null): resolves after queued changes have refreshed and drawn, or the screen is left
+/**
+ * Take a change of the game files made elsewhere (the Enable Mods switch, the tray, a queued write, the classic
+ * UI closing) into the screen. The family is read again and the left side reloads the way an applied portrait
+ * or lobby does.
+ * @param {{cores: string[]}|null} [change] The cores that changed; null: anything may have changed.
+ * @returns {Promise<void>|undefined} Settles after queued changes have refreshed and drawn, or the screen is
+ *     left; undefined when the screen is not open.
+ */
 export function filesChanged(change = null) {
   if (!open || !fam) return;
   if (change) {
@@ -4278,8 +4309,11 @@ async function ensureLayouts() {
   };
 }
 
-// the voice volume and mute (development runs started with --mute stay silent), the zoom-out limit and the
-// post-processing from the settings
+/**
+ * Apply the settings the lobby and the voices take: the voice volume and mute (development runs started with
+ * --mute stay silent), the zoom-out limit and the post-processing.
+ * @param {object|undefined} prefs The settings as read.
+ */
 export function applyPrefs(prefs) {
   Lobby.setVolume((prefs?.voiceVolume ?? 80) / 100, ctx?.info?.mute || prefs?.voiceMuted);
   Lobby.setZoomLimit(prefs?.lobbyZoom);
@@ -4289,8 +4323,11 @@ export function applyPrefs(prefs) {
   Lobby.setTrace(ctx?.info?.debug ? (events) => rpc("debug.trace", { events }).catch(() => {}) : null);
 }
 
-// Locale updates redraw controls around the retained scene. Do not call show,
-// renderLeft or begin here: they reset expressions, playback or capture scopes.
+/**
+ * Redraw the screen's controls after a locale change, around the retained scene. It does not call show,
+ * renderLeft or begin: they reset expressions, playback and capture scopes.
+ * @returns {Promise<void>} Settles when the controls are redrawn.
+ */
 export async function relabel() {
   if (!open || !fam || !layouts) return;
   const work = [renderScreen(), renderChips(), renderExpressions()];
@@ -4312,12 +4349,11 @@ export async function relabel() {
   await Promise.all(work);
 }
 
-// --- the previous and next student from the keyboard: the PC client's keys for the arrows (step-keys.js) ---
-// A key steps exactly like its arrow (ctx.step: the roster's cards in its order), one step at a time: the next one
-// waits until the screen shows the student the last one went to (arrived), so a held key goes at the pace the screen
-// follows and starts no load it would drop. The keys are the screen's own: not while a text field or an input method
-// has them, under a popup (the screen's, the settings, the consent or update dialog), in a fullscreen view (the lobby,
-// the 3D model, the portrait's visual mode), during a job or another change of the screen, or behind the loading screen.
+// --- the previous and next student from the keyboard: the PC client's keys for the arrows (step-keys.js) --- A
+// key steps exactly like its arrow (ctx.step: the roster's cards in its order), one step at a time: the next one
+// waits until the screen shows the student the last one went to (arrived), so a held key goes at the pace the
+// screen follows. The keys are the screen's own: not while a text field or an input method has them, under a
+// popup, in a fullscreen view, during a job or another change of the screen, or behind the loading screen.
 const blocked = () =>
   !open ||
   !fam ||
@@ -4395,9 +4431,18 @@ addEventListener("keyup", (ev) => {
 });
 addEventListener("blur", () => keySteps.release());
 
-// show(context, familyData, variantKey, {inPlace}): open the detail screen on a variant; resolves once the screen is
-// ready (the panels, primary preview and decoded UI images). In place (another
-// variant or family while the screen is shown), the shown screen stays until then and every part swaps in one frame.
+/**
+ * Open the detail screen on a variant. In place (another variant or family while the screen is shown), the
+ * shown screen stays until the new one is ready and every part swaps in one frame.
+ * @param {object} context The shared screen context.
+ * @param {object} familyData The family, as family.get gives it.
+ * @param {string} key The variant's key.
+ * @param {object} [options] Options.
+ * @param {boolean} [options.inPlace] Swap the parts in place of the shown screen.
+ * @param {string|null} [options.kind] The tab to open on: "spr", "lobby" or "model".
+ * @returns {Promise<void>} Settles once the screen is ready (the panels, primary preview and decoded UI
+ *     images).
+ */
 export async function show(context, familyData, key, { inPlace = false, kind = null } = {}) {
   Photo.destroy();
   Camera.close(false);
@@ -4481,16 +4526,23 @@ export async function show(context, familyData, key, { inPlace = false, kind = n
   if (open && hasLobby(variant())) rpc("lobby.warm").catch(() => {});
 }
 
-// a route to a student failed (main.js): a key step waiting for that screen goes on at once
+/**
+ * Tell the screen a route to a student failed: a key step waiting for that screen goes on at once.
+ */
 export function stepFailed() {
   arrived();
 }
 
-// The variant actually shown, including the fallback for a family-only or unavailable-variant route.
+/**
+ * The variant actually shown, including the fallback for a family-only or unavailable-variant route.
+ * @returns {string|null} The variant's key, or null when the screen is not shown.
+ */
 export const currentVariant = () => ((open || suspended) && fam ? variant().key : null);
 
-// Release page work before a destination waits on library locks, retaining the
-// complete current frame until that destination can replace it.
+/**
+ * Release page work before a destination waits on library locks, keeping the complete current frame until that
+ * destination can replace it.
+ */
 export function suspend() {
   Photo.destroy();
   Camera.close(false);
@@ -4508,7 +4560,9 @@ export function suspend() {
   spineToken += 1;
 }
 
-// leaving the screen: stop the players, drop any change being prepared
+/**
+ * Leave the screen: stop the players and drop any change being prepared.
+ */
 export function hide() {
   Photo.destroy();
   Camera.close(false);
