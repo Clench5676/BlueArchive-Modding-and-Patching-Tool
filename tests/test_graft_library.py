@@ -6,10 +6,10 @@ from __future__ import annotations
 import pytest
 from PIL import Image
 
-from bmpt import atlas_remap as remap
-from bmpt.errors import ServiceError
+from bmpt.spine import atlas_remap as remap
+from bmpt.core.errors import ServiceError
 from bmpt.library.integrity import inspect as inspect_bundle
-from bmpt.spine_binary import Skeleton
+from bmpt.spine.binary import Skeleton
 
 from graft_rigs import region, skeleton
 from test_atlas_remap import _official_name, write_bundle

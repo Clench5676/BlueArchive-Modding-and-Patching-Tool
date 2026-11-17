@@ -1,9 +1,9 @@
-// Tests for web/js/visual-view.js (the portrait's visual mode framing and its prefab's numbers), run by
+// Tests for web/js/detail/visual-view.js (the portrait's visual mode framing and its prefab's numbers), run by
 // tests/test_visual_mode.py with Node's test runner: node --test tests/js/visual_view.test.mjs
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { SKELETON_SCALE, stagePoint } from "../../src/bmpt/web/js/portrait-view.js";
+import { SKELETON_SCALE, stagePoint } from "../../src/bmpt/web/js/detail/portrait-view.js";
 import {
   FULL_SCALE,
   SCREEN,
@@ -24,7 +24,7 @@ import {
   viewOf,
   viewport,
   zoomAt,
-} from "../../src/bmpt/web/js/visual-view.js";
+} from "../../src/bmpt/web/js/detail/visual-view.js";
 
 const S = 1920 / 2960; // stage px per prefab unit (util.js)
 const BOX = { left: 0, top: 0, width: STAGE.width, height: STAGE.height };

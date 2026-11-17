@@ -1,5 +1,5 @@
-"""The lobby's linear-light drawing (web/js/linear.js) is front-end code: its tests run with Node's test runner against
-a recording stand-in for WebGL2, skipped where Node is not installed."""
+"""The lobby's linear-light drawing (web/js/core/linear.js) is front-end code: its tests run with Node's test runner
+against a recording stand-in for WebGL2, skipped where Node is not installed."""
 
 import shutil
 import subprocess

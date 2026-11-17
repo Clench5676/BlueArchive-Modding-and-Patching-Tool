@@ -7,12 +7,13 @@ import json
 
 import pytest
 
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.library import service
 from ba_modding_toolkit.models import FilePair
 from bmpt.library.rebuild import RebuildResult
 
 from test_library import game_bundle, header_bundle, make_mod, reload_library, setup_library
+from module_patches import patch_everywhere
 
 
 def journals(env):
@@ -45,7 +46,7 @@ def two_part_mod(setup_library, monkeypatch):
         result.write_bytes(header_bundle(b"rebuilt " + current[0].name.encode()[-20:]))
         return RebuildResult(True, "updated", [FilePair(result, current[0])])
 
-    monkeypatch.setattr(service, "rebuild", rebuild)
+    patch_everywhere(monkeypatch, [service], "rebuild", rebuild)
     env.entry, env.directory, env.old = entry, directory, old
     env.record = raw_record(env, entry.id)
     return env
@@ -90,8 +91,8 @@ def test_an_interrupted_update_leaves_the_old_mod_whole_or_finishes_after_its_co
         return result
 
     with monkeypatch.context() as patch:
-        patch.setattr(service, "atomic_copy", copying)
-        patch.setattr(service, "atomic_json", writing)
+        patch_everywhere(patch, [service], "atomic_copy", copying)
+        patch_everywhere(patch, [service], "atomic_json", writing)
         with pytest.raises(SystemExit):
             env.library.update(env.entry.id)
     (journal,) = journals(env)
@@ -126,7 +127,7 @@ def test_a_failed_replace_rolls_back_in_process(two_part_mod, monkeypatch):
             raise OSError(errno.ENOSPC, "Synthetic disk full", str(target))
 
     with monkeypatch.context() as patch:
-        patch.setattr(service, "atomic_copy", full)
+        patch_everywhere(patch, [service], "atomic_copy", full)
         with pytest.raises(ServiceError, match="library_io_error"):
             env.library.update(env.entry.id)
     assert_old_mod_whole(env)
@@ -149,7 +150,7 @@ def test_a_split_update_interrupted_after_a_new_part_removes_it(setup_library, m
         result.write_bytes(header_bundle(b"split " + current[0].name.encode()[-12:]))
         return RebuildResult(True, "updated", [FilePair(result, current[0])])
 
-    monkeypatch.setattr(service, "rebuild", rebuild)
+    patch_everywhere(monkeypatch, [service], "rebuild", rebuild)
     copy = service.atomic_copy
 
     def copying(source, target):
@@ -159,7 +160,7 @@ def test_a_split_update_interrupted_after_a_new_part_removes_it(setup_library, m
         return result
 
     with monkeypatch.context() as patch:
-        patch.setattr(service, "atomic_copy", copying)
+        patch_everywhere(patch, [service], "atomic_copy", copying)
         with pytest.raises(SystemExit):
             env.library.update(entry.id)
     assert len(list(entry.file.parent.glob("*.bundle"))) == 2
@@ -179,7 +180,7 @@ def test_only_the_newest_previous_copy_is_kept(two_part_mod, monkeypatch):
         result.write_bytes(header_bundle(b"again " + current[0].name.encode()[-20:]))
         return RebuildResult(True, "updated", [FilePair(result, current[0])])
 
-    monkeypatch.setattr(service, "rebuild", again)
+    patch_everywhere(monkeypatch, [service], "rebuild", again)
     second = env.library.update(env.entry.id)
     folders = list((env.directory / "previous").iterdir())
     assert folders == [second.previous[0].parent]
@@ -197,7 +198,7 @@ def test_the_update_publishes_under_the_mod_writer_and_refuses_changed_files(two
         return write(path, data)
 
     with monkeypatch.context() as patch:
-        patch.setattr(service, "atomic_json", writing)
+        patch_everywhere(patch, [service], "atomic_json", writing)
         env.library.update(env.entry.id)
     assert seen and all(seen)
     current = {path.name: path.read_bytes() for path in env.directory.glob("*.bundle")}
@@ -207,7 +208,7 @@ def test_the_update_publishes_under_the_mod_writer_and_refuses_changed_files(two
         sources[0].write_bytes(header_bundle(b"changed meanwhile"))
         return rebuild(sources, targets, output, *args, **kwargs)
 
-    monkeypatch.setattr(service, "rebuild", lambda *args, **kwargs: changing(*args, **kwargs))
+    patch_everywhere(monkeypatch, [service], "rebuild", lambda *args, **kwargs: changing(*args, **kwargs))
     with pytest.raises(ServiceError, match="entry_changed"):
         env.library.update(env.entry.id)
     assert not journals(env)

@@ -1,4 +1,4 @@
-// Tests for web/js/switch-sources.js (what the detail screen's switch cards offer and what the game shows), run by
+// Tests for web/js/mods/switch-sources.js (what the detail screen's switch cards offer and what the game shows), run by
 // tests/test_switch_sources.py with Node's test runner: node --test tests/js/switch_sources.test.mjs
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -31,7 +31,7 @@ import {
   showOthers,
   sourceOf,
   switchKindOf,
-} from "../../src/bmpt/web/js/switch-sources.js";
+} from "../../src/bmpt/web/js/mods/switch-sources.js";
 
 const part = (kind, applied, extra = {}) => ({
   file: `/game/${kind}-${applied}.bundle`,
@@ -628,7 +628,7 @@ test("every other student's model is listed without the 64 cap, in the same orde
 });
 
 test("Show other students is off at every start and is kept only in memory", async () => {
-  const fresh = await import("../../src/bmpt/web/js/switch-sources.js?fresh-start");
+  const fresh = await import("../../src/bmpt/web/js/mods/switch-sources.js?fresh-start");
   assert.equal(showOthers(), false, "off by default");
   assert.equal(fresh.showOthers(), false);
   setShowOthers(1);
@@ -637,7 +637,7 @@ test("Show other students is off at every start and is kept only in memory", asy
   setShowOthers(false);
   assert.equal(showOthers(), false);
   // nothing writes it down: no storage, no settings, no library call mentions it
-  for (const file of ["switch-sources.js", "detail.js"]) {
+  for (const file of ["mods/switch-sources.js", "detail/detail.js"]) {
     const lines = readFileSync(new URL(`../../src/bmpt/web/js/${file}`, import.meta.url), "utf8").split("\n");
     for (const line of lines.filter((l) => /showOthers|ShowOthers/.test(l)))
       assert.ok(!/localStorage|sessionStorage|settings|rpc\(|fetch\(/.test(line), `${file}: ${line}`);
@@ -692,7 +692,7 @@ test("past-limit verdicts allow Apply for every pair while hard refusals stay bl
 });
 
 test("split model slots offer dependency mods and judge every slot part", async () => {
-  const { selectionStatus, candidateStatus } = await import("../../src/bmpt/web/js/switch-sources.js");
+  const { selectionStatus, candidateStatus } = await import("../../src/bmpt/web/js/mods/switch-sources.js");
   const dependency = { id: "dependency", kind: "model", core: "ch0258", target: "ch0258" };
   const v = {
     key: "ch0258",
@@ -757,7 +757,7 @@ test("split model slots offer dependency mods and judge every slot part", async 
 
 test("Applied follows game intent independently of physical writes and preview selection", async () => {
   const { selectionStatus, candidateStatus, detailStatus, selectionError, importStatus } = await import(
-    "../../src/bmpt/web/js/switch-sources.js"
+    "../../src/bmpt/web/js/mods/switch-sources.js"
   );
   for (const kind of ["spr", "lobby", "model"]) {
     const v = {
@@ -792,7 +792,7 @@ test("Applied follows game intent independently of physical writes and preview s
 });
 
 test("saved previews and game intent remain independent for every asset kind", async () => {
-  const { intendedKey, isApplied, selectionStatus } = await import("../../src/bmpt/web/js/switch-sources.js");
+  const { intendedKey, isApplied, selectionStatus } = await import("../../src/bmpt/web/js/mods/switch-sources.js");
   for (const kind of ["spr", "lobby", "model"]) {
     const v = { key: "a", configured: { [kind]: "mod:game" }, previewSources: { [kind]: "mod:preview" } };
     for (const enabled of [false, true]) {

@@ -6,8 +6,8 @@ import { compact, flat } from "./helpers/source-text.mjs";
 import { test } from "node:test";
 import { otherMode, actionCaption, choiceLayout } from "../../src/bmpt/web/js/photography/camera.js";
 
-import { CONTROL, XS_BUTTON, SPACE, FULLSCREEN_BUTTON } from "../../src/bmpt/web/js/ui-tokens.js";
-import { row } from "../../src/bmpt/web/js/ui-grid.js";
+import { CONTROL, XS_BUTTON, SPACE, FULLSCREEN_BUTTON } from "../../src/bmpt/web/js/ui/ui-tokens.js";
+import { row } from "../../src/bmpt/web/js/ui/ui-grid.js";
 const web = new URL("../../src/bmpt/web/js/", import.meta.url);
 const controller = readFileSync(new URL("photography/controller.js", web), "utf8");
 const dense = compact(controller);
@@ -249,7 +249,7 @@ globalThis.document = {
   documentElement: { lang: "en-US", appendChild() {} },
 };
 globalThis.getComputedStyle = () => ({ getPropertyValue: () => "" });
-const NGUI = await import("../../src/bmpt/web/js/ngui.js");
+const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
 const S = 1920 / 2960;
 for (const locale of LOCALES)
   test(`every dialogue caption fits the action button in ${locale}`, () => {

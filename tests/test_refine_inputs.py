@@ -12,9 +12,9 @@ import numpy as np
 from PIL import Image, ImageDraw
 import pytest
 
-from bmpt.refine_composite import compose
-from bmpt.refine_cut import Pose
-from bmpt.refine_inputs import (
+from bmpt.refine.composite import compose
+from bmpt.refine.cut import Pose
+from bmpt.refine.inputs import (
     InputParameters,
     InputGateError,
     choose_key,
@@ -265,7 +265,7 @@ def test_key_quality_gate_rejects_destructive_alpha_snapping(tmp_path):
 
 def test_real_synthetic_bundle_chain_packs_every_page_and_preserves_metadata(tmp_path):
     from test_atlas_remap import atlas_text, write_bundle
-    from bmpt.atlas_remap import read_inputs
+    from bmpt.spine.atlas_remap import read_inputs
 
     plan, folder, _, pages = make_plan(tmp_path)
     text = atlas_text(
@@ -371,7 +371,7 @@ def test_manifest_plan_and_finish_commands(tmp_path, capsys):
 def test_official_cycling_input_identity(tmp_path):
     if not os.environ.get("BAMT_TEST_GAME_DIR"):
         pytest.skip("Set BAMT_TEST_GAME_DIR to a verified official development view")
-    from bmpt.atlas_remap import read_inputs, texture_key
+    from bmpt.spine.atlas_remap import read_inputs, texture_key
     from ba_modding_toolkit.searching import get_search_dirs
 
     name = "shiroko_ridingsuit_spr"

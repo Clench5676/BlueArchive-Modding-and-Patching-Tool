@@ -10,8 +10,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from bmpt import game_paths
-from bmpt.errors import ServiceError
+from bmpt.host import game_paths
+from bmpt.core.errors import ServiceError
 from bmpt.library import safety
 from bmpt.webui.gamewatch import FAST_SECONDS, SLOW_SECONDS, GameWatch, WatchState
 

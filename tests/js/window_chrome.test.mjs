@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFileSync } from "node:fs";
-import * as geometry from "../../src/bmpt/web/js/window-layout.js";
+import * as geometry from "../../src/bmpt/web/js/window/window-layout.js";
 class Classes extends Set {
   contains(name) {
     return this.has(name);
@@ -243,7 +243,7 @@ globalThis.chromeFixture = {
   },
 };
 const lockedRows = new Set();
-let source = readFileSync(new URL("../../src/bmpt/web/js/window-chrome.js", import.meta.url), "utf8").replace(
+let source = readFileSync(new URL("../../src/bmpt/web/js/window/window-chrome.js", import.meta.url), "utf8").replace(
   /^import [^;]*;$/gm,
   "",
 );

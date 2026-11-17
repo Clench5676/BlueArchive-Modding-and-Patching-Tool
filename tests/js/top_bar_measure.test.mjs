@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFileSync } from "node:fs";
-import { naturalTextWidth } from "../../src/bmpt/web/js/top-bar-measure.js";
+import { naturalTextWidth } from "../../src/bmpt/web/js/window/top-bar-measure.js";
 
 test("caption measurement retains shaping and trailing spacing outside the compact row", () => {
   for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {

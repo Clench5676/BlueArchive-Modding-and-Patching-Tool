@@ -6,7 +6,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 import pytest
 
-from bmpt.refine_stitch import (
+from bmpt.refine.stitch import (
     minimum_seam,
     seam_mask,
     stitch,
@@ -16,8 +16,8 @@ from bmpt.refine_stitch import (
     fringe_gate,
     nearest_inside,
 )
-from bmpt.refine_inputs import InputParameters, key_image, flatten, crop_boxes, prompt
-from bmpt.refine_cut import join_band_gate
+from bmpt.refine.inputs import InputParameters, key_image, flatten, crop_boxes, prompt
+from bmpt.refine.cut import join_band_gate
 
 
 def drawing():
@@ -183,7 +183,7 @@ def test_prompt_v2_keeps_v1_and_forbids_wording_at_fill_time():
 
 
 def test_outline_matte_preserves_neutral_interior_and_softens_only_outer_band():
-    from bmpt.refine_stitch import frame_background
+    from bmpt.refine.stitch import frame_background
 
     official = Image.new("RGBA", (128, 128))
     ImageDraw.Draw(official).rectangle((16, 16, 111, 111), fill=(180, 180, 180, 255))
@@ -210,7 +210,7 @@ def test_outline_matte_preserves_neutral_interior_and_softens_only_outer_band():
 
 
 def test_frame_background_uses_connectivity_not_neutral_colour():
-    from bmpt.refine_stitch import frame_background
+    from bmpt.refine.stitch import frame_background
 
     mask = np.ones((20, 20), bool)
     mask[3:17, 3:17] = False
@@ -222,7 +222,7 @@ def test_frame_background_uses_connectivity_not_neutral_colour():
 
 
 def test_rigid_subpixel_estimator_corrects_shift_and_retains_identity():
-    from bmpt.refine_stitch import estimate_translation, translate_rgb
+    from bmpt.refine.stitch import estimate_translation, translate_rgb
 
     a = np.asarray(drawing())[..., :3].astype(np.float32)
     assert np.array_equal(translate_rgb(a, (0, 0)), a)
@@ -235,7 +235,7 @@ def test_rigid_subpixel_estimator_corrects_shift_and_retains_identity():
 
 
 def test_nearest_colour_accepts_existing_dark_ink_rejects_green_outlier():
-    from bmpt.refine_stitch import nearest_colour
+    from bmpt.refine.stitch import nearest_colour
 
     rgb = np.full((24, 24, 3), 220, np.float32)
     rgb[10, 10] = (30, 30, 30)
@@ -292,7 +292,7 @@ def test_complement_gate_accepts_palette_interpolation_rejects_new_green():
 
 @pytest.mark.parametrize("coverage", [1.0, 0.75])
 def test_key_chroma_despill_includes_opaque_edges_without_changing_interior(coverage):
-    from bmpt.refine_stitch import despill_key_band
+    from bmpt.refine.stitch import despill_key_band
 
     rgb = np.zeros((96, 96, 3), np.float32)
     rgb[16:80, 16:80] = (0.25, 0.25, 0.4)
@@ -314,7 +314,7 @@ def test_key_chroma_despill_includes_opaque_edges_without_changing_interior(cove
 
 
 def test_key_chroma_despill_uses_the_crop_own_interior_palette():
-    from bmpt.refine_stitch import despill_key_band
+    from bmpt.refine.stitch import despill_key_band
 
     results = []
     for paint in ((0.2, 0.2, 0.35), (0.4, 0.2, 0.45)):
@@ -331,7 +331,7 @@ def test_key_chroma_despill_uses_the_crop_own_interior_palette():
 
 
 def test_key_direction_gate_rejects_opaque_magenta_rim_accepts_interior_paint():
-    from bmpt.refine_stitch import key_fringe_gate
+    from bmpt.refine.stitch import key_fringe_gate
 
     a = np.zeros((128, 128, 4), np.uint8)
     a[..., :3] = (100, 100, 130)

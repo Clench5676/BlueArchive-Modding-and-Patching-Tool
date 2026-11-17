@@ -1,12 +1,12 @@
-// The hover hint (web/js/hover-hint.js): the game's description tooltip box (UIDescriptionTooltip/Default) above a
+// The hover hint (web/js/ui/hover-hint.js): the game's description tooltip box (UIDescriptionTooltip/Default) above a
 // control, in every shipped language. The prefab's numbers are the Global client's (tooltip bundle of 2026-04-06).
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { LOCALES, installFitPage, text } from "./helpers/fit_canvas.mjs";
 
 installFitPage();
-const { S } = await import("../../src/bmpt/web/js/util.js");
-const { BOX_INSET, hintHost, hintLayout, hintStyle, hintTree } = await import("../../src/bmpt/web/js/hover-hint.js");
+const { S } = await import("../../src/bmpt/web/js/core/util.js");
+const { BOX_INSET, hintHost, hintLayout, hintStyle, hintTree } = await import("../../src/bmpt/web/js/ui/hover-hint.js");
 
 const sprite = (name, w, h, extra = {}) => ({
   cls: "UISprite",

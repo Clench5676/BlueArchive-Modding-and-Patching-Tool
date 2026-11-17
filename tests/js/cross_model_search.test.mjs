@@ -1,19 +1,26 @@
 // Exercise detail.js's search and check queue without starting the app or its renderers.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { statementEnd } from "./helpers/source-text.mjs";
+import { DETAIL_MODULES, POPUP_MODULES, statementEnd } from "./helpers/source-text.mjs";
 import { test } from "node:test";
 import vm from "node:vm";
-import * as Sources from "../../src/bmpt/web/js/switch-sources.js";
+import * as Sources from "../../src/bmpt/web/js/mods/switch-sources.js";
 import { LOCALES, installFitPage } from "./helpers/fit_canvas.mjs";
 
 installFitPage();
-const { pickerItems } = await import("../../src/bmpt/web/js/roster-widgets.js");
-const source = readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8");
+const { pickerItems } = await import("../../src/bmpt/web/js/roster/roster-widgets.js");
+// the detail screen's modules read as one, their exports as plain declarations
+const source = DETAIL_MODULES.map((file) =>
+  readFileSync(new URL(`../../src/bmpt/web/js/detail/${file}`, import.meta.url), "utf8"),
+)
+  .join("\n")
+  .replace(/^export /gm, "");
 const functionSource = (name) => {
   const at = source.indexOf(`function ${name}(`);
   return source.slice(source.lastIndexOf("\n", at) + 1, source.indexOf("\n}\n", at) + 2);
 };
+// detail.js's setters of the state the code run here writes, defined in each context
+const setters = ["setPending", "setCrossShown", "setStartLoose"].map((name) => functionSource(name)).join("\n");
 const flush = async () => {
   for (let i = 0; i < 100; i++) await Promise.resolve();
 };
@@ -69,7 +76,7 @@ for (const locale of LOCALES)
       runOptimize: (c) => optimized.push(c.key),
       costumeChecking: () => false,
     });
-    vm.runInContext(functionSource("drawPopup"), ctx);
+    vm.runInContext(setters + functionSource("drawPopup"), ctx);
     await ctx.drawPopup();
     const item = (key) => popup.items.find((it) => it.key === `v:${key}`);
     const actions = (key) =>
@@ -149,7 +156,7 @@ for (const locale of LOCALES)
       costumeChecking: (_v, kind, key) => kind === "model" && checking.has(key),
       GREYED_BADGE: () => ({}),
     });
-    vm.runInContext(functionSource("drawPopup"), ctx);
+    vm.runInContext(setters + functionSource("drawPopup"), ctx);
     await ctx.drawPopup();
     const actions = (key) =>
       popup
@@ -240,7 +247,7 @@ for (const locale of LOCALES)
       runOptimize: () => null,
       costumeChecking: () => false,
     });
-    vm.runInContext(functionSource("drawPopup"), ctx);
+    vm.runInContext(setters + functionSource("drawPopup"), ctx);
     await ctx.drawPopup();
     const item = (key) => popup.items.find((it) => it.key === `v:${key}`);
     const applyHint = (key) => popup.details(item(key)).actions.find(([label]) => label === ui.popup.apply)[4];
@@ -776,8 +783,10 @@ test("in-view cards are read in calls of at most 64 keys, then checked one pair 
 
 test("another student's card is drawn like any card: no grey filter anywhere in the switch or the list", () => {
   const read = (name) => readFileSync(new URL(`../../src/bmpt/web/js/${name}`, import.meta.url), "utf8");
-  assert.ok(!/shade:\s*true|\bSHADE\b|\.shade\b/.test(read("detail.js")), "detail.js");
-  assert.ok(!/shade:\s*true|\bSHADE\b|\.shade\b/.test(read("popup.js")), "popup.js");
+  for (const file of DETAIL_MODULES)
+    assert.ok(!/shade:\s*true|\bSHADE\b|\.shade\b/.test(read(`detail/${file}`)), `detail/${file}`);
+  for (const file of POPUP_MODULES)
+    assert.ok(!/shade:\s*true|\bSHADE\b|\.shade\b/.test(read(`ui/${file}`)), `ui/${file}`);
 });
 
 // --- Optimize Physics answers: the official model needs none; a costume no physics rule improves has no gain ---
@@ -809,7 +818,7 @@ async function optimizeAnswer(result, locale = "en-US") {
   });
   const start = source.indexOf("const optimizeSource ="),
     end = statementEnd(source, start);
-  vm.runInContext(`${source.slice(start, end)}\n${functionSource("runOptimize")}`, ctx);
+  vm.runInContext(`${setters}\n${source.slice(start, end)}\n${functionSource("runOptimize")}`, ctx);
   await ctx.runOptimize({ kind: "variant", variant: { key: "costume" }, key: "v:costume" });
   return { messages, pending: ctx.pending, web };
 }

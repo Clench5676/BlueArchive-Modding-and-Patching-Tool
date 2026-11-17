@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import vm from "node:vm";
-import { isIdentity, jobProgress, modJob } from "../../src/bmpt/web/js/job-progress.js";
-import { setStrings } from "../../src/bmpt/web/js/i18n.js";
+import { isIdentity, jobProgress, modJob } from "../../src/bmpt/web/js/core/job-progress.js";
+import { setStrings } from "../../src/bmpt/web/js/core/i18n.js";
 
 const context = vm.createContext({
   console,
@@ -23,7 +23,7 @@ vm.runInContext(
   context,
 );
 globalThis.spine = context.spine;
-const source = readFileSync(new URL("../../src/bmpt/web/js/mod-compatibility.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../src/bmpt/web/js/mods/mod-compatibility.js", import.meta.url), "utf8");
 const fixture = JSON.parse(
   readFileSync(new URL("../assets/integrity/mismatched_skeleton.json", import.meta.url), "utf8"),
 );

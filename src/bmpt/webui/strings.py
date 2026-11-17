@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from bmpt.engine import fallback_language
-from ..localization import LOCALES
+from ..core.localization import LOCALES
 
 
 def get_locale_dir() -> Path:

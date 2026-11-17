@@ -26,7 +26,8 @@
       <section class="screen" id="screen-detail" hidden>
         <div class="scene-clip">
           <div class="layer-host" id="ngui-bg"></div>
-          <!-- the portrait's visual mode (js/visual-mode.js): its background under the portrait, its buttons over all -->
+          <!-- the portrait's visual mode (js/detail/visual-mode.js): its background under the portrait, its buttons
+               over all -->
           <div class="visual-bg" id="visual-bg" hidden></div>
           <div class="portrait" id="portrait"></div>
           <div class="model" id="model" hidden></div>
@@ -54,7 +55,7 @@
 
       <header class="topbar">
         <button class="back" aria-label="back"><i class="icon-back"></i></button>
-        <!-- the Enable Mods switch, its label and its square "?" (js/mod-switch.js); not on the no-game screen -->
+        <!-- the Enable Mods switch, its label and its square "?" (js/mods/mod-switch.js); not on the no-game screen -->
         <div class="mod-switch" id="mod-switch" hidden></div>
         <!-- the game's top bar Option and Home controls -->
         <i class="top-line"></i>
@@ -69,7 +70,7 @@
         </footer>
       </div>
 
-      <!-- the loading screen (js/loading.js); the page starts covered, so nothing shows while it is built -->
+      <!-- the loading screen (js/app/loading.js); the page starts covered, so nothing shows while it is built -->
       <div class="loading full on neutral" id="loading-boot" role="status">
         <div class="loading-back"></div>
         <div class="loading-ind" aria-hidden="true"><div class="loading-plain"><span></span></div></div>
@@ -79,17 +80,18 @@
       <div class="consent-host settings-host" id="settings" hidden></div>
       <!-- the student list's display settings (filter and sort) -->
       <div class="consent-host settings-host" id="display" hidden></div>
-      <!-- the shared popups on the stage (js/popup.js), over the settings: list prompts, and message popups over them -->
+      <!-- the shared popups on the stage (js/ui/popup.js), over the settings: list prompts, and message popups over
+           them -->
       <div class="popup-host stage-host" id="prompt" hidden></div>
       <div class="popup-host stage-host" id="dialog" hidden></div>
     </div>
   </div>
 
-  <!-- three.js for the 3D model tab (js/model.js, loaded with the first model) -->
+  <!-- three.js for the 3D model tab (js/model/model.js, loaded with the first model) -->
   <script type="importmap">
     { "imports": { "three": "./vendor/three-0.160.0/build/three.module.min.js",
                    "three/addons/": "./vendor/three-0.160.0/examples/jsm/" } }
   </script>
-  <script type="module" src="js/main.js"></script>
+  <script type="module" src="js/app/main.js"></script>
 </body>
 </html>

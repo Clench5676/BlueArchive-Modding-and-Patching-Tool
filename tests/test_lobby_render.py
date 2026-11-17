@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from bmpt.gameassets import meshfx, particles, pins, spine_materials
-from bmpt.gameassets.model import DecodedClip
+from bmpt.gameassets.model_glb import DecodedClip
 
 GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-game")
 NODE = shutil.which("node")

@@ -5,7 +5,7 @@ import logging
 import pytest
 
 from ba_modding_toolkit.bundle import Bundle
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.library import integrity, pointers
 from bmpt.library.integrity import inspect as inspect_bundle
 from test_batch_direct import rename_crc, restore_metadata

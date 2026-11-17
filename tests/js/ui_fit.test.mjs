@@ -1,5 +1,5 @@
 // Text fit of the Batch Import header and name plate, the option rows, the roster's cards and the Show in
-// Explorer button, in every shipped language: the real locale strings through the fit logic of web/js/ngui.js
+// Explorer button, in every shipped language: the real locale strings through the fit logic of web/js/ui/ngui.js
 // against the prefabs' numbers (a stand-in canvas, see helpers/fit_canvas.mjs: what is asserted is the logic,
 // not a font).
 import assert from "node:assert/strict";
@@ -9,9 +9,9 @@ import { LOCALES, installFitPage, text } from "./helpers/fit_canvas.mjs";
 import { makeImportLayouts } from "./import_prefabs.mjs";
 
 const page = installFitPage();
-const NGUI = await import("../../src/bmpt/web/js/ngui.js");
-const { importArtwork } = await import("../../src/bmpt/web/js/import-layout.js");
-const { S } = await import("../../src/bmpt/web/js/util.js");
+const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
+const { importArtwork } = await import("../../src/bmpt/web/js/mods/import-layout.js");
+const { S } = await import("../../src/bmpt/web/js/core/util.js");
 
 const { find, fontSizeFor, glyphWidth, LINE_PITCH } = NGUI;
 const lines = (value) => String(value).split("\n");
@@ -179,7 +179,7 @@ test("a name with no word break to wrap at is not cut off by the plate", () => {
 });
 
 // --- options side by side share one size (settings-rows.js radioRow: Language, Match Strategy, Spine ...) ---
-const { radioRow } = await import("../../src/bmpt/web/js/settings-rows.js");
+const { radioRow } = await import("../../src/bmpt/web/js/settings/settings-rows.js");
 // the language picker's order (i18n.py UI_LANGUAGES), each option named in its own language
 const LANGUAGES = ["zh-CN", "zh-TW", "en-US", "ja-JP", "ko-KR", "th-TH"];
 // the labels a radio row draws, in order: [widget, node]
@@ -339,8 +339,8 @@ const namesOf = (locale) =>
 const separator = (locale) => (/^(zh|ja)/.test(locale) ? "、" : ", ");
 
 // the Show in Finder / Explorer button: Btn_Up's body is 200 x 180 (inclined), its caption 32 down to 26 in 140
-const { explorerLayout, BODY, ICON, CAPTION } = await import("../../src/bmpt/web/js/explorer-button.js");
-const { TAN10 } = await import("../../src/bmpt/web/js/util.js");
+const { explorerLayout, BODY, ICON, CAPTION } = await import("../../src/bmpt/web/js/ui/explorer-button.js");
+const { TAN10 } = await import("../../src/bmpt/web/js/core/util.js");
 for (const locale of LOCALES)
   test(`the Show in Finder / Explorer caption wraps onto up to three lines inside the button at 26 or more in ${locale}`, () => {
     page.lang = locale;
@@ -413,10 +413,10 @@ test("a Japanese word wider than the button breaks between characters rather tha
   assert.deepEqual(NGUI.fitGroup([], 32, 26, 140, 3), []);
 });
 
-// the prompt cards' labels (prompts.js card, popup.js listCard: 34 down to 24, two lines, 250 - 56 wide)
-const { markedLabel } = await import("../../src/bmpt/web/js/util.js");
+// the prompt cards' labels (prompts.js card, popup-list.js listCard: 34 down to 24, two lines, 250 - 56 wide)
+const { markedLabel } = await import("../../src/bmpt/web/js/core/util.js");
 test("the prompt cards draw the pieces this test measures", () => {
-  const popup = readFileSync(new URL("../../src/bmpt/web/js/popup.js", import.meta.url), "utf8");
+  const popup = readFileSync(new URL("../../src/bmpt/web/js/ui/popup-list.js", import.meta.url), "utf8");
   assert.match(
     flat(popup),
     /LIST_CARD_NAME = Object\.freeze\(\{ fs: 34, fsMin: 24, lines: 2, padY: 22, pitch: 1\.2 \}\)/,
@@ -426,7 +426,7 @@ test("the prompt cards draw the pieces this test measures", () => {
     /markedLabel\(it\.label, \{ fs: LIST_CARD_NAME.fs, fsMin: LIST_CARD_NAME.fsMin, color: "#ffffff\/1\.00", maxW: w - 56 - \(it\.nameEdit \? 60 : 0\), mark: false, maxLines: LIST_CARD_NAME.lines \}\)/,
   );
   assert.match(flat(popup), /export function listLayout[\s\S]*?card: \{ w: 250, h: 226, bar: 68 \}/);
-  const prompts = readFileSync(new URL("../../src/bmpt/web/js/prompts.js", import.meta.url), "utf8");
+  const prompts = readFileSync(new URL("../../src/bmpt/web/js/app/prompts.js", import.meta.url), "utf8");
   assert.doesNotMatch(
     prompts.slice(prompts.indexOf("export function card(")),
     /kindLabel\(entry\)\}`/,
@@ -457,9 +457,9 @@ for (const locale of LOCALES)
 
 // the Hall's student cards (student-hall-ui.js formationCardTree: 36 down to 24, two lines, 190 wide)
 const hall = await (async () => {
-  let source = readFileSync(new URL("../../src/bmpt/web/js/student-hall-ui.js", import.meta.url), "utf8");
-  const { POPUP, POPUP_FRAME, CONTROL, TYPE, SPACE, XS_BUTTON } = await import("../../src/bmpt/web/js/ui-tokens.js");
-  const { stack: layoutStack } = await import("../../src/bmpt/web/js/ui-grid.js");
+  let source = readFileSync(new URL("../../src/bmpt/web/js/hall/student-hall-ui.js", import.meta.url), "utf8");
+  const { POPUP, POPUP_FRAME, CONTROL, TYPE, SPACE, XS_BUTTON } = await import("../../src/bmpt/web/js/ui/ui-tokens.js");
+  const { stack: layoutStack } = await import("../../src/bmpt/web/js/ui/ui-grid.js");
   globalThis.hallHarness = {
     NGUI,
     Popup: {},

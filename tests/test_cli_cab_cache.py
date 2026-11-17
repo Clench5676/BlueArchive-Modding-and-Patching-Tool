@@ -9,7 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from bmpt import config
+from bmpt.host import config
 from ba_modding_toolkit import utils
 from bmpt.gameassets.cache import AssetCache, PreviewCache
 from bmpt.gameassets.service import GameAssets

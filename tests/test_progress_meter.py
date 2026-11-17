@@ -7,8 +7,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from bmpt import progress_meter
-from bmpt.progress_meter import CAP, QUIET, Meter
+from bmpt.core import progress_meter
+from bmpt.core.progress_meter import CAP, QUIET, Meter
 
 GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-game")
 official = pytest.mark.skipif(not GAME_DIR.is_dir(), reason="Set BAMT_TEST_GAME_DIR to a verified official view")

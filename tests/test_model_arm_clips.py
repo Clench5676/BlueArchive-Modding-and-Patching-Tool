@@ -7,7 +7,8 @@ import numpy as np
 import pytest
 
 from bmpt.gameassets import model_arm_clips as ac, model_skirts as ms
-from bmpt.gameassets.model import decode_clip, read_streamed
+from bmpt.gameassets.model_glb import decode_clip, read_streamed
+from module_patches import patch_everywhere
 
 
 def _binding(path, attr=1, type_id=4):
@@ -159,21 +160,21 @@ def test_official_copies_leave_originals_and_other_consumers_unchanged_and_expor
 ):
     import time
     from bmpt.engine import Bundle, SaveOptions
-    from bmpt.gameassets import model_adapt as ma, model_arms as ar
+    from bmpt.gameassets import model_adapt as ma, model_arm_frames as arf, model_arm_solve as ars, model_arms as ar
     from bmpt.gameassets.discovery import cab_names
     from bmpt.gameassets.model import BundleGraph, _prefabs, _key, _Exporter, export_chibi
     from test_model_adapt import _slot
 
     files, index = view
     captured = {}
-    retarget = ar.retarget
+    retarget = ars.retarget
 
     def capture(*args, **kwargs):
         changes = retarget(*args, **kwargs)
         captured.update({k: (c.clip.get_raw_data(), c.clip.peek_name()) for k, c in changes.items()})
         return changes
 
-    monkeypatch.setattr(ar, "retarget", capture)
+    monkeypatch.setattr(ars, "retarget", capture)
     slot = _slot(files, "hina_original")
     sources = [p for p in files if p.name.startswith("character-ch0288-_mxload")]
     started = time.perf_counter()
@@ -225,7 +226,7 @@ def test_official_copies_leave_originals_and_other_consumers_unchanged_and_expor
         assert {c.peek_name() for c in exported} >= original_names
     data = export_chibi(BundleGraph(adapted), [p for p in paths if p.name.startswith("character-")], "hina_original")
     assert data[:4] == b"glTF"
-    monkeypatch.setattr(ar, "retarget", lambda *args, **kwargs: {})
+    monkeypatch.setattr(ars, "retarget", lambda *args, **kwargs: {})
     started = time.perf_counter()
     baseline = ma.adapt(
         index=index,
@@ -301,7 +302,7 @@ def test_synthetic_copy_and_repoint_keeps_original_clip_enemy_and_timeline_bytes
     rotations = _rotations()
     ac.encode_rotations(edited, rotations)
     change = SimpleNamespace(clip=original, tree=edited, rotations=rotations)
-    monkeypatch.setattr(ma, "saved_tree", lambda obj: copy.deepcopy(obj.tree))
+    patch_everywhere(monkeypatch, [ma], "saved_tree", lambda obj: copy.deepcopy(obj.tree))
     copies = ac.write_copies(Writer(), {("cab-slot", 1): change}, {("cab-slot", 1): "cab-slot"}, [controller], None, {})
     assert copies == {("cab-slot", 1): ("cab-slot", 10)}
     assert controller.tree["m_Clips"][0]["m_OverrideClip"] == ptr(10)
@@ -361,7 +362,7 @@ def test_official_ungated_pair_build_is_byte_identical_to_the_previous_path(view
     import hashlib
     import time
     from bmpt.engine import Bundle
-    from bmpt.gameassets import model_adapt as ma, model_arms as ar
+    from bmpt.gameassets import model_adapt as ma, model_arm_frames as arf, model_arm_solve as ars, model_arms as ar
     from test_model_adapt import _slot
 
     files, index = view
@@ -378,7 +379,7 @@ def test_official_ungated_pair_build_is_byte_identical_to_the_previous_path(view
     enabled = ma.adapt(**arguments)
     enabled_seconds = time.perf_counter() - started
     before = {p.name: hashlib.sha256(b.env.file.save(packer="none")).hexdigest() for p, b in enabled.changed.items()}
-    monkeypatch.setattr(ar, "retarget", lambda *a, **k: {})
+    monkeypatch.setattr(ars, "retarget", lambda *a, **k: {})
     started = time.perf_counter()
     disabled = ma.adapt(**arguments)
     disabled_seconds = time.perf_counter() - started

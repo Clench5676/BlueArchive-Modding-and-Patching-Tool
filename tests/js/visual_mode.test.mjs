@@ -1,5 +1,5 @@
-// Tests for web/js/visual-mode.js on a small stand-in DOM: the detail screen's UI set aside while a fullscreen view is
-// open, and leaving it, which closes the visual mode whatever the screen shows by then. Run by
+// Tests for web/js/detail/visual-mode.js on a small stand-in DOM: the detail screen's UI set aside while a fullscreen
+// view is open, and leaving it, which closes the visual mode whatever the screen shows by then. Run by
 // tests/test_visual_mode.py with Node's test runner: node --test tests/js/visual_mode.test.mjs
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -88,8 +88,8 @@ const press = (key) => {
 let now = 0;
 Object.defineProperty(globalThis, "performance", { value: { now: () => now }, configurable: true, writable: true });
 
-const Visual = await import("../../src/bmpt/web/js/visual-mode.js");
-const { setSpineConsent } = await import("../../src/bmpt/web/js/spine-runtime.js");
+const Visual = await import("../../src/bmpt/web/js/detail/visual-mode.js");
+const { setSpineConsent } = await import("../../src/bmpt/web/js/spine/spine-runtime.js");
 setSpineConsent(true);
 globalThis.spine = {};
 
@@ -232,7 +232,7 @@ test("leaving fullscreen closes the visual mode even after the tab changed under
 });
 
 test("Escape on a message over the visual mode closes the message only; the next one leaves", async () => {
-  const Popup = await import("../../src/bmpt/web/js/popup.js");
+  const Popup = await import("../../src/bmpt/web/js/ui/popup.js");
   const s = screen();
   let backs = 0;
   Visual.uiOut(s.out);

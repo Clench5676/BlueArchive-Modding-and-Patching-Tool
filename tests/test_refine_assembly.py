@@ -6,9 +6,9 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from bmpt import atlas_remap as remap
+from bmpt.spine import atlas_remap as remap
 from ba_modding_toolkit.bundle import Bundle
-from bmpt.refine_assembly import assemble_mod, assemble_page, misalignment
+from bmpt.refine.assembly import assemble_mod, assemble_page, misalignment
 
 from test_atlas_remap import atlas_text, pattern, write_bundle
 
@@ -250,7 +250,7 @@ def test_official_cycling_identity_roundtrip(cycling_official, tmp_path):
 @pytest.mark.parametrize("scale", [1, 2])
 def test_official_cycling_mod_is_accepted_and_identified_by_app_import(cycling_official, tmp_path, scale):
     from bmpt.catalog import Catalog
-    from bmpt.config import Settings
+    from bmpt.host.config import Settings
     from bmpt.gameassets import AssetCache, GameAssets
     from bmpt.library import ModLibrary
 
@@ -302,7 +302,7 @@ def test_official_cycling_mod_is_accepted_and_identified_by_app_import(cycling_o
 
 
 def test_projected_page_uses_k4_packer_and_rejects_alpha_or_outside_changes(tmp_path):
-    from bmpt.refine_assembly import Assembly
+    from bmpt.refine.assembly import Assembly
 
     text = atlas_text([("page.png", (20, 18), [("body", -1, (4, 3), (6, 4), (6, 4), (0, 0), 0)])])
     source = write_bundle(tmp_path / "official" / NAME, {"hero.atlas": text}, {"page": page()})
@@ -339,7 +339,7 @@ def test_projected_page_uses_k4_packer_and_rejects_alpha_or_outside_changes(tmp_
 
 
 def test_generated_alpha_requires_mesh_mask_and_roundtrips(tmp_path):
-    from bmpt.refine_assembly import Assembly
+    from bmpt.refine.assembly import Assembly
 
     text = atlas_text([("page.png", (20, 18), [("body", -1, (4, 3), (6, 4), (6, 4), (0, 0), 0)])])
     source = write_bundle(
@@ -384,7 +384,7 @@ def test_generated_alpha_requires_mesh_mask_and_roundtrips(tmp_path):
 
 
 def test_generated_alpha_mask_does_not_bypass_official_region_check(tmp_path):
-    from bmpt.refine_assembly import Assembly
+    from bmpt.refine.assembly import Assembly
 
     text = atlas_text([("page.png", (20, 18), [("body", -1, (4, 3), (6, 4), (6, 4), (0, 0), 0)])])
     source = write_bundle(tmp_path / "official" / NAME, {"hero.atlas": text}, {"page": page()})

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-const source = readFileSync(new URL("../../src/bmpt/web/js/mod-compare.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../src/bmpt/web/js/mods/mod-compare.js", import.meta.url), "utf8");
 const code = source.slice(source.indexOf("function previewPlayer("));
 class El {
   children = [];
@@ -98,8 +98,8 @@ test("closing compare before its licence gate settles prevents late players", as
 });
 
 // The compare callers retain their public frame fields while the shared geometry rounds their width up to L.
-import { compareFrame } from "../../src/bmpt/web/js/popup-frames.js";
-import { POPUP_FOOTER, POPUP_FRAME, SPACE } from "../../src/bmpt/web/js/ui-tokens.js";
+import { compareFrame } from "../../src/bmpt/web/js/ui/popup-frames.js";
+import { POPUP_FOOTER, POPUP_FRAME, SPACE } from "../../src/bmpt/web/js/ui/ui-tokens.js";
 test("compare and repair frames use L and keep their scrolling findings inside the content box", () => {
   for (const review of [false, true]) {
     const f = compareFrame(review);

@@ -11,11 +11,11 @@ from typing import TYPE_CHECKING, Any
 from PIL import Image, ImageOps
 from UnityPy.helpers.ResourceReader import get_resource_data
 
-from .. import devmode
+from ..core import devmode
 from bmpt.engine import Bundle, SaveOptions
-from ..errors import ServiceError
-from ..openfiles import temporary_directory
-from ..texture_guard import texture_image
+from ..core.errors import ServiceError
+from ..core.openfiles import temporary_directory
+from ..unity.texture_guard import texture_image
 from . import profiles
 from .judge import core_of, date_of, other_target
 from .models import PhotographApplyResult
@@ -546,7 +546,7 @@ def apply(
             library._defer(pin, saved["target"], {core: core}, source)
             result = PhotographApplyResult(variant, source, [], unchanged=True, deferred=True, cores=[core])
         else:
-            from .service import _ChoiceChange
+            from .service.base import _ChoiceChange
 
             change = _ChoiceChange(library, pin, saved["target"], source)
             try:
@@ -589,7 +589,7 @@ def refresh_missing(library: ModLibrary, pins: list[Pin], log) -> None:
         pins: Game installs and servers the operation is fixed to.
         log: Receives user-facing operation messages.
     """
-    from ..filelock import file_lock
+    from ..core.filelock import file_lock
     from ..gameassets import GameAssets
 
     config = library.profiles.read() or {}

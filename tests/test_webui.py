@@ -13,8 +13,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from bmpt.config import Settings
-from bmpt.errors import ServiceError
+from bmpt.host.config import Settings
+from bmpt.core.errors import ServiceError
 from ba_modding_toolkit.i18n import I18n, offered_languages
 from bmpt.webui.api import build_api, ui_strings
 from bmpt.webui.events import EventBus
@@ -1542,7 +1542,7 @@ def test_install_update_needs_the_window_and_the_verified_download(app, services
 
 @pytest.fixture
 def update_env(services, tmp_path, monkeypatch):
-    from bmpt import updater
+    from bmpt.host import updater
 
     info = updater.UpdateInfo(
         "1.1.0",
@@ -1672,7 +1672,7 @@ def test_update_rpc_rechecks_the_cache_when_queued_downloads_run(app, services, 
 
 
 def test_update_rpc_does_not_cache_a_failed_download_and_can_retry(app, services, update_env, monkeypatch):
-    from bmpt import updater
+    from bmpt.host import updater
 
     rpc(app, "app.checkUpdate")
     download = updater.download
@@ -1694,7 +1694,7 @@ def test_update_rpc_does_not_cache_a_failed_download_and_can_retry(app, services
 
 @pytest.mark.parametrize("code", ["classic_open", "busy", "update_unavailable", "update_unsupported"])
 def test_install_update_refusals_keep_the_download_for_retry(app, services, update_env, monkeypatch, code):
-    from bmpt import updater
+    from bmpt.host import updater
 
     rpc(app, "app.checkUpdate")
     file = download_update(app, services)
@@ -1734,7 +1734,7 @@ def test_install_update_refusals_keep_the_download_for_retry(app, services, upda
 def test_install_update_reserves_admission_until_native_closed_and_starts_only_one_helper(
     app, services, update_env, monkeypatch, closing_event
 ):
-    from bmpt import updater
+    from bmpt.host import updater
 
     rpc(app, "app.checkUpdate")
     file = download_update(app, services)
@@ -1799,9 +1799,9 @@ def test_install_update_reserves_admission_until_native_closed_and_starts_only_o
 def test_install_update_never_launches_a_helper_for_a_refused_native_close_and_releases_admission(
     app, services, update_env, monkeypatch, refusal
 ):
-    from bmpt.webui import services as services_module
+    from bmpt.webui import services_window
 
-    monkeypatch.setattr(services_module, "UPDATE_QUIT_WAIT", 0.01)
+    monkeypatch.setattr(services_window, "UPDATE_QUIT_WAIT", 0.01)
     rpc(app, "app.checkUpdate")
     file = download_update(app, services)
     destroy = services.window.destroy
@@ -1898,8 +1898,8 @@ def test_program_command_in_a_compiled_build(monkeypatch, tmp_path):
 @pytest.mark.parametrize("platform", ["win32", "darwin", "linux"])
 def test_the_window_leaves_the_pointer_and_text_selection_to_the_page(monkeypatch, tmp_path, platform):
     """pywebview's text_select=False (its default) appends "body { user-select: none; cursor: default }" to the page,
-    after app.css: the game's pointer (web/js/cursor.js) then shows only on buttons, the system arrow everywhere else.
-    The window keeps text selection on and the page turns it off itself."""
+    after app.css: the game's pointer (web/js/app/cursor.js) then shows only on buttons, the system arrow everywhere
+    else. The window keeps text selection on and the page turns it off itself."""
     import re
     import sys
     from types import SimpleNamespace
@@ -2107,7 +2107,7 @@ def test_a_repaired_id_reaches_the_web_ui_only_while_its_copy_exists_or_is_held(
 
 
 def test_release_page_snapshot_survives_another_check(app, services, update_env, monkeypatch):
-    from bmpt import updater
+    from bmpt.host import updater
 
     opened = []
     monkeypatch.setattr("bmpt.webui.api.webbrowser.open", opened.append)
@@ -2369,7 +2369,7 @@ def test_lobby_camera_save_checks_its_params_before_any_job(app, services):
 
 @pytest.mark.parametrize("version, enabled", [("0.7.0-rc.2", True), ("0.7.0-dev", True), ("0.7.0", False)])
 def test_troubleshoot_mods_answers_only_in_pre_release_builds(app, services, monkeypatch, version, enabled):
-    monkeypatch.setattr("bmpt.webui.api.get_version_info", lambda: {"version": version})
+    monkeypatch.setattr("bmpt.webui.api_mods.get_version_info", lambda: {"version": version})
     monkeypatch.setattr(
         "bmpt.library.troubleshoot.status", lambda library: {"active": False, "count": 0, "since": None}
     )

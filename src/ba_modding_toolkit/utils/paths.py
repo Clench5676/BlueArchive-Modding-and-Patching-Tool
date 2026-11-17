@@ -3,9 +3,9 @@ import shutil
 import sys
 from pathlib import Path
 from typing import Literal
-from bmpt import devmode
-from bmpt.data_paths import migrate_data_dir
-from bmpt.game_paths import find_game_dirs
+from bmpt.core import devmode
+from bmpt.host.data_paths import migrate_data_dir
+from bmpt.host.game_paths import find_game_dirs
 
 _ba_path_cache: dict[str, str | None] = {}
 BARegion = Literal["auto", "global", "japan"]

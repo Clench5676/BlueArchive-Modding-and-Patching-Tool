@@ -18,7 +18,8 @@ from typing import Any
 
 from PIL import Image
 
-from .. import config, devmode, spans
+from ..host import config
+from ..core import devmode, spans
 
 logger = logging.getLogger(__name__)
 

@@ -1,18 +1,39 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
+import { DETAIL_MODULES } from "./helpers/source-text.mjs";
 import vm from "node:vm";
-import { coreOf, previewChanged } from "../../src/bmpt/web/js/switch-sources.js";
+import { coreOf, previewChanged } from "../../src/bmpt/web/js/mods/switch-sources.js";
 
 // Exercise the actual detail-screen apply callback without loading its renderers.
-const source = readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8");
+// the detail screen's modules read as one, their exports as plain declarations
+const source = DETAIL_MODULES.map((file) =>
+  readFileSync(new URL(`../../src/bmpt/web/js/detail/${file}`, import.meta.url), "utf8"),
+)
+  .join("\n")
+  .replace(/^export /gm, "");
 function functionSource(name) {
   const start = source.indexOf(`${name}(`);
   return source.slice(source.lastIndexOf("\n", start) + 1, source.indexOf("\n}\n", start) + 2);
 }
-const code = ["async function applyCandidate", "async function reload", "function resetPreview"]
+const code = [
+  "async function applyCandidate",
+  "async function reload",
+  "function resetPreview",
+  // detail.js's setters of the state these write
+  ...[
+    "setFam",
+    "setLobbyStale",
+    "setLobbyShot",
+    "setShownKey",
+    "setModelShot",
+    "setExpressionState",
+    "setMainPlayer",
+  ].map((name) => `function ${name}`),
+]
   .map(functionSource)
   .join("\n");
+const setFam = functionSource("function setFam");
 async function apply(result, kind, { changedConfiguration = false } = {}) {
   const calls = [];
   const v = {
@@ -138,7 +159,7 @@ test("a lobby source event reloads the manifest even if a repack kept every fami
     renderLeft: async () => calls.push("preview"),
   };
   vm.createContext(ctx);
-  await vm.runInContext(`${functionSource("async function reloadChanged")}; reloadChanged();`, ctx);
+  await vm.runInContext(`${setFam}\n${functionSource("async function reloadChanged")}; reloadChanged();`, ctx);
   assert.deepEqual(calls, ["roster", "lobby", "panels", "preview"]);
 });
 
@@ -171,9 +192,9 @@ test("prefab and dependency source events refresh the model while foreign cores 
       resumeChanged: () => calls.push("queued"),
     };
     vm.createContext(ctx);
-    const gate = functionSource("export function filesChanged").replace("export ", "");
+    const gate = functionSource("function filesChanged");
     await vm.runInContext(
-      `${gate}; ${functionSource("async function reloadChanged")};
+      `${setFam}\n${gate}; ${functionSource("async function reloadChanged")};
       filesChanged({cores: [${JSON.stringify(core)}]}); reloadChanged();`,
       ctx,
     );
@@ -242,7 +263,10 @@ test("a family read that finishes after the screen was read anew does not replac
     renderLeft: async () => calls.push("preview"),
   };
   vm.createContext(ctx);
-  const running = vm.runInContext(`${functionSource("async function reloadChanged")}; reloadChanged();`, ctx);
+  const running = vm.runInContext(
+    `${setFam}\n${functionSource("async function reloadChanged")}; reloadChanged();`,
+    ctx,
+  );
   ctx.fam = newer; // the screen was left and entered again, or reloaded by another action, while the read waited
   ctx.heldChange = undefined;
   read.resolve({ key: "shun", variants: [{ ...v, old: true }] });

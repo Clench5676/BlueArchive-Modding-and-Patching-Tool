@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any
 
 from bmpt.engine import t
 
-from ..errors import ServiceError
+from ..core.errors import ServiceError
 from . import profiles as profiles_mod
 from .judge import now
 from .models import ToggleResult

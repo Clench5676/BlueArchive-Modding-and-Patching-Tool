@@ -34,9 +34,9 @@ if (proof)
   };
 Object.defineProperty(globalThis, "navigator", { value: { platform: "Mac" }, configurable: true });
 globalThis.addEventListener = () => {};
-const NGUI = await import("../../src/bmpt/web/js/ngui.js");
-const { importArtwork, loadImportLayouts, ROW_SCALE } = await import("../../src/bmpt/web/js/import-layout.js");
-const { STATES } = await import("../../src/bmpt/web/js/import-state.js");
+const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
+const { importArtwork, loadImportLayouts, ROW_SCALE } = await import("../../src/bmpt/web/js/mods/import-layout.js");
+const { STATES } = await import("../../src/bmpt/web/js/mods/import-state.js");
 
 const { find, fontSizeFor, inkBand, inkReference, LINE_PITCH } = NGUI;
 const prefabs = makeImportLayouts();
@@ -122,14 +122,14 @@ test("the correction is the distance between the ink's centre and the background
 
 // The accepted missing-file layout and text-fit proof, extended to every shipped locale.
 {
-  const Popup = await import("../../src/bmpt/web/js/popup.js");
+  const Popup = await import("../../src/bmpt/web/js/ui/popup.js");
   const { controlRect, badgeRect, ROW_WIDTH, ROW_TEXT_SIZE, BUTTON_BODY_H, clipButtonPatterns } = await import(
-    "../../src/bmpt/web/js/import-layout.js"
+    "../../src/bmpt/web/js/mods/import-layout.js"
   );
-  const { CHOOSE, noteRoom, NOTE_LEFT } = await import("../../src/bmpt/web/js/import-state.js");
-  const { XS_BUTTON, CONTROL, SPACE, TYPE, LINE } = await import("../../src/bmpt/web/js/ui-tokens.js");
-  const { S } = await import("../../src/bmpt/web/js/util.js");
-  const { setStrings } = await import("../../src/bmpt/web/js/i18n.js");
+  const { CHOOSE, noteRoom, NOTE_LEFT } = await import("../../src/bmpt/web/js/mods/import-state.js");
+  const { XS_BUTTON, CONTROL, SPACE, TYPE, LINE } = await import("../../src/bmpt/web/js/ui/ui-tokens.js");
+  const { S } = await import("../../src/bmpt/web/js/core/util.js");
+  const { setStrings } = await import("../../src/bmpt/web/js/core/i18n.js");
   const missingLabel = (key, params = {}, locale) =>
     text(locale, `import.missing.${({ missing: "count", missingNotFound: "notFound" })[key] || key}`, params);
   const statusText = (missing, locale) =>
@@ -765,7 +765,7 @@ test("the correction is the distance between the ink's centre and the background
       assert.ok(control.minHeight <= height, "native body corner slices fit");
     });
 
-  const { spriteMaskTransform } = await import("../../src/bmpt/web/js/sprite-mask.js");
+  const { spriteMaskTransform } = await import("../../src/bmpt/web/js/ui/sprite-mask.js");
   for (const locale of LOCALES)
     test(`clipping: Choose Files keeps native decoration inside the badge-height body in ${locale}`, async () => {
       setStrings(locale, {});

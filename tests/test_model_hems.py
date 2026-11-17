@@ -8,7 +8,7 @@ import pytest
 from UnityPy.helpers.PackedBitVector import unpack_ints
 
 from bmpt.gameassets import model_hems as hm
-from bmpt.gameassets.model import compressed_skin
+from bmpt.gameassets.model_glb import compressed_skin
 
 
 def _rotation(axis, angle):

@@ -1,0 +1,377 @@
+// What the detail screen's switch cards offer and what the game shows now, for the portrait ("spr") and the
+// memorial lobby ("lobby"), and the 3D model: pure functions of the family that family.get returns, tested in
+// Node (tests/js/switch_sources.test.mjs). Switching saves the chosen source and installs it while enabled; the
+// library keeps what it replaces (docs/webui/library.md, library).
+import { spineBase } from "../core/api.js";
+
+/**
+ * The kind of source an asset tab switches; every asset tab uses the same source selection and apply flow.
+ * @returns {"spr"|"lobby"|"model"|null} The kind; null for another tab.
+ */
+export const switchKindOf = (tab) => ({ portrait: "spr", lobby: "lobby", model: "model" })[tab] || null;
+
+/** The core of a variant's skeleton of a kind: its portrait or its memorial lobby (or its 3D model's). */
+export const coreOf = (v, kind = "spr") => (kind === "model" ? v.model : kind === "lobby" ? v.lobby : v.spr) || null;
+/**
+ * Whether a variant has a kind to show: a variant with only a field-mode model (fieldModel: an event or story
+ * costume) has a 3D tab, but no slot to switch.
+ */
+export const hasKind = (v, kind) =>
+  ["spr", "lobby", "model"].includes(kind) &&
+  (!!coreOf(v, kind) || (kind === "model" && !!v?.fieldModel) || !!v?.storedKinds?.includes(kind));
+/** Whether a variant has any kind to show. */
+export const hasAsset = (v) => hasKind(v, "spr") || hasKind(v, "lobby") || hasKind(v, "model");
+/** The first kind a variant has: the portrait, else the lobby, else the model. */
+export const primaryKind = (v) =>
+  hasKind(v, "spr") ? "spr" : hasKind(v, "lobby") ? "lobby" : hasKind(v, "model") ? "model" : "lobby";
+/** The tab to show for a variant: the wanted one when the variant has its kind, else the first it has. */
+export function availableTab(v, tab) {
+  if (hasKind(v, switchKindOf(tab))) return tab;
+  return hasKind(v, "spr") ? "portrait" : hasKind(v, "lobby") ? "lobby" : hasKind(v, "model") ? "model" : "lobby";
+}
+
+/**
+ * The game file parts of one kind ("spr" portrait, "lobby" memorial lobby, "model" the 3D chibi's whole slot),
+ * newest first.
+ */
+export const partsOf = (v, kind = "spr") => {
+  const parts = (v?.state?.files || []).filter((f) => f.kind === kind);
+  return kind === "model" && !parts.length ? v?.modelFiles || [] : parts;
+};
+
+/**
+ * Whether a game file part holds official bytes: the server's verdict (family.get's official), else, from a
+ * server without it, its applied source.
+ */
+export const isOfficial = (f) => (typeof f.official === "boolean" ? f.official : f.applied === "official");
+
+/**
+ * What the variant's game files of a kind carry now, from their non-official parts only (the library records
+ * every part of a switched kind, the parts a mod left official included): the one source among them (a mod
+ * often replaces one part), "official", or "unknown" when they carry several
+ * (tests/data/source_rule_cases.json, shared with the library's own rule).
+ */
+export function appliedOf(v, kind = "spr") {
+  const sources = new Set(
+    partsOf(v, kind)
+      .filter((f) => !isOfficial(f))
+      .map((f) => f.applied),
+  );
+  return !sources.size ? "official" : sources.size === 1 ? [...sources][0] : "unknown";
+}
+
+/**
+ * The candidate key of what the game shows: "self" (the variant's own official files), "m:<mod id>",
+ * "v:<variant key>" (another variant's official files, adapted) or "unknown" (changed outside the library).
+ */
+export function appliedKey(v, kind = "spr") {
+  const a = appliedOf(v, kind);
+  if (a === "official") return "self";
+  if (a.startsWith("mod:")) return `m:${a.slice(4)}`;
+  if (a.startsWith("variant:")) return `v:${a.slice(8)}`;
+  return "unknown";
+}
+
+/** A candidate key as an actions.apply source. */
+export const sourceOf = (key) =>
+  key === "self" ? "official" : key.startsWith("m:") ? `mod:${key.slice(2)}` : `variant:${key.slice(2)}`;
+
+/**
+ * Whether a variant's files of a kind are overwritten: a part that is not official has no official copy
+ * anywhere (family.get's restorable false). Its official choice is unavailable; library mods can still replace
+ * it.
+ */
+export const overwrittenOf = (v, kind = "spr") =>
+  partsOf(v, kind).some((f) => !isOfficial(f) && f.restorable === false);
+
+// The cautions of the 3D model's costume pairs (model.costumeCautions) are kept beside the verdicts under this
+// key: { other: ["ex_parts" | "carried_shader", ...] }. It is a symbol, so it never reads as a variant.
+export const CAUTIONS = Symbol("cautions");
+const CAUTION_TEXT = { ex_parts: "model.exParts", carried_shader: "model.carriedShader" };
+const cautionsOf = (costumes, key) => {
+  const found = costumes?.[CAUTIONS]?.[key];
+  return Array.isArray(found) && found.some((c) => c in CAUTION_TEXT) ? { cautions: found } : {};
+};
+/** The locale key of a card's caution on hover: the first it has, in CAUTION_TEXT's order; null for none. */
+export const cautionKey = (c) => {
+  const found = Object.keys(CAUTION_TEXT).find((code) => c?.cautions?.includes(code));
+  return found ? CAUTION_TEXT[found] : null;
+};
+/**
+ * The sources a variant's portrait or lobby can be switched to, in the switch popup's order: its own official
+ * files, its own mods of that kind, then for the portrait the other variants' official files (those with a
+ * portrait of their own) and the other variants' portrait mods. Other variants' memorial lobbies and their
+ * lobby mods are not offered: another student's lobby under this variant's lobby prefab is untested in the
+ * game. Each is { key, kind ("self" | "mod" | "variant"), core, variant, id, mod, origin (the variant a mod was
+ * made for), restorable (its files have an official copy), greyed (cannot be chosen) }. The 3D model lists
+ * every other model of the student as a costume at once; only a pair that was built and exported for these
+ * files can be applied (`costumes`: model.costumes' verdicts, "ok" | "preview" | "refused" | null): "ok" and
+ * "preview" pairs are offered, the latter with a caution (`beyondFit`); unchecked or refused pairs are for a
+ * preview only (`previewOnly`), and a refused pair cannot be chosen as the preview either (`refused`). Another
+ * student's model (`families`: roster.list's) is offered through the popup's search, or all at once with "Show
+ * other students" (crossCandidates), save the one already chosen, listed last (`cross`).
+ * @param {object} fam The family, as family.get gives it.
+ * @param {"spr"|"lobby"|"model"} [kind] The kind to switch.
+ * @param {object|null} [costumes] The 3D model's verdicts by variant.
+ * @param {object[]|null} [families] roster.list's families, for other students' models.
+ */
+export function candidates(fam, v, kind = "spr", costumes = null, families = null) {
+  const own = coreOf(v, kind);
+  const cores = (kind === "model" && v.modelCores?.length ? v.modelCores : [own]).map((core) =>
+    String(core).toLowerCase(),
+  );
+  const mods = fam.variants
+    .flatMap((o) => o.modList || [])
+    .filter((m) => m.kind === kind)
+    .filter((m) => kind === "spr" || !m.core || !own || cores.includes(m.core));
+  // cross-variant adaptation requires an actual local target
+  const across = (kind === "spr" || kind === "model") && !!own;
+  const others = !across
+    ? []
+    : kind === "model"
+      ? costumeCandidates(fam, v)
+      : fam.variants.filter((o) => o.key !== v.key && !!coreOf(o, kind) && coreOf(o, kind) !== own);
+  const chosen = kind === "model" ? new Set([configuredKey(v, kind), sourceKey(v?.previewSources?.model)]) : null;
+  const chosenCross =
+    kind === "model" && across ? crossModels(families, v).filter((o) => chosen.has(`v:${o.key}`)) : [];
+  const mod = (m) => ({
+    key: `m:${m.id}`,
+    kind: "mod",
+    id: m.id,
+    mod: m,
+    core: null,
+    origin: fam.variants.find((o) => o.key === m.target) || null,
+  });
+  const list = [
+    { key: "self", kind: "self", core: own, variant: v },
+    ...mods.filter((m) => m.target === v.key).map(mod),
+    // beyondFit: past the stretch limit; previewOnly: not checked yet or refused, shown but never applied
+    ...others.map((o) => ({
+      key: `v:${o.key}`,
+      kind: "variant",
+      core: coreOf(o, kind),
+      variant: o,
+      ...(kind === "model" && costumes?.[o.key] === "preview"
+        ? { beyondFit: true }
+        : kind === "model" && costumes?.[o.key] !== "ok"
+          ? { previewOnly: true }
+          : {}),
+      ...(kind === "model" && costumes?.[o.key] === "refused" ? { refused: true } : {}),
+      ...(kind === "model" ? cautionsOf(costumes, o.key) : {}),
+    })),
+    ...(across && kind === "spr" ? mods.filter((m) => m.target !== v.key).map(mod) : []),
+    ...chosenCross.map((o) => crossCard(o, costumes)),
+  ];
+  const stuck = overwrittenOf(v, kind);
+  return list.map((c) => {
+    const restorable = c.cross || c.kind === "mod" ? true : !overwrittenOf(c.variant, kind);
+    const greyed = (c.kind === "self" && (!own || stuck)) || (c.kind === "variant" && !restorable);
+    return { ...c, restorable, greyed };
+  });
+}
+
+/**
+ * The other variants whose model a variant's 3D model may take as a costume, before their check: any other
+ * model of the student, field-mode models included (model.costumes / model.checkCostumes judge each pair).
+ */
+export function costumeCandidates(fam, v) {
+  const own = coreOf(v, "model");
+  if (!own) return [];
+  return fam.variants.filter(
+    (o) => o.key !== v.key && !!(coreOf(o, "model") || o.fieldModel) && coreOf(o, "model") !== own,
+  );
+}
+
+// --- another student's model ---
+// The most cards a search adds to Switch 3D Model: the pairs one model.costumes or model.checkCostumes call takes
+// (webui/api_students.py costume_keys).
+export const CROSS_LIMIT = 64;
+// "Show other students" (Switch 3D Model): every other student's model listed after the student's own, not only
+// the search's hits. Off at every App start and never saved: kept for as long as the page lives, across students
+// and popups.
+const others = { shown: false };
+/** Whether the 3D popup lists all other students' models ("Show other students"). */
+export const showOthers = () => others.shown;
+/** Set "Show other students". */
+export const setShowOthers = (on) => {
+  others.shown = !!on;
+};
+/**
+ * The other students' variants (roster.list's families) whose model a variant's 3D model may take as a costume:
+ * any with a battle model or a field-mode or NPC one.
+ */
+export function crossModels(families, v) {
+  if (!coreOf(v, "model")) return [];
+  return (families || [])
+    .flatMap((f) => f.variants || [])
+    .filter((o) => o.family !== v.family && o.key !== v.key && !!(coreOf(o, "model") || o.fieldModel));
+}
+/**
+ * The card of another student's model. It is a deliberate choice: past the stretch limit ("preview") it is
+ * applied like "ok"; before its verdict lands it waits (`pending`), and a refused one is shown for a preview
+ * only.
+ */
+export const crossCard = (o, costumes = null) => {
+  const verdict = costumes?.[o.key];
+  return {
+    key: `v:${o.key}`,
+    kind: "variant",
+    core: coreOf(o, "model"),
+    variant: o,
+    cross: true,
+    restorable: true,
+    greyed: false,
+    ...(verdict === "ok" || verdict === "preview"
+      ? {}
+      : verdict == null
+        ? { pending: true }
+        : { previewOnly: true, refused: true }),
+    ...cautionsOf(costumes, o.key),
+  };
+};
+/**
+ * The cards a search adds after the popup's own: the other students' models `match` finds, refused ones left
+ * out, in `compare`'s order (the roster's name order), the first `limit` (CROSS_LIMIT: what one RPC call takes;
+ * "Show other students" lists them all).
+ * @param {object[]} families roster.list's families.
+ * @param {object|null} [costumes] The 3D model's verdicts.
+ * @param {object} [options]
+ * @param {(model: object) => boolean} [options.match] Whether a model matches the search.
+ * @param {((a: object, b: object) => number)|null} [options.compare] The order of the hits.
+ * @param {string[]} [options.exclude] The keys of the popup's own cards.
+ * @param {number} [options.limit] The most cards.
+ */
+export function crossCandidates(
+  families,
+  v,
+  costumes = null,
+  { match = () => true, compare = null, exclude = [], limit = CROSS_LIMIT } = {},
+) {
+  const skip = new Set(exclude);
+  const hits = crossModels(families, v).filter(
+    (o) => !skip.has(`v:${o.key}`) && costumes?.[o.key] !== "refused" && match(o),
+  );
+  if (compare) hits.sort(compare);
+  return hits.slice(0, limit).map((o) => crossCard(o, costumes));
+}
+/**
+ * What a card of another student's model carries beyond any card's, from the search or from "Show other
+ * students" alike: its word of caution on hover (`caution`), and the dev ids the popup's search also finds it
+ * by.
+ */
+export const crossExtras = (c, caution) =>
+  c.cross ? { hint: caution, terms: [c.variant.fileId, c.variant.model, c.variant.fieldModel] } : {};
+/**
+ * What keeps a 3D candidate from being applied by its costume check.
+ * @returns {"pending"|"unfit"|null} "pending" (another student's model before its verdict), "unfit" (refused:
+ *     shown, never applied) or null.
+ */
+export function costumeHold(fam, v, key, costumes) {
+  if (typeof key !== "string" || !key.startsWith("v:")) return null;
+  const other = key.slice(2),
+    verdict = costumes?.[other];
+  if (fam.variants.some((o) => o.key === other))
+    return verdict != null && verdict !== "ok" && verdict !== "preview" ? "unfit" : null;
+  return verdict === "ok" || verdict === "preview" ? null : verdict == null ? "pending" : "unfit";
+}
+
+const sourceKey = (source) =>
+  typeof source === "string" && source.startsWith("variant:") ? `v:${source.slice(8)}` : null;
+
+/**
+ * A configured source (family.get's configured[kind]) as a candidate key; null when the kind is not configured.
+ */
+export function configuredKey(v, kind = "spr") {
+  const source = v?.configured?.[kind];
+  if (typeof source !== "string" || !source || source === "official") return null;
+  if (source.startsWith("mod:")) return `m:${source.slice(4)}`;
+  if (source.startsWith("variant:")) return `v:${source.slice(8)}`;
+  return null;
+}
+
+/**
+ * The candidate key the previews show: always the saved source. The file table and write guards still use
+ * appliedOf/appliedKey, which describe the bytes in the game folder.
+ */
+export const previewKey = (v, kind = "spr", enabled = true) => {
+  const source = v?.previewSources?.[kind];
+  if (source === "official") return "self";
+  if (source?.startsWith("mod:")) return `m:${source.slice(4)}`;
+  if (source?.startsWith("variant:")) return `v:${source.slice(8)}`;
+  return configuredKey(v, kind) || (v?.configured || !enabled ? "self" : appliedKey(v, kind));
+};
+
+/** The candidate key the game should use, including while Mods are off: the manifest's. */
+export const intendedKey = (v, kind = "spr") => configuredKey(v, kind) || "self";
+export const isApplied = (v, kind, key = previewKey(v, kind)) => key === intendedKey(v, kind);
+
+/**
+ * The status of a variant's selection of a kind. A switch being On is intent, never evidence that the chosen
+ * source reached the game.
+ * @returns {"mods.incomplete"|"status.applied"|null} The locale key of the status.
+ */
+export function selectionStatus(v, kind = "spr") {
+  if (
+    (previewKey(v, kind) === intendedKey(v, kind) && v?.selection?.[kind]?.incomplete) ||
+    (v?.modList || []).some((m) => m.incomplete && `m:${m.id}` === previewKey(v, kind))
+  )
+    return "mods.incomplete";
+  return isApplied(v, kind) ? "status.applied" : null;
+}
+export function candidateStatus(v, kind, key, mod = (v?.modList || []).find((m) => `m:${m.id}` === key)) {
+  if (mod?.incomplete) return "mods.incomplete";
+  return isApplied(v, kind, key) ? "status.applied" : null;
+}
+export const detailStatus = selectionStatus;
+export const selectionError = (v, kind) => v?.selection?.[kind]?.error || null;
+export const importStatus = (item) =>
+  item?.incomplete ? "mods.incomplete" : item?.applied || item?.configured ? "status.applied" : "import.notApplied";
+export const previewChanged = (before, after, kind, beforeEnabled, enabled) =>
+  !before ||
+  !after ||
+  beforeEnabled !== enabled ||
+  previewKey(before, kind, beforeEnabled) !== previewKey(after, kind, enabled);
+export function modelSource(v, enabled = true) {
+  if (enabled && !v?.configured && !v?.previewSources?.model) return "live";
+  const key = previewKey(v, "model", enabled);
+  return key.startsWith("m:")
+    ? `mod:${key.slice(2)}`
+    : key.startsWith("v:")
+      ? `variant:${key.slice(2)}`
+      : key === "self"
+        ? "official"
+        : "live";
+}
+// the model route's address of a variant's chibi from a source; with `clip`, of that clip of it alone (model.js
+// addClips)
+export function modelUrl(key, source = "live", clip = null) {
+  const query = [
+    source === "live" ? "" : `source=${encodeURIComponent(source)}`,
+    clip ? `clip=${encodeURIComponent(clip)}` : "",
+  ];
+  const q = query.filter(Boolean).join("&");
+  return `/asset/model/${encodeURIComponent(key)}.glb${q ? `?${q}` : ""}`;
+}
+
+export function previewBase(v, kind = "spr", enabled = true, variants = []) {
+  if (kind === "model") return modelUrl(v.key, modelSource(v, enabled));
+  if (enabled && !v?.configured && !v?.previewSources?.[kind]) return spineBase(kind, coreOf(v, kind));
+  const key = previewKey(v, kind, enabled);
+  if (key.startsWith("m:")) return spineBase("mod", key.slice(2));
+  const source = key.startsWith("v:") ? variants.find((o) => o.key === key.slice(2)) : v;
+  return spineBase(`official-${kind}`, coreOf(source || v, kind));
+}
+
+/**
+ * How the switch popup starts: on the saved choice, including a pending or failed install; the buttons read
+ * Apply or Save.
+ * @returns {{start: string, button: string, set: boolean}} The card to start on, the primary button's locale
+ *     key and whether it saves.
+ */
+export function popupMode(fam, v, kind = "spr", enabled = true, families = null) {
+  const set = configuredKey(v, kind);
+  const listed = candidates(fam, v, kind, null, families);
+  const want = previewKey(v, kind, enabled);
+  const start = listed.some((c) => c.key === want) ? want : "self";
+  return { start, button: "popup.save", set };
+}

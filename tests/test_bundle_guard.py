@@ -11,10 +11,10 @@ import pytest
 from UnityPy.helpers.CompressionHelper import compress_lz4
 
 from ba_modding_toolkit import bundle as bundle_module
-from bmpt import bundle_guard, unityfs
+from bmpt.unity import bundle_guard, unityfs
 from ba_modding_toolkit.bundle import Bundle
-from bmpt.bundle_guard import check_bundle
-from bmpt.errors import ServiceError
+from bmpt.unity.bundle_guard import check_bundle
+from bmpt.core.errors import ServiceError
 
 from test_atlas_remap import write_bundle
 

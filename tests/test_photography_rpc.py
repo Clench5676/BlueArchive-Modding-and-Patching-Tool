@@ -11,7 +11,7 @@ from dataclasses import replace
 import pytest
 from PIL import Image
 
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.library.models import Pin, PhotographApplyResult
 from bmpt.webui.server import MAX_BODY
 from test_webui import app, call, rpc, services

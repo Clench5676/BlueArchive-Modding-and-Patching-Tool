@@ -1,6 +1,6 @@
 // Escape belongs to the top layer: a message over a fullscreen view (detail.js) or over the camera (photography/
 // controller.js, a capture error) closes alone, and the view under it stays until the next Escape. The real popup
-// stack (web/js/popup.js) on a stand-in DOM; the screens' key handlers are taken from their sources.
+// stack (web/js/ui/popup.js) on a stand-in DOM; the screens' key handlers are taken from their sources.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
@@ -93,7 +93,7 @@ function press(key) {
   return ev;
 }
 globalThis.fetch = async () => ({ ok: false, status: 404, json: async () => null });
-const Popup = await import("../../src/bmpt/web/js/popup.js");
+const Popup = await import("../../src/bmpt/web/js/ui/popup.js");
 
 // a message on the popup stack (the #dialog host); Escape closes it through the stack
 function message() {
@@ -107,7 +107,7 @@ function message() {
   return { host, closes };
 }
 
-const detail = readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8");
+const detail = readFileSync(new URL("../../src/bmpt/web/js/detail/detail.js", import.meta.url), "utf8");
 const detailKeys = detail.slice(
   detail.indexOf("// Escape leaves fullscreen only when"),
   detail.indexOf('addEventListener("keyup"'),

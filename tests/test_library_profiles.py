@@ -18,8 +18,8 @@ import pytest
 from ba_modding_toolkit import core
 from ba_modding_toolkit.core import mod_install
 from ba_modding_toolkit.bundle import Bundle
-from bmpt.config import Settings
-from bmpt.errors import ServiceError
+from bmpt.host.config import Settings
+from bmpt.core.errors import ServiceError
 from ba_modding_toolkit.i18n import I18n
 from bmpt.library import ModLibrary, safety, service, storage
 from bmpt.library import profiles as profiles_module
@@ -31,6 +31,7 @@ from ba_modding_toolkit.naming import parse_filename
 from ba_modding_toolkit.utils import CRCUtils
 
 from test_library import FakeCatalog, FakeVariant, game_bundle, header_bundle, make_mod
+from module_patches import patch_everywhere
 
 DATA = Path(__file__).parent / "data"
 
@@ -120,7 +121,7 @@ def test_a_failed_write_keeps_the_file_as_it_was(tmp_path, monkeypatch):
     profiles = Profiles(tmp_path)
     profiles.update(lambda data: data.update(enabled=False))
     before = (tmp_path / "profiles.json").read_bytes()
-    from bmpt import filelock
+    from bmpt.core import filelock
 
     real = filelock.os.replace
 
@@ -257,7 +258,7 @@ OFFICIAL = header_bundle(b"official")
 @pytest.mark.parametrize("language", ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR"])
 def test_adoption_toggle_and_drift_progress_name_the_action(world, monkeypatch, language):
     translate = I18n(language).t
-    monkeypatch.setattr(service, "t", translate)
+    patch_everywhere(monkeypatch, [service], "t", translate)
     world.consent = True
     keep_backup(world.spr)
     outside_mod(world.spr)
@@ -474,7 +475,7 @@ def test_a_failed_build_still_shows_its_error_on_the_new_choice(world, monkeypat
         raise ServiceError("mod_apply_failed", file=world.spr)
 
     monkeypatch.setattr(service.ModLibrary, "_needs_crc_fix", lambda self, source, target: True)
-    monkeypatch.setattr(service, "install_staged", broken)
+    patch_everywhere(monkeypatch, [service], "install_staged", broken)
     expect_error("mod_apply_failed", lambda: world.library.apply("test", f"mod:{second.id}"))
     choice = world.folder()["configured"]["test_spr"]
     assert choice["source"] == f"mod:{second.id}" and choice["error"]["code"] == "mod_apply_failed"
@@ -702,7 +703,7 @@ def test_an_adoption_that_does_not_fit_is_refused(world, monkeypatch):
     world.consent = True
     keep_backup(world.spr)
     outside_mod(world.spr)
-    monkeypatch.setattr(service.shutil, "disk_usage", lambda path: SimpleNamespace(free=1000))
+    monkeypatch.setattr(shutil, "disk_usage", lambda path: SimpleNamespace(free=1000))
     error = expect_error(
         "not_enough_space", lambda: world.library.adopt([{"install": world.key(), "core": "test_spr"}])
     )
@@ -727,8 +728,8 @@ def no_installer(monkeypatch):
     def fail(*args, **kwargs):
         raise AssertionError("the installer must not run")
 
-    monkeypatch.setattr(service, "install_staged", fail)
-    monkeypatch.setattr(service, "rebuild", fail)
+    patch_everywhere(monkeypatch, [service], "install_staged", fail)
+    patch_everywhere(monkeypatch, [service], "rebuild", fail)
 
 
 def rebuilding_installer(monkeypatch, payload=b"rebuilt!", only=None):
@@ -750,7 +751,7 @@ def rebuilding_installer(monkeypatch, payload=b"rebuilt!", only=None):
                 target.write_bytes(CRCUtils.apply_crc_fix(header_bundle(payload), int(parse_filename(target.name).crc)))
         return []
 
-    monkeypatch.setattr(service, "install_staged", install)
+    patch_everywhere(monkeypatch, [service], "install_staged", install)
     monkeypatch.setattr(service.ModLibrary, "_needs_crc_fix", rebuilding)
 
 
@@ -842,7 +843,7 @@ def test_clear_built_mods_keeps_another_instances_copy_in_progress(world, monkey
     stamp = time.time()
     os.utime(temporary, (stamp, stamp))
     os.utime(stale, (stamp - 3601, stamp - 3601))
-    monkeypatch.setattr(service.time, "time", lambda: stamp)
+    monkeypatch.setattr(time, "time", lambda: stamp)
     assert world.library.sizes("built")["builtSize"] == freed
 
     freed += stale.stat().st_size
@@ -1128,10 +1129,12 @@ def test_an_on_cut_short_is_pending_never_drift(world, monkeypatch):
     world.consent = True
     cores = ["test_spr", "other_spr", "third_spr"]
     world.catalog.variants["third"] = FakeVariant("third", "third_spr", family="third")
-    files = {core: world.spr if core == "test_spr" else game_bundle(world.game, core) for core in cores}
-    mods = {core: world.add(files[core], fixed=True, where=core) for core in cores}
-    for core in cores:
-        world.library.apply(core.removesuffix("_spr"), f"mod:{mods[core].id}")
+    files = {
+        core_name: world.spr if core_name == "test_spr" else game_bundle(world.game, core_name) for core_name in cores
+    }
+    mods = {core_name: world.add(files[core_name], fixed=True, where=core_name) for core_name in cores}
+    for core_name in cores:
+        world.library.apply(core_name.removesuffix("_spr"), f"mod:{mods[core_name].id}")
     world.toggle(False)
     calls = []
     real = service.ModLibrary._switch
@@ -1147,10 +1150,12 @@ def test_an_on_cut_short_is_pending_never_drift(world, monkeypatch):
         world.toggle(True)
     monkeypatch.undo()
     monkeypatch.setattr(safety, "check_game_not_running", lambda: None)
-    states = {core: world.entries()[(world.key(), core)].state for core in cores}
+    states = {core_name: world.entries()[(world.key(), core_name)].state for core_name in cores}
     assert sorted(states.values()) == ["ok", "pending", "pending"]
     listed = {(item["core"], item["why"]) for item in world.unfinished()}
-    assert {core for core, state in states.items() if state == "pending"} <= {core for core, _ in listed}
+    assert {core_name for core_name, state in states.items() if state == "pending"} <= {
+        core_name for core_name, _ in listed
+    }
     assert world.library.intent()["enabled"] is True
 
 
@@ -1159,8 +1164,8 @@ def test_an_on_cut_short_is_pending_never_drift(world, monkeypatch):
 
 def japan(world: World, *cores: str) -> Path:
     folder = world.tmp / "japan"
-    for core in cores or ("test_spr",):
-        game_bundle(folder, core)
+    for core_name in cores or ("test_spr",):
+        game_bundle(folder, core_name)
     world.settings.set("game_resource_dir_japan", str(folder))
     return folder
 
@@ -1211,8 +1216,8 @@ def test_another_installs_variant_source_stays_configured_and_is_applied_from_th
         result.write_bytes(CRCUtils.apply_crc_fix(header_bundle(b"adapted!"), int(parse_filename(targets[0].name).crc)))
         return RebuildResult(True, "updated", [FilePair(result, targets[0])])
 
-    monkeypatch.setattr("bmpt.library.service.adapt_variant_sources", lambda sources, *args: sources)
-    monkeypatch.setattr(service, "rebuild", update)
+    patch_everywhere(monkeypatch, ["bmpt.library.service"], "adapt_variant_sources", lambda sources, *args: sources)
+    patch_everywhere(monkeypatch, [service], "rebuild", update)
     # configured there by an earlier build, with a variant the current catalog lacks
     world.library.profiles.update(
         lambda data: (
@@ -1241,9 +1246,9 @@ def three_mods(world: World) -> dict:
         "other_spr": game_bundle(world.game, "other_spr"),
         "third_spr": game_bundle(world.game, "third_spr"),
     }
-    for core, path in files.items():
-        mod = world.add(path, fixed=True, where=core)
-        world.library.apply(core.removesuffix("_spr"), f"mod:{mod.id}")
+    for core_name, path in files.items():
+        mod = world.add(path, fixed=True, where=core_name)
+        world.library.apply(core_name.removesuffix("_spr"), f"mod:{mod.id}")
     return files
 
 
@@ -1300,7 +1305,7 @@ def test_a_repaired_stuck_entry_leaves_the_list_without_reading_other_files(worl
         read.append(Path(path).name)
         return real(path)
 
-    monkeypatch.setattr(service, "trailing_bytes", record)
+    patch_everywhere(monkeypatch, [service], "trailing_bytes", record)
     world.reload()
     assert world.library.judge_unfinished() == 1
     assert world.unfinished() == [] and other.name not in read
@@ -1334,7 +1339,7 @@ def test_an_on_retries_the_set_source_after_an_unfinished_off(world, monkeypatch
     mod = world.add(world.spr)
     world.library.apply("test", f"mod:{mod.id}")
     outside_mod(world.spr)  # changed outside the library; no consent: found when the Off reaches it
-    monkeypatch.setattr(service.shutil, "disk_usage", lambda path: SimpleNamespace(free=0))
+    monkeypatch.setattr(shutil, "disk_usage", lambda path: SimpleNamespace(free=0))
     result = world.toggle(False)
     assert [item["core"] for item in result.left] == ["test_spr"]
     assert world.unfinished() == [{"install": world.key(), "core": "test_spr", "why": "left"}]
@@ -1627,8 +1632,8 @@ def test_a_variant_record_without_its_core_there_is_unknown_and_adopted(world, m
         result.write_bytes(swap)
         return RebuildResult(True, "updated", [FilePair(result, targets[0])])
 
-    monkeypatch.setattr("bmpt.library.service.adapt_variant_sources", lambda sources, *args: sources)
-    monkeypatch.setattr(service, "rebuild", update)
+    patch_everywhere(monkeypatch, ["bmpt.library.service"], "adapt_variant_sources", lambda sources, *args: sources)
+    patch_everywhere(monkeypatch, [service], "rebuild", update)
     world.library.apply("test", "variant:other")
     other.unlink()  # that variant's portrait is gone from this install
     world.reload()
@@ -1719,7 +1724,7 @@ def record_headers(monkeypatch) -> list[str]:
         read.append(Path(path).name)
         return real(path)
 
-    monkeypatch.setattr(service, "trailing_bytes", trailing)
+    patch_everywhere(monkeypatch, [service], "trailing_bytes", trailing)
     return read
 
 
@@ -1973,7 +1978,7 @@ def test_the_official_flag_compares_the_written_bytes_with_the_official_copy(wor
                 file.existing_path.write_bytes(header_bundle(b"in place"))
         return []
 
-    monkeypatch.setattr(service, "install_staged", install)
+    patch_everywhere(monkeypatch, [service], "install_staged", install)
     monkeypatch.setattr(world.library, "_needs_crc_fix", lambda *args: True)
     world.library.apply("test", f"mod:{pack.id}")
     applied = json.loads((world.root / "state.json").read_text())["applied"]
@@ -2005,7 +2010,7 @@ def lock_game_file(monkeypatch, path: Path) -> None:
             raise OSError(errno.EBUSY, "Locked", str(path))  # another program holds the game file
         return real(source, target)
 
-    monkeypatch.setattr(service, "atomic_copy", copy)
+    patch_everywhere(monkeypatch, [service], "atomic_copy", copy)
 
     def clone_locked(source, target):
         if Path(target) == path:
@@ -2017,8 +2022,8 @@ def lock_game_file(monkeypatch, path: Path) -> None:
             raise OSError(errno.EBUSY, "Locked", str(path))  # another program holds the game file
         return move(source, target, sha1)
 
-    monkeypatch.setattr(service, "atomic_clone", clone_locked)
-    monkeypatch.setattr(service, "verified_move", move_locked)
+    patch_everywhere(monkeypatch, [service], "atomic_clone", clone_locked)
+    patch_everywhere(monkeypatch, [service], "verified_move", move_locked)
 
 
 def test_a_failed_apply_keeps_the_choice_and_available_original(world, monkeypatch, original_cloning):
@@ -2175,7 +2180,7 @@ def test_a_slow_read_in_a_scan_does_not_hold_the_library(world, monkeypatch):
             release.wait(5)
         return real(path)
 
-    monkeypatch.setattr(service, "trailing_bytes", slow)
+    patch_everywhere(monkeypatch, [service], "trailing_bytes", slow)
     thread = threading.Thread(target=world.library.scan)
     thread.start()
     assert started.wait(5)
@@ -2198,7 +2203,7 @@ def test_a_scan_that_meets_a_write_is_stale(world, monkeypatch):
             world.library.apply("test", f"mod:{mod.id}")
         return real(path)
 
-    monkeypatch.setattr(service, "trailing_bytes", meanwhile)
+    patch_everywhere(monkeypatch, [service], "trailing_bytes", meanwhile)
     result = world.library.scan()
     assert result.stale and result.entries == []
 
@@ -2263,7 +2268,7 @@ def test_a_mod_retargeted_by_a_later_catalog_is_listed_and_installed_there_direc
     def fail(*args, **kwargs):
         raise AssertionError("adapted onto its own variant")
 
-    monkeypatch.setattr(service, "rebuild", fail)
+    patch_everywhere(monkeypatch, [service], "rebuild", fail)
     world.library.restore("ch0042")
     world.library.apply("ch0042", f"mod:{mod.id}")
     assert newcomer.read_bytes() == data
@@ -2560,7 +2565,7 @@ def test_a_built_key_keeps_its_file_when_another_instance_drops_the_last_referen
             return update(change) if after is None else update(change, after=after)
 
         monkeypatch.setattr(profiles_module, "file_lock", tracked)
-        monkeypatch.setattr(service, "atomic_copy", recover)
+        patch_everywhere(monkeypatch, [service], "atomic_copy", recover)
         monkeypatch.setattr(other, "_update_profiles", meanwhile)
         other._make_built(pin, entry)
         assert copied == [built]
@@ -2721,8 +2726,8 @@ def test_a_variant_entry_whose_source_files_changed_is_rebuilt(world, monkeypatc
         result.write_bytes(CRCUtils.apply_crc_fix(header_bundle(b"adapted!"), int(parse_filename(targets[0].name).crc)))
         return RebuildResult(True, "updated", [FilePair(result, targets[0])])
 
-    monkeypatch.setattr("bmpt.library.service.adapt_variant_sources", lambda sources, *args: sources)
-    monkeypatch.setattr(service, "rebuild", update)
+    patch_everywhere(monkeypatch, ["bmpt.library.service"], "adapt_variant_sources", lambda sources, *args: sources)
+    patch_everywhere(monkeypatch, [service], "rebuild", update)
     world.library.apply("test", "variant:other")
     world.toggle(False)
     assert world.folder()["built"]["test_spr"]["inputs"] == [other.name]
@@ -2765,7 +2770,7 @@ def test_an_off_that_does_not_fit_writes_nothing(world, monkeypatch):
     world.consent = True
     keep_backup(world.spr)
     outside_mod(world.spr)
-    monkeypatch.setattr(service.shutil, "disk_usage", lambda path: SimpleNamespace(free=10))
+    monkeypatch.setattr(shutil, "disk_usage", lambda path: SimpleNamespace(free=10))
     error = expect_error("not_enough_space", lambda: world.toggle(False))
     assert error.params["free"] == 10
     assert world.library.intent()["enabled"] is True and world.library.mods() == []
@@ -2899,7 +2904,7 @@ def test_entries_of_cores_the_current_catalog_does_not_map_carry_shipped_names(w
 def test_the_lock_order_is_kept_across_threads(world, monkeypatch):
     """The library lock, transactions.lock, mods.lock, state.json.lock and profiles.json.lock stay in order;
     no thread holds profiles.json.lock while it asks the scan consent."""
-    from bmpt import filelock
+    from bmpt.core import filelock
     from bmpt.library import profiles as profiles_module
 
     order = {"transactions.lock": 1.25, "mods.lock": 1.5, "state.json.lock": 2, "profiles.json.lock": 3}
@@ -2926,7 +2931,7 @@ def test_the_lock_order_is_kept_across_threads(world, monkeypatch):
         finally:
             stack().pop()
 
-    monkeypatch.setattr(service, "file_lock", tracked)
+    patch_everywhere(monkeypatch, [service], "file_lock", tracked)
     monkeypatch.setattr(profiles_module, "file_lock", tracked)
 
     class Tracked:
@@ -3091,7 +3096,7 @@ def test_real_bundles_off_on_drift_and_adoption(tmp_path, monkeypatch):
     def fail(*args, **kwargs):
         raise AssertionError("the installer must not run")
 
-    monkeypatch.setattr(service, "install_staged", fail)
+    patch_everywhere(monkeypatch, [service], "install_staged", fail)
     library.toggle(True, False)
     assert texture_file.read_bytes() == applied  # byte for byte, from the built copy
 
@@ -3444,7 +3449,7 @@ def test_a_new_build_writes_entries_whose_last_write_failed_again_once(world, mo
     def fail(*args, **kwargs):
         raise ServiceError("mod_release_mismatch", file=world.spr.name)
 
-    monkeypatch.setattr(service, "_app_version", lambda: "1.0.0")
+    patch_everywhere(monkeypatch, [service], "_app_version", lambda: "1.0.0")
     monkeypatch.setattr(world.library, "_switch", fail)
     assert world.toggle(True).failed
     assert world.library.update_due()["retry"] is True
@@ -3455,7 +3460,7 @@ def test_a_new_build_writes_entries_whose_last_write_failed_again_once(world, mo
     assert world.folder()["retried"] == "1.0.0" and world.library.update_due()["retry"] is False
     assert world.library.retry_failed() is None
     # a new build that fixed the cause: written at its first start, the error gone, the entry off the unfinished list
-    monkeypatch.setattr(service, "_app_version", lambda: "1.0.1")
+    patch_everywhere(monkeypatch, [service], "_app_version", lambda: "1.0.1")
     monkeypatch.setattr(world.library, "_switch", switch)
     assert world.reload().update_due()["retry"] is True
     assert world.library.retry_failed().done
@@ -3471,7 +3476,7 @@ def test_a_retry_clears_the_stale_error_of_an_entry_that_holds_its_source(world,
     world.library._selection_error(pin, ["test_spr"], {"code": "mod_release_mismatch", "params": {}})
     assert world.library.selection("test")["spr"]["installed"] is False
     before = world.spr.read_bytes(), world.spr.stat().st_mtime_ns
-    monkeypatch.setattr(service, "_app_version", lambda: "1.0.1")
+    patch_everywhere(monkeypatch, [service], "_app_version", lambda: "1.0.1")
     world.library.retry_failed()
     assert world.library.selection("test")["spr"] == {"source": f"mod:{mod.id}", "installed": True, "error": None}
     assert (world.spr.read_bytes(), world.spr.stat().st_mtime_ns) == before  # nothing written
@@ -3482,7 +3487,7 @@ def test_failed_writes_wait_while_mods_are_off_or_the_game_runs(world, monkeypat
     world.library.apply("test", f"mod:{mod.id}")
     pin = world.library.current_pin()
     world.library._selection_error(pin, ["test_spr"], {"code": "mod_release_mismatch", "params": {}})
-    monkeypatch.setattr(service, "_app_version", lambda: "1.0.1")
+    patch_everywhere(monkeypatch, [service], "_app_version", lambda: "1.0.1")
     world.library.profiles.update(lambda data: data.update(enabled=False))
     assert world.library.update_due()["retry"] is False and world.library.retry_failed() is None
     world.library.profiles.update(lambda data: data.update(enabled=True))
@@ -3620,7 +3625,7 @@ def updating(monkeypatch, payload: bytes = b"new build") -> None:
         result.write_bytes(header_bundle(payload))
         return RebuildResult(True, "updated", [FilePair(result, targets[0])])
 
-    monkeypatch.setattr(service, "rebuild", update)
+    patch_everywhere(monkeypatch, [service], "rebuild", update)
 
 
 def forget_markers(world: World) -> None:
@@ -3700,8 +3705,9 @@ def test_an_update_that_changed_nothing_sets_no_marker_and_keeps_built_copies(wo
         (output / targets[0].name).write_bytes(mod.file.read_bytes())
         return RebuildResult(True, "updated", [FilePair(output / targets[0].name, targets[0])])
 
-    monkeypatch.setattr(
-        service,
+    patch_everywhere(
+        monkeypatch,
+        [service],
         "rebuild",
         same if same_bytes else lambda *args, **kwargs: RebuildResult(True, "", [], all_unchanged=True),
     )
@@ -3808,6 +3814,6 @@ def test_apply_configuration_without_official_keeps_outside_and_reports_incomple
     assert {path.name: path.read_bytes() for path in kept.file.parent.glob("*.bundle")} == before
     assert texture.read_bytes() == mod.file.read_bytes()
     assert world.spr.read_bytes() == before[world.spr.name]
-    from bmpt.webui.services import _changed_of
+    from bmpt.webui.services_jobs import _changed_of
 
     assert _changed_of(result)["mods"]

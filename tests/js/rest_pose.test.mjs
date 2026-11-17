@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { lobbyIdle } from "../../src/bmpt/web/js/rest-pose.js";
-import * as Lobby from "../../src/bmpt/web/js/lobby.js";
+import { lobbyIdle } from "../../src/bmpt/web/js/spine/rest-pose.js";
+import * as Lobby from "../../src/bmpt/web/js/lobby/lobby.js";
 
 const data = (names) => ({
   animations: names.map((name) => ({ name })),

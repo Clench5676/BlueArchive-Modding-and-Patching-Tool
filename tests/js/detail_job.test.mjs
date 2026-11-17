@@ -1,12 +1,16 @@
 // Exercise the detail job's orchestration with stand-ins for the rendered screen and RPC transport.
-import { modJob, progressName, steadyFraction } from "../../src/bmpt/web/js/job-progress.js";
-import { setStrings, T as translate } from "../../src/bmpt/web/js/i18n.js";
+import { modJob, progressName, steadyFraction } from "../../src/bmpt/web/js/core/job-progress.js";
+import { setStrings, T as translate } from "../../src/bmpt/web/js/core/i18n.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-const source = readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8");
+// the module's exports as plain declarations
+const source = readFileSync(new URL("../../src/bmpt/web/js/detail/detail-actions.js", import.meta.url), "utf8").replace(
+  /^export /gm,
+  "",
+);
 const jobSource = source.slice(source.indexOf("async function job("), source.indexOf("function shownMod()"));
-const loadingSource = readFileSync(new URL("../../src/bmpt/web/js/loading.js", import.meta.url), "utf8");
+const loadingSource = readFileSync(new URL("../../src/bmpt/web/js/app/loading.js", import.meta.url), "utf8");
 const progressSource = loadingSource.slice(
   loadingSource.indexOf("export function progressText("),
   loadingSource.indexOf("export async function task("),

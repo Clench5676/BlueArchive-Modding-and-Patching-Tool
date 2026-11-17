@@ -9,9 +9,9 @@ import pytest
 
 from ba_modding_toolkit import asset, i18n
 from ba_modding_toolkit.models import AssetType, SaveOptions
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.library import rebuild
-from bmpt.localization import LOCALES, register_locales
+from bmpt.core.localization import LOCALES, register_locales
 from bmpt.webui.strings import ui_strings
 
 EXPECTED = json.loads((Path(__file__).parent / "fixtures" / "package_split" / "messages.json").read_text())

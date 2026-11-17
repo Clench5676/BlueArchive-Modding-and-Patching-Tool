@@ -6,8 +6,8 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from bmpt import rebake
-from bmpt.atlas_remap import RemapError, parse_atlas
+from bmpt.spine import rebake
+from bmpt.spine.atlas_remap import RemapError, parse_atlas
 
 RED, GREEN, BLUE, WHITE = (220, 30, 30, 255), (30, 200, 40, 255), (40, 50, 210, 255), (250, 250, 250, 255)
 

@@ -1,0 +1,383 @@
+// Update popup on the game's popup frame (UIPopup_Sort): the current and the new version, Later / Update.
+// Updating downloads and verifies the build; Restart installs it only after a separate confirmation. check()
+// resolves once the popup has closed; automatic checks wait for beforeShow without holding a screen.
+import * as Buttons from "../ui/game-buttons.js";
+import * as NGUI from "../ui/ngui.js";
+import * as Popup from "../ui/popup.js";
+import { frameGeometry } from "../ui/popup-frames.js";
+import { rpc, waitJob } from "../core/api.js";
+import { T, errorText, language } from "../core/i18n.js";
+import { notesFor } from "./release-notes.js";
+import { statsBox } from "../ui/stats-box.js";
+import { COLOUR, POPUP, POPUP_FOOTER, STATS_BOX } from "../ui/ui-tokens.js";
+import { S, clone } from "../core/util.js";
+
+const { node, sprite, label, find } = NGUI;
+const checks = new WeakMap();
+const RESTART_WAIT = 3000;
+const NOTES_FONT = 44;
+
+// The release's Markdown on the same UIPopup_Sort frame used by notices, in the UI language (release-notes.js):
+// headings larger, list items with a hanging bullet. No HTML, images or update jobs.
+const dialogTitle = (key, simulation) => T(key) + (simulation ? T("update.simulation.suffix") : "");
+const HEADING_FONT = [56, 52, 48];
+
+/**
+ * The popup's lines for the release notes: one fixed type size per kind, as a changelog reads; a longer line
+ * wraps instead of shrinking.
+ * @param {string} markdown The notes.
+ * @param {string} [lang] The language tag.
+ */
+export function notesLines(markdown, lang = language()) {
+  const blocks = notesFor(typeof markdown === "string" ? markdown : "", lang);
+  if (!blocks.length) return [{ text: T("update.notesEmpty"), fontSize: NOTES_FONT, minFontSize: NOTES_FONT }];
+  return blocks.map((b) => {
+    if (b.kind === "heading") {
+      const fontSize = HEADING_FONT[Math.min(b.level, 3) - 1];
+      return { text: b.text, fontSize, minFontSize: fontSize, gap: b.gap ? 32 : 0 };
+    }
+    const line = { text: b.text, fontSize: NOTES_FONT, minFontSize: NOTES_FONT, gap: b.gap ? 12 : 0 };
+    if (b.kind === "item") return { ...line, marker: b.marker, markerGap: 44, indent: 52 + b.depth * 52 };
+    return b.under != null ? { ...line, indent: 52 + b.under * 52 } : line;
+  });
+}
+
+/**
+ * Show a release's notes.
+ * @param {object} info The release's information: version, notes and page.
+ * @param {object} [options]
+ * @param {boolean} [options.simulation] The notes of a simulated release.
+ * @param {Function} [options.onSimulatedPage] Called instead of opening the release page.
+ * @param {boolean} [options.releasePage] False leaves out the release page button (a local build's tag may not
+ *     be published).
+ */
+export async function releaseNotes(info, { simulation = false, onSimulatedPage, releasePage = true } = {}) {
+  const lines = notesLines(info.notes);
+  const result = await Popup.message({
+    title: `${dialogTitle("update.notes", simulation)} - ${info.version}`,
+    lines,
+    plain: true,
+    scroll: true,
+    width: "L",
+    buttons: [
+      ...(releasePage ? [{ label: T("update.releasePage"), value: "page" }] : []),
+      { label: T("display.close"), value: "dismiss" },
+    ],
+  });
+  if (result.button === "page") {
+    if (simulation) await onSimulatedPage?.();
+    else await rpc("app.openReleasePage", { page: info.page });
+  }
+}
+
+/**
+ * Show the first launch after an upgrade, pre-releases included: the running version's own notes once, when no
+ * popup is open and blocked() is false. The server records the launch (app.upgradeNotes), so it is asked before
+ * the feature tours; the offer stays pending until the popup has closed.
+ * @param {object} [options]
+ * @param {() => boolean} [options.blocked] Whether the notes must wait.
+ */
+export async function afterUpgrade({ blocked = () => false } = {}) {
+  const own = await rpc("app.upgradeNotes");
+  if (!own?.due) return;
+  await Popup.whenIdle(200, blocked);
+  await releaseNotes(own, { releasePage: false });
+  await rpc("app.upgradeNotesPresented", { version: own.current });
+}
+
+/**
+ * Simulate an update for the pre-release previews: Settings supplies the server's shared prerelease gate, and
+ * synthetic data never enters the updater service. With notes, the build's own release notes (app.releaseNotes)
+ * stand in for a newer release's, so they can be read before publishing.
+ * @param {HTMLElement} host The popup's host.
+ * @param {object} prefs The settings.
+ * @param {boolean} [notes] Use the build's own release notes.
+ */
+export async function simulate(host, prefs, notes = true) {
+  if (prefs?.prereleasePreviews !== true || checks.has(host)) return null;
+  const own = notes ? await rpc("app.releaseNotes").catch(() => null) : null;
+  return check(
+    host,
+    {
+      current: prefs.version,
+      version: own?.notes ? own.version : "0.6.0",
+      installable: true,
+      notes: notes ? own?.notes || T("update.simulation.sample") : "",
+    },
+    { simulation: true },
+  );
+}
+
+/**
+ * Offer an update. The popup resolves with what closed it: "later" (Later or Escape), "page" (the download page
+ * opened) or "update" (a failed update, once dismissed); a successful retry clears that failure; Restart quits
+ * the app on success.
+ * @param {HTMLElement} host The popup's host.
+ * @param {object} info The update information; Settings may pass its check's result.
+ * @param {object} [options]
+ * @param {(info: object) => void} [options.onCheck] Called with the check's answer.
+ * @param {(error: Error) => void} [options.onError] Called when the check fails.
+ * @param {() => Promise<void>} [options.beforeShow] Automatic checks wait for it without holding a screen.
+ * @param {boolean} [options.simulation] A simulated update.
+ * @returns {Promise<"later"|"page"|"update"|null>} null without a newer release, offline or when the popup
+ *     cannot be drawn.
+ */
+export function check(host, info, { onCheck, onError, beforeShow, simulation = false } = {}) {
+  const observe = (checked) => {
+    if (onCheck || onError) checked.then(onCheck, onError).catch((err) => console.error("update check", err));
+  };
+  if (checks.has(host)) {
+    const current = checks.get(host);
+    observe(current.checked);
+    return current.done;
+  }
+  // Reserve the host before asking the server, including checks that have not drawn their popup yet.
+  const checked = Promise.resolve().then(() => (info === undefined ? rpc("app.checkUpdate") : info));
+  observe(checked);
+  const done = checked
+    .then(
+      async (release) => {
+        if (!release) return null;
+        await beforeShow?.();
+        return show(host, release, { simulation });
+      },
+      () => null,
+    )
+    .finally(() => checks.delete(host)); // automatic checks stay quiet when offline
+  checks.set(host, { checked, done });
+  return done;
+}
+
+/**
+ * Fit the offer's three captions (Label_Locale widgets) on the footer's bodies in the frame (FRAME_W wide,
+ * taken to the popup frames' class): the popups' footer fit (popupFrame applies the same to the three choices),
+ * a long one wraps to two lines before it shrinks, clear of the body's edges; all three share one size.
+ */
+export function offerCaptions(widgets) {
+  const texts = widgets.map((l) => l.text),
+    { kind, room } = Popup.footerLayout(texts, frameGeometry(FRAME_W).w);
+  return Popup.footerLabels(widgets, texts, { width: room, caption: kind.caption });
+}
+
+// the frame, 1700 wide, as high as its content needs: the light box where a message's lines start under the
+// title, then Status (96 high) and the Progress bar (20 high, the lowest content), and the popups' footer
+// clearance (POPUP_FOOTER) under that
+const STATUS = { gap: 6, h: 96 };
+const PROGRESS = { gap: 8, h: 20 };
+const TOP = Popup.MSG.title;
+const FRAME_W = 1700;
+/**
+ * The frame for a box boxH high: its height, the box's top and the centres of Status and Progress (popup-local
+ * y), and the lowest content edge.
+ */
+export function frameFor(boxH) {
+  const below = STATUS.gap + STATUS.h + PROGRESS.gap + PROGRESS.h;
+  const h = Math.ceil(TOP + boxH + below + POPUP_FOOTER.clearance);
+  const boxTop = POPUP.frameY + h / 2 - TOP,
+    boxBottom = boxTop - boxH;
+  const status = boxBottom - STATUS.gap - STATUS.h / 2,
+    progress = boxBottom - STATUS.gap - STATUS.h - PROGRESS.gap - PROGRESS.h / 2;
+  return { w: FRAME_W, h, boxTop, status, progress, contentBottom: progress - PROGRESS.h / 2 };
+}
+/**
+ * How far the content group moves down from its top place: it is centred in the room the frame keeps under the
+ * title, the version box alone while the offer waits, with Status once there is a line, with the Progress bar
+ * too while downloading (no empty band under the box).
+ * @param {object} [options]
+ * @param {boolean} [options.status] A status line shows.
+ * @param {boolean} [options.progress] The progress bar shows.
+ */
+export function contentShift({ status = false, progress = false } = {}) {
+  const full = STATUS.gap + STATUS.h + PROGRESS.gap + PROGRESS.h;
+  const shown = status || progress ? STATUS.gap + STATUS.h + (progress ? PROGRESS.gap + PROGRESS.h : 0) : 0;
+  return (full - shown) / 2;
+}
+/**
+ * The rows of the version box: the current version in black, the latest in the success colour.
+ */
+export const versionRows = (info) => [
+  { caption: T("update.current"), value: info.current.replace(/-dev$/, "") },
+  { caption: T("update.latest"), value: info.version, colour: `${COLOUR.success}/1.00` },
+];
+// the two versions are one line each: two rows of the box's minimum
+export const FRAME = frameFor(2 * STATS_BOX.rowMin + 2 * STATS_BOX.padY);
+
+function show(host, info, options) {
+  return new Promise((resolve) => {
+    draw(host, info, resolve, options).catch((err) => {
+      console.error("update popup", err);
+      host.hidden = true;
+      host.innerHTML = "";
+      resolve(null);
+    });
+  });
+}
+
+async function draw(host, info, resolve, { simulation = false } = {}) {
+  host.hidden = false;
+  let ended = false;
+  let phase = !simulation && info.installable && info.downloaded ? "ready" : "offer";
+  let file = info.file,
+    error = "",
+    status = "",
+    percent = 0,
+    revision = 0;
+  let buttons = [];
+  const blocked = () => phase === "downloading" || phase === "installing";
+  const close = (how) => {
+    if (ended || blocked()) return false;
+    ended = true;
+    host.hidden = true;
+    host.innerHTML = "";
+    Popup.closed(host);
+    resolve(how === "later" && error ? "update" : how);
+    return true;
+  };
+  // on the popup stack from the start: Escape is Later unless a job or restart is in progress
+  Popup.opened(host, () => close("later"));
+  await Buttons.ready();
+  await Popup.frameReady();
+  if (ended) return;
+  const installable = simulation || info.installable;
+  // the two versions on the game's light stats box; the frame takes the height the box and the lines under it need
+  const rows = versionRows(info);
+  const frame = frameFor(statsBox({ holder: "frame", width: FRAME_W, rows }).height);
+  const content = [
+    ...statsBox({ holder: "frame", width: FRAME_W, at: [0, frame.boxTop], rows }).nodes,
+    node("Status", [0, frame.status], [label("", 40, "#2d4664/1.00", 1250, STATUS.h, { depth: 8 })]),
+    node(
+      "Progress",
+      [0, frame.progress],
+      [sprite("Common_Bg_Raius10px", 1200, PROGRESS.h, { depth: 5, color: "#c0c9d4/1.00" })],
+      [
+        node(
+          "Fill",
+          [-600, 0],
+          [sprite("Common_Bg_Raius10px", 1200, PROGRESS.h, { pivot: 3, depth: 6, color: `${COLOUR.success}/1.00` })],
+        ),
+      ],
+    ),
+  ];
+
+  async function render() {
+    const rev = ++revision,
+      locked = blocked();
+    if (locked) for (const b of buttons) b.disabled = true;
+    const action = !installable ? "page" : phase === "ready" || phase === "installing" ? "restart" : "update";
+    const okText = T(action === "update" ? "update.now" : `update.${action}`);
+    // the shared popup frame, no close button; Later, Release Notes and the action are its three choices
+    const tree = Popup.popupFrame(dialogTitle("update.title", simulation), frame.w, frame.h, {
+      close: false,
+      buttons: [
+        { label: T("update.later"), name: "Btn_Cancel" },
+        { label: T("update.notes"), name: "Btn_Notes" },
+        { label: okText, name: "Btn_Ok", primary: true, semantic: "update" },
+      ],
+    });
+    const body = find(tree, "Popup"),
+      controls = find(body, "Btn");
+    const text =
+      error ||
+      status ||
+      (phase === "downloading"
+        ? T("update.downloading", { p: percent })
+        : phase === "ready"
+          ? T("update.complete")
+          : phase === "installing"
+            ? T("update.restarting")
+            : "");
+    const shift = contentShift({ status: !!text, progress: phase === "downloading" });
+    body.children.push(node("Content", [0, -shift], [], clone(content)));
+    for (const name of ["Btn_Cancel", "Btn_Notes", "Btn_Ok"]) {
+      if (locked) {
+        const index = controls.children.findIndex((child) => child.name === name);
+        controls.children[index] = Buttons.disable(controls.children[index]);
+      }
+    }
+    const f = NGUI.fitText(text, 40, 30, 1250, 2);
+    Object.assign(find(body, "Content/Status").widgets[0], {
+      text: f.text,
+      fontSize: f.fs,
+      color: error ? `${COLOUR.error}/1.00` : "#2d4664/1.00",
+    });
+    const progress = find(body, "Content/Progress");
+    progress.active = phase === "downloading";
+    find(progress, "Fill").active = percent > 0;
+    find(progress, "Fill").widgets[0].w_ = (1200 * percent) / 100;
+    const next = document.createElement("div");
+    const view = await NGUI.render(tree, next, { scale: S, origin: [960, 540], z: 2000 });
+    if (ended || rev !== revision) return;
+    const hit = (name, fn, caption, action) =>
+      Popup.hit(next, view, `Center/Popup/Btn/${name}/BG (1)`, fn, { name: caption, action, z: 2100 });
+    buttons = [
+      hit("Btn_Cancel", () => close("later"), T("update.later"), "later"),
+      hit(
+        "Btn_Notes",
+        () =>
+          releaseNotes(info, {
+            simulation,
+            onSimulatedPage: async () => {
+              status = T("update.simulation.pageStatus");
+              await render();
+            },
+          }).catch((err) => console.error("release notes", err)),
+        T("update.notes"),
+        "notes",
+      ),
+      hit("Btn_Ok", () => act(action), okText, action),
+    ];
+    for (const b of buttons) {
+      b.disabled = locked;
+      b.setAttribute("aria-disabled", String(locked));
+    }
+    host.replaceChildren(...next.childNodes);
+  }
+
+  async function act(action) {
+    if (ended || blocked()) return;
+    if ((action === "update" && phase !== "offer") || (action === "restart" && phase !== "ready")) return;
+    // Intercept every simulated action before download, staged-file handling or native installation.
+    if (simulation) {
+      status = T("update.simulation.status");
+      await render();
+      return;
+    }
+    if (!installable) {
+      if (close("page")) rpc("app.openReleasePage", { page: info.page }).catch(() => {});
+      return;
+    }
+    const installing = phase === "ready";
+    phase = installing ? "installing" : "downloading";
+    error = "";
+    percent = 0;
+    try {
+      await render();
+      if (installing) {
+        if ((await rpc("app.installUpdate", { file })) === false) {
+          phase = "ready";
+          await render();
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, RESTART_WAIT));
+        // A successful quit destroys this page. If it is still here, allow dismissal and another Restart.
+        phase = "ready";
+        error = T("error.update_restart_failed");
+        await render();
+        return;
+      }
+      const result = await waitJob(await rpc("app.update"), (p) => {
+        const next = p.total > 0 ? Math.max(0, Math.min(100, Math.floor((p.current / p.total) * 100))) : 0;
+        if (next === percent) return; // the popup is drawn again only when the number changes
+        percent = next;
+        render().catch((err) => console.error("update progress", err));
+      });
+      file = result.file;
+      phase = "ready";
+    } catch (err) {
+      phase = installing ? "ready" : "offer";
+      error = errorText(err);
+    }
+    await render();
+  }
+  await render();
+}

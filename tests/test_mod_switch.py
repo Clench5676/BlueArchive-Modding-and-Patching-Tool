@@ -1,4 +1,4 @@
-"""The Enable Mods switch (web/js/mod-switch.js: its view from mods.state, a click, the first toggle's explanation,
+"""The Enable Mods switch (web/js/mods/mod-switch.js: its view from mods.state, a click, the first toggle's explanation,
 the help, the result, the classic modal, the start prompts) is front-end code: its tests run with Node's test runner
 on a stand-in DOM, skipped where Node is not installed."""
 

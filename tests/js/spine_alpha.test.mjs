@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
-import { loadPlayer } from "../../src/bmpt/web/js/spine-load.js";
+import { loadPlayer } from "../../src/bmpt/web/js/spine/spine-load.js";
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 const near = (values, expected) => values.forEach((v, i) => assert.ok(Math.abs(v - expected[i]) < 1e-6));
@@ -49,7 +49,7 @@ test("portrait and lobby loads retain 0.2.0 straight blending even when atlas pa
 });
 
 test("the memorial lobby caller selects the 0.2.0 PMA flag", () => {
-  const source = read("../../src/bmpt/web/js/lobby.js");
+  const source = read("../../src/bmpt/web/js/lobby/lobby.js");
   const code = source.slice(
     source.indexOf("function makePlayer("),
     source.indexOf("// A loaded player in linear light"),

@@ -5,7 +5,7 @@ import { FRAME } from "../../src/bmpt/web/js/photography/camera.js";
 const source = (
   await readFile(new URL("../../src/bmpt/web/js/photography/capture.js", import.meta.url), "utf8")
 ).replace(
-  /import \* as NGUI from ["']\.\.\/ngui\.js["'];/,
+  /import \* as NGUI from ["']\.\.\/ui\/ngui\.js["'];/,
   "const NGUI={load:async()=>{throw new Error('Unexpected fallback')}};",
 );
 const adjusted = source.replace(

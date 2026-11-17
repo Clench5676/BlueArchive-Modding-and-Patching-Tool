@@ -1,11 +1,11 @@
-// Tests for the memorial lobby's camera framing: the views it allows (web/js/lobby.js framingView: centred
-// across, no cell past the art that some pose leaves bare), what the shutter keeps (cameraParams) and where the intro
-// has its skeletons at a time (web/js/lobby-intro.js sampler). Run with Node's test runner.
+// Tests for the memorial lobby's camera framing: the views it allows (web/js/lobby/lobby-measure.js framingView:
+// centred across, no cell past the art that some pose leaves bare), what the shutter keeps (cameraParams) and where the
+// intro has its skeletons at a time (web/js/lobby/lobby-intro.js sampler). Run with Node's test runner.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-const Lobby = await import("../../src/bmpt/web/js/lobby.js");
-const Intro = await import("../../src/bmpt/web/js/lobby-intro.js");
+const Lobby = await import("../../src/bmpt/web/js/lobby/lobby.js");
+const Intro = await import("../../src/bmpt/web/js/lobby/lobby-intro.js");
 
 const G = { x: -1480, y: -832.5, w: 2960, h: 1665 };
 const C = Lobby.FRAMING_CELL;
@@ -80,7 +80,7 @@ test("the shutter keeps the lobby scaled about the screen centre and moved so th
 });
 
 test("a camera's still shows the art the framed view showed, as its lobby does", async () => {
-  const { lobbyStillViewport } = await import("../../src/bmpt/web/js/lobby-still.js");
+  const { lobbyStillViewport } = await import("../../src/bmpt/web/js/lobby/lobby-still.js");
   // the official prefab's main layer, and a view framed on it: zoomed in and moved up and to the left
   const official = { name: "hero", x: 0, y: -1017.5, scale: 1.05769 };
   const w = 1600,
@@ -88,7 +88,7 @@ test("a camera's still shows the art the framed view showed, as its lobby does",
     V = { x: -900, y: -120, w, h };
   const { scale: k, offset } = Lobby.cameraParams(V, G);
   // the camera's prefab places the layer by p -> k p + offset, its scale times k (library/lobby_camera.py); the
-  // framing.json of a camera answers that layer and the game's view (webui/services.py)
+  // framing.json of a camera answers that layer and the game's view (webui/services_assets.py)
   const camera = {
     name: "hero",
     x: k * official.x + offset[0],
@@ -168,8 +168,8 @@ test("the intro sampler places a moved skeleton by its timeline and plays its cl
 });
 
 // --- a saved camera is a Memorial Lobby choice of the student ---
-const { modName } = await import("../../src/bmpt/web/js/names.js");
-const Sources = await import("../../src/bmpt/web/js/switch-sources.js");
+const { modName } = await import("../../src/bmpt/web/js/core/names.js");
+const Sources = await import("../../src/bmpt/web/js/mods/switch-sources.js");
 const words = { "lobby.original": "Original", "lobby.cameraName": "Camera {n}" };
 const translate = (key, params = {}) => (words[key] || key).replace(/\{(\w+)\}/g, (_, k) => params[k]);
 

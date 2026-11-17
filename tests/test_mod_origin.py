@@ -8,17 +8,17 @@ from types import SimpleNamespace
 
 import pytest
 
-from bmpt import mod_origin
+from bmpt.unity import mod_origin
 from ba_modding_toolkit.bundle import Bundle
 from bmpt.library import integrity
 from bmpt.library import ModLibrary
 from bmpt.library.identity import content_cores
 from bmpt.library.integrity import inspect as inspect_bundle, metadata as bundle_metadata
-from bmpt.webui import batch_import
+from bmpt.webui import batch_candidates, batch_import
 from bmpt.library import targets as resolver
 from ba_modding_toolkit.utils import CRCUtils
 
-from test_batch_import import REAL_SHARING_KEYS, analyze, env, finish, rpc, run
+from test_batch_import import REAL_SHARING_KEYS, analyze, env, finish, patch_batch, rpc, run
 from test_library import game_bundle, make_mod, setup_library
 
 
@@ -177,7 +177,7 @@ def test_conversion_update_add_apply_uses_real_classic_core(real_metadata, platf
 def test_current_release_spine_rebuilds_foreign_platform_instead_of_copying(
     real_metadata, kind, crc_name, manual, platform, source_platform
 ):
-    from bmpt.errors import ServiceError
+    from bmpt.core.errors import ServiceError
 
     env = real_metadata
     if kind == "lobby":
@@ -263,7 +263,7 @@ def test_current_release_cross_platform_rebuild_rejects_invalid_output(real_meta
             output.write_bytes(output.read_bytes().replace(b"2021.3.0f1", b"2020.3.0f1"))
         return RebuildResult(True, "converted", [FilePair(output, target)])
 
-    monkeypatch.setattr(batch_import, "rebuild", foreign_output)
+    patch_batch(monkeypatch, "rebuild", foreign_output)
     (result,) = run(env, [entry], types=["TextAsset"])
     assert (result["outcome"], result["reason"], result["applied"]) == ("failed", reason, False)
     assert env.original.read_bytes() == before and not env.library.mods()
@@ -272,7 +272,7 @@ def test_current_release_cross_platform_rebuild_rejects_invalid_output(real_meta
 @pytest.mark.parametrize("kind", ["spr", "lobby"])
 @pytest.mark.parametrize("manual", [False, True])
 def test_current_release_spine_upgrades_serialized_version_using_target_format(real_metadata, kind, manual):
-    from bmpt.errors import ServiceError
+    from bmpt.core.errors import ServiceError
 
     env = real_metadata
     if kind == "lobby":
@@ -439,7 +439,7 @@ def test_converted_source_is_already_in_library_after_move_and_restart(real_meta
     def forbidden(*args, **kwargs):
         pytest.fail("A remembered conversion must not rebuild, add, or apply")
 
-    monkeypatch.setattr(batch_import, "rebuild", forbidden)
+    patch_batch(monkeypatch, "rebuild", forbidden)
     monkeypatch.setattr(env.library, "add_files", forbidden)
     monkeypatch.setattr(env.library, "apply_import", forbidden)
     (repeated,) = analyze(env, [moved])["entries"]
@@ -503,7 +503,7 @@ def test_legacy_converted_output_is_verified_without_reimporting(real_metadata, 
     assert (repeated["state"], repeated["libraryId"]) == ("library", result["libraryId"])
     assert env.library._records[result["libraryId"]].get("import_sources")
     assert env.original.read_bytes() == before and len(env.library.mods()) == 1
-    monkeypatch.setattr(batch_import, "rebuild", forbidden)
+    patch_batch(monkeypatch, "rebuild", forbidden)
     assert analyze(env, [source])["entries"][0]["state"] == "library"
 
 
@@ -662,7 +662,7 @@ def test_official_metadata_detection_on_copies_only(tmp_path):
 
 
 def test_ios_target_folder_is_found_by_settings_resource_search(tmp_path):
-    from bmpt.config import Settings
+    from bmpt.host.config import Settings
     from ba_modding_toolkit.searching import get_search_dirs
 
     folder = tmp_path / "Resource"
@@ -689,7 +689,7 @@ def test_conversion_failure_cannot_store_or_apply_mobile_bytes(real_metadata, mo
     )
     (entry,) = analyze(env, [source])["entries"]
     before = env.original.read_bytes()
-    monkeypatch.setattr(batch_import, "rebuild", lambda **kwargs: RebuildResult(False, "failed", []))
+    patch_batch(monkeypatch, "rebuild", lambda **kwargs: RebuildResult(False, "failed", []))
     (result,) = run(env, [entry], types=["TextAsset"])
     assert result["outcome"] == "failed" and result["reason"] == "conversion_failed"
     assert not result["applied"] and not env.library.mods() and env.original.read_bytes() == before
@@ -697,7 +697,7 @@ def test_conversion_failure_cannot_store_or_apply_mobile_bytes(real_metadata, mo
 
 @pytest.mark.parametrize("output", [False, True])
 def test_conversion_stages_only_inside_the_pinned_library_with_dev_guards(real_metadata, monkeypatch, output):
-    from bmpt import devmode
+    from bmpt.core import devmode
 
     env = real_metadata
     monkeypatch.setenv(devmode.ROOTS, str(env.tmp))
@@ -719,7 +719,7 @@ def test_conversion_stages_only_inside_the_pinned_library_with_dev_guards(real_m
         seen.extend([kwargs["output_dir"], *kwargs["target_paths"]])
         return update(**kwargs)
 
-    monkeypatch.setattr(batch_import, "rebuild", convert)
+    patch_batch(monkeypatch, "rebuild", convert)
     (result,) = run(env, [entry], types=["TextAsset"], output=str(env.tmp / "output") if output else None)
     assert result["outcome"] == "updated" and result["applied"], result
     assert seen and all(path.is_relative_to(env.library.root / "staging") for path in seen)
@@ -729,7 +729,7 @@ def test_conversion_stages_only_inside_the_pinned_library_with_dev_guards(real_m
 
 
 def test_system_temp_conversion_output_reproduces_the_dev_read_guard_failure(real_metadata, monkeypatch):
-    from bmpt import devmode
+    from bmpt.core import devmode
 
     env = real_metadata
     monkeypatch.setenv(devmode.ROOTS, str(env.tmp))
@@ -756,7 +756,7 @@ def test_system_temp_conversion_output_reproduces_the_dev_read_guard_failure(rea
 
     monkeypatch.setattr(batch_import.staging, "temporary_directory", former_staging)
     (result,) = run(env, [entry], types=["TextAsset"], enableAfterImport=False)
-    refused = staged[0] / batch_import.staging_name(entry["id"]) / "output" / env.original.name
+    refused = staged[0] / batch_candidates.staging_name(entry["id"]) / "output" / env.original.name
     assert result["outcome"] == "failed" and result["reason"] == "dev_path_outside"
     assert result["params"] == {"path": str(refused)}
     assert not env.library.mods()
@@ -784,7 +784,7 @@ def test_converted_output_still_requires_full_dependency_validation(real_metadat
         )
         return RebuildResult(True, "converted", [FilePair(output, target)])
 
-    monkeypatch.setattr(batch_import, "rebuild", broken_output)
+    patch_batch(monkeypatch, "rebuild", broken_output)
     (result,) = run(env, [entry], types=["TextAsset"])
     assert result["outcome"] == "failed" and result["reason"] == "mod_parts_missing"
     assert not env.library.mods() and not result["applied"]
@@ -1060,7 +1060,7 @@ def test_import_uses_current_counterparts_and_reports_omissions(real_metadata, m
 @pytest.mark.parametrize("method", ["bundle", "inspect", "keys", "readable_keys"])
 @pytest.mark.parametrize("replacement", [False, True])
 def test_inspection_rejects_changed_file_revision(tmp_path, method, replacement):
-    from bmpt.errors import ServiceError
+    from bmpt.core.errors import ServiceError
 
     source = unity_bundle(tmp_path / "source.bundle")
     inspection = integrity.Inspection()
@@ -1109,7 +1109,7 @@ def test_judge_rejects_input_changed_during_library_identity(real_metadata, monk
 
 
 def test_inspection_rejects_a_file_changed_during_load(tmp_path, monkeypatch):
-    from bmpt.errors import ServiceError
+    from bmpt.core.errors import ServiceError
 
     source = unity_bundle(tmp_path / "source.bundle")
     load = Bundle.load
@@ -1228,12 +1228,12 @@ def test_legacy_recognition_rebuilds_only_when_source_hashes_are_missing(real_me
         pytest.fail("Analysis must never rebuild a legacy conversion")
 
     if recorded:
-        monkeypatch.setattr(batch_import, "rebuild", forbidden)
+        patch_batch(monkeypatch, "rebuild", forbidden)
         monkeypatch.setattr(batch_import.staging, "import_directory", forbidden)
     for _ in range(2):
         (repeated,) = analyze(env, [source])["entries"]
         assert repeated["state"] == "library"
-        monkeypatch.setattr(batch_import, "rebuild", forbidden)
+        patch_batch(monkeypatch, "rebuild", forbidden)
     assert len(env.library.mods()) == 1
 
 
@@ -1317,7 +1317,7 @@ def test_reimport_rebuild_does_not_rebind_provenance_to_swapped_parts(real_metad
 
 
 def test_optional_stored_source_lookup_failure_does_not_block(real_metadata, monkeypatch):
-    from bmpt.errors import ServiceError
+    from bmpt.core.errors import ServiceError
 
     env = real_metadata
     source = old_bundle(

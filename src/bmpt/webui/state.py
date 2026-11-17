@@ -32,9 +32,9 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-# the lock and the replace shared with the mod library (bmpt.filelock)
-from ..filelock import file_lock as _file_lock, replace as _replace
-from ..logging_utils import log_failure
+# the lock and the replace shared with the mod library (bmpt.core.filelock)
+from ..core.filelock import file_lock as _file_lock, replace as _replace
+from ..core.logging_utils import log_failure
 
 logger = logging.getLogger(__name__)
 
@@ -90,8 +90,8 @@ def custom_aliases(value: Any) -> list[str]:
     return out[:ALIAS_MAX]
 
 
-# The student list's view (web/js/roster-order.js keeps the same rules): merge toggle, the two segment filters, the
-# display settings' sort, order and filter groups.
+# The student list's view (web/js/roster/roster-order.js keeps the same rules): merge toggle, the two segment filters,
+# the display settings' sort, order and filter groups.
 ROSTER_SORTS = ("recent", "added", "name", "mods", "default")
 ROSTER_NATURAL = {"recent": "desc", "added": "desc", "name": "asc", "mods": "desc", "default": "asc"}
 ROSTER_FILTERS = {
@@ -767,8 +767,9 @@ def _holds_id(folder: Path, data_id: str) -> bool:
     return False
 
 
-# The memorial lobby's fullscreen zoom-out limit (web/js/lobby.js zoomBounds): the game's view, the art every clip keeps
-# painted (Full Art), the box of the scene's art over its poses (Unlocked), or a custom number of game views across.
+# The memorial lobby's fullscreen zoom-out limit (web/js/lobby/lobby.js zoomBounds): the game's view, the art every clip
+# keeps painted (Full Art), the box of the scene's art over its poses (Unlocked), or a custom number of game views
+# across.
 LOBBY_ZOOM_MODES = ("game", "art", "unlocked", "custom")
 LOBBY_ZOOM_CUSTOM = (1.0, 4.0)  # the custom limit's range; lobby.js never zooms out further (ZOOM_OUT_MAX)
 LOBBY_ZOOM_CUSTOM_DEFAULT = 2.0

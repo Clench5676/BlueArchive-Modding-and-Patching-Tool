@@ -1,5 +1,5 @@
 """The classic hand-off: the control channel, the window's placement, classic.json and the queue of writes for after
-the classic window (webui/classic.py, gui/control.py)."""
+the classic window (webui/classic/, gui/control.py)."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from urllib.parse import urlparse
 
 import pytest
 
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.gui import control as ctl
 from bmpt.webui import classic as cl
 from bmpt.webui import system
@@ -928,7 +928,7 @@ def test_a_real_child_that_prints_during_import_keeps_the_channel(tmp_path, monk
     holder["port"] = httpd.server_port
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     try:
-        src = str(Path(cl.__file__).parents[2])
+        src = str(Path(cl.__file__).parents[3])
         monkeypatch.setenv("PYTHONPATH", os.pathsep.join(filter(None, [src, os.environ.get("PYTHONPATH")])))
         assert window.open() == {"started": True}
         pid = window.status()["pid"]

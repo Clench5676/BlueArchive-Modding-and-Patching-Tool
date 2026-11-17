@@ -12,7 +12,7 @@ register(
   return next(spec, ctx); }`)}`,
 );
 const THREE = await import("three");
-const { createStillView } = await import("../../src/bmpt/web/js/model.js");
+const { createStillView } = await import("../../src/bmpt/web/js/model/model.js");
 
 // one buffer of float32 runs, each a buffer view
 function buffer(...runs) {

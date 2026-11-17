@@ -10,7 +10,7 @@ from PIL import Image
 
 from bmpt.gameassets import AssetCache, GameAssets
 
-SOURCE = Path(__file__).parents[1] / "src/bmpt/web/js/selected-frames.js"
+SOURCE = Path(__file__).parents[1] / "src/bmpt/web/js/ui/selected-frames.js"
 
 
 @pytest.fixture

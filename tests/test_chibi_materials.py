@@ -1,5 +1,5 @@
-"""The 3D chibi's materials (web/js/chibi-materials.js) and camera (web/js/model.js) are front-end code: their tests
-run with Node's test runner, skipped where Node is not installed."""
+"""The 3D chibi's materials (web/js/model/chibi-materials.js) and camera (web/js/model/model-camera.js) are front-end
+code: their tests run with Node's test runner, skipped where Node is not installed."""
 
 import shutil
 import subprocess

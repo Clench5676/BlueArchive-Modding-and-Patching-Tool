@@ -25,7 +25,7 @@ from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
-from ..errors import ServiceError
+from ..core.errors import ServiceError
 
 MAX_WORKERS = 4
 LZMA_DICT = 0x800000  # UnityPy's dictionary size, written in the header

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import { test } from "node:test";
-import { poseSetup } from "../../src/bmpt/web/js/refine-composite.js";
+import { poseSetup } from "../../src/bmpt/web/js/spine/refine-composite.js";
 const c = vm.createContext({
   console,
   TextDecoder,
@@ -102,7 +102,7 @@ test("runtime clipping, hidden slots and explicit null replacement", () => {
   );
 });
 
-import { poseTracks, listPoses } from "../../src/bmpt/web/js/refine-composite.js";
+import { poseTracks, listPoses } from "../../src/bmpt/web/js/spine/refine-composite.js";
 function animated() {
   const f = fixture("mesh");
   f.animations = {

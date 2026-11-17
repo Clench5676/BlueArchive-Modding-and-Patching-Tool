@@ -8,7 +8,7 @@ import hashlib
 import pytest
 
 from bmpt.library import troubleshoot
-from bmpt.steam_records import OfficialFile
+from bmpt.host.steam_records import OfficialFile
 
 from test_library import game_bundle, header_bundle
 from test_library_profiles import OFFICIAL, World, expect_error, world  # noqa: F401 (the fixture)

@@ -1,9 +1,10 @@
-// Tests for web/js/png-decode.js: the 3D viewer's own PNG decoding keeps colours where alpha is 0 (WebKit loses them).
+// Tests for web/js/core/png-decode.js: the 3D viewer's own PNG decoding keeps colours where alpha is 0 (WebKit loses
+// them).
 import assert from "node:assert/strict";
 import { deflateSync } from "node:zlib";
 import { test } from "node:test";
 
-import { decodePng } from "../../src/bmpt/web/js/png-decode.js";
+import { decodePng } from "../../src/bmpt/web/js/core/png-decode.js";
 
 const crcTable = Array.from({ length: 256 }, (_, n) => {
   let c = n;

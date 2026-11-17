@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { bindScale } from "../../src/bmpt/web/js/student-hall-scale.js";
-import { createDraft } from "../../src/bmpt/web/js/student-hall-model.js";
-import { PORTRAIT_TOOLBAR_HEIGHT, portraitScale, portraitRect } from "../../src/bmpt/web/js/student-hall-framing.js";
+import { bindScale } from "../../src/bmpt/web/js/hall/student-hall-scale.js";
+import { createDraft } from "../../src/bmpt/web/js/hall/student-hall-model.js";
+import {
+  PORTRAIT_TOOLBAR_HEIGHT,
+  portraitScale,
+  portraitRect,
+} from "../../src/bmpt/web/js/hall/student-hall-framing.js";
 class Input {
   value = "";
   listeners = {};
@@ -139,7 +143,7 @@ import {
   PORTRAIT_SIZE,
   PORTRAIT_TOOLBAR_MARGIN,
   portraitToolbarLayout,
-} from "../../src/bmpt/web/js/student-hall-framing.js";
+} from "../../src/bmpt/web/js/hall/student-hall-framing.js";
 test("individual size uses .5–2.0, hundredth steps, reset and a cancellable/saveable draft", () => {
   const saved = {
     revision: 0,

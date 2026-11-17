@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import NamedTuple
 from PIL import Image
 
-from bmpt.localization import register_locales
+from bmpt.core.localization import register_locales
 
 register_locales()
 

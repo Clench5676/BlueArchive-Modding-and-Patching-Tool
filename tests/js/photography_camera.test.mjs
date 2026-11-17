@@ -83,8 +83,8 @@ test("composed occlusion control keeps the right edge, centred neighbours and sc
     new URL("../../src/bmpt/web/js/photography/controller.js", import.meta.url),
     "utf8",
   );
-  const { CONTROL, XS_BUTTON, SPACE, FULLSCREEN_BUTTON } = await import("../../src/bmpt/web/js/ui-tokens.js");
-  const { row } = await import("../../src/bmpt/web/js/ui-grid.js");
+  const { CONTROL, XS_BUTTON, SPACE, FULLSCREEN_BUTTON } = await import("../../src/bmpt/web/js/ui/ui-tokens.js");
+  const { row } = await import("../../src/bmpt/web/js/ui/ui-grid.js");
   const S = 1920 / 2960,
     code = controller.slice(
       controller.indexOf("function photographyToolbarLayout("),

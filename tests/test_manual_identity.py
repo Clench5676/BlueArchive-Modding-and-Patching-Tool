@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from bmpt.catalog import Catalog
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.library import integrity, manual_identity
 
 from test_batch_import import env, analyze, finish, rpc, run

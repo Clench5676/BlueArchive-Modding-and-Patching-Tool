@@ -6,7 +6,7 @@ Prototype by [kalina](https://github.com/kalinaowo)
 
 import binascii
 from pathlib import Path
-from bmpt import devmode
+from bmpt.core import devmode
 
 # --- 原类常量，转为模块私有常量 ---
 _POLY_NORMAL = 0x104C11DB7

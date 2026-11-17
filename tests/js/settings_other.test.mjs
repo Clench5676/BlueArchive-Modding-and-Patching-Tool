@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { controls } from "./control_prefabs.mjs";
-import { overwrittenLines } from "../../src/bmpt/web/js/repairs.js";
+import { overwrittenLines } from "../../src/bmpt/web/js/app/repairs.js";
 
 const web = new URL("../../src/bmpt/web/js/", import.meta.url);
-const source = readFileSync(new URL("settings-other.js", web), "utf8");
-const settings = readFileSync(new URL("settings.js", web), "utf8");
+const source = readFileSync(new URL("settings/settings-other.js", web), "utf8");
+const settings = readFileSync(new URL("settings/settings.js", web), "utf8");
 const strip = (s) => s.replace(/^import [^;]*;\n/gm, "").replace(/^export /gm, "");
 function harness({ locale = "en-US", answer = "ok", used = true, error = null, result = {} } = {}) {
   const strings = JSON.parse(
@@ -215,14 +215,14 @@ test("generic Settings rows render names, every target file, status and actions 
     json: async () => (url.endsWith("atlases.json") ? { Common: { Test: { width: 1, height: 1 } } } : {}),
   }));
   try {
-    const NGUI = await import(new URL("ngui.js", web));
-    const { wrapPath } = await import(new URL("util.js", web));
+    const NGUI = await import(new URL("ui/ngui.js", web));
+    const { wrapPath } = await import(new URL("core/util.js", web));
     const h = harness();
-    const Rows = await import(new URL("settings-rows.js", web));
-    const ButtonsModule = await import(new URL("game-buttons.js", web));
+    const Rows = await import(new URL("settings/settings-rows.js", web));
+    const ButtonsModule = await import(new URL("ui/game-buttons.js", web));
     const { option, filter } = controls();
     const Buttons = { smallButton: (...args) => ButtonsModule.optionButton(option, filter, ...args) };
-    const { BACKDROP, XS_BUTTON, TYPE } = await import(new URL("ui-tokens.js", web));
+    const { BACKDROP, XS_BUTTON, TYPE } = await import(new URL("ui/ui-tokens.js", web));
     const deps = { NGUI, T: h.T, wrapPath, ...Rows, Buttons, BACKDROP, XS_BUTTON, TYPE };
     const valueRow = new Function("deps", `const {${Object.keys(deps)}} = deps; ${strip(settings)}; return valueRow;`)(
       deps,

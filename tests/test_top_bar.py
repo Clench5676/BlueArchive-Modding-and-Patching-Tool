@@ -1,4 +1,4 @@
-"""The top bar's alignment (web/js/top-bar-layout.js) is front-end code: its tests run with Node's test
+"""The top bar's alignment (web/js/window/top-bar-layout.js) is front-end code: its tests run with Node's test
 runner, skipped where Node is not installed."""
 
 import shutil

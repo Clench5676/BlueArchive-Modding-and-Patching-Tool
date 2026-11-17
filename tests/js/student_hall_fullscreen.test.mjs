@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createFullscreen } from "../../src/bmpt/web/js/student-hall-fullscreen.js";
+import { createFullscreen } from "../../src/bmpt/web/js/hall/student-hall-fullscreen.js";
 class Element {
   constructor(doc) {
     this.doc = doc;

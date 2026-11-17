@@ -1,3 +1,5 @@
+import { posix } from "node:path";
+
 // Source text for tests that assert how a module is written: the layout the formatter chose is irrelevant, so line
 // breaks and indentation collapse to single spaces, and a wrapped list closes up on its contents without the trailing
 // comma the formatter adds.
@@ -92,3 +94,48 @@ export const compact = (text) =>
     .replace(/ ?([^\w$ ]) ?/g, "$1")
     .replace(/,([)\]}])/g, "$1")
     .replace(/(^|[^\w$.])\(([\w$]+)\)=>/g, "$1$2=>");
+
+// A module and the sibling modules split from it as one module body, for tests that evaluate the code with stubs of
+// their own: the siblings come first, as their imports evaluate before the module itself; the import statements and
+// the `export { ... }` lists that link the pieces are dropped, and so is the `export` keyword of the siblings'
+// declarations (the module keeps its own exported declarations).
+export const joinedModules = (main, ...siblings) =>
+  [...siblings.map((text) => text.replace(/^export (?=(async )?function\b|const |let |class )/gm, "")), main]
+    .join("\n")
+    .replace(/^import [^;]*;$/gm, "")
+    .replace(/^export \{[^}]*\}( from "[^"]*")?;$/gm, "");
+
+// The popups' code: popup.js and the modules split from it, paths under web/js/ui.
+export const POPUP_MODULES = [
+  "popup.js",
+  "popup-footer.js",
+  "popup-checkbox.js",
+  "popup-list.js",
+  "popup-details.js",
+  "popup-message.js",
+];
+
+// The detail screen's code: detail.js and the modules split from it, paths under web/js/detail.
+export const DETAIL_MODULES = [
+  "detail.js",
+  "detail-screen.js",
+  "detail-actions.js",
+  "detail-chips.js",
+  "detail-strip.js",
+  "detail-portrait.js",
+  "detail-switchers.js",
+  "detail-aliases.js",
+  "detail-files.js",
+  "detail-lobby-tab.js",
+  "detail-model-tab.js",
+  "detail-fullscreen.js",
+  "detail-changes.js",
+  "detail-photo.js",
+];
+
+// The relative specifier a web UI module writes to import another, as a regular expression source matching only that
+// specifier: `from` and `to` are paths under web/js (e.g. "app/main.js", "core/i18n.js").
+export function importOf(from, to) {
+  const rel = posix.relative(posix.dirname(from), to);
+  return (rel.startsWith("..") ? rel : `./${rel}`).replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
+}

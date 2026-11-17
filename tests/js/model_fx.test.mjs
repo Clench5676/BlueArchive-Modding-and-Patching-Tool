@@ -1,5 +1,5 @@
-// Tests for web/js/model-fx.js (the halo's particles in the 3D model view): the lobby programs' GLSL rewritten for
-// three.js, the blend, and each system placed by its glTF node (glTF mirrors Unity on X). Run by
+// Tests for web/js/model/model-fx.js (the halo's particles in the 3D model view): the lobby programs' GLSL rewritten
+// for three.js, the blend, and each system placed by its glTF node (glTF mirrors Unity on X). Run by
 // tests/test_particles_player.py with Node's test runner; "three" resolves to the bundled copy.
 import assert from "node:assert/strict";
 import { register } from "node:module";
@@ -14,10 +14,10 @@ register(
 );
 const THREE = await import("three");
 const { blendOf, createModelFx, fragment3d, rows, vertex3d, viewOf } = await import(
-  "../../src/bmpt/web/js/model-fx.js"
+  "../../src/bmpt/web/js/model/model-fx.js"
 );
-const { PROGRAMS } = await import("../../src/bmpt/web/js/particles-gl.js");
-const { IDENTITY, WORLD } = await import("../../src/bmpt/web/js/particles.js");
+const { PROGRAMS } = await import("../../src/bmpt/web/js/lobby/particles-gl.js");
+const { IDENTITY, WORLD } = await import("../../src/bmpt/web/js/lobby/particles.js");
 
 const near = (a, b, eps = 1e-5, what = "") => assert.ok(Math.abs(a - b) <= eps, `${what} ${a} != ${b}`);
 

@@ -22,7 +22,7 @@ from typing import Any, Callable, Iterable
 from urllib.parse import parse_qs, unquote
 from wsgiref.simple_server import WSGIRequestHandler, WSGIServer, make_server
 
-from ..errors import ServiceError
+from ..core.errors import ServiceError
 from .events import EventBus
 from .instance import RAISE_HEADER, RAISE_PATH
 from .rpc import RpcRegistry
@@ -294,9 +294,9 @@ class WebApp:
         if rel == "index.html":
             recovery_config = self.recovery()
             if recovery_config.get("safeMode"):
-                body = body.replace(b'<script type="module" src="js/main.js"></script>', b"")
+                body = body.replace(b'<script type="module" src="js/app/main.js"></script>', b"")
             config = json.dumps(recovery_config, ensure_ascii=True).replace("<", "\\u003c")
-            recovery = (WEB_DIR / "js" / "recovery.js").read_bytes()
+            recovery = (WEB_DIR / "js" / "app" / "recovery.js").read_bytes()
             fallback = (WEB_DIR / "css" / "fallback.css").read_bytes()
             body = body.replace(
                 b"<!-- recovery -->",

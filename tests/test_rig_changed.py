@@ -10,9 +10,9 @@ import pytest
 from PIL import Image
 
 from ba_modding_toolkit.models import FilePair
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.library.rebuild import RebuildResult
-from bmpt import atlas_remap as remap
+from bmpt.spine import atlas_remap as remap
 from bmpt.library import fingerprint, service
 from bmpt.library.integrity import inspect as inspect_bundle
 
@@ -27,6 +27,7 @@ from test_atlas_remap import (
 )
 from test_built_against import animation, binary_skeleton, sidecar, spine  # noqa: F401 - fixture
 from test_library import header_bundle, make_mod, reload_library, setup_library  # noqa: F401 - fixture
+from module_patches import patch_everywhere
 
 OLD = [("page.png", (16, 16), [("part", -1, (1, 1), (4, 4), (4, 4), (0, 0), 0)])]
 # the same page size: the part moved and an expression's region came with it
@@ -131,7 +132,7 @@ def real(setup_library, monkeypatch):
     monkeypatch.setattr("bmpt.library.integrity.inspect", inspect_bundle)
     # The synthetic rigs (rebake_geometry) draw every region at a place of its own name, an expression beside the
     # body rather than over it: the rest pictures of rigs that gained one do not overlap as real ones do.
-    monkeypatch.setattr("bmpt.rebake.REDRAWN_BELOW", 0)
+    monkeypatch.setattr("bmpt.spine.rebake.REDRAWN_BELOW", 0)
     env = setup_library
     env.original.unlink()
     return env
@@ -226,7 +227,7 @@ def test_a_mod_with_its_own_complete_rig_is_left_alone(real):
     report = env.library.compatibility(entry.id)
     assert report["rig"] == {"layout": [], "animations": {}, "regions": {}, "unknown": []} and not report["remappable"]
     assert env.library.remap(entry.id, geometry=rig_geometry(env.library, entry.id)) == {"unchanged": True}
-    from bmpt.errors import ServiceError
+    from bmpt.core.errors import ServiceError
 
     with pytest.raises(ServiceError, match="bad_params"):  # a portrait is baked from the page's geometry
         env.library.remap(entry.id)
@@ -314,12 +315,14 @@ def test_update_tells_what_the_official_rig_gained_and_keeps_the_layout_of_the_t
         result.write_bytes(header_bundle(b"updated!"))
         return RebuildResult(True, "updated", [FilePair(result, targets[0])])
 
-    monkeypatch.setattr(service, "rebuild", update)
+    patch_everywhere(monkeypatch, [service], "rebuild", update)
     result = env.library.update(entry.id)
     assert result.rig == {"animations": {"Test.skel": ["00"]}}
     assert result.to_json()["rig"] == {"animations": {"Test.skel": ["00"]}}
     # an update that changes nothing says it too
-    monkeypatch.setattr(service, "rebuild", lambda *args, **kwargs: RebuildResult(True, "", [], all_unchanged=True))
+    patch_everywhere(
+        monkeypatch, [service], "rebuild", lambda *args, **kwargs: RebuildResult(True, "", [], all_unchanged=True)
+    )
     again = env.library.update(entry.id)
     assert again.unchanged and again.rig == {"animations": {"Test.skel": ["00"]}}
 
@@ -338,7 +341,7 @@ def test_update_carries_the_layout_texture_only_files_follow(spine, monkeypatch)
         result.write_bytes(header_bundle(b"rebuilt!"))
         return RebuildResult(True, "updated", [FilePair(result, targets[0])])
 
-    monkeypatch.setattr(service, "rebuild", update)
+    patch_everywhere(monkeypatch, [service], "rebuild", update)
     assert env.library.update(entry.id).rig == {}
     stored = json.loads(sidecar(env, entry.id).read_text())
     assert stored["event"] == "update" and stored["painted"] == data["painted"]

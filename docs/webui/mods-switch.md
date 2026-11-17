@@ -2,7 +2,7 @@
 
 ## Mods state, scan and the classic queue
 
-The services hold what the Enable Mods switch, the prompts and the classic hand-off read (`webui/services.py`):
+The services hold what the Enable Mods switch, the prompts and the classic hand-off read (`webui/services.py` and its mixins):
 
 - **The snapshot** (`ModsSnapshot`). `mods.state` answers from it, never through the library lock: the library's
   `status()` (names and `profiles.json` only, without walking storage), the last scan's entries and a running

@@ -2,15 +2,18 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-const source = readFileSync(new URL("../../src/bmpt/web/js/lobby.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby.js", import.meta.url), "utf8");
 const dialogue = source
   .slice(source.indexOf("export function play(anim"), source.indexOf("export const playingAll"))
   .replaceAll("export function", "function");
 const linesSetter = source
   .slice(source.indexOf("export function setLines("), source.indexOf("export function setVolume("))
   .replaceAll("export function", "function");
-const detail = readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8");
-const toggle = detail.slice(detail.indexOf("function togglePlayAll()"), detail.indexOf("// a dialogue started"));
+const detail = readFileSync(new URL("../../src/bmpt/web/js/detail/detail-strip.js", import.meta.url), "utf8");
+const toggle = detail.slice(
+  detail.indexOf("function togglePlayAll()"),
+  detail.indexOf("export function renderExpressions()"),
+);
 
 function player(cues = []) {
   const starts = [],

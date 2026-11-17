@@ -1,12 +1,13 @@
-// Tests for web/js/lobby-intro.js (the memorial lobby's intro timeline), the particle player's hooks it uses
+// Tests for web/js/lobby/lobby-intro.js (the memorial lobby's intro timeline), the particle player's hooks it uses
 // (particles.js Effects.restart / stop, overrides, spriteGeometry) and lobby-dof.js's blur spacing. Run by
 // tests/test_intro.py with Node's test runner.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-const I = await import("../../src/bmpt/web/js/lobby-intro.js");
-const P = await import("../../src/bmpt/web/js/particles.js");
-const Dof = await import("../../src/bmpt/web/js/lobby-dof.js");
+const I = await import("../../src/bmpt/web/js/lobby/lobby-intro.js");
+const P = await import("../../src/bmpt/web/js/lobby/particles.js");
+const G = await import("../../src/bmpt/web/js/lobby/particles-geometry.js");
+const Dof = await import("../../src/bmpt/web/js/lobby/lobby-dof.js");
 
 const near = (a, b, eps = 1e-6, what = "") => assert.ok(Math.abs(a - b) <= eps, `${what} ${a} != ${b}`);
 
@@ -546,9 +547,9 @@ test("particle systems: off at rest, restarted with a pre-simulation, stopped wi
 
 test("a sprite's quad: its rect around the pivot through its matrix, its UVs and colour", () => {
   const def = { quad: [-0.5, -0.5, 0.5, 0.5], uv: [0, 0, 1, 0.88], flip: [0, 0] };
-  const { data, count } = P.spriteGeometry(def, [100, 0, 0, 10, 0, 50, 0, 0, 0, 0, 1, 0], [1, 1, 1, 0.5]);
+  const { data, count } = G.spriteGeometry(def, [100, 0, 0, 10, 0, 50, 0, 0, 0, 0, 1, 0], [1, 1, 1, 0.5]);
   assert.equal(count, 6);
-  const v = (i) => data.slice(i * P.STRIDE, (i + 1) * P.STRIDE);
+  const v = (i) => data.slice(i * G.STRIDE, (i + 1) * G.STRIDE);
   assert.deepEqual([...v(0).slice(0, 4)], [-40, -25, 0, 0]);
   assert.deepEqual(
     [...v(2).slice(0, 4)].map((x) => +x.toFixed(4)),
@@ -559,7 +560,7 @@ test("a sprite's quad: its rect around the pivot through its matrix, its UVs and
     [...v(0).slice(14, 18)].map((x) => +x.toFixed(4)),
     [1, 1, 1, +(128 / 255).toFixed(4)],
   );
-  const flipped = P.spriteGeometry({ ...def, flip: [1, 0] }, P.IDENTITY, [1, 1, 1, 1]).data;
+  const flipped = G.spriteGeometry({ ...def, flip: [1, 0] }, P.IDENTITY, [1, 1, 1, 1]).data;
   assert.equal(flipped[2], 1); // u of the left corner
 });
 

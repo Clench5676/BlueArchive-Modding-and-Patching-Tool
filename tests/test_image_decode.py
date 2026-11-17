@@ -1,5 +1,5 @@
-"""The pictures a screen waits for before it shows (web/js/image-decode.js) are front-end code: their tests run with
-Node's test runner, skipped where Node is not installed."""
+"""The pictures a screen waits for before it shows (web/js/core/image-decode.js) are front-end code: their tests run
+with Node's test runner, skipped where Node is not installed."""
 
 import shutil
 import subprocess

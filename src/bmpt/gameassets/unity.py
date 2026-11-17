@@ -16,7 +16,7 @@ from UnityPy.environment import Environment
 from UnityPy.files import ObjectReader
 
 from bmpt.engine import Bundle
-from ..errors import ServiceError
+from ..core.errors import ServiceError
 
 logger = logging.getLogger(__name__)
 _guard = threading.Lock()

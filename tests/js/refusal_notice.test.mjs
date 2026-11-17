@@ -1,5 +1,5 @@
 // Ordinary refusals read as the game's neutral notice (title Notice, Confirm only); real failures keep Failed and the
-// Error Report button. web/js/popup.js runs for real on a stand-in DOM without a game folder (every prefab is
+// Error Report button. web/js/ui/popup.js runs for real on a stand-in DOM without a game folder (every prefab is
 // missing), so the messages are drawn plain, which carries the same buttons.
 import assert from "node:assert/strict";
 import { flat } from "./helpers/source-text.mjs";
@@ -108,8 +108,8 @@ console.warn = (...args) => {
   if (!/popup layout|message popup without/.test(String(args[0]))) warn(...args);
 };
 
-const Popup = await import("../../src/bmpt/web/js/popup.js");
-const { setStrings } = await import("../../src/bmpt/web/js/i18n.js");
+const Popup = await import("../../src/bmpt/web/js/ui/popup.js");
+const { setStrings } = await import("../../src/bmpt/web/js/core/i18n.js");
 const locales = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"];
 const webui = (locale) =>
   JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
@@ -145,8 +145,8 @@ async function closeAll() {
 afterEach(closeAll);
 
 test("the registry loads once across importers and exposes name lookups and levels", async () => {
-  const codes = await import("../../src/bmpt/web/js/error-codes.js");
-  await import("../../src/bmpt/web/js/import-details.js");
+  const codes = await import("../../src/bmpt/web/js/app/error-codes.js");
+  await import("../../src/bmpt/web/js/mods/import-details.js");
   assert.equal(registryReads, 1);
   assert.equal(codes.codeOf("mod_parts_missing"), "E3006");
   assert.equal(codes.codeOf("not_registered"), undefined);
@@ -292,7 +292,7 @@ test("information is still silent, and an empty text shows nothing", async () =>
 });
 
 test("a Failed popup appends the reference to its last line in all six locales; Notices never do", async () => {
-  const { errorText } = await import("../../src/bmpt/web/js/i18n.js");
+  const { errorText } = await import("../../src/bmpt/web/js/core/i18n.js");
   try {
     for (const locale of locales) {
       const ui = webui(locale);
@@ -375,7 +375,7 @@ test("a failed registry fetch leaves popups working without display references",
 
 test("the classic modal is not a failure and passes no error", () => {
   const web = (file) => readFileSync(new URL(`../../src/bmpt/web/js/${file}`, import.meta.url), "utf8");
-  const modal = web("mod-switch.js"),
+  const modal = web("mods/mod-switch.js"),
     start = modal.indexOf("export async function classicModal(");
   const classic = modal.slice(start, modal.indexOf("\n}\n", start));
   assert.match(classic, /title: T\("classic\.opened"\)/);
@@ -383,7 +383,7 @@ test("the classic modal is not a failure and passes no error", () => {
 });
 
 test("a greyed Apply names its reason as the same refusal as the greyed switch", () => {
-  const prompts = readFileSync(new URL("../../src/bmpt/web/js/prompts.js", import.meta.url), "utf8");
+  const prompts = readFileSync(new URL("../../src/bmpt/web/js/app/prompts.js", import.meta.url), "utf8");
   assert.match(flat(prompts), /notify\(b\.why \|\| "", \{ kind: "error", error: b\.whyError \}\)/);
   assert.match(flat(prompts), /why: blocked, whyError: \{ code: s\.reason, params: s\.reasonParams \}/);
 });

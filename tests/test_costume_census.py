@@ -30,7 +30,7 @@ _state = {}
 def _open(view: str, work: str) -> None:
     from ba_modding_toolkit.searching import get_search_dirs
     from bmpt.catalog import Catalog
-    from bmpt.config import Settings
+    from bmpt.host.config import Settings
     from bmpt.gameassets import AssetCache, GameAssets
     from bmpt.library import ModLibrary
 
@@ -60,7 +60,7 @@ def _jobs() -> list[tuple[str, str, str | None]]:
 
 
 def _outcome(fn) -> dict:
-    from bmpt.errors import ServiceError
+    from bmpt.core.errors import ServiceError
 
     started = time.perf_counter()
     try:

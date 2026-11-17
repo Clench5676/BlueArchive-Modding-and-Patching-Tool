@@ -32,7 +32,7 @@ from bmpt.engine import (
     no_log,
     t,
 )
-from ..errors import ServiceError
+from ..core.errors import ServiceError
 
 
 class UpdateScope:

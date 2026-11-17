@@ -1,4 +1,4 @@
-"""The portrait's visual mode (web/js/visual-view.js, visual-mode.js): its framing runs with Node's test runner,
+"""The portrait's visual mode (web/js/detail/visual-view.js, visual-mode.js): its framing runs with Node's test runner,
 skipped where Node is not installed; the prefab it draws is checked against a real install when one is found."""
 
 import json

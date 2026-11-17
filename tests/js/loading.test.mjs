@@ -1,12 +1,17 @@
-import { alignBaseline, publishAligned } from "../../src/bmpt/web/js/loading-baseline.js";
-import { fitLine, modLine } from "../../src/bmpt/web/js/job-progress.js";
-import { loadingLabel, loadingLetterSprites, loadingInkLine, alphaBounds } from "../../src/bmpt/web/js/ngui-label.js";
+import { alignBaseline, publishAligned } from "../../src/bmpt/web/js/app/loading-baseline.js";
+import { fitLine, modLine } from "../../src/bmpt/web/js/core/job-progress.js";
+import {
+  loadingLabel,
+  loadingLetterSprites,
+  loadingInkLine,
+  alphaBounds,
+} from "../../src/bmpt/web/js/ui/ngui-label.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { flat } from "./helpers/source-text.mjs";
 import { test } from "node:test";
 
-const source = readFileSync(new URL("../../src/bmpt/web/js/loading.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../src/bmpt/web/js/app/loading.js", import.meta.url), "utf8");
 const deferred = () => {
   let resolve, reject;
   const promise = new Promise((ok, fail) => {
@@ -594,7 +599,7 @@ test("the stage stays hidden at its default scale until the first fit, so the st
     ["document", "innerWidth", "innerHeight", "bamtHeaderGeometry"].map((k) => [k, globalThis[k]]),
   );
   globalThis.document = { createElement: () => ({ getContext: () => ({}) }) };
-  const { fitStage } = await import("../../src/bmpt/web/js/util.js");
+  const { fitStage } = await import("../../src/bmpt/web/js/core/util.js");
   const style = {
     setProperty(key, value) {
       this[key] = value;

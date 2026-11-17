@@ -8,10 +8,10 @@ from pathlib import Path
 
 import pytest
 
-from bmpt import globallines
-from bmpt.config import Settings
-from bmpt.errors import ServiceError
-from bmpt.webui import api as webui_api
+from bmpt.lines import global_lines as globallines
+from bmpt.host.config import Settings
+from bmpt.core.errors import ServiceError
+from bmpt.webui import api_students
 from bmpt.webui.api import build_api
 from bmpt.webui.services import Services
 from bmpt.webui.state import UiState
@@ -386,7 +386,7 @@ class SlowFetcher(Fetcher):
 
 def test_lobby_lines_do_not_wait_long_for_a_slow_global_table(api, monkeypatch):
     s, rpc = api
-    monkeypatch.setattr(webui_api, "LINES_WAIT", 0.3)
+    monkeypatch.setattr(api_students, "LINES_WAIT", 0.3)
     s.global_lines = SlowFetcher(json.dumps(TABLE).encode())
     talks = {"Talk_01_M": ["hoshino_memoriallobby_1"]}
     results = []

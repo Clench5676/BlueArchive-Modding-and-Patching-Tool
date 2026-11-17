@@ -27,7 +27,7 @@ from typing import Any, Callable, Collection, Iterable, Mapping, Sequence
 
 from bmpt.engine import parse_filename
 
-from ..errors import ServiceError
+from ..core.errors import ServiceError
 from .integrity import replacement_key
 from .judge import core_of, date_of, part_of
 

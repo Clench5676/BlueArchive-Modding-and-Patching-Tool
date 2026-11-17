@@ -1,4 +1,4 @@
-// Tests for web/js/slot-colours.js (the slot colours as each atlas page's shader takes them) and its hook in
+// Tests for web/js/spine/slot-colours.js (the slot colours as each atlas page's shader takes them) and its hook in
 // linear.js tint(). Run by tests/test_slot_colours.py with Node's test runner.
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -36,8 +36,8 @@ globalThis.spine = {
   },
 };
 
-const Linear = await import("../../src/bmpt/web/js/linear.js");
-const SlotColours = await import("../../src/bmpt/web/js/slot-colours.js");
+const Linear = await import("../../src/bmpt/web/js/core/linear.js");
+const SlotColours = await import("../../src/bmpt/web/js/spine/slot-colours.js");
 
 const dec = (c) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
 const close = (got, want, msg) =>

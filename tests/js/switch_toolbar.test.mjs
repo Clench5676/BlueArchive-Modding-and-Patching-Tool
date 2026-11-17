@@ -13,11 +13,11 @@ globalThis.addEventListener = () => {};
 globalThis.removeEventListener = () => {};
 globalThis.fetch = async () => ({ ok: false, status: 404, json: async () => null });
 const JS = "../../src/bmpt/web/js/";
-const NGUI = await import(`${JS}ngui.js`);
-const Popup = await import(`${JS}popup.js`);
-const { CONTROL, SPACE } = await import(`${JS}ui-tokens.js`);
-const { S } = await import(`${JS}util.js`);
-const { setStrings } = await import(`${JS}i18n.js`);
+const NGUI = await import(`${JS}ui/ngui.js`);
+const Popup = await import(`${JS}ui/popup.js`);
+const { CONTROL, SPACE } = await import(`${JS}ui/ui-tokens.js`);
+const { S } = await import(`${JS}core/util.js`);
+const { setStrings } = await import(`${JS}core/i18n.js`);
 
 const flat = (value, prefix = "webui") =>
   Object.entries(value).flatMap(([key, item]) =>

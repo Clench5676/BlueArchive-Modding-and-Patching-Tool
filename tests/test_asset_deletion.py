@@ -1,13 +1,14 @@
 """Deletion rows and undo paths use only synthetic game files and temporary libraries."""
 
 from copy import deepcopy
+import shutil
 from pathlib import Path
 from types import SimpleNamespace
 import json
 
 import pytest
 
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.library import service, portrait_edit, asset_delete
 from bmpt.library.photographs import Photographs
 from bmpt.library.judge import core_of
@@ -53,7 +54,7 @@ def test_failure_after_restoration_undoes_game_source_and_configuration(world, m
     mod = world.add(world.spr)
     world.library.apply("test", "mod:" + mod.id)
     before = world.spr.read_bytes(), deepcopy(world.profiles())
-    real = service.shutil.rmtree
+    real = shutil.rmtree
     fired = []
 
     def fail(path, *args, **kwargs):
@@ -65,7 +66,7 @@ def test_failure_after_restoration_undoes_game_source_and_configuration(world, m
         return real(path, *args, **kwargs)
 
     if failure == "cleanup":
-        monkeypatch.setattr(service.shutil, "rmtree", fail)
+        monkeypatch.setattr(shutil, "rmtree", fail)
 
     def reconcile():
         if failure == "reconcile":
@@ -388,7 +389,7 @@ def test_outer_recovery_restores_a_deleted_source_and_profiles(world):
     del world.library._records[mod.id]
     world.library._save()
     world.library.profiles.update(lambda data: data["folders"][world.key()]["configured"].clear())
-    service.shutil.rmtree(mod.file.parent)
+    shutil.rmtree(mod.file.parent)
     # A new instance recovers under transactions.lock before accepting another operation.
     from bmpt.library import ModLibrary
 

@@ -19,7 +19,7 @@ A button's padding includes its body's 30-unit slice border (the rim and corner)
 Every button went one size down. The app's small buttons (Settings rows, the import page's row, a details panel's
 actions, the Hall's and the photography page's) are `buttonXS` (`XS_BUTTON`); `SMALL_BUTTON` (402 x 136) stays for the
 popups whose footers are set to S. A popup's footer is M unless its call site names a size (`footer: "S"`, `"M"`, `"L"`;
-`FOOTER_DEFAULT` in `popup.js`), its bodies as wide as the longest caption needs (`footerWidth`, 348 at least, 551 at most). The
+`FOOTER_DEFAULT` in `popup-footer.js`), its bodies as wide as the longest caption needs (`footerWidth`, 348 at least, 551 at most). The
 inline buttons of a plain popup line and the Batch Import tool row are the XS body scaled by its ratio to S. A new button
 takes its size from these; it never states a height.
 

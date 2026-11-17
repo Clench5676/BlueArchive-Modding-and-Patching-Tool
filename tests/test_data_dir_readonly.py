@@ -82,7 +82,7 @@ def test_app_info_reports_the_result(app, services):
 
 @posix_permissions
 def test_the_services_test_the_folder_at_start(tmp_path):
-    from bmpt.config import Settings
+    from bmpt.host.config import Settings
     from bmpt.webui.services import Services
     from bmpt.webui.state import UiState
 

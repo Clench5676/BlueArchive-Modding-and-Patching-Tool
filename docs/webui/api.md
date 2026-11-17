@@ -152,10 +152,10 @@ target. A manual label does not bypass bundle-readability, dependency or compati
 
 ### Atlas remap
 
-`atlas_remap.py` reconstructs current official atlas pages from matching mod regions. A physical page smaller than
+`spine/atlas_remap.py` reconstructs current official atlas pages from matching mod regions. A physical page smaller than
 its atlas declaration is enlarged to the declared dimensions (LANCZOS) before any region is placed; rotations, trim
 offsets and premultiplied alpha remain part of placement. A portrait remap bakes pages through world space
-(`bmpt.rebake`) using per-pose geometry the page computes (`rig-geometry.js`); a portrait the game drew anew is
+(`bmpt.spine.rebake`) using per-pose geometry the page computes (`rig-geometry.js`); a portrait the game drew anew is
 refused (`atlas_remap_redrawn`, judged by `actions.redrawn`'s silhouette overlap). Where no record keeps the rig a
 texture-only portrait's pages were drawn for, the library's archive of official portrait rigs does
 (`library/rig_archive.py`, `<library>/rigs`, kept from verified official copies with the scan consent); a mod's pages

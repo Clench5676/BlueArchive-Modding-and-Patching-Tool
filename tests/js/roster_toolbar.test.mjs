@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFile } from "node:fs/promises";
 import { readFileSync } from "node:fs";
-import { emptyBlock } from "../../src/bmpt/web/js/empty-block.js";
-import { CONTROL, SPACE } from "../../src/bmpt/web/js/ui-tokens.js";
-import { row } from "../../src/bmpt/web/js/ui-grid.js";
+import { emptyBlock } from "../../src/bmpt/web/js/ui/empty-block.js";
+import { CONTROL, SPACE } from "../../src/bmpt/web/js/ui/ui-tokens.js";
+import { row } from "../../src/bmpt/web/js/ui/ui-grid.js";
 const text = {
   "roster.title": "Student List",
   "roster.merge": "Group Alts",
@@ -25,7 +25,7 @@ const fit = (value, size, min, width) => ({
   fs: Math.max(min, Math.min(size, width / (value.length * 0.45))),
   lines: 1,
 });
-let source = await readFile(new URL("../../src/bmpt/web/js/roster-widgets.js", import.meta.url), "utf8");
+let source = await readFile(new URL("../../src/bmpt/web/js/roster/roster-widgets.js", import.meta.url), "utf8");
 source = source.replace(/^import [^;]*;$/gm, "");
 // ink as the page font draws it: 0.72 em above the baseline, 0.2 below for a letter with a descender, in a box
 // 1.15 em a line
@@ -314,7 +314,7 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
       documentElement: { lang: locale, appendChild() {} },
     };
     globalThis.getComputedStyle = () => ({ getPropertyValue: () => "" });
-    const real = await import("../../src/bmpt/web/js/ngui.js"),
+    const real = await import("../../src/bmpt/web/js/ui/ngui.js"),
       fixture = globalThis.toolbarFixture,
       previous = fixture.NGUI.fitGroup;
     const ui = JSON.parse(

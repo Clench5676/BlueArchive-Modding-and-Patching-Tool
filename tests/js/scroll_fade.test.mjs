@@ -1,7 +1,7 @@
 // Scrolling areas fade at an edge only while there is more to scroll past it.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-const { fadeMask, FADE, SCROLLERS } = await import("../../src/bmpt/web/js/scroll-fade.js");
+const { fadeMask, FADE, SCROLLERS } = await import("../../src/bmpt/web/js/ui/scroll-fade.js");
 
 test("an area fades at the edges with more past them, and stays sharp where there is none", () => {
   assert.equal(fadeMask({ start: 0, max: 0 }), "", "nothing to scroll: no mask");

@@ -6,11 +6,11 @@ import { test } from "node:test";
 import { LOCALES, installFitPage, text } from "./helpers/fit_canvas.mjs";
 
 const page = installFitPage();
-const { glyphWidth, fontSizeFor, LINE_PITCH } = await import("../../src/bmpt/web/js/ngui.js");
+const { glyphWidth, fontSizeFor, LINE_PITCH } = await import("../../src/bmpt/web/js/ui/ngui.js");
 const { ACTION_DEFS, actionLabel, actionsOf, groupLabel, menuOf, parseClip, sectionLabel } = await import(
-  "../../src/bmpt/web/js/clip-names.js"
+  "../../src/bmpt/web/js/detail/clip-names.js"
 );
-const L = await import("../../src/bmpt/web/js/action-list-layout.js");
+const L = await import("../../src/bmpt/web/js/ui/action-list-layout.js");
 // the clip names of three official chibis' controllers (names only), as their GLB lists them (extras.clips)
 const MODELS = JSON.parse(readFileSync(new URL("./fixtures/model_clips.json", import.meta.url), "utf8"));
 

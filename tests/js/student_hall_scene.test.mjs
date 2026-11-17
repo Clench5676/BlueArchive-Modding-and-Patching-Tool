@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { flat } from "./helpers/source-text.mjs";
+import { flat, joinedModules } from "./helpers/source-text.mjs";
 import { test } from "node:test";
 import { readFile } from "node:fs/promises";
 import {
@@ -7,11 +7,11 @@ import {
   sourceKey,
   portraitSelection,
   portraitReplacements,
-} from "../../src/bmpt/web/js/student-hall-model.js";
-import { createMemorialPool } from "../../src/bmpt/web/js/student-hall-memorial.js";
-import { dialogueText } from "../../src/bmpt/web/js/dialogue-text.js";
-import { sceneRect, sceneViewport } from "../../src/bmpt/web/js/student-hall-camera.js";
-import { portraitRect } from "../../src/bmpt/web/js/student-hall-framing.js";
+} from "../../src/bmpt/web/js/hall/student-hall-model.js";
+import { createMemorialPool } from "../../src/bmpt/web/js/hall/student-hall-memorial.js";
+import { dialogueText } from "../../src/bmpt/web/js/detail/dialogue-text.js";
+import { sceneRect, sceneViewport } from "../../src/bmpt/web/js/hall/student-hall-camera.js";
+import { portraitRect } from "../../src/bmpt/web/js/hall/student-hall-framing.js";
 
 class Element {
   constructor() {
@@ -162,12 +162,12 @@ globalThis.sceneHarness = {
     return button;
   },
 };
-let source = await readFile(new URL("../../src/bmpt/web/js/student-hall.js", import.meta.url), "utf8");
-source = source.replace(/^import [^;]*;$/gm, "");
+const hallFile = (name) => readFile(new URL(`../../src/bmpt/web/js/hall/${name}`, import.meta.url), "utf8");
+let source = joinedModules(await hallFile("student-hall.js"), await hallFile("student-hall-portrait-toolbar.js"));
 source =
-  `import { CONTROL, XS_BUTTON, SPACE } from "${new URL("../../src/bmpt/web/js/ui-tokens.js", import.meta.url).href}";\nimport { row } from "${new URL("../../src/bmpt/web/js/ui-grid.js", import.meta.url).href}";\n` +
+  `import { CONTROL, XS_BUTTON, SPACE } from "${new URL("../../src/bmpt/web/js/ui/ui-tokens.js", import.meta.url).href}";\nimport { row } from "${new URL("../../src/bmpt/web/js/ui/ui-grid.js", import.meta.url).href}";\n` +
   source;
-source = `import { bindPortraitPointer, portraitToolbarLayout } from "${new URL("../../src/bmpt/web/js/student-hall-framing.js", import.meta.url).href}";\nconst {createDraft,createMemorialPool,sourceKey,portraitSelection,portraitReplacements,portraitRect,sceneRect,sceneViewport,dialogueText,language,clone,S,T,L,document,Backgrounds,Loading,Lobby,Popup,UI,rpc,hitButton}=globalThis.sceneHarness;\n${source}
+source = `import { bindPortraitPointer, portraitToolbarLayout } from "${new URL("../../src/bmpt/web/js/hall/student-hall-framing.js", import.meta.url).href}";\nconst {createDraft,createMemorialPool,sourceKey,portraitSelection,portraitReplacements,portraitRect,sceneRect,sceneViewport,dialogueText,language,clone,S,T,L,document,Backgrounds,Loading,Lobby,Popup,UI,rpc,hitButton}=globalThis.sceneHarness;\n${source}
 const originalHits=renderHits;
 export function fixture(value,renderer,memory=null,shownMode=value.mode){
  store=createDraft(value);root=document.createElement('div');art=document.createElement('div');hits=document.createElement('div');chrome=document.createElement('div');subtitle=document.createElement('div');root.append(art,hits,chrome,subtitle);

@@ -8,7 +8,7 @@ from contextlib import contextmanager
 
 import pytest
 
-from bmpt import spans
+from bmpt.core import spans
 from bmpt.gameassets import AssetCache, GameAssets, model
 
 

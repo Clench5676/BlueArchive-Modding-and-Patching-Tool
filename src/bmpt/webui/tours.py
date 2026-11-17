@@ -5,8 +5,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from ..errors import ServiceError
-from ..updater import parse_version, prerelease_previews
+from ..core.errors import ServiceError
+from ..host.updater import parse_version, prerelease_previews
 from .state import UiState
 from .strings import ui_strings
 

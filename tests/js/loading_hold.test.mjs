@@ -86,9 +86,9 @@ globalThis.requestAnimationFrame = (fn) => setTimeout(fn, 0);
 globalThis.fetch = async () => {
   throw new Error("no game assets in this test");
 };
-const Loading = await import("../../src/bmpt/web/js/loading.js");
-const Popup = await import("../../src/bmpt/web/js/popup.js");
-const { freezeWhileLoading } = await import("../../src/bmpt/web/js/preview-lifecycle.js");
+const Loading = await import("../../src/bmpt/web/js/app/loading.js");
+const Popup = await import("../../src/bmpt/web/js/ui/popup.js");
+const { freezeWhileLoading } = await import("../../src/bmpt/web/js/detail/preview-lifecycle.js");
 const event = (target = new El(), key) => ({
   target,
   key,
@@ -270,7 +270,11 @@ test("a repair cover blocks Back, popup clicks and Escape until success or failu
   }
 });
 
-const detailSource = readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8");
+// the actions module, its exports as plain declarations
+const detailSource = readFileSync(
+  new URL("../../src/bmpt/web/js/detail/detail-actions.js", import.meta.url),
+  "utf8",
+).replace(/^export /gm, "");
 const detailJob = detailSource.slice(
   detailSource.indexOf("async function job("),
   detailSource.indexOf("function shownMod()"),
@@ -396,7 +400,7 @@ for (const entry of ["Enable Mods"])
           assert.equal(ev.stopped, blocked, `${entry}: ${type}`);
         }
     };
-    const source = readFileSync(new URL("../../src/bmpt/web/js/mod-switch.js", import.meta.url), "utf8");
+    const source = readFileSync(new URL("../../src/bmpt/web/js/mods/mod-switch.js", import.meta.url), "utf8");
     const run = source.slice(source.indexOf("async function run(params)"), source.indexOf("// a toggle job followed"));
     const env = {
       Loading,
@@ -655,8 +659,8 @@ test("a full cover hides the native toolbar with the screen; an indicator leaves
 });
 
 test("the toolbar row the lock reaches is the one the window chrome builds, and the cover hides it", () => {
-  const chrome = readFileSync(new URL("../../src/bmpt/web/js/window-chrome.js", import.meta.url), "utf8");
-  const loading = readFileSync(new URL("../../src/bmpt/web/js/loading.js", import.meta.url), "utf8");
+  const chrome = readFileSync(new URL("../../src/bmpt/web/js/window/window-chrome.js", import.meta.url), "utf8");
+  const loading = readFileSync(new URL("../../src/bmpt/web/js/app/loading.js", import.meta.url), "utf8");
   const css = readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
   assert.match(chrome, /wrapper\.className = ["']window-header["'][\s\S]*unlockHeader = lockOutside\(wrapper\)/);
   assert.match(loading, /export function lockOutside/);
@@ -671,7 +675,7 @@ const OUTSIDE_STAGE = {
   "cursor.js": ["c"], // touch effects, pointer-events: none
   "thumbs.js": ["host"], // off-screen thumbnail renderer, pointer-events: none
   "settings.js": ["input"], // a clipboard fallback, removed in the same task
-  "ngui.js": ["probe"], // a font measuring probe, removed in the same call
+  "ngui-text.js": ["probe"], // a font measuring probe, removed in the same call
 };
 test("nothing else is attached outside the stage", () => {
   const dir = new URL("../../src/bmpt/web/js/", import.meta.url);

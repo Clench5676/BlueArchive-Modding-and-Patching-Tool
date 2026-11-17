@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import vm from "node:vm";
-import { rpc } from "../../src/bmpt/web/js/api.js";
+import { rpc } from "../../src/bmpt/web/js/core/api.js";
 
-const source = readFileSync(new URL("../../src/bmpt/web/js/recovery.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../src/bmpt/web/js/app/recovery.js", import.meta.url), "utf8");
 class El {
   children = [];
   style = {};
@@ -148,9 +148,9 @@ test("boot exceptions, rejections and module or stylesheet load failures recover
     if (mode === "rejection") h.listeners.unhandledrejection({ reason: new Error("rejected") });
     else
       h.listeners.error({
-        target: mode === "module" ? { src: "js/main.js" } : mode === "style" ? { href: "css/app.css" } : h.ctx,
+        target: mode === "module" ? { src: "js/app/main.js" } : mode === "style" ? { href: "css/app.css" } : h.ctx,
         message: mode === "error" ? "failed" : undefined,
-        filename: "js/main.js",
+        filename: "js/app/main.js",
       });
     assert.ok(h.panel(), mode);
     assert.equal(h.api.failed(), true);

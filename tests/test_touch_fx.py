@@ -1,5 +1,5 @@
-"""The touch effect's simulation (web/js/touch-fx.js) and the pointer syntax (web/js/cursor.js) are front-end code:
-their tests run with Node's test runner, skipped where Node is not installed."""
+"""The touch effect's simulation (web/js/app/touch-fx.js) and the pointer syntax (web/js/app/cursor.js) are front-end
+code: their tests run with Node's test runner, skipped where Node is not installed."""
 
 import shutil
 import subprocess

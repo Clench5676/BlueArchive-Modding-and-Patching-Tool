@@ -1,8 +1,11 @@
 # Front end
 
 `ngui.js` (prefab renderer), the roster, the detail screen, the popups, the consent popup and the lobby player, as ES
-modules under `web/js/`, one page with a hash router (`#/roster`, `#/student/<family>/<variant>`). Data comes from the
-RPC methods, art from `/asset/...`, strings from the locale files. Invisible buttons over drawn controls carry their
+modules under `web/js/`, one page with a hash router (`#/roster`, `#/student/<family>/<variant>`). The modules sit in
+folders by screen area: `app/` (start-up, navigation, loading, updates, prompts), `window/` (window chrome and top bar),
+`core/` (RPC, strings, shared helpers), `ui/` (NGUI, popups, shared widgets and tokens), `roster/`, `detail/`, `mods/`
+(mod switching and import), `spine/`, `lobby/`, `model/` (3D), `hall/`, `settings/` and `photography/`. Data comes from
+the RPC methods, art from `/asset/...`, strings from the locale files. Invisible buttons over drawn controls carry their
 accessible names from the locale files; a control that picks one of several carries `aria-pressed`.
 
 ## Student list
@@ -82,8 +85,8 @@ given back on leave.
 ## Popups
 
 The detail screen's popups are drawn on the game's popup frame (UIPopup_Sort) with its dark backdrop (`BACKDROP` in
-`ui-tokens.js`); a click on the backdrop or Escape closes them. The shared module (`popup.js`, tested in Node on a
-stand-in DOM) reads its prefabs once and provides:
+`ui-tokens.js`); a click on the backdrop or Escape closes them. The shared module (`popup.js`, with the `popup-*.js`
+modules split from it, tested in Node on a stand-in DOM) reads its prefabs once and provides:
 
 - **Hosts.** `#popup` and `#picker` inside the detail screen; `#prompt` and `#dialog` on the stage, so a popup shows
   on any screen. Each message popup is a layer of its own in `#dialog`, so one opened from another shows over it.
@@ -136,7 +139,7 @@ toolbar the motion also drives the window buttons (`window.motion`, `CocoaHost.s
 
 ## Design tokens
 
-The shared numbers and colours live in `web/js/ui-tokens.js`, each named after the prefab node it comes from; the
+The shared numbers and colours live in `web/js/ui/ui-tokens.js`, each named after the prefab node it comes from; the
 scales, controls, popup anatomy and alignment rules are documented in [`design-system/`](../design-system/README.md)
 (`tests/js/ui_tokens.test.mjs` pins the call sites, `tests/test_ui_tokens.py` the prefab values).
 

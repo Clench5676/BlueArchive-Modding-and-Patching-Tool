@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { controls } from "./control_prefabs.mjs";
 
 const web = new URL("../../src/bmpt/web/js/", import.meta.url);
-const source = readFileSync(new URL("settings.js", web), "utf8");
+const source = readFileSync(new URL("settings/settings.js", web), "utf8");
 const locales = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"];
 const strip = (s) => s.replace(/^import [^;]*;\n/gm, "").replace(/^export /gm, "");
 class El {
@@ -26,12 +26,12 @@ class El {
   }
 }
 globalThis.document = { documentElement: new El(), createElement: () => new El() };
-const NGUI = await import(new URL("ngui.js", web));
-const { wrapPath, S } = await import(new URL("util.js", web));
-const Rows = await import(new URL("settings-rows.js", web));
-const ButtonsModule = await import(new URL("game-buttons.js", web));
-const { errorText } = await import(new URL("i18n.js", web));
-const { BACKDROP, XS_BUTTON, TYPE } = await import(new URL("ui-tokens.js", web));
+const NGUI = await import(new URL("ui/ngui.js", web));
+const { wrapPath, S } = await import(new URL("core/util.js", web));
+const Rows = await import(new URL("settings/settings-rows.js", web));
+const ButtonsModule = await import(new URL("ui/game-buttons.js", web));
+const { errorText } = await import(new URL("core/i18n.js", web));
+const { BACKDROP, XS_BUTTON, TYPE } = await import(new URL("ui/ui-tokens.js", web));
 const { option, filter } = controls();
 const Buttons = { smallButton: (...args) => ButtonsModule.optionButton(option, filter, ...args) };
 

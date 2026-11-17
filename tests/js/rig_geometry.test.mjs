@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import vm from "node:vm";
-import { failedPoses, forRemap, poses, restOnly } from "../../src/bmpt/web/js/rig-geometry.js";
+import { failedPoses, forRemap, poses, restOnly } from "../../src/bmpt/web/js/spine/rig-geometry.js";
 
 const context = vm.createContext({
   console,
@@ -134,7 +134,7 @@ test("the remap pairs each official atlas with its skeleton and takes the mod's 
 });
 
 test("the graft's setup pose gives each bone's world matrix, each slot's bone and each skin attachment as set up", async () => {
-  const { setupOf, partPoses } = await import("../../src/bmpt/web/js/rig-geometry.js");
+  const { setupOf, partPoses } = await import("../../src/bmpt/web/js/spine/rig-geometry.js");
   const rig = setupOf(S, ATLAS, skeleton());
   assert.deepEqual(rig.bones.root, [1, 0, 0, 1, 0, 0]);
   assert.deepEqual(rig.slotBones, { body: "root", face: "root", glow: "root" });

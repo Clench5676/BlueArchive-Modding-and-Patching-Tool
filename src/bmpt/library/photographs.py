@@ -19,9 +19,9 @@ from urllib.parse import quote
 
 from PIL import Image
 
-from .. import devmode
-from ..errors import ServiceError
-from ..filelock import file_lock
+from ..core import devmode
+from ..core.errors import ServiceError
+from ..core.filelock import file_lock
 from .storage import atomic_json, sync_directory
 
 logger = logging.getLogger(__name__)

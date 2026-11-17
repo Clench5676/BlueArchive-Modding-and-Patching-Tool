@@ -1,4 +1,4 @@
-"""The student list's quit (web/js/quit.js: Escape's rule, the prompt and the quit) is front-end code: its tests run
+"""The student list's quit (web/js/app/quit.js: Escape's rule, the prompt and the quit) is front-end code: its tests run
 with Node's test runner, skipped where Node is not installed."""
 
 import shutil

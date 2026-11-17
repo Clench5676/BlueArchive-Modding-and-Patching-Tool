@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.gameassets import AssetCache, GameAssets
 from bmpt.webui.server import WebApp
 

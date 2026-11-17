@@ -1,6 +1,6 @@
-// The game's pointer (web/js/cursor.js) is the only pointer of the page: --cursor everywhere, --cursor-press on what a
-// press reacts to (the same image), drag handles keep grab and grabbing, text fields the text cursor. Any other cursor
-// keyword in the page's own styles is a system cursor over the game's pointer (a flicker on macOS and Windows).
+// The game's pointer (web/js/app/cursor.js) is the only pointer of the page: --cursor everywhere, --cursor-press on
+// what a press reacts to (the same image), drag handles keep grab and grabbing, text fields the text cursor. Any other
+// cursor keyword in the page's own styles is a system cursor over the game's pointer (a flicker on macOS and Windows).
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readdirSync, readFileSync } from "node:fs";
@@ -27,7 +27,7 @@ function declarations() {
       found.push([file, value]);
   }
   for (const file of files("js", ".js")) {
-    if (file === "js/cursor.js") continue;
+    if (file === "js/app/cursor.js") continue;
     for (const [, value] of read(file).matchAll(/(?<![-\w])cursor\s*(?::|=(?!=))\s*["'`]([^"'`]+)["'`]/g))
       found.push([file, value]);
   }
@@ -51,7 +51,7 @@ test("a hit area or an unseen control never sets a system cursor of its own", ()
   assert.doesNotMatch(app.match(/\.hit\.slider-range\s*\{[^}]*\}/)[0], /cursor/);
   assert.match(app, /^\.hit\s*\{[^}]*cursor: var\(--cursor-press\)/m);
   // a card that does not open a preview shows the plain game pointer, not the system arrow
-  const hall = readFileSync(join(WEB, "js/student-hall-ui.js"), "utf8");
+  const hall = readFileSync(join(WEB, "js/hall/student-hall-ui.js"), "utf8");
   assert.match(hall, /if \(!interactive\) \{[^}]*hit\.style\.cursor = "var\(--cursor\)"/);
 });
 
@@ -61,14 +61,14 @@ test("only the root sets the pointer variables, cursor.js once the game's pointe
     const text = read(file);
     for (const [, name, value] of text.matchAll(/(--cursor(?:-press)?)\s*:\s*([^;}\n]+)/g))
       sets.push(`${file} ${name}: ${value.trim()}`);
-    if (file === "js/cursor.js")
+    if (file === "js/app/cursor.js")
       for (const [, name] of text.matchAll(/setProperty\("(--cursor(?:-press)?)"/g)) sets.push(`${file} ${name}`);
   }
   assert.deepEqual(sets, [
     "css/app.css --cursor: default",
     "css/app.css --cursor-press: pointer",
-    "js/cursor.js --cursor",
-    "js/cursor.js --cursor-press",
+    "js/app/cursor.js --cursor",
+    "js/app/cursor.js --cursor-press",
   ]);
 });
 

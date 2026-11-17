@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { decodeAll } from "../../src/bmpt/web/js/image-decode.js";
+import { decodeAll } from "../../src/bmpt/web/js/core/image-decode.js";
 
-const source = readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../src/bmpt/web/js/detail/detail-portrait.js", import.meta.url), "utf8");
+const detailSource = readFileSync(new URL("../../src/bmpt/web/js/detail/detail.js", import.meta.url), "utf8").replace(
+  /^export /gm,
+  "",
+);
 const portraitCode = source.slice(
   source.indexOf("async function showSpine("),
   source.indexOf("// the detail screen's portrait framing"),
@@ -61,6 +65,7 @@ function portraitHarness(portrait, confirm = async () => false, decode = () => P
     "env",
     `const { ${Object.keys(env).join(", ")} } = env;
     let spineToken = 1, batch = null, blinkTimer, mainPlayer = null, open = true;
+    function setMainPlayer(value) { mainPlayer = value; }
     ${portraitCode}; return showSpine;`,
   )(env);
   return {
@@ -151,7 +156,10 @@ test("a cancelled confirmation read cannot add a portrait after detail was left"
 });
 
 test("detail thumbnail fallbacks use collection portraits only for the matching official source", () => {
-  const code = source.slice(source.indexOf("function collectionPortrait("), source.indexOf("function begin()"));
+  const code = detailSource.slice(
+    detailSource.indexOf("function collectionPortrait("),
+    detailSource.indexOf("function begin()"),
+  );
   const variants = [
     { key: "ibuki", spr: "ibuki_spr", portrait: "/ibuki.png", modList: [{ id: "added", kind: "spr" }] },
     { key: "special:npc", lobby: "npc" },
@@ -167,8 +175,8 @@ test("detail thumbnail fallbacks use collection portraits only for the matching 
   assert.equal(read("unknown"), null);
 });
 
-import { ALIAS, MOD_ALIAS, aliasFrame, detailsFrame } from "../../src/bmpt/web/js/popup-frames.js";
-import { POPUP_FOOTER, POPUP_FRAME, SPACE } from "../../src/bmpt/web/js/ui-tokens.js";
+import { ALIAS, MOD_ALIAS, aliasFrame, detailsFrame } from "../../src/bmpt/web/js/ui/popup-frames.js";
+import { POPUP_FOOTER, POPUP_FRAME, SPACE } from "../../src/bmpt/web/js/ui/ui-tokens.js";
 test("detail caller frames preserve their rows and scroll bounds with the shared anatomy", () => {
   for (const height of [0, 300, 800, 2000, 20000]) {
     const f = detailsFrame(height);

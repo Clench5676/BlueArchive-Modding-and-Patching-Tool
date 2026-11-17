@@ -28,10 +28,11 @@ from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from typing import Iterator
 
-from .. import devmode, game_paths
-from ..errors import ServiceError
-from ..filelock import IN_USE_WAIT
-from ..logging_utils import log_failure
+from ..host import game_paths
+from ..core import devmode
+from ..core.errors import ServiceError
+from ..core.filelock import IN_USE_WAIT
+from ..core.logging_utils import log_failure
 
 logger = logging.getLogger(__name__)
 

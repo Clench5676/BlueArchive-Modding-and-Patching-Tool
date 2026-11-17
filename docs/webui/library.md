@@ -138,9 +138,9 @@ saved; bundle copies run outside that lock and are checked again under it. Setti
 clear it; sizes are measured on demand.
 
 **What reads Steam's records.** The scan consent covers Steam's records on this device: Detect, the game watch's
-Steam poll, and Steam's file list of the installed build (`steam_records.py`: the depot manifest's size and SHA-1 per
-file). With it, a bundle that list names is official by its size and SHA-1; without it, the CRC rule stays. The
-write-time Steam-busy check needs no consent.
+Steam poll, and Steam's file list of the installed build (`host/steam_records.py`: the depot manifest's size and
+SHA-1 per file). With it, a bundle that list names is official by its size and SHA-1; without it, the CRC rule stays.
+The write-time Steam-busy check needs no consent.
 
 **What reads game files.** The scan consent (`scan_allowed`, asked at each use) covers every read the app makes on
 its own of files the library did not write: the scan (headers and last bytes, never a whole file), an Off's own pass,
@@ -204,7 +204,7 @@ model-kind core `Catalog.model_map` maps to that variant; the choice is keyed by
 files, Needs Fix, restore availability and incomplete judgement cover all its cores. A model Mod fits when every
 file's core belongs to the slot; apply uses the existing replacement mapping, keeps originals and journals the whole
 transaction. Switch Chibi offers Mods from any of the slot's cores and the student's other models as costumes
-(`variant:<key>`, field-mode models included, `gameassets/model_adapt.py`): the slot keeps its skeleton, clips,
+(`variant:<key>`, field-mode models included, `gameassets/model_adapt/`): the slot keeps its skeleton, clips,
 weapon, halo and props; the source's costume renderers are added as new objects to the slot's own bundles (existing
 objects never change in place, since other bundles reference them). Roles, bone mapping and checks use data only,
 never part names; a pair whose checks fail is refused with `source_unsupported`. A pair past the stretch limit

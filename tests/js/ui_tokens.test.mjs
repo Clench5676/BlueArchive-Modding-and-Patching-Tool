@@ -1,13 +1,13 @@
-// The design tokens (web/js/ui-tokens.js): one place for the numbers and colours that popups, buttons, chips and
+// The design tokens (web/js/ui/ui-tokens.js): one place for the numbers and colours that popups, buttons, chips and
 // the style sheets share. The prefab values behind them are checked by tests/test_ui_tokens.py against the
 // development view.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { flat } from "./helpers/source-text.mjs";
 import { test } from "node:test";
-import { row, toNode } from "../../src/bmpt/web/js/ui-grid.js";
-import * as Tokens from "../../src/bmpt/web/js/ui-tokens.js";
-import { stack as layoutStack } from "../../src/bmpt/web/js/ui-grid.js";
+import { row, toNode } from "../../src/bmpt/web/js/ui/ui-grid.js";
+import * as Tokens from "../../src/bmpt/web/js/ui/ui-tokens.js";
+import { stack as layoutStack } from "../../src/bmpt/web/js/ui/ui-grid.js";
 const near = (a, b, eps = 1e-9) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b}`);
 
 const WEB = new URL("../../src/bmpt/web/", import.meta.url);
@@ -19,7 +19,7 @@ const frozenDeep = (value) =>
 
 test("every token is frozen and the module imports no other UI module", () => {
   for (const [name, value] of Object.entries(Tokens)) assert.ok(frozenDeep(value), `${name} is frozen`);
-  assert.doesNotMatch(src("js/ui-tokens.js"), /^\s*import\b/m);
+  assert.doesNotMatch(src("js/ui/ui-tokens.js"), /^\s*import\b/m);
 });
 
 test("the footer's centre follows from the prefab's frame and button rows", () => {
@@ -60,8 +60,8 @@ globalThis.document = {
   documentElement: { lang: "en-US", appendChild() {} },
 };
 globalThis.getComputedStyle = () => ({ getPropertyValue: () => "" });
-const NGUI = await import("../../src/bmpt/web/js/ngui.js");
-const ButtonsModule = await import("../../src/bmpt/web/js/game-buttons.js");
+const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
+const ButtonsModule = await import("../../src/bmpt/web/js/ui/game-buttons.js");
 const { controls } = await import("./control_prefabs.mjs");
 
 const { option, filter } = controls();
@@ -108,7 +108,7 @@ test("stopped memorial sites explicitly retain their existing button boxes and c
     );
     assert.ok(labelOf(tree).fontSize <= fs, `${w} x ${h}`);
   }
-  const hall = src("js/student-hall-ui.js");
+  const hall = src("js/hall/student-hall-ui.js");
   assert.match(
     hall,
     /retainedButtonSize = .*NGUI\.fitGroup\(captions, 40, 26, width \/ S - 60, 2, \{ maxH: height \/ S - 20 \}\)/,
@@ -116,8 +116,8 @@ test("stopped memorial sites explicitly retain their existing button boxes and c
   assert.match(hall, /actions.map\(\(action, index\) => retainedButton/);
   assert.match(hall, /kind === "spr" \? button : retainedButton/);
   // the queue's Remove is a trash button over the card
-  assert.match(src("js/student-hall-picker.js"), /UI\.trashButton\(box, `Remove/);
-  assert.match(src("js/student-hall.js"), /UI\.button\(destination, "HallPortraitScaleReset"/);
+  assert.match(src("js/hall/student-hall-picker.js"), /UI\.trashButton\(box, `Remove/);
+  assert.match(src("js/hall/student-hall-portrait-toolbar.js"), /UI\.button\(destination, "HallPortraitScaleReset"/);
 });
 
 // --- item F: colours from the game's own prefabs, each in one place ---
@@ -179,8 +179,8 @@ test("no site outside ui-tokens.js carries a retired backdrop or colour literal"
     /#6b7d92/i,
     /#545454/i,
   ];
-  const files = [...sources("js/", ".js"), ...sources("css/", ".css")].filter((file) => file !== "js/ui-tokens.js");
-  assert.ok(files.length > 100 && files.includes("js/popup.js") && files.includes("css/app.css"));
+  const files = [...sources("js/", ".js"), ...sources("css/", ".css")].filter((file) => file !== "js/ui/ui-tokens.js");
+  assert.ok(files.length > 100 && files.includes("js/ui/popup.js") && files.includes("css/app.css"));
   for (const file of files) {
     const text = read(file);
     for (const pattern of retired) assert.doesNotMatch(text, pattern, `${file} still holds ${pattern}`);
@@ -189,12 +189,13 @@ test("no site outside ui-tokens.js carries a retired backdrop or colour literal"
 
 test("the call sites take the status colours from the tokens, the style sheet repeats the same values", () => {
   const uses = {
-    "js/update.js": ["COLOUR.success", "COLOUR.error"],
-    "js/detail.js": ["COLOUR.success", "COLOUR.warning", "COLOUR.greyed"],
-    "js/mod-compare.js": ["COLOUR.warning", "COLOUR.success", "COLOUR.error"],
-    "js/prompts.js": ["COLOUR.greyed"],
-    "js/popup.js": ["COLOUR.inUse", "COLOUR.inUseInk"],
-    "js/consent.js": ["COLOUR.neverBar", "COLOUR.note"],
+    "js/app/update.js": ["COLOUR.success", "COLOUR.error"],
+    "js/detail/detail-screen.js": ["COLOUR.success", "COLOUR.warning"],
+    "js/detail/detail-switchers.js": ["COLOUR.greyed"],
+    "js/mods/mod-compare.js": ["COLOUR.warning", "COLOUR.success", "COLOUR.error"],
+    "js/app/prompts.js": ["COLOUR.greyed"],
+    "js/ui/popup-list.js": ["COLOUR.inUse", "COLOUR.inUseInk"],
+    "js/app/consent.js": ["COLOUR.neverBar", "COLOUR.note"],
   };
   for (const [file, names] of Object.entries(uses))
     for (const name of names) assert.ok(read(file).includes(name), `${file} uses ${name}`);
@@ -375,7 +376,7 @@ for (const locale of locales)
   });
 
 // Hall modals use the shared footer; the memorial editor hits its full-row stop rule.
-const popupSource = read("js/popup.js");
+const footerSource = read("js/ui/popup-footer.js");
 const footerHelpers = new Function(
   "CONTROL",
   "POPUP_FOOTER",
@@ -390,8 +391,8 @@ const footerHelpers = new Function(
   "captionMinimum",
   "SMALL_BUTTON",
   "XS_BUTTON",
-  `${popupSource
-    .slice(popupSource.indexOf("export const footerBottom"), popupSource.indexOf("const titleHeight"))
+  `${footerSource
+    .slice(footerSource.indexOf("export const footerBottom"))
     .replaceAll(
       "export ",
       "",
@@ -427,8 +428,8 @@ test("Hall modal footers use the default XS for one, two and three actions", () 
     assert.equal(footerHelpers.footerBottom(), Tokens.POPUP_FOOTER.bottom, "the prefab's 102 under 176, scaled to 104");
   }
 });
-const { SORTS } = await import("../../src/bmpt/web/js/roster-order.js");
-const toolbarSource = read("js/roster-widgets.js");
+const { SORTS } = await import("../../src/bmpt/web/js/roster/roster-order.js");
+const toolbarSource = read("js/roster/roster-widgets.js");
 const toolbarFor = (web) =>
   new Function(
     "NGUI",
@@ -458,7 +459,7 @@ const toolbarFor = (web) =>
     row,
   );
 const modalLayoutFor = (web) => {
-  const source = read("js/student-hall-ui.js");
+  const source = read("js/hall/student-hall-ui.js");
   return new Function(
     "Popup",
     "POPUP",
@@ -550,8 +551,8 @@ for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"])
     assert.ok(bg[1] >= 540 - (Tokens.POPUP.frameY + 1450 / 2 - 132) * S);
     assert.ok(bg[3] >= 280);
     assert.ok(bg[1] + bg[3] + Tokens.POPUP.clearance * S <= 540 - footerHelpers.footerTop(1450, 2) * S + 1e-9);
-    assert.match(src("js/student-hall-picker.js"), /UI\.portraitPickerLayout\(view, searching\)\.list/);
-    assert.match(src("js/student-hall.js"), /UI\.backgroundPickerBox\(\)/);
+    assert.match(src("js/hall/student-hall-picker.js"), /UI\.portraitPickerLayout\(view, searching\)\.list/);
+    assert.match(src("js/hall/student-hall.js"), /UI\.backgroundPickerBox\(\)/);
   });
 test("the memorial modal keeps its retained footer: XS-high buttons at the frame's bottom right, under its fixed queue", () => {
   // the queue panel ends at 915 px; the retained buttons (the XS body) stand under it
@@ -560,13 +561,13 @@ test("the memorial modal keeps its retained footer: XS-high buttons at the frame
   assert.ok(bottom >= 720 + 195, `${bottom}`);
   // each as wide as its caption needs, their right edge on the panels'
   assert.match(
-    src("js/student-hall-ui.js"),
+    src("js/hall/student-hall-ui.js"),
     /const bodyH = CONTROL\.buttonXS\.h \* S, captions = actions\.map\(\(action\) => action\.label\);/,
   );
-  assert.match(src("js/student-hall-ui.js"), /let x = WIDE\.left \+ WIDE\.width - widths\.reduce/);
-  assert.match(src("js/student-hall-picker.js"), /memorial \? \{ retainedFooter: true \}/);
+  assert.match(src("js/hall/student-hall-ui.js"), /let x = WIDE\.left \+ WIDE\.width - widths\.reduce/);
+  assert.match(src("js/hall/student-hall-picker.js"), /memorial \? \{ retainedFooter: true \}/);
   // the queue across WIDE, the L class's content
-  assert.match(src("js/student-hall-picker.js"), /queuePanel\(layer, \[wideLeft, 720, wideW, 195\]/);
+  assert.match(src("js/hall/student-hall-picker.js"), /queuePanel\(layer, \[wideLeft, 720, wideW, 195\]/);
 });
 const HALL_FOOTERS = [
   ["popup.cancel", "hall.savePlaylist"],
@@ -625,15 +626,15 @@ test("a named caption allowance only lowers a floor, for its own site and locale
     const { kind, room } = footerHelpers.footerLayout(captions, 2800);
     assert.doesNotThrow(() => footerHelpers.footerFit(captions, { site, width: room, caption: kind.caption }));
   }
-  assert.match(src("js/student-hall-picker.js"), /memorial \? \{ retainedFooter: true \} : UI\.PORTRAIT_FRAME/);
-  assert.match(src("js/student-hall.js"), /captionSite: "hall.unsavedChanges"/);
+  assert.match(src("js/hall/student-hall-picker.js"), /memorial \? \{ retainedFooter: true \} : UI\.PORTRAIT_FRAME/);
+  assert.match(src("js/hall/student-hall.js"), /captionSite: "hall.unsavedChanges"/);
   assert.match(
-    popupSource,
+    read("js/ui/popup-message.js"),
     /popupFrame\(title, w, height, \{ ok, cancel, buttons, close: dismissable, captionSite, footer \}\)/,
   );
 });
 
-const hallUiSource = read("js/student-hall-ui.js");
+const hallUiSource = read("js/hall/student-hall-ui.js");
 const { COMPACT_BUTTON_H, COMPACT_FOOTER_W } = modalLayoutFor({});
 const hallControls = new Function(
   "NGUI",
@@ -701,13 +702,13 @@ test("portrait rows and their virtual strips grow together for the compact Add b
   const maxBar = 22 + 2 * 34 * 1.2;
   near(row.height, 138 + (300 + 10 + maxBar) * 0.46 + 8 + (Tokens.CONTROL.buttonXS.h / 2) * S + Tokens.SPACE.m * S);
   assert.equal(row.pitch, row.height + 4);
-  assert.match(src("js/student-hall-picker.js"), /groups.length, rowLayout.pitch/);
-  assert.match(src("js/student-hall-picker.js"), /rowPlate\(rowHost, \[rowLayout.width, rowLayout.height\]/);
-  assert.match(src("js/student-hall-picker.js"), /row.student.name, rowLayout.name/);
-  assert.match(src("js/student-hall-picker.js"), /\[rowLayout.stripX, 0, rowLayout.stripW, rowLayout.height\]/);
+  assert.match(src("js/hall/student-hall-picker.js"), /groups.length, rowLayout.pitch/);
+  assert.match(src("js/hall/student-hall-picker.js"), /rowPlate\(rowHost, \[rowLayout.width, rowLayout.height\]/);
+  assert.match(src("js/hall/student-hall-picker.js"), /row.student.name, rowLayout.name/);
+  assert.match(src("js/hall/student-hall-picker.js"), /\[rowLayout.stripX, 0, rowLayout.stripW, rowLayout.height\]/);
 });
 test("portrait Add and Select keep horizontal centres and widths below both one- and two-line names", async () => {
-  const source = read("js/student-hall-ui.js"),
+  const source = read("js/hall/student-hall-ui.js"),
     S = 1920 / 2960;
   let drawn;
   const draw = async (host, name, caption, box, action, opts) => {
@@ -978,5 +979,5 @@ for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"])
     assert.equal(host.origin[1], 74 + row / 2, "centred on the slider's row");
     assert.ok(label.fontSize >= Tokens.XS_BUTTON.fsMin, "the small button's floor, no allowance needed any more");
     assert.equal(label.text.replace(/\s/g, ""), web.hall.scaleReset.replace(/\s/g, ""));
-    assert.match(src("js/student-hall.js"), /captionSite: "hall.scaleReset"/);
+    assert.match(src("js/hall/student-hall-portrait-toolbar.js"), /captionSite: "hall.scaleReset"/);
   });

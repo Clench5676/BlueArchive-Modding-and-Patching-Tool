@@ -123,7 +123,7 @@ def cab_names(path: Path) -> list[str]:
     Args:
         path: UnityFS bundle whose directory is inspected without decoding asset blocks.
     """
-    from ..unityfs import read_cab_names
+    from ..unity.unityfs import read_cab_names
 
     return [name.lower() for name in read_cab_names(path) or ()]
 

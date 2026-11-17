@@ -14,11 +14,14 @@ from UnityPy.enums import BuildTarget, TextureFormat as TF
 from UnityPy.export import Texture2DConverter
 from UnityPy.helpers import ResourceReader, TextureSwizzler
 
-from bmpt import atlas_remap as remap, refine_assembly, texture_guard as guard
+from bmpt.refine import assembly as refine_assembly
+from bmpt.spine import atlas_remap as remap
+from bmpt.unity import texture_guard as guard
 from ba_modding_toolkit.bundle import Bundle
 from ba_modding_toolkit.core import extraction
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.gameassets import AssetCache, GameAssets, model, service
+from bmpt.gameassets import model_service
 from bmpt.gameassets.spine import extract_spine
 from bmpt.library import portrait_edit
 from ba_modding_toolkit.models import AssetType, SaveOptions
@@ -509,6 +512,7 @@ def fake_env(monkeypatch, tmp_path, declared, cab="CAB-test", path_id=42):
 
     (tmp_path / "fake.bundle").write_bytes(b"fake")
     monkeypatch.setattr(service, "open_bundle", open_bundle)
+    monkeypatch.setattr(model_service, "open_bundle", open_bundle)  # lobby effect textures
     located = {"cab-test": str(tmp_path / "fake.bundle")}
     monkeypatch.setattr(GameAssets, "_resolve_cabs", lambda self, wanted, hint=None: located)
 

@@ -1,4 +1,4 @@
-"""The skeleton URLs (web/js/api.js spineBase and spinePrefix) and thumbs.js forgetting a core's thumbnails are
+"""The skeleton URLs (web/js/core/api.js spineBase and spinePrefix) and thumbs.js forgetting a core's thumbnails are
 front-end code: their tests run with Node's test runner, skipped where Node is not installed."""
 
 import shutil

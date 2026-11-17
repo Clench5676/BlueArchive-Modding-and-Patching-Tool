@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from bmpt.config import Settings
+from bmpt.host.config import Settings
 from ba_modding_toolkit.searching import is_game_install
 from bmpt.webui.api import build_api
 from bmpt.webui.server import WebApp

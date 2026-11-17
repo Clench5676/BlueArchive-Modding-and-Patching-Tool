@@ -19,6 +19,8 @@ from UnityPy.helpers.CompressionHelper import compress_lz4
 from bmpt.catalog import Catalog, model_core
 from bmpt.gameassets import AssetCache, AssetNotFound, GameAssets
 from bmpt.gameassets import model
+from bmpt.gameassets import model_glb
+from bmpt.gameassets import model_service
 from bmpt.gameassets import service
 from bmpt.gameassets.discovery import cab_names, is_model_dependency
 from ba_modding_toolkit.searching import get_search_dirs
@@ -33,12 +35,12 @@ GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-
 
 def test_safe_unpack_floats_with_zero_bit_size():
     packed = SimpleNamespace(m_BitSize=0, m_NumItems=6, m_Start=0.25, m_Range=0.0, m_Data=b"")
-    assert model.safe_unpack_floats(packed) == [0.25] * 6
-    assert model.safe_unpack_floats(packed, 0, 4, shape=(2,)) == [[0.25, 0.25], [0.25, 0.25]]
+    assert model_glb.safe_unpack_floats(packed) == [0.25] * 6
+    assert model_glb.safe_unpack_floats(packed, 0, 4, shape=(2,)) == [[0.25, 0.25], [0.25, 0.25]]
     # the mesh decoder uses the safe version
     from UnityPy.helpers import MeshHelper
 
-    assert MeshHelper.unpack_floats is model.safe_unpack_floats
+    assert MeshHelper.unpack_floats is model_glb.safe_unpack_floats
 
 
 def test_compressed_skin_sums_integer_weights():
@@ -46,14 +48,14 @@ def test_compressed_skin_sums_integer_weights():
     # three weights short of 31 imply the fourth and read one more bone index
     weights = [1, 25, 5, 31, 10, 10, 10]
     bones = [3, 4, 5, 6, 7, 8, 9, 2]
-    w, j = model.compressed_skin(weights, bones, 3)
+    w, j = model_glb.compressed_skin(weights, bones, 3)
     assert j == [[3, 4, 5, 0], [6, 0, 0, 0], [7, 8, 9, 2]]
     assert w[0] == pytest.approx([1 / 31, 25 / 31, 5 / 31, 0])
     assert w[1] == [1, 0, 0, 0]
     assert w[2] == pytest.approx([10 / 31, 10 / 31, 10 / 31, 1 / 31])
     assert all(sum(row) == pytest.approx(1) for row in w)
     # extra data past the last vertex is ignored, missing bone indices do not raise
-    assert model.compressed_skin([31, 31, 31], [1], 2)[1] == [[1, 0, 0, 0], [0, 0, 0, 0]]
+    assert model_glb.compressed_skin([31, 31, 31], [1], 2)[1] == [[1, 0, 0, 0], [0, 0, 0, 0]]
 
 
 def _channels(*formats):
@@ -72,22 +74,22 @@ def test_fix_vertex_formats_scales_normalised_channels():
         m_Colors=[(255, 0, 51, 255)],
         m_UV0=[(0.5, 0.5)],
     )
-    model.fix_vertex_formats(mesh, handler)
+    model_glb.fix_vertex_formats(mesh, handler)
     assert handler.m_Colors == [pytest.approx((1.0, 0.0, 0.2, 1.0))]
     assert handler.m_Normals == [pytest.approx((1.0, -1.0, 0.0))]  # SNorm -128 clamps to -1
     assert handler.m_Vertices == [(1.0, 2.0, 3.0)] and handler.m_UV0 == [(0.5, 0.5)]
     # older vertex format tables differ: left alone
     old = SimpleNamespace(version=(2018, 4, 0, 0), m_Colors=[(255, 0, 0, 255)])
-    model.fix_vertex_formats(_channels((0, 3), (0, 3), (0, 0), (2, 4)), old)
+    model_glb.fix_vertex_formats(_channels((0, 3), (0, 3), (0, 0), (2, 4)), old)
     assert old.m_Colors == [(255, 0, 0, 255)]
 
 
 def test_pad_skin_rigid_props_and_renormalise():
-    joints, weights = model.pad_skin([(5,), (6,)], None, 2)
+    joints, weights = model_glb.pad_skin([(5,), (6,)], None, 2)
     assert joints == [(5, 0, 0, 0), (6, 0, 0, 0)] and weights == [(1.0, 0.0, 0.0, 0.0)] * 2
-    joints, weights = model.pad_skin([(1, 2)], [(0.5, 0.25)], 1)
+    joints, weights = model_glb.pad_skin([(1, 2)], [(0.5, 0.25)], 1)
     assert joints == [(1, 2, 0, 0)] and weights == [pytest.approx((2 / 3, 1 / 3, 0, 0))]
-    assert model.pad_skin(None, None, 3) == (None, None)
+    assert model_glb.pad_skin(None, None, 3) == (None, None)
 
 
 # --- clips ---
@@ -124,7 +126,7 @@ def _clip(streamed=(), curve_count=0, dense=None, constant=(), stop=1.0, rate=2.
 
 def test_read_streamed_frames():
     words = _words((-math.inf, [(0, 0, 0, 0, 1)]), (0.0, [(0, 0, 0, 2, 1)]), (math.inf, []))
-    frames = model.read_streamed(words)
+    frames = model_glb.read_streamed(words)
     assert [f[0] for f in frames] == [-math.inf, 0.0, math.inf]
     assert frames[1][1] == [(0, 0.0, 0.0, 2.0, 1.0)]
 
@@ -144,7 +146,7 @@ def test_decode_clip_streamed_dense_constant():
         "m_BeginTime": 0.0,
         "m_SampleArray": [10, 20, 30, 40],
     }
-    clip = model.decode_clip(_clip(streamed, 2, dense, constant=[7, 8]))
+    clip = model_glb.decode_clip(_clip(streamed, 2, dense, constant=[7, 8]))
     assert clip.duration == 1.0 and clip.times == [0.0, 0.5, 1.0]
     assert clip.curves[0] == pytest.approx([1, 2, 5])
     assert clip.curves[1] == pytest.approx([0, 0, 0.125])  # before its first key it holds that key's value
@@ -163,24 +165,24 @@ def test_bind_tracks_walks_binding_dimensions():
         {"typeID": 4, "attribute": 4, "path": a},  # Euler: 11-13
     ]
     curves = {i: [float(i)] for i in range(14)}
-    tracks = model.bind_tracks(bindings, curves, {a: 0, b: 1})
+    tracks = model_glb.bind_tracks(bindings, curves, {a: 0, b: 1})
     assert tracks == {0: {1: [[0.0], [1.0], [2.0]], 4: [[11.0], [12.0], [13.0]]}, 1: {2: [[3.0], [4.0], [5.0], [6.0]]}}
     assert (
-        model.binding_dims({"typeID": 4, "attribute": 2}) == 4
-        and model.binding_dims({"typeID": 23, "attribute": 2}) == 1
+        model_glb.binding_dims({"typeID": 4, "attribute": 2}) == 4
+        and model_glb.binding_dims({"typeID": 23, "attribute": 2}) == 1
     )
 
 
 def test_track_values_mirror_and_continuity():
-    path, values = model.track_values(1, [[1.0, 2.0], [2.0], [3.0, 4.0]])
+    path, values = model_glb.track_values(1, [[1.0, 2.0], [2.0], [3.0, 4.0]])
     assert path == "translation" and values == [(-1.0, 2.0, 3.0), (-2.0, 2.0, 4.0)]
     # the second quaternion is the first one negated: kept on the same side
-    path, values = model.track_values(2, [[0.0, 0.0], [0.6, -0.6], [0.0, 0.0], [0.8, -0.8]])
+    path, values = model_glb.track_values(2, [[0.0, 0.0], [0.6, -0.6], [0.0, 0.0], [0.8, -0.8]])
     assert (
         path == "rotation" and values[0] == pytest.approx((0, -0.6, 0, 0.8)) and values[1] == pytest.approx(values[0])
     )
     # Euler 90 degrees about Y: a quarter turn, mirrored to -Y
-    path, values = model.track_values(4, [[0.0], [90.0], [0.0]])
+    path, values = model_glb.track_values(4, [[0.0], [90.0], [0.0]])
     s = math.sqrt(0.5)
     assert path == "rotation" and values[0] == pytest.approx((0, -s, 0, s))
 
@@ -189,15 +191,15 @@ def test_euler_rotation_orders():
     s = math.sqrt(0.5)
     qx, qy = (s, 0, 0, s), (0, s, 0, s)
     # Unity's own order (ZXY): X before Y, q = qy * qx; XYZ the same here, ZYX applies Y first
-    assert model.euler_to_quat((90, 90, 0)) == pytest.approx(model.qmul(qy, qx))
-    assert model.euler_to_quat((90, 90, 0), 0) == pytest.approx(model.qmul(qy, qx))
-    assert model.euler_to_quat((90, 90, 0), 5) == pytest.approx(model.qmul(qx, qy))
+    assert model_glb.euler_to_quat((90, 90, 0)) == pytest.approx(model_glb.qmul(qy, qx))
+    assert model_glb.euler_to_quat((90, 90, 0), 0) == pytest.approx(model_glb.qmul(qy, qx))
+    assert model_glb.euler_to_quat((90, 90, 0), 5) == pytest.approx(model_glb.qmul(qx, qy))
     # X and Z: ZXY applies Z first (q = qx * qz), XYZ applies X first (q = qz * qx)
     qz = (0, 0, s, s)
-    assert model.euler_to_quat((90, 0, 90)) == pytest.approx(model.qmul(qx, qz))
-    assert model.euler_to_quat((90, 0, 90), 0) == pytest.approx(model.qmul(qz, qx))
+    assert model_glb.euler_to_quat((90, 0, 90)) == pytest.approx(model_glb.qmul(qx, qz))
+    assert model_glb.euler_to_quat((90, 0, 90), 0) == pytest.approx(model_glb.qmul(qz, qx))
     # an unknown order falls back to Unity's
-    assert model.euler_to_quat((90, 0, 90), 9) == pytest.approx(model.euler_to_quat((90, 0, 90)))
+    assert model_glb.euler_to_quat((90, 0, 90), 9) == pytest.approx(model_glb.euler_to_quat((90, 0, 90)))
 
 
 def test_euler_orders_from_custom_type():
@@ -208,33 +210,33 @@ def test_euler_orders_from_custom_type():
         {"typeID": 4, "attribute": 2, "path": c, "customType": 0},  # a quaternion: no order
         {"typeID": 4, "attribute": 4, "path": 12345, "customType": 0},  # a path the model lacks
     ]
-    assert model.euler_orders(bindings, {a: 0, b: 1, c: 2}) == {0: 0, 1: 4}
+    assert model_glb.euler_orders(bindings, {a: 0, b: 1, c: 2}) == {0: 0, 1: 4}
     # the order reaches the channel: 90 degrees about X then Z (XYZ) differs from Z then X (Unity's)
-    _, xyz = model.track_values(4, [[90.0], [0.0], [90.0]], 0)
-    _, zxy = model.track_values(4, [[90.0], [0.0], [90.0]])
+    _, xyz = model_glb.track_values(4, [[90.0], [0.0], [90.0]], 0)
+    _, zxy = model_glb.track_values(4, [[90.0], [0.0], [90.0]])
     assert xyz[0] != pytest.approx(zxy[0])
-    assert xyz[0] == pytest.approx(model.quat_norm(model.mquat(model.euler_to_quat((90, 0, 90), 0))))
+    assert xyz[0] == pytest.approx(model_glb.quat_norm(model_glb.mquat(model_glb.euler_to_quat((90, 0, 90), 0))))
 
 
 def test_mirror_matrix_and_quaternion_helpers():
     identity = {f"e{r}{c}": float(r == c) for r in range(4) for c in range(4)}
-    assert model.mirror_matrix(identity) == [float(r == c) for c in range(4) for r in range(4)]
+    assert model_glb.mirror_matrix(identity) == [float(r == c) for c in range(4) for r in range(4)]
     m = dict(identity, e03=2.0, e13=3.0)  # translation (2, 3, 0)
-    assert model.mirror_matrix(m)[12:15] == [-2.0, 3.0, 0.0]
-    assert model.qmul((0, 0, 0, 1), (0.1, 0.2, 0.3, 0.9)) == pytest.approx((0.1, 0.2, 0.3, 0.9))
-    assert model.euler_to_quat((0, 0, 0)) == pytest.approx((0, 0, 0, 1))
+    assert model_glb.mirror_matrix(m)[12:15] == [-2.0, 3.0, 0.0]
+    assert model_glb.qmul((0, 0, 0, 1), (0.1, 0.2, 0.3, 0.9)) == pytest.approx((0.1, 0.2, 0.3, 0.9))
+    assert model_glb.euler_to_quat((0, 0, 0)) == pytest.approx((0, 0, 0, 1))
 
 
 def test_pick_clips_prefers_own_clips_and_falls_back_to_an_idle():
     names = ["CH0258_01_Formation_Idle", "CH0258_02_Formation_Idle", "CH0258_01_Cafe_Idle", "CH0258_02_Victory_End"]
-    assert model.pick_clips(names, ("Formation_Idle", "Cafe_Idle", "Victory_End"), "ch0258_02") == [
+    assert model_glb.pick_clips(names, ("Formation_Idle", "Cafe_Idle", "Victory_End"), "ch0258_02") == [
         (1, "Formation_Idle"),
         (2, "Cafe_Idle"),
         (3, "Victory_End"),
     ]
     npc = ["Police_Normal_Attack_Ing", "Police_Stand_Idle", "Police_Normal_Idle"]
-    assert model.pick_clips(npc, model.DEFAULT_CLIPS, "police") == [(2, "Idle")]
-    assert model.pick_clips(["X_Move_Ing"], model.DEFAULT_CLIPS, "x") == []
+    assert model_glb.pick_clips(npc, model_glb.DEFAULT_CLIPS, "police") == [(2, "Idle")]
+    assert model_glb.pick_clips(["X_Move_Ing"], model_glb.DEFAULT_CLIPS, "x") == []
 
 
 def test_default_clips_bring_the_knockdown_fall_and_the_retreat_cry():
@@ -249,32 +251,32 @@ def test_default_clips_bring_the_knockdown_fall_and_the_retreat_cry():
         "VitalDeathGroggy",
         "VitalHit",
     ]
-    assert model.pick_clips(names, model.DEFAULT_CLIPS, "ch0069") == [
+    assert model_glb.pick_clips(names, model_glb.DEFAULT_CLIPS, "ch0069") == [
         (0, "Formation_Idle"),
         (4, "Vital_Retreat"),
         (1, "Vital_Death"),
     ]
     # a student with two battle forms shows the first form's; misspelt pickups still count
     two = ["CH0187_Formation_Idle", "CH0187_Vital_Death02", "CH0187_Vital_Death01", "CH0187_Vital_Retreat01"]
-    assert model.pick_clips(two, model.DEFAULT_CLIPS, "ch0187") == [
+    assert model_glb.pick_clips(two, model_glb.DEFAULT_CLIPS, "ch0187") == [
         (0, "Formation_Idle"),
         (3, "Vital_Retreat"),
         (2, "Vital_Death"),
     ]
     for name in ("CH0271_Fomation_Pickup", "Hanae_Original_Formation Pickup"):
-        assert model.pick_clips(["X_Formation_Idle", name], model.DEFAULT_CLIPS, "x") == [
+        assert model_glb.pick_clips(["X_Formation_Idle", name], model_glb.DEFAULT_CLIPS, "x") == [
             (0, "Formation_Idle"),
             (1, "Formation_Pickup"),
         ]
     # the own name wins over an alias
-    assert model.pick_clips(["X_Vital_Death01", "X_Vital_Death"], ("Vital_Death",), "x") == [(1, "Vital_Death")]
+    assert model_glb.pick_clips(["X_Vital_Death01", "X_Vital_Death"], ("Vital_Death",), "x") == [(1, "Vital_Death")]
 
 
 # --- GLB ---
 
 
 def test_glb_writer_layout():
-    glb = model.GlbWriter()
+    glb = model_glb.GlbWriter()
     pos = glb.accessor([(0.0, 1.0, 2.0), (-1.0, 0.5, 3.0)], "VEC3", target=34962, minmax=True)
     idx = glb.accessor([0, 1, 1], "SCALAR", component=5123, target=34963)  # 6 bytes: the next view is padded
     tex = glb.image(b"\x89PNG..", "Tex")
@@ -299,7 +301,7 @@ def test_glb_writer_layout():
 
 
 def test_glb_writer_samplers_and_linear_textures():
-    glb = model.GlbWriter()
+    glb = model_glb.GlbWriter()
     clamp = {"magFilter": 9729, "minFilter": 9729, "wrapS": 33071, "wrapT": 33071}
     a = glb.image(b"a", "Body", sampler=clamp)
     b = glb.image(b"b", "Body_Mask", linear=True, sampler=dict(clamp))
@@ -481,7 +483,7 @@ def test_bind_toggles_walks_the_curve_index():
         {"typeID": 25, "attribute": enabled, "path": face01, "isPPtrCurve": 1},  # 9
     ]
     curves = {i: [float(i)] for i in range(10)}
-    assert model.bind_toggles(bindings, curves, {face: 1, face01: 2, fx: 3}) == [
+    assert model_glb.bind_toggles(bindings, curves, {face: 1, face01: 2, fx: 3}) == [
         (1, "renderer", [4.0]),
         (2, "renderer", [5.0]),
         (3, "active", [6.0]),
@@ -490,9 +492,9 @@ def test_bind_toggles_walks_the_curve_index():
 
 def test_toggle_keys_are_change_points():
     times = [0.0, 0.5, 1.0, 1.5, 2.0]
-    assert model.toggle_keys([1.0, 1.0, 0.0, 0.2, 1.0], times) == [[0.0, 1], [1.0, 0], [2.0, 1]]
-    assert model.toggle_keys([0.0], times) == [[0.0, 0]]  # a constant curve
-    assert model.toggle_keys([0.0, 1.0], [2.0, 2.5], start=2.0) == [[0.0, 0], [0.5, 1]]  # from the clip start
+    assert model_glb.toggle_keys([1.0, 1.0, 0.0, 0.2, 1.0], times) == [[0.0, 1], [1.0, 0], [2.0, 1]]
+    assert model_glb.toggle_keys([0.0], times) == [[0.0, 0]]  # a constant curve
+    assert model_glb.toggle_keys([0.0, 1.0], [2.0, 2.5], start=2.0) == [[0.0, 0], [0.5, 1]]  # from the clip start
 
 
 def test_toggles_bring_in_disabled_renderers_and_drop_rest_states(monkeypatch):
@@ -531,7 +533,7 @@ def test_toggles_bring_in_disabled_renderers_and_drop_rest_states(monkeypatch):
             ]
         },
     }
-    decoded = model.DecodedClip(
+    decoded = model_glb.DecodedClip(
         1.5, [0.0, 0.5, 1.0, 1.5], {0: [1.0], 1: [0.0], 2: [0.0, 0.0, 1.0, 1.0], 3: [1.0, 0.0, 0.0, 0.0]}
     )
     toggles = exporter.toggles(tt, decoded, by_hash)
@@ -580,16 +582,16 @@ def test_glb_json_has_only_finite_numbers():
     exporter.glb.json["scenes"][0]["nodes"].append(0)
     doc = _strict(exporter.glb.finish())
     extras = doc["materials"][0]["extras"]
-    assert extras["colors"]["_CameraFadeParams"] == [0.0, model.FLT_MAX, 0.0, 0.0]
-    assert extras["colors"]["_Odd"] == [0.0, -model.FLT_MAX, 1.0, 1.0]  # NaN becomes 0
-    assert extras["floats"] == {"_Cull": 2.0, "_Far": model.FLT_MAX}
-    assert doc["nodes"][0]["translation"] == [model.FLT_MAX, 0.0, 0.0]
+    assert extras["colors"]["_CameraFadeParams"] == [0.0, model_glb.FLT_MAX, 0.0, 0.0]
+    assert extras["colors"]["_Odd"] == [0.0, -model_glb.FLT_MAX, 1.0, 1.0]  # NaN becomes 0
+    assert extras["floats"] == {"_Cull": 2.0, "_Far": model_glb.FLT_MAX}
+    assert doc["nodes"][0]["translation"] == [model_glb.FLT_MAX, 0.0, 0.0]
 
 
 def test_glb_writer_rejects_what_is_not_finite(monkeypatch):
     # without the clean-up a non-finite number fails the export instead of the viewer
-    monkeypatch.setattr(model, "finite_json", lambda value: value)
-    glb = model.GlbWriter()
+    monkeypatch.setattr(model_glb, "finite_json", lambda value: value)
+    glb = model_glb.GlbWriter()
     glb.json["nodes"].append({"name": "root", "scale": [math.nan, 1.0, 1.0]})
     with pytest.raises(ValueError):
         glb.finish()
@@ -759,11 +761,13 @@ def test_set_aside_ex_only_reads_submeshes_and_shaders(monkeypatch):
     }
     # a clip that turns it off changes nothing (hidden at rest already); one that turns it on brings it in
     assert (
-        exporter.toggles(tt, model.DecodedClip(1.0, [0.0, 1.0], {0: [0.0]}), {zlib.crc32(b"CH0198_Face01_Outline"): 1})
+        exporter.toggles(
+            tt, model_glb.DecodedClip(1.0, [0.0, 1.0], {0: [0.0]}), {zlib.crc32(b"CH0198_Face01_Outline"): 1}
+        )
         == []
     )
     toggles = exporter.toggles(
-        tt, model.DecodedClip(1.0, [0.0, 1.0], {0: [0.0, 1.0]}), {zlib.crc32(b"CH0198_Face01_Outline"): 1}
+        tt, model_glb.DecodedClip(1.0, [0.0, 1.0], {0: [0.0, 1.0]}), {zlib.crc32(b"CH0198_Face01_Outline"): 1}
     )
     gag_mesh = exporter.nodes[1]["extras"]["renderer"]
     assert (
@@ -936,7 +940,7 @@ def test_model_glb_cache_hit_does_not_wait_for_export_lock(tmp_path, monkeypatch
         def __exit__(self, *args):
             pass
 
-    monkeypatch.setattr(service, "_MODEL_LOCK", UnrelatedExport())
+    monkeypatch.setattr(model_service, "_MODEL_LOCK", UnrelatedExport())
     assert game.model_glb("ch0242") == b"glTF cached"
     assert not (tmp_path / "cache").exists()
 
@@ -1195,7 +1199,7 @@ def test_real_chibi_exports(tmp_path):
             m["extras"]["colors"].get("_CameraFadeParams")
             for m in _strict(game.model_glb("saya_original"))["materials"]
         ]
-        assert [0.0, model.FLT_MAX, 0.0, 0.0] in fade
+        assert [0.0, model_glb.FLT_MAX, 0.0, 0.0] in fade
     assert not (tmp_path / "cache").exists()
 
 
@@ -1450,7 +1454,7 @@ def test_field_index_holds_field_npcs_by_id(tmp_path, monkeypatch):
         def __exit__(self, *exc):
             return False
 
-    monkeypatch.setattr(service, "open_bundle", Env)
+    monkeypatch.setattr(model_service, "open_bundle", Env)
     assert game.field_model_cores() == {"np0009", "np0143", "ch0171"}
     assert [Path(p).name for p in game._field_index()["np0143"]] == [first, second]
 

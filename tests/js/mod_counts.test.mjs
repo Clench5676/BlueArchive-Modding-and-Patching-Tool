@@ -6,7 +6,7 @@ globalThis.document = {
   documentElement: { lang: "en" },
   createElement: () => ({ getContext: () => ({ measureText: (t) => ({ width: String(t).length * 20 }) }) }),
 };
-const { COUNT_ICONS, countNodes, countText, iconsOf } = await import("../../src/bmpt/web/js/mod-counts.js");
+const { COUNT_ICONS, countNodes, countText, iconsOf } = await import("../../src/bmpt/web/js/mods/mod-counts.js");
 
 test("count icons are the two named game sprites, found in the loaded atlases only", () => {
   const index = {

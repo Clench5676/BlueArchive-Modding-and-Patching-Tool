@@ -1,5 +1,5 @@
-"""The thumbnail framing (web/js/thumbs.js) is front-end code: its tests run with Node's test runner, skipped where
-Node is not installed."""
+"""The thumbnail framing (web/js/detail/thumbs.js) is front-end code: its tests run with Node's test runner, skipped
+where Node is not installed."""
 
 import shutil
 import subprocess

@@ -5,7 +5,7 @@
 - **Threads.** Services are thread-safe: HTTP handlers run on many threads at once. UnityPy work on one bundle is
   serialised with a per-bundle lock. Long operations run on the single job worker (see [Jobs](api.md#jobs-and-events)).
 - **No prose in results.** Services return data, not sentences. Errors are `ServiceError(code, **params)`
-  (`bmpt/errors.py`); the front end shows the locale string `webui.error.<code>`. An error passes every parameter
+  (`bmpt/core/errors.py`); the front end shows the locale string `webui.error.<code>`. An error passes every parameter
   its text names, above all `file` (`tests/test_error_params.py` scans for omissions). Diagnostics go to
   `logging.getLogger(__name__)`, never `print`.
 - **JSON-ready results.** Dataclasses with `to_json()` returning plain dicts; paths as absolute strings, dates as
@@ -96,12 +96,14 @@ The collection art is read where the game loads it (CostumeExcel's texture paths
 
 `model_glb` reads prefab bundles and resolves their external CABs on demand. Model, memorial and office graphs share
 the revision-checked `gameassets/cabs.py` resolver; the optional preview cache persists bounded, checksummed CAB
-metadata, confined to the installation and checked by device, inode, size, mtime and ctime. The shared `unityfs.py`
-parser reads only header/block info and uses the declared bundle length to ignore CRC-correction tails. The GLB
+metadata, confined to the installation and checked by device, inode, size, mtime and ctime. The shared
+`unity/unityfs.py` parser reads only header/block info and uses the declared bundle length to ignore CRC-correction
+tails. The GLB
 carries what the game's shaders need (materials, constants, keywords, outline, blend state, samplers, clip toggles);
-`web/js/chibi-materials.js` ports the game's shaders from their compiled programs, and `model.js` opens at the
-formation screen's view with the formation screen's light, both read from the game's own data and checked against
-in-game screenshots. Input is wheel/pinch zoom, pan and orbit with eased framing (`attachInput`).
+`web/js/model/chibi-materials.js` ports the game's shaders from their compiled programs, and `model.js` opens at the
+formation screen's view (its camera in `model-camera.js`) with the formation screen's light, both read from the game's
+own data and checked against in-game screenshots. Input is wheel/pinch zoom, pan and orbit with eased framing
+(`attachInput`).
 
 `AssetNotFound` (a `KeyError`) when a name is unknown. Layout nodes use the schema
 `{name, active, pos[x, y], scale[x, y], rotZ, widgets[], children?}`; atlas and texture references are resolved to

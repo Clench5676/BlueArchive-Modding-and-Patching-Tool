@@ -8,8 +8,11 @@ import pytest
 from ba_modding_toolkit.i18n import I18n
 from bmpt.library import service
 from bmpt.library.migrations import LEGACY_REMAP
+from ba_modding_toolkit.bundle import Bundle
+from bmpt.core.errors import ServiceError
 
 from test_library import game_bundle, reload_library, setup_library
+from module_patches import patch_everywhere
 
 
 OLD_SUFFIXES = {
@@ -73,8 +76,8 @@ def test_legacy_pair_uses_current_repair_names_and_metadata_once(setup_library, 
     path = write_legacy_state(env.root, [original, repaired], applied=applied)
     before = {p: (p.read_bytes(), p.stat().st_mtime_ns) for p in env.tmp.rglob("*.bundle")}
     translate = I18n(language).t
-    monkeypatch.setattr(service, "t", translate)
-    monkeypatch.setattr(service.Bundle, "load", lambda *a, **kw: pytest.fail("Migration must not load bundles"))
+    patch_everywhere(monkeypatch, [service], "t", translate)
+    monkeypatch.setattr(Bundle, "load", lambda *a, **kw: pytest.fail("Migration must not load bundles"))
     library = reload_library(env)
     mods = {m.id: m for m in library.mods()}
     assert mods[original["id"]].repaired_id == repaired["id"]
@@ -85,7 +88,7 @@ def test_legacy_pair_uses_current_repair_names_and_metadata_once(setup_library, 
     assert not fixed.user_added
     assert len({m.repaired_from or m.id for m in mods.values()}) == 1
     for mod_id in mods:
-        with pytest.raises(service.ServiceError, match="entry_changed"):
+        with pytest.raises(ServiceError, match="entry_changed"):
             library.remap(mod_id)
     monkeypatch.setattr(library, "_check_group", lambda *a, **kw: {"remappable": True})
     assert all(not library.compatibility(mod_id)["remappable"] for mod_id in mods)
@@ -95,7 +98,7 @@ def test_legacy_pair_uses_current_repair_names_and_metadata_once(setup_library, 
     assert [m["files"] for m in saved["mods"]] == [original["files"], repaired["files"]]
     assert {p: (p.read_bytes(), p.stat().st_mtime_ns) for p in env.tmp.rglob("*.bundle")} == before
     contents = path.read_bytes()
-    monkeypatch.setattr(service, "legacy_remapped", lambda _: pytest.fail("Migration must run once"))
+    patch_everywhere(monkeypatch, [service], "legacy_remapped", lambda _: pytest.fail("Migration must run once"))
     assert {m.id: m for m in reload_library(env).mods()} == mods
     assert path.read_bytes() == contents
     library.rename(original["id"], "Original alias")
@@ -121,7 +124,7 @@ def test_deleted_original_leaves_a_tagged_standalone_repair(setup_library, missi
     assert fixed.repaired_from and fixed.repaired_from != fixed.id
     assert not fixed.repaired_id
     assert fixed.label == service.t("webui.remap.name", name="test_spr")
-    with pytest.raises(service.ServiceError, match="entry_changed"):
+    with pytest.raises(ServiceError, match="entry_changed"):
         library.remap(fixed.id)
     assert reload_library(env).mods() == [fixed]
 
@@ -239,7 +242,7 @@ def test_failed_migration_write_keeps_disk_and_memory_retryable(setup_library, m
     before = path.read_bytes()
     save = service.atomic_json
     with monkeypatch.context() as patch:
-        patch.setattr(service, "atomic_json", lambda *a, **kw: (_ for _ in ()).throw(OSError("disk full")))
+        patch_everywhere(patch, [service], "atomic_json", lambda *a, **kw: (_ for _ in ()).throw(OSError("disk full")))
         library = reload_library(env)
         assert path.read_bytes() == before
         assert not library._records[repaired["id"]].get("repaired_from")

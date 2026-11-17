@@ -22,8 +22,8 @@ from typing import TYPE_CHECKING, Any
 
 from bmpt.engine import LogFunc, ProgressCallback, no_log, t
 
-from ..errors import ServiceError
-from ..logging_utils import log_failure
+from ..core.errors import ServiceError
+from ..core.logging_utils import log_failure
 from . import safety
 from .judge import LIBRARY_SOURCES, core_of, crc_state, now, says_official
 from .models import JsonResult

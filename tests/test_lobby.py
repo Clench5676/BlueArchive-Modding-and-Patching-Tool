@@ -10,8 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from bmpt.config import Settings
-from bmpt.errors import ServiceError
+from bmpt.host.config import Settings
+from bmpt.core.errors import ServiceError
 from bmpt.gameassets import lobby
 from bmpt.gameassets.unity import open_bundle
 from bmpt.webui.services import Services
@@ -967,7 +967,7 @@ def real_game(tmp_path_factory):
 
 @pytest.mark.skipif(not GAME_DIR.is_dir(), reason="No local game install")
 def test_real_lobbies(real_game, monkeypatch):
-    from bmpt.gameassets.service import _SCHEMA
+    from bmpt.gameassets.service_base import _SCHEMA
 
     cache, puts = real_game.cache, []
     put = cache.put

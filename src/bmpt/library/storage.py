@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from bmpt.engine import Bundle
-from ..filelock import replace as replace_file
+from ..core.filelock import replace as replace_file
 
 logger = logging.getLogger(__name__)
 

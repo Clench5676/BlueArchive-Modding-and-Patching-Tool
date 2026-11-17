@@ -14,10 +14,10 @@ own module:
 - **Post-processing** (`lobby.py` reads the prefabs' URP volumes; the linear pass applies Panini projection,
   chromatic aberration and the colour grade as URP 12 does, placed in the game's screen). The Settings L2D tab's
   `lobbyPost` (on by default) is the PC client's PP option.
-- **Particle effects** (`gameassets/particles.py`, `particles.js`, `particles-gl.js`): the prefabs' ParticleSystems
-  simulated and drawn with the game's DSFX shaders ported from their compiled programs, in linear light, sorted with
-  the skeleton parts; emission, shapes, curves, sub-emitters, trails and ring buffers follow Unity's rules. Cost is
-  about 0.2–0.6 ms a frame; everything is freed with the lobby. Without WebGL2 nothing is drawn.
+- **Particle effects** (`gameassets/particles.py`, `particles.js`, `particles-geometry.js`, `particles-gl.js`): the
+  prefabs' ParticleSystems simulated and drawn with the game's DSFX shaders ported from their compiled programs, in
+  linear light, sorted with the skeleton parts; emission, shapes, curves, sub-emitters, trails and ring buffers follow
+  Unity's rules. Cost is about 0.2–0.6 ms a frame; everything is freed with the lobby. Without WebGL2 nothing is drawn.
 - **Mesh effects** (`gameassets/meshfx.py`, `mesh-fx.js`): the few prefabs with plain MeshRenderers (lens dirt,
   light quads, water), drawn with the particle programs, Animator loops included.
 - **Skeleton materials** (`gameassets/spine_materials.py`, `skeleton-materials.js`): a page's shader decides how its
@@ -71,8 +71,8 @@ own module:
 
 Online data, fetched on demand and kept in memory only (never written to disk):
 
-- Kivo (`kivo.py`): one student page per variant (zh-CN, ja and the voices, by voice clip name).
-- The Global server's CharacterDialog table (`globallines.py`), as ba-data publishes it (one bounded download per
+- Kivo (`lines/kivo.py`): one student page per variant (zh-CN, ja and the voices, by voice clip name).
+- The Global server's CharacterDialog table (`lines/global_lines.py`), as ba-data publishes it (one bounded download per
   session, only when the UI language is not zh-CN; `lobby.lines` waits up to 3 s for it, then answers with Kivo's
   lines alone). A dialogue's rows go on the talk animation's voice clips in order.
 
@@ -89,7 +89,7 @@ enlarges a thumbnail as its capture source. The centered 404:456 guide matches t
 stay outside output, and the shutter writes a lossless native-pixel PNG directly to the library. The mode button is
 drawn only when the student has the other mode (`bridge.info()` tells `hasPortrait` and `hasLobby`). The camera's
 controls reuse the game's prefabs and are laid out with `ui-grid.js`. The gallery (the button at the bottom left) is
-the Switch pickers' list popup (`popup.js` `listPopup`, Switch 3D Model's square cards, layout kind `photo`): the chosen photo with Apply,
+the Switch pickers' list popup (`popup-list.js` `listPopup`, Switch 3D Model's square cards, layout kind `photo`): the chosen photo with Apply,
 Export and Delete in the details at the left, the photos scrolling at the right, Restore Default, Cancel and Save in
 the footer.
 

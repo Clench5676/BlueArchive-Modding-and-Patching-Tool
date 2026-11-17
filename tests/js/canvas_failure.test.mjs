@@ -6,8 +6,8 @@ import {
   encodedPicture,
   hasAlpha,
   REPORT_EVERY,
-} from "../../src/bmpt/web/js/canvas-failure.js";
-import { maskWithSprite } from "../../src/bmpt/web/js/sprite-mask.js";
+} from "../../src/bmpt/web/js/core/canvas-failure.js";
+import { maskWithSprite } from "../../src/bmpt/web/js/ui/sprite-mask.js";
 import { maskCanvas } from "./sprite_mask_fixture.mjs";
 
 const style = (x, y, w, h) => ({ left: `${x}px`, top: `${y}px`, width: `${w}px`, height: `${h}px`, transform: "" });

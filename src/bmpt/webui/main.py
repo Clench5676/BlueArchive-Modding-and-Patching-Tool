@@ -10,11 +10,11 @@ import time
 import webbrowser
 from pathlib import Path
 
-from ..localization import register_locales
+from ..core.localization import register_locales
 
 register_locales()
 
-from .. import devmode
+from ..core import devmode
 from bmpt.engine import EXE_DIR, i18n_manager, t
 from .api import build_api
 from .instance import InstanceLock, raise_running

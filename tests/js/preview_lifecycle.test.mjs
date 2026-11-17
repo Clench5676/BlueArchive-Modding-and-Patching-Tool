@@ -5,9 +5,9 @@ import {
   freezeWhileLoading,
   previewLifecycle,
   previewTimer,
-} from "../../src/bmpt/web/js/preview-lifecycle.js";
-import { latestLoad, loadPlayer } from "../../src/bmpt/web/js/spine-load.js";
-import { nextFrame } from "../../src/bmpt/web/js/async.js";
+} from "../../src/bmpt/web/js/detail/preview-lifecycle.js";
+import { latestLoad, loadPlayer } from "../../src/bmpt/web/js/spine/spine-load.js";
+import { nextFrame } from "../../src/bmpt/web/js/core/async.js";
 
 const tick = () => new Promise(setImmediate);
 function globals(t, env) {
@@ -294,7 +294,7 @@ for (const kind of ["portrait", "lobby", "special L2D"])
   });
 
 test("a Spine load that times out says how far it got", async () => {
-  const { loadPlayer } = await import("../../src/bmpt/web/js/spine-load.js");
+  const { loadPlayer } = await import("../../src/bmpt/web/js/spine/spine-load.js");
   const assetManager = { getLoaded: () => 2, getToLoad: () => 1, hasErrors: () => false, getErrors: () => ({}) };
   const player = {
     assetManager,
@@ -424,7 +424,7 @@ test("a loaded Spine player on screen stops under Now Loading and restarts after
 });
 
 test("preview deadlines leave out the time a read waits for the library", async (t) => {
-  const { setLibraryWaiting, LIBRARY_WAIT_CAP } = await import("../../src/bmpt/web/js/preview-lifecycle.js");
+  const { setLibraryWaiting, LIBRARY_WAIT_CAP } = await import("../../src/bmpt/web/js/detail/preview-lifecycle.js");
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const env = surface();
   let now = 0,
@@ -521,8 +521,8 @@ test("a Spine player restarted under Now Loading draws again once it ends", asyn
 });
 
 test("a clip fetch waiting for a job on the server does not reach its 15 s cap", async (t) => {
-  const { setLibraryWaiting } = await import("../../src/bmpt/web/js/preview-lifecycle.js");
-  const { withPreviewTimeout } = await import("../../src/bmpt/web/js/async.js");
+  const { setLibraryWaiting } = await import("../../src/bmpt/web/js/detail/preview-lifecycle.js");
+  const { withPreviewTimeout } = await import("../../src/bmpt/web/js/core/async.js");
   t.mock.timers.enable({ apis: ["setTimeout"] });
   let now = 0;
   const realNow = performance.now;

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { spineBase, spinePrefix, spineAssetBase } from "../../src/bmpt/web/js/api.js";
+import { spineBase, spinePrefix, spineAssetBase } from "../../src/bmpt/web/js/core/api.js";
 import {
   thumb,
   forget,
@@ -10,9 +10,9 @@ import {
   withThumbnailFallback,
   THUMB_LOAD_TIMEOUT,
   THUMB_CAPTURE_TIMEOUT,
-} from "../../src/bmpt/web/js/thumbs.js";
-import { setSpineConsent } from "../../src/bmpt/web/js/spine-runtime.js";
-import { previewCache } from "../../src/bmpt/web/js/preview-cache.js";
+} from "../../src/bmpt/web/js/detail/thumbs.js";
+import { setSpineConsent } from "../../src/bmpt/web/js/spine/spine-runtime.js";
+import { previewCache } from "../../src/bmpt/web/js/detail/preview-cache.js";
 
 setSpineConsent(true);
 
@@ -1659,7 +1659,7 @@ test("cancelling a delayed disk thumbnail read never publishes late art or start
 // Keep Loading.hold's real ownership and cancellation logic while stubbing its decorative overlay.
 async function modalLoadingHold() {
   const { readFile } = await import("node:fs/promises");
-  const source = await readFile(new URL("../../src/bmpt/web/js/loading.js", import.meta.url), "utf8");
+  const source = await readFile(new URL("../../src/bmpt/web/js/app/loading.js", import.meta.url), "utf8");
   const start = source.indexOf("export async function hold("),
     end = source.indexOf("export function page(", start);
   const code = source.slice(start, end).replace("export async function", "async function");

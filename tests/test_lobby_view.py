@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from bmpt.config import Settings
+from bmpt.host.config import Settings
 from bmpt.webui.api import TRACE_BATCH, TRACE_LINE, build_api, ui_strings
 from bmpt.webui.main import _trace_to_file
 from bmpt.webui.server import WebApp
@@ -175,7 +175,7 @@ const cases = [
 console.log(JSON.stringify(cases.map(([e, last]) => T.wheelKind(e, now, last))));
 """
     out = subprocess.run(
-        ["node", "--input-type=module", "-e", script, (WEB / "js" / "lobby-touch.js").as_uri()],
+        ["node", "--input-type=module", "-e", script, (WEB / "js" / "lobby" / "lobby-touch.js").as_uri()],
         capture_output=True,
         text=True,
         timeout=60,

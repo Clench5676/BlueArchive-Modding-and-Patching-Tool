@@ -8,9 +8,9 @@ import {
   bindCorner,
   bindEdge,
   reflowCorners,
-} from "../../src/bmpt/web/js/corner-layout.js";
-import { headerGeometry } from "../../src/bmpt/web/js/window-layout.js";
-import { topActionLayout, nativeRightClearance } from "../../src/bmpt/web/js/top-action-layout.js";
+} from "../../src/bmpt/web/js/window/corner-layout.js";
+import { headerGeometry } from "../../src/bmpt/web/js/window/window-layout.js";
+import { topActionLayout, nativeRightClearance } from "../../src/bmpt/web/js/window/top-action-layout.js";
 import { cornerPrefabs } from "./corner_prefabs.mjs";
 
 const S = 1920 / 2960,
@@ -211,7 +211,7 @@ test("the real stage fitter spans the window with the non-native toolbar and cle
     ["document", "innerWidth", "innerHeight", "bamtWindowChrome", "bamtHeaderGeometry"].map((k) => [k, globalThis[k]]),
   );
   globalThis.document = { createElement: () => ({ getContext: () => ({}) }) };
-  const { fitStage } = await import("../../src/bmpt/web/js/util.js");
+  const { fitStage } = await import("../../src/bmpt/web/js/core/util.js");
   const style = () => ({
     setProperty(key, value) {
       this[key] = value;

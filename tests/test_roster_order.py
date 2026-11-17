@@ -1,4 +1,4 @@
-"""The student list's ordering (web/js/roster-order.js) is front-end code: its tests run with Node's test runner,
+"""The student list's ordering (web/js/roster/roster-order.js) is front-end code: its tests run with Node's test runner,
 skipped where Node is not installed."""
 
 import shutil

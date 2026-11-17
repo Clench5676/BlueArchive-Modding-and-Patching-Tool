@@ -7,7 +7,7 @@ import {
   installVerticalWheel,
   wheelScroller,
   windowsWheel,
-} from "../../src/bmpt/web/js/horizontal-scroll.js";
+} from "../../src/bmpt/web/js/ui/horizontal-scroll.js";
 
 const near = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-8, `${actual} != ${expected}`);
 const notch = (extra = {}) => ({
@@ -344,7 +344,7 @@ test("pointer, keyboard, blur, visibility and motion preference changes cancel n
 });
 
 test("the roster uses the shared controller for its virtual position and cancels it on hide or rebuild", () => {
-  const source = readFileSync(new URL("../../src/bmpt/web/js/roster.js", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../../src/bmpt/web/js/roster/roster.js", import.meta.url), "utf8");
   assert.match(flat(source), /wheelScroller\(\{ read: \(\) => view.scroll/);
   assert.match(flat(source), /view.scroll = top; applyScroll\(\)/);
   assert.match(flat(source), /if \(motion.wheel\(ev\)\) return;/);
@@ -353,6 +353,6 @@ test("the roster uses the shared controller for its virtual position and cancels
       flat(source),
       new RegExp(`(?:async )?function ${name}\\([^)]*\\) \\{\\s*wheelMotion\\?\\.stop\\(\\);`),
     );
-  const main = readFileSync(new URL("../../src/bmpt/web/js/main.js", import.meta.url), "utf8");
+  const main = readFileSync(new URL("../../src/bmpt/web/js/app/main.js", import.meta.url), "utf8");
   assert.match(flat(main), /installVerticalWheel\(\);/);
 });

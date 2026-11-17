@@ -8,7 +8,7 @@ import time
 
 import pytest
 
-from bmpt.filelock import file_lock
+from bmpt.core.filelock import file_lock
 from bmpt.library.service import ModLibrary
 from bmpt.library.staging import import_directory
 

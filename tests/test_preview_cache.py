@@ -17,9 +17,10 @@ from types import SimpleNamespace
 import pytest
 from PIL import Image
 
-from bmpt.config import Settings
+from bmpt.host.config import Settings
 from bmpt.gameassets import AssetCache, AssetNotFound, GameAssets
 from bmpt.gameassets import model, service
+from bmpt.gameassets import model_service
 from bmpt.gameassets.cache import PreviewCache, pack_preview_files, unpack_preview_files
 from bmpt.webui.api import build_api
 from bmpt.webui.server import AssetResponse, WebApp
@@ -341,7 +342,7 @@ def test_model_dependency_replaced_during_decode_is_not_cached(tmp_path, monkeyp
             dependency.write_bytes(b"new")
         return b"glTF" + decoded
 
-    monkeypatch.setattr(service, "open_bundle", opener)
+    monkeypatch.setattr(model_service, "open_bundle", opener)
     monkeypatch.setattr(model, "export_chibi", export)
     with pytest.raises(AssetNotFound, match="Model dependency changed"):
         game.model_glb("ch0242")
@@ -377,7 +378,7 @@ def test_missing_model_cab_is_not_persisted_and_new_dependency_exports_on_restar
         texture = graph.deref(owner, {"m_FileID": 1, "m_PathID": 7})
         return b"glTF" + (texture.data if texture else b"partial")
 
-    monkeypatch.setattr(service, "open_bundle", opener)
+    monkeypatch.setattr(model_service, "open_bundle", opener)
     monkeypatch.setattr(model, "export_chibi", export)
     assert game.model_glb("ch0242") == b"glTFpartial"
     assert game.model_glb("ch0242") == b"glTFpartial", "existing memory-only render behavior is retained"

@@ -78,7 +78,7 @@ def mobile_copy(official: Path, folder: Path, part: str) -> Path:
 @pytest.fixture
 def mobile(tmp_path):
     from bmpt.catalog import Catalog
-    from bmpt.config import Settings
+    from bmpt.host.config import Settings
     from bmpt.gameassets import AssetCache, GameAssets
     from bmpt.gameassets.cabs import CabIndex
     from bmpt.library import ModLibrary, integrity

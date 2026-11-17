@@ -111,7 +111,7 @@ def _streamed_curve(keys: list[list[float]]) -> dict:
 
 
 def evaluate(curve: Mapping[str, Any], t: float) -> float:
-    """Evaluate an exported curve as web/js/lobby-intro.js does.
+    """Evaluate an exported curve as web/js/lobby/lobby-intro.js does.
 
     Args:
         curve: Constant k, streamed cubic keys s, or dense [begin, rate, values] under d.
@@ -701,7 +701,7 @@ def bone_go(n: dict, by_go: Mapping[int, dict]) -> int | None:
     return next((x["go"] for x in chain(n, by_go) if "SkeletonUtilityBone" in x["first"]), None)
 
 
-# the volume components the player blends (web/js/lobby-intro.js), with the parameters it reads
+# the volume components the player blends (web/js/lobby/lobby-intro.js), with the parameters it reads
 VOLUME_PARAMS = {
     "ChromaticAberration": ("intensity",),
     "LiftGammaGain": ("lift", "gamma", "gain"),
@@ -861,7 +861,7 @@ def build(
     fx: dict,
     sprites: list[dict],
 ) -> dict:
-    """Build the intro for web/js/lobby-intro.js and mark affected lobby drawables.
+    """Build the intro for web/js/lobby/lobby-intro.js and mark affected lobby drawables.
 
     The output includes:
     - nodes: [{"path", "own", "trs" (moved ones)}], the GameObjects it switches or moves;

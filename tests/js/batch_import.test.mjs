@@ -175,8 +175,8 @@ globalThis.IntersectionObserver = class {
     );
   }
 };
-const { createImportPage, entryIdentity, catalogEntries } = await import("../../src/bmpt/web/js/batch-import.js");
-const { importAssistants, suggestImports } = await import("../../src/bmpt/web/js/import-assistants.js");
+const { createImportPage, entryIdentity, catalogEntries } = await import("../../src/bmpt/web/js/mods/batch-import.js");
+const { importAssistants, suggestImports } = await import("../../src/bmpt/web/js/mods/import-assistants.js");
 const {
   importArtwork,
   clipButtonPatterns,
@@ -188,15 +188,15 @@ const {
   PAPER_CENTRE,
   EMPTY_GAP,
   emptyBlock,
-} = await import("../../src/bmpt/web/js/import-layout.js");
-const { DIALOG_H } = await import("../../src/bmpt/web/js/batch-import.js");
-const { frameOutline } = await import("../../src/bmpt/web/js/row-thumbnail.js");
-const { ROW_W: OPTION_WIDTH, rowBase, radioRow } = await import("../../src/bmpt/web/js/settings-rows.js");
-const { S } = await import("../../src/bmpt/web/js/util.js");
+} = await import("../../src/bmpt/web/js/mods/import-layout.js");
+const { DIALOG_H } = await import("../../src/bmpt/web/js/mods/batch-import.js");
+const { frameOutline } = await import("../../src/bmpt/web/js/ui/row-thumbnail.js");
+const { ROW_W: OPTION_WIDTH, rowBase, radioRow } = await import("../../src/bmpt/web/js/settings/settings-rows.js");
+const { S } = await import("../../src/bmpt/web/js/core/util.js");
 const { SPACE, TYPE, LINE, CONTROL, POPUP_FOOTER, POPUP_FRAME, POPUP_TYPE } = await import(
-  "../../src/bmpt/web/js/ui-tokens.js"
+  "../../src/bmpt/web/js/ui/ui-tokens.js"
 );
-const { container } = await import("../../src/bmpt/web/js/ui-grid.js");
+const { container } = await import("../../src/bmpt/web/js/ui/ui-grid.js");
 // separate lines of a row stack LINE.stack of the row's one size apart (List_01's meta lines)
 const PITCH = LINE.stack * TYPE.dense.fs;
 // run a page test in en-US and zh-CN (the design system's geometry is checked in both), restoring en-US after
@@ -213,8 +213,8 @@ const inLocales = (name, fn) => {
       }
     });
 };
-const { createImportState, sourceFolder } = await import("../../src/bmpt/web/js/import-state.js");
-const { setStrings } = await import("../../src/bmpt/web/js/i18n.js");
+const { createImportState, sourceFolder } = await import("../../src/bmpt/web/js/mods/import-state.js");
+const { setStrings } = await import("../../src/bmpt/web/js/core/i18n.js");
 const flatten = (data, prefix = "", result = {}) => {
   for (const [key, value] of Object.entries(data)) {
     if (typeof value === "object") flatten(value, `${prefix}${key}.`, result);
@@ -1484,7 +1484,7 @@ test("failed option reads cannot release an in-flight analysis lock", async () =
 });
 
 test("the window's native drop event goes directly to Batch Import on its route", async () => {
-  const source = readFileSync(new URL("../../src/bmpt/web/js/main.js", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../../src/bmpt/web/js/app/main.js", import.meta.url), "utf8");
   const drop = source.slice(
     source.indexOf("  // Only Import Mod takes files dropped"),
     source.indexOf('  $("top-option").addEventListener'),
@@ -1532,7 +1532,7 @@ test("the page clones runtime Items/Mailbox widgets and has no invented empty pr
   assert.equal(h.host.querySelector("img"), null, "pictures bind to prefab UITexture widgets");
   assert.equal(h.host.querySelector(".import-preview-image").dataset.path, "EquipPos/Texture");
   assert.equal(h.row("a").querySelector(".import-thumb").dataset.path, "List_01/BG_Icon/Icon_Arona");
-  const source = readFileSync(new URL("../../src/bmpt/web/js/batch-import.js", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../../src/bmpt/web/js/mods/batch-import.js", import.meta.url), "utf8");
   assert.doesNotMatch(source, /ui\.(sprite|node)\(|import\.choose|\b[Kk]ey[Hh]int/);
   const css = readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
   const rules = css.slice(
@@ -1656,10 +1656,10 @@ test("resized real button patterns are clipped to the inclined body at every pag
         }
 });
 
-const { XS_BUTTON } = await import("../../src/bmpt/web/js/ui-tokens.js");
+const { XS_BUTTON } = await import("../../src/bmpt/web/js/ui/ui-tokens.js");
 // the list's tools: the Items prefab's 162-high bodies at the page's tool scale, which went down with the small button
 const TOOL_SCALE = (0.34 * CONTROL.buttonXS.h) / CONTROL.buttonS.h;
-const { BUTTON_BODY_H } = await import("../../src/bmpt/web/js/import-layout.js");
+const { BUTTON_BODY_H } = await import("../../src/bmpt/web/js/mods/import-layout.js");
 const drawn = (h, element) => h.rendered.findLast((item) => item.host === element.art);
 const rectOf = (element) => ["left", "top", "width", "height"].map((key) => parseFloat(element.style[key]));
 const closeTo = (actual, expected) => assert.ok(Math.abs(actual - expected) < 0.02, `${actual} != ${expected}`);
@@ -4142,8 +4142,8 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
 }
 
 // --- the game's scrollbar on every scrolling area (UICharacterCollection/SeletControl/List/Scroll Bar) ---
-const { scrollbarTrack } = await import("../../src/bmpt/web/js/scrollbar.js");
-const { DIALOG_AREA } = await import("../../src/bmpt/web/js/batch-import.js");
+const { scrollbarTrack } = await import("../../src/bmpt/web/js/ui/scrollbar.js");
+const { DIALOG_AREA } = await import("../../src/bmpt/web/js/mods/batch-import.js");
 const importCss = readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
 const cssRule = (selector) =>
   importCss.match(new RegExp(`(?:^|\\n)${selector.replace(/[.]/g, "\\.")}\\s*\\{([^}]+)\\}`))[1];

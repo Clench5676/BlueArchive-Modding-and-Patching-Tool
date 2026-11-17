@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { flat } from "./helpers/source-text.mjs";
 import { test } from "node:test";
 import { readFileSync } from "node:fs";
-import { isImmersive, dragRegions, headerGeometry } from "../../src/bmpt/web/js/window-layout.js";
+import { isImmersive, dragRegions, headerGeometry } from "../../src/bmpt/web/js/window/window-layout.js";
 const source = (file) => readFileSync(new URL(`../../src/bmpt/${file}`, import.meta.url), "utf8");
 const scenes = [
   ["portrait fullscreen", ["fullscreen"], []],
@@ -19,14 +19,14 @@ for (const [name, stage, root] of scenes)
 test("camera preparation is immersive even before the shared detail fullscreen flag arrives", () => {
   assert.ok(isImmersive([], ["photo-active"]));
   assert.equal(isImmersive([], ["photo-lobby"]), false);
-  assert.match(flat(source("web/js/detail.js")), /stage\(\)\.classList\.toggle\("fullscreen", on\)/);
+  assert.match(flat(source("web/js/detail/detail-fullscreen.js")), /stage\(\)\.classList\.toggle\("fullscreen", on\)/);
   assert.match(
     flat(source("web/js/photography/controller.js")),
     /document\.documentElement\.classList\.add\(["']photo-active["']\)/,
   );
-  assert.match(flat(source("web/js/student-hall-fullscreen.js")), /stage\.classList\.add\("hall-fullscreen"\)/);
+  assert.match(flat(source("web/js/hall/student-hall-fullscreen.js")), /stage\.classList\.add\("hall-fullscreen"\)/);
   assert.match(
-    flat(source("web/js/window-chrome.js")),
+    flat(source("web/js/window/window-chrome.js")),
     /observe\(document\.documentElement, \{ attributes: true, attributeFilter: \[["']class["']\]/,
   );
   const css = flat(source("web/css/app.css"));
@@ -36,7 +36,7 @@ test("camera preparation is immersive even before the shared detail fullscreen f
     /\.chrome-hide-top \.topbar, \.chrome-hide-bottom \.nav \{[^}]*visibility: hidden;[^}]*pointer-events: none/,
   );
   assert.doesNotMatch(css, /\.stage\.(hall-)?fullscreen \.(topbar|nav) \{|\.window-immersive \.topbar/);
-  assert.doesNotMatch(flat(source("web/js/nav.js")), /back\.style\.visibility/);
+  assert.doesNotMatch(flat(source("web/js/app/nav.js")), /back\.style\.visibility/);
 });
 for (const platform of ["darwin", "win32", "fallback"])
   test(`immersion reports no drag rectangles for ${platform}`, () => {

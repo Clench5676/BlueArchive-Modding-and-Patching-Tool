@@ -35,7 +35,7 @@ globalThis.Image = class {
 };
 globalThis.requestAnimationFrame = (fn) => queueMicrotask(fn);
 const { barImage, barDensity, BAR_CUTS, BAR_BORDER_SCALES, paintTopBar, createTopBarPainter } = await import(
-  "../../src/bmpt/web/js/top-bar-background.js"
+  "../../src/bmpt/web/js/window/top-bar-background.js"
 );
 for (const scale of [0.5, 0.625, 0.75, 5 / 6, 1, 1.25, 1.5, 1.75, 2])
   for (const dpi of [1, 1.25, 1.5, 2, 3])
@@ -101,7 +101,7 @@ test("the top bar and the Enable Mods switch draw no shadow of their own", () =>
   }
 });
 test("remaining switch and scrollbar paint paths do not create CSS border-image slices", () => {
-  for (const name of ["mod-switch-skin.js", "scrollbar.js"]) {
+  for (const name of ["mods/mod-switch-skin.js", "ui/scrollbar.js"]) {
     const js = readFileSync(new URL(`../../src/bmpt/web/js/${name}`, import.meta.url), "utf8").replace(
       /^\s*\/\/.*$/gm,
       "",

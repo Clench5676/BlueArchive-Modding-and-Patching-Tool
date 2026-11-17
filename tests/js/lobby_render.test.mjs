@@ -1,6 +1,6 @@
-// Tests for the lobby's mesh renderers (web/js/mesh-fx.js and their drawing in particles-gl.js), the skeletons' game
-// materials (web/js/skeleton-materials.js) and pinned bones (web/js/skeleton-pins.js), against recording stand-ins for
-// WebGL2 and spine-player. Run by tests/test_lobby_render.py with Node's test runner.
+// Tests for the lobby's mesh renderers (web/js/lobby/mesh-fx.js and their drawing in particles-gl.js), the skeletons'
+// game materials (web/js/spine/skeleton-materials.js) and pinned bones (web/js/spine/skeleton-pins.js), against
+// recording stand-ins for WebGL2 and spine-player. Run by tests/test_lobby_render.py with Node's test runner.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFileSync } from "node:fs";
@@ -199,7 +199,7 @@ function player(gl, slots, layer) {
   return p;
 }
 
-const Linear = await import("../../src/bmpt/web/js/linear.js");
+const Linear = await import("../../src/bmpt/web/js/core/linear.js");
 
 test("empty ungraded targets are detected even when the final pass adds an opaque clear colour", () => {
   const gl = fakeGL(),
@@ -231,9 +231,10 @@ test("empty ungraded targets are detected even when the final pass adds an opaqu
     Linear.detach(p);
   }
 });
-const Mesh = await import("../../src/bmpt/web/js/mesh-fx.js");
-const GL = await import("../../src/bmpt/web/js/particles-gl.js");
-const { STRIDE, IDENTITY } = await import("../../src/bmpt/web/js/particles.js");
+const Mesh = await import("../../src/bmpt/web/js/lobby/mesh-fx.js");
+const GL = await import("../../src/bmpt/web/js/lobby/particles-gl.js");
+const { IDENTITY } = await import("../../src/bmpt/web/js/lobby/particles.js");
+const { STRIDE } = await import("../../src/bmpt/web/js/lobby/particles-geometry.js");
 
 // --- mesh-fx.js -----------------------------------------------------------------------------------------------------
 
@@ -456,7 +457,7 @@ test("mesh renderers draw with the effects, sorted with them, with their animate
 
 // --- skeleton-materials.js ------------------------------------------------------------------------------------------
 
-const M = await import("../../src/bmpt/web/js/skeleton-materials.js");
+const M = await import("../../src/bmpt/web/js/spine/skeleton-materials.js");
 // linear.js attached, with the blend modes the batch is set to in the player's log
 function attachLinear(p) {
   const ok = Linear.attach(p),
@@ -566,7 +567,7 @@ test("Multiply and Screen slots without replacement materials draw as Normal", (
 });
 
 test("only Aoi's NPC keeps its declared glow blends through the real lobby material setup", () => {
-  const source = readFileSync(new URL("../../src/bmpt/web/js/lobby.js", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby.js", import.meta.url), "utf8");
   const code = source.slice(source.indexOf("function lightUp("), source.indexOf("// --- fallback only"));
   for (const core of [
     "np0032_npc",
@@ -652,7 +653,7 @@ test("only Aoi's NPC keeps its declared glow blends through the real lobby mater
 });
 
 test("a library-only Mod without an official core still attaches and renders its lobby materials", () => {
-  const source = readFileSync(new URL("../../src/bmpt/web/js/lobby.js", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby.js", import.meta.url), "utf8");
   const code = source.slice(source.indexOf("function lightUp("), source.indexOf("// --- fallback only"));
   const gl = fakeGL(),
     layer = { name: "custom_home", materials: { pages: {}, blend: {}, tintBlack: false } };
@@ -871,7 +872,7 @@ test("a skeleton without prefab data keeps spine-player's drawing", () => {
 
 // --- skeleton-pins.js -----------------------------------------------------------------------------------------------
 
-const Pins = await import("../../src/bmpt/web/js/skeleton-pins.js");
+const Pins = await import("../../src/bmpt/web/js/spine/skeleton-pins.js");
 
 test("pinned bones keep their prefab place after the animation", () => {
   const bones = {

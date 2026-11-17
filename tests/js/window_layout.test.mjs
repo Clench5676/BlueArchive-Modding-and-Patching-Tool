@@ -8,12 +8,12 @@ import {
   subtractRegions,
   expandRect,
   stageCoverBleed,
-} from "../../src/bmpt/web/js/window-layout.js";
-import { topActionLayout, nativeRightClearance } from "../../src/bmpt/web/js/top-action-layout.js";
-import { barCentre } from "../../src/bmpt/web/js/top-bar-layout.js";
+} from "../../src/bmpt/web/js/window/window-layout.js";
+import { topActionLayout, nativeRightClearance } from "../../src/bmpt/web/js/window/top-action-layout.js";
+import { barCentre } from "../../src/bmpt/web/js/window/top-bar-layout.js";
 import { cornerPrefabs } from "./corner_prefabs.mjs";
-import { CORNER_MARGIN } from "../../src/bmpt/web/js/corner-layout.js";
-import { installCloseGuard } from "../../src/bmpt/web/js/window-close.js";
+import { CORNER_MARGIN } from "../../src/bmpt/web/js/window/corner-layout.js";
+import { installCloseGuard } from "../../src/bmpt/web/js/window/window-close.js";
 
 const S = 24 / 37;
 const sizes = [

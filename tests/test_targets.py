@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.library import targets as resolver
 from bmpt.library.targets import Readers, resolve
 
@@ -238,22 +238,20 @@ def test_a_generic_slot_holds_its_newest_file():
 
 #: (file, class, function): the call sites of the resolver
 CALL_SITES = [
-    ("src/bmpt/library/service.py", "ModLibrary", name)
-    for name in (
-        "_check_group",
-        "_replacements",
-        "_update_groups",
-        "_groups_of",
-        "_replaced_parts",
-        "direct_import",
-        "preview_complements",
-        "_plan",
-        "_other_targets",
-        "_other_matches",
-        "_game_files",
-        "_install_direct",
-    )
-] + [("src/bmpt/webui/batch_import.py", "BatchImport", "_judge")]
+    ("src/bmpt/library/service/mods_add.py", "AddMixin", "_check_group"),
+    ("src/bmpt/library/service/imports.py", "ImportsMixin", "_replacements"),
+    ("src/bmpt/library/service/imports.py", "ImportsMixin", "_update_groups"),
+    ("src/bmpt/library/service/imports.py", "ImportsMixin", "_groups_of"),
+    ("src/bmpt/library/service/imports.py", "ImportsMixin", "_replaced_parts"),
+    ("src/bmpt/library/service/imports.py", "ImportsMixin", "direct_import"),
+    ("src/bmpt/library/service/views.py", "ViewsMixin", "preview_complements"),
+    ("src/bmpt/library/service/switch_plan.py", "SwitchPlanMixin", "_plan"),
+    ("src/bmpt/library/service/folders.py", "FoldersMixin", "_other_targets"),
+    ("src/bmpt/library/service/folders.py", "FoldersMixin", "_other_matches"),
+    ("src/bmpt/library/service/folders.py", "FoldersMixin", "_game_files"),
+    ("src/bmpt/library/service/switching.py", "SwitchingMixin", "_install_direct"),
+    ("src/bmpt/webui/batch_judge.py", "JudgeMixin", "_judge"),
+]
 #: what only the resolver may do: upstream's planner and matcher, the newest-date and part rules
 FORBIDDEN_CALLS = {
     "plan_mod_install",

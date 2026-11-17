@@ -11,7 +11,7 @@ import pytest
 
 from ba_modding_toolkit.searching import get_search_dirs
 from ba_modding_toolkit.utils import no_log
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.gameassets.discovery import resource_version
 from bmpt.library import tested_build
 

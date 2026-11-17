@@ -7,8 +7,8 @@ import {
   studentChoices,
   memorialChoices,
   contentBounds,
-} from "../../src/bmpt/web/js/student-hall-model.js";
-import { normalizeView } from "../../src/bmpt/web/js/roster-order.js";
+} from "../../src/bmpt/web/js/hall/student-hall-model.js";
+import { normalizeView } from "../../src/bmpt/web/js/roster/roster-order.js";
 const saved = () => ({
   revision: 0,
   mode: "portraits",
@@ -313,7 +313,7 @@ test("merged picker families aggregate only the current resource kind", () => {
   );
 });
 
-import { portraitReplacements } from "../../src/bmpt/web/js/student-hall-model.js";
+import { portraitReplacements } from "../../src/bmpt/web/js/hall/student-hall-model.js";
 const swapChoices = [
   { variant: "base", family: "hero", kind: "spr", source: "mod:current" },
   { variant: "base", family: "hero", kind: "spr", source: "official" },

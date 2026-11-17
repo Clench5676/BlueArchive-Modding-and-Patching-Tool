@@ -13,7 +13,7 @@ import pytest
 
 from bmpt.catalog import Catalog, DEFAULT_DATA
 from bmpt.catalog._names import BASE_SHORT, LANGUAGES
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from ba_modding_toolkit.naming import parse_filename
 
 FIXTURES = Path(__file__).parent / "fixtures" / "catalog"

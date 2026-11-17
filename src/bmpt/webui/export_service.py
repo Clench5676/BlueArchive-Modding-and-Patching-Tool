@@ -14,9 +14,11 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
-from .. import atlas_remap, devmode, mod_origin
-from ..errors import ServiceError
-from ..openfiles import temporary_directory
+from ..spine import atlas_remap
+from ..unity import mod_origin
+from ..core import devmode
+from ..core.errors import ServiceError
+from ..core.openfiles import temporary_directory
 from ..library import ba_mod, integrity, mod_progress
 from ..library.judge import core_of, kind_of_file
 from ..library.storage import sync_directory
@@ -423,7 +425,7 @@ def export_zip(
         }
         live = {path.name: path for group in library._index(pin).values() for path in group} if pin else {}
         release = ba_mod.release_of(list(pin.dirs), server, platform) if pin else {}
-        from ..updater import current_version
+        from ..host.updater import current_version
 
         created_by = {"tool": "BMPT", "version": current_version()}
         try:

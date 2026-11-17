@@ -7,7 +7,7 @@ import threading
 import time
 from contextlib import contextmanager
 
-from .. import spans
+from ..core import spans
 
 logger = logging.getLogger(__name__)
 

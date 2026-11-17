@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { L, T, setStrings } from "../../src/bmpt/web/js/i18n.js";
-import { modName, studentName } from "../../src/bmpt/web/js/names.js";
+import { L, T, setStrings } from "../../src/bmpt/web/js/core/i18n.js";
+import { modName, studentName } from "../../src/bmpt/web/js/core/names.js";
 
 globalThis.document = {
   documentElement: {},
@@ -13,9 +13,9 @@ globalThis.document = {
 };
 globalThis.window = new EventTarget();
 globalThis.addEventListener = () => {};
-const Prompts = await import("../../src/bmpt/web/js/prompts.js");
-const ModSwitch = await import("../../src/bmpt/web/js/mod-switch.js");
-const main = readFileSync(new URL("../../src/bmpt/web/js/main.js", import.meta.url), "utf8");
+const Prompts = await import("../../src/bmpt/web/js/app/prompts.js");
+const ModSwitch = await import("../../src/bmpt/web/js/mods/mod-switch.js");
+const main = readFileSync(new URL("../../src/bmpt/web/js/app/main.js", import.meta.url), "utf8");
 const code = main.slice(main.indexOf("async function variantNames()"), main.indexOf("// --- library.changed"));
 const flatten = (obj, prefix = "", out = {}) => {
   for (const [key, value] of Object.entries(obj)) {

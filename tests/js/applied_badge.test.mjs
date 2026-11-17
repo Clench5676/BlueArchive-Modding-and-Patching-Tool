@@ -22,9 +22,9 @@ globalThis.document = {
   documentElement: { lang: "en-US", appendChild() {} },
 };
 globalThis.getComputedStyle = () => ({ getPropertyValue: () => "" });
-const { LINE_PITCH, fitGroup, fontSizeFor, glyphWidth } = await import("../../src/bmpt/web/js/ngui.js");
+const { LINE_PITCH, fitGroup, fontSizeFor, glyphWidth } = await import("../../src/bmpt/web/js/ui/ngui.js");
 const { BADGE_FONT_MIN, badgeCaptionBox, fitBadgeCaptions, selectedFrame, SELECTION_BADGE_SLICES, SELECTION_SLOT } =
-  await import("../../src/bmpt/web/js/selected-frames.js");
+  await import("../../src/bmpt/web/js/ui/selected-frames.js");
 
 const LOCALES = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"];
 // The game's own word for "Selected": the Global client's text for it in English, Traditional Chinese, Japanese,

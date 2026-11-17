@@ -1,9 +1,9 @@
-// Tests for web/js/quit.js (the student list's quit: Escape's rule and the prompt's outcome), without a DOM.
+// Tests for web/js/app/quit.js (the student list's quit: Escape's rule and the prompt's outcome), without a DOM.
 // Run by tests/test_quit.py with Node's test runner: node --test tests/js/quit.test.mjs
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { CONFIRM_KEYS, HOSTS, confirmQuit, quitKey } from "../../src/bmpt/web/js/quit.js";
+import { CONFIRM_KEYS, HOSTS, confirmQuit, quitKey } from "../../src/bmpt/web/js/app/quit.js";
 
 // the page: the student list shown, every popup host hidden, unless said otherwise
 function page({ roster = true, open = [] } = {}) {

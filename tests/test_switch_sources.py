@@ -1,5 +1,5 @@
-"""What the detail screen's switch cards offer (web/js/switch-sources.js) is front-end code: its tests run with Node's
-test runner, skipped where Node is not installed."""
+"""What the detail screen's switch cards offer (web/js/mods/switch-sources.js) is front-end code: its tests run with
+Node's test runner, skipped where Node is not installed."""
 
 import shutil
 import subprocess

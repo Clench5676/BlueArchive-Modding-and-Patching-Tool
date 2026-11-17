@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { register } from "node:module";
 import { test } from "node:test";
+import { DETAIL_MODULES } from "./helpers/source-text.mjs";
 import { switchPrefabs } from "./switch_prefabs.mjs";
 import { selectionPrefab, selectionFramePixels, selectionSprite } from "./selection_prefabs.mjs";
 import { controls } from "./control_prefabs.mjs";
@@ -530,9 +531,11 @@ const atlas = {
     [
       ...new Set([
         ...[
-          ...readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8").matchAll(
-            /"(Common_[A-Za-z0-9_]+)"/g,
-          ),
+          ...DETAIL_MODULES.map((file) =>
+            readFileSync(new URL(`../../src/bmpt/web/js/detail/${file}`, import.meta.url), "utf8"),
+          )
+            .join("\n")
+            .matchAll(/"(Common_[A-Za-z0-9_]+)"/g),
         ].map((m) => m[1]),
         "Common_Bg_Raius10px_Select",
         "Common_Icon_Check_Y_Off",
@@ -661,8 +664,8 @@ const flat = (obj, prefix = "", out = {}) => {
   }
   return out;
 };
-const { setStrings } = await import("../../src/bmpt/web/js/i18n.js");
-const { setSpineConsent } = await import("../../src/bmpt/web/js/spine-runtime.js");
+const { setStrings } = await import("../../src/bmpt/web/js/core/i18n.js");
+const { setSpineConsent } = await import("../../src/bmpt/web/js/spine/spine-runtime.js");
 setSpineConsent(true);
 setStrings(
   "en-US",
@@ -710,19 +713,34 @@ const modelStub = `data:text/javascript,${encodeURIComponent(
 register(
   `data:text/javascript,${encodeURIComponent(`export async function load(url, ctx, next) {
   const result = await next(url, ctx);
-  if (url.endsWith("/web/js/detail.js")) {
+  // the detail screen's private layouts, each from the module that holds it
+  const exposed = {
+    "detail-screen.js": "screenTree, nameplateRow, switchTextLayout",
+    "detail-chips.js": "chipBoxes",
+    "detail-strip.js": "expressionBoxes, pileBoxes",
+    "detail-files.js": "detailsBody",
+  }[url.split("/web/js/detail/")[1]];
+  if (exposed) {
     const source = typeof result.source === "string" ? result.source : new TextDecoder().decode(result.source);
-    return { ...result, source: source + "\\nexport { screenTree, nameplateRow, chipBoxes, expressionBoxes, pileBoxes, switchTextLayout, detailsBody };" };
+    return { ...result, source: source + "\\nexport { " + exposed + " };" };
   }
   return result;
 }
 export async function resolve(spec, ctx, next) {
-  if (spec === "./model.js" && (ctx.parentURL?.endsWith("/detail.js") || ctx.parentURL?.endsWith("/model-still.js"))) return { url: ${JSON.stringify(modelStub)}, shortCircuit: true };
+  if ((spec === "../model/model.js" && ctx.parentURL?.endsWith("/detail.js")) ||
+      (spec === "./model.js" && ctx.parentURL?.endsWith("/model-still.js")))
+    return { url: ${JSON.stringify(modelStub)}, shortCircuit: true };
   return next(spec, ctx);
 }`)}`,
 );
 await import(modelStub);
-const Detail = await import("../../src/bmpt/web/js/detail.js");
+// detail.js first, as the app loads it; then the modules split from it, read as one with it
+const Detail = Object.assign(
+  {},
+  ...(await Promise.all(
+    DETAIL_MODULES.map((file) => import(new URL(`../../src/bmpt/web/js/detail/${file}`, import.meta.url).href)),
+  )),
+);
 const localeTable = (lang) =>
   flat(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url), "utf8")));
 
@@ -759,11 +777,11 @@ test("disabled actions use the game's grey button body without changing its dono
   assert.equal(bg.widgets[0].color, template.children.find((node) => node.name === "BG (1)").widgets[0].color);
   assert.deepEqual(template, before);
 });
-const NGUI = await import("../../src/bmpt/web/js/ngui.js");
-const Loading = await import("../../src/bmpt/web/js/loading.js");
-const ModSwitch = await import("../../src/bmpt/web/js/mod-switch.js");
-const ModAlias = await import("../../src/bmpt/web/js/mod-alias.js");
-const Popup = await import("../../src/bmpt/web/js/popup.js");
+const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
+const Loading = await import("../../src/bmpt/web/js/app/loading.js");
+const ModSwitch = await import("../../src/bmpt/web/js/mods/mod-switch.js");
+const ModAlias = await import("../../src/bmpt/web/js/mods/mod-alias.js");
+const Popup = await import("../../src/bmpt/web/js/ui/popup.js");
 let invalidations = 0;
 const context = {
   prefs: { voiceMuted: true, voiceVolume: 0 },
@@ -1417,7 +1435,7 @@ test("NGUI logs missing atlas metadata and keeps placeholder geometry for contro
 });
 
 test("a lobby player setup exception settles its layer instead of hanging Lobby.show", async () => {
-  const Lobby = await import("../../src/bmpt/web/js/lobby.js");
+  const Lobby = await import("../../src/bmpt/web/js/lobby/lobby.js");
   try {
     errors.length = 0;
     lobbyMode = "ready";
@@ -1437,7 +1455,7 @@ for (const mode of ["pending", "error", "empty", "partial", "invalid"])
     try {
       errors.length = 0;
       indexMode = mode;
-      const Renderer = await import(`../../src/bmpt/web/js/ngui.js?index=${mode}`);
+      const Renderer = await import(`../../src/bmpt/web/js/ui/ngui.js?index=${mode}`);
       const host = new El();
       const view = await Renderer.render(node("Panel"), host, { deferImages: true });
       assert.equal(view.nodes.get("Panel").els[0].style.backgroundColor, "#ffffff");
@@ -3404,7 +3422,7 @@ test("Escape while a fullscreen switch is loading cannot reopen fullscreen with 
 
 for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
   test(`fullscreen prefab corners and native switch buttons preserve geometry in ${lang}`, async () => {
-    const Visual = await import("../../src/bmpt/web/js/visual-mode.js");
+    const Visual = await import("../../src/bmpt/web/js/detail/visual-mode.js");
     const strings = localeTable(lang),
       scale = 1920 / 2960,
       layout = visualPrefab();
@@ -3505,8 +3523,8 @@ for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
       );
     }
     assert.deepEqual(layout, before, "The source prefab is unchanged");
-    const { CORNER_MARGIN, reflowCorners } = await import("../../src/bmpt/web/js/corner-layout.js");
-    const { headerGeometry } = await import("../../src/bmpt/web/js/window-layout.js");
+    const { CORNER_MARGIN, reflowCorners } = await import("../../src/bmpt/web/js/window/corner-layout.js");
+    const { headerGeometry } = await import("../../src/bmpt/web/js/window/window-layout.js");
     const oldRect = hosts.stage.getBoundingClientRect;
     const old = Object.fromEntries(
       ["innerWidth", "innerHeight", "bamtWindowChrome", "bamtHeaderGeometry"].map((k) => [k, globalThis[k]]),
@@ -3875,7 +3893,7 @@ test("the unfolded expression strip takes the wheel and a drag picks no face", a
 // --- the Show in Finder / Explorer button is drawn from explorer-button.js's layout, in every locale ---
 test("the Show in Finder button's caption and folder icon are placed by the explorer layout in every locale", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
-  const { explorerLayout } = await import("../../src/bmpt/web/js/explorer-button.js");
+  const { explorerLayout } = await import("../../src/bmpt/web/js/ui/explorer-button.js");
   try {
     for (const lang of everyLocale) {
       const table = localeTable(lang);
@@ -3908,8 +3926,8 @@ test("the Show in Finder button's caption and folder icon are placed by the expl
 for (const lang of ["en-US", "zh-CN"])
   test(`detail keeps its prefab cards and composes the edit row, chips and expression pile in ${lang}`, async (t) => {
     t.mock.timers.enable({ apis: ["setTimeout"] });
-    const { SPACE, CONTROL, CHIP } = await import("../../src/bmpt/web/js/ui-tokens.js");
-    const { centreOf, toNode } = await import("../../src/bmpt/web/js/ui-grid.js");
+    const { SPACE, CONTROL, CHIP } = await import("../../src/bmpt/web/js/ui/ui-tokens.js");
+    const { centreOf, toNode } = await import("../../src/bmpt/web/js/ui/ui-grid.js");
     const S = 1920 / 2960,
       near = (a, b, eps = 0.025) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b}`);
     try {
@@ -4023,7 +4041,7 @@ for (const lang of ["en-US", "zh-CN"])
 // caption 40 down to 28 ---
 test("variant chips are 272 x 72 with the caption at 40 down to 28, the second column 290 on", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
-  const { CHIP } = await import("../../src/bmpt/web/js/ui-tokens.js");
+  const { CHIP } = await import("../../src/bmpt/web/js/ui/ui-tokens.js");
   const S = 1920 / 2960;
   try {
     setStrings("en-US", localeTable("en-US"));
@@ -4059,10 +4077,10 @@ test("variant chips are 272 x 72 with the caption at 40 down to 28, the second c
       Math.abs(parseFloat(caption.style.fontSize) - NGUI.fontSizeFor(caption.textContent, CHIP.fs) * S) < 0.02,
       "caption size 40",
     );
-    const source = readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8").replace(
-      /\s+/g,
-      " ",
-    );
+    const source = readFileSync(
+      new URL("../../src/bmpt/web/js/detail/detail-chips.js", import.meta.url),
+      "utf8",
+    ).replace(/\s+/g, " ");
     assert.match(source, /const CHIP_FS = CHIP\.fs, CHIP_W = CHIP\.w, CHIP_PITCH = CHIP\.pitch;/);
     assert.doesNotMatch(source, /CHIP_FS = 38/);
     Detail.hide();

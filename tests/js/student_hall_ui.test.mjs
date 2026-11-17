@@ -9,9 +9,9 @@ import {
   TYPE,
   SPACE,
   captionMinimum,
-} from "../../src/bmpt/web/js/ui-tokens.js";
-import { stack as layoutStack } from "../../src/bmpt/web/js/ui-grid.js";
-import { withTimeout } from "../../src/bmpt/web/js/async.js";
+} from "../../src/bmpt/web/js/ui/ui-tokens.js";
+import { stack as layoutStack } from "../../src/bmpt/web/js/ui/ui-grid.js";
+import { withTimeout } from "../../src/bmpt/web/js/core/async.js";
 class Element {
   constructor(id = "") {
     this.id = id;
@@ -112,7 +112,7 @@ globalThis.uiHarness = {
     top: () => top,
   },
 };
-let source = await readFile(new URL("../../src/bmpt/web/js/student-hall-ui.js", import.meta.url), "utf8");
+let source = await readFile(new URL("../../src/bmpt/web/js/hall/student-hall-ui.js", import.meta.url), "utf8");
 source = source.replace(/^import [^;]*;$/gm, "");
 source = `const {Popup,clone,NGUI,Loading,withTimeout,T,POPUP,POPUP_FRAME,XS_BUTTON,CONTROL,TYPE,SPACE,layoutStack,captionMinimum}=globalThis.uiHarness; const Buttons={disable:(...args)=>globalThis.uiHarness.Buttons.disable(...args)}; const S=1920/2960;\n${source}\nexport function areaFixture(fn){area=fn;} export function assetsFixture(value){assets=value;} export function readinessFixture(host,fn){visibleReadiness.set(host,fn);} export {pictureReadiness};\n//# sourceURL=hall-ui-fixture.js`;
 const UI = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);

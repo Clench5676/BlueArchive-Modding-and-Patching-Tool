@@ -11,7 +11,7 @@ with `busy` while a writer job is queued or running, the same rule as the window
 ## Classic window
 
 The bottom-bar entries without a web screen, and Settings' More Settings, hand over to the classic Tk GUI
-(`webui/classic.py`, its child side in `gui/control.py`). It runs in a process of its own on both systems: Tk and
+(`webui/classic/`, its child side in `gui/control.py`). It runs in a process of its own on both systems: Tk and
 pywebview both need the main thread on macOS, and a crash in a classic tab never takes the web UI with it.
 
 - **One window per data directory.** `ClassicWindow.open(tab, may_start)` starts the program again

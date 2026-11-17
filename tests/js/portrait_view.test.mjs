@@ -1,9 +1,14 @@
-// Tests for web/js/portrait-view.js (the detail screen's portrait framing), run by tests/test_portrait_view.py with
-// Node's test runner: node --test tests/js/portrait_view.test.mjs
+// Tests for web/js/detail/portrait-view.js (the detail screen's portrait framing), run by tests/test_portrait_view.py
+// with Node's test runner: node --test tests/js/portrait_view.test.mjs
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { CHARACTER_POS, SKELETON_SCALE, portraitViewport, stagePoint } from "../../src/bmpt/web/js/portrait-view.js";
+import {
+  CHARACTER_POS,
+  SKELETON_SCALE,
+  portraitViewport,
+  stagePoint,
+} from "../../src/bmpt/web/js/detail/portrait-view.js";
 
 const S = 1920 / 2960; // stage px per prefab unit (util.js)
 const ORIGIN = [960, 515]; // the detail screen's prefab centre on the stage (detail.js)

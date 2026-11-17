@@ -6,7 +6,7 @@ import threading
 import time
 from types import SimpleNamespace
 
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.webui.scanner import Scanner
 
 

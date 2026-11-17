@@ -13,14 +13,14 @@ from types import SimpleNamespace
 import pytest
 
 from ba_modding_toolkit.bundle import Bundle
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.library import integrity
 from bmpt.library import targets as resolver
 from ba_modding_toolkit.models import AssetType, FilePair, PatchResult
 from ba_modding_toolkit.naming import parse_filename
 from ba_modding_toolkit.utils import CRCUtils
 from bmpt.library.rebuild import RebuildResult
-from bmpt.webui import batch_import, native
+from bmpt.webui import batch_candidates, batch_import, batch_judge, native
 from bmpt.webui.api import build_api
 from bmpt.webui.services import Services
 from bmpt.webui.state import UiState
@@ -31,6 +31,15 @@ from test_library_other import other_env
 
 
 REAL_SHARING_KEYS = resolver.sharing_keys
+BATCH_MODULES = (batch_import, batch_candidates, batch_judge)
+
+
+def patch_batch(patch, name, value):
+    """Patch a module-level name in every batch import module that reads it."""
+    holders = [module for module in BATCH_MODULES if name in vars(module)]
+    assert holders, name
+    for module in holders:
+        patch.setattr(module, name, value)
 
 
 @pytest.fixture
@@ -650,7 +659,7 @@ def updater(monkeypatch, calls, payload=b"updated mod"):
             pairs.append(FilePair(output, target))
         return RebuildResult(True, "ok", pairs)
 
-    monkeypatch.setattr(batch_import, "rebuild", update)
+    patch_batch(monkeypatch, "rebuild", update)
 
 
 # A library folder of 73 characters and the longest official bundle names (134 characters).
@@ -680,7 +689,7 @@ def test_staging_paths_fit_the_windows_limit_with_the_longest_bundle_names(env, 
         staged.extend(kwargs["output_dir"] / path.name for path in kwargs["target_paths"])
         return update(**kwargs)
 
-    monkeypatch.setattr(batch_import, "rebuild", record)
+    patch_batch(monkeypatch, "rebuild", record)
     snapshot = env.services.batch_import._snapshot_originals
 
     def snapshot_and_record(candidate, temporary, snapshots):
@@ -720,7 +729,7 @@ def test_omitted_assets_are_available_in_the_settings_app_log(env, monkeypatch):
         result.not_transferred = omitted
         return result
 
-    monkeypatch.setattr(batch_import, "rebuild", with_omissions)
+    patch_batch(monkeypatch, "rebuild", with_omissions)
     env.services.log_path.parent.mkdir(parents=True, exist_ok=True)
     handler = logging.FileHandler(env.services.log_path, encoding="utf-8")
     handler.setFormatter(RedactingFormatter(env.services.log_secrets))
@@ -1032,7 +1041,7 @@ def test_per_entry_failures_keep_successful_imports_and_error_codes(env, monkeyp
     )
     entries = analyze(env, [bad, good])["entries"]
     if phase == "update":
-        monkeypatch.setattr(batch_import, "rebuild", lambda **kwargs: RebuildResult(False, "message", []))
+        patch_batch(monkeypatch, "rebuild", lambda **kwargs: RebuildResult(False, "message", []))
         code = "mod_update_failed"
     elif phase == "add":
         add = env.library.add
@@ -1065,7 +1074,7 @@ def test_per_entry_failures_keep_successful_imports_and_error_codes(env, monkeyp
 def test_skip_unchanged_update_and_modified_source_are_safe(env, monkeypatch):
     old = game_bundle(env.tmp / "old", date="2025-01-01", payload=b"mod")
     (entry,) = analyze(env, [old])["entries"]
-    monkeypatch.setattr(batch_import, "rebuild", lambda **kwargs: RebuildResult(True, "", [], all_unchanged=True))
+    patch_batch(monkeypatch, "rebuild", lambda **kwargs: RebuildResult(True, "", [], all_unchanged=True))
     (result,) = run(env, [entry])
     assert result["outcome"] == "unchanged" and not env.library.mods()
     assert env.services.batch_import._latest[entry["id"]].entry["state"] != "done"
@@ -1137,7 +1146,7 @@ def test_update_reads_kept_official_bytes_instead_of_the_installed_mod(env, monk
         assert kwargs["target_paths"][0].read_bytes() == official
         return update(**kwargs)
 
-    monkeypatch.setattr(batch_import, "rebuild", checked)
+    patch_batch(monkeypatch, "rebuild", checked)
     assert run(env, [entry], enableAfterImport=False)[0]["outcome"] == "updated"
     assert env.original.read_bytes() == current_mod.read_bytes()
 
@@ -1179,7 +1188,7 @@ def test_workers_parallelize_updates_while_library_adds_remain_serial(env, monke
         barrier.wait(timeout=5)
         return update(**kwargs)
 
-    monkeypatch.setattr(batch_import, "rebuild", parallel)
+    patch_batch(monkeypatch, "rebuild", parallel)
     results = run(env, entries, workers=2, enableAfterImport=False)
     assert [r["outcome"] for r in results] == ["updated", "updated"]
     assert len(threads) == 2 and len(env.library.mods()) == 2
@@ -1296,10 +1305,10 @@ def test_later_worker_uses_frozen_official_bytes_after_an_earlier_apply(env, mon
             pairs.append(FilePair(output, target))
         return RebuildResult(True, "ok", pairs)
 
-    monkeypatch.setattr(batch_import, "atomic_clone", tracked_clone)
+    patch_batch(monkeypatch, "atomic_clone", tracked_clone)
     monkeypatch.setattr(env.services.batch_import, "_prepare", delayed)
     monkeypatch.setattr(env.library, "apply_import", applying)
-    monkeypatch.setattr(batch_import, "rebuild", update)
+    patch_batch(monkeypatch, "rebuild", update)
     results = run(env, entries, workers=2)
     assert all(result["outcome"] == "updated" and result["applied"] for result in results)
     assert baselines == [original, original]
@@ -1318,7 +1327,7 @@ def test_changing_original_during_snapshot_never_reaches_preparation(env, monkey
         original.write_bytes(original.read_bytes() + b"changed")
         return True
 
-    monkeypatch.setattr(batch_import, "atomic_clone", changed)
+    patch_batch(monkeypatch, "atomic_clone", changed)
     monkeypatch.setattr(env.services.batch_import, "_prepare", forbid)
     (result,) = run(env, [entry], enableAfterImport=False)
     assert (result["outcome"], result["reason"]) == ("failed", "entry_changed")
@@ -1477,7 +1486,7 @@ GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-
 
 @pytest.mark.skipif(not GAME_DIR.is_dir(), reason="Blue Archive install unavailable")
 def test_integration_official_bundle_preflight_uses_only_copies(tmp_path, monkeypatch):
-    from bmpt.config import Settings
+    from bmpt.host.config import Settings
     from bmpt.library import ModLibrary
     from ba_modding_toolkit.naming import parse_filename
     from ba_modding_toolkit.searching import get_search_dirs
@@ -1700,20 +1709,20 @@ def test_same_name_upload_converts_only_uploaded_skeletons(env, monkeypatch):
 
 
 def test_copy_compatibility_keeps_retained_atlas_validation(monkeypatch):
-    monkeypatch.setattr(batch_import, "get_skel_version", lambda data: data.decode())
+    patch_batch(monkeypatch, "get_skel_version", lambda data: data.decode())
     report = {
         "official": {"skeletons": {"a.skel": {"version": "4.2.33"}, "b.skel": {"version": "4.1.24"}}},
         "mod": {"skeletons": {"a.skel": {"version": "3.8.75"}, "b.skel": {"version": "4.1.24"}}},
         "remappable": True,
         "misfit": True,
     }
-    assert batch_import.copy_compatibility(report, integrity.Contents(skeletons={"a.skel": b"3.8.75"})) == (
+    assert batch_candidates.copy_compatibility(report, integrity.Contents(skeletons={"a.skel": b"3.8.75"})) == (
         {"a.skel": {"4.2.33"}},
         {"a.skel": "3.8.75"},
         True,
     )
     # what the official rig changed under a mod never refuses the copy: only a page size the texture does not fit
-    assert batch_import.copy_compatibility({**report, "misfit": False}, integrity.Contents())[2] is False
+    assert batch_candidates.copy_compatibility({**report, "misfit": False}, integrity.Contents())[2] is False
 
 
 def test_failed_install_result_keeps_set_note_and_error(env, monkeypatch):
@@ -1966,7 +1975,7 @@ def test_a_stored_mod_whose_install_fails_stays_in_the_library_row(env, monkeypa
 
 def test_an_import_whose_workspace_cannot_be_removed_still_reports_its_rows(env, monkeypatch):
     # On Windows a bundle read during the import can keep the workspace from being removed.
-    from bmpt import openfiles
+    from bmpt.core import openfiles
 
     def refuse(path, **kwargs):
         raise PermissionError(32, "The process cannot access the file because it is being used by another process")
@@ -2112,7 +2121,7 @@ def test_row_file_picker_passes_initial_directory_and_validates_it(env, monkeypa
 
 def test_official_3d_slot_with_one_file_omitted_then_completed_on_clones(tmp_path, monkeypatch):
     from bmpt.catalog import Catalog
-    from bmpt.config import Settings
+    from bmpt.host.config import Settings
     from bmpt.gameassets import AssetCache, GameAssets
     from bmpt.gameassets.cabs import CabIndex
     from bmpt.library import ModLibrary

@@ -11,8 +11,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from uuid import uuid4
 
-from ..errors import ServiceError
-from ..openfiles import remove_tree
+from ..core.errors import ServiceError
+from ..core.openfiles import remove_tree
 from .judge import core_of
 from .storage import atomic_copy, atomic_json
 
@@ -203,7 +203,7 @@ class Deletion:
 
             library.profiles.update(restore)
         if photo := data.get("photo"):
-            from ..filelock import file_lock
+            from ..core.filelock import file_lock
 
             store = library.photographs
             with store._lock, file_lock(store.root / "index.lock"):

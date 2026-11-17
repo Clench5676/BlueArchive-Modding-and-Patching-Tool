@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 // The hall screen's staging while a route loads it (main.js): overlapping hall reloads, as a mod toggle starts them.
-const source = readFileSync(new URL("../../src/bmpt/web/js/main.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../src/bmpt/web/js/app/main.js", import.meta.url), "utf8");
 const code = source.slice(source.indexOf("let stagedHall"), source.indexOf("function goBack("));
 const staging = () => new Function(`${code}; return { stageHall, unstageHall };`)();
 const screen = (hidden) => ({ hidden, style: { visibility: "" } });

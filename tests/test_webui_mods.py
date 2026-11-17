@@ -1,5 +1,5 @@
-"""The web UI's wiring of the Enable Mods switch, the scan, the classic hand-off and quitting (webui/services.py,
-api.py, main.py), with a real mod library over temporary game folders of header-only bundles (never a real install,
+"""The web UI's wiring of the Enable Mods switch, the scan, the classic hand-off and quitting (webui/services*.py,
+api*.py, main.py), with a real mod library over temporary game folders of header-only bundles (never a real install,
 library or settings), driven through the WSGI app without a window or a socket."""
 
 from __future__ import annotations
@@ -14,9 +14,9 @@ from types import SimpleNamespace
 import pytest
 
 from ba_modding_toolkit.bundle import Bundle
-from bmpt.config import Settings
-from bmpt.data_paths import APP_DIR_NAME, OLD_APP_DIR_NAME, migrate_data_dir
-from bmpt.errors import ServiceError
+from bmpt.host.config import Settings
+from bmpt.host.data_paths import APP_DIR_NAME, OLD_APP_DIR_NAME, migrate_data_dir
+from bmpt.core.errors import ServiceError
 from ba_modding_toolkit.i18n import t
 from bmpt.gui import control as ctl
 from bmpt.library import safety
@@ -35,6 +35,7 @@ from bmpt.webui.state import UiState, data_path
 from test_classic_handoff import FakePopen, FakeProcesses, WsgiOpener, wait_for
 from test_library import FakeCatalog, FakeVariant, game_bundle, header_bundle, make_mod
 from test_webui import call, rpc
+from module_patches import patch_everywhere
 
 OFFICIAL = header_bundle(b"official")
 
@@ -274,7 +275,7 @@ def test_mods_state_and_status_refresh_never_compute_sizes(env, monkeypatch):
     def no_sizes(directory):
         pytest.fail(f"State refresh measured storage: {directory}")
 
-    monkeypatch.setattr("bmpt.library.service._folder_size", no_sizes)
+    patch_everywhere(monkeypatch, ["bmpt.library.service"], "_folder_size", no_sizes)
     status = env.s.refresh_status()
     assert status is not None
     assert "builtSize" not in status and "originalsSize" not in status
@@ -301,7 +302,7 @@ def test_mods_sizes_counts_only_the_requested_folder_on_demand(env, monkeypatch,
         measured.append(directory)
         return folder_size(directory)
 
-    monkeypatch.setattr(service, "_folder_size", measure)
+    patch_everywhere(monkeypatch, [service], "_folder_size", measure)
     expected = 2 * len(b"generated" if kind == "built" else b"official")
     assert rpc(env.app, "mods.sizes", kind=kind)["result"] == {f"{kind}Size": expected}
     assert measured == [root / kind]
@@ -1119,13 +1120,13 @@ def test_failed_build_finishes_the_apply_and_releases_its_locks(env, monkeypatch
             raise RuntimeError("build failed")
         return [("test_spr", "mismatched bundle")]
 
-    monkeypatch.setattr(service, "install_staged", fail)
+    patch_everywhere(monkeypatch, [service], "install_staged", fail)
     monkeypatch.setattr(env.s.library, "_needs_crc_fix", lambda *args: True)
     job = env.job("actions.apply", variant="test", source=f"mod:{mod.id}")
     assert job.state == "failed"
     assert job.error["code"] in ("mod_apply_failed", "library_operation_failed")
     assert env.spr.read_bytes() == original and not env.s.jobs.busy()
-    monkeypatch.setattr(service, "install_staged", execute)
+    patch_everywhere(monkeypatch, [service], "install_staged", execute)
     monkeypatch.setattr(env.s.library, "_needs_crc_fix", needs_fix)
     assert env.job("actions.apply", variant="test", source=f"mod:{mod.id}").state == "done"
     assert env.job("actions.restore", variant="test").state == "done"
@@ -1517,7 +1518,7 @@ def test_remap_rpc_is_read_only_and_accept_publishes_a_new_library_mod(env, monk
     job = env.job("actions.acceptRemap", preview="review")
     assert job.state == "done" and job.writes == "library"
     assert job.result == result.to_json()
-    from bmpt.webui.services import _changed_of
+    from bmpt.webui.services_jobs import _changed_of
 
     assert _changed_of(result) == {"cores": [entry.core], "kinds": [entry.kind], "mods": True}
 

@@ -24,9 +24,9 @@ globalThis.document = {
   documentElement: { lang: "en-US", appendChild() {} },
 };
 globalThis.getComputedStyle = () => ({ getPropertyValue: () => "" });
-const NGUI = await import("../../src/bmpt/web/js/ngui.js");
-const { CONTROL, XS_BUTTON, SPACE, FULLSCREEN_BUTTON } = await import("../../src/bmpt/web/js/ui-tokens.js");
-const { row } = await import("../../src/bmpt/web/js/ui-grid.js");
+const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
+const { CONTROL, XS_BUTTON, SPACE, FULLSCREEN_BUTTON } = await import("../../src/bmpt/web/js/ui/ui-tokens.js");
+const { row } = await import("../../src/bmpt/web/js/ui/ui-grid.js");
 const controller = await readFile(new URL("../../src/bmpt/web/js/photography/controller.js", import.meta.url), "utf8");
 const layoutCode = controller.slice(
   controller.indexOf("function photographyToolbarLayout("),

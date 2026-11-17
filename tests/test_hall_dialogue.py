@@ -10,8 +10,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from bmpt import globallines
-from bmpt.errors import ServiceError
+from bmpt.lines import global_lines as globallines
+from bmpt.core.errors import ServiceError
 from bmpt.webui import student_hall
 from bmpt.webui.student_hall import MemoryMemo, PortraitVoices, LocalPortraitVoices
 
@@ -194,7 +194,7 @@ def test_warm_line_metadata_uses_published_caches_without_false_pending_jobs(
     def forbidden(*args, **kwargs):
         pytest.fail("Published line metadata should not schedule another background job")
 
-    monkeypatch.setattr("bmpt.webui.api._background", forbidden)
+    monkeypatch.setattr("bmpt.webui.api_students._background", forbidden)
     result = rpc(app, "hall.lines", variant="hoshino", lang="en")["result"]
     assert result["pending"] is False and result["lines"]["hoshino_lobby_1"]["voice"]
 

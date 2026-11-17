@@ -17,7 +17,7 @@ test("a cold student pencil waits visibly for the popup frame before using it", 
   const gate = deferred();
   let waiting = false,
     built = false;
-  const text = source("detail"),
+  const text = source("detail/detail-aliases"),
     code = text.slice(
       text.indexOf("async function openAliases("),
       text.indexOf('  const popup = find(t, "Popup");', text.indexOf("async function openAliases(")),
@@ -64,7 +64,7 @@ test("a cold Mod pencil needs only the frame, and shows loading while it arrives
   const gate = deferred();
   let waiting = false,
     built = false;
-  const text = source("mod-alias"),
+  const text = source("mods/mod-alias"),
     code = text
       .slice(text.indexOf("export async function open("), text.indexOf('  const host = $("dialog")'))
       .replace("export ", "");

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { maskWithSprite, spriteMaskTransform, spriteSurface } from "../../src/bmpt/web/js/sprite-mask.js";
-import { clipButtonPatterns } from "../../src/bmpt/web/js/button-layout.js";
+import { maskWithSprite, spriteMaskTransform, spriteSurface } from "../../src/bmpt/web/js/ui/sprite-mask.js";
+import { clipButtonPatterns } from "../../src/bmpt/web/js/ui/button-layout.js";
 import { maskCanvas } from "./sprite_mask_fixture.mjs";
 
 const style = (x, y, w, h, transform = "") => ({

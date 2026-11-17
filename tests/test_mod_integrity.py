@@ -11,16 +11,18 @@ from types import SimpleNamespace
 import pytest
 
 from ba_modding_toolkit.bundle import Bundle
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.library import integrity, service
 from bmpt.gameassets.cabs import CabIndex
 from bmpt.library.identity import identify
 from bmpt.library.judge import mod_versions
 from ba_modding_toolkit.naming import parse_filename
+from bmpt.library.install import Action
 from test_batch_import import analyze, env
 from bmpt.library.integrity import inspect as inspect_bundle
 
 from test_library import game_bundle, make_mod, setup_library
+from module_patches import patch_everywhere
 
 FIXTURES = Path(__file__).parent / "assets" / "integrity"
 
@@ -536,14 +538,14 @@ def test_self_contained_atlas_positions_rotations_and_trims_are_not_official_dri
     assert not report["remappable"]
     register(source, {"atlases": {"test.atlas": new}, "textures": {"page": [64, 64]}})
     # Inspecting an equal atlas is insensitive to line indentation and syntax spelling.
-    from bmpt.atlas_remap import layout_changes
+    from bmpt.spine.atlas_remap import layout_changes
 
     equivalent = old.replace("rotate: false", "rotate: 0")
     assert layout_changes({"test.atlas": old.encode()}, {"test.atlas": equivalent.encode()}) == []
 
 
 def test_import_validates_parts_without_running_compatibility(serialized, monkeypatch):
-    from bmpt import atlas_remap
+    from bmpt.spine import atlas_remap
 
     env, register = serialized
     source = register(make_mod(env.original, env.tmp / "input"))
@@ -602,7 +604,7 @@ def checks(env, monkeypatch):
     monkeypatch.setattr(integrity, "inspect", read)
     monkeypatch.setattr(integrity, "metadata", read)
     monkeypatch.setattr(integrity, "cab_names", cabs)
-    monkeypatch.setattr(service, "CabIndex", index)
+    patch_everywhere(monkeypatch, [service], "CabIndex", index)
     register(env.original)
     env.register, env.reads, env.indexes = register, reads, indexes
     return env
@@ -864,7 +866,7 @@ def test_pre_split_older_bundle_keeps_all_update_targets_in_add_and_batch(checks
     (mod,) = e.library.add_files(kind, [old])
     assert e.library.compatibility(mod.id, pin)["outdated"]
     (group,) = e.library._plan(e.library._record(mod.id), lambda text: None, pin)
-    assert all(file.action == service.Action.UPDATE for file in group.files)
+    assert all(file.action == Action.UPDATE for file in group.files)
     assert set(group.target_paths) == set(targets)
 
 

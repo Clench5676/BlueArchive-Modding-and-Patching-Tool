@@ -9,8 +9,9 @@ register(
   if (spec.startsWith("three/addons/")) return { url: ${JSON.stringify(VENDOR + "examples/jsm/")} + spec.slice(13), shortCircuit: true };
   return next(spec, ctx); }`)}`,
 );
-const { createStillView, FORMATION_VIEW, visibleStillFrame } = await import("../../src/bmpt/web/js/model.js");
-const { OUTLINE } = await import("../../src/bmpt/web/js/chibi-materials.js");
+const { createStillView } = await import("../../src/bmpt/web/js/model/model.js");
+const { FORMATION_VIEW, visibleStillFrame } = await import("../../src/bmpt/web/js/model/model-camera.js");
+const { OUTLINE } = await import("../../src/bmpt/web/js/model/chibi-materials.js");
 const vertices = new Float32Array([-0.3, 0, 0, 0.3, 0, 0, 0, 1.1, 0]);
 const fixture = new TextEncoder().encode(
   JSON.stringify({

@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { jobProgress, progressName } from "../../src/bmpt/web/js/job-progress.js";
-import { NAME_LANG, setStrings, T } from "../../src/bmpt/web/js/i18n.js";
+import { jobProgress, progressName } from "../../src/bmpt/web/js/core/job-progress.js";
+import { NAME_LANG, setStrings, T } from "../../src/bmpt/web/js/core/i18n.js";
 
 globalThis.document = { documentElement: {} };
 const locales = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"];
@@ -114,7 +114,7 @@ for (const locale of locales) {
 }
 
 // A job over mods (library/mod_progress.py): one line per item at hand, the parts the bottom-left line shortens.
-import { fitLine, modLine } from "../../src/bmpt/web/js/job-progress.js";
+import { fitLine, modLine } from "../../src/bmpt/web/js/core/job-progress.js";
 const nameOf = ({ variant }) => ({ ch0063: "Hoshino (Swimsuit)", ch0145: "Hina" })[variant] || variant;
 for (const locale of locales)
   test(`a job over mods names the item at hand, its kind, own name, percentage and step in ${locale}`, () => {
@@ -213,7 +213,7 @@ test("a long line shortens the mod's own name first, then who it is, and keeps t
 });
 
 // A one-mod job (a student page's, Settings' or a repair's action): who it is stays, the step and share follow the job.
-import { modJob } from "../../src/bmpt/web/js/job-progress.js";
+import { modJob } from "../../src/bmpt/web/js/core/job-progress.js";
 import { readdirSync } from "node:fs";
 test("a one-mod job keeps who it is, shows no count and keeps its step through a report of files", () => {
   setStrings("zh-CN", flat(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/zh-CN.json", import.meta.url)))));

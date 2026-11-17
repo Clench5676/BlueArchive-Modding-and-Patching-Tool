@@ -174,7 +174,7 @@ def _clone_by_copy(monkeypatch):
 
 
 def _replace_actions(tmp_path, monkeypatch):
-    from bmpt import filelock
+    from bmpt.core import filelock
 
     source = tmp_path / "source"
     source.write_bytes(b"new bytes")

@@ -41,9 +41,9 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from ..errors import ServiceError
-from ..filelock import file_lock, replace
-from ..logging_utils import log_failure
+from ..core.errors import ServiceError
+from ..core.filelock import file_lock, replace
+from ..core.logging_utils import log_failure
 
 logger = logging.getLogger(__name__)
 

@@ -6,7 +6,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from bmpt.engine import AssetType, Bundle, LogFunc, Obj, ReplaceAssetType, SaveOptions
-from ..errors import ServiceError
+from ..core.errors import ServiceError
 
 
 def adapt_variant_sources(

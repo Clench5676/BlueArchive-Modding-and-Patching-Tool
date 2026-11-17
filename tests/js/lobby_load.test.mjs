@@ -2,12 +2,13 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { latestLoad, loadPlayer } from "../../src/bmpt/web/js/spine-load.js";
-import { withTimeout } from "../../src/bmpt/web/js/async.js";
-import { atStep } from "../../src/bmpt/web/js/preview-error.js";
-import { validRect } from "../../src/bmpt/web/js/lobby-health.js";
+import { latestLoad, loadPlayer } from "../../src/bmpt/web/js/spine/spine-load.js";
+import { withTimeout } from "../../src/bmpt/web/js/core/async.js";
+import { atStep } from "../../src/bmpt/web/js/detail/preview-error.js";
+import { validRect } from "../../src/bmpt/web/js/lobby/lobby-health.js";
 
-const source = readFileSync(new URL("../../src/bmpt/web/js/lobby.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby.js", import.meta.url), "utf8");
+const measureSource = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby-measure.js", import.meta.url), "utf8");
 const loading = source
   .slice(source.indexOf("const lobbyLoads ="), source.indexOf("export const setTrace"))
   .replaceAll("export function", "function")
@@ -412,7 +413,7 @@ test("a manifest that answers after the total deadline cannot start a discarded 
 
 test("zoom limits are cached by both the configured art revision and the live layout revision", () => {
   const start = source.indexOf("function measureClips()");
-  const code = source.slice(start, source.indexOf("// the layers' setup-pose bounds", start));
+  const code = source.slice(start, source.indexOf("// --- the camera framing", start));
   const measured = [];
   const env = {
     game: () => ({}),
@@ -433,7 +434,8 @@ test("zoom limits are cached by both the configured art revision and the live la
     "env",
     `const { ${Object.keys(env).join(", ")} } = env;
     let current;
-    ${source.slice(source.indexOf("function rectCache("), source.indexOf("// the grid: three game views"))}
+    ${measureSource.slice(measureSource.indexOf("function rectCache("), measureSource.indexOf("// the grid: three game views"))}
+    ${source.slice(source.indexOf("const paintedRects ="), source.indexOf("// a reusable skeleton of a layer"))}
     const safeRects = rectCache();
     ${code}
     return (artBase, base, extra = {}) => {

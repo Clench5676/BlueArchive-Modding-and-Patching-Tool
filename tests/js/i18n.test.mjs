@@ -1,11 +1,12 @@
-// Tests for web/js/i18n.js: the name language of each UI language and what stands in for a missing name. Run by
+// Tests for web/js/core/i18n.js: the name language of each UI language and what stands in for a missing name. Run by
 // tests/test_i18n.py with Node's test runner: node --test tests/js/i18n.test.mjs
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { DETAIL_MODULES, importOf } from "./helpers/source-text.mjs";
 
 globalThis.document = { documentElement: { lang: "" } };
 const { L, NAME_LANG, T, language, nameKeys, setStrings, languageRefresh } = await import(
-  "../../src/bmpt/web/js/i18n.js"
+  "../../src/bmpt/web/js/core/i18n.js"
 );
 
 const names = { "zh-CN": "星野", "zh-TW": "星野", en: "Hoshino", ja: "ホシノ", ko: "호시노" };
@@ -126,7 +127,7 @@ test("a failed locale read preserves the active table and can be retried", async
 // wrong: ")
 test("errorText gives a coded error its string and an uncoded one error.internal with a detail or none at all", async () => {
   const { readFileSync } = await import("node:fs");
-  const { errorText } = await import("../../src/bmpt/web/js/i18n.js");
+  const { errorText } = await import("../../src/bmpt/web/js/core/i18n.js");
   const flat = (o, p = "webui") =>
     Object.entries(o).flatMap(([k, v]) => (typeof v === "object" ? flat(v, `${p}.${k}`) : [[`${p}.${k}`, v]]));
   class RpcError extends Error {
@@ -192,18 +193,18 @@ test("the sites the review lists draw their error text through the shared errorT
   const { readFileSync } = await import("node:fs");
   const { flat } = await import("./helpers/source-text.mjs");
   const read = (name) => readFileSync(new URL(`../../src/bmpt/web/js/${name}`, import.meta.url), "utf8");
-  for (const name of ["consent.js", "update.js", "quit.js", "settings.js"]) {
+  for (const name of ["app/consent.js", "app/update.js", "app/quit.js", "settings/settings.js"]) {
     const source = read(name);
     assert.doesNotMatch(source, /`error\.\$\{/, `${name} builds no error key of its own`);
     assert.doesNotMatch(source, /const errorText =/, `${name} has no errorText of its own`);
     assert.match(source, /errorText\(/, name);
   }
   assert.equal(
-    read("consent.js").match(/errorText\(err\)/g).length,
+    read("app/consent.js").match(/errorText\(err\)/g).length,
     4,
     "the asset consent, the folder change, the Spine consent and the scan consent",
   );
-  const main = flat(read("main.js"));
+  const main = flat(read("app/main.js"));
   assert.match(
     main,
     /catch \(err\) \{ notify\(errorText\(err\), \{ kind: "error", error: err \}\); \}/,
@@ -219,7 +220,15 @@ test("the sites the review lists draw their error text through the shared errorT
 test("the other copies of that expression use the shared errorText too", async () => {
   const { readFileSync } = await import("node:fs");
   const read = (name) => readFileSync(new URL(`../../src/bmpt/web/js/${name}`, import.meta.url), "utf8");
-  for (const name of ["detail.js", "nav.js", "mod-alias.js", "mod-export.js", "student-hall.js", "main.js"]) {
+  for (const name of [
+    "detail/detail-actions.js",
+    "detail/detail-switchers.js",
+    "app/nav.js",
+    "mods/mod-alias.js",
+    "mods/mod-export.js",
+    "hall/student-hall.js",
+    "app/main.js",
+  ]) {
     const source = read(name);
     assert.doesNotMatch(
       source,
@@ -228,7 +237,25 @@ test("the other copies of that expression use the shared errorText too", async (
     );
     assert.doesNotMatch(source, /String\(err(or)?\) \}\)/, `${name} builds no error detail of its own`);
     assert.doesNotMatch(source, /const errorText =/, `${name} has no errorText of its own`);
-    assert.match(source, /import \{[^}]*\berrorText\b[^}]*\} from "\.\/i18n\.js"/, `${name} imports the shared one`);
+    assert.match(
+      source,
+      new RegExp(`import \\{[^}]*\\berrorText\\b[^}]*\\} from "${importOf(name, "core/i18n.js")}"`),
+      `${name} imports the shared one`,
+    );
     assert.match(source, /\berrorText\(/, name);
+  }
+});
+
+test("none of the detail screen's modules builds an error text of its own", async () => {
+  const { readFileSync } = await import("node:fs");
+  for (const file of DETAIL_MODULES) {
+    const source = readFileSync(new URL(`../../src/bmpt/web/js/detail/${file}`, import.meta.url), "utf8");
+    assert.doesNotMatch(
+      source,
+      /T\(`error\.\$\{\w+\??\.code \|\| "internal"\}`/,
+      `${file} builds no error key of its own`,
+    );
+    assert.doesNotMatch(source, /String\(err(or)?\) \}\)/, `${file} builds no error detail of its own`);
+    assert.doesNotMatch(source, /const errorText =/, `${file} has no errorText of its own`);
   }
 });

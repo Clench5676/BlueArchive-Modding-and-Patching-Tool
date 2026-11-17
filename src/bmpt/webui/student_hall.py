@@ -15,13 +15,13 @@ from concurrent.futures import FIRST_COMPLETED, Future, TimeoutError as FutureTi
 from typing import Any
 from uuid import UUID, uuid4
 
-from ..errors import ServiceError
-from .. import globallines
+from ..core.errors import ServiceError
+from ..lines import global_lines as globallines
 from ..gameassets.errors import AssetNotFound
 from ..gameassets.layouts import export_layout, subtree
 from ..gameassets.unity import open_bundle, object_record
 from ..gameassets.spine import spine_stamps
-from ..kivo import API, AUDIO_HOST, Kivo, _one_line, clip_id
+from ..lines.kivo import API, AUDIO_HOST, Kivo, _one_line, clip_id
 
 logger = logging.getLogger(__name__)
 
@@ -586,7 +586,7 @@ def register_api(rpc: Any, s: Any) -> None:
     local = LocalPortraitVoices(s)
 
     def rows_for(v: Any, lang: str) -> tuple[dict, bool, bool]:
-        from .api import _background
+        from .api_students import _background
 
         started = time.monotonic()
         local_cached = local.cached_index()

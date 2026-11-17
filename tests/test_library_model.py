@@ -8,15 +8,17 @@ from types import SimpleNamespace
 import pytest
 
 from bmpt.catalog import Catalog
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.library import ModLibrary, supports_kind
 from bmpt.library.identity import content_cores, identify
 from bmpt.library.integrity import Contents
 from bmpt.library.judge import kind_of_file
 from ba_modding_toolkit.naming import parse_filename
+from bmpt.library import safety
 
 from test_library import game_bundle, header_bundle, make_mod, setup_library
 from test_mod_identity import objects
+from module_patches import patch_everywhere
 
 # the real-install tests run only on an official game folder named by BAMT_TEST_GAME_DIR
 GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-game")
@@ -35,7 +37,7 @@ def model_bundle(folder, core="hoshino_original", *, prefab=False, **kwargs):
 
 @pytest.mark.skipif(not GAME_DIR.is_dir(), reason="Set BAMT_TEST_GAME_DIR to a verified official view")
 def test_official_model_slot_ownership(tmp_path, record_property):
-    from bmpt.config import Settings
+    from bmpt.host.config import Settings
     from bmpt.gameassets import AssetCache, GameAssets
     from bmpt.library.judge import core_of
     from ba_modding_toolkit.searching import get_search_dirs
@@ -81,7 +83,7 @@ def test_official_split_model_dependency_mod_on_clones(tmp_path, batch, complete
     import hashlib
     import json
     import subprocess
-    from bmpt.config import Settings
+    from bmpt.host.config import Settings
     from bmpt.gameassets import AssetCache, GameAssets
     from bmpt.gameassets.cabs import CabIndex
     from bmpt.library.integrity import Inspection
@@ -182,7 +184,7 @@ def test_official_split_model_dependency_mod_on_clones(tmp_path, batch, complete
         if shutil.which("node"):
             script = (
                 'import {readFileSync} from "node:fs"; '
-                'import {candidates} from "./src/bmpt/web/js/switch-sources.js"; '
+                'import {candidates} from "./src/bmpt/web/js/mods/switch-sources.js"; '
                 'const f=JSON.parse(readFileSync(0,"utf8")); const v=f.variants.find(v=>v.key==="ch0258"); '
                 'if(!candidates(f,v,"model").some(c=>c.id===' + json.dumps(mod.id) + ")) process.exit(1);"
             )
@@ -566,7 +568,7 @@ def test_split_model_journal_rolls_back_prefab_and_dependency_together(split_mod
                 raise PermissionError("synthetic failed second slot part")
         return copy(source, target)
 
-    monkeypatch.setattr(service, "atomic_copy", fail_second)
+    patch_everywhere(monkeypatch, [service], "atomic_copy", fail_second)
     with pytest.raises(ServiceError, match="game_file_denied"):
         env.library.apply("ch0258", f"mod:{mod.id}", kind="model")
     assert len(written) == 2
@@ -945,7 +947,7 @@ def test_model_costume_of_itself_is_refused(model_env):
 
 
 def test_model_jobs_publish_the_model_kind(model_env):
-    from bmpt.webui.services import _changed_of
+    from bmpt.webui.services_jobs import _changed_of
 
     env = model_env
     (entry,) = env.library.add([make_mod(env.parts[1], env.tmp / "upload")])
@@ -1046,11 +1048,11 @@ def test_official_roster_partial_and_complete_mod_preflight(tmp_path, monkeypatc
     """
     import time
     from functools import cache
-    from bmpt.config import Settings
+    from bmpt.host.config import Settings
     from bmpt.gameassets import AssetCache, GameAssets
     from bmpt.library import integrity
     from bmpt.library.storage import atomic_clone
-    from bmpt.openfiles import temporary_directory
+    from bmpt.core.openfiles import temporary_directory
     from ba_modding_toolkit.searching import get_search_dirs
 
     started = time.perf_counter()
@@ -1406,12 +1408,12 @@ def test_costume_builds_of_an_older_rule_are_built_again_at_the_start(model_env,
     def running(dirs):
         raise ServiceError("game_running")
 
-    real = service.safety.check_game_for
-    monkeypatch.setattr(service.safety, "check_game_for", running)
+    real = safety.check_game_for
+    monkeypatch.setattr(safety, "check_game_for", running)
     built.clear()
     assert library.refresh_costumes() == {"done": [], "kept": [], "left": [copy]}
     assert built == [] and library.update_due()["outdated"] is True  # neither built nor written: the next start
-    monkeypatch.setattr(service.safety, "check_game_for", real)
+    monkeypatch.setattr(safety, "check_game_for", real)
     assert library.refresh_costumes() == {"done": [copy], "kept": [], "left": []}
     assert library.selection("hoshino")["model"] == {"source": f"mod:{made}", "installed": True, "error": None}
     assert library.update_due()["outdated"] is False
@@ -1590,7 +1592,7 @@ def test_costume_verdicts_are_kept_per_build_signature(model_env, monkeypatch):
         )["ok"]
         is False
     )
-    monkeypatch.setattr(service, "_build_version", lambda: "next:build")
+    patch_everywhere(monkeypatch, [service], "_build_version", lambda: "next:build")
     assert library.costume_verdict("hoshino", "hoshino_swimsuit")["ok"] is False
     from bmpt.gameassets import costume_rule
 
@@ -1599,7 +1601,7 @@ def test_costume_verdicts_are_kept_per_build_signature(model_env, monkeypatch):
     assert library.record_costume_verdict("hoshino", "hoshino_swimsuit", True)["ok"] is True
     assert library.costume_verdict("hoshino", "hoshino_swimsuit")["ok"] is True
     # bounded, newest kept; an unreadable file reads as none
-    monkeypatch.setattr(service, "COSTUME_VERDICTS", 2)
+    patch_everywhere(monkeypatch, [service], "COSTUME_VERDICTS", 2)
     for i in range(3):
         library._save_verdict(f"signature-{i}", False, "rest pose")
     assert sorted(library._verdicts()) == ["signature-1", "signature-2"]

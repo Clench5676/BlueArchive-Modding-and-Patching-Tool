@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { hasAsset, primaryKind, configuredKey, previewBase } from "../../src/bmpt/web/js/switch-sources.js";
+import { hasAsset, primaryKind, configuredKey, previewBase } from "../../src/bmpt/web/js/mods/switch-sources.js";
 
-const source = readFileSync(new URL("../../src/bmpt/web/js/roster.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../src/bmpt/web/js/roster/roster.js", import.meta.url), "utf8");
 const rowsCode = source.slice(source.indexOf("async function renderRow("), source.indexOf("function maxScroll("));
 const deferred = () => {
   let resolve;

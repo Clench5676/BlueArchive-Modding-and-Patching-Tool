@@ -1,4 +1,4 @@
-"""The design tokens (web/js/ui-tokens.js) against the game's own prefabs, from the official development view.
+"""The design tokens (web/js/ui/ui-tokens.js) against the game's own prefabs, from the official development view.
 
 Skipped without BAMT_TEST_GAME_DIR (set by the development test plugin) or Node.js. Only numbers and colour codes of
 prefab nodes are read: no image data. The call sites are pinned against the tokens by tests/js/ui_tokens.test.mjs.
@@ -20,7 +20,7 @@ from bmpt.gameassets.unity import open_bundle
 
 NODE = shutil.which("node")
 GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-game")
-TOKENS = Path(__file__).resolve().parents[1] / "src/bmpt/web/js/ui-tokens.js"
+TOKENS = Path(__file__).resolve().parents[1] / "src/bmpt/web/js/ui/ui-tokens.js"
 
 pytestmark = pytest.mark.skipif(
     NODE is None or not GAME_DIR.is_dir(), reason="Node.js and an official development view are required"

@@ -1,10 +1,10 @@
-// Tests for the fullscreen lobby's wheel handling (web/js/lobby-touch.js): a mouse wheel zooms and a trackpad swipe
-// pans, in WebKit (the macOS app's WKWebView: wheelDeltaY is 3 x deltaY for every device) and in Chromium (WebView2:
-// notches of 120). Run by tests/test_lobby_view.py with Node's test runner.
+// Tests for the fullscreen lobby's wheel handling (web/js/lobby/lobby-touch.js): a mouse wheel zooms and a trackpad
+// swipe pans, in WebKit (the macOS app's WKWebView: wheelDeltaY is 3 x deltaY for every device) and in Chromium
+// (WebView2: notches of 120). Run by tests/test_lobby_view.py with Node's test runner.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import * as Touch from "../../src/bmpt/web/js/lobby-touch.js";
+import * as Touch from "../../src/bmpt/web/js/lobby/lobby-touch.js";
 
 globalThis.document ??= { addEventListener() {}, removeEventListener() {} };
 

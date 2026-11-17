@@ -1,4 +1,4 @@
-"""The graft of an official rig's new animations into a mod's own rig (bmpt.graft, bmpt.spine_binary)."""
+"""The graft of an official rig's new animations into a mod's own rig (bmpt.spine.graft, bmpt.spine.binary)."""
 
 from __future__ import annotations
 
@@ -11,8 +11,8 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from bmpt import atlas_remap, graft, rebake
-from bmpt.spine_binary import MESH, REGION, Skeleton, draw_order, draw_order_bytes, strip_nonessential, varint_bytes
+from bmpt.spine import atlas_remap, graft, rebake
+from bmpt.spine.binary import MESH, REGION, Skeleton, draw_order, draw_order_bytes, strip_nonessential, varint_bytes
 
 from graft_rigs import mesh, region, remove_animations, remove_slot, skeleton
 

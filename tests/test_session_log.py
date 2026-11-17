@@ -6,7 +6,7 @@ from urllib.parse import quote
 
 import pytest
 
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.webui.api import build_api
 from bmpt.webui.session_log import LOG_BYTES, RedactingFormatter, redact, tail
 from bmpt.webui.timing import Timings

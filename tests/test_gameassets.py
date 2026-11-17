@@ -17,7 +17,7 @@ from types import SimpleNamespace
 import pytest
 from PIL import Image
 
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.gameassets import AssetCache, AssetNotFound, GameAssets
 from bmpt.gameassets import service, unity
 from bmpt.gameassets.discovery import (
@@ -1422,7 +1422,7 @@ def test_real_spine_files_and_pages_stay_in_memory(real_game, kind, core):
 
 @real_install
 def test_real_detail_layout_places_the_portrait(real_game):
-    # the detail screen frames portraits on this node (web/js/portrait-view.js): its origin and a uniform scale
+    # the detail screen frames portraits on this node (web/js/detail/portrait-view.js): its origin and a uniform scale
     detail = real_game.layout("UICharacterDetail")
     content = next(c for c in detail["children"] if c["name"] == "Inventory_ListControl")
     node = next(c for c in content["children"] if c["name"] == "CharacterPos")

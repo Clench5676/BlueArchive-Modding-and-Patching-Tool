@@ -1,4 +1,4 @@
-// Tests for web/js/repairs.js (the Overwritten message's repair lines), with the en-US strings. Run by
+// Tests for web/js/app/repairs.js (the Overwritten message's repair lines), with the en-US strings. Run by
 // tests/test_repairs.py with Node's test runner: node --test tests/js/repairs.test.mjs
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -13,11 +13,11 @@ const flat = (o, p = "", out = {}) => {
   return out;
 };
 const strings = flat(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8")));
-const I18n = await import("../../src/bmpt/web/js/i18n.js");
+const I18n = await import("../../src/bmpt/web/js/core/i18n.js");
 I18n.setStrings("en-US", strings);
 const T = I18n.T;
 const S = (key) => strings[`webui.${key}`];
-const Repairs = await import("../../src/bmpt/web/js/repairs.js");
+const Repairs = await import("../../src/bmpt/web/js/app/repairs.js");
 
 const STEAM = "C:\\Program Files (x86)\\Steam\\steamapps\\common\\BlueArchive";
 

@@ -6,11 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from bmpt import filelock
-from bmpt.errors import ServiceError
+from bmpt.core import filelock
+from bmpt.core.errors import ServiceError
 from bmpt.library import ModLibrary, profiles, service, staging
 
 from test_library import setup_library
+from module_patches import patch_everywhere
 
 
 def assert_private_logs(caplog, *private_values):
@@ -113,7 +114,7 @@ def test_saving_state_redacts_state_and_lock_failures(setup_library, monkeypatch
         assert path == lock_file
         raise PermissionError(errno.EACCES, "Permission denied", str(path))
 
-    monkeypatch.setattr(service, "atomic_json", fail_save)
+    patch_everywhere(monkeypatch, [service], "atomic_json", fail_save)
     if fail_lock:
         monkeypatch.setattr(filelock, "open", fail_open, raising=False)
     caplog.clear()

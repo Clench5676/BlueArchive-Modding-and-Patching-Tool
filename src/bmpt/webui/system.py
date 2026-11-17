@@ -7,8 +7,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-from ..errors import ServiceError
-from .. import devmode, updater
+from ..core.errors import ServiceError
+from ..host import updater
+from ..core import devmode
 from ..engine import ENGINE_PACKAGE
 
 logger = logging.getLogger(__name__)
@@ -136,7 +137,7 @@ def classic_command(tab: str | None = None, *, control: bool = False) -> list[st
 
     Args:
         tab: The tab to open, or ``"settings"`` for the classic settings; None for the default tab.
-        control: Add the control channel, for a window the web UI places and raises (``webui/classic.py``).
+        control: Add the control channel, for a window the web UI places and raises (``webui/classic/``).
 
     Raises:
         ServiceError: ``bad_params``, ``tab`` is not a valid name.

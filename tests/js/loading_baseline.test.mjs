@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { rangeBaseline, alignBaseline, publishAligned } from "../../src/bmpt/web/js/loading-baseline.js";
+import { rangeBaseline, alignBaseline, publishAligned } from "../../src/bmpt/web/js/app/loading-baseline.js";
 
 test("the measured DOM metrics require an upward 15.3-stage-unit correction", () => {
   const measured = rangeBaseline(

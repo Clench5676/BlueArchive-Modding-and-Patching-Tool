@@ -1,4 +1,4 @@
-"""The environment hooks for isolated development runs (bmpt.devmode): inert without their variables,
+"""The environment hooks for isolated development runs (bmpt.core.devmode): inert without their variables,
 and what each does when set."""
 
 import fnmatch
@@ -14,7 +14,8 @@ import pytest
 
 import ba_modding_toolkit
 from ba_modding_toolkit.utils import paths as utils_paths
-from bmpt import config, devmode
+from bmpt.host import config
+from bmpt.core import devmode
 from ba_modding_toolkit import utils
 
 DEV_VARIABLES = (
@@ -109,7 +110,7 @@ def _python(code: str, **env: str) -> str:
 
 def test_data_dir_is_read_on_import(tmp_path):
     out = _python(
-        "from bmpt import config\nfrom ba_modding_toolkit import utils\n"
+        "from bmpt.host import config\nfrom ba_modding_toolkit import utils\n"
         "print(utils.EXE_DIR); print(config.CONFIG_FILE); print(config.user_cache_dir())",
         BAMT_DATA_DIR=str(tmp_path / "profile"),
     )
@@ -124,7 +125,7 @@ def test_data_dir_is_read_on_import(tmp_path):
 @pytest.fixture
 def no_search(monkeypatch):
     """Fail the test if the game is searched for: the user's prefixes, Steam libraries or registry."""
-    from bmpt import game_paths
+    from bmpt.host import game_paths
 
     def searched(*args, **kwargs):
         raise AssertionError("searched for the game")
@@ -139,7 +140,7 @@ def test_game_dirs_unset_is_none():
 
 
 def test_named_game_dirs_replace_the_search(tmp_path, monkeypatch, no_search):
-    from bmpt.game_paths import find_game_dirs
+    from bmpt.host.game_paths import find_game_dirs
 
     first, second = tmp_path / "first", tmp_path / "second"
     first.mkdir()
@@ -180,7 +181,7 @@ def dev(tmp_path, monkeypatch):
 
 
 def expect_outside(action, path=None):
-    from bmpt.errors import ServiceError
+    from bmpt.core.errors import ServiceError
 
     with pytest.raises(ServiceError) as caught:
         action()
@@ -222,14 +223,14 @@ def test_dev_roots_set_to_nothing_allow_nothing(tmp_path, monkeypatch):
 
 
 def test_dev_mode_never_searches_for_the_game(dev, no_search):
-    from bmpt.game_paths import find_game_dirs
+    from bmpt.host.game_paths import find_game_dirs
 
     assert find_game_dirs("global") == [] and find_game_dirs("japan") == []
     assert utils.get_BA_path("auto") is None
 
 
 def test_named_game_dirs_outside_the_roots_are_dropped(dev, monkeypatch, no_search):
-    from bmpt.game_paths import find_game_dirs
+    from bmpt.host.game_paths import find_game_dirs
 
     view = dev.root / "view"
     view.mkdir()
@@ -263,7 +264,7 @@ def test_output_folder_outside_the_roots_is_refused(dev):
 
 
 def test_library_takes_mods_from_inside_the_roots_only(dev):
-    from bmpt.errors import ServiceError
+    from bmpt.core.errors import ServiceError
     from bmpt.library import ModLibrary
 
     library = ModLibrary(dev.root / "library", SimpleNamespace(), object(), config.Settings(dev.root / "config.toml"))
@@ -651,7 +652,7 @@ def test_adb_runs_without_dev_mode(monkeypatch):
 @pytest.fixture
 def installable_build(tmp_path, monkeypatch):
     """A writable macOS app bundle the updater could replace."""
-    from bmpt import updater
+    from bmpt.host import updater
 
     target = tmp_path / "Tool.app"
     executable = target / "Contents" / "MacOS" / "Tool"
@@ -664,8 +665,8 @@ def installable_build(tmp_path, monkeypatch):
 
 
 def test_a_build_never_replaces_itself_in_dev_mode(installable_build, monkeypatch, tmp_path):
-    from bmpt import updater
-    from bmpt.errors import ServiceError
+    from bmpt.host import updater
+    from bmpt.core.errors import ServiceError
 
     assert updater.install_target() == installable_build
     monkeypatch.setenv("BAMT_DEV_ROOTS", str(tmp_path))
@@ -681,7 +682,7 @@ def test_a_build_never_replaces_itself_in_dev_mode(installable_build, monkeypatc
 
 
 def test_builds_carry_the_hooks_version():
-    marker = Path(devmode.__file__).parent / "assets" / "dev-hooks.json"
+    marker = Path(devmode.__file__).parents[1] / "assets" / "dev-hooks.json"
     assert json.loads(marker.read_text(encoding="utf-8")) == {"hooks": devmode.HOOKS}
 
 

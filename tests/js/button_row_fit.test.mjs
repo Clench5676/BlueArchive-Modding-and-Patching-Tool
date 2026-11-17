@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFile } from "node:fs/promises";
-import { flat } from "./helpers/source-text.mjs";
+import { flat, POPUP_MODULES } from "./helpers/source-text.mjs";
 
 const WIDE = /[⺀-鿿　-ヿ＀-￯가-힯฀-๿]/;
 const ctx = {
@@ -21,7 +21,7 @@ globalThis.document = {
   documentElement: { lang: "en-US", appendChild() {} },
 };
 globalThis.getComputedStyle = () => ({ getPropertyValue: () => "" });
-const NGUI = await import("../../src/bmpt/web/js/ngui.js");
+const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
 const { LINE_PITCH, fitGroup, fitLabels, fitRow, fitText, fontSizeFor, glyphWidth } = NGUI;
 
 const LOCALES = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"];
@@ -38,6 +38,8 @@ const text = (locale, key) => {
 };
 const raw = async (file) => readFile(new URL(`../../src/bmpt/web/js/${file}`, import.meta.url), "utf8");
 const source = async (file) => flat(await raw(file));
+// popup.js and the modules split from it, read as one
+const popupSource = async () => (await Promise.all(POPUP_MODULES.map((file) => source(`ui/${file}`)))).join("\n");
 
 const widest = (f) => Math.max(...f.text.split("\n").map((l) => glyphWidth(l, f.fs)));
 const tall = (f) => f.lines * fontSizeFor(f.text, f.fs) * LINE_PITCH;
@@ -66,7 +68,7 @@ function assertGroup(fits, captions, widths, maxH, label) {
 
 // --- the source pickers' action row (popup.js detailsTree), 850 wide panel, 120 high bodies ---
 test("the picker's constants are the ones asserted here", async () => {
-  const popup = await source("popup.js");
+  const popup = await popupSource();
   // the actions' captions 34 down to 24 on XS bodies, 30 down to 22 on XXS ones, the button's padding each side
   assert.match(
     popup,
@@ -163,10 +165,10 @@ test("with the Chinese wording the five-button row keeps equal bodies at a full 
   assert.ok(row.every((f) => f.width === row[0].width));
 });
 
-// --- the detail page's action cards and tabs (detail.js screenTree) ---
+// --- the detail page's action cards and tabs (detail-screen.js screenTree) ---
 for (const locale of LOCALES)
   test(`the four action cards and the three tabs share one size each in ${locale}`, async () => {
-    const detail = await source("detail.js");
+    const detail = await source("detail/detail-screen.js");
     assert.match(detail, /const ROW_L = 58 \+ 37, ROW_R = 1320 - 37, GAP = 6, CW = \(ROW_R - ROW_L - 3 \* GAP\) \/ 4;/);
     assert.match(detail, /fitGroup\(actions\.map\(\(\[, key\]\) => T\(key\)\), 40, 28, CW - 60, 2, \{ maxH: 90 \}\)/);
     assert.match(detail, /fitGroup\(tabLabels, 52, 36, 360, 1\)/);
@@ -196,7 +198,7 @@ for (const locale of LOCALES)
 
 // --- popup buttons: the default footer is XS, 104 high, captions 40 down to 28 in a box 12 less high; its bodies
 // are as wide as the captions need (200 at least, 551 at most), so the room is the body less its padding each side ---
-const { CONTROL, SPACE } = await import("../../src/bmpt/web/js/ui-tokens.js");
+const { CONTROL, SPACE } = await import("../../src/bmpt/web/js/ui/ui-tokens.js");
 const PAIRS = [
   ["picker.ok", "popup.cancel"],
   ["popup.save", "popup.cancel"],
@@ -217,9 +219,9 @@ function footerBody(captions) {
 }
 for (const locale of LOCALES)
   test(`popup footer captions share one size and fit the default XS body in ${locale}`, async () => {
-    const popup = await source("popup.js"),
-      consent = await source("consent.js"),
-      update = await source("update.js");
+    const popup = await popupSource(),
+      consent = await source("app/consent.js"),
+      update = await source("app/update.js");
     assert.match(popup, /export const BUTTON_TEXT_H = CONTROL.buttonL.h - SPACE.m;/);
     assert.match(popup, /export const FOOTER_DEFAULT = "XS";/);
     assert.match(popup, /NGUI.fitLabels\(widgets, captions, caption.fs, caption.fsMin/);
@@ -282,8 +284,8 @@ for (const locale of LOCALES)
 // --- segments: the roster's six and the list popup's three ---
 for (const locale of LOCALES)
   test(`the roster's six segments and the popup's three share one size in ${locale}`, async () => {
-    const roster = await source("roster-widgets.js"),
-      popup = await source("popup.js");
+    const roster = await source("roster/roster-widgets.js"),
+      popup = await popupSource();
     // the roster's two filters' six captions go through toolbarFit, which fits every filter's captions as one group
     assert.match(
       roster,
@@ -337,12 +339,12 @@ for (const locale of LOCALES)
 
 // --- Settings: tabs (300 wide), the buttons of a value row (402 x 136, the prefab's small button), the export
 // pair (680 x 136) ---
-const { XS_BUTTON } = await import("../../src/bmpt/web/js/ui-tokens.js");
+const { XS_BUTTON } = await import("../../src/bmpt/web/js/ui/ui-tokens.js");
 const S = 1920 / 2960;
 for (const locale of LOCALES)
   test(`Settings tabs and button pairs share one size and fit in ${locale}`, async () => {
-    const settings = await source("settings.js"),
-      buttons = await source("game-buttons.js");
+    const settings = await source("settings/settings.js"),
+      buttons = await source("ui/game-buttons.js");
     assert.match(settings, /fitGroup\(TABS\.map\(\(id\) => T\(`settings\.tab\.\$\{id\}`\)\), 56, 40, 300, 2\)/);
     assert.match(
       settings,
@@ -396,8 +398,8 @@ for (const locale of LOCALES)
 // apart, at scale 0.34) and the row under the list ---
 for (const locale of LOCALES)
   test(`the import list's tools and the row under the list share one size and fit their bodies in ${locale}`, async () => {
-    const page = await source("batch-import.js"),
-      layout = await source("import-layout.js");
+    const page = await source("mods/batch-import.js"),
+      layout = await source("mods/import-layout.js");
     assert.match(
       page,
       /\["files", "addFiles", 174\], \["folder", "addFolder", 190\], \["all", "all", 126\], \["none", "none", 140\]/,
@@ -447,10 +449,10 @@ for (const locale of LOCALES)
   });
 
 // --- the Hall modal's retained footer ---
-await import("../../src/bmpt/web/js/ui-grid.js");
+await import("../../src/bmpt/web/js/ui/ui-grid.js");
 for (const locale of LOCALES)
   test(`the Hall modal's footer captions fit in ${locale}`, async () => {
-    const ui = await source("student-hall-ui.js");
+    const ui = await source("hall/student-hall-ui.js");
     assert.match(ui, /fitGroup\(captions, 40, 26, width \/ S - 60, 2, \{ maxH: height \/ S - 20 \}\)/);
     document.documentElement.lang = locale;
     const S = 1920 / 2960;
@@ -509,11 +511,11 @@ for (const locale of LOCALES)
 // --- the compatibility result's three repair choices (mod-compatibility.js repairButtons): the XS footer every
 // popup has , bodies as wide as the captions need and sharing the frame's width (popup.js footerScale), in each
 // frame the result popup can take ---
-const { POPUP_FRAME } = await import("../../src/bmpt/web/js/ui-tokens.js");
+const { POPUP_FRAME } = await import("../../src/bmpt/web/js/ui/ui-tokens.js");
 for (const locale of LOCALES)
   test(`the three repair choices share one size and fit their small button bodies in ${locale}`, async () => {
-    const popup = await source("popup.js"),
-      compatibility = await source("mod-compatibility.js");
+    const popup = await popupSource(),
+      compatibility = await source("mods/mod-compatibility.js");
     assert.match(
       popup,
       /return n < 3 \? 1 : Math\.min\(1, \(w - 2 \* POPUP_FRAME\.footer\.side - POPUP_FRAME\.footer\.gap \* \(n - 1\)\) \/ n \/ control\.minW\);/,
@@ -543,13 +545,13 @@ for (const locale of LOCALES)
     }
   });
 
-// --- the 3D model tab's action cards (detail.js stripCard): a 242-wide Common_Btn_BG card, its caption 56 down
+// --- the 3D model tab's action cards (detail-strip.js stripCard): a 242-wide Common_Btn_BG card, its caption 56 down
 // to 28 in 50 less than the card's width, up to two lines; every action model.js plays has its caption in every
 // locale ---
 for (const locale of LOCALES)
   test(`the 3D model's action captions fit their cards in ${locale}`, async () => {
-    const detail = await source("detail.js"),
-      model = await raw("model.js");
+    const detail = await source("detail/detail-strip.js"),
+      model = await raw("model/model.js");
     assert.match(detail, /const CARD = \{ w: 242, h: 209 \};/);
     // (the action bar's group cards bring their own fit: action_list.test.mjs)
     assert.match(detail, /const f = captionFit \|\| fitText\(caption, 56, 28, w - 50\)[,;]/);

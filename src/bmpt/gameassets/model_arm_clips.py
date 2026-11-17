@@ -9,7 +9,8 @@ from collections import defaultdict, deque
 import numpy as np
 
 from . import model_skirts as ms
-from .model import read_streamed, _key
+from .model_glb import read_streamed
+from .model import _key
 
 ARM_TOLERANCE = 2e-5
 

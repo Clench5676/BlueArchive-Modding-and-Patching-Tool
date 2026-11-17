@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from ba_modding_toolkit.bundle import Bundle
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.library import integrity
 from bmpt.library import targets as resolver
 from bmpt.library.identity import content_cores
@@ -16,8 +16,8 @@ from bmpt.library.integrity import metadata as bundle_metadata, inspect as inspe
 from ba_modding_toolkit.models import AssetType, SaveOptions
 from ba_modding_toolkit.naming import parse_filename
 from ba_modding_toolkit.utils import CRCUtils
-from bmpt.webui import batch_import
-from test_batch_import import analyze, batch_model_env, env, run
+from bmpt.webui import batch_candidates, batch_import
+from test_batch_import import analyze, batch_model_env, env, patch_batch, run
 from test_library import game_bundle, make_mod, setup_library
 from test_library_model import model_bundle, model_env
 from test_mod_origin import unity_bundle
@@ -57,7 +57,7 @@ from test_mod_origin import unity_bundle
     ],
 )
 def test_blocked_reason_keeps_missing_counterparts_distinct(code, reason):
-    assert batch_import.blocked_reason(ServiceError(code)) == reason
+    assert batch_candidates.blocked_reason(ServiceError(code)) == reason
 
 
 @pytest.mark.parametrize("phase", ["identify", "preflight", "prepare"])
@@ -89,7 +89,7 @@ def test_failure_details_reach_results_and_logs(env, monkeypatch, caplog, phase,
     expected = ServiceError(code, **params).to_json()
     assert result["error"] == expected
     if phase != "prepare":
-        assert entry["reason"] == batch_import.blocked_reason(ServiceError(code))
+        assert entry["reason"] == batch_candidates.blocked_reason(ServiceError(code))
         assert entry["error"] == expected
     assert code in caplog.text and "Modified_Body" in caplog.text
     # The game's own file name stays in the log; the folder it came from never does.
@@ -131,7 +131,7 @@ def test_model_direct_replacement_never_transfers_assets(batch_model_env, monkey
 
     monkeypatch.setattr(Bundle, "extract_patch", forbidden)
     monkeypatch.setattr(resolver, "sharing_keys", forbidden)
-    monkeypatch.setattr(batch_import, "rebuild", forbidden)
+    patch_batch(monkeypatch, "rebuild", forbidden)
     (entry,) = analyze(env, [source])["entries"]
     assert (entry["state"], entry["reason"], entry["files"][0]["target"]) == ("ready", None, target.name)
     (result,) = run(env, [entry], crc="auto", extraBytes="", types=["Texture2D"], backup=True)
@@ -189,7 +189,7 @@ def test_direct_replacement_honours_the_crc_and_extra_bytes_options(
         unity_bundle(env.tmp / "input" / target.name, name="Unknown_CutIn_Body", payload=b"modified model")
     )
     original_source = source.read_bytes()
-    monkeypatch.setattr(batch_import, "install_needs_crc", lambda source: install_needs)
+    patch_batch(monkeypatch, "install_needs_crc", lambda source: install_needs)
     (entry,) = analyze(env, [source])["entries"]
     assert entry["state"] == "ready" and entry["files"][0]["target"] == target.name
     (result,) = run(env, [entry], crc=crc, extraBytes=extra, types=["Texture2D"])
@@ -285,7 +285,7 @@ def verified_model(tmp_path, monkeypatch):
     if not value:
         pytest.skip("Set BAMT_TEST_GAME_DIR to an isolated verified official view")
     from bmpt.catalog import Catalog
-    from bmpt.config import Settings
+    from bmpt.host.config import Settings
     from bmpt.library import ModLibrary, safety
     from ba_modding_toolkit.searching import get_search_dirs
     from bmpt.webui.api import build_api

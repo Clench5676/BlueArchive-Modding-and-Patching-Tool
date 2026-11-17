@@ -1,6 +1,6 @@
 """Run the web UI with ``python -m bmpt.webui``."""
 
-from ..localization import register_locales
+from ..core.localization import register_locales
 
 register_locales()
 

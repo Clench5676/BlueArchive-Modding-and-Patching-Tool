@@ -7,7 +7,7 @@ from pathlib import Path, PurePosixPath
 
 import pytest
 
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.webui import stills
 
 WEB = stills.WEB_DIR
@@ -65,12 +65,12 @@ def test_every_import_of_a_pixel_file_is_classified(renderer):
 def test_the_vendor_runtimes_in_use_are_the_listed_ones():
     imports = _import_map()
     assert imports["three"].removeprefix("./") in stills.RENDERERS["model"]
-    root = re.search(r'const ROOT = "([^"]+)"', (WEB / "js/spine-runtime.js").read_text()).group(1)
+    root = re.search(r'const ROOT = "([^"]+)"', (WEB / "js/spine/spine-runtime.js").read_text()).group(1)
     assert root + "spine-player.min.js" in stills.RENDERERS["spine"]
     # the still entry points: the 3D still loads model.js, the Spine stills live in thumbs.js
-    assert 'import("./model.js")' in (WEB / "js/model-still.js").read_text()
-    assert {"js/model-still.js", "js/model.js"} <= set(stills.RENDERERS["model"])
-    assert "js/thumbs.js" in stills.RENDERERS["spine"]
+    assert 'import("./model.js")' in (WEB / "js/model/model-still.js").read_text()
+    assert {"js/model/model-still.js", "js/model/model.js"} <= set(stills.RENDERERS["model"])
+    assert "js/detail/thumbs.js" in stills.RENDERERS["spine"]
 
 
 def test_a_change_to_a_pixel_file_changes_only_its_renderers_revision(tmp_path):
@@ -82,7 +82,7 @@ def test_a_change_to_a_pixel_file_changes_only_its_renderers_revision(tmp_path):
     assert before["model"] != before["spine"]
     changed = tmp_path / "changed"
     shutil.copytree(tmp_path, changed, ignore=shutil.ignore_patterns("changed"))
-    with (changed / "js/png-decode.js").open("a") as file:
+    with (changed / "js/core/png-decode.js").open("a") as file:
         file.write("\n// changed\n")
     assert stills.revision("model", changed) != before["model"]
     assert stills.revision("spine", changed) == before["spine"]

@@ -9,7 +9,7 @@ import { test } from "node:test";
 import { controls } from "./control_prefabs.mjs";
 
 const web = new URL("../../src/bmpt/web/js/", import.meta.url);
-const source = readFileSync(new URL("settings.js", web), "utf8");
+const source = readFileSync(new URL("settings/settings.js", web), "utf8");
 const strip = (s) => s.replace(/^import [^;]*;\n/gm, "").replace(/^export /gm, "");
 class El {
   style = {};
@@ -30,12 +30,12 @@ class El {
   }
 }
 globalThis.document = { documentElement: new El(), createElement: () => new El() };
-const NGUI = await import(new URL("ngui.js", web));
-const { wrapPath, S, glyphsOf } = await import(new URL("util.js", web));
-const Rows = await import(new URL("settings-rows.js", web));
-const ButtonsModule = await import(new URL("game-buttons.js", web));
-const { errorText } = await import(new URL("i18n.js", web));
-const { BACKDROP, XS_BUTTON, TYPE, SPACE, PANEL, CONTROL } = await import(new URL("ui-tokens.js", web));
+const NGUI = await import(new URL("ui/ngui.js", web));
+const { wrapPath, S, glyphsOf } = await import(new URL("core/util.js", web));
+const Rows = await import(new URL("settings/settings-rows.js", web));
+const ButtonsModule = await import(new URL("ui/game-buttons.js", web));
+const { errorText } = await import(new URL("core/i18n.js", web));
+const { BACKDROP, XS_BUTTON, TYPE, SPACE, PANEL, CONTROL } = await import(new URL("ui/ui-tokens.js", web));
 const { option, filter } = controls();
 const Buttons = { smallButton: (...args) => ButtonsModule.optionButton(option, filter, ...args) };
 
@@ -274,7 +274,7 @@ test("the Enable Mods ? stands SPACE.xl after the title text, on the title's lin
 
 test("Settings keeps no hand-placed value geometry of its own", () => {
   assert.doesNotMatch(source, /VALUE_ROOM|VALUE_ROOM_MIN|BUTTONS_X|BELOW_ROOM|BUTTON_STEP|SETTINGS\.rowGap/);
-  const rowsSource = readFileSync(new URL("settings-rows.js", web), "utf8");
+  const rowsSource = readFileSync(new URL("settings/settings-rows.js", web), "utf8");
   assert.doesNotMatch(rowsSource, /\b1400\b|\b1440\b|-718|-689|\b700\b/);
 });
 
@@ -282,7 +282,7 @@ test("Settings keeps no hand-placed value geometry of its own", () => {
 // CVLabel): the caption role, pivot top left, its top SPACE.l under the dotted line from the content box's left,
 // in the red of SkillCutIn's note; the path and the buttons follow it SPACE.m below and the card grows by what
 // it adds. Every language.
-const { COLOUR } = await import(new URL("ui-tokens.js", web));
+const { COLOUR } = await import(new URL("ui/ui-tokens.js", web));
 for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
   test(`${locale} general: the Log card's anonymized note stands under the dotted line, above its path and buttons`, () => {
     const { rows, T } = harness(locale, "general");

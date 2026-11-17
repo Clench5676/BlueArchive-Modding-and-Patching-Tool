@@ -1,4 +1,4 @@
-"""The detail screen's previous / next student keys (web/js/step-keys.js) are front-end code: their tests run with
+"""The detail screen's previous / next student keys (web/js/core/step-keys.js) are front-end code: their tests run with
 Node's test runner, skipped where Node is not installed."""
 
 import shutil

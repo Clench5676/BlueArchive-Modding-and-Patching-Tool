@@ -1,0 +1,649 @@
+import { portraitMinimum } from "../photography/camera.js";
+// The portrait's fullscreen view: the game's visual mode (UICharacterVisualMode), which UICharacterDetail opens from its
+// ZoomButton. It is drawn from the prefab's PC group: the student's collection background under two pulsing light
+// patterns, the portrait's own player (detail.js; framed by visual-view.js: the whole art, the body in the middle), the
+// full-screen TouchArea whose press drags the portrait and the zoom, and the buttons Btn_Back (leaves), Btn_HideUI
+// (switches to this skin's memorial lobby when available) and Btn_RefreshPos (back to the whole art; greyed out while
+// there). The phone's gyroscope and the button sounds are not reproduced. Press and drag moves the art; the wheel zooms
+// at the pointer; a trackpad pinches and swipes; two fingers pinch.
+import * as NGUI from "../ui/ngui.js";
+import { anyOpen as popupOpen } from "../ui/popup.js";
+import { bindCorner } from "../window/corner-layout.js";
+import { ensureSpine } from "../spine/spine-runtime.js";
+import { wheelKind, wheelStep } from "../lobby/lobby-touch.js";
+import { S, clone, hitButton } from "../core/util.js";
+import { FULLSCREEN_BUTTON } from "../ui/ui-tokens.js";
+import {
+  SLIDE,
+  SLIDE_S,
+  STAGE,
+  anchoredCentre,
+  artBox,
+  atHome,
+  homeView,
+  limits,
+  mix,
+  panBy,
+  slideFrames,
+  viewOf,
+  viewport,
+  zoomAt,
+} from "./visual-view.js";
+
+const CENTRE = [960, 540]; // the screen's centre on the stage
+const GLIDE_MS = 450; // in and out, in step with the UI slide (app.css .45s)
+const RESET_MS = 300; // Btn_RefreshPos: back to the whole art
+const ZOOM_TAU = 0.08; // s: a wheel zoom eases to its target, as in the lobby
+const WHEEL = 0.0015,
+  LINE = 40,
+  PINCH = 0.01,
+  SCROLL_MS = 120; // as lobby-touch.js
+// the buttons' BoxColliders [width, height, centre y] in NGUI units around their node; the greyed reset has none. They
+// grow with the bodies' fullscreen height (fullscreenBody): the prefab's bodies are 116 high.
+const HIT = {
+  Btn_Back: [228.83, 165 + FULLSCREEN_BUTTON.h - 116, 0],
+  Btn_HideUI: [228.83, 165 + FULLSCREEN_BUTTON.h - 116, 0],
+  Btn_RefreshPos: [228.83, 195.2 + FULLSCREEN_BUTTON.h - 116, 32],
+};
+const CORNERS = [
+  ["LeftTop", ["Btn_Back"]],
+  ["RightTop", ["Btn_HideUI"]],
+  ["RightBottom", ["Btn_RefreshPos", "Btn_RefreshPos_Disable"]],
+];
+// the buttons the clip moves, and their keys
+const MOVING = {
+  Btn_Back: SLIDE.Btn_Back,
+  Btn_HideUI: SLIDE.Btn_HideUI,
+  Btn_RefreshPos: SLIDE.Btn_RefreshPos,
+  Btn_RefreshPos_Disable: SLIDE.Btn_RefreshPos,
+};
+
+let st = null;
+const clamp01 = (t) => Math.max(0, Math.min(1, t));
+const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+
+/** Whether the visual mode is open and not closing. */
+export const isOpen = () => !!st && !st.closing;
+
+/**
+ * Render the prefab's background and buttons off screen, for one open().
+ * @param {object} options
+ * @param {NguiNode} options.layout The UICharacterVisualMode layout.
+ * @param {object} options.bg The student's collection background.
+ * @param {{reset: string, back: string, switch?: string}} options.strings The captions; omit `switch` for skins
+ *     without a memorial lobby.
+ * @returns {Promise<object|null>} The prepared parts; null without the prefab.
+ */
+export async function prepare({ layout, bg, strings }) {
+  const pc = layout ? NGUI.find(layout, "Inventory_ListControl_PC") : null;
+  if (!pc) return null;
+  const [back, groups] = await Promise.all([renderBg(pc, bg), renderButtons(pc, strings)]);
+  return { pc, bg: back, groups };
+}
+
+/**
+ * Prepare the switch button: the memorial lobby reuses the exact portrait switch widget, without a portrait
+ * touch area or reset control. It is returned detached so the detail screen can discard a superseded request
+ * before publishing it.
+ * @param {object} options
+ * @param {NguiNode} options.layout The UICharacterVisualMode layout.
+ * @param {() => void} options.onSwitch Called when it is pressed.
+ * @returns {Promise<HTMLElement|null>} The button; null without the prefab.
+ */
+export async function prepareSwitch({ layout, label, onSwitch }) {
+  const pc = layout ? NGUI.find(layout, "Inventory_ListControl_PC") : null;
+  if (!pc || !label) return null;
+  const groups = await renderButtons(pc, { switch: label }, [["RightTop", ["Btn_HideUI"]]], onSwitch);
+  return groups.Btn_HideUI || null;
+}
+
+/**
+ * Prepare the Back button: cameras reuse the fullscreen Back's complete body, icon and BoxCollider, with their
+ * own leave action.
+ * @param {object} options
+ * @param {NguiNode} options.layout The UICharacterVisualMode layout.
+ * @param {() => void} options.onBack Called when it is pressed.
+ * @returns {Promise<HTMLElement|null>} The button; null without the prefab.
+ */
+export async function prepareBack({ layout, label, onBack }) {
+  const pc = layout ? NGUI.find(layout, "Inventory_ListControl_PC") : null;
+  if (!pc) return null;
+  const groups = await renderButtons(pc, { back: label }, [["LeftTop", ["Btn_Back"]]], onBack);
+  return groups.Btn_Back || null;
+}
+
+/**
+ * Draw the same complete Back widget for memorial lobby and model fullscreen.
+ * @param {HTMLElement} host The element to draw into.
+ * @param {NguiNode} layout The UICharacterVisualMode layout.
+ */
+export async function exitControl(host, layout) {
+  const source = NGUI.find(layout, "Inventory_ListControl_PC/LeftTop/Btn_Back");
+  if (!source) return;
+  const tree = fullscreenBody(clone(source)),
+    body = tree.widgets.find((w) => "sprite" in w);
+  tree.pos = [0, 0];
+  const w = body.w_ * S,
+    h = body.h_ * S,
+    next = document.createElement("div");
+  await NGUI.render(tree, next, { scale: S, origin: [w / 2, h / 2] });
+  await NGUI.decoded([...(next.children || [])], Infinity);
+  Object.assign(host.style, {
+    left: `${960 + source.pos[0] * S - w / 2}px`,
+    top: `${540 - source.pos[1] * S - h / 2}px`,
+    width: `${w}px`,
+    height: `${h}px`,
+  });
+  host.replaceChildren(...next.childNodes);
+  bindCorner(host, [parseFloat(host.style.left), parseFloat(host.style.top), w, h], { corner: "top-left" });
+}
+
+/**
+ * Open the visual mode: the portrait glides from the detail screen's viewport to the whole art while the
+ * prepared parts come in. Without parts (no prefab) there is no background and no button, and the caller gives
+ * a way out. The glide's clock starts with its first frame, as the page's own transitions do.
+ * @param {object} o What it opens on.
+ * @param {object|null} o.parts What prepare() gave.
+ * @param {object} o.skeleton The portrait's skeleton.
+ * @param {object} o.detail The detail screen's viewport.
+ * @param {HTMLElement} o.host The element for the portrait.
+ * @param {HTMLElement} o.bgHost The element for the background.
+ * @param {HTMLElement} o.uiHost The element for the buttons.
+ * @param {() => object[]} o.players Gives every portrait player on the stage.
+ * @param {() => void} o.onBack Called when Back is pressed.
+ */
+export async function open(o) {
+  if (!(await ensureSpine()) || o.alive?.() === false) return false;
+  close({ instant: true });
+  const parts = o.parts || null;
+  const box = artBox(o.skeleton?.data, measure(o.skeleton));
+  const home = homeView(box, {
+    s: S,
+    scale: parts ? NGUI.find(parts.pc, "Character/CharacterPos")?.scale?.[0] : undefined,
+  });
+  const detail = viewOf(o.detail);
+  const s = (st = {
+    o,
+    home,
+    lim: limits(box, home),
+    detail,
+    view: o.instant ? home : detail,
+    target: home,
+    last: null,
+    glide: o.instant ? null : { from: detail, to: home, t0: null, ms: GLIDE_MS, kind: "open" },
+    groups: parts?.groups || {},
+    homeShown: null,
+    ptrs: new Map(),
+    pinch: null,
+    scroll: { kind: null, at: -Infinity },
+    pinchUntil: -Infinity,
+    gesture: 1,
+  });
+  const touch = document.createElement("div");
+  touch.className = "visual-touch";
+  for (const [type, fn, opts] of HANDLERS) touch.addEventListener(type, fn, opts);
+  s.touch = touch;
+  const g = s.groups;
+  syncReset(s);
+  o.uiHost.replaceChildren(touch, ...Object.values(g));
+  o.uiHost.hidden = false;
+  if (parts) {
+    o.bgHost.classList.remove("on");
+    o.bgHost.replaceChildren(...parts.bg);
+    o.bgHost.hidden = false;
+    // A fullscreen handoff publishes its background without replaying the entry fade.
+    o.bgHost.style.transition = o.instant ? "none" : "";
+    void o.bgHost.offsetWidth; // the fade starts from transparent
+    o.bgHost.classList.add("on");
+    if (!o.instant) for (const [name, keys] of Object.entries(MOVING)) if (g[name]) slide(g[name], keys, false);
+  }
+  addEventListener("keydown", onKey);
+  return true;
+}
+
+/**
+ * Close: the buttons slide out, the background fades and the portrait glides back to the detail screen's
+ * framing.
+ * @param {object} [options]
+ * @param {boolean} [options.instant] Close at once (the screen is being left).
+ * @param {boolean} [options.restore] Give the detail screen's framing back.
+ */
+export function close({ instant = false, restore = true } = {}) {
+  const s = st;
+  if (!s) return;
+  if (instant) {
+    finish(s, restore);
+    return;
+  }
+  if (s.closing) return;
+  s.closing = true;
+  removeEventListener("keydown", onKey);
+  s.ptrs.clear();
+  s.touch.classList.remove("grabbing");
+  s.touch.style.pointerEvents = "none";
+  for (const [name, keys] of Object.entries(MOVING)) if (s.groups[name]) slide(s.groups[name], keys, true);
+  s.o.bgHost.classList.remove("on");
+  s.glide = { from: s.view, to: s.detail, t0: null, ms: GLIDE_MS, kind: "close" };
+  // the players draw the glide and end it; a portrait that broke meanwhile draws nothing, so a timer ends it too
+  setTimeout(() => finish(s), GLIDE_MS + 1000);
+}
+
+function finish(s, restore = true) {
+  if (s.finished) return;
+  s.finished = true;
+  if (st === s) st = null;
+  removeEventListener("keydown", onKey);
+  // exactly the detail screen's framing again
+  const { x, y, width, height } = s.o.detail;
+  if (restore)
+    for (const p of s.o.players())
+      if (p?.currentViewport)
+        Object.assign(p.currentViewport, { x, y, width, height, padLeft: 0, padRight: 0, padTop: 0, padBottom: 0 });
+  for (const host of [s.o.bgHost, s.o.uiHost]) {
+    host.hidden = true;
+    host.replaceChildren();
+    host.classList.remove("on");
+  }
+}
+
+// Every fullscreen view of the detail screen (this one, the memorial lobby's, the 3D model's) slides the
+// screen's UI out (app.css .stage.fullscreen); uiOut and uiBack handle the screen's parts meanwhile.
+let asideFocus = null;
+/**
+ * Make the screen's parts inert while they are slid out, so a control nobody sees neither takes the keyboard's
+ * focus nor acts; the focused one lets go.
+ */
+export function uiOut(parts) {
+  const live = parts.filter(Boolean),
+    focused = document.activeElement;
+  if (focused && live.some((p) => p.contains(focused))) {
+    asideFocus = focused;
+    focused.blur();
+  }
+  for (const p of live) p.inert = true;
+}
+/**
+ * Bring the screen's parts back: the visual mode closes whichever tab the screen shows by then (a tab changed
+ * meanwhile must not leave its full-screen touch area over the screen), and the control that had the focus gets
+ * it back.
+ * @param {object[]} parts The parts uiOut made inert.
+ * @param {object} [options]
+ * @param {boolean} [options.refocus] False while the screen is being left.
+ * @param {() => (HTMLElement|null)} [options.fallback] Resolves the control's replacement when a fullscreen
+ *     view switch rebuilt the detail controls.
+ */
+export function uiBack(parts, { refocus = true, fallback } = {}) {
+  close();
+  for (const p of parts) if (p) p.inert = false;
+  const back = asideFocus;
+  asideFocus = null;
+  const target = back?.isConnected ? back : back ? fallback?.() : null;
+  if (refocus && target?.isConnected && !target.closest("[inert]")) target.focus({ preventScroll: true });
+}
+
+/**
+ * spine-player's per-frame hook (detail.js passes it as the portrait players' config.frame): sets the view of
+ * this frame before the player frames its camera.
+ * @param {object} player The portrait's spine-player.
+ */
+export function frame(player) {
+  const s = st;
+  if (!s || !player?.currentViewport) return;
+  step(s, performance.now());
+  if (s.finished) return;
+  Object.assign(player.currentViewport, viewport(s.view));
+  syncReset(s);
+}
+
+// advance the glide, or ease the view to its target (several players may call it in one frame)
+function step(s, now) {
+  const dt = s.last == null ? 0 : Math.max(0, Math.min(0.1, (now - s.last) / 1000));
+  s.last = now;
+  const g = s.glide;
+  if (g) {
+    g.t0 ??= now;
+    const t = clamp01((now - g.t0) / g.ms);
+    s.view = mix(g.from, g.to, ease(t));
+    if (t < 1) return;
+    s.glide = null;
+    s.view = g.to;
+    if (g.kind === "close") finish(s);
+    else s.target = g.to;
+    return;
+  }
+  if (s.view === s.target) return;
+  const next = mix(s.view, s.target, 1 - Math.exp(-dt / ZOOM_TAU));
+  s.view =
+    Math.abs(next.k / s.target.k - 1) < 1e-4 &&
+    Math.abs((next.cx - s.target.cx) * next.k) < 0.05 &&
+    Math.abs((next.cy - s.target.cy) * next.k) < 0.05
+      ? s.target
+      : next;
+}
+
+// the setup pose's bounds, for a skeleton without exported ones
+function measure(sk) {
+  if (!sk || (sk.data.width > 0 && sk.data.height > 0) || !globalThis.spine) return null;
+  const off = new spine.Vector2(),
+    size = new spine.Vector2();
+  sk.getBounds(off, size, []);
+  return [off.x, off.y, size.x, size.y];
+}
+
+// --- the prefab's background and buttons ---
+
+async function renderBg(pc, bg) {
+  const node = NGUI.find(pc, "BG");
+  if (!node) return [];
+  const host = document.createElement("div");
+  await NGUI.render(clone(node), host, {
+    scale: S,
+    origin: CENTRE,
+    rootPath: "Inventory_ListControl_PC",
+    textures: bg ? { BG: bg } : undefined,
+  });
+  return [...host.children];
+}
+
+// every white body of a button tree (the prefab's 171 x 116 Common_Bg_Raius5px_Shadow) at the fullscreen views' one
+// button size, about its own centre
+function fullscreenBody(tree) {
+  for (const w of tree.widgets || [])
+    if (w.sprite === "Common_Bg_Raius5px_Shadow")
+      Object.assign(w, { w_: FULLSCREEN_BUTTON.w, h_: FULLSCREEN_BUTTON.h });
+  for (const child of tree.children || []) fullscreenBody(child);
+  return tree;
+}
+
+// one layer per button, so each slides on its own; the corners are anchored to the screen's edges
+async function renderButtons(pc, strings, corners = CORNERS, onPress = press) {
+  const groups = {},
+    made = [];
+  const labels = { Btn_Back: strings.back, Btn_HideUI: strings.switch, Btn_RefreshPos: strings.reset };
+  for (const [corner, names] of corners) {
+    const c = NGUI.find(pc, corner);
+    if (!c) continue;
+    const at = anchoredCentre(c.widgets.find((w) => w.anchors)) || c.pos;
+    for (const name of names) {
+      if (name === "Btn_HideUI" && !strings.switch) continue;
+      const n = NGUI.find(c, name);
+      if (!n) continue;
+      const el = document.createElement("div");
+      el.className = "visual-btn";
+      const tree = NGUI.node(corner, at, [], [fullscreenBody({ ...clone(n), active: true })]);
+      if (name === "Btn_HideUI") {
+        // Student Hall's Flip sprite is 80x80. Fit it into this button's own 79x67 icon slot (67x67 ink).
+        const icon = NGUI.find(tree, `${name}/Icon`).widgets.find((w) => "sprite" in w);
+        Object.assign(icon, { atlas: "Common", sprite: "Common_Icon_Change", type: 0, keepAspect: true });
+      }
+      let hitBox;
+      if (HIT[name]) {
+        const [w, h, dy] = HIT[name],
+          x = CENTRE[0] + (at[0] + n.pos[0]) * S,
+          y = CENTRE[1] - (at[1] + n.pos[1] + dy) * S;
+        hitBox = [x - (w * S) / 2, y - (h * S) / 2, w * S, h * S];
+      }
+      made.push(
+        NGUI.render(tree, el, {
+          scale: S,
+          origin: CENTRE,
+          rootPath: "Inventory_ListControl_PC",
+          texts: { Label_Locale_Reset: "" },
+        }).then((view) => {
+          const path = `Inventory_ListControl_PC/${corner}/${name}${corner === "RightBottom" ? "/Btn_RefreshPos" : ""}`;
+          const body = view.nodes.get(path)?.els[0];
+          if (body)
+            bindCorner(el, NGUI.rect(body), {
+              corner: corner === "LeftTop" ? "top-left" : corner === "RightTop" ? "top-right" : "bottom-right",
+            });
+        }),
+      );
+      if (hitBox) {
+        const hit = hitButton(
+          el,
+          hitBox,
+          (e) => {
+            e.stopPropagation();
+            return onPress(name);
+          },
+          labels[name],
+        );
+        hit.dataset.visualAction = name;
+      }
+      groups[name] = el;
+    }
+  }
+  await Promise.all(made);
+  return groups;
+}
+// a button of the open visual mode
+function press(name) {
+  const s = st;
+  if (!s || s.closing) return;
+  if (name === "Btn_Back") return s.o.onBack();
+  else if (name === "Btn_HideUI") return s.o.onSwitch?.();
+  else if (name === "Btn_RefreshPos") reset(s);
+}
+
+// a button's slide (UIAni_CharacterVisualMode_PC), in or out (the clip backwards)
+function slide(el, keys, out) {
+  const frames = slideFrames(keys).map(({ offset, value }) => ({
+    offset,
+    transform: `translateX(${(value * S).toFixed(2)}px)`,
+  }));
+  el.slideRun?.cancel();
+  el.slideRun = el.animate?.(frames, { duration: SLIDE_S * 1000, fill: "both", direction: out ? "reverse" : "normal" });
+  return el.slideRun;
+}
+
+// the reset button greys out while the whole art is shown
+function syncReset(s) {
+  const on = s.groups.Btn_RefreshPos,
+    offBtn = s.groups.Btn_RefreshPos_Disable;
+  if (!on || !offBtn || s.closing) return;
+  const home = (!s.glide && atHome(s.target, s.home)) || s.glide?.kind === "open";
+  if (home === s.homeShown) return;
+  s.homeShown = home;
+  on.hidden = home;
+  offBtn.hidden = !home;
+}
+
+// back to the whole art; a press or a scroll meanwhile takes over
+function reset(s) {
+  s.glide = { from: s.view, to: s.home, t0: null, ms: RESET_MS, kind: "reset" };
+  s.target = s.home;
+}
+
+// --- input ---
+
+const ready = (s) => s && !s.closing && s.glide?.kind !== "open";
+function stagePoint(s, e) {
+  const r = s.o.host.getBoundingClientRect();
+  return [((e.clientX - r.left) / r.width) * STAGE.width, ((e.clientY - r.top) / r.height) * STAGE.height];
+}
+// a running reset gives way to the user
+function interrupt(s) {
+  if (s.glide?.kind !== "reset") return;
+  s.glide = null;
+  s.target = s.view;
+}
+function pan(s, dx, dy) {
+  interrupt(s);
+  const same = s.view === s.target;
+  s.view = panBy(s.view, dx, dy, s.lim);
+  s.target = same ? s.view : panBy(s.target, dx, dy, s.lim);
+}
+// a wheel or trackpad zoom: the target, eased to
+function zoomTo(s, f, sx, sy) {
+  interrupt(s);
+  s.target = zoomAt(s.target, f, sx, sy, s.lim);
+}
+const notchZoom = (e, unit) => Math.exp(-Math.sign(e.deltaY) * Math.max(Math.abs(e.deltaY * unit), LINE) * WHEEL);
+function pinchOf(s) {
+  if (s.ptrs.size < 2) return null;
+  const [a, b] = s.ptrs.values();
+  return { d: Math.max(1, Math.hypot(a[0] - b[0], a[1] - b[1])), mid: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2] };
+}
+
+function down(e) {
+  const s = st;
+  if (!ready(s) || (e.pointerType === "mouse" && e.button > 2)) return;
+  if (e.button === 1 || e.button === 2) e.preventDefault();
+  interrupt(s);
+  try {
+    s.touch.setPointerCapture?.(e.pointerId);
+  } catch {
+    /* the drag goes on without capture */
+  }
+  s.ptrs.set(e.pointerId, stagePoint(s, e));
+  s.pinch = pinchOf(s);
+  s.touch.classList.add("grabbing");
+}
+function move(e) {
+  const s = st;
+  if (!s || !s.ptrs.has(e.pointerId) || s.closing) return;
+  const p = stagePoint(s, e),
+    was = s.ptrs.get(e.pointerId);
+  s.ptrs.set(e.pointerId, p);
+  if (s.ptrs.size === 1) {
+    pan(s, p[0] - was[0], p[1] - was[1]);
+    return;
+  }
+  // two fingers: the art follows their middle and their spread
+  const g = pinchOf(s);
+  if (s.pinch && g) {
+    const moved = panBy(s.view, g.mid[0] - s.pinch.mid[0], g.mid[1] - s.pinch.mid[1], s.lim);
+    s.view = s.target = zoomAt(moved, g.d / s.pinch.d, g.mid[0], g.mid[1], s.lim);
+  }
+  s.pinch = g;
+}
+function up(e) {
+  const s = st;
+  if (!s || !s.ptrs.delete(e.pointerId)) return;
+  s.pinch = pinchOf(s);
+  if (!s.ptrs.size) s.touch.classList.remove("grabbing");
+}
+// A mouse wheel zooms, a trackpad swipe pans, a pinch zooms; one scroll keeps its kind (lobby-touch.js wheelKind)
+function wheel(e) {
+  const s = st;
+  e.preventDefault();
+  if (!ready(s)) return;
+  const [sx, sy] = stagePoint(s, e),
+    unit = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 800 : 1,
+    now = performance.now();
+  const r = s.o.host.getBoundingClientRect(),
+    k = r.width ? STAGE.width / r.width : 1;
+  const step = wheelStep(e);
+  if (e.ctrlKey) {
+    s.scroll = { kind: null, at: -Infinity };
+    if (now < s.pinchUntil) return; // WebKit's pinch comes as gesture events
+    zoomTo(s, step !== "smooth" ? notchZoom(e, unit) : Math.exp(-e.deltaY * unit * PINCH), sx, sy);
+    return;
+  }
+  const fresh = !(now - s.scroll.at < SCROLL_MS && s.scroll.kind),
+    kind = wheelKind(e, now, s.scroll);
+  if (fresh) {
+    // a scroll that starts like a wheel keeps the view it started from, to go back to if it turns out a trackpad
+    const zooms = kind === "mouse" && !e.deltaMode && Math.abs(e.deltaY) >= Math.abs(e.deltaX);
+    s.scroll = { kind, at: now, from: zooms ? s.target : null };
+  } else {
+    if (s.scroll.kind === "mouse" && kind === "trackpad" && s.scroll.from) s.target = s.scroll.from;
+    if (step === "notch" || kind === "trackpad") s.scroll.from = null;
+    s.scroll.kind = kind;
+    s.scroll.at = now;
+  }
+  if (kind === "mouse" && Math.abs(e.deltaY) >= Math.abs(e.deltaX)) {
+    zoomTo(s, notchZoom(e, unit), sx, sy);
+    return;
+  }
+  pan(s, -e.deltaX * unit * k, kind === "mouse" ? 0 : -e.deltaY * unit * k);
+}
+// Safari and WKWebView trackpad pinch
+function gestureStart(e) {
+  e.preventDefault();
+  if (st) {
+    st.gesture = 1;
+    st.pinchUntil = performance.now() + 300;
+  }
+}
+function gestureChange(e) {
+  e.preventDefault();
+  const s = st;
+  if (!ready(s)) return;
+  s.pinchUntil = performance.now() + 300;
+  const [sx, sy] = stagePoint(s, e);
+  zoomTo(s, e.scale / s.gesture, sx, sy);
+  s.gesture = e.scale;
+}
+function gestureEnd(e) {
+  e.preventDefault();
+  if (st) st.pinchUntil = performance.now() + 300;
+}
+const prevent = (e) => e.preventDefault();
+
+const HANDLERS = [
+  ["pointerdown", down],
+  ["pointermove", move],
+  ["pointerup", up],
+  ["pointercancel", up],
+  ["wheel", wheel, { passive: false }],
+  ["gesturestart", gestureStart],
+  ["gesturechange", gestureChange],
+  ["gestureend", gestureEnd],
+  ["contextmenu", prevent],
+  ["dragstart", prevent],
+];
+
+// Escape leaves, like the game's back key; not when a popup took it or is open over the view (the top layer has it)
+function onKey(e) {
+  if (e.key !== "Escape" || e.defaultPrevented || popupOpen() || !isOpen()) return;
+  e.preventDefault();
+  st.o.onBack();
+}
+
+/** For checks: the view, the home view and the limits. */
+export const state = () =>
+  st
+    ? {
+        view: { ...st.view },
+        target: { ...st.target },
+        home: { ...st.home },
+        kMax: st.lim.kMax,
+        box: [...st.lim.box],
+        glide: st.glide?.kind || null,
+        closing: !!st.closing,
+      }
+    : null;
+
+/**
+ * Photography constrains only the framing guide while the native portrait player stays.
+ * @param {boolean} on Whether photography is on.
+ */
+export function photography(on, frame) {
+  if (!st) return;
+  st.lim.photoFrame = on ? frame : null;
+  st.lim.kMin = on ? portraitMinimum(st.lim.box, st.home.k, frame) : st.home.k;
+  const full = viewport(st.home);
+  st.lim.photoBounds = [
+    Math.min(full.x, st.lim.box[0]),
+    Math.min(full.y, st.lim.box[1]),
+    Math.max(full.x + full.width, st.lim.box[2]),
+    Math.max(full.y + full.height, st.lim.box[3]),
+  ];
+}
+/** Whether the portrait is ready to be captured. */
+export function captureReady() {
+  if (st) {
+    st.glide = null;
+    st.view = st.target = st.home;
+    syncReset(st);
+  }
+}
+/** Pan the portrait by the camera's drag. */
+export function panCapture(dx, dy) {
+  if (ready(st)) pan(st, dx, dy);
+}
+/** Zoom the portrait by the camera's wheel or pinch at a stage point. */
+export function zoomCapture(factor, x, y) {
+  if (ready(st)) zoomTo(st, factor, x, y);
+}

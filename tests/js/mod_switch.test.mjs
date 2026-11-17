@@ -1,4 +1,4 @@
-// Tests for web/js/mod-switch.js (the Enable Mods switch: its view from mods.state, a click, the first toggle's
+// Tests for web/js/mods/mod-switch.js (the Enable Mods switch: its view from mods.state, a click, the first toggle's
 // explanation, the "?" help, the result, the classic modal, the start prompts), with the en-US strings, on a small
 // stand-in DOM. Run by tests/test_mod_switch.py with Node's test runner: node --test tests/js/mod_switch.test.mjs
 import assert from "node:assert/strict";
@@ -442,12 +442,12 @@ const strings = Object.fromEntries(
     flat(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8"))),
   ).filter(([k]) => k.startsWith("webui.")),
 );
-const I18n = await import("../../src/bmpt/web/js/i18n.js");
+const I18n = await import("../../src/bmpt/web/js/core/i18n.js");
 I18n.setStrings("en-US", strings);
 const S = (key) => strings[`webui.${key}`];
 
-const MS = await import("../../src/bmpt/web/js/mod-switch.js");
-const Loading = await import("../../src/bmpt/web/js/loading.js");
+const MS = await import("../../src/bmpt/web/js/mods/mod-switch.js");
+const Loading = await import("../../src/bmpt/web/js/app/loading.js");
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 const actionsIn = (root) => walk(root).filter((e) => e.dataset?.action);
@@ -1007,7 +1007,7 @@ test("state refresh, the first explanation and help never measure logical origin
 });
 
 test("Settings measures built mods only when its Mods row is drawn, and remeasures after cleanup", async () => {
-  const Settings = await import("../../src/bmpt/web/js/settings.js");
+  const Settings = await import("../../src/bmpt/web/js/settings/settings.js");
   answers["settings.get"] = {
     languages: [{ code: "en-US", name: "English" }],
     language: "en-US",
@@ -1070,8 +1070,8 @@ test("Settings measures built mods only when its Mods row is drawn, and remeasur
 });
 
 test("Troubleshoot Mods shows only in pre-release builds, and Apply Official to All confirms, runs and shows the check", async () => {
-  const Settings = await import("../../src/bmpt/web/js/settings.js");
-  const T = await import("../../src/bmpt/web/js/troubleshoot.js");
+  const Settings = await import("../../src/bmpt/web/js/settings/settings.js");
+  const T = await import("../../src/bmpt/web/js/app/troubleshoot.js");
   const button = (name) =>
     walk(settingsHost).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === name);
   const hasText = (text) => walk(settingsHost).some((e) => e.textContent === text);
@@ -1159,8 +1159,8 @@ test("Troubleshoot Mods shows only in pre-release builds, and Apply Official to 
 });
 
 test("the help fits its opening lines together in every locale, with and without action rows", async () => {
-  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
-  const { S: scale } = await import("../../src/bmpt/web/js/util.js");
+  const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
+  const { S: scale } = await import("../../src/bmpt/web/js/core/util.js");
   try {
     for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
       const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
@@ -1210,8 +1210,8 @@ test("the help fits its opening lines together in every locale, with and without
 });
 
 test("Settings combines scan consent and automatic checks, preserving the consent popup from Off", async () => {
-  const Settings = await import("../../src/bmpt/web/js/settings.js");
-  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
+  const Settings = await import("../../src/bmpt/web/js/settings/settings.js");
+  const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
   let prefs = {
     ...answers["settings.get"],
     native: true,
@@ -1299,7 +1299,7 @@ test("Settings combines scan consent and automatic checks, preserving the consen
 });
 
 test("Settings' manual Check asks for missing consent, stops on refusal, and checks after Allow", async () => {
-  const Settings = await import("../../src/bmpt/web/js/settings.js");
+  const Settings = await import("../../src/bmpt/web/js/settings/settings.js");
   const saved = { ...answers };
   let state;
   answers["mods.state"] = () => state;
@@ -1523,7 +1523,7 @@ test("the classic modal queues the refused write only when its box is ticked, on
 
 // --- item 1's prompts (prompts.js) ---
 
-const P = await import("../../src/bmpt/web/js/prompts.js");
+const P = await import("../../src/bmpt/web/js/app/prompts.js");
 const GLOBAL = "/games/BlueArchive",
   JAPAN = "/games/Japan";
 const gameFile = (core, extra = {}) => ({
@@ -1722,7 +1722,7 @@ test("an overwritten entry's message: Add First until its mod is in the library,
 
 test("the tray's first toggle explains once, and the explanation's button submits the tray's toggle", async () => {
   // a page that has not explained anything yet (the explanation is once per place it shows)
-  const Fresh = await import("../../src/bmpt/web/js/mod-switch.js?tray");
+  const Fresh = await import("../../src/bmpt/web/js/mods/mod-switch.js?tray");
   answers["mods.state"] = base({ explained: false, enabled: true });
   answers["mods.toggle"] = "job-tray-1";
   jobs["job-tray-1"] = {
@@ -1739,7 +1739,7 @@ test("the tray's first toggle explains once, and the explanation's button submit
   await tick();
   assert.equal(dialog.hidden, true, "plain confirmations stay silent");
   // closed any other way: shown, and nothing toggled
-  const Other = await import("../../src/bmpt/web/js/mod-switch.js?tray-cancel");
+  const Other = await import("../../src/bmpt/web/js/mods/mod-switch.js?tray-cancel");
   const explained = called("mods.explained").length;
   const cancelled = Other.trayOpen({ view: "explain", enabled: false, expect: true });
   await drawn(dialog, "cancel");
@@ -1846,7 +1846,7 @@ test("the tray's Back to Official opens the drift prompt: two buttons and no way
 });
 
 test('the Game Files row\'s "?": one definition of configuration drift', async () => {
-  const Settings = await import("../../src/bmpt/web/js/settings.js");
+  const Settings = await import("../../src/bmpt/web/js/settings/settings.js");
   try {
     for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
       const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
@@ -1890,7 +1890,7 @@ test("held refusal prompts accept Overwritten, Add First and its result, and sca
   assert.equal(await held, false);
   assert.equal(Loading.held(), false);
 
-  const Consent = await import("../../src/bmpt/web/js/consent.js");
+  const Consent = await import("../../src/bmpt/web/js/app/consent.js");
   held = Loading.hold(() => Consent.scan(consent));
   await drawn(consent, "ok");
   assert.equal(press("Escape", stage).stopped, false);
@@ -2066,7 +2066,7 @@ test("scan, cache cleanup and both switch directions name their action in every 
 });
 
 test("the toggle flushes the event delay and awaits the visible detail or roster redraw", async () => {
-  const main = readFileSync(new URL("../../src/bmpt/web/js/main.js", import.meta.url), "utf8");
+  const main = readFileSync(new URL("../../src/bmpt/web/js/app/main.js", import.meta.url), "utf8");
   const changed = main.slice(main.indexOf("let heldChange,"), main.indexOf("// the window back in front"));
   assert.match(main, /refreshPage: refreshAfterToggle/, "the switch uses the awaited refresh");
   for (const screen of ["detail", "roster"]) {
@@ -2125,7 +2125,7 @@ test("the toggle flushes the event delay and awaits the visible detail or roster
 });
 
 test("main refreshes on external Enable Mods changes and keeps the awaited local toggle refresh", async () => {
-  const main = readFileSync(new URL("../../src/bmpt/web/js/main.js", import.meta.url), "utf8");
+  const main = readFileSync(new URL("../../src/bmpt/web/js/app/main.js", import.meta.url), "utf8");
   const setup = main.slice(main.indexOf('  await timed("mod-state"'), main.indexOf("  Prompts.init("));
   let listener,
     options,
@@ -2176,10 +2176,10 @@ test("the startup update check can be disabled for compiled releases", () => {
 });
 
 test("detail refresh callers await changes queued while an earlier refresh is drawing", async () => {
-  const detail = readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8");
+  const detail = readFileSync(new URL("../../src/bmpt/web/js/detail/detail-changes.js", import.meta.url), "utf8");
   const changed = detail
     .slice(detail.indexOf("let heldChange;"), detail.indexOf("async function reloadChanged()"))
-    .replace("export function", "function");
+    .replace(/^export /gm, "");
   const first = deferred(),
     second = deferred();
   let reads = 0,
@@ -2215,8 +2215,8 @@ test("detail refresh callers await changes queued while an earlier refresh is dr
 });
 
 test("Spine notice is plain before asset consent and enables nothing until its acknowledgement is saved", async () => {
-  const Consent = await import("../../src/bmpt/web/js/consent.js");
-  const Runtime = await import("../../src/bmpt/web/js/spine-runtime.js");
+  const Consent = await import("../../src/bmpt/web/js/app/consent.js");
+  const Runtime = await import("../../src/bmpt/web/js/spine/spine-runtime.js");
   const saved = answers["app.spineConsent"],
     save = deferred();
   Runtime.setSpineConsent(null);
@@ -2254,8 +2254,8 @@ test("Spine notice is plain before asset consent and enables nothing until its a
 });
 
 test("Spine notice has the same title, legal body and lone Confirm in both paths in every locale", async () => {
-  const Consent = await import("../../src/bmpt/web/js/consent.js");
-  const Runtime = await import("../../src/bmpt/web/js/spine-runtime.js");
+  const Consent = await import("../../src/bmpt/web/js/app/consent.js");
+  const Runtime = await import("../../src/bmpt/web/js/spine/spine-runtime.js");
   const saved = answers["app.spineConsent"];
   answers["app.spineConsent"] = ({ granted }) => granted;
   try {
@@ -2300,7 +2300,7 @@ test("Spine notice has the same title, legal body and lone Confirm in both paths
 });
 
 test("startup shows the Spine notice after assets until it is acknowledged, re-renders, and skips an old Yes", async () => {
-  const main = readFileSync(new URL("../../src/bmpt/web/js/main.js", import.meta.url), "utf8");
+  const main = readFileSync(new URL("../../src/bmpt/web/js/app/main.js", import.meta.url), "utf8");
   const source = main.slice(main.indexOf("function startPopups()"), main.indexOf("async function start()"));
   for (const choice of [undefined, null, false, true]) {
     const info = { consent: null, spineConsent: choice },
@@ -2338,7 +2338,7 @@ test("startup shows the Spine notice after assets until it is acknowledged, re-r
       "env",
       `const { ${Object.keys(env).join(", ")} } = env; ${source}; return startPopups();`,
     )(env);
-    await (await import("../../src/bmpt/web/js/popup.js")).sequence(steps);
+    await (await import("../../src/bmpt/web/js/ui/popup.js")).sequence(steps);
     assert.deepEqual(order, ["assets", ...(choice !== true ? ["spine", "route"] : []), "scan", "drift", "untracked"]);
     assert.equal(info.spineConsent, true);
     assert.equal(MS.startDue("spine", { info }), false);
@@ -2346,9 +2346,9 @@ test("startup shows the Spine notice after assets until it is acknowledged, re-r
 });
 
 test("Settings Spine value row opens the same read-only notice in every locale without changing state", async () => {
-  const Consent = await import("../../src/bmpt/web/js/consent.js");
-  const Settings = await import("../../src/bmpt/web/js/settings.js");
-  const Runtime = await import("../../src/bmpt/web/js/spine-runtime.js");
+  const Consent = await import("../../src/bmpt/web/js/app/consent.js");
+  const Settings = await import("../../src/bmpt/web/js/settings/settings.js");
+  const Runtime = await import("../../src/bmpt/web/js/spine/spine-runtime.js");
   const saved = { ...answers },
     S = I18n.T;
   const prefs = {
@@ -2415,7 +2415,7 @@ test("Settings Spine value row opens the same read-only notice in every locale w
 
 // --- the impact of a game update (update-impact.js) and the drift prompt's held cards ---
 
-const Impact = await import("../../src/bmpt/web/js/update-impact.js");
+const Impact = await import("../../src/bmpt/web/js/app/update-impact.js");
 
 test("an update's impact as a list: only the mods to update, each a card with its details; the footer", () => {
   const mods = [
@@ -2894,7 +2894,7 @@ test("the drift prompt asks the impacts of the mods its entries are configured w
   const items = P.heldCards([{ key: "/a|a_spr" }, { key: "/a|b_spr" }, { key: "/b|a_spr", disabled: true }], held);
   assert.equal(items[0].badge.text, "Outdated");
   // the badge keeps its whole word on the generic list's card (250 wide: popup.js listCard, 26 down to 20, 70 kept)
-  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
+  const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
   try {
     for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
       const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
@@ -2902,9 +2902,9 @@ test("the drift prompt asks the impacts of the mods its entries are configured w
       assert.equal(bf.text, ui.mods.heldBadge, `${lang}: whole`);
       assert.ok(NGUI.glyphWidth(bf.text, bf.fs) <= 250 - 70, `${lang}: inside the card`);
       // with the tick box in the corner (the update list): whole, and short of the box on every kind's card
-      const Pop = await import("../../src/bmpt/web/js/popup.js");
-      const { switchGrid } = await import("../../src/bmpt/web/js/switch-layout.js");
-      const { TAN10 } = await import("../../src/bmpt/web/js/util.js");
+      const Pop = await import("../../src/bmpt/web/js/ui/popup.js");
+      const { switchGrid } = await import("../../src/bmpt/web/js/mods/switch-layout.js");
+      const { TAN10 } = await import("../../src/bmpt/web/js/core/util.js");
       for (const kind of [null, "spr", "lobby", "model"]) {
         const card = switchGrid(kind, Pop.listCardBox(Pop.listLayout(false, kind)).w).card;
         const room = Pop.badgeRoom(card);
