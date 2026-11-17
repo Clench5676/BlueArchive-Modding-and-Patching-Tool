@@ -58,11 +58,11 @@ class FakeCatalog:
     def core_map(self, spr_cores, lobby_cores, special_cores=()):
         """Any install's cores by the variants' cores; another core by the plain rule (the core less its suffix)."""
         keys, spr, lobby = {}, {}, {}
-        for core in [*spr_cores, *lobby_cores]:
-            variant = self.variant_for_core(core.lower())
-            key = variant.key if variant else core.lower().removesuffix("_spr").split("_home")[0]
-            keys[core.lower()] = key
-            (spr if core.lower().endswith("_spr") else lobby).setdefault(key, core)
+        for core_name in [*spr_cores, *lobby_cores]:
+            variant = self.variant_for_core(core_name.lower())
+            key = variant.key if variant else core_name.lower().removesuffix("_spr").split("_home")[0]
+            keys[core_name.lower()] = key
+            (spr if core_name.lower().endswith("_spr") else lobby).setdefault(key, core_name)
         return CoreMap(keys, spr, lobby, {})
 
 

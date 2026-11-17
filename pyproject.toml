@@ -80,8 +80,6 @@ select = ["E", "F", "W", "D", "ERA"]
 ignore = [
     "E731",  # a named lambda is fine for a one-line key or callback
     "E741",  # short names such as l stay readable in numeric code
-    # Not yet met by the existing code: remove each line once the code passes the rule.
-    "F402",
 ]
 
 [tool.ruff.lint.per-file-ignores]

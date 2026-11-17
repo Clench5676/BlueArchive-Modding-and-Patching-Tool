@@ -958,14 +958,14 @@ class _View:
         for pin in pins:
             wanted = self.cores(pin)
             if cores is not None:
-                wanted &= {self.maps[pin.key].slot(core) for core in cores}
-            for core in sorted(wanted):
+                wanted &= {self.maps[pin.key].slot(core_name) for core_name in cores}
+            for core_name in sorted(wanted):
                 if background:
                     preview_gate.yield_to_previews(cancel)
                 if cancel and cancel():
                     return out
                 try:
-                    entry = self.entry(pin, core)
+                    entry = self.entry(pin, core_name)
                 except (OSError, _Unread):
                     continue
                 if entry.configured or entry.state != "ok" or entry.overwritten:
@@ -1632,9 +1632,9 @@ class ModLibrary:
                     if new == old or new in configured:
                         continue
                     configured[new] = configured.pop(old)
-                    for field in ("built", "updated"):
-                        if old in folder.get(field, {}):
-                            folder[field][new] = folder[field].pop(old)
+                    for field_name in ("built", "updated"):
+                        if old in folder.get(field_name, {}):
+                            folder[field_name][new] = folder[field_name].pop(old)
                     for marker in folder.get("dismissed", {}).values():
                         if isinstance(marker, dict) and old in marker:
                             marker[new] = marker.pop(old)
@@ -3867,11 +3867,11 @@ class ModLibrary:
                     entry = configured.pop(old)
                     for key in sorted(new):
                         configured.setdefault(key, copy.deepcopy(entry))
-                    for field in ("built", "updated"):
-                        if old in folder.get(field, {}):
-                            value = folder[field].pop(old)
+                    for field_name in ("built", "updated"):
+                        if old in folder.get(field_name, {}):
+                            value = folder[field_name].pop(old)
                             for key in sorted(new):
-                                folder[field].setdefault(key, copy.deepcopy(value))
+                                folder[field_name].setdefault(key, copy.deepcopy(value))
                     for marker in folder.get("dismissed", {}).values():
                         if isinstance(marker, dict) and old in marker:
                             value = marker.pop(old)
@@ -5256,10 +5256,13 @@ class ModLibrary:
         confirmed = self._untested_ok.get((pin.key, version), set())
         index = self._index(pin)
         changed = []
-        for core in sorted({core_of(path.name) for path in targets}):
-            names = [path.name for path in index.get(core) or [path for path in targets if core_of(path.name) == core]]
-            if core not in confirmed and any(not tested.has(name) for name in names):
-                changed.append(core)
+        for core_name in sorted({core_of(path.name) for path in targets}):
+            names = [
+                path.name
+                for path in index.get(core_name) or [path for path in targets if core_of(path.name) == core_name]
+            ]
+            if core_name not in confirmed and any(not tested.has(name) for name in names):
+                changed.append(core_name)
         return changed
 
     def _untested_entry(
@@ -5854,11 +5857,15 @@ class ModLibrary:
         config = self.profiles.read()
         folder = (((config or {}).get("folders") or {}).get(pin.key) or {}).get("configured") or {}
         result = {}
-        for kind, core in (("spr", variant.spr), ("lobby", variant.lobby), ("model", getattr(variant, "model", None))):
-            choice = folder.get(core.lower()) if core else None
+        for kind, core_name in (
+            ("spr", variant.spr),
+            ("lobby", variant.lobby),
+            ("model", getattr(variant, "model", None)),
+        ):
+            choice = folder.get(core_name.lower()) if core_name else None
             if not choice:
                 continue
-            result[kind] = self._selection_of(pin, config, core, choice)
+            result[kind] = self._selection_of(pin, config, core_name, choice)
         from . import lobby_camera
 
         return lobby_camera.overlay_selection(self, variant_key, pin, config, folder, result)
@@ -5919,8 +5926,8 @@ class ModLibrary:
         def change(data):
             choices = (data["folders"].get(pin.key) or {}).get("configured", {})
             changed = False
-            for core in cores:
-                choice = choices.get(core)
+            for core_name in cores:
+                choice = choices.get(core_name)
                 if choice is not None and choice.get("error") != error:
                     if error is None:
                         choice.pop("error", None)
@@ -5954,9 +5961,9 @@ class ModLibrary:
 
     def _modified(self, pin: Pin, view: _View) -> dict[str, str]:
         out: dict[str, str] = {}
-        for core, paths in view.indexes[pin.key].items():
-            variant = self.catalog.variant_for_core(core)
-            if variant is None or (not core.endswith("_spr") and not getattr(variant, "spine_category", None)):
+        for core_name, paths in view.indexes[pin.key].items():
+            variant = self.catalog.variant_for_core(core_name)
+            if variant is None or (not core_name.endswith("_spr") and not getattr(variant, "spine_category", None)):
                 continue
             kind = next((kind for path in paths if (kind := kind_of_file(path.name))), None) or "spr"
             sources = set()
@@ -8715,8 +8722,8 @@ class ModLibrary:
             return build()  # No official baseline to sign; never cache a live fallback as official.
         build_keys.update((target, signature) for target in targets)
         for folder in ((self.profiles.read() or {}).get("folders") or {}).values():
-            for core, key in (folder.get("built") or {}).items():
-                configured = (folder.get("configured") or {}).get(core) or {}
+            for core_name, key in (folder.get("built") or {}).items():
+                configured = (folder.get("configured") or {}).get(core_name) or {}
                 if key.get("build") != signature or key.get("source") != configured.get("source"):
                     continue
                 parts = key.get("parts") or {}
@@ -8964,10 +8971,12 @@ class ModLibrary:
             folder = data["folders"].get(target)
             if not folder:
                 return False
-            for core in list(folder["built"]):
-                if (cores is not None and core not in cores) or (when is not None and not when(folder["built"][core])):
+            for core_name in list(folder["built"]):
+                if (cores is not None and core_name not in cores) or (
+                    when is not None and not when(folder["built"][core_name])
+                ):
                     continue
-                dropped.append(folder["built"].pop(core))
+                dropped.append(folder["built"].pop(core_name))
             return bool(dropped)
 
         self._update_profiles(change, after=lambda data: self._delete_built_files(dropped, data))
@@ -9016,9 +9025,11 @@ class ModLibrary:
         def change(data: dict) -> bool:
             changed = False
             for folder in data["folders"].values():
-                for core in list(folder["built"]):
-                    if any(not part.get("mod_file") for part in (folder["built"][core].get("parts") or {}).values()):
-                        del folder["built"][core]
+                for core_name in list(folder["built"]):
+                    if any(
+                        not part.get("mod_file") for part in (folder["built"][core_name].get("parts") or {}).values()
+                    ):
+                        del folder["built"][core_name]
                         changed = True
             return changed
 
@@ -9110,27 +9121,27 @@ class ModLibrary:
                     return False
                 folder = self._new_folder(data, pin, named)
             changed = False
-            for kind, core in kinds.items():
-                if core.startswith("other:"):
+            for kind, core_name in kinds.items():
+                if core_name.startswith("other:"):
                     kind = "other"
-                current = folder["configured"].get(core)
+                current = folder["configured"].get(core_name)
                 if source is None:
                     if current is None:
                         continue
-                    del folder["configured"][core]
+                    del folder["configured"][core_name]
                 elif current and current.get("source") == source:
                     continue
                 else:
-                    folder["configured"][core] = {
+                    folder["configured"][core_name] = {
                         "variant": variant_key,
                         "kind": kind,
                         "source": source,
                         "since": stamp,
                     }
                 changed = True
-                folder["updated"].pop(core, None)
-                if core in folder["built"]:
-                    dropped_keys.append(folder["built"].pop(core))
+                folder["updated"].pop(core_name, None)
+                if core_name in folder["built"]:
+                    dropped_keys.append(folder["built"].pop(core_name))
             return changed
 
         if dropped is not None:
@@ -9169,12 +9180,12 @@ class ModLibrary:
             folder = data["folders"].get(pin.key)
             if folder is None:
                 return False
-            for core, parts in saved.items():
+            for core_name, parts in saved.items():
                 for part, value in parts.items():
                     if value is None:
-                        folder.setdefault(part, {}).pop(core, None)
+                        folder.setdefault(part, {}).pop(core_name, None)
                     else:
-                        folder.setdefault(part, {})[core] = copy.deepcopy(value)
+                        folder.setdefault(part, {})[core_name] = copy.deepcopy(value)
             return True
 
         self._update_profiles(change)
@@ -9824,8 +9835,8 @@ class ModLibrary:
             add(entry.pin, entry.core)
         for pin in pins:
             folder = folders.get(pin.key) or {}
-            for core in sorted(folder.get("configured") or {}):
-                add(pin, core)
+            for core_name in sorted(folder.get("configured") or {}):
+                add(pin, core_name)
             for name, record in sorted(self._applied.items()):
                 path = Path(name)
                 if path.parent in pin.dirs and (not enabled or record.get("removed")):
@@ -10118,10 +10129,12 @@ class ModLibrary:
         """
         writes = []
         untested = {key: self.untested_version(pin) for key, pin in {pin.key: pin for pin, _core in plan}.items()}
-        for pin, core in plan:
+        for pin, core_name in plan:
             if untested[pin.key] is None:
                 continue
-            entry = ((((config or {}).get("folders") or {}).get(pin.key) or {}).get("configured") or {}).get(core) or {}
+            entry = ((((config or {}).get("folders") or {}).get(pin.key) or {}).get("configured") or {}).get(
+                core_name
+            ) or {}
             source = entry.get("source")
             if (
                 not isinstance(source, str)
@@ -10130,10 +10143,14 @@ class ModLibrary:
                 or (not drift and self._hold(pin, source))
             ):
                 continue
-            targets = self._spine_parts(self._core_map(pin).slot(core), pin)
+            targets = self._spine_parts(self._core_map(pin).slot(core_name), pin)
             if targets:
                 writes.append(
-                    (pin, self._untested_entry(pin, core, targets, entry.get("variant"), entry.get("kind")), targets)
+                    (
+                        pin,
+                        self._untested_entry(pin, core_name, targets, entry.get("variant"), entry.get("kind")),
+                        targets,
+                    )
                 )
         self._check_untested(writes)
 
@@ -10174,8 +10191,8 @@ class ModLibrary:
                     if not part.official and entry.copies.get(str(part.path)) in ("backup", "elsewhere")
                 )
         folders = (config or {}).get("folders") or {}
-        for pin, core in plan:
-            configured = ((folders.get(pin.key) or {}).get("configured") or {}).get(core)
+        for pin, core_name in plan:
+            configured = ((folders.get(pin.key) or {}).get("configured") or {}).get(core_name)
             source = (configured or {}).get("source")
             if not source:
                 continue
@@ -10183,7 +10200,7 @@ class ModLibrary:
             if source.startswith("mod:") and source[4:] in self._records:
                 with contextlib.suppress(OSError):
                     mod_sha1s = {self._hashes.get(path).sha1 for path in self._paths(self._records[source[4:]])}
-            for path in self._spine_parts(core, pin):
+            for path in self._spine_parts(core_name, pin):
                 record = self._applied.get(str(path.resolve()))
                 if not record or record.get("source") != source or record.get("official") is True:
                     continue
@@ -12278,14 +12295,16 @@ class ModLibrary:
         def change(data: dict) -> bool:
             changed = False
             for folder in data["folders"].values():
-                for core in [core for core, key in folder["built"].items() if key.get("source") == source]:
-                    dropped.append(folder["built"].pop(core))
+                for core_name in [
+                    core_name for core_name, key in folder["built"].items() if key.get("source") == source
+                ]:
+                    dropped.append(folder["built"].pop(core_name))
                     changed = True
-                for core, entry in folder["configured"].items():
+                for core_name, entry in folder["configured"].items():
                     if entry.get("source") == source:
-                        folder["updated"][core] = stamp
+                        folder["updated"][core_name] = stamp
                         if isinstance(folder["dismissed"].get("drift"), dict):
-                            folder["dismissed"]["drift"].pop(core, None)
+                            folder["dismissed"]["drift"].pop(core_name, None)
                         changed = True
             return changed
 
@@ -12459,14 +12478,16 @@ def _drop_source(data: dict, source: str, keys: list[dict]) -> list[tuple[str, s
     """
     dropped = []
     for key, folder in data["folders"].items():
-        for core in [core for core, entry in folder["configured"].items() if entry.get("source") == source]:
-            del folder["configured"][core]
-            folder["updated"].pop(core, None)
-            dropped.append((key, core))
-        for core in [core for core, entry in folder["built"].items() if entry.get("source") == source]:
-            keys.append(folder["built"].pop(core))
-            if (key, core) not in dropped:
-                dropped.append((key, core))
+        for core_name in [
+            core_name for core_name, entry in folder["configured"].items() if entry.get("source") == source
+        ]:
+            del folder["configured"][core_name]
+            folder["updated"].pop(core_name, None)
+            dropped.append((key, core_name))
+        for core_name in [core_name for core_name, entry in folder["built"].items() if entry.get("source") == source]:
+            keys.append(folder["built"].pop(core_name))
+            if (key, core_name) not in dropped:
+                dropped.append((key, core_name))
     return dropped
 
 
@@ -12489,8 +12510,8 @@ class _ChoiceChange:
         self.dropped: list[dict] = []
 
     def configure(self, kinds: dict[str, str]) -> None:
-        for core, parts in self.library._saved_choices(self.pin, kinds).items():
-            self.saved.setdefault(core, parts)
+        for core_name, parts in self.library._saved_choices(self.pin, kinds).items():
+            self.saved.setdefault(core_name, parts)
         self.library._configure(self.pin, self.variant_key, kinds, self.source, dropped=self.dropped)
 
     def refused(self, error: BaseException) -> bool:

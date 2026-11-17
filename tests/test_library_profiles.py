@@ -1128,10 +1128,12 @@ def test_an_on_cut_short_is_pending_never_drift(world, monkeypatch):
     world.consent = True
     cores = ["test_spr", "other_spr", "third_spr"]
     world.catalog.variants["third"] = FakeVariant("third", "third_spr", family="third")
-    files = {core: world.spr if core == "test_spr" else game_bundle(world.game, core) for core in cores}
-    mods = {core: world.add(files[core], fixed=True, where=core) for core in cores}
-    for core in cores:
-        world.library.apply(core.removesuffix("_spr"), f"mod:{mods[core].id}")
+    files = {
+        core_name: world.spr if core_name == "test_spr" else game_bundle(world.game, core_name) for core_name in cores
+    }
+    mods = {core_name: world.add(files[core_name], fixed=True, where=core_name) for core_name in cores}
+    for core_name in cores:
+        world.library.apply(core_name.removesuffix("_spr"), f"mod:{mods[core_name].id}")
     world.toggle(False)
     calls = []
     real = service.ModLibrary._switch
@@ -1147,10 +1149,12 @@ def test_an_on_cut_short_is_pending_never_drift(world, monkeypatch):
         world.toggle(True)
     monkeypatch.undo()
     monkeypatch.setattr(safety, "check_game_not_running", lambda: None)
-    states = {core: world.entries()[(world.key(), core)].state for core in cores}
+    states = {core_name: world.entries()[(world.key(), core_name)].state for core_name in cores}
     assert sorted(states.values()) == ["ok", "pending", "pending"]
     listed = {(item["core"], item["why"]) for item in world.unfinished()}
-    assert {core for core, state in states.items() if state == "pending"} <= {core for core, _ in listed}
+    assert {core_name for core_name, state in states.items() if state == "pending"} <= {
+        core_name for core_name, _ in listed
+    }
     assert world.library.intent()["enabled"] is True
 
 
@@ -1159,8 +1163,8 @@ def test_an_on_cut_short_is_pending_never_drift(world, monkeypatch):
 
 def japan(world: World, *cores: str) -> Path:
     folder = world.tmp / "japan"
-    for core in cores or ("test_spr",):
-        game_bundle(folder, core)
+    for core_name in cores or ("test_spr",):
+        game_bundle(folder, core_name)
     world.settings.set("game_resource_dir_japan", str(folder))
     return folder
 
@@ -1241,9 +1245,9 @@ def three_mods(world: World) -> dict:
         "other_spr": game_bundle(world.game, "other_spr"),
         "third_spr": game_bundle(world.game, "third_spr"),
     }
-    for core, path in files.items():
-        mod = world.add(path, fixed=True, where=core)
-        world.library.apply(core.removesuffix("_spr"), f"mod:{mod.id}")
+    for core_name, path in files.items():
+        mod = world.add(path, fixed=True, where=core_name)
+        world.library.apply(core_name.removesuffix("_spr"), f"mod:{mod.id}")
     return files
 
 
