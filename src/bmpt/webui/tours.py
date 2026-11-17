@@ -6,7 +6,7 @@ import re
 from typing import Any
 
 from ..core.errors import ServiceError
-from ..updater import parse_version, prerelease_previews
+from ..host.updater import parse_version, prerelease_previews
 from .state import UiState
 from .strings import ui_strings
 

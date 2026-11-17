@@ -353,7 +353,7 @@ def lobby_sources(real_game):
 @pytest.fixture
 def camera_env(tmp_path, monkeypatch, lobby_sources):
     from types import SimpleNamespace
-    from bmpt.config import Settings
+    from bmpt.host.config import Settings
     from bmpt.gameassets import AssetCache, GameAssets
     from bmpt.library import ModLibrary, safety, storage
     from test_library import FakeCatalog, FakeVariant
@@ -463,7 +463,7 @@ def test_camera_choice_applies_switches_and_restores(camera_env):
 
 @pytest.mark.skipif(not GAME_DIR.is_dir(), reason="No local game install")
 def test_camera_serves_the_effect_textures_of_the_lobby_it_frames(camera_env, tmp_path, monkeypatch):
-    from bmpt.config import Settings
+    from bmpt.host.config import Settings
     from bmpt.gameassets import AssetNotFound
     from bmpt.webui.services import Services
     from bmpt.webui.state import UiState
@@ -511,7 +511,7 @@ def test_camera_serves_the_effect_textures_of_the_lobby_it_frames(camera_env, tm
 def test_camera_still_is_framed_by_its_camera(camera_env, tmp_path):
     import json
 
-    from bmpt.config import Settings
+    from bmpt.host.config import Settings
     from bmpt.webui.services import Services
     from bmpt.webui.state import UiState
 

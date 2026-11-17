@@ -662,7 +662,7 @@ def test_official_metadata_detection_on_copies_only(tmp_path):
 
 
 def test_ios_target_folder_is_found_by_settings_resource_search(tmp_path):
-    from bmpt.config import Settings
+    from bmpt.host.config import Settings
     from ba_modding_toolkit.searching import get_search_dirs
 
     folder = tmp_path / "Resource"

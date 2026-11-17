@@ -12,7 +12,7 @@ from types import SimpleNamespace
 import pytest
 from PIL import Image
 
-from bmpt.config import Settings
+from bmpt.host.config import Settings
 from bmpt.core.errors import ServiceError
 from bmpt.gameassets import AssetCache, GameAssets
 from bmpt.gameassets.unity import open_bundle, find_object

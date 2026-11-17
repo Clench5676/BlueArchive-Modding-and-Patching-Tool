@@ -181,7 +181,7 @@ def test_apply_and_restore_use_selected_install_and_preserve_other_choices(setup
 
 
 def test_switch_rebuilds_game_library_catalog_and_cab_index(tmp_path, monkeypatch):
-    from bmpt.config import Settings
+    from bmpt.host.config import Settings
     from bmpt.webui.services import Services
     from bmpt.webui.api import build_api
     from bmpt.webui.server import WebApp
@@ -238,7 +238,7 @@ def test_switch_rebuilds_game_library_catalog_and_cab_index(tmp_path, monkeypatc
 
 
 def test_steam_going_idle_rebuilds_the_game_services_only_after_a_version_change(tmp_path, monkeypatch):
-    from bmpt.config import Settings
+    from bmpt.host.config import Settings
     from bmpt.webui.services import Services
     from test_cab_discovery import bundle
 

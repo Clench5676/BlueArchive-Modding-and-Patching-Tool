@@ -250,7 +250,7 @@ def test_official_cycling_identity_roundtrip(cycling_official, tmp_path):
 @pytest.mark.parametrize("scale", [1, 2])
 def test_official_cycling_mod_is_accepted_and_identified_by_app_import(cycling_official, tmp_path, scale):
     from bmpt.catalog import Catalog
-    from bmpt.config import Settings
+    from bmpt.host.config import Settings
     from bmpt.gameassets import AssetCache, GameAssets
     from bmpt.library import ModLibrary
 

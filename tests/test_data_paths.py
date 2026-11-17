@@ -12,10 +12,10 @@ import pytest
 import toml
 
 from ba_modding_toolkit.utils import paths as utils_paths
-from bmpt import config, data_paths
+from bmpt.host import config, data_paths
 from bmpt.core import devmode, filelock
 from ba_modding_toolkit import utils
-from bmpt.data_paths import APP_DIR_NAME, OLD_APP_DIR_NAME, migrate_data_dir
+from bmpt.host.data_paths import APP_DIR_NAME, OLD_APP_DIR_NAME, migrate_data_dir
 from bmpt.webui.instance import InstanceLock
 
 

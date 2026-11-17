@@ -72,7 +72,7 @@ def test_introspection_reads_official_samples_without_writing(sample_case):
 def test_cab_scan_caches_and_invalidates_changed_bundle(tmp_path, monkeypatch):
     bundle = tmp_path / "sample.bundle"
     names = unityfs(bundle)
-    from bmpt import config
+    from bmpt.host import config
     from ba_modding_toolkit import utils
 
     monkeypatch.setattr(utils, "EXE_DIR", tmp_path / "data")

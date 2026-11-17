@@ -197,7 +197,7 @@ class ConfigManager:
             with open(self.config_file, 'r', encoding='utf-8') as f:
                 data = toml.load(f)
 
-            from bmpt.config import migrate_game_directories
+            from bmpt.host.config import migrate_game_directories
 
             data["Directories"] = migrate_game_directories(data.get("Directories", {}), get_BA_path)
             

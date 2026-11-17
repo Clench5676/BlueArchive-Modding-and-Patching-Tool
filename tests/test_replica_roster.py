@@ -232,7 +232,7 @@ def chosen_cores(library, catalog, pin) -> list[str]:
 @pytest.fixture(scope="module")
 def roster(tmp_path_factory):
     from bmpt.catalog import Catalog
-    from bmpt.config import Settings
+    from bmpt.host.config import Settings
     from bmpt.gameassets import AssetCache, GameAssets
     from bmpt.gameassets.cabs import CabIndex
     from bmpt.library import ModLibrary, integrity

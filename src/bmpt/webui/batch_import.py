@@ -27,7 +27,7 @@ from bmpt.engine import (
     parse_hex_bytes,
     t,
 )
-from ..config import install_needs_crc
+from ..host.config import install_needs_crc
 from ..core.errors import ServiceError
 from ..gameassets.spine import PREVIEW_TYPES, Composition, spine_revision
 from ..gameassets.discovery import cab_names

@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 from typing import Callable, Iterable, Iterator, Literal
 
-from .core import devmode
+from ..core import devmode
 
 logger = logging.getLogger(__name__)
 

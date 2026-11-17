@@ -28,7 +28,8 @@ from typing import TYPE_CHECKING, Any, Callable, Collection, Hashable, Iterable,
 
 from UnityPy.helpers.ResourceReader import get_resource_data
 
-from bmpt import atlas_remap, game_paths, graft as grafting, mod_origin, rebake, spine_converter, steam_records
+from bmpt import atlas_remap, graft as grafting, mod_origin, rebake, spine_converter
+from bmpt.host import game_paths, steam_records
 from bmpt.core import devmode, preview_gate, spans
 from bmpt.core.progress_meter import Meter
 from bmpt.engine import (
@@ -124,7 +125,7 @@ from .variants import adapt_variant_sources
 
 if TYPE_CHECKING:
     from ..catalog import Catalog
-    from ..config import Settings
+    from ..host.config import Settings
     from ..gameassets import GameAssets
 
 logger = logging.getLogger(__name__)
@@ -157,7 +158,7 @@ LATER = (*STOPPING, "busy", "entry_changed", "library_state_unreadable", "librar
 
 def _app_version() -> str:
     """This build's version (``updater.current_version``)."""
-    from ..updater import current_version
+    from ..host.updater import current_version
 
     return current_version()
 

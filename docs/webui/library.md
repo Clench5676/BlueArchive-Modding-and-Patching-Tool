@@ -138,9 +138,9 @@ saved; bundle copies run outside that lock and are checked again under it. Setti
 clear it; sizes are measured on demand.
 
 **What reads Steam's records.** The scan consent covers Steam's records on this device: Detect, the game watch's
-Steam poll, and Steam's file list of the installed build (`steam_records.py`: the depot manifest's size and SHA-1 per
-file). With it, a bundle that list names is official by its size and SHA-1; without it, the CRC rule stays. The
-write-time Steam-busy check needs no consent.
+Steam poll, and Steam's file list of the installed build (`host/steam_records.py`: the depot manifest's size and
+SHA-1 per file). With it, a bundle that list names is official by its size and SHA-1; without it, the CRC rule stays.
+The write-time Steam-busy check needs no consent.
 
 **What reads game files.** The scan consent (`scan_allowed`, asked at each use) covers every read the app makes on
 its own of files the library did not write: the scan (headers and last bytes, never a whole file), an Off's own pass,

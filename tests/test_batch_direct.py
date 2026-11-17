@@ -285,7 +285,7 @@ def verified_model(tmp_path, monkeypatch):
     if not value:
         pytest.skip("Set BAMT_TEST_GAME_DIR to an isolated verified official view")
     from bmpt.catalog import Catalog
-    from bmpt.config import Settings
+    from bmpt.host.config import Settings
     from bmpt.library import ModLibrary, safety
     from ba_modding_toolkit.searching import get_search_dirs
     from bmpt.webui.api import build_api

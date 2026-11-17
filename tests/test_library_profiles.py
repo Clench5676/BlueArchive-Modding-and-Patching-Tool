@@ -18,7 +18,7 @@ import pytest
 from ba_modding_toolkit import core
 from ba_modding_toolkit.core import mod_install
 from ba_modding_toolkit.bundle import Bundle
-from bmpt.config import Settings
+from bmpt.host.config import Settings
 from bmpt.core.errors import ServiceError
 from ba_modding_toolkit.i18n import I18n
 from bmpt.library import ModLibrary, safety, service, storage

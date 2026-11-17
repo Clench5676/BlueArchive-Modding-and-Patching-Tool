@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from bmpt import game_paths
-from bmpt.game_paths import (
+from bmpt.host import game_paths
+from bmpt.host.game_paths import (
     STEAM_APP_ID,
     reg_value,
     steam_app_dirs,

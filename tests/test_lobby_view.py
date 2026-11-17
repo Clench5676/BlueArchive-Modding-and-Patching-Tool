@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from bmpt.config import Settings
+from bmpt.host.config import Settings
 from bmpt.webui.api import TRACE_BATCH, TRACE_LINE, build_api, ui_strings
 from bmpt.webui.main import _trace_to_file
 from bmpt.webui.server import WebApp

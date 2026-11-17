@@ -14,8 +14,8 @@ from types import SimpleNamespace
 import pytest
 
 from ba_modding_toolkit.bundle import Bundle
-from bmpt.config import Settings
-from bmpt.data_paths import APP_DIR_NAME, OLD_APP_DIR_NAME, migrate_data_dir
+from bmpt.host.config import Settings
+from bmpt.host.data_paths import APP_DIR_NAME, OLD_APP_DIR_NAME, migrate_data_dir
 from bmpt.core.errors import ServiceError
 from ba_modding_toolkit.i18n import t
 from bmpt.gui import control as ctl

@@ -36,7 +36,7 @@ from bmpt.engine import (
     utils,
 )
 from .data_paths import APP_DIR_NAME, OLD_APP_DIR_NAME, default_cache_dir, migrate_cache_dir
-from .core.logging_utils import log_failure
+from ..core.logging_utils import log_failure
 
 CONFIG_FILE = EXE_DIR / "config.toml"
 
@@ -184,7 +184,7 @@ def migrate_game_directories(directories: dict, detect: Callable[[str], str | No
         or not devmode.allows_read(legacy)
     ):
         return directories
-    from .library.judge import install_root
+    from ..library.judge import install_root
 
     try:
         root = install_root(Path(legacy).expanduser())

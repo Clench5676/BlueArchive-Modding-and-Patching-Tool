@@ -21,8 +21,8 @@ from typing import Any
 
 import toml
 
-from .core import devmode
-from .core.filelock import file_lock
+from ..core import devmode
+from ..core.filelock import file_lock
 
 APP_DIR_NAME = "bluearchive-modding-patching-tool"
 OLD_APP_DIR_NAME = "BA-Modding-Toolkit"
@@ -82,7 +82,7 @@ def _legacy_in_use(folder: Path) -> Iterator[bool]:
             except OSError:
                 yield True
                 return
-        from .webui.classic import SYSTEM_PROCESSES, read_classic_json
+        from ..webui.classic import SYSTEM_PROCESSES, read_classic_json
 
         found = read_classic_json(folder)
         proc = found[1] if found else None

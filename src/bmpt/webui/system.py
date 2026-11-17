@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from ..core.errors import ServiceError
-from .. import updater
+from ..host import updater
 from ..core import devmode
 from ..engine import ENGINE_PACKAGE
 

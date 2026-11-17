@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote
 
-from .. import steam_records, updater
+from ..host import steam_records, updater
 from ..core import devmode, spans
 from ..core.error_codes import code_of
 from bmpt.engine import UI_LANGUAGES, i18n_manager

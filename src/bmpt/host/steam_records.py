@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Iterator
 
 from . import game_paths
-from .core import devmode
+from ..core import devmode
 
 logger = logging.getLogger(__name__)
 

@@ -124,7 +124,7 @@ GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-
 
 @pytest.mark.skipif(not GAME_DIR.is_dir(), reason="Set BAMT_TEST_GAME_DIR to a verified official view")
 def test_every_official_memorial_lobby_prefab_gets_its_own_slot(tmp_path):
-    from bmpt.config import Settings
+    from bmpt.host.config import Settings
     from test_library import FakeCatalog, FakeVariant
 
     settings = Settings(tmp_path / "config.toml")

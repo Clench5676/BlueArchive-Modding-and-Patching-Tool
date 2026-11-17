@@ -28,7 +28,7 @@ from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from typing import Iterator
 
-from .. import game_paths
+from ..host import game_paths
 from ..core import devmode
 from ..core.errors import ServiceError
 from ..core.filelock import IN_USE_WAIT

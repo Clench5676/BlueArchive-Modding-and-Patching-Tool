@@ -424,7 +424,7 @@ def export_zip(
         }
         live = {path.name: path for group in library._index(pin).values() for path in group} if pin else {}
         release = ba_mod.release_of(list(pin.dirs), server, platform) if pin else {}
-        from ..updater import current_version
+        from ..host.updater import current_version
 
         created_by = {"tool": "BMPT", "version": current_version()}
         try:

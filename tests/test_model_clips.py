@@ -13,7 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from bmpt.config import Settings
+from bmpt.host.config import Settings
 from bmpt.gameassets import AssetCache, AssetNotFound, GameAssets
 from bmpt.gameassets import model
 from bmpt.webui.services import Services

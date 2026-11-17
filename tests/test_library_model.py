@@ -35,7 +35,7 @@ def model_bundle(folder, core="hoshino_original", *, prefab=False, **kwargs):
 
 @pytest.mark.skipif(not GAME_DIR.is_dir(), reason="Set BAMT_TEST_GAME_DIR to a verified official view")
 def test_official_model_slot_ownership(tmp_path, record_property):
-    from bmpt.config import Settings
+    from bmpt.host.config import Settings
     from bmpt.gameassets import AssetCache, GameAssets
     from bmpt.library.judge import core_of
     from ba_modding_toolkit.searching import get_search_dirs
@@ -81,7 +81,7 @@ def test_official_split_model_dependency_mod_on_clones(tmp_path, batch, complete
     import hashlib
     import json
     import subprocess
-    from bmpt.config import Settings
+    from bmpt.host.config import Settings
     from bmpt.gameassets import AssetCache, GameAssets
     from bmpt.gameassets.cabs import CabIndex
     from bmpt.library.integrity import Inspection
@@ -1046,7 +1046,7 @@ def test_official_roster_partial_and_complete_mod_preflight(tmp_path, monkeypatc
     """
     import time
     from functools import cache
-    from bmpt.config import Settings
+    from bmpt.host.config import Settings
     from bmpt.gameassets import AssetCache, GameAssets
     from bmpt.library import integrity
     from bmpt.library.storage import atomic_clone

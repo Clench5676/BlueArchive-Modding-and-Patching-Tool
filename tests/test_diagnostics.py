@@ -425,7 +425,7 @@ def test_pywebview_failure_is_caught_by_startup_wrapper(reports, monkeypatch):
 
 
 def test_safe_mode_disables_assets_and_maintenance_without_changing_consent(tmp_path, monkeypatch):
-    from bmpt.config import Settings
+    from bmpt.host.config import Settings
     from bmpt.webui.services import Services
     from bmpt.webui.state import UiState
     from bmpt.core.errors import ServiceError
@@ -576,7 +576,7 @@ def test_log_header_redacts_home(reports):
 
 
 def test_build_propagates_safe_mode_and_html_does_not_wait_for_game_cache(tmp_path, monkeypatch):
-    from bmpt.config import Settings
+    from bmpt.host.config import Settings
     from bmpt.webui.services import Services
 
     s = Services(Settings(tmp_path / "config.toml"), tmp_path, safe_mode=True)
@@ -1029,7 +1029,7 @@ def steam_reports(reports):
     s.state.diagnostic_state = lambda: {"consent": {"uiAssets": True, "spine": False, "scan": True}, "libraryDir": None}
     s.installs = []
     s.snapshot = SimpleNamespace(status=lambda: {"installs": s.installs})
-    from bmpt import steam_records
+    from bmpt.host import steam_records
 
     s.steam_files = steam_records.OfficialFiles()
     return reports

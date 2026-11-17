@@ -13,7 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from bmpt.config import Settings
+from bmpt.host.config import Settings
 from bmpt.core.errors import ServiceError
 from ba_modding_toolkit.i18n import I18n, offered_languages
 from bmpt.webui.api import build_api, ui_strings
@@ -1542,7 +1542,7 @@ def test_install_update_needs_the_window_and_the_verified_download(app, services
 
 @pytest.fixture
 def update_env(services, tmp_path, monkeypatch):
-    from bmpt import updater
+    from bmpt.host import updater
 
     info = updater.UpdateInfo(
         "1.1.0",
@@ -1672,7 +1672,7 @@ def test_update_rpc_rechecks_the_cache_when_queued_downloads_run(app, services, 
 
 
 def test_update_rpc_does_not_cache_a_failed_download_and_can_retry(app, services, update_env, monkeypatch):
-    from bmpt import updater
+    from bmpt.host import updater
 
     rpc(app, "app.checkUpdate")
     download = updater.download
@@ -1694,7 +1694,7 @@ def test_update_rpc_does_not_cache_a_failed_download_and_can_retry(app, services
 
 @pytest.mark.parametrize("code", ["classic_open", "busy", "update_unavailable", "update_unsupported"])
 def test_install_update_refusals_keep_the_download_for_retry(app, services, update_env, monkeypatch, code):
-    from bmpt import updater
+    from bmpt.host import updater
 
     rpc(app, "app.checkUpdate")
     file = download_update(app, services)
@@ -1734,7 +1734,7 @@ def test_install_update_refusals_keep_the_download_for_retry(app, services, upda
 def test_install_update_reserves_admission_until_native_closed_and_starts_only_one_helper(
     app, services, update_env, monkeypatch, closing_event
 ):
-    from bmpt import updater
+    from bmpt.host import updater
 
     rpc(app, "app.checkUpdate")
     file = download_update(app, services)
@@ -2107,7 +2107,7 @@ def test_a_repaired_id_reaches_the_web_ui_only_while_its_copy_exists_or_is_held(
 
 
 def test_release_page_snapshot_survives_another_check(app, services, update_env, monkeypatch):
-    from bmpt import updater
+    from bmpt.host import updater
 
     opened = []
     monkeypatch.setattr("bmpt.webui.api.webbrowser.open", opened.append)

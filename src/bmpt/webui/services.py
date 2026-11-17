@@ -17,10 +17,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping, Callable
 
-from .. import steam_records, updater
+from ..host import steam_records, updater
 from ..core import devmode, preview_gate, spans
-from ..config import APP_DIR_NAME, Settings, managed_cache_dir
-from ..data_paths import OLD_APP_DIR_NAME
+from ..host.config import APP_DIR_NAME, Settings, managed_cache_dir
+from ..host.data_paths import OLD_APP_DIR_NAME
 from ..globallines import GlobalLines
 from ..kivo import Kivo
 from ..core.errors import ServiceError
@@ -1708,7 +1708,7 @@ class Services:
             if self._startup_ready or self.safe_mode:
                 return
             self._startup_ready = True
-        from ..updater import finalize_windows_update
+        from ..host.updater import finalize_windows_update
 
         finalize_windows_update()
         threading.Thread(target=self._warm, name="bamt-library", daemon=True).start()

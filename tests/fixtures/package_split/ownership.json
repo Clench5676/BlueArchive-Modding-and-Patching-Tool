@@ -371,7 +371,7 @@
       "file": "src/ba_modding_toolkit/gui/configs.py",
       "line": 200,
       "original": "from ..config import migrate_game_directories",
-      "import": "from bmpt.config import migrate_game_directories"
+      "import": "from bmpt.host.config import migrate_game_directories"
     },
     {
       "file": "src/ba_modding_toolkit/gui/main.py",
@@ -407,7 +407,7 @@
       "file": "src/ba_modding_toolkit/gui/windows/settings.py",
       "line": 17,
       "original": "from ...game_paths import GameRegion, find_game_dirs",
-      "import": "from bmpt.game_paths import GameRegion, find_game_dirs"
+      "import": "from bmpt.host.game_paths import GameRegion, find_game_dirs"
     },
     {
       "file": "src/ba_modding_toolkit/searching.py",
@@ -425,7 +425,7 @@
       "file": "src/ba_modding_toolkit/searching.py",
       "line": 304,
       "original": "from . import config, devmode",
-      "import": "from bmpt import config"
+      "import": "from bmpt.host import config"
     },
     {
       "file": "src/ba_modding_toolkit/searching.py",
@@ -473,13 +473,13 @@
       "file": "src/ba_modding_toolkit/utils/paths.py",
       "line": 7,
       "original": "from ..data_paths import migrate_data_dir",
-      "import": "from bmpt.data_paths import migrate_data_dir"
+      "import": "from bmpt.host.data_paths import migrate_data_dir"
     },
     {
       "file": "src/ba_modding_toolkit/utils/paths.py",
       "line": 8,
       "original": "from ..game_paths import find_game_dirs",
-      "import": "from bmpt.game_paths import find_game_dirs"
+      "import": "from bmpt.host.game_paths import find_game_dirs"
     }
   ]
 }

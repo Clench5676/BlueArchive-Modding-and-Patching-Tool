@@ -29,9 +29,9 @@ the scales in `ui-tokens.js`, the layout primitives in `ui-grid.js`).
   when the installation has no corresponding original resource; application remains unavailable in that case.
 - Nav entries without a web screen yet open the classic Tk GUI on that tab (`bamt --tab <name>`).
 - `bamt` (and the compiled app) starts the web UI; `bamt --classic` starts the classic Tk GUI.
-- Released builds look for a newer GitHub release at start and can update themselves (`updater.py`). The offer is
-  the newest release above the running version that has this platform's build and its checksum; when none has them,
-  it is the newest release, without an install button. The unset-preference default is on; an explicitly saved
+- Released builds look for a newer GitHub release at start and can update themselves (`host/updater.py`). The offer
+  is the newest release above the running version that has this platform's build and its checksum; when none has
+  them, it is the newest release, without an install button. The unset-preference default is on; an explicitly saved
   startup-update opt-out remains off.
 
 ## Process layout
@@ -63,7 +63,7 @@ header `X-BAMT-Token`), and the `Host` header must be `127.0.0.1:<port>` or `loc
 
 ```
 src/bmpt/
-  config.py      Tk-free settings: same config.toml groups and keys as ba_modding_toolkit/gui/configs.py
+  host/config.py Tk-free settings: same config.toml groups and keys as ba_modding_toolkit/gui/configs.py
   gameassets/    UI atlases, UI textures, prefab layouts, collection art and Spine skeletons from the install
   catalog/       students (families) and their variants, names per language
   library/       portrait, lobby, model and other mods: add, remove, apply, restore, update, extract, compare

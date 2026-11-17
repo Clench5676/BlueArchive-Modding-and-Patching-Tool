@@ -2081,7 +2081,7 @@ def test_official_no_slot_models_are_found_and_exported(tmp_path):
 @official
 def test_official_costume_apply_restore_and_preview_on_clones(tmp_path):
     from bmpt.catalog import Catalog
-    from bmpt.config import Settings
+    from bmpt.host.config import Settings
     from bmpt.gameassets import AssetCache, GameAssets
     from bmpt.gameassets.cabs import CabIndex
     from bmpt.library import ModLibrary

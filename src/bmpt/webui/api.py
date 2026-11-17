@@ -22,7 +22,8 @@ from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import unquote
 
-from .. import globallines, updater
+from .. import globallines
+from ..host import updater
 from ..core import devmode
 from ..catalog.special import SPECIAL_PREFIX
 from ..core.errors import ServiceError
@@ -543,7 +544,7 @@ def build_api(s: Services) -> RpcRegistry:
             raise ServiceError("bad_params", region=region)
         if not s.scan_allowed():
             raise ServiceError("scan_off")  # finding the game reads Steam's records: the Check Game Files consent
-        from ..game_paths import find_game_dirs
+        from ..host.game_paths import find_game_dirs
 
         return [str(p) for p in find_game_dirs(region)]
 

@@ -6,7 +6,7 @@ import io
 from pathlib import Path
 from types import SimpleNamespace
 
-from bmpt.config import Settings
+from bmpt.host.config import Settings
 from bmpt.core.errors import ServiceError
 from bmpt.webui.api import build_api
 from bmpt.webui.server import WebApp

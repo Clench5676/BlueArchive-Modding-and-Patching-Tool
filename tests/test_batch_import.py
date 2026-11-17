@@ -1477,7 +1477,7 @@ GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-
 
 @pytest.mark.skipif(not GAME_DIR.is_dir(), reason="Blue Archive install unavailable")
 def test_integration_official_bundle_preflight_uses_only_copies(tmp_path, monkeypatch):
-    from bmpt.config import Settings
+    from bmpt.host.config import Settings
     from bmpt.library import ModLibrary
     from ba_modding_toolkit.naming import parse_filename
     from ba_modding_toolkit.searching import get_search_dirs
@@ -2112,7 +2112,7 @@ def test_row_file_picker_passes_initial_directory_and_validates_it(env, monkeypa
 
 def test_official_3d_slot_with_one_file_omitted_then_completed_on_clones(tmp_path, monkeypatch):
     from bmpt.catalog import Catalog
-    from bmpt.config import Settings
+    from bmpt.host.config import Settings
     from bmpt.gameassets import AssetCache, GameAssets
     from bmpt.gameassets.cabs import CabIndex
     from bmpt.library import ModLibrary

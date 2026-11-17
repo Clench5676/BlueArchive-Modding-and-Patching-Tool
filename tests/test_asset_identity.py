@@ -119,7 +119,7 @@ CASES = [  # dependency parts of cores whose parts sit under several dates
 @pytest.fixture(scope="module")
 def official(tmp_path_factory):
     from bmpt.catalog import Catalog
-    from bmpt.config import Settings
+    from bmpt.host.config import Settings
     from bmpt.gameassets import AssetCache, GameAssets
     from bmpt.library import ModLibrary
     from ba_modding_toolkit.searching import get_search_dirs
