@@ -21,7 +21,15 @@ from bmpt.library import tested_build  # noqa: E402
 
 
 def entry(game: Path, build: str) -> dict:
-    """The data file's entry for the game folder ``game``."""
+    """Return the data file's entry for a game folder.
+
+    Args:
+        game: The official game folder of the tested build.
+        build: Its Steam build id, recorded as it is.
+
+    Raises:
+        SystemExit: The folder has no resource folders or no bundles.
+    """
     dirs = get_search_dirs(game)
     if not dirs:
         raise SystemExit(f"No resource folders under {game}")
@@ -32,6 +40,14 @@ def entry(game: Path, build: str) -> dict:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Update the server's entry in the data file, keeping the other servers' entries.
+
+    Args:
+        argv: Command-line arguments; None reads ``sys.argv``.
+
+    Returns:
+        The exit status, 0.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--game", type=Path, required=True, help="the game folder of the tested build")
     parser.add_argument("--build", required=True, help="its Steam build id, for the record")

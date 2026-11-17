@@ -1,10 +1,9 @@
 """Assemble generated colour into official Spine geometry; no UI or generation service.
 
-Region crops are unrotated, trimmed attachments. Box crops use atlas page coordinates
-(left, top, right, bottom). Whole pages retain the official layout at any resolution.
-Generated alpha requires an explicit projected-page option and edited mesh mask.
-PMA defaults to the atlas declaration,
-as in atlas_remap; callers with independent page metadata can override it explicitly.
+Region crops are unrotated, trimmed attachments. Box crops use atlas page coordinates (left, top, right, bottom).
+Whole pages retain the official layout at any resolution. Generated alpha requires an explicit projected-page option
+and edited mesh mask. PMA defaults to the atlas declaration, as in atlas_remap; callers with independent page metadata
+can override it explicitly.
 """
 
 from __future__ import annotations
@@ -23,6 +22,8 @@ from .texture_guard import texture_image
 
 @dataclass
 class Assembly:
+    """An assembled page image and its report."""
+
     image: Image.Image
     report: dict
 
@@ -48,11 +49,21 @@ def misalignment(
     generated_pma: bool = False,
     pixel_scale: int = 1,
 ) -> dict:
-    """Signed displacement of alpha-weighted internal luminance-edge centroids.
+    """Measure the signed displacement of alpha-weighted internal luminance-edge centroids.
 
-    This is a colour-sensitive line-position diagnostic, not a registration estimate or
-    an acceptance score. Null means one image has no measurable internal edges. Both
+    This is a colour-sensitive line-position diagnostic, not a registration estimate or an acceptance score. Both
     images use the official mask, before replacement; no geometry is corrected.
+
+    Args:
+        official: The official crop (RGBA).
+        generated: The generated crop, the same size.
+        pma: Whether ``official`` is premultiplied.
+        generated_pma: Whether ``generated`` is premultiplied.
+        pixel_scale: Crop pixels per official texture pixel; the displacement is divided by it.
+
+    Returns:
+        ``edge_centroid_dx_px``, ``edge_centroid_dy_px`` and ``edge_centroid_distance_px`` in official texture pixels
+        (generated minus official, y down); None when one image has no measurable internal edges.
     """
     mask = official.getchannel("A")
     left = _centroid(remap._alpha(official, pma, False), mask)
@@ -81,10 +92,28 @@ def assemble_page(
 ) -> Assembly:
     """Replace RGB inside selected atlas rectangles, retaining every official alpha byte.
 
-    At integer enlargement the baseline uses nearest-neighbour replication, so untouched
-    pixels retain their exact RGBA values in each scale-by-scale block. Box edits are
-    clipped to the union of atlas regions. Whole-page overlaps/aliases are pasted once.
-    Atlas coordinates, trim offsets, original sizes and skeleton bytes never change.
+    At integer enlargement the baseline uses nearest-neighbour replication, so untouched pixels retain their exact
+    RGBA values in each scale-by-scale block. Box edits are clipped to the union of atlas regions. Whole-page
+    overlaps/aliases are pasted once. Atlas coordinates, trim offsets, original sizes and skeleton bytes never change.
+
+    Args:
+        atlas: The official atlas.
+        page_name: The page edited.
+        official: The official page texture.
+        generated: The new colour for the selection: a region's unrotated, trimmed crop, the box's crop or the whole
+            page, at any size (resized to the selection; its alpha is ignored).
+        region: (name, index) of the one region to replace; None for a box or the whole page.
+        box: (left, top, right, bottom) in declared page coordinates; None for a region or the whole page.
+        scale: Integer enlargement of the output page over the official texture.
+        generated_pma: Whether ``generated`` is premultiplied.
+        page_pma: Whether the page is premultiplied; None takes the atlas declaration.
+
+    Returns:
+        The page and a report: mode, changed pixels, the changed regions and the edge misalignment per region.
+
+    Raises:
+        ValueError: An invalid scale, page, region or box, both a region and a box, a texture whose aspect ratio
+            differs from the declared page, or a selection that meets no region.
     """
     if type(scale) is not int or scale < 1:
         raise ValueError("Page scale must be a positive integer")
@@ -234,11 +263,35 @@ def assemble_mod(
 ) -> dict:
     """Build one released-form texture mod, with its official name, LZ4 and fixed CRC.
 
-    Supply all official portrait parts, including atlas and skeleton. Only the bundle
-    containing the selected page is emitted. Edited textures are stored as RGBA32 to
-    avoid BC7/etc. re-encoding changes to untouched pixels and alpha. This uses the same
-    lossless format policy as library.portrait_edit, then the existing named-PNG packer.
-    The output directory must not already contain the target file.
+    Supply all official portrait parts, including atlas and skeleton. Only the bundle containing the selected page is
+    emitted. Edited textures are stored as RGBA32 to avoid BC7/etc. re-encoding changes to untouched pixels and alpha.
+    This uses the same lossless format policy as library.portrait_edit, then the existing named-PNG packer. The output
+    directory must not already contain the target file. The written bundle is reloaded and checked: CRC, every other
+    object byte-identical, the page's pixels as assembled.
+
+    Args:
+        official_bundles: Every official bundle of the portrait.
+        generated: The new colour, as for ``assemble_page``: an image or a PNG file.
+        output_dir: The folder the mod's bundle is written to, under the official bundle's name.
+        atlas_name: The official atlas TextAsset's name.
+        page_name: The page edited.
+        region: As for ``assemble_page``.
+        box: As for ``assemble_page``.
+        scale: As for ``assemble_page``.
+        generated_pma: As for ``assemble_page``.
+        page_pma: As for ``assemble_page``.
+        projected: A page already projected (``refine_composite.project``) to write instead of assembling one; it
+            must keep the official alpha and every pixel outside the page's regions.
+        allow_generated_alpha: Let ``projected`` change alpha inside the edited meshes.
+        edited_mesh_mask: A binary L mask of the edited meshes at page size; None takes the projection's own.
+
+    Returns:
+        The assembly's report with the written ``bundle`` and its ``texture_format``.
+
+    Raises:
+        ValueError: An input fails a check, the target exists, or packing or the reload check fails (nothing is
+            left written then).
+        ServiceError: ``dev_path_outside`` in dev mode, for a path outside the dev roots.
     """
     if type(scale) is not int or scale < 1:
         raise ValueError("Page scale must be a positive integer")
@@ -287,8 +340,8 @@ def assemble_mod(
             page_pma=page_pma,
         )
     else:
-        # Composite projection already preserves colour/alpha. Validate the K4
-        # invariants without another PMA conversion or resampling pass.
+        # Composite projection already preserves colour/alpha. Validate the alpha and outside-region invariants
+        # without another PMA conversion or resampling pass.
         baseline = official.resize((official.width * scale, official.height * scale), Image.Resampling.NEAREST)
         if projected.image.mode != "RGBA" or projected.image.size != baseline.size:
             raise ValueError("Projected page must be RGBA at the requested integer scale")

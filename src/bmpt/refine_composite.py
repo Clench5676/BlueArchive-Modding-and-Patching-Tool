@@ -1,9 +1,8 @@
 """CPU setup-pose composition and visibility-aware colour projection.
 
-Geometry comes from web/js/refine-composite.js and the shipped public Spine API.
-Python never invokes Node. Coordinates are world y-up, atlas UV top-down. Sampling
-is bilinear, at pixel centres; no gamma conversion is applied (like the App).
-The four Spine blend factors operate on premultiplied framebuffer channels.
+Geometry comes from web/js/refine-composite.js and the shipped public Spine API. Python never invokes Node.
+Coordinates are world y-up, atlas UV top-down. Sampling is bilinear, at pixel centres; no gamma conversion is applied
+(like the App). The four Spine blend factors operate on premultiplied framebuffer channels.
 """
 
 from __future__ import annotations
@@ -17,6 +16,13 @@ from PIL import Image, ImageFilter
 
 @dataclass
 class Composite:
+    """A composed setup pose and the maps between its pixels and the page texels.
+
+    ``image`` is straight RGBA; ``frame`` is (left, bottom, right, top) in world units. ``layers`` holds per attachment
+    its forward map (composite pixel to page texel) and blend terms; ``inverse`` per attachment its drawn texels with
+    the composite point each lands on, whether it is visible there and its colour gain.
+    """
+
     image: Image.Image
     geometry: dict
     pages: dict[str, Image.Image]
@@ -100,10 +106,22 @@ def _distance(mask, limit):
 def compose(geometry: dict, pages: dict[str, Image.Image], *, density=1.0, frame=None, inverse=True) -> Composite:
     """Compose straight RGBA and map every drawn texture texel back to the composite.
 
-    Density 1 is official texture pixels; geometry.textureDensity maps world units. Explicit frame
-    is (left, bottom, right, top), shared across expressions and arbitrary outputs.
-    Inverse entries are sparse page coordinates; off-frame texels are present but
-    invisible. Translucent overlaps retain visibility where their colour contributes.
+    Inverse entries are sparse page coordinates; off-frame texels are present but invisible. Translucent overlaps
+    retain visibility where their colour contributes.
+
+    Args:
+        geometry: The setup pose from ``refine-composite.js``: ``attachments`` in draw order (world ``vertices``,
+            ``uvs``, ``triangles``, ``region`` page, ``blend``, colours), ``pages`` (name, size, ``pma``) and
+            ``textureDensity`` (official texture pixels per world unit).
+        pages: Page images by page name.
+        density: Composite pixels per official texture pixel.
+        frame: (left, bottom, right, top) in world units, shared across expressions and arbitrary outputs; None fits
+            the attachments with 4 units around them.
+        inverse: Also build the inverse maps that ``project`` needs.
+
+    Raises:
+        ValueError: A non-positive density, no attachments, non-finite geometry, a frame of no or more than 32
+            million pixels, or a page whose aspect ratio differs from its declaration.
     """
     if not math.isfinite(density) or density <= 0:
         raise ValueError("Density must be positive")
@@ -180,11 +198,21 @@ def compose(geometry: dict, pages: dict[str, Image.Image], *, density=1.0, frame
 
 
 def movement_check(official, generated, *, density=1.0, min_iou=0.96, max_offset=3.0) -> dict:
-    """Reject moved silhouettes or internal line maps. Thresholds are explicit.
+    """Flag a generated image whose silhouette or internal lines moved against the official one.
 
-    Symmetric nearest-line distance uses a capped Chebyshev distance in official
-    pixels; p95 detects local moved features that a global centroid can hide.
-    This diagnostic cannot certify semantic/text fidelity or successful registration.
+    Symmetric nearest-line distance uses a capped Chebyshev distance in official pixels; p95 detects local moved
+    features that a global centroid can hide. This diagnostic cannot certify semantic/text fidelity or successful
+    registration.
+
+    Args:
+        official: The official image.
+        generated: The generated image; resized to the official one's size.
+        density: Image pixels per official texture pixel; distances are divided by it.
+        min_iou: The least IoU of the two alpha silhouettes (alpha at least 0.5) before ``silhouette_moved``.
+        max_offset: The largest p95 line distance, in official texture pixels, before ``features_moved``.
+
+    Returns:
+        ``silhouette_iou``, ``line_offset_p95_px``, the thresholds and the ``flags`` raised.
     """
     a = _rgba(official)
     b = _rgba(generated.resize(official.size, Image.Resampling.LANCZOS))
@@ -237,10 +265,28 @@ def project(
 ) -> tuple[dict, dict]:
     """Project colour residuals through the blend Jacobian, retaining official alpha.
 
-    Exact identity bypasses all filtering. Edge/seam fade distances are measured on
-    each actual page, then divided by page density, so 2x retains the same band.
-    Coincident shared UVs sum derivatives; other reuse selects the first visible draw.
-    Flagged input requires explicit diagnostic override; production callers fail.
+    Exact identity bypasses all filtering. Edge/seam fade distances are measured on each actual page, then divided by
+    page density, so 2x retains the same band. Coincident shared UVs sum derivatives; other reuse selects the first
+    visible draw.
+
+    Args:
+        composite: The official composite, with inverse maps.
+        generated: The generated composite; resized to the composite's size.
+        band_width: Width of the fade towards alpha edges and seams, in official texture pixels; 0 fades nothing.
+        colour_match: Subtract each attachment's median residual near the official join.
+        allow_flagged: Return the result although ``movement_check`` flagged it (diagnostics only; production callers
+            fail).
+        min_iou: As for ``movement_check``, for the whole composite and each attachment.
+        max_offset: As for ``movement_check``, for the whole composite and each attachment.
+        only_slots: The slots whose texels change; None changes all.
+
+    Returns:
+        The projected pages by name, and a report: the movement check, per attachment the residual error in the edge
+        and seam bands and its own movement check.
+
+    Raises:
+        ValueError: A negative band width, a composite without inverse maps, or a flagged result without
+            ``allow_flagged``.
     """
     if band_width < 0:
         raise ValueError("Band width cannot be negative")

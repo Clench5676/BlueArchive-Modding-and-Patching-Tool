@@ -18,7 +18,11 @@ ACTIVE_LIMIT = 32
 
 
 class Sink(Protocol):
-    def record(self, phase: str, seconds: float) -> None: ...
+    """Receives finished spans: the web UI's session timings."""
+
+    def record(self, phase: str, seconds: float) -> None:
+        """Record that ``phase`` took ``seconds``."""
+        ...
 
 
 _sink: Sink | None = None
@@ -30,11 +34,13 @@ _ids = itertools.count()
 
 
 def install(sink: Sink | None) -> None:
+    """Send the spans to ``sink`` from now on; None drops them."""
     global _sink
     _sink = sink
 
 
 def record(name: str, seconds: float) -> None:
+    """Hand a finished span of ``seconds`` to the installed sink, if there is one."""
     sink = _sink
     if sink is not None:
         sink.record(name, seconds)
@@ -55,7 +61,14 @@ def running(name: str) -> Iterator[float]:
 
 
 def active(now: float | None = None) -> list[dict[str, Any]]:
-    """The unfinished spans, the oldest first: name and seconds so far."""
+    """Return the unfinished spans, the oldest first, at most ``ACTIVE_LIMIT``.
+
+    Args:
+        now: The ``perf_counter`` time to measure to; None reads the clock.
+
+    Returns:
+        ``{"name", "seconds"}`` for each span, seconds so far rounded to milliseconds.
+    """
     now = time.perf_counter() if now is None else now
     with _active_lock:
         items = sorted(_active.values(), key=lambda item: item[1])
@@ -64,6 +77,7 @@ def active(now: float | None = None) -> list[dict[str, Any]]:
 
 @contextmanager
 def span(name: str) -> Iterator[None]:
+    """Time the block as ``name``, listed among the unfinished spans while it runs."""
     with running(name) as started:
         try:
             yield
@@ -73,9 +87,15 @@ def span(name: str) -> Iterator[None]:
 
 @contextmanager
 def held(name: str, lock: Any, *, hold: bool = False, floor: float = WAIT_FLOOR) -> Iterator[None]:
-    """Hold ``lock``, recording ``<name>.wait`` when acquiring it took ``floor`` or more, and with ``hold`` also
-    ``<name>.held``: how long this holder kept everyone else waiting (for rare, long holders only; every record is
-    also a log line)."""
+    """Hold ``lock`` for the block, recording how long it took to get.
+
+    Args:
+        name: Span prefix: ``<name>.wait`` and ``<name>.held``.
+        lock: An object with ``acquire`` and ``release``.
+        hold: Also record ``<name>.held``, how long this holder kept everyone else waiting. For rare, long holders
+            only: every record is also a log line.
+        floor: Seconds of waiting from which ``<name>.wait`` is recorded.
+    """
     with running(name + ".wait") as started:
         lock.acquire()
     try:

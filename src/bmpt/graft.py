@@ -72,12 +72,16 @@ Matrix = np.ndarray
 
 
 class GraftError(ValueError):
+    """A graft that cannot be made: ``code`` and ``params`` are those of the ``ServiceError`` the caller raises."""
+
     def __init__(self, code: str, **params):
+        """Create the error with its ``ServiceError`` code and parameters."""
         super().__init__(f"{code}: {params}")
         self.code, self.params = code, params
 
 
 def bad() -> GraftError:
+    """Return the error for posted geometry that fails a check (``bad_params``)."""
     return GraftError("bad_params", key="geometry")
 
 
@@ -88,6 +92,7 @@ class Strings:
     """A skeleton's shared strings with the ones a graft appends."""
 
     def __init__(self, skeleton: Skeleton):
+        """Start from the skeleton's own shared strings."""
         self.all = list(skeleton.strings)
         self.base = len(self.all)
         self.index: dict[str | None, int] = {}
@@ -95,6 +100,7 @@ class Strings:
             self.index.setdefault(text, i + 1)
 
     def ref(self, text: str | None) -> int:
+        """Return a string's reference (its index plus one), appending it when new; None is 0."""
         if text is None:
             return 0
         if text not in self.index:
@@ -104,6 +110,7 @@ class Strings:
 
     @property
     def added(self) -> list[str]:
+        """The strings appended since the start, in order."""
         return self.all[self.base :]
 
 
@@ -117,8 +124,17 @@ def _names(skeleton: Skeleton) -> dict[str, list]:
 
 
 def insert_slot(mod_data: bytes, official: Skeleton, name: str) -> bytes:
-    """The mod's skeleton with the official slot ``name`` added after the last slot both have that the official rig
-    draws before it (first when there is none); every slot index and every draw-order frame of the mod follows."""
+    """Return the mod's skeleton with an official slot added.
+
+    The slot goes after the last slot both rigs have that the official rig draws before it, first when there is none;
+    every slot index and every draw-order frame of the mod follows, and in the frames the new slot follows the slot it
+    follows in the setup order.
+
+    Args:
+        mod_data: The mod's binary skeleton.
+        official: The official skeleton the slot comes from.
+        name: The slot's name; its bone must exist in the mod.
+    """
     mod = Skeleton(mod_data)
     count = len(mod.slots)
     source_index = official.slot_index(name)
@@ -164,13 +180,28 @@ class Carried:
 
     @property
     def region(self) -> str | None:
+        """The atlas region a region or mesh attachment draws (its path), or None for other kinds."""
         return self.attachment["path"] if self.attachment["kind"] in (REGION, MESH) else None
 
 
 class SkeletonGraft:
-    """The plan of a skeleton graft and the writer of its result (``build``)."""
+    """The plan of a skeleton graft and the writer of its result (``build``).
+
+    After planning: ``animations`` are the official animations carried (as walked), ``refused`` the reasons by
+    animation left out (``kind:name``), ``inserted`` the slots added, ``carried`` the attachments carried by (skin,
+    slot, key), ``shown`` per carried animation the carried attachments it shows, ``events_added`` the events appended,
+    ``mod`` the mod's skeleton with the slots and events added and ``remap`` the reference mapping from the official
+    file to it.
+    """
 
     def __init__(self, mod_data: bytes, official_data: bytes, only: set[str] | None = None):
+        """Plan the graft and add the slots and events it needs to the mod's skeleton.
+
+        Args:
+            mod_data: The mod's binary skeleton.
+            official_data: The official binary skeleton.
+            only: The names of the official animations to carry; None carries every one the mod lacks.
+        """
         official = self.official = Skeleton(official_data)
         mod = Skeleton(mod_data)
         have = {a["name"] for a in mod.animations}
@@ -292,8 +323,11 @@ class SkeletonGraft:
         self.same_slots = [s["name"] for s in mod.slots] == [s["name"] for s in official.slots]
 
     def _order_for_mod(self, offsets: list) -> list[int]:
-        """An official draw-order frame as an order of the mod's slots: shared slots in the official order, each slot
-        only the mod has right after the slot it follows in the mod's setup order."""
+        """An official draw-order frame as an order of the mod's slots.
+
+        Shared slots go in the official order, each slot only the mod has right after the slot it follows in the mod's
+        setup order.
+        """
         mod, official = self.mod, self.official
         order = [mod.slot_index(official.slots[s]["name"]) for s in draw_order(offsets, len(official.slots))]
         order = [s for s in order if s is not None]
@@ -303,12 +337,22 @@ class SkeletonGraft:
         return order
 
     def record(self, carried: Carried, **overrides) -> bytes:
-        """A carried attachment's record for the mod's file (``attachment_record`` overrides)."""
+        """Return a carried attachment's record for the mod's file.
+
+        Args:
+            carried: The attachment.
+            **overrides: ``name``, ``path``, ``region`` or ``vertices``, as ``attachment_record`` takes them.
+        """
         return attachment_record(self.official, carried.attachment, self.remap, self.mod.nonessential, **overrides)
 
     def animation_bytes(self, animation: dict, rename: dict[str, str] | None = None, name: str | None = None) -> bytes:
-        """A carried animation for the mod's file; ``rename`` maps attachment names its timelines name to others and
-        ``name`` renames it (the test rig's candidates)."""
+        """Return a carried animation's record for the mod's file.
+
+        Args:
+            animation: The official animation as walked.
+            rename: Attachment names its timelines name, mapped to the names written instead (the test rig's copies).
+            name: A name written instead of its own (a test rig's candidate).
+        """
         patches = {}
         if not self.same_slots:
             for start, end, offsets in animation["draworder"]:
@@ -331,8 +375,14 @@ class SkeletonGraft:
         extra_records: list[tuple[str, str, str, bytes]] = (),
         extra_animations: list[bytes] = (),
     ) -> bytes:
-        """The mod's skeleton with the carried animations and attachments. ``records``: a carried attachment's record
-        in place of ``record``; ``extra_records`` (skin, slot, key, record) and ``extra_animations`` go in too."""
+        """Return the mod's skeleton with the carried animations and attachments.
+
+        Args:
+            records: Per carried attachment (skin, slot, key) a record written instead of ``record``'s; None or a
+                missing key keeps that.
+            extra_records: (skin, slot, key, record) attachments added as well.
+            extra_animations: Animation records appended after the carried ones.
+        """
         mod = self.mod
         added = bytearray()
         for animation in self.animations:
@@ -392,8 +442,11 @@ def _matrix(value) -> Matrix:
 
 @dataclass
 class Setup:
-    """A rig's setup pose as the runtime gives it: per bone its world matrix, per slot its bone, and per skin
-    attachment (slot, name) its page, world vertices, page UVs and triangles."""
+    """A rig's setup pose as the runtime gives it.
+
+    Per bone its world matrix (a 3x3 affine of bone space to world), per slot its bone, and per skin attachment (slot,
+    name) its page's texture key, world vertices, page UVs and triangles.
+    """
 
     bones: dict[str, Matrix] = field(default_factory=dict)
     slot_bones: dict[str, str] = field(default_factory=dict)
@@ -401,8 +454,18 @@ class Setup:
 
 
 def setup(value, atlas: atlas_remap.Atlas | None = None) -> Setup:
-    """Posted setup geometry (``rig-geometry.js`` ``setupOf``), checked (untrusted: counts capped, numbers finite,
-    names strings, UVs on the page, indices in range, pages of ``atlas`` when given)."""
+    """Check posted setup geometry (``rig-geometry.js`` ``setupOf``) and return it as a ``Setup``.
+
+    The geometry is untrusted: counts are capped, numbers must be finite, names strings, UVs on the page, indices in
+    range, and pages those of ``atlas`` when given.
+
+    Args:
+        value: The posted geometry (``bones`` as ``[a, b, c, d, x, y]``, ``slotBones``, ``skin``).
+        atlas: The atlas the rig draws from; None skips the page check.
+
+    Raises:
+        GraftError: ``bad_params`` for geometry that fails a check.
+    """
     if not isinstance(value, dict):
         raise bad()
     bones, slot_bones, skin = value.get("bones"), value.get("slotBones"), value.get("skin", [])
@@ -462,10 +525,21 @@ def setup(value, atlas: atlas_remap.Atlas | None = None) -> Setup:
 
 
 def fit_anchor(mod: Setup, base: Setup, slot: str) -> tuple[Matrix, bool]:
-    """(T, fitted): the affine that takes the base rig's picture of ``slot`` to the mod's, fitted over the skin
-    attachments both have there (same name, same vertex count). The identity, not fitted, without such points, or when
-    the worst point is off by more than ``ANCHOR_SLACK`` of the slot's extent (the mod changed the face otherwise
-    than by moving, turning and scaling it)."""
+    """Fit the affine that takes the base rig's picture of a slot to the mod's, in world space.
+
+    The fit is least squares over the world vertices of the skin attachments both rigs have in the slot (same name,
+    same vertex count).
+
+    Args:
+        mod: The mod's setup.
+        base: The setup of the official rig the mod was made from.
+        slot: The slot's name.
+
+    Returns:
+        ``(T, fitted)``: T as a 3x3 matrix. The identity, not fitted, without three points spanning a plane, or when
+        the worst point is off by more than ``ANCHOR_SLACK`` of the slot's extent (the mod changed the face otherwise
+        than by moving, turning and scaling it).
+    """
     a, b = [], []
     for (s, name), (_page, world, _uv, _t) in mod.skin.items():
         other = base.skin.get((s, name))
@@ -498,8 +572,18 @@ def _turned(values: np.ndarray, degrees: float) -> np.ndarray:
 
 
 def region_corners(floats: tuple[float, ...], flags: int, region: atlas_remap.Region, turn: float = 0.0) -> np.ndarray:
-    """A region attachment's four corners in its bone's space (bottom left, top left, top right, bottom right), as
-    the runtime lays them out, trim included."""
+    """Return a region attachment's four corners in its bone's space, as the runtime lays them out, trim included.
+
+    Args:
+        floats: The attachment's floats as walked: rotation when ``flags`` has bit 128, then x, y, scale x, scale y,
+            width, height.
+        flags: The attachment's flags.
+        region: The atlas region it draws: its trim offset, its size before and after trimming, in pixels.
+        turn: Degrees added to the attachment's rotation.
+
+    Returns:
+        A (4, 2) array: bottom left, top left, top right, bottom right.
+    """
     rotation, (x, y, sx, sy, w, h) = (floats[0], floats[1:]) if flags & 128 else (0.0, floats)
     rotation += turn
     ox, oy = region.offset
@@ -521,10 +605,23 @@ def placed_record(
     region: atlas_remap.Region | None,
     path: int | None = None,
 ) -> tuple[bytes | None, str]:
-    """(record, note) of a carried attachment re-expressed by the affine ``m`` (official bone space to the mod's)
-    and turned by ``turn`` degrees about its own centre. None (the official record) when nothing changes; a region
-    under a sheared or mirrored ``m`` goes as a four-vertex mesh (note ``mesh``); a record that cannot take it stays
-    as it is (note ``verbatim``)."""
+    """Re-express a carried attachment by an affine and turn it about its own centre.
+
+    A region under a sheared or mirrored ``m`` goes as a four-vertex mesh; a weighted mesh or another kind cannot
+    take ``m`` and stays as it is.
+
+    Args:
+        graft: The graft the attachment belongs to.
+        carried: The attachment.
+        m: A 3x3 affine from the official bone's space to the mod's bone's space.
+        turn: Degrees the attachment turns about its own centre.
+        region: The official atlas region it draws; None leaves a region under a sheared ``m`` as it is.
+        path: A shared-string reference written as its path (a test rig's region copy); None keeps its own.
+
+    Returns:
+        ``(record, note)``. The record is None when the official record goes unchanged; the note is ``mesh`` for a
+        region turned into a mesh, ``verbatim`` for a record left as it is, else empty.
+    """
     a = carried.attachment
     identity = np.allclose(m, np.eye(3), atol=1e-6)
     if identity and not turn:
@@ -594,6 +691,17 @@ def region_lines(
     original: tuple[int, int],
     legacy: bool,
 ) -> list[str]:
+    """Return an atlas region's lines.
+
+    Args:
+        name: The region's name.
+        xy: Its top left on the page, in pixels.
+        size: Its size before rotation, in pixels.
+        degrees: Its rotation on the page: 0, 90, 180 or 270.
+        offset: Its trim offset, in pixels.
+        original: Its size before trimming, in pixels.
+        legacy: Write the Spine 3 syntax (``xy:``, ``rotate: true``) instead of Spine 4's (``bounds:``).
+    """
     (x, y), (w, h) = xy, size
     if legacy:
         rotate = {0: "false", 90: "true"}.get(degrees, str(degrees))
@@ -615,13 +723,22 @@ def region_lines(
 
 
 def packed(region: atlas_remap.Region) -> tuple[int, int]:
-    """The region's footprint on its page."""
+    """Return the region's footprint on its page, (width, height) in pixels, swapped when it is turned by 90."""
     w, h = region.size
     return (h, w) if region.degrees in (90, 270) else (w, h)
 
 
 def free_spot(occupied: np.ndarray, width: int, height: int) -> tuple[int, int] | None:
-    """The first clear spot, row by row, for a box with ``PAD`` around it."""
+    """Find the first clear spot, row by row, for a box with ``PAD`` around it.
+
+    Args:
+        occupied: The page's taken pixels, (rows, columns).
+        width: The box's width in pixels.
+        height: The box's height in pixels.
+
+    Returns:
+        The box's top left (x, y) inside its padding, or None when it fits nowhere.
+    """
     rows, columns = occupied.shape
     w, h = width + 2 * PAD, height + 2 * PAD
     if w > columns or h > rows:
@@ -637,7 +754,16 @@ def free_spot(occupied: np.ndarray, width: int, height: int) -> tuple[int, int] 
 
 
 def sampled(skin: Setup, page: str, size: tuple[int, int]) -> np.ndarray:
-    """Where the rig's skin attachments sample a page (texel centres in their triangles), widened by ``PAD``."""
+    """Return where the rig's skin attachments sample a page (their triangles), widened by ``PAD``.
+
+    Args:
+        skin: The rig's setup.
+        page: The page's texture key.
+        size: The page's declared size in pixels.
+
+    Returns:
+        The sampled pixels, (rows, columns).
+    """
     from PIL import ImageDraw, ImageFilter
 
     image = Image.new("L", size, 0)
@@ -655,6 +781,8 @@ def sampled(skin: Setup, page: str, size: tuple[int, int]) -> np.ndarray:
 
 @dataclass
 class Placed:
+    """Where a carried region goes: the mod's page, its top left in page pixels, and the official region."""
+
     page: str  # the mod's page name
     xy: tuple[int, int]
     region: atlas_remap.Region  # the official region
@@ -672,7 +800,16 @@ class Pages:
 
 
 def packed_regions(atlas: atlas_remap.Atlas, page: str, size: tuple[int, int]) -> np.ndarray:
-    """Where the atlas's own regions lie on a page, widened by ``PAD``: the space taken without a posed rig."""
+    """Return where the atlas's own regions lie on a page, widened by ``PAD``: the space taken without a posed rig.
+
+    Args:
+        atlas: The atlas.
+        page: The page's name.
+        size: The page's declared size in pixels.
+
+    Returns:
+        The taken pixels, (rows, columns).
+    """
     occupied = np.zeros((size[1], size[0]), dtype=bool)
     for region in atlas.regions.values():
         if region.page != page:
@@ -690,9 +827,28 @@ def pack(
     official_pages: dict[str, Image.Image],
     mod_setup: Setup | None,
 ) -> Pages:
-    """Place the official regions ``regions`` on the mod's pages: into space the mod's rig does not sample (without
-    ``mod_setup``, space none of the mod's atlas regions takes), page by page, else the first page grows downward
-    (whole ``ROWS``); pixels copied as packed."""
+    """Place official regions on the mod's pages and copy their pixels as packed.
+
+    The largest regions go first, into space the mod's rig does not sample, page by page; when none is left the first
+    page grows downward (to whole ``ROWS``). A page image of another size than its atlas declares gets the pixels
+    scaled to it.
+
+    Args:
+        mod_text: The mod's atlas text.
+        official_text: The official atlas text.
+        regions: The regions the carried attachments draw; duplicates and those the mod's atlas has are skipped.
+        mod_pages: The mod's page images by texture key.
+        official_pages: The official page images by texture key.
+        mod_setup: The mod's posed setup; None takes the space none of the mod's atlas regions takes instead.
+
+    Returns:
+        The placements, the changed page images, the page sizes, the rows each page grew by, and the regions the
+        official atlas lacks.
+
+    Raises:
+        GraftError: ``graft_page_missing`` without a mod page image, or the official page of a placed region;
+            ``graft_region_too_large`` when a page would pass ``MAX_PAGE_PIXELS`` or a region fits nowhere.
+    """
     mod_atlas = atlas_remap.parse_atlas(mod_text, "mod")
     official_atlas = atlas_remap.parse_atlas(official_text, "official")
     by_name = {}
@@ -789,9 +945,17 @@ def pack(
 def atlas_text(
     mod_text: str, pages: Pages, extra: list[tuple[str, Placed, int]] = (), rotate: dict[str, int] | None = None
 ) -> str:
-    """The mod's atlas with the placed regions (and ``extra`` (name, placement, degrees) ones, the test rig's)
-    appended to their pages, in its own syntax, and the page sizes that grew. ``rotate``: a region written with
-    another rotate than the official one (a candidate correction): its size and offsets as packed."""
+    """Return the mod's atlas with the placed regions appended to their pages, in its own syntax.
+
+    The page sizes that grew are rewritten.
+
+    Args:
+        mod_text: The mod's atlas text.
+        pages: The placements from ``pack``.
+        extra: (name, placement, degrees) regions added too (the test rig's copies).
+        rotate: Region name to the rotation written instead of the official one (a candidate correction); a region
+            turned by 90 that way is written with its size swapped and without trim offsets.
+    """
     legacy = _legacy(mod_text)
     lines = mod_text.lstrip("﻿").replace("\r\n", "\n").split("\n")
     while lines and not lines[-1].strip():
@@ -829,6 +993,7 @@ def atlas_text(
 
 
 def block_size(block: list[str]) -> tuple[int, int]:
+    """Return the size an atlas page block declares (its lines, the page name first), or (0, 0) without one."""
     for line in block[1:]:
         key, _, value = line.partition(":")
         if key.strip() == "size":
@@ -839,6 +1004,7 @@ def block_size(block: list[str]) -> tuple[int, int]:
 
 
 def resize_block(block: list[str], size: tuple[int, int], legacy: bool) -> list[str]:
+    """Return an atlas page block with its declared size rewritten, in the Spine 3 syntax when ``legacy``."""
     out = list(block)
     for i, line in enumerate(out[1:], 1):
         key, _, _value = line.partition(":")
@@ -860,7 +1026,17 @@ def _premultiplied(image: Image.Image) -> np.ndarray:
 def render(
     items: list[rebake.Drawn], pages: dict[str, np.ndarray], frame: tuple[float, float, int, int], scale: float
 ) -> np.ndarray:
-    """A part as the pixels its posed triangles map (premultiplied RGBA, normal and additive blending)."""
+    """Draw a part as the pixels its posed triangles map, with normal or additive blending.
+
+    Args:
+        items: The part's drawn attachments, in draw order.
+        pages: Premultiplied RGBA pages (floats 0..1) by texture key.
+        frame: Left and top in world units (y up), then width and height in pixels.
+        scale: Pixels per world unit.
+
+    Returns:
+        A (height, width, 4) premultiplied RGBA image, 0..1.
+    """
     left, top, width, height = frame
     out = np.zeros((height, width, 4), dtype=np.float32)
     for item in items:
@@ -907,8 +1083,20 @@ def off(
     official: list[rebake.Drawn],
     official_pages: dict[str, np.ndarray],
 ) -> float:
-    """The share of the visible pixels where two parts differ by more than 40/255 on mid grey; 1 when only one side
-    draws anything."""
+    """Return the share of the visible pixels where two parts differ by more than 40/255 on mid grey.
+
+    Both are drawn at ``PART_SCALE`` (halved until under ``MAX_PART_PIXELS``) in a frame 20 units around them; a
+    pixel is visible where either side's alpha is above 0.06.
+
+    Args:
+        grafted: The grafted part's drawn attachments.
+        grafted_pages: The grafted rig's premultiplied pages by texture key.
+        official: The official part's drawn attachments, through the anchor.
+        official_pages: The official premultiplied pages by texture key.
+
+    Returns:
+        0..1; 0 when neither side draws anything, 1 when only one does.
+    """
     if not grafted or not official:
         return 0.0 if not grafted and not official else 1.0
     every = np.concatenate([item.vertices for item in [*grafted, *official]])
@@ -926,7 +1114,7 @@ def off(
 
 
 def moved(items: tuple[rebake.Drawn, ...], anchors: dict[str, Matrix]) -> list[rebake.Drawn]:
-    """Official drawn items taken through their slot's anchor."""
+    """Return official drawn attachments taken through their slot's anchor (``fit_anchor``), by slot name."""
     out = []
     for item in items:
         t = anchors.get(item.slot)
@@ -979,7 +1167,24 @@ def prepare(
     official_setup: Setup,
     base_setup: Setup | None = None,
 ) -> Prepared:
-    """Plan, splice and pack one rig, and build the test rig: per carried animation one copy per candidate."""
+    """Plan, splice and pack one rig, and build the test rig: per carried animation one copy per candidate.
+
+    Args:
+        mod_skeleton: The mod's binary skeleton.
+        mod_atlas: The mod's atlas text.
+        mod_pages: The mod's page images by texture key.
+        official_skeleton: The official binary skeleton.
+        official_atlas: The official atlas text.
+        official_pages: The official page images by texture key.
+        mod_setup: The mod's posed setup.
+        official_setup: The official rig's posed setup.
+        base_setup: The setup of the official rig the mod was made from, for the anchors; None places every
+            carried attachment as if the mod had not moved the face, and lists its slot as unanchored.
+
+    Raises:
+        GraftError: ``graft_refused`` when no animation can be carried, ``pack``'s errors, or ``bad_params`` when a
+            carried slot has no bone in a setup.
+    """
     graft = SkeletonGraft(mod_skeleton, official_skeleton)
     if not graft.animations:
         raise GraftError("graft_refused", names=", ".join(sorted(graft.refused)) or "—")
@@ -1091,9 +1296,26 @@ def choose(
     official_pages: dict[str, Image.Image],
     grafted_pages: dict[str, Image.Image],
 ) -> Checked:
-    """Check every grafted expression's part against the official part (through the anchors); for one over
-    ``BOUND`` keep the candidate with the smallest difference under it. ``official``/``test``: the posed official
-    and test rigs (``rebake.rig``)."""
+    """Check every grafted expression's part against the official part and pick a candidate for those off.
+
+    A part (what the expression's slots draw) is compared with the official part taken through the anchors; for one
+    over ``BOUND`` the candidate with the smallest difference under it is kept, and the delivered rig is rebuilt with
+    those choices.
+
+    Args:
+        prepared: The prepared graft.
+        official: The official rig, posed (``rebake.rig``).
+        test: The test rig, posed.
+        official_pages: The official page images by texture key.
+        grafted_pages: The mod's page images with the carried regions, by texture key.
+
+    Returns:
+        The delivered rig and, per animation, ``off`` (the share that differs), ``candidate`` (the correction
+        chosen, or None) and ``fixed`` (whether it is within ``BOUND``).
+
+    Raises:
+        GraftError: ``bad_params`` when a rig lacks a carried animation's pose.
+    """
     graft = prepared.graft
     gp = {key: _premultiplied(image) for key, image in grafted_pages.items()}
     op = {key: _premultiplied(image) for key, image in official_pages.items()}
@@ -1193,11 +1415,26 @@ def plain(
     official_pages: dict[str, Image.Image],
     only: set[str] | None = None,
 ) -> Plain:
-    """The graft of a rig whose new animations have no part to compare with the official one (a memorial lobby, a
-    Spine background: they mostly move bones and constraints): every carried attachment as the official record on
-    the mod's bone of the same name, its regions packed where none of the mod's atlas regions lie. ``only``: the
-    animations to carry. Each carried animation's result is checked by posing it (``rig-geometry.js``
-    ``failedPoses``), not by pixels."""
+    """Graft a rig whose new animations have no part to compare with the official one.
+
+    That is a memorial lobby or a Spine background, whose animations mostly move bones and constraints. Every carried
+    attachment goes as the official record on the mod's bone of the same name, its regions packed where none of the
+    mod's atlas regions lie. Each carried animation's result is checked by posing it (``rig-geometry.js``
+    ``failedPoses``), not by pixels.
+
+    Args:
+        mod_skeleton: The mod's binary skeleton.
+        mod_atlas: The mod's atlas text.
+        mod_pages: The mod's page images by texture key.
+        official_skeleton: The official binary skeleton.
+        official_atlas: The official atlas text.
+        official_pages: The official page images by texture key.
+        only: The official animations to carry; None carries every one the mod lacks.
+
+    Raises:
+        GraftError: ``graft_refused`` when no animation can be carried, ``graft_page_missing`` when the official
+            atlas lacks a region to carry, and ``pack``'s errors.
+    """
     graft = SkeletonGraft(mod_skeleton, official_skeleton, only)
     if not graft.animations:
         raise GraftError("graft_refused", names=", ".join(sorted(graft.refused)) or "—")

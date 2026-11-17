@@ -43,6 +43,12 @@ UV_SLACK = 0.1
 
 @dataclass(frozen=True)
 class Drawn:
+    """One attachment a posed rig draws.
+
+    ``blend`` is Spine's blend mode (0 normal, 1 additive, 2 multiply, 3 screen) and ``alpha`` the slot's alpha,
+    0..1. ``uvs`` are page-normalised with v down; ``triangles`` index the vertices.
+    """
+
     slot: str
     region: str
     page: str  # texture key of the page
@@ -55,6 +61,8 @@ class Drawn:
 
 @dataclass(frozen=True)
 class Rig:
+    """A posed rig: its slots in setup order and, per pose, what it draws in draw order (``""`` is the rest pose)."""
+
     slots: tuple[str, ...]
     poses: dict[str, tuple[Drawn, ...]]
 
@@ -74,9 +82,19 @@ def _numbers(value, limit: int, *, integer: bool = False) -> list:
 
 
 def rig(value, atlas: Atlas, max_poses: int | None = None) -> Rig:
-    """The posted geometry of one rig, checked against the atlas the back end read itself (untrusted input: counts
-    capped, numbers finite, UVs on the page, triangle indices in range, regions and pages of that atlas). Refused
-    with ``bad_params``. ``max_poses``: the most poses taken (a graft's test rig asks for one per candidate)."""
+    """Check the posted geometry of one rig against the atlas the back end read itself.
+
+    The geometry is untrusted input: counts are capped, numbers must be finite, UVs on the page (within
+    ``UV_SLACK``), triangle indices in range, regions and pages those of the atlas, and the rest pose present.
+
+    Args:
+        value: The geometry the page posted (``slots`` and ``poses``).
+        atlas: The atlas the rig draws from.
+        max_poses: The most poses taken; None allows ``MAX_POSES`` (a graft's test rig asks for one per candidate).
+
+    Raises:
+        RemapError: ``bad_params`` for geometry that fails a check.
+    """
     if (
         not isinstance(value, dict)
         or not isinstance(value.get("slots"), list)
@@ -214,10 +232,12 @@ def _texels(item: Drawn, width: int, height: int):
 
 
 def _pick(item: Drawn, kind: str, statics: list[Drawn], pose: str, source: Rig, switching: set[str]) -> list[Drawn]:
-    """The source attachments a target attachment takes its pixels from, first first: ``switch`` from the source
-    pose of the same name, top of the draw order first (none without such a pose); the others from the source's
-    rest pose, of the same class, static layers in order of stratum distance (rank among the rig's static
-    attachments, as a fraction), so a layer takes its own depth first and keeps paint hidden under others."""
+    """The source attachments a target attachment takes its pixels from, first first.
+
+    ``switch`` from the source pose of the same name, top of the draw order first (none without such a pose); the
+    others from the source's rest pose, of the same class, static layers in order of stratum distance (rank among the
+    rig's static attachments, as a fraction), so a layer takes its own depth first and keeps paint hidden under others.
+    """
     if kind == "switch":
         drawn = source.poses.get(pose)
         return [d for d in reversed(drawn) if _class(d, switching) == "switch"] if drawn else []
@@ -230,8 +250,10 @@ def _pick(item: Drawn, kind: str, statics: list[Drawn], pose: str, source: Rig, 
 
 
 def _gather(candidates: list[Drawn], pages: dict[str, np.ndarray], wx: np.ndarray, wy: np.ndarray):
-    """The candidates' pixels at the world points, composited under each other until opaque (premultiplied), and
-    which points any of them holds."""
+    """The candidates' pixels at the world points, composited under each other until opaque (premultiplied).
+
+    Also returns which points any of them holds.
+    """
     acc = np.zeros((len(wx), 4), dtype=np.float32)
     held = np.zeros(len(wx), dtype=bool)
     for candidate in candidates:
@@ -328,8 +350,20 @@ def _alpha_pages(pages: dict[str, Image.Image]) -> dict[str, np.ndarray]:
 def overlap(
     source: Rig, target: Rig, source_pages: dict[str, Image.Image], official_pages: dict[str, Image.Image]
 ) -> float:
-    """How far the two rest pictures cover the same place: the IoU of their alpha silhouettes (``_silhouette``).
-    Pages are keyed by texture key."""
+    """Return how far the two rest pictures cover the same place: the IoU of their alpha silhouettes, 0..1.
+
+    The silhouettes (``_silhouette``) are drawn at ``GATE_SCALE`` in a frame around both pictures; 1 when neither
+    covers anything.
+
+    Args:
+        source: The rig the mod's textures were drawn for, posed.
+        target: The official rig, posed.
+        source_pages: The mod's pages by texture key.
+        official_pages: The official pages by texture key.
+
+    Raises:
+        RemapError: ``bad_params`` when the frame would exceed ``MAX_GATE_PIXELS``.
+    """
     frame = _frame(source.poses[""], target.poses[""])
     left = _silhouette(source.poses[""], _alpha_pages(source_pages), frame) > 0.5
     right = _silhouette(target.poses[""], _alpha_pages(official_pages), frame) > 0.5
@@ -340,11 +374,26 @@ def overlap(
 def bake(
     source: Rig, target: Rig, source_pages: dict[str, Image.Image], official_pages: dict[str, Image.Image]
 ) -> tuple[dict[str, Image.Image], dict]:
-    """The official pages with every region the target rig draws filled from the source pages through world space
-    (pages keyed by texture key, straight alpha as the game's). A texel no source attachment holds keeps the
-    official pixel; a region less than half of which the source holds keeps the official pixels whole (``official``
-    in the report); page area no attachment draws keeps the official pixels. Refuses a portrait the game drew anew
-    (``atlas_remap_redrawn``) before anything is baked."""
+    """Fill every region the official rig draws from the mod's pages, through world space.
+
+    A texel no source attachment holds keeps the official pixel; a region less than ``HELD_BELOW`` of which the source
+    holds keeps the official pixels whole; page area no attachment draws keeps the official pixels.
+
+    Args:
+        source: The rig the mod's textures were drawn for, posed.
+        target: The official rig, posed.
+        source_pages: The mod's pages by texture key.
+        official_pages: The official pages by texture key.
+
+    Returns:
+        The official pages, filled, by texture key (straight alpha, as the game's), and the report: the regions
+        ``moved``, the regions kept ``official``, and ``partial`` when any was kept.
+
+    Raises:
+        RemapError: ``atlas_remap_page_missing`` when an official page the rig draws is missing;
+            ``atlas_remap_redrawn`` before anything is baked when the rest pictures overlap less than
+            ``REDRAWN_BELOW`` (the game drew the portrait anew).
+    """
     for drawn in target.poses.values():
         for item in drawn:
             if item.page not in official_pages:

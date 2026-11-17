@@ -38,10 +38,12 @@ _SEMVER = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za
 
 
 def parse_version(text: str) -> tuple | None:
-    """A sortable key following SemVer 2.0.0 precedence, or None when ``text`` is not a version.
+    """Return a sortable key following SemVer 2.0.0 precedence, or None when ``text`` is not a version.
 
-    A version without a pre-release ranks above the same version with one; pre-release identifiers compare one by one,
-    numbers numerically and below any text."""
+    A leading ``v`` and build metadata are allowed. A version without a pre-release ranks above the same version with
+    one; pre-release identifiers compare one by one, numbers numerically and below any text. The key's fourth item
+    starts with 0 for a pre-release and 1 for a release.
+    """
     m = _SEMVER.match(text.strip())
     if not m:
         return None
@@ -54,14 +56,20 @@ def parse_version(text: str) -> tuple | None:
 
 
 def prerelease_previews(version: str) -> bool:
-    """Local review features require a running SemVer pre-release, including development's ``-dev``."""
+    """Whether a version is a SemVer pre-release, development's ``-dev`` included.
+
+    Pre-releases show the features kept out of releases: Troubleshoot Mods and the tours approved for pre-releases.
+    """
     key = parse_version(version) if isinstance(version, str) else None
     return key is not None and key[3][0] == 0
 
 
 def button_size_tags(version: str) -> bool:
-    """The button size tags mark pre-release builds and development runs, but not a packaged release
-    candidate, which shows the App as a stable release will."""
+    """Whether a version shows the button size tags.
+
+    They mark pre-release builds and development runs, but not a packaged release candidate (``-rc...``), which shows
+    the App as a stable release will.
+    """
     if not prerelease_previews(version):
         return False
     pre = version.strip().split("-", 1)[1]
@@ -69,26 +77,36 @@ def button_size_tags(version: str) -> bool:
 
 
 def current_version() -> str:
-    """This build's version; development runs report ``<version>-dev``."""
+    """Return this build's version; development runs report ``<version>-dev``."""
     return get_version_info().get("version") or "0.0.0"
 
 
 def is_compiled() -> bool:
+    """Whether this is a packaged build rather than a run from source."""
     return "__compiled__" in globals() or getattr(sys, "frozen", False)
 
 
 @dataclass
 class Asset:
+    """A file attached to a GitHub release: its name, download URL and size in bytes (0 when unknown)."""
+
     name: str
     url: str
     size: int
 
     def to_json(self) -> dict:
+        """Return what the front end shows of it: name and size."""
         return {"name": self.name, "size": self.size}
 
 
 @dataclass
 class UpdateInfo:
+    """A newer release: its version (without ``v``), this build's version, its release page and notes.
+
+    ``asset`` and ``checksum`` are this platform's build and its ``.md5`` file, None when the release has none;
+    ``installable`` says whether this build can download and swap it in by itself.
+    """
+
     version: str
     current: str
     page: str
@@ -99,6 +117,7 @@ class UpdateInfo:
     notes: str = ""
 
     def to_json(self) -> dict:
+        """Return the update for the front end; of the downloads, only the build's name and size."""
         return {
             "version": self.version,
             "current": self.current,
@@ -111,7 +130,7 @@ class UpdateInfo:
 
 
 def platform_suffix() -> str | None:
-    """The end of this platform's build name: ``-macos-arm64.dmg`` or ``-windows-x64.exe``."""
+    """Return the end of this platform's build name (``-macos-arm64.dmg``, ``-windows-x64.exe``), or None for none."""
     machine = platform.machine().lower()
     if sys.platform == "darwin":
         return f"-macos-{'arm64' if machine in ('arm64', 'aarch64') else 'x86_64'}.dmg"
@@ -122,7 +141,18 @@ def platform_suffix() -> str | None:
 
 
 def pick_assets(assets: list[dict], suffix: str | None, version: str) -> tuple[Asset | None, Asset | None]:
-    """The GUI build for this platform and its ``.md5`` file (the CLI builds are named ``...-cli-...``)."""
+    """Pick the GUI build for this platform and its ``.md5`` file from a release's assets.
+
+    The CLI builds, named ``...-cli-...``, are skipped; of several builds the first by name is taken.
+
+    Args:
+        assets: The release's ``assets`` from GitHub's API.
+        suffix: This platform's build name ending (``platform_suffix``); None finds nothing.
+        version: The release's version, without ``v``; a build's name ends in ``-<version><suffix>``.
+
+    Returns:
+        ``(build, checksum)``; either is None when missing.
+    """
     if not suffix:
         return None, None
     by_name = {a["name"]: Asset(a["name"], a["browser_download_url"], int(a.get("size") or 0)) for a in assets}
@@ -140,10 +170,19 @@ def _get(url: str, timeout: float) -> bytes:
 
 
 def latest(releases: list[dict], current: str, suffix: str | None) -> UpdateInfo | None:
-    """The newest release above ``current`` (drafts skipped; pre-releases included, the project is in alpha).
+    """Return the newest release above the running version, drafts skipped and pre-releases included.
 
     A release with this platform's build and checksum is preferred over a newer one without them (a pre-release often
-    ships no Windows build); the newest release overall is the fallback when none has both. Never a downgrade."""
+    ships no Windows build); the newest release overall is the fallback when none has both. Never a downgrade.
+
+    Args:
+        releases: The releases from GitHub's API.
+        current: The running version; a ``-dev`` suffix is ignored, and one that does not parse counts as 0.0.0.
+        suffix: This platform's build name ending (``platform_suffix``); None finds no build.
+
+    Returns:
+        The update, or None when no release is newer.
+    """
     mine = parse_version(current.removesuffix("-dev")) or parse_version("0.0.0")
     best = None
     best_built = None
@@ -177,7 +216,17 @@ def latest(releases: list[dict], current: str, suffix: str | None) -> UpdateInfo
 
 
 def check(timeout: float = 10.0) -> UpdateInfo | None:
-    """Ask GitHub for a newer release. ``ServiceError("update_check_failed")`` when it cannot be reached."""
+    """Ask GitHub for a release newer than this build.
+
+    Args:
+        timeout: Seconds for the request.
+
+    Returns:
+        The update, or None when there is none.
+
+    Raises:
+        ServiceError: ``update_check_failed`` when GitHub cannot be reached or answers with no list of releases.
+    """
     try:
         releases = json.loads(_get(API, timeout))
     except Exception as e:  # network errors, HTTP errors, bad JSON
@@ -186,7 +235,7 @@ def check(timeout: float = 10.0) -> UpdateInfo | None:
 
 
 def parse_md5(text: str, name: str) -> str | None:
-    """The hash for ``name`` in an md5sum-style file (``<hash>  <name>``), or a lone hash."""
+    """Return the lower-case hash for ``name`` in an md5sum-style file (``<hash>  <name>``) or a lone hash, or None."""
     for line in text.splitlines():
         parts = line.strip().split()
         if not parts or not re.fullmatch(r"[0-9a-fA-F]{32}", parts[0]):
@@ -197,6 +246,7 @@ def parse_md5(text: str, name: str) -> str | None:
 
 
 def md5_of(path: Path) -> str:
+    """Return a file's MD5 in lower-case hex."""
     h = hashlib.md5()
     with path.open("rb") as f:
         for chunk in iter(lambda: f.read(CHUNK), b""):
@@ -207,7 +257,23 @@ def md5_of(path: Path) -> str:
 def download(
     info: UpdateInfo, dest: Path, progress: Callable[[int, int, str], None] | None = None, timeout: float = 30.0
 ) -> tuple[Path, str]:
-    """Download and verify the build; return its path and the MD5 to retain for ``install``."""
+    """Download this platform's build of an update and verify it against the release's ``.md5`` file.
+
+    The build is written to a ``.part`` file first and renamed when its MD5 matches.
+
+    Args:
+        info: The update, with its build and checksum.
+        dest: The folder the build is saved in; created when missing.
+        progress: Called with bytes done, bytes in total (0 when unknown) and the build's file name after each chunk.
+        timeout: Seconds for each request.
+
+    Returns:
+        The build's path and the MD5 to hand to ``install``.
+
+    Raises:
+        ServiceError: ``update_unavailable`` without a build or checksum, ``update_download_failed`` on a network or
+            file error, ``update_checksum_mismatch`` when the checksum file names no hash or the MD5 differs.
+    """
     if not info.asset or not info.checksum:
         raise ServiceError("update_unavailable", version=info.version)
     dest.mkdir(parents=True, exist_ok=True)
@@ -246,8 +312,11 @@ def download(
 
 
 def install_target() -> Path | None:
-    """The writable ``.app`` bundle or ``.exe`` an update can replace, or None (always in dev mode: a build under
-    test never replaces itself, see devmode)."""
+    """Return the writable ``.app`` bundle or ``.exe`` an update can replace, or None.
+
+    None in dev mode (a build under test never replaces itself), for an app run from a disk image or translocated by
+    macOS, and for a program in a folder this process cannot write.
+    """
     if devmode.active():
         return None
     target = None
@@ -275,6 +344,13 @@ def install_target() -> Path | None:
 
 
 def macos_script(dmg: Path, app: Path, pid: int) -> str:
+    """Return the shell script that swaps the app for the one in a disk image once this process has quit.
+
+    Args:
+        dmg: The downloaded disk image; removed after the swap.
+        app: The installed ``.app`` bundle, replaced and started again.
+        pid: The process the script waits for.
+    """
     q = shlex.quote
     staged = app.with_name(f".{app.stem}.update.app")
     return f"""#!/bin/sh
@@ -303,7 +379,14 @@ open {q(str(app))}
 
 
 def windows_script(pids: list[int]) -> str:
-    """An ASCII helper; paths arrive through Unicode environment variables, expanded only once."""
+    """Return the batch script that swaps the program for the downloaded build once it has quit.
+
+    The script is ASCII: its paths and the expected MD5 arrive through the ``BAMT_UPDATE_*`` environment variables
+    (Unicode), expanded only once. A failed replacement starts the original program again.
+
+    Args:
+        pids: The processes the script waits for (a onefile build's launcher and this process).
+    """
     labels = "\n".join(
         f":wait{pid}\n"
         + f'tasklist /FI "PID eq {pid}" 2>nul | find "{pid}" >nul && (timeout /t 1 /nobreak >nul & goto wait{pid})'
@@ -338,16 +421,33 @@ start "" /D "%BAMT_UPDATE_DIR%" "%BAMT_UPDATE_EXE%"
 :end
 del "%BAMT_UPDATE_STAGE%" >nul 2>&1
 del "%~f0"
-"""
+"""  # noqa: E501 - each PowerShell command must stay on one script line
 
 
 def install(downloaded: Path, expected_md5: str) -> None:
-    """Recheck the MD5 retained from ``download``, then start the swap helper; the caller must quit."""
+    """Recheck the MD5 retained from ``download``, then start the swap helper; the caller must quit.
+
+    Raises:
+        ServiceError: As ``prepare_install`` raises.
+    """
     prepare_install(downloaded, expected_md5)()
 
 
 def prepare_install(downloaded: Path, expected_md5: str) -> Callable[[], None]:
-    """Validate and write the swap helper, returning its launch for a confirmed native close."""
+    """Recheck a downloaded build's MD5 and write the swap helper, returning its launch for a confirmed native close.
+
+    Args:
+        downloaded: The build ``download`` saved.
+        expected_md5: The MD5 ``download`` returned.
+
+    Returns:
+        A function that starts the helper; the App must quit after calling it.
+
+    Raises:
+        ServiceError: ``update_unsupported`` for a run from source, a program that cannot be replaced or another
+            platform; ``update_checksum_mismatch`` when the file's MD5 differs; ``update_download_failed`` when the
+            file cannot be read.
+    """
     target = install_target()
     if not is_compiled() or target is None:
         raise ServiceError("update_unsupported")
@@ -408,7 +508,10 @@ def prepare_install(downloaded: Path, expected_md5: str) -> Callable[[], None]:
 
 
 def finalize_windows_update() -> None:
-    """Retire only this updater's backup after the new application reaches a complete first screen."""
+    """Remove the backup the swap helper kept of the previous program, once the new one shows its first screen.
+
+    Only the backup the helper named in ``BAMT_UPDATE_BACKUP``, beside the program, is removed; Windows builds only.
+    """
     if sys.platform != "win32" or devmode.active() or not is_compiled():
         return
     name = os.environ.pop("BAMT_UPDATE_BACKUP", "")
