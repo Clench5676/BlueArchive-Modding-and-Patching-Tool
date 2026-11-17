@@ -53,8 +53,48 @@ bamt = "bmpt.launcher:main"
 [dependency-groups]
 dev = [
     "pytest>=8.0.0",
+    "ruff>=0.17.5",
 ]
 
 [tool.pytest.ini_options]
 # collect only tests/: the checkout's root may hold the user's own data and research folders
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+src = ["src", "tests"]
+# Upstream's engine keeps upstream's style; vendored and local-only folders are not App code.
+extend-exclude = [
+    "src/ba_modding_toolkit",
+    "src/bmpt/web/vendor",
+    "src/bmpt_dev",
+    "prototype",
+    "research",
+    "ai-work",
+    "docs",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "D", "ERA"]
+ignore = [
+    "E731",  # a named lambda is fine for a one-line key or callback
+    "E741",  # short names such as l stay readable in numeric code
+    # Not yet met by the existing code: remove each line once the code passes the rule.
+    "D100", "D101", "D102", "D103", "D104", "D105", "D107",
+    "D200", "D202", "D205", "D209", "D212", "D301", "D403", "D415",
+    "E501",
+    "F402",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# engine.py imports the engine's names for type checking and re-exports them.
+"src/bmpt/engine.py" = ["F401"]
+# The entry points register the locales before importing modules that translate at import time.
+"src/bmpt/webui/__main__.py" = ["E402"]
+"src/bmpt/webui/main.py" = ["E402"]
+# Tests import shared fixtures by name, set up paths before imports and need no docstrings.
+"tests/**" = ["D", "E402", "F401", "F811"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"

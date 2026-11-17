@@ -1,0 +1,58 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.6.8/schema.json",
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "files": {
+    // The App's front end and its tests; the vendored libraries under src/bmpt/web/vendor are not ours.
+    "includes": ["src/bmpt/web/js/**", "src/bmpt/web/css/**", "tests/js/**"]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 120
+  },
+  "javascript": {
+    "formatter": { "quoteStyle": "double", "semicolons": "always" }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "style": {
+        "useExponentiationOperator": "off",
+        "useTemplate": "off",
+        // CSS: rules are ordered by screen, not by selector weight.
+        "noDescendingSpecificity": "off"
+      },
+      "suspicious": {
+        // forEach callbacks written as expressions, and assignments in conditions, are house style.
+        "useIterableCallbackReturn": "off",
+        "noAssignInExpressions": "off",
+        // CSS: a fallback value followed by the preferred one (overflow: hidden; overflow: clip).
+        "noDuplicateProperties": "off"
+      },
+      "correctness": {
+        // Callbacks keep the parameters of the signature they implement.
+        "noUnusedFunctionParameters": "off",
+        // do { ... } while (true) loops that end with a break.
+        "noConstantCondition": "off",
+        // Not yet met by the existing code: set back to the preset once the code passes it.
+        "noUnusedVariables": "off"
+      },
+      "complexity": {
+        "useArrowFunction": "off",
+        // CSS: !important overrides inline styles set by the prefab layout.
+        "noImportantStyles": "off",
+        // Not yet met by the existing code: set back to the preset once the code passes it.
+        "useOptionalChain": "off",
+        "noCommaOperator": "off",
+        "useMathMinMax": "off"
+      },
+      "performance": {
+        // innerText is read for its rendered layout, which textContent does not give.
+        "useDomNodeTextContent": "off"
+      }
+    }
+  },
+  "assist": { "enabled": false }
+}
