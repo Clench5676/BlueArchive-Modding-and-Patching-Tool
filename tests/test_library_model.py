@@ -945,7 +945,7 @@ def test_model_costume_of_itself_is_refused(model_env):
 
 
 def test_model_jobs_publish_the_model_kind(model_env):
-    from bmpt.webui.services import _changed_of
+    from bmpt.webui.services_jobs import _changed_of
 
     env = model_env
     (entry,) = env.library.add([make_mod(env.parts[1], env.tmp / "upload")])

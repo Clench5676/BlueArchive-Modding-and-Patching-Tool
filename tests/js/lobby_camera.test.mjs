@@ -88,7 +88,7 @@ test("a camera's still shows the art the framed view showed, as its lobby does",
     V = { x: -900, y: -120, w, h };
   const { scale: k, offset } = Lobby.cameraParams(V, G);
   // the camera's prefab places the layer by p -> k p + offset, its scale times k (library/lobby_camera.py); the
-  // framing.json of a camera answers that layer and the game's view (webui/services.py)
+  // framing.json of a camera answers that layer and the game's view (webui/services_assets.py)
   const camera = {
     name: "hero",
     x: k * official.x + offset[0],

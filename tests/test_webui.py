@@ -1799,9 +1799,9 @@ def test_install_update_reserves_admission_until_native_closed_and_starts_only_o
 def test_install_update_never_launches_a_helper_for_a_refused_native_close_and_releases_admission(
     app, services, update_env, monkeypatch, refusal
 ):
-    from bmpt.webui import services as services_module
+    from bmpt.webui import services_window
 
-    monkeypatch.setattr(services_module, "UPDATE_QUIT_WAIT", 0.01)
+    monkeypatch.setattr(services_window, "UPDATE_QUIT_WAIT", 0.01)
     rpc(app, "app.checkUpdate")
     file = download_update(app, services)
     destroy = services.window.destroy

@@ -3808,6 +3808,6 @@ def test_apply_configuration_without_official_keeps_outside_and_reports_incomple
     assert {path.name: path.read_bytes() for path in kept.file.parent.glob("*.bundle")} == before
     assert texture.read_bytes() == mod.file.read_bytes()
     assert world.spr.read_bytes() == before[world.spr.name]
-    from bmpt.webui.services import _changed_of
+    from bmpt.webui.services_jobs import _changed_of
 
     assert _changed_of(result)["mods"]

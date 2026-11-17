@@ -2,7 +2,7 @@
 
 from bmpt.catalog import Catalog
 from bmpt.catalog.special import describe
-from bmpt.webui.services import skeleton_file
+from bmpt.webui.services_assets import skeleton_file
 
 
 def _metadata():

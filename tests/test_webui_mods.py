@@ -1,5 +1,5 @@
-"""The web UI's wiring of the Enable Mods switch, the scan, the classic hand-off and quitting (webui/services.py,
-api.py, main.py), with a real mod library over temporary game folders of header-only bundles (never a real install,
+"""The web UI's wiring of the Enable Mods switch, the scan, the classic hand-off and quitting (webui/services*.py,
+api*.py, main.py), with a real mod library over temporary game folders of header-only bundles (never a real install,
 library or settings), driven through the WSGI app without a window or a socket."""
 
 from __future__ import annotations
@@ -1517,7 +1517,7 @@ def test_remap_rpc_is_read_only_and_accept_publishes_a_new_library_mod(env, monk
     job = env.job("actions.acceptRemap", preview="review")
     assert job.state == "done" and job.writes == "library"
     assert job.result == result.to_json()
-    from bmpt.webui.services import _changed_of
+    from bmpt.webui.services_jobs import _changed_of
 
     assert _changed_of(result) == {"cores": [entry.core], "kinds": [entry.kind], "mods": True}
 
