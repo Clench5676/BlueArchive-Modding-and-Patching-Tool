@@ -20,7 +20,8 @@ reference is mapped by name; nothing of the mod's skeleton changes but what the 
   through the anchor; ``BOUND`` of the visible pixels may differ. Flagged parts try ``CANDIDATES`` (atlas rotate,
   attachment turned, placement verbatim or by world) in one test rig the page poses once; the comparison decides.
 
-The page poses every rig with the runtime (``web/js/rig-geometry.js``); this module only maps names, bytes and pixels.
+The page poses every rig with the runtime (``web/js/spine/rig-geometry.js``); this module only maps names, bytes and
+pixels.
 """
 
 from __future__ import annotations

@@ -6,7 +6,7 @@
 // its linear framebuffer, post-processed once (linear.js). A lobby whose bottom skeleton fails to load keeps one context
 // per skeleton, stacked (lobby.js).
 import * as Linear from "./core/linear.js";
-import * as Parts from "./skeleton-parts.js";
+import * as Parts from "./spine/skeleton-parts.js";
 import { compareKeys, queuesOf, sortKey } from "./particles.js";
 
 const hosts = new WeakMap(); // guest player -> the player whose context it draws with

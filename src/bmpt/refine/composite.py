@@ -1,6 +1,6 @@
 """CPU setup-pose composition and visibility-aware colour projection.
 
-Geometry comes from web/js/refine-composite.js and the shipped public Spine API. Python never invokes Node.
+Geometry comes from web/js/spine/refine-composite.js and the shipped public Spine API. Python never invokes Node.
 Coordinates are world y-up, atlas UV top-down. Sampling is bilinear, at pixel centres; no gamma conversion is applied
 (like the App). The four Spine blend factors operate on premultiplied framebuffer channels.
 """

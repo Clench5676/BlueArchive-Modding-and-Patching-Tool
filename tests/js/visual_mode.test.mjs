@@ -89,7 +89,7 @@ let now = 0;
 Object.defineProperty(globalThis, "performance", { value: { now: () => now }, configurable: true, writable: true });
 
 const Visual = await import("../../src/bmpt/web/js/detail/visual-mode.js");
-const { setSpineConsent } = await import("../../src/bmpt/web/js/spine-runtime.js");
+const { setSpineConsent } = await import("../../src/bmpt/web/js/spine/spine-runtime.js");
 setSpineConsent(true);
 globalThis.spine = {};
 

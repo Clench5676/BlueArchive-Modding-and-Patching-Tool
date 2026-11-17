@@ -469,7 +469,7 @@ const Popup = await import("../../src/bmpt/web/js/ui/popup.js");
 const Update = await import("../../src/bmpt/web/js/app/update.js");
 const { S } = await import("../../src/bmpt/web/js/core/util.js");
 const { setStrings } = await import("../../src/bmpt/web/js/core/i18n.js");
-const { setSpineConsent } = await import("../../src/bmpt/web/js/spine-runtime.js");
+const { setSpineConsent } = await import("../../src/bmpt/web/js/spine/spine-runtime.js");
 setSpineConsent(true);
 const runtime = vm.createContext({
   console,

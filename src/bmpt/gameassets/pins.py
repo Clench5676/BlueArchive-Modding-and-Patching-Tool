@@ -1,4 +1,4 @@
-"""Describe bones pinned by memorial lobby prefabs for web/js/skeleton-pins.js.
+"""Describe bones pinned by memorial lobby prefabs for web/js/spine/skeleton-pins.js.
 
 A SkeletonUtilityBone in Override mode (mode 1) sets its bone from its GameObject every frame, after the animation
 and before the world transform (spine-unity's SkeletonUtility.UpdateLocal: the bone's local x / y from the

@@ -8,10 +8,10 @@ import { lobbyCaptureView, lobbyMaximumWidth } from "./photography/camera.js";
 // setLines). The touch interaction and the wheel zoom are in lobby-touch.js, the drawing in lobby-stage.js, the intro in
 // lobby-intro.js.
 import { specialFramingOf, specialView } from "./detail/special-view.js";
-import { latestLoad, loadPlayer } from "./spine-load.js";
-import { ensureSpine } from "./spine-runtime.js";
+import { latestLoad, loadPlayer } from "./spine/spine-load.js";
+import { ensureSpine } from "./spine/spine-runtime.js";
 import { forgetSpineAssets, spineBase, spineAssetBase } from "./core/api.js";
-import { lobbyIdle } from "./rest-pose.js";
+import { lobbyIdle } from "./spine/rest-pose.js";
 // every wait of the lobby is a preview's: counted in the foreground, without the time a read waits for the library
 import { withPreviewTimeout as withTimeout } from "./core/async.js";
 import { atStep, previewError } from "./detail/preview-error.js";
@@ -19,11 +19,11 @@ import { T, language } from "./core/i18n.js";
 const dialogueModule = () => import("./student-hall-dialogue.js");
 import { artBounds, containingView, overlaps, resumeRest, settle, validRect, worldBounds } from "./lobby-health.js";
 import * as Linear from "./core/linear.js";
-import * as Materials from "./skeleton-materials.js";
+import * as Materials from "./spine/skeleton-materials.js";
 import * as Particles from "./particles-gl.js";
-import * as SlotColours from "./slot-colours.js";
+import * as SlotColours from "./spine/slot-colours.js";
 import * as Stage from "./lobby-stage.js";
-import * as Pins from "./skeleton-pins.js";
+import * as Pins from "./spine/skeleton-pins.js";
 import * as Touch from "./lobby-touch.js";
 import * as Sync from "./lobby-sync.js";
 import * as Intro from "./lobby-intro.js";

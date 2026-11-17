@@ -3,7 +3,7 @@ import vm from "node:vm";
 import * as Sync from "../../src/bmpt/web/js/lobby-sync.js";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
-import { latestLoad } from "../../src/bmpt/web/js/spine-load.js";
+import { latestLoad } from "../../src/bmpt/web/js/spine/spine-load.js";
 import * as Intro from "../../src/bmpt/web/js/lobby-intro.js";
 import { withTimeout } from "../../src/bmpt/web/js/core/async.js";
 

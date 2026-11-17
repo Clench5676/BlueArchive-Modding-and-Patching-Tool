@@ -12,7 +12,7 @@ import * as Buttons from "../ui/game-buttons.js";
 import * as Popup from "../ui/popup.js";
 import { rpc } from "../core/api.js";
 import { T, errorText } from "../core/i18n.js";
-import { setSpineConsent } from "../spine-runtime.js";
+import { setSpineConsent } from "../spine/spine-runtime.js";
 import { COLOUR, POPUP_FOOTER, POPUP_FRAME, POPUP_TYPE, SPACE, TYPE, XS_BUTTON } from "../ui/ui-tokens.js";
 import { frameGeometry, popupContent } from "../ui/popup-frames.js";
 import { container, row, stack, textItem, toNode } from "../ui/ui-grid.js";

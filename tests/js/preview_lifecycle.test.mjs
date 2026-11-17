@@ -6,7 +6,7 @@ import {
   previewLifecycle,
   previewTimer,
 } from "../../src/bmpt/web/js/detail/preview-lifecycle.js";
-import { latestLoad, loadPlayer } from "../../src/bmpt/web/js/spine-load.js";
+import { latestLoad, loadPlayer } from "../../src/bmpt/web/js/spine/spine-load.js";
 import { nextFrame } from "../../src/bmpt/web/js/core/async.js";
 
 const tick = () => new Promise(setImmediate);
@@ -294,7 +294,7 @@ for (const kind of ["portrait", "lobby", "special L2D"])
   });
 
 test("a Spine load that times out says how far it got", async () => {
-  const { loadPlayer } = await import("../../src/bmpt/web/js/spine-load.js");
+  const { loadPlayer } = await import("../../src/bmpt/web/js/spine/spine-load.js");
   const assetManager = { getLoaded: () => 2, getToLoad: () => 1, hasErrors: () => false, getErrors: () => ({}) };
   const player = {
     assetManager,

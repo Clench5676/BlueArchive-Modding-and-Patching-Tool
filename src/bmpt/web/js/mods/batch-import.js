@@ -12,7 +12,7 @@ import { L, T, language } from "../core/i18n.js";
 import { withCode } from "../app/error-codes.js";
 import { customAliases, studentName } from "../core/names.js";
 import { specialFraming } from "../detail/special-view.js";
-import { spineAllowed } from "../spine-runtime.js";
+import { spineAllowed } from "../spine/spine-runtime.js";
 import { thumbnailScope, forget } from "../detail/thumbs.js";
 import { modelThumbnail } from "../model-still.js";
 import { S } from "../core/util.js";

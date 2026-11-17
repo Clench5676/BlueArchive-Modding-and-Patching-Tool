@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 const { spineBase, spinePrefix } = await import("../../src/bmpt/web/js/core/api.js");
-const { setSpineConsent } = await import("../../src/bmpt/web/js/spine-runtime.js");
+const { setSpineConsent } = await import("../../src/bmpt/web/js/spine/spine-runtime.js");
 setSpineConsent(true);
 
 test("a core's skeleton base and its prefix", () => {

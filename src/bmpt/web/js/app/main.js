@@ -25,7 +25,7 @@ import { hasAsset, primaryKind } from "../mods/switch-sources.js";
 import { renderNav, setTitle, setTopActions } from "./nav.js";
 import { confirmQuit, quitKey } from "./quit.js";
 import { forget } from "../detail/thumbs.js";
-import { setSpineConsent } from "../spine-runtime.js";
+import { setSpineConsent } from "../spine/spine-runtime.js";
 import { $, fitStage } from "../core/util.js";
 import { studentName } from "../core/names.js";
 import { previewCache } from "../detail/preview-cache.js";

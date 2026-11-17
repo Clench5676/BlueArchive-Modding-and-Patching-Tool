@@ -12,9 +12,9 @@ import {
   validRect,
   worldBounds,
 } from "../../src/bmpt/web/js/lobby-health.js";
-import { lobbyIdle } from "../../src/bmpt/web/js/rest-pose.js";
+import { lobbyIdle } from "../../src/bmpt/web/js/spine/rest-pose.js";
 import * as Lobby from "../../src/bmpt/web/js/lobby.js";
-import * as Pins from "../../src/bmpt/web/js/skeleton-pins.js";
+import * as Pins from "../../src/bmpt/web/js/spine/skeleton-pins.js";
 
 const context = vm.createContext({
   console,

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
-import { loadPlayer } from "../../src/bmpt/web/js/spine-load.js";
+import { loadPlayer } from "../../src/bmpt/web/js/spine/spine-load.js";
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 const near = (values, expected) => values.forEach((v, i) => assert.ok(Math.abs(v - expected[i]) < 1e-6));

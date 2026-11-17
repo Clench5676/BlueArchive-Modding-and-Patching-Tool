@@ -4,11 +4,11 @@
 import { artBounds, settle } from "../lobby-health.js";
 import { specialFramingOf, specialView } from "./special-view.js";
 import { withTimeout } from "../core/async.js";
-import { loadPlayer as spinePlayer } from "../spine-load.js";
-import { ensureSpine, spineAllowed } from "../spine-runtime.js";
+import { loadPlayer as spinePlayer } from "../spine/spine-load.js";
+import { ensureSpine, spineAllowed } from "../spine/spine-runtime.js";
 
 import { spineAssetBase, forgetSpineAssets } from "../core/api.js";
-import { lobbyIdle } from "../rest-pose.js";
+import { lobbyIdle } from "../spine/rest-pose.js";
 import { lobbyStillViewport } from "../lobby-still.js";
 import { previewError } from "./preview-error.js";
 import { captureRetries } from "../core/capture-retries.js";

@@ -1,4 +1,4 @@
-"""Describe memorial lobby materials as spine-unity sets them, for web/js/skeleton-materials.js.
+"""Describe memorial lobby materials as spine-unity sets them, for web/js/spine/skeleton-materials.js.
 
 spine-unity draws every submesh with the material of its atlas page (the SpineAtlasAsset's materials, matched by their
 main texture). Most pages use the plain spine shaders, which the web UI's spine-player reproduces; some use other

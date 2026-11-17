@@ -2216,7 +2216,7 @@ test("detail refresh callers await changes queued while an earlier refresh is dr
 
 test("Spine notice is plain before asset consent and enables nothing until its acknowledgement is saved", async () => {
   const Consent = await import("../../src/bmpt/web/js/app/consent.js");
-  const Runtime = await import("../../src/bmpt/web/js/spine-runtime.js");
+  const Runtime = await import("../../src/bmpt/web/js/spine/spine-runtime.js");
   const saved = answers["app.spineConsent"],
     save = deferred();
   Runtime.setSpineConsent(null);
@@ -2255,7 +2255,7 @@ test("Spine notice is plain before asset consent and enables nothing until its a
 
 test("Spine notice has the same title, legal body and lone Confirm in both paths in every locale", async () => {
   const Consent = await import("../../src/bmpt/web/js/app/consent.js");
-  const Runtime = await import("../../src/bmpt/web/js/spine-runtime.js");
+  const Runtime = await import("../../src/bmpt/web/js/spine/spine-runtime.js");
   const saved = answers["app.spineConsent"];
   answers["app.spineConsent"] = ({ granted }) => granted;
   try {
@@ -2348,7 +2348,7 @@ test("startup shows the Spine notice after assets until it is acknowledged, re-r
 test("Settings Spine value row opens the same read-only notice in every locale without changing state", async () => {
   const Consent = await import("../../src/bmpt/web/js/app/consent.js");
   const Settings = await import("../../src/bmpt/web/js/settings.js");
-  const Runtime = await import("../../src/bmpt/web/js/spine-runtime.js");
+  const Runtime = await import("../../src/bmpt/web/js/spine/spine-runtime.js");
   const saved = { ...answers },
     S = I18n.T;
   const prefs = {

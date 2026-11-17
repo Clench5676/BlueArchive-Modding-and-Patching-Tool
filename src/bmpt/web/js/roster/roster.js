@@ -23,7 +23,7 @@ import { L, T, language } from "../core/i18n.js";
 import { scrollbar } from "../ui/scrollbar.js";
 import { wheelScroller } from "../ui/horizontal-scroll.js";
 import { prioritise, thumbnailScope } from "../detail/thumbs.js";
-import { spineAllowed } from "../spine-runtime.js";
+import { spineAllowed } from "../spine/spine-runtime.js";
 import { configuredKey, hasAsset, previewBase, primaryKind } from "../mods/switch-sources.js";
 import { $, RECRUIT, S, advanceOf, clone, glyphsOf } from "../core/util.js";
 import { DEFAULT_VIEW, arrange, normalizeView, order as orderOf } from "./roster-order.js";

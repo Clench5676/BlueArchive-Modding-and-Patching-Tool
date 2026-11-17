@@ -1,6 +1,6 @@
 // Tests for the lobby's mesh renderers (web/js/mesh-fx.js and their drawing in particles-gl.js), the skeletons' game
-// materials (web/js/skeleton-materials.js) and pinned bones (web/js/skeleton-pins.js), against recording stand-ins for
-// WebGL2 and spine-player. Run by tests/test_lobby_render.py with Node's test runner.
+// materials (web/js/spine/skeleton-materials.js) and pinned bones (web/js/spine/skeleton-pins.js), against recording
+// stand-ins for WebGL2 and spine-player. Run by tests/test_lobby_render.py with Node's test runner.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFileSync } from "node:fs";
@@ -456,7 +456,7 @@ test("mesh renderers draw with the effects, sorted with them, with their animate
 
 // --- skeleton-materials.js ------------------------------------------------------------------------------------------
 
-const M = await import("../../src/bmpt/web/js/skeleton-materials.js");
+const M = await import("../../src/bmpt/web/js/spine/skeleton-materials.js");
 // linear.js attached, with the blend modes the batch is set to in the player's log
 function attachLinear(p) {
   const ok = Linear.attach(p),
@@ -871,7 +871,7 @@ test("a skeleton without prefab data keeps spine-player's drawing", () => {
 
 // --- skeleton-pins.js -----------------------------------------------------------------------------------------------
 
-const Pins = await import("../../src/bmpt/web/js/skeleton-pins.js");
+const Pins = await import("../../src/bmpt/web/js/spine/skeleton-pins.js");
 
 test("pinned bones keep their prefab place after the animation", () => {
   const bones = {

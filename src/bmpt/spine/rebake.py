@@ -1,6 +1,6 @@
 """Move a portrait mod's pixels onto the official rig's pages through world space.
 
-The page posts what both rigs draw, pose by pose (``web/js/rig-geometry.js``, the runtime's public API): per drawn
+The page posts what both rigs draw, pose by pose (``web/js/spine/rig-geometry.js``, the runtime's public API): per drawn
 slot its region, page, blend, alpha, world vertices, page UVs and triangles. For every texel a region of the official
 rig draws, its world point is where the official rig puts it; the mod's pixels at that point are the ones the rig the
 mod's textures were drawn for shows there. Both rigs draw the same picture at the same place, so this holds however

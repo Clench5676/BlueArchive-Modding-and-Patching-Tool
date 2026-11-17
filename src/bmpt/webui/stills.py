@@ -38,10 +38,10 @@ RENDERERS: dict[str, tuple[str, ...]] = {
         "js/detail/thumbs.js",
         "js/lobby-still.js",
         "js/lobby-health.js",
-        "js/rest-pose.js",
+        "js/spine/rest-pose.js",
         "js/detail/special-view.js",
-        "js/spine-load.js",
-        "js/spine-runtime.js",
+        "js/spine/spine-load.js",
+        "js/spine/spine-runtime.js",
         "vendor/spine-player-4.2.120/spine-player.min.js",
     ),
 }

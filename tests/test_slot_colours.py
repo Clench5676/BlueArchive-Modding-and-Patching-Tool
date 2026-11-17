@@ -1,6 +1,6 @@
-"""The lobby's slot colours as each atlas page's shader takes them (web/js/slot-colours.js): its Node tests, and on an
-official game folder (BAMT_TEST_GAME_DIR) the page shaders lobby.json names and the shaders' compiled vertex programs,
-which say how each one takes the vertex colour."""
+"""The lobby's slot colours as each atlas page's shader takes them (web/js/spine/slot-colours.js): its Node tests, and
+on an official game folder (BAMT_TEST_GAME_DIR) the page shaders lobby.json names and the shaders' compiled vertex
+programs, which say how each one takes the vertex colour."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ import pytest
 
 NODE = shutil.which("node")
 ROOT = Path(__file__).parent
-MODULE = ROOT.parent / "src" / "bmpt" / "web" / "js" / "slot-colours.js"
+MODULE = ROOT.parent / "src" / "bmpt" / "web" / "js" / "spine" / "slot-colours.js"
 GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-game")
 # the constants of the two gamma-to-linear conversions as float32 immediates in a D3D11 program: UnityCG's
 # GammaToLinearSpace (a cubic, spine-unity's PMAGammaToTargetSpace) and the exact sRGB curve's linear part (1 / 12.92)

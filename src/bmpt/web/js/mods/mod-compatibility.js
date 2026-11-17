@@ -4,9 +4,9 @@ import { rpc, waitJob } from "../core/api.js";
 import * as Loading from "../app/loading.js";
 import * as Popup from "../ui/popup.js";
 import * as Compare from "./mod-compare.js";
-import { ensureSpine } from "../spine-runtime.js";
+import { ensureSpine } from "../spine/spine-runtime.js";
 import { isIdentity, jobProgress, modJob } from "../core/job-progress.js";
-import * as RigGeometry from "../rig-geometry.js";
+import * as RigGeometry from "../spine/rig-geometry.js";
 
 const key = (name) =>
   name

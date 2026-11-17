@@ -1,7 +1,7 @@
 // Test-only binary reader. The shipped Python engine does not require Node.
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
-import { poseSetup, poseTracks, listPoses } from "../../../src/bmpt/web/js/refine-composite.js";
+import { poseSetup, poseTracks, listPoses } from "../../../src/bmpt/web/js/spine/refine-composite.js";
 const context = vm.createContext({
   console,
   TextDecoder,

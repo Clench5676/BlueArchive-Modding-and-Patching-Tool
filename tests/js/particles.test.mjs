@@ -1765,7 +1765,7 @@ test("a system's trails draw with their own material where its queue sorts them"
 
 // --- skeleton-parts.js: a skeleton drawn one render queue at a time ---
 
-const Parts = await import("../../src/bmpt/web/js/skeleton-parts.js");
+const Parts = await import("../../src/bmpt/web/js/spine/skeleton-parts.js");
 
 test("a skeleton draws one part per queue of its pages, each with its own slots, the effects in between", () => {
   const layer = {

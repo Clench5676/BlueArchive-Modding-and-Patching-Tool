@@ -1,7 +1,7 @@
 // One full-quality WebGL target. Repeated sources share textures and SkeletonData, while every entry owns its pose.
 import { loadSpineAssets, spineBase } from "./core/api.js";
-import { loadPlayer } from "./spine-load.js";
-import { ensureSpine } from "./spine-runtime.js";
+import { loadPlayer } from "./spine/spine-load.js";
+import { ensureSpine } from "./spine/spine-runtime.js";
 import { idleAnimation } from "./detail/thumbs.js";
 import * as Stage from "./lobby-stage.js";
 import { APPLIED_SELECTION_GOLD } from "./ui/ui-tokens.js";
