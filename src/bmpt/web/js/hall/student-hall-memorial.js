@@ -1,14 +1,13 @@
-// Two bounded lobby module instances: one retained current scene and one hidden replacement.
+// Two bounded lobby instances (createLobby), each with its own state: one retained current scene and one hidden
+// replacement. Each is made the first time its slot is used, loading the lobby code then.
 const modules = [null, null];
-const moduleAt = (index) =>
-  (modules[index] ||=
-    index === 0 ? import("../lobby/lobby.js?student-hall-a") : import("../lobby/lobby.js?student-hall-b"));
+const moduleAt = (index) => (modules[index] ||= import("../lobby/lobby.js").then(({ createLobby }) => createLobby()));
 /**
  * Make the Hall's pool of memorial lobbies: one retained current scene and one hidden replacement.
  * @param {object} options
  * @param {(choice: object, host: HTMLElement, signal: AbortSignal) => Promise<object>} options.load
- * @param {(index: number) => Promise<object>} [options.moduleFor] Gives the lobby module instance of a slot,
- *     for the tests.
+ * @param {(index: number) => Promise<object>} [options.moduleFor] Gives the lobby instance of a slot, for the
+ *     tests.
  * @returns {object} The pool's controls: current(), suspend(), resume(), prepare(choice, makeHost, signal),
  *     commit(session), discard(session), invalidate(session), cancelPending() and dispose().
  */

@@ -7,7 +7,7 @@
 import * as Linear from "../core/linear.js";
 import { toLinear } from "../app/touch-fx.js";
 
-// Runtime hooks run only on players created after lobby.js awaits ensureSpine().
+// Runtime hooks run only on players created after lobby-players.js awaits ensureSpine().
 
 const states = new WeakMap(),
   attached = new Set();

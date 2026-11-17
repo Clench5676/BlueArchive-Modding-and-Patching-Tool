@@ -90,8 +90,8 @@ test("scene framing fills every supported view aspect from its own bounds", () =
 });
 
 test("detail and thumbnails frame real posed vertices, ignoring stale export bounds", () => {
-  const lobby = read("../../src/bmpt/web/js/lobby/lobby.js");
-  const code = lobby.slice(lobby.indexOf("function measureSpecial("), lobby.indexOf("export function frame("));
+  const lobby = read("../../src/bmpt/web/js/lobby/lobby-geometry.js");
+  const code = lobby.slice(lobby.indexOf("function measureSpecial("), lobby.indexOf("  return { measureClips"));
   const thumbs = read("../../src/bmpt/web/js/detail/thumbs.js");
   const thumbnail = new Function(
     "spine",
@@ -107,8 +107,8 @@ test("detail and thumbnails frame real posed vertices, ignoring stale export bou
     const current = { framing };
     const measure = new Function(
       "env",
-      `const { current, worldBounds, artBounds, validRect, union, specialFramingOf, specialView, rectOf } = env; ${code}; return measureSpecial;`,
-    )({ current, worldBounds, artBounds, validRect, union, specialFramingOf, specialView, rectOf });
+      `const { S, worldBounds, artBounds, validRect, union, specialFramingOf, specialView, rectOf } = env; ${code}; return measureSpecial;`,
+    )({ S: { current }, worldBounds, artBounds, validRect, union, specialFramingOf, specialView, rectOf });
     const m = measure([layer]),
       shaped = specialFramingOf(framing, edge);
     assert.deepEqual(m.full, specialView(edge, shaped));
@@ -137,16 +137,16 @@ test("art taller than wide is framed as a whole character, whatever the slot's n
 });
 
 test("the detail view keeps scene framing for a tall set of several skeletons", () => {
-  const lobby = read("../../src/bmpt/web/js/lobby/lobby.js");
-  const code = lobby.slice(lobby.indexOf("function measureSpecial("), lobby.indexOf("export function frame("));
+  const lobby = read("../../src/bmpt/web/js/lobby/lobby-geometry.js");
+  const code = lobby.slice(lobby.indexOf("function measureSpecial("), lobby.indexOf("  return { measureClips"));
   const tall = { x0: -970, y0: -1000, x1: 975, y1: 1151 },
     art = () => tall,
     world = (r) => r;
   const m = new Function(
     "env",
-    `const { current, worldBounds, artBounds, validRect, union, specialFramingOf, specialView, rectOf } = env; ${code}; return measureSpecial;`,
+    `const { S, worldBounds, artBounds, validRect, union, specialFramingOf, specialView, rectOf } = env; ${code}; return measureSpecial;`,
   )({
-    current: { framing: "scene" },
+    S: { current: { framing: "scene" } },
     worldBounds: world,
     artBounds: art,
     validRect,
@@ -163,8 +163,8 @@ test("the detail view keeps scene framing for a tall set of several skeletons", 
 });
 
 test("the detail view and its thumbnail frame a tall scene-named NPC alike", () => {
-  const lobby = read("../../src/bmpt/web/js/lobby/lobby.js");
-  const code = lobby.slice(lobby.indexOf("function measureSpecial("), lobby.indexOf("export function frame("));
+  const lobby = read("../../src/bmpt/web/js/lobby/lobby-geometry.js");
+  const code = lobby.slice(lobby.indexOf("function measureSpecial("), lobby.indexOf("  return { measureClips"));
   const thumbs = read("../../src/bmpt/web/js/detail/thumbs.js");
   const tall = { x0: -418, y0: -873, x1: 667, y1: 1341 };
   const art = () => tall,
@@ -172,8 +172,8 @@ test("the detail view and its thumbnail frame a tall scene-named NPC alike", () 
   const current = { framing: "scene" };
   const m = new Function(
     "env",
-    `const { current, worldBounds, artBounds, validRect, union, specialFramingOf, specialView, rectOf } = env; ${code}; return measureSpecial;`,
-  )({ current, worldBounds: world, artBounds: art, validRect, union, specialFramingOf, specialView, rectOf })([
+    `const { S, worldBounds, artBounds, validRect, union, specialFramingOf, specialView, rectOf } = env; ${code}; return measureSpecial;`,
+  )({ S: { current }, worldBounds: world, artBounds: art, validRect, union, specialFramingOf, specialView, rectOf })([
     { name: "momoka_weekdungeon", player: {} },
   ]);
   assert.equal(m.sparse, true);

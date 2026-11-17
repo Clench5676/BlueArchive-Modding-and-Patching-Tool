@@ -1,5 +1,5 @@
 // Clips the memorial lobby plays at random times and the sounds its clips carry, as the game does.
-// lobby.js starts them with a skeleton's idle and feeds them its frames; nothing here touches the page.
+// lobby-players.js starts them with a skeleton's idle and feeds them its frames; nothing here touches the page.
 // A clip of PlayMode 2 (masked at random times: snow, clouds, petals, stars, Shigure's train) waits, plays once
 // on its own track, plus the extra plays its loops add, and, when it loops, waits again from that start for its
 // playing time plus a random min to max (the first wait follows its RandomTimingIntroDelayMode). A clip's sound

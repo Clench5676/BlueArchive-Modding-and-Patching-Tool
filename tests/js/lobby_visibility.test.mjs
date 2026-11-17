@@ -3,10 +3,8 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { overlaps, worldBounds } from "../../src/bmpt/web/js/lobby/lobby-health.js";
 
-const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby.js", import.meta.url), "utf8");
-const code = source
-  .slice(source.indexOf("export function reveal("), source.indexOf("export function setIntro("))
-  .replace("export function", "function");
+const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby-scene.js", import.meta.url), "utf8");
+const code = source.slice(source.indexOf("function reveal("), source.indexOf("function setIntro("));
 function harness(mode = "left") {
   let now = 1,
     pixels = true;
@@ -40,13 +38,12 @@ function harness(mode = "left") {
     drawnAt: now,
   };
   const env = {
-    current: c,
-    players: [p],
+    S: { current: c, players: [p], mode, talk: null, playerLoads: new WeakMap() },
+    L: {
+      recoverView: (view) => recovered.push(view),
+      failView: (err, host, url, step) => errors.push({ err, host, url, step }),
+    },
     document,
-    mode,
-    talk: null,
-    playerLoads: new WeakMap(),
-    recoverView: (view) => recovered.push(view),
     performance: { now: () => now },
     overlaps,
     worldBounds,
@@ -60,7 +57,6 @@ function harness(mode = "left") {
       return id;
     },
     clearTimeout: (id) => timers.delete(id),
-    failView: (err, host, url, step) => errors.push({ err, host, url, step }),
   };
   const reveal = new Function("env", `let { ${Object.keys(env).join(", ")} } = env; ${code}; return reveal;`)(env);
   return {

@@ -1,6 +1,6 @@
 // The memorial lobby's measuring, the pure part: the painted-rect grid, the poses the zoom-out limit checks and how
-// it shrinks, the camera framings and the view rectangles. The module state (the lobby shown, its caches and timers)
-// stays in lobby.js, which loads once per query-keyed instance; this module holds none, so the instances share it.
+// it shrinks, the camera framings and the view rectangles. The state (the lobby shown, its caches and timers) is each
+// instance's own (lobby.js createLobby); this module holds none, so the instances share it.
 import { artBounds, validRect, worldBounds } from "./lobby-health.js";
 
 export const ZOOM_IN = 2; // fullscreen zoom limit relative to the game's view (the art is about 0.5 texel per unit)

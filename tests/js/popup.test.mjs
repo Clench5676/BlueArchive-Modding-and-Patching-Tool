@@ -2,7 +2,7 @@
 // several cards ticked, the start sequence), web/js/app/update.js and detail.js's preview actions, on a small stand-in
 // DOM. Run by tests/test_popup.py with Node's test runner: node --test tests/js/popup.test.mjs
 import assert from "node:assert/strict";
-import { DETAIL_MODULES, flat, POPUP_MODULES } from "./helpers/source-text.mjs";
+import { DETAIL_MODULES, flat, LOBBY_MODULES, POPUP_MODULES } from "./helpers/source-text.mjs";
 import { readFileSync } from "node:fs";
 import { register } from "node:module";
 import { afterEach, test } from "node:test";
@@ -7034,8 +7034,7 @@ test("the startup Spine notice wraps inside UIPopup_Sort at message sizes in eve
 // Every preview entry stays quiet while the startup acknowledgement is pending.
 test("preview, comparison and compatibility modules contain no licence notice or confirmation button", () => {
   for (const name of [
-    "lobby/lobby",
-    "lobby/lobby-measure",
+    ...LOBBY_MODULES.map((file) => `lobby/${file.replace(/\.js$/, "")}`),
     ...DETAIL_MODULES.map((file) => `detail/${file.replace(/\.js$/, "")}`),
     "hall/student-hall",
     "hall/student-hall-portrait-toolbar",

@@ -7,12 +7,10 @@ import { withTimeout } from "../../src/bmpt/web/js/core/async.js";
 import { atStep } from "../../src/bmpt/web/js/detail/preview-error.js";
 import { validRect } from "../../src/bmpt/web/js/lobby/lobby-health.js";
 
-const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby-players.js", import.meta.url), "utf8");
+const geometrySource = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby-geometry.js", import.meta.url), "utf8");
 const measureSource = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby-measure.js", import.meta.url), "utf8");
-const loading = source
-  .slice(source.indexOf("const lobbyLoads ="), source.indexOf("export const setTrace"))
-  .replaceAll("export function", "function")
-  .replaceAll("export async function", "async function");
+const loading = source.slice(source.indexOf("// --- show(core, host)"), source.indexOf("\n  return { makePlayer"));
 const tick = () => new Promise(setImmediate);
 const noop = () => {};
 const meta = {
@@ -94,25 +92,26 @@ function harness(layersOf = layers, resolveSources = null, { allowed = true } = 
         { signal },
       );
     },
-    setView: noop,
-    game: () => ({}),
-    viewOf: () => ({}),
-    feather: noop,
     lightUp: noop,
-    openEdge: noop,
-    releaseTouch: noop,
-    restoreTouch: () => touchSetups.push("setup"),
-    clearTimers: noop,
     previewLifecycle: () => ({ active: () => true, dispose: noop }),
     freezeWhileLoading: () => ({ held: () => false, dispose: noop }),
     onScreen: () => true,
-    measure: () => structuredClone(meta),
-    measuresClips: () => false,
     Stage: { install: noop, hostOf: () => null },
     Linear: { setClear: noop, detach: noop },
     Materials: { detach: noop },
     Touch: { setup: noop, detach: noop },
-    Idle: { start: noop, stop: noop },
+  };
+  const L = {
+    setView: noop,
+    game: () => ({}),
+    viewOf: () => ({}),
+    feather: noop,
+    openEdge: noop,
+    releaseTouch: noop,
+    restoreTouch: () => touchSetups.push("setup"),
+    clearTimers: noop,
+    measure: () => structuredClone(meta),
+    measuresClips: () => false,
     toWorld: noop,
     zoomAt: noop,
     panBy: noop,
@@ -122,19 +121,35 @@ function harness(layersOf = layers, resolveSources = null, { allowed = true } = 
     viewTarget: noop,
     setViewTarget: noop,
     endTalk: noop,
-    Sfx: { clear: noop },
     stop: noop,
     setTimeout: noop,
+    clearTimeout: noop,
     reveal: () => calls.push("reveal"),
   };
+  const S = {
+    current: null,
+    players: [],
+    token: 0,
+    talkIndex: -1,
+    mode: "left",
+    wantTouch: false,
+    extendTimer: undefined,
+    chain: undefined,
+    lobbyLoads: latestLoad(),
+    sourceLoads: latestLoad(),
+    playerLoads: new WeakMap(),
+    Idle: { start: noop, stop: noop },
+    Sfx: { clear: noop },
+  };
+
   const h = new Function(
     "env",
+    "S",
+    "L",
     `let { ${Object.keys(env).join(", ")} } = env;
-    let current = null, players = [], token = 0, talkIndex = -1, mode = "left", wantTouch = false;
-    let extendTimer, chain, subtitleTimer;
     ${loading}
-    return { show, hide, recoverView, current: () => current };`,
-  )(env);
+    return { show, hide, recoverView, current: () => S.current };`,
+  )(env, S, L);
   return { ...h, host, created, calls, revisions, failures, prompts, touchSetups };
 }
 
@@ -412,8 +427,8 @@ test("a manifest that answers after the total deadline cannot start a discarded 
 });
 
 test("zoom limits are cached by both the configured art revision and the live layout revision", () => {
-  const start = source.indexOf("function measureClips()");
-  const code = source.slice(start, source.indexOf("// --- the camera framing", start));
+  const start = geometrySource.indexOf("function measureClips()");
+  const code = geometrySource.slice(start, geometrySource.indexOf("// --- the camera framing", start));
   const measured = [];
   const env = {
     game: () => ({}),
@@ -433,15 +448,15 @@ test("zoom limits are cached by both the configured art revision and the live la
   const measure = new Function(
     "env",
     `const { ${Object.keys(env).join(", ")} } = env;
-    let current;
     ${measureSource.slice(measureSource.indexOf("function rectCache("), measureSource.indexOf("// the grid: three game views"))}
-    ${source.slice(source.indexOf("const paintedRects ="), source.indexOf("// a reusable skeleton of a layer"))}
-    const safeRects = rectCache();
+    const S = { current: undefined, paintedRects: rectCache(), safeRects: rectCache() };
+    const L = { game, reclamp, setTimeout };
+    ${geometrySource.slice(geometrySource.indexOf("function geometryKey("), geometrySource.indexOf("// a reusable skeleton of a layer"))}
     ${code}
     return (artBase, base, extra = {}) => {
-      current = { artBase, base, loaded: [{ name: "hero", x: 0, y: 0, scale: 1, player: {} }], meta: { full: {} }, ...extra };
+      S.current = { artBase, base, loaded: [{ name: "hero", x: 0, y: 0, scale: 1, player: {} }], meta: { full: {} }, ...extra };
       measureClips();
-      return current.meta;
+      return S.current.meta;
     };`,
   )(env);
   const first = `${"a".repeat(64)}/`,

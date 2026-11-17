@@ -115,6 +115,20 @@ export const POPUP_MODULES = [
   "popup-message.js",
 ];
 
+// The memorial lobby's code: lobby.js, which builds each instance, and the parts of an instance, paths under
+// web/js/lobby.
+export const LOBBY_MODULES = [
+  "lobby.js",
+  "lobby-measure.js",
+  "lobby-layers.js",
+  "lobby-view.js",
+  "lobby-scene.js",
+  "lobby-geometry.js",
+  "lobby-clips.js",
+  "lobby-talk.js",
+  "lobby-players.js",
+];
+
 // The detail screen's code: detail.js and the modules split from it, paths under web/js/detail.
 export const DETAIL_MODULES = [
   "detail.js",

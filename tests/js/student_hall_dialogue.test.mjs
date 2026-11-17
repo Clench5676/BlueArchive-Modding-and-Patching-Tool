@@ -1140,7 +1140,7 @@ test("balloon subtitle transitions preserve the 260 ms sequence and immediate la
   h.dispose();
 });
 test("the Hall and memorial lobby use one prepareBalloon and CSS contributes no subtitle look", async () => {
-  const lobby = await readFile(new URL("../../src/bmpt/web/js/lobby/lobby.js", import.meta.url), "utf8");
+  const lobby = await readFile(new URL("../../src/bmpt/web/js/lobby/lobby-players.js", import.meta.url), "utf8");
   const css = await readFile(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
   assert.match(flat(lobby), /import\("\.\.\/hall\/student-hall-dialogue.js"\)/);
   assert.equal((source.match(/function prepareBalloon\(/g) || []).length, 1);

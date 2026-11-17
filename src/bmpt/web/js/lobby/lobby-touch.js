@@ -1,5 +1,5 @@
 // Fullscreen memorial lobby interaction, as in the game and from its own data (lobby.json: the prefab's SpineDragIK and
-// SpineCharacterBodyTouch boxes; lobby.js plays the clips). Press and hold on the head: after the trigger delay the pat
+// SpineCharacterBodyTouch boxes; lobby-clips.js plays the clips). Press and hold on the head: after the trigger delay the pat
 // clips play and the Touch_Point bone follows the pointer inside its box; on release the end clips play and the bone
 // eases back; the other drag kinds work the same way on their bones. Press and drag anywhere else: the eyes follow
 // (Touch_Eye); during a dialogue only the bone follows. A tap on the body starts the next dialogue. The wheel or a
@@ -430,7 +430,7 @@ export function detach() {
  * @param {number} delta The frame time in seconds.
  */
 export function apply(player, delta) {
-  // Only lobby.js players created after ensureSpine() install this frame hook.
+  // Only lobby players (lobby-players.js) created after ensureSpine() install this frame hook.
   if (!items.length) return;
   const dt = Math.max(0, Math.min(0.1, delta || 0));
   for (const it of items) {
