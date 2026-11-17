@@ -2,7 +2,13 @@
 
 ## Memorial lobby
 
-`lobby.js` frames and plays the lobby, `lobby-touch.js` adds the game's touch interaction in fullscreen. The player
+`lobby.js` frames and plays the lobby, `lobby-touch.js` adds the game's touch interaction in fullscreen. Each lobby is
+an instance of its own (`createLobby()`): its state (the lobby shown, players, dialogue, timers, settings, caches) is
+made per instance, and its functions come from parts that take that state and keep none: `lobby-players.js` (show,
+hide, context recovery), `lobby-view.js` (views, zoom, camera framing, edge extension), `lobby-geometry.js` (painted
+rect and limits), `lobby-scene.js` (timers, touch ownership, suspension, the first frame, the intro's controls),
+`lobby-clips.js` and `lobby-talk.js` (clips, dialogues, sounds); `lobby-layers.js` and `lobby-measure.js` are
+stateless. `lobby.js`'s own exports are the detail screen's instance; the Student Hall makes one per slot. The player
 reproduces the game's rendering, read from the game's own data rather than fitted by eye; the subsystems, each in its
 own module:
 
