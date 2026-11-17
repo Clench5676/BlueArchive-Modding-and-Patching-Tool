@@ -21,7 +21,7 @@ import urllib.error
 import urllib.request
 from typing import Any, Callable, MutableMapping
 
-from ..webui.classic import (
+from ..webui.classic.protocol import (
     CONTROL_PATH,
     CONTROL_POLL,
     ENV_TOKEN,

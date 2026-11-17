@@ -27,7 +27,9 @@ from ..core.errors import ServiceError
 from bmpt.engine import EXE_DIR, i18n_manager, parse_filename
 from ..core.logging_utils import log_failure
 from ..core.openfiles import temporary_directory
-from .classic import QUEUE_METHODS, ClassicQueue, ClassicWindow, NativeOps, QueuedCall, native_ops, stat_files
+from .classic.native import NativeOps, native_ops
+from .classic.queued import QUEUE_METHODS, ClassicQueue, QueuedCall, stat_files
+from .classic.window import ClassicWindow
 from ..library.relocate import relocate
 from .events import EventBus
 from .jobs import MAINTENANCE, USER, Cancelled, JobRunner

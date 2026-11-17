@@ -21,7 +21,7 @@ import { $ } from "./util.js";
 // the reasons that keep the prompts reading the scan (drift, untracked) away: the game, Steam or the classic UI may
 // be writing, so a file may be half written
 export const PROMPT_BLOCKERS = ["game_running", "steam_busy", "classic_open"];
-// the calls the classic modal can keep for when the classic window closes (webui/classic.py QUEUE_METHODS)
+// the calls the classic modal can keep for when the classic window closes (webui/classic/queued.py QUEUE_METHODS)
 export const QUEUEABLE = ["actions.apply", "actions.restore", "mods.toggle", "mods.restoreDrift"];
 
 /** The language's list separator: 、 in Chinese and Japanese, a comma elsewhere. */
