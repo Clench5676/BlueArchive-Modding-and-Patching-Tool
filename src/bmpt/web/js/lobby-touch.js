@@ -1,15 +1,11 @@
-// Fullscreen memorial lobby interaction, as in the game and from its own data (lobby.json: the prefab's
-// SpineDragIK and SpineCharacterBodyTouch boxes; lobby.js plays the clips). Press and hold on the head: after
-// the trigger delay the pat clips play and the Touch_Point bone follows the pointer inside its box (the
-// skeleton's own constraints make the hair and face follow); on release the end clips play and the bone eases
-// back; the cheek pinch, hand follow and other drag kinds work the same way on their bones. Press and drag
-// anywhere else: the eyes follow (Touch_Eye); during a dialogue only the bone follows and the dialogue goes on,
-// any other drag ends it. A tap on the body starts the next dialogue. A mouse wheel or a trackpad pinch zooms at
-// the pointer (ctrl + wheel in Chromium and WebView2, gesture events in WebKit); a two-finger trackpad swipe,
-// the horizontal wheel or a right- or middle-button drag pans, only while zoomed in.
-// Positions are NGUI units (lobby.js): the stage shows the current view, each skeleton sits at its prefab offset
-// and scale. Lobbies without prefab data get boxes around the character's own bones (medians over the game's
-// lobbies).
+// Fullscreen memorial lobby interaction, as in the game and from its own data (lobby.json: the prefab's SpineDragIK and
+// SpineCharacterBodyTouch boxes; lobby.js plays the clips). Press and hold on the head: after the trigger delay the pat
+// clips play and the Touch_Point bone follows the pointer inside its box; on release the end clips play and the bone
+// eases back; the other drag kinds work the same way on their bones. Press and drag anywhere else: the eyes follow
+// (Touch_Eye); during a dialogue only the bone follows. A tap on the body starts the next dialogue. The wheel or a
+// trackpad pinch zooms at the pointer; a two-finger swipe, the horizontal wheel or a right- or middle-button drag pans,
+// only while zoomed in. Positions are NGUI units (lobby.js); lobbies without prefab data get boxes around the
+// character's own bones.
 
 const SLOP = { mouse: 10, pen: 10, touch: 24 }; // stage px a tap may move (NGUI's mouse click threshold is 10)
 const WHEEL = 0.0015; // zoom by exp(-deltaY * WHEEL) per wheel pixel

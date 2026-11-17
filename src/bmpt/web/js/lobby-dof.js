@@ -1,13 +1,9 @@
-// The depth of field a memorial lobby's intro turns on (its PPV_D volume), as URP 12 draws Gaussian depth of
-// field (PostProcessPass.DoGaussianDepthOfField, GaussianDepthOfField.shader), before the colour steps of the
-// camera's post-processing (linear.js setPrepass). The lobby's Spine art is transparent and writes no depth, so
-// the depth texture holds the far plane everywhere: past the volume's far blur end (0 in every lobby's profile)
-// the circle of confusion is 1 all over the screen and the whole picture is blurred: downsampled to half size,
-// blurred across and then down with the 3-tap kernel (taps 1.333 radii apart, weights 0.353, 0.294, 0.353) and
-// taken instead of the sharp picture (the composite's non-linear blend is 1 at that circle of confusion). The
-// radius is the volume's max radius (blended by its weight) at 1080p, in canvas pixels of the game's screen, so
-// the blur keeps its size on the art in the left view and when zoomed. No lobby uses Bokeh depth of field: the
-// five profiles that set its lens leave the mode Off.
+// The depth of field a memorial lobby's intro turns on (its PPV_D volume), as URP 12 draws Gaussian depth of field,
+// before the colour steps of the camera's post-processing (linear.js setPrepass). The lobby's Spine art writes no depth,
+// so the depth texture holds the far plane everywhere: past the volume's far blur end (0 in every lobby's profile) the
+// circle of confusion is 1 all over the screen and the whole picture is blurred (half-size downsample, a 3-tap blur
+// across and then down) and taken instead of the sharp one. The radius is the volume's max radius (blended by its
+// weight) at 1080p, in canvas pixels of the game's screen. No lobby uses Bokeh depth of field.
 
 const VS = `#version 300 es
 in vec2 p;

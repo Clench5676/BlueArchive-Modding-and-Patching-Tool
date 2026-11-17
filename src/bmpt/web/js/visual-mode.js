@@ -1,13 +1,11 @@
 import { portraitMinimum } from "./photography/camera.js";
-// The portrait's fullscreen view: the game's visual mode (UICharacterVisualMode), which UICharacterDetail opens
-// from its ZoomButton (the nameplate's square button, Char_ZoomBtn). It is drawn from the prefab's PC group: the
-// student's collection background under two pulsing light patterns, the portrait's own player (detail.js, so the
-// face and the blink go on, framed by visual-view.js: the whole art, the body in the middle), the full-screen
-// TouchArea whose press drags the portrait and the zoom, Btn_Back (leaves), Btn_HideUI (switches to this skin's
-// memorial lobby when available) and Btn_RefreshPos (back to the whole art; greyed out while there), sliding in
-// from the screen's edges. The phone's gyroscope (mobile only) and the button sounds are not reproduced. Press
-// and drag (any button, a finger) moves the art; the mouse wheel zooms at the pointer; a trackpad pinches (ctrl
-// + wheel in Chromium and WebView2, gesture events in WebKit) and swipes; two fingers pinch.
+// The portrait's fullscreen view: the game's visual mode (UICharacterVisualMode), which UICharacterDetail opens from its
+// ZoomButton. It is drawn from the prefab's PC group: the student's collection background under two pulsing light
+// patterns, the portrait's own player (detail.js; framed by visual-view.js: the whole art, the body in the middle), the
+// full-screen TouchArea whose press drags the portrait and the zoom, and the buttons Btn_Back (leaves), Btn_HideUI
+// (switches to this skin's memorial lobby when available) and Btn_RefreshPos (back to the whole art; greyed out while
+// there). The phone's gyroscope and the button sounds are not reproduced. Press and drag moves the art; the wheel zooms
+// at the pointer; a trackpad pinches and swipes; two fingers pinch.
 import * as NGUI from "./ngui.js";
 import { anyOpen as popupOpen } from "./popup.js";
 import { bindCorner } from "./corner-layout.js";

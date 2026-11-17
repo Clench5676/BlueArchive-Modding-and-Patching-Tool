@@ -1210,15 +1210,6 @@ export const STRIDE3 = STRIDE + 1;
 
 const cross3 = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 
-// One system's triangles for a perspective camera (the 3D model view's halo, model-fx.js), as geometry() builds them
-// for the lobby's orthographic one, with z kept: positions in the simulation's units (lobby units, WORLD per Unity
-// unit) and space (the system's matrices place it there). view: the camera in that space, {x, y, z: its right, up and
-// forward unit vectors (Unity's handedness: x cross y is z), eye: its position, k: the visible height per unit of
-// depth (2 tan(fov / 2))}. Billboards face the camera plane (View alignment; World and Local: the system's plane, as
-// geometry()), horizontal ones lie in the world's XZ plane, vertical ones stand up facing the camera; stretched ones
-// lie along the velocity, turned round it to the camera; meshes turn with the camera (View), the world (World) or the
-// system (Local). The max particle size is a share of the view's height at the particle's depth. Trails are not built
-// (no halo has them).
 let scratch3 = new Float32Array(0);
 /**
  * One system's triangles for a perspective camera (the 3D model view's halo, model-fx.js), as geometry() builds

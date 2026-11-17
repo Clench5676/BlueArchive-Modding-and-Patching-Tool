@@ -1,14 +1,10 @@
-// The game's own mouse pointer and its touch effect. The pointer is the PC client's PCIcon_MousePoint
-// (UIs/GLPC_Cursor, 64 x 64): here a CSS cursor of 32 CSS px with the texture as its 2x image, on everything the
-// game would show it on (drag handles keep grab and grabbing, text fields the text cursor). WebKit drops a
-// cursor image whose box would cross the window's right or bottom edge and shows the system arrow instead, so
-// the image is cut to the texture's opaque part and smaller cuts follow in the list for the last pixels at those
-// edges, down to 1 CSS px; other engines take the first, the whole pointer. The window must leave body's cursor
-// alone (webui/main.py keeps pywebview's text_select True). The touch effect: touch-fx.js simulates FX_Touch;
-// this draws it on two canvases over the whole window, below the pointer and above everything else, idle
-// (hidden, no frame loop, no bitmap) while nothing animates; the light goes to a canvas screened over the page,
-// what the flash disc hides to a multiplied one under it. Both use the game's textures from the light
-// /asset/ui/texture route; without a game the system cursor stays and there is no effect.
+// The game's own mouse pointer and its touch effect. The pointer is the PC client's PCIcon_MousePoint (UIs/GLPC_Cursor,
+// 64 x 64) as a CSS cursor of 32 CSS px with the texture as its 2x image; drag handles keep grab and grabbing, text
+// fields the text cursor. WebKit drops a cursor image whose box would cross the window's right or bottom edge, so the
+// image is cut to the texture's opaque part and smaller cuts follow for the last pixels at those edges, down to 1 CSS
+// px. The window must leave body's cursor alone (webui/main.py keeps pywebview's text_select True). The touch effect
+// (touch-fx.js simulates it) is drawn on two canvases over the window, idle while nothing animates. Without a game the
+// system cursor stays and there is no effect.
 import * as FX from "./touch-fx.js";
 import { textureUrl } from "./api.js";
 

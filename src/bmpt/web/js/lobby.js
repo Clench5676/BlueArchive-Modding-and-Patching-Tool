@@ -1,19 +1,12 @@
 import { lobbyCaptureView, lobbyMaximumWidth } from "./photography/camera.js";
-// Memorial lobby for the detail screen's second tab, framed and played like the game. The lobby's UILobbyElement
-// prefab (lobby.json, read by the server) places every skeleton in NGUI units around the prefab root, the screen
-// centre; at 16:9 the game shows the 2960 x 1665 units G around it. Fullscreen shows exactly G; the left view
-// puts the head-pat point (Touch_Point) left of the panel and stays inside the painted rect P, the largest
-// rectangle around G that the lobby's opaque art covers, so neither view shows a blank edge; switching between
-// them crossfades.
-// Dialogues play the talk clips with the game's own tracks and mixes, their voices and one subtitle line per
-// voice cue (lines and voices come from Kivo, setLines); lobby-touch.js adds the touch interaction and the wheel
-// zoom in fullscreen. Fullscreen zooms out as far as the zoom-out setting allows (zoomBounds); past the painted
-// art it shows what the game's lobby camera clears to, black. The skeletons of one lobby all draw in the bottom
-// one's context with the prefab's particle systems (lobby-stage.js, particles-gl.js), with the game's materials
-// (skeleton-materials.js) and the bones the prefab pins (skeleton-pins.js). Each skeleton's idle starts the
-// clips the game's does, some at random times (lobby-sync.js). Entered, the lobby plays its intro timeline
-// (lobby-intro.js) from the first frame it is on screen: a tap or a dialogue skips it, and with the setting off
-// the lobby starts as the intro leaves it.
+// Memorial lobby for the detail screen's second tab, framed and played like the game. The lobby's UILobbyElement prefab
+// (lobby.json, read by the server) places every skeleton in NGUI units around the screen centre; at 16:9 the game shows
+// the 2960 x 1665 units G around it. Fullscreen shows exactly G; the left view puts the head-pat point (Touch_Point)
+// left of the panel and stays inside the painted rect P, the largest rectangle around G that the lobby's opaque art
+// covers, so neither view shows a blank edge; switching between them crossfades. Dialogues play the talk clips with the
+// game's own tracks and mixes, their voices and one subtitle line per voice cue (lines and voices come from Kivo,
+// setLines). The touch interaction and the wheel zoom are in lobby-touch.js, the drawing in lobby-stage.js, the intro in
+// lobby-intro.js.
 import { specialFramingOf, specialView } from "./special-view.js";
 import { latestLoad, loadPlayer } from "./spine-load.js";
 import { ensureSpine } from "./spine-runtime.js";

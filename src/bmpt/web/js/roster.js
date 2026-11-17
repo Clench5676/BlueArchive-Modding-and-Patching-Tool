@@ -1,14 +1,10 @@
-// Roster: the game's student list prefabs rendered by ngui.js. UICharacterCollection gives the list frame, ruled
-// paper, segment filters, search / sort / order buttons, the search box (CharacterSearch) and the empty list
-// (LeftInfo_Empty); UICharacterCollectionPopulatorUnit the card template (UICollectCard) and the "not owned"
-// section bar; UIPopup_GachaCharList.Btn_Checkbox the checkbox toggle, reused for "group the variants of one
-// character".
-// Which cards show, and in what order, is roster-order.js (two segment filters, the search, and the display
-// settings behind the sort button). Cards with mods come first; cards without mods follow the section bar,
-// dimmed like not-owned students. Favourites (the game's pins) come first in each group. Grouped, each character
-// shows its first variant (or the first one the search found). The view is kept across launches (settings key
-// "roster"), the search for the session. Only the rows near the view are rendered; the list scrolls with the
-// wheel, by dragging and with the scrollbar.
+// Roster: the game's student list prefabs rendered by ngui.js: UICharacterCollection gives the list frame, ruled paper,
+// segment filters, search / sort / order buttons, search box and empty list; UICharacterCollectionPopulatorUnit the card
+// template (UICollectCard) and the "not owned" section bar; UIPopup_GachaCharList.Btn_Checkbox the checkbox toggle,
+// reused for "group the variants of one character". Which cards show, and in what order, is roster-order.js. Cards with
+// mods come first; cards without mods follow the section bar, dimmed like not-owned students; favourites (the game's
+// pins) come first in each group. The view is kept across launches (settings key "roster"), the search for the session.
+// Only the rows near the view are rendered.
 import { clipRosterBand } from "./roster-card.js";
 import { specialFraming } from "./special-view.js";
 import * as NGUI from "./ngui.js";

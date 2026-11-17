@@ -1,12 +1,10 @@
-// The slot colours of a lobby skeleton as the shaders of its atlas pages take them (lobby.json layer "shaders",
-// each page's shader by the page's name). spine-unity hands every shader the slot colour as a premultiplied
-// vertex colour in gamma space (an additive slot with alpha 0); what the shader does with it in Unity's linear
-// colour space is in its compiled vertex program. Spine/Skeleton and the blend-mode shaders decode it with
-// UnityCG's cubic fit of the sRGB curve (PMAGammaToTargetSpace: divided by the alpha, decoded, multiplied by the
-// alpha again; alpha 0 decoded as a whole); Spine/Skeleton MX Portrait with the exact sRGB curve; the MX
-// Standard pages (97 lobbies) and NoiseFlowAnimation pass it on as it is, so a slot at 50 % grey darkens its
-// texture to 0.5 in linear light and an additive slot at alpha 0.42 adds 0.42 of its texture; MX Portrait Noise
-// reads only the colour's alpha. Without the page's shader a slot is decoded with the exact curve.
+// The slot colours of a lobby skeleton as the shaders of its atlas pages take them (lobby.json layer "shaders", each
+// page's shader by the page's name). spine-unity hands every shader the slot colour as a premultiplied vertex colour in
+// gamma space (an additive slot with alpha 0). Spine/Skeleton and the blend-mode shaders decode it with a cubic fit of
+// the sRGB curve (divided by the alpha, decoded, multiplied by the alpha again; alpha 0 decoded as a whole);
+// Spine/Skeleton MX Portrait with the exact sRGB curve; the MX Standard pages (97 lobbies) and NoiseFlowAnimation pass
+// it on as it is; MX Portrait Noise reads only the colour's alpha. Without the page's shader a slot is decoded with the
+// exact curve.
 import { pageOf } from "./skeleton-parts.js";
 
 const exact = (c) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));

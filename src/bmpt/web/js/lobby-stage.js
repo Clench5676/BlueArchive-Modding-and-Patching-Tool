@@ -1,12 +1,10 @@
-// A memorial lobby drawn the way the game's camera draws it: every skeleton and particle effect of the lobby
-// into one target, in the order Unity sorts them (sorting order, render queue, then back to front, whichever
-// renderer a submesh belongs to). So the skeletons of one lobby interleave, which one canvas per skeleton cannot
-// do. A lobby of several skeletons therefore draws them all in the bottom player's WebGL context (the host): the
-// other players (guests) are made with that context and their canvases stay empty; the host runs their frames at
-// the start of its own, then draws every skeleton part (one per render queue of a skeleton's pages,
-// skeleton-parts.js) and the effects between them (particles-gl.js) into its linear framebuffer, post-processed
-// once (linear.js). A lobby whose bottom skeleton fails to load keeps one context per skeleton, stacked
-// (lobby.js).
+// A memorial lobby drawn the way the game's camera draws it: every skeleton and particle effect of the lobby into one
+// target, in the order Unity sorts them (sorting order, render queue, then back to front), so the skeletons of one lobby
+// interleave, which one canvas per skeleton cannot do. A lobby of several skeletons therefore draws them all in the
+// bottom player's WebGL context (the host): the other players (guests) are made with that context and their canvases
+// stay empty; the host draws every skeleton part (skeleton-parts.js) and the effects between them (particles-gl.js) into
+// its linear framebuffer, post-processed once (linear.js). A lobby whose bottom skeleton fails to load keeps one context
+// per skeleton, stacked (lobby.js).
 import * as Linear from "./linear.js";
 import * as Parts from "./skeleton-parts.js";
 import { compareKeys, queuesOf, sortKey } from "./particles.js";

@@ -1,12 +1,10 @@
-// The memorial lobby's intro (lobby.json "intro", gameassets/intro.py): the Timeline the lobby prefab's
-// PlayableDirector plays when the lobby is entered, played on the lobby's own clock from the first frame the
-// lobby is on screen. Its Spine tracks set their clips on the skeleton's AnimationState; its recorded clips'
-// curves switch GameObjects on and off, move transforms, colour the flash sprites, weigh the post-processing
-// volumes and set particle and renderer properties; its control and activation clips switch GameObjects on and
-// play their particle systems; its sounds play at their times at the app's voice volume, never when muted.
-// A tap on the lobby skips it, as the game's does: the timeline jumps to its end, where the wrap mode None puts
-// back what it changed and Hold (Shiroko) keeps its last frame. The idle, its clips and the random idle clips
-// start as lobby.js starts them; the intro takes over the track its Spine clips play on.
+// The memorial lobby's intro (lobby.json "intro", gameassets/intro.py): the Timeline the lobby prefab's PlayableDirector
+// plays when the lobby is entered, on the lobby's own clock from the first frame the lobby is on screen. Its Spine
+// tracks set clips on the skeleton's AnimationState; its recorded curves switch GameObjects, move transforms, colour the
+// flash sprites, weigh the post-processing volumes and set particle and renderer properties; its sounds play at their
+// times at the app's voice volume, never when muted. A tap on the lobby skips it, as the game's does: the timeline jumps
+// to its end, where the wrap mode None puts back what it changed and Hold (Shiroko) keeps its last frame. The intro
+// takes over the track its Spine clips play on.
 import * as Linear from "./linear.js";
 import * as Dof from "./lobby-dof.js";
 import { IDENTITY, mul, euler } from "./particles.js";

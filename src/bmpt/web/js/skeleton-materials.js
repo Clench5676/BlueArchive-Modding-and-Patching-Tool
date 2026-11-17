@@ -1,12 +1,9 @@
 // A lobby skeleton drawn with the materials the game's spine-unity gives it (lobby.json layer "materials",
-// gameassets/spine_materials.py), in spine-player's batch. The atlas pages the game draws with a shader of its
-// own (Aru's multiply page, the scrolling water and river pages, CH0310's glitching game screen) draw with ports
-// of those compiled programs, from the game's own vertex colours and with the shader's blend; the other pages
-// keep spine-player's drawing, which is the game's Spine/Skeleton. Multiply and Screen slots of a skeleton
-// without replacement materials for that mode keep their page's material and draw as Normal; with them, the
-// replacement's shader. The dark colour (two-colour tint) never reaches the screen: no lobby shader reads it.
-// Hooks spine-player's PolygonBatcher (the page of each draw is its texture) and SkeletonRenderer; needs
-// linear.js.
+// gameassets/spine_materials.py), in spine-player's batch. The atlas pages the game draws with a shader of its own
+// (Aru's multiply page, the scrolling water and river pages, CH0310's glitching game screen) draw with ports of those
+// compiled programs; the other pages keep spine-player's drawing. Multiply and Screen slots of a skeleton without
+// replacement materials for that mode draw as Normal. The dark colour (two-colour tint) never reaches the screen: no
+// lobby shader reads it. Hooks spine-player's PolygonBatcher and SkeletonRenderer; needs linear.js.
 import * as Linear from "./linear.js";
 import { toLinear } from "./touch-fx.js";
 

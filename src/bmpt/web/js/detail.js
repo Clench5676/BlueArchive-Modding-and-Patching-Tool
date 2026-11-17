@@ -2,17 +2,14 @@ import * as Photo from "./photography/controller.js";
 import * as Camera from "./lobby-camera.js";
 import { notify } from "./popup.js";
 import { modJob, progressName } from "./job-progress.js";
-// Detail screen, built from the game's own prefab (UICharacterDetail) by ngui.js: the prefab supplies every
-// frame, sprite, tint, incline and position; this file swaps labels and textures, hides what the tool has no use
-// for, and adds what the game has no screen for (variant chips, the expression strip, the portrait and lobby
-// switchers).
-// A family is one base character with all of its variant portraits. Each variant's game file carries one
-// portrait (its own skeleton, another variant's or an added one) and one memorial lobby (its own or an added
-// one). Added portraits and lobbies belong to the variant whose game file they replace (mod.target); added
-// portraits can be worn by the other variants of the family, lobbies are not offered to them. Switching writes
-// the chosen one into the game files (switch-sources.js, actions.apply).
-// A change inside the screen (another variant, a tab, an applied portrait) prepares its parts behind the loading
-// cover and swaps them in one frame, after the primary preview and required UI images settle.
+// Detail screen, built from the game's own prefab (UICharacterDetail) by ngui.js: the prefab supplies every frame,
+// sprite, tint, incline and position; this file swaps labels and textures, hides what the tool has no use for, and adds
+// what the game has no screen for (variant chips, the expression strip, the portrait and lobby switchers). A family is
+// one base character with all of its variant portraits. Each variant's game file carries one portrait and one memorial
+// lobby (its own, another variant's or an added one). Added ones belong to the variant whose game file they replace
+// (mod.target); added portraits can be worn by the other variants of the family, lobbies are not offered to them.
+// Switching writes the chosen one into the game files (switch-sources.js, actions.apply). A change inside the screen
+// prepares its parts behind the loading cover and swaps them in one frame.
 import { isSpecial, specialFraming } from "./special-view.js";
 import * as NGUI from "./ngui.js";
 import { resizeButton } from "./button-layout.js";

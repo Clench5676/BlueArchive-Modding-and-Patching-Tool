@@ -1,16 +1,12 @@
-// What a game update did under the library's mods (docs/webui/library.md, "Game update impact"). At the start,
-// before the first screen (gate): once the current install's resource version differs from the last one seen and
-// the library has mods (mods.updateDue), the page asks whether to check them; Check runs under the loading
-// screen with its progress (run): the library classifies every mod from the official parts it was built against
-// (mods.impact), and with mods on and the file check allowed the applied entries the update overwrote with
-// official files, which need no repair, are applied again (mods.restoreDrift). Once the first screen is in, the
-// summary lists the mods to update, only when there are any (check; the drift prompt's popup): the held mods,
-// ticked, with the Outdated badge; what the check handled by itself is never listed. A card's details hold Go
-// To, the update's preview and Update and Apply. Closing it records the version as seen (mods.impactSeen);
-// Settings' View Mods to Update opens the list from the last check without checking (view, mods.impactLast), and
-// its Check Update Impact runs the check again. Before the question, costume builds of an older costume rule are
-// built again (refresh), and entries whose last write failed are written again once under a new build of the App
-// (mods.updateDue's retry). The pure parts are tested in Node (tests/js/mod_switch.test.mjs).
+// What a game update did under the library's mods (docs/webui/library.md, "Game update impact"). At the start, before
+// the first screen (gate): once the install's resource version differs from the last one seen and the library has mods
+// (mods.updateDue), the page asks whether to check them. Check runs under the loading screen (run): the library
+// classifies every mod from the official parts it was built against (mods.impact), and with mods on and the file check
+// allowed, applied entries the update overwrote with official files that need no repair are applied again
+// (mods.restoreDrift). Once the first screen is in, the summary lists the held mods to update, only when there are any
+// (check). Closing it records the version as seen (mods.impactSeen); Settings can reopen the list from the last check
+// (view, mods.impactLast) or run the check again. Before the question, outdated costume builds are rebuilt (refresh) and
+// entries whose last write failed are retried once per App build.
 import * as Compatibility from "./mod-compatibility.js";
 import * as Loading from "./loading.js";
 import { modJob } from "./job-progress.js";

@@ -8,15 +8,13 @@
 const VS = `#version 300 es
 in vec2 p;
 void main() { gl_Position = vec4(p, 0.0, 1.0); }`;
-// The framebuffer holds linear, premultiplied colour; the canvas gets sRGB, premultiplied (the page composites
-// the layers' canvases). Light beyond the coverage (additive over a transparent part of an upper layer) is
-// passed on as it is, so it still brightens the layer below.
-// The final pass is the post-processing as URP 12 runs it for the lobby's camera: the Panini projection, the
-// chromatic aberration and the LDR colour grading, in that order and in linear light. A lobby's skeletons all
-// draw into the bottom player's framebuffer (lobby-stage.js) and are post-processed once, as the game's camera
-// target is. Panini and the aberration are placed in the game's screen, the camera's 16:9 view G (setScreen),
-// never in the canvas's own, and are held at those of G's edge past it. The bottom layer (setClear) is drawn
-// over the camera's clear colour, black, before the colour steps, as the game's camera target holds it.
+// The framebuffer holds linear, premultiplied colour; the canvas gets sRGB, premultiplied (the page composites the
+// layers' canvases). Light beyond the coverage (additive over a transparent part of an upper layer) is passed on as it
+// is, so it still brightens the layer below. The final pass is the post-processing as URP 12 runs it for the lobby's
+// camera: the Panini projection, the chromatic aberration and the LDR colour grading, in that order and in linear light,
+// once for all skeletons of a lobby (lobby-stage.js). Panini and the aberration are placed in the game's screen, the
+// camera's 16:9 view G (setScreen), never in the canvas's own. The bottom layer (setClear) is drawn over the camera's
+// clear colour, black, before the colour steps.
 const FS = `#version 300 es
 precision highp float;
 uniform sampler2D t;
