@@ -5,9 +5,9 @@ import * as Loading from "./app/loading.js";
 import { EXPORT } from "./popup-frames.js";
 import { POPUP_TYPE } from "./ui-tokens.js";
 import { rowBase, radioRow } from "./settings-rows.js";
-import { rpc, waitJob } from "./api.js";
-import { T, errorText } from "./i18n.js";
-import { S, hitButton, wrapPath } from "./util.js";
+import { rpc, waitJob } from "./core/api.js";
+import { T, errorText } from "./core/i18n.js";
+import { S, hitButton, wrapPath } from "./core/util.js";
 
 let active = false;
 

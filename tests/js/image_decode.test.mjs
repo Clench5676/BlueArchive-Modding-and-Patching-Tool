@@ -1,9 +1,9 @@
-// Tests for web/js/image-decode.js (the pictures a screen waits for before it shows), run by tests/test_image_decode.py
-// with Node's test runner: node --test tests/js/image_decode.test.mjs
+// Tests for web/js/core/image-decode.js (the pictures a screen waits for before it shows), run by
+// tests/test_image_decode.py with Node's test runner: node --test tests/js/image_decode.test.mjs
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { cssUrls, decodeAll, imageUrls, imageDecoder } from "../../src/bmpt/web/js/image-decode.js";
+import { cssUrls, decodeAll, imageUrls, imageDecoder } from "../../src/bmpt/web/js/core/image-decode.js";
 
 // an element as the page has it: only its inline style matters
 const el = (backgroundImage) => ({ style: { backgroundImage } });

@@ -9,10 +9,10 @@ import * as Loading from "./loading.js";
 import * as NGUI from "../ngui.js";
 import * as Popup from "../popup.js";
 import { navigationEntry, navigationOrigin } from "./navigation-layout.js";
-import { rpc } from "../api.js";
-import { T, errorText } from "../i18n.js";
+import { rpc } from "../core/api.js";
+import { T, errorText } from "../core/i18n.js";
 import { ITEMS, activate, handOffPrompt, view } from "./nav-items.js";
-import { $, S, clone } from "../util.js";
+import { $, S, clone } from "../core/util.js";
 
 const CLASSIC_WAIT = 32000; // the classic UI's start: app.openClassic waits up to 30 s for its window
 let options = { game: false, prefs: () => null, setPrefs: () => {} };

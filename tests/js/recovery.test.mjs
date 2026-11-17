@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import vm from "node:vm";
-import { rpc } from "../../src/bmpt/web/js/api.js";
+import { rpc } from "../../src/bmpt/web/js/core/api.js";
 
 const source = readFileSync(new URL("../../src/bmpt/web/js/app/recovery.js", import.meta.url), "utf8");
 class El {

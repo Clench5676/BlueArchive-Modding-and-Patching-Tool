@@ -1,6 +1,6 @@
 import * as NGUI from "./ngui.js";
-import { T } from "./i18n.js";
-import { $, S } from "./util.js";
+import { T } from "./core/i18n.js";
+import { $, S } from "./core/util.js";
 import { closed as popupClosed, closable, hit as hitNode, popupFrame, ready, scrollArea } from "./popup.js";
 import { compareFrame } from "./popup-frames.js";
 import { COLOUR } from "./ui-tokens.js";

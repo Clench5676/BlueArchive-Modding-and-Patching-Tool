@@ -36,7 +36,7 @@ globalThis.spine = {
   },
 };
 
-const Linear = await import("../../src/bmpt/web/js/linear.js");
+const Linear = await import("../../src/bmpt/web/js/core/linear.js");
 const SlotColours = await import("../../src/bmpt/web/js/slot-colours.js");
 
 const dec = (c) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));

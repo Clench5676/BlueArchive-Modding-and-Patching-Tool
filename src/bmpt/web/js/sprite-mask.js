@@ -1,6 +1,6 @@
 // Reuse a rendered prefab sprite's alpha in another flattened widget's local
 // coordinates. The sprite supplies every corner; no replacement radius is used.
-import { canvasFailed, context2d, encodedPicture, hasAlpha } from "./canvas-failure.js";
+import { canvasFailed, context2d, encodedPicture, hasAlpha } from "./core/canvas-failure.js";
 
 const masks = new Map();
 const LIMIT = 96;

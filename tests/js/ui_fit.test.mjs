@@ -11,7 +11,7 @@ import { makeImportLayouts } from "./import_prefabs.mjs";
 const page = installFitPage();
 const NGUI = await import("../../src/bmpt/web/js/ngui.js");
 const { importArtwork } = await import("../../src/bmpt/web/js/import-layout.js");
-const { S } = await import("../../src/bmpt/web/js/util.js");
+const { S } = await import("../../src/bmpt/web/js/core/util.js");
 
 const { find, fontSizeFor, glyphWidth, LINE_PITCH } = NGUI;
 const lines = (value) => String(value).split("\n");
@@ -340,7 +340,7 @@ const separator = (locale) => (/^(zh|ja)/.test(locale) ? "、" : ", ");
 
 // the Show in Finder / Explorer button: Btn_Up's body is 200 x 180 (inclined), its caption 32 down to 26 in 140
 const { explorerLayout, BODY, ICON, CAPTION } = await import("../../src/bmpt/web/js/explorer-button.js");
-const { TAN10 } = await import("../../src/bmpt/web/js/util.js");
+const { TAN10 } = await import("../../src/bmpt/web/js/core/util.js");
 for (const locale of LOCALES)
   test(`the Show in Finder / Explorer caption wraps onto up to three lines inside the button at 26 or more in ${locale}`, () => {
     page.lang = locale;
@@ -414,7 +414,7 @@ test("a Japanese word wider than the button breaks between characters rather tha
 });
 
 // the prompt cards' labels (prompts.js card, popup.js listCard: 34 down to 24, two lines, 250 - 56 wide)
-const { markedLabel } = await import("../../src/bmpt/web/js/util.js");
+const { markedLabel } = await import("../../src/bmpt/web/js/core/util.js");
 test("the prompt cards draw the pieces this test measures", () => {
   const popup = readFileSync(new URL("../../src/bmpt/web/js/popup.js", import.meta.url), "utf8");
   assert.match(

@@ -661,7 +661,7 @@ const flat = (obj, prefix = "", out = {}) => {
   }
   return out;
 };
-const { setStrings } = await import("../../src/bmpt/web/js/i18n.js");
+const { setStrings } = await import("../../src/bmpt/web/js/core/i18n.js");
 const { setSpineConsent } = await import("../../src/bmpt/web/js/spine-runtime.js");
 setSpineConsent(true);
 setStrings(

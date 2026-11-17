@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import vm from "node:vm";
-import { isIdentity, jobProgress, modJob } from "../../src/bmpt/web/js/job-progress.js";
-import { setStrings } from "../../src/bmpt/web/js/i18n.js";
+import { isIdentity, jobProgress, modJob } from "../../src/bmpt/web/js/core/job-progress.js";
+import { setStrings } from "../../src/bmpt/web/js/core/i18n.js";
 
 const context = vm.createContext({
   console,

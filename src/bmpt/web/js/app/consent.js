@@ -10,13 +10,13 @@ import { notify } from "../popup.js";
 import * as NGUI from "../ngui.js";
 import * as Buttons from "../game-buttons.js";
 import * as Popup from "../popup.js";
-import { rpc } from "../api.js";
-import { T, errorText } from "../i18n.js";
+import { rpc } from "../core/api.js";
+import { T, errorText } from "../core/i18n.js";
 import { setSpineConsent } from "../spine-runtime.js";
 import { COLOUR, POPUP_FOOTER, POPUP_FRAME, POPUP_TYPE, SPACE, TYPE, XS_BUTTON } from "../ui-tokens.js";
 import { frameGeometry, popupContent } from "../popup-frames.js";
 import { container, row, stack, textItem, toNode } from "../ui-grid.js";
-import { S, hitButton, wrapPath } from "../util.js";
+import { S, hitButton, wrapPath } from "../core/util.js";
 
 const { node, sprite, label, find, rect } = NGUI;
 let assetsAllowed = false,

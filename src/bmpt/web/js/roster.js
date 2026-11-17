@@ -18,14 +18,14 @@ import {
   toolbarTree,
 } from "./roster-widgets.js";
 import { countNodes, countText, iconsOf } from "./mod-counts.js";
-import { rpc, spineBase } from "./api.js";
-import { L, T, language } from "./i18n.js";
+import { rpc, spineBase } from "./core/api.js";
+import { L, T, language } from "./core/i18n.js";
 import { scrollbar } from "./scrollbar.js";
 import { wheelScroller } from "./horizontal-scroll.js";
 import { prioritise, thumbnailScope } from "./thumbs.js";
 import { spineAllowed } from "./spine-runtime.js";
 import { configuredKey, hasAsset, previewBase, primaryKind } from "./switch-sources.js";
-import { $, RECRUIT, S, advanceOf, clone, glyphsOf } from "./util.js";
+import { $, RECRUIT, S, advanceOf, clone, glyphsOf } from "./core/util.js";
 import { DEFAULT_VIEW, arrange, normalizeView, order as orderOf } from "./roster-order.js";
 
 const { node, sprite, find } = NGUI;

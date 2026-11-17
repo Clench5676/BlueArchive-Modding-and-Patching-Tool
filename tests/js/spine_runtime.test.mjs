@@ -22,7 +22,7 @@ async function harness(choice = null) {
     calls.push(method);
     return choice;
   };
-  const code = source.replace('import { rpc } from "./api.js";', "const rpc = globalThis.spineRuntimeRpc;");
+  const code = source.replace('import { rpc } from "./core/api.js";', "const rpc = globalThis.spineRuntimeRpc;");
   const mod = await import(
     `data:text/javascript;base64,${Buffer.from(`${code}\n// ${sequence++}`).toString("base64")}`
   );

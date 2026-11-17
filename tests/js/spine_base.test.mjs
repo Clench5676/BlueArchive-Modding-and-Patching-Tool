@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-const { spineBase, spinePrefix } = await import("../../src/bmpt/web/js/api.js");
+const { spineBase, spinePrefix } = await import("../../src/bmpt/web/js/core/api.js");
 const { setSpineConsent } = await import("../../src/bmpt/web/js/spine-runtime.js");
 setSpineConsent(true);
 

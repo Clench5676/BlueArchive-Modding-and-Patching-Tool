@@ -2,7 +2,7 @@
 // to the approved two-column screen; sprite slicing, inclines, decoration, colours and typography stay in NGUI.
 import { countNodes } from "./mod-counts.js";
 import { resizeButton } from "./button-layout.js";
-import { clone } from "./util.js";
+import { clone } from "./core/util.js";
 import { frameOutline, innerFrame } from "./row-thumbnail.js";
 import { SPACE, TYPE, LINE, CONTROL, LIST_ROW, XS_BUTTON } from "./ui-tokens.js";
 import { row as layoutRow, stack as layoutStack, textItem, controlWidth, toNode } from "./ui-grid.js";

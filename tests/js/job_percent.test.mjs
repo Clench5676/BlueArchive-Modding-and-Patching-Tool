@@ -7,11 +7,11 @@ import { installFitPage, LOCALES } from "./helpers/fit_canvas.mjs";
 
 installFitPage();
 const NGUI = await import("../../src/bmpt/web/js/ngui.js");
-const { setStrings, T } = await import("../../src/bmpt/web/js/i18n.js");
+const { setStrings, T } = await import("../../src/bmpt/web/js/core/i18n.js");
 const { jobProgress, percentText, progressName, steadyFraction, withPercent } = await import(
-  "../../src/bmpt/web/js/job-progress.js"
+  "../../src/bmpt/web/js/core/job-progress.js"
 );
-const { S } = await import("../../src/bmpt/web/js/util.js");
+const { S } = await import("../../src/bmpt/web/js/core/util.js");
 
 const flat = (data, prefix = "", out = {}) => {
   for (const [key, value] of Object.entries(data)) {

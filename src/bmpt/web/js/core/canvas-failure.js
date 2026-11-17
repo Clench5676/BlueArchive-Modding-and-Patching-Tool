@@ -1,7 +1,7 @@
 // A 2D canvas without a backing store (WebKit past its canvas memory limit) draws nothing, reads back as transparent
 // and encodes to "data:," or to no blob at all. A picture made from it must never be cached: a mask or image cached
 // once is reused for the rest of the session, so a passing shortage would hide that picture until the next launch.
-import { previewError } from "./preview-error.js";
+import { previewError } from "../preview-error.js";
 
 /** Whether data is a PNG or other image data URL with a body: "data:," (an empty canvas's encoding) is none. */
 export const encodedPicture = (data) => typeof data === "string" && /^data:image\/[\w.+-]+(;[^,]*)?,./.test(data);

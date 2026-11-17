@@ -3,12 +3,12 @@
 // topmost layer; closing it leaves any other layer of the host alone.
 import { notify } from "./popup.js";
 import * as NGUI from "./ngui.js";
-import { rpc } from "./api.js";
-import { T, errorText } from "./i18n.js";
+import { rpc } from "./core/api.js";
+import { T, errorText } from "./core/i18n.js";
 import { closed, closable, frameReady, hit, popupFrame } from "./popup.js";
 import { MOD_ALIAS } from "./popup-frames.js";
 import * as Loading from "./app/loading.js";
-import { $, S } from "./util.js";
+import { $, S } from "./core/util.js";
 
 let token = 0,
   dismiss = null;

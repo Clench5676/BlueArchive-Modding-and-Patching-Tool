@@ -6,7 +6,7 @@ import {
   encodedPicture,
   hasAlpha,
   REPORT_EVERY,
-} from "../../src/bmpt/web/js/canvas-failure.js";
+} from "../../src/bmpt/web/js/core/canvas-failure.js";
 import { maskWithSprite } from "../../src/bmpt/web/js/sprite-mask.js";
 import { maskCanvas } from "./sprite_mask_fixture.mjs";
 

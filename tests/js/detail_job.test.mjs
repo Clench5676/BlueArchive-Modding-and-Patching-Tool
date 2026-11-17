@@ -1,6 +1,6 @@
 // Exercise the detail job's orchestration with stand-ins for the rendered screen and RPC transport.
-import { modJob, progressName, steadyFraction } from "../../src/bmpt/web/js/job-progress.js";
-import { setStrings, T as translate } from "../../src/bmpt/web/js/i18n.js";
+import { modJob, progressName, steadyFraction } from "../../src/bmpt/web/js/core/job-progress.js";
+import { setStrings, T as translate } from "../../src/bmpt/web/js/core/i18n.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";

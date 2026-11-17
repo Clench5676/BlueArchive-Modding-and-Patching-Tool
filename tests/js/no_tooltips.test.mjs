@@ -29,7 +29,7 @@ test("hit targets and NGUI labels retain accessible names without hover titles o
   globalThis.document = { createElement: () => new El(), documentElement: { lang: "en-US" } };
   try {
     const NGUI = await import("../../src/bmpt/web/js/ngui.js");
-    const { hitButton } = await import("../../src/bmpt/web/js/util.js");
+    const { hitButton } = await import("../../src/bmpt/web/js/core/util.js");
     const host = new El();
     const button = hitButton(host, [0, 0, 10, 10], () => {}, "Open Details");
     assert.equal(button.attrs["aria-label"], "Open Details");

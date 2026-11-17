@@ -9,7 +9,7 @@ import { LOBBY_ENTRY } from "../../src/bmpt/web/js/ui-tokens.js";
 const source = readFileSync(new URL("../../src/bmpt/web/js/window/chrome-motion.js", import.meta.url), "utf8")
   .replace('import { reflowCorners } from "./corner-layout.js";', "const reflowCorners = () => {};")
   .replace(
-    'import { rpc } from "../api.js";',
+    'import { rpc } from "../core/api.js";',
     "const rpc = (...call) => { globalThis.motionRpc.push(call); return Promise.resolve(); };",
   )
   .replace(

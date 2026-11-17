@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { decodeAll } from "../../src/bmpt/web/js/image-decode.js";
+import { decodeAll } from "../../src/bmpt/web/js/core/image-decode.js";
 
 const source = readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8");
 const portraitCode = source.slice(

@@ -1,5 +1,5 @@
-// Tests for web/js/linear.js (the lobby's linear-light drawing) against a recording stand-in for WebGL2: what a player
-// gets on attach is freed again on detach. Run by tests/test_lobby_linear.py with Node's test runner.
+// Tests for web/js/core/linear.js (the lobby's linear-light drawing) against a recording stand-in for WebGL2: what a
+// player gets on attach is freed again on detach. Run by tests/test_lobby_linear.py with Node's test runner.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -60,7 +60,7 @@ globalThis.spine = {
   },
 };
 
-const Linear = await import("../../src/bmpt/web/js/linear.js");
+const Linear = await import("../../src/bmpt/web/js/core/linear.js");
 
 function player(gl) {
   const page = Object.assign(new Texture(), { texture: {}, useMipMaps: false });

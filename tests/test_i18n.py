@@ -195,6 +195,6 @@ def test_lines_language_of_each_ui_language():
 
 @pytest.mark.skipif(NODE is None, reason="Node.js is not installed")
 def test_name_language_in_node():
-    """The front end's names follow the UI language (web/js/i18n.js NAME_LANG, L)."""
+    """The front end's names follow the UI language (web/js/core/i18n.js NAME_LANG, L)."""
     result = subprocess.run([NODE, "--test", str(JS_TESTS)], capture_output=True, text=True, timeout=120)
     assert result.returncode == 0, result.stdout + result.stderr

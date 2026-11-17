@@ -5,7 +5,7 @@
 // route (fx_<id>.png, memory only) and are sampled as sRGB where the game imports them so. The prefab's plain
 // mesh renderers (mesh-fx.js) draw with the same programs, sorted with the systems. Without linear light (no
 // WebGL2) nothing is drawn.
-import * as Linear from "./linear.js";
+import * as Linear from "./core/linear.js";
 import { Meshes } from "./mesh-fx.js";
 import {
   Effects,

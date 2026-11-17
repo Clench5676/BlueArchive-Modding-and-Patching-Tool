@@ -11,7 +11,7 @@ import { anyOpen as popupOpen } from "./popup.js";
 import { bindCorner } from "./window/corner-layout.js";
 import { ensureSpine } from "./spine-runtime.js";
 import { wheelKind, wheelStep } from "./lobby-touch.js";
-import { S, clone, hitButton } from "./util.js";
+import { S, clone, hitButton } from "./core/util.js";
 import { FULLSCREEN_BUTTON } from "./ui-tokens.js";
 import {
   SLIDE,

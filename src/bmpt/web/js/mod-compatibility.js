@@ -1,11 +1,11 @@
 // Read structural data with the same bundled Spine runtime as the preview, without creating textures or a player.
-import { T, language } from "./i18n.js";
-import { rpc, waitJob } from "./api.js";
+import { T, language } from "./core/i18n.js";
+import { rpc, waitJob } from "./core/api.js";
 import * as Loading from "./app/loading.js";
 import * as Popup from "./popup.js";
 import * as Compare from "./mod-compare.js";
 import { ensureSpine } from "./spine-runtime.js";
-import { isIdentity, jobProgress, modJob } from "./job-progress.js";
+import { isIdentity, jobProgress, modJob } from "./core/job-progress.js";
 import * as RigGeometry from "./rig-geometry.js";
 
 const key = (name) =>

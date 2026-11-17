@@ -7,10 +7,10 @@
 import { hasAffirmative, skinAffirmatives, goldTemplate } from "./affirmative-buttons.js";
 import { labelEffect, labelClipPadding } from "./ngui-label.js";
 import { clipButtonPatterns, tagOf, tagBox, overlaps, inkBox } from "./button-layout.js";
-import { spriteUrl, uiExportUrl, setAssetContext } from "./api.js";
-import { decodeAll, imageUrls, imageDecoder } from "./image-decode.js";
-import { withTimeout } from "./async.js";
-import { canvasFailed, encodedPicture } from "./canvas-failure.js";
+import { spriteUrl, uiExportUrl, setAssetContext } from "./core/api.js";
+import { decodeAll, imageUrls, imageDecoder } from "./core/image-decode.js";
+import { withTimeout } from "./core/async.js";
+import { canvasFailed, encodedPicture } from "./core/canvas-failure.js";
 import { spriteBorders, sliceAxis } from "./sprite-slices.js";
 import { renderFrameEffect } from "./ngui-frame-fx.js";
 

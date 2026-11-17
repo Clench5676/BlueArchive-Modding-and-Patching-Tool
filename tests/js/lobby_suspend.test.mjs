@@ -5,7 +5,7 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { latestLoad } from "../../src/bmpt/web/js/spine-load.js";
 import * as Intro from "../../src/bmpt/web/js/lobby-intro.js";
-import { withTimeout } from "../../src/bmpt/web/js/async.js";
+import { withTimeout } from "../../src/bmpt/web/js/core/async.js";
 
 const source = (await readFile(new URL("../../src/bmpt/web/js/lobby.js", import.meta.url), "utf8"))
   .replace(/^import [^;]*;$/gm, "")

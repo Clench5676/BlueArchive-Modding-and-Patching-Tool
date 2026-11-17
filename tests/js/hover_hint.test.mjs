@@ -5,7 +5,7 @@ import { test } from "node:test";
 import { LOCALES, installFitPage, text } from "./helpers/fit_canvas.mjs";
 
 installFitPage();
-const { S } = await import("../../src/bmpt/web/js/util.js");
+const { S } = await import("../../src/bmpt/web/js/core/util.js");
 const { BOX_INSET, hintHost, hintLayout, hintStyle, hintTree } = await import("../../src/bmpt/web/js/hover-hint.js");
 
 const sprite = (name, w, h, extra = {}) => ({

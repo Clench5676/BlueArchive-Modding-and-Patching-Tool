@@ -6,8 +6,8 @@
 // outside the list (other than on a group card, which switches the list) or Escape closes it.
 import * as NGUI from "./ngui.js";
 import { HINT_PREFAB, hintStyle } from "./hover-hint.js";
-import { T } from "./i18n.js";
-import { S, clone, hitButton } from "./util.js";
+import { T } from "./core/i18n.js";
+import { S, clone, hitButton } from "./core/util.js";
 import { BOX, HEAD, ROW, contentWidth, fitList, keyLabelWidth, placeList, stackList } from "./action-list-layout.js";
 import { actionLabel, sectionLabel } from "./clip-names.js";
 

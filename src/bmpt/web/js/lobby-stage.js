@@ -5,7 +5,7 @@
 // stay empty; the host draws every skeleton part (skeleton-parts.js) and the effects between them (particles-gl.js) into
 // its linear framebuffer, post-processed once (linear.js). A lobby whose bottom skeleton fails to load keeps one context
 // per skeleton, stacked (lobby.js).
-import * as Linear from "./linear.js";
+import * as Linear from "./core/linear.js";
 import * as Parts from "./skeleton-parts.js";
 import { compareKeys, queuesOf, sortKey } from "./particles.js";
 

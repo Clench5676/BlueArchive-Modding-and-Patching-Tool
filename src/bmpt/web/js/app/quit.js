@@ -1,7 +1,7 @@
 // Quitting from the student list, as the PC client's back key does in the lobby: the top bar's back button, or Escape
 // on the list, opens the game's quit prompt (title Notice, line Quit?, Cancel and Confirm). Without the DOM (tested in
 // Node from tests/test_quit.py); main.js wires it.
-import { errorText } from "../i18n.js";
+import { errorText } from "../core/i18n.js";
 
 // the hosts of the popups and screens that take Escape themselves: the asset consent, scan consent and update popups,
 // the display settings, the settings, the shared message and list popups, the detail screen's own

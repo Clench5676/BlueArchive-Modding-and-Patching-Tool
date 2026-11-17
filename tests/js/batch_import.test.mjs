@@ -192,7 +192,7 @@ const {
 const { DIALOG_H } = await import("../../src/bmpt/web/js/batch-import.js");
 const { frameOutline } = await import("../../src/bmpt/web/js/row-thumbnail.js");
 const { ROW_W: OPTION_WIDTH, rowBase, radioRow } = await import("../../src/bmpt/web/js/settings-rows.js");
-const { S } = await import("../../src/bmpt/web/js/util.js");
+const { S } = await import("../../src/bmpt/web/js/core/util.js");
 const { SPACE, TYPE, LINE, CONTROL, POPUP_FOOTER, POPUP_FRAME, POPUP_TYPE } = await import(
   "../../src/bmpt/web/js/ui-tokens.js"
 );
@@ -214,7 +214,7 @@ const inLocales = (name, fn) => {
     });
 };
 const { createImportState, sourceFolder } = await import("../../src/bmpt/web/js/import-state.js");
-const { setStrings } = await import("../../src/bmpt/web/js/i18n.js");
+const { setStrings } = await import("../../src/bmpt/web/js/core/i18n.js");
 const flatten = (data, prefix = "", result = {}) => {
   for (const [key, value] of Object.entries(data)) {
     if (typeof value === "object") flatten(value, `${prefix}${key}.`, result);

@@ -1,6 +1,6 @@
 // UICharacterCollection's complete texture track and thumb, shared by native and virtual lists.
 import * as NGUI from "./ngui.js";
-import { clone } from "./util.js";
+import { clone } from "./core/util.js";
 
 /**
  * The track of the game list's scrollbar inside a box. Painted alpha occupies x 29..49 of the native 126-pixel

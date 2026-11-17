@@ -8,7 +8,7 @@
 // for the top bar, down for the bottom menu.
 import { LOBBY_ENTRY } from "../ui-tokens.js";
 import { reflowCorners } from "./corner-layout.js";
-import { rpc } from "../api.js";
+import { rpc } from "../core/api.js";
 
 const UNIT = 1920 / 2960;
 export const FRAME = 1 / 60;

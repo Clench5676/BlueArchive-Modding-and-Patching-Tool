@@ -1,4 +1,4 @@
-import { rpc } from "./api.js";
+import { rpc } from "./core/api.js";
 
 const ROOT = "vendor/spine-player-4.2.120/";
 let choice,

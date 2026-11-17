@@ -30,9 +30,9 @@ import {
   noteFit,
   noteNode,
 } from "./settings-rows.js";
-import { on, rpc } from "./api.js";
-import { T, errorText, platform } from "./i18n.js";
-import { $, DOT, S, clone, glyphsOf, hitButton, wrapPath } from "./util.js";
+import { on, rpc } from "./core/api.js";
+import { T, errorText, platform } from "./core/i18n.js";
+import { $, DOT, S, clone, glyphsOf, hitButton, wrapPath } from "./core/util.js";
 
 const { node, sprite, label, find, rect } = NGUI;
 const fitText = (...a) => NGUI.fitText(...a);

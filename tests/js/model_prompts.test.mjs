@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { setStrings } from "../../src/bmpt/web/js/i18n.js";
+import { setStrings } from "../../src/bmpt/web/js/core/i18n.js";
 
 globalThis.document = {
   documentElement: {},

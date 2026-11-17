@@ -27,10 +27,10 @@ class El {
 }
 globalThis.document = { documentElement: new El(), createElement: () => new El() };
 const NGUI = await import(new URL("ngui.js", web));
-const { wrapPath, S } = await import(new URL("util.js", web));
+const { wrapPath, S } = await import(new URL("core/util.js", web));
 const Rows = await import(new URL("settings-rows.js", web));
 const ButtonsModule = await import(new URL("game-buttons.js", web));
-const { errorText } = await import(new URL("i18n.js", web));
+const { errorText } = await import(new URL("core/i18n.js", web));
 const { BACKDROP, XS_BUTTON, TYPE } = await import(new URL("ui-tokens.js", web));
 const { option, filter } = controls();
 const Buttons = { smallButton: (...args) => ButtonsModule.optionButton(option, filter, ...args) };

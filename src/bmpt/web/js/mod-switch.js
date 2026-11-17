@@ -11,10 +11,10 @@ import * as NGUI from "./ngui.js";
 import * as Consent from "./app/consent.js";
 import * as Loading from "./app/loading.js";
 import * as Popup from "./popup.js";
-import { on, rpc, waitJob } from "./api.js";
-import { T, language } from "./i18n.js";
+import { on, rpc, waitJob } from "./core/api.js";
+import { T, language } from "./core/i18n.js";
 import { overwrittenLines } from "./app/repairs.js";
-import { $ } from "./util.js";
+import { $ } from "./core/util.js";
 
 // --- pure parts ---
 

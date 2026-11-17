@@ -4,7 +4,7 @@
 // tests can run it.
 import * as NGUI from "./ngui.js";
 import { STATS_BOX as B } from "./ui-tokens.js";
-import { wrapPath } from "./util.js";
+import { wrapPath } from "./core/util.js";
 
 const { node, sprite, label } = NGUI;
 const colourOf = (colour) => colour || "#000000/1.00";

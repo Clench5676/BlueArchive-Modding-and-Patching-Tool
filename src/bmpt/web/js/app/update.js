@@ -5,12 +5,12 @@ import * as Buttons from "../game-buttons.js";
 import * as NGUI from "../ngui.js";
 import * as Popup from "../popup.js";
 import { frameGeometry } from "../popup-frames.js";
-import { rpc, waitJob } from "../api.js";
-import { T, errorText, language } from "../i18n.js";
+import { rpc, waitJob } from "../core/api.js";
+import { T, errorText, language } from "../core/i18n.js";
 import { notesFor } from "./release-notes.js";
 import { statsBox } from "../stats-box.js";
 import { COLOUR, POPUP, POPUP_FOOTER, STATS_BOX } from "../ui-tokens.js";
-import { S, clone } from "../util.js";
+import { S, clone } from "../core/util.js";
 
 const { node, sprite, label, find } = NGUI;
 const checks = new WeakMap();

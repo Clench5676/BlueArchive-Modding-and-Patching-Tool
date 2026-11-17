@@ -128,8 +128,8 @@ test("the correction is the distance between the ink's centre and the background
   );
   const { CHOOSE, noteRoom, NOTE_LEFT } = await import("../../src/bmpt/web/js/import-state.js");
   const { XS_BUTTON, CONTROL, SPACE, TYPE, LINE } = await import("../../src/bmpt/web/js/ui-tokens.js");
-  const { S } = await import("../../src/bmpt/web/js/util.js");
-  const { setStrings } = await import("../../src/bmpt/web/js/i18n.js");
+  const { S } = await import("../../src/bmpt/web/js/core/util.js");
+  const { setStrings } = await import("../../src/bmpt/web/js/core/i18n.js");
   const missingLabel = (key, params = {}, locale) =>
     text(locale, `import.missing.${({ missing: "count", missingNotFound: "notFound" })[key] || key}`, params);
   const statusText = (missing, locale) =>

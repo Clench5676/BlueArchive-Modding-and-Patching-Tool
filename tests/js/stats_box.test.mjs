@@ -224,7 +224,7 @@ test("the module touches no page: it uses the text measure, the path wrap and th
   assert.doesNotMatch(flat(source), /document\.|window\.|innerWidth|getElementById/);
   assert.deepEqual(
     [...source.matchAll(/^import [^;]* from "(.+)";$/gm)].map((m) => m[1]),
-    ["./ngui.js", "./ui-tokens.js", "./util.js"],
+    ["./ngui.js", "./ui-tokens.js", "./core/util.js"],
   );
 });
 

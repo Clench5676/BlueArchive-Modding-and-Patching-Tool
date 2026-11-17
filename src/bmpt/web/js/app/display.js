@@ -6,10 +6,10 @@ import { opened, closed, FOOTER as FOOTERS, FOOTER_DEFAULT, footerWidth } from "
 import { resizeButton } from "../button-layout.js";
 import { scrollbar } from "../scrollbar.js";
 import * as NGUI from "../ngui.js";
-import { T } from "../i18n.js";
+import { T } from "../core/i18n.js";
 import { FILTERS, NATURAL, SORTS } from "../roster-order.js";
 import { BACKDROP, POPUP_FRAME, POPUP_TYPE } from "../ui-tokens.js";
-import { $, S, clone, glyphsOf, hitButton } from "../util.js";
+import { $, S, clone, glyphsOf, hitButton } from "../core/util.js";
 
 const { node, find } = NGUI;
 const Z = 3000;

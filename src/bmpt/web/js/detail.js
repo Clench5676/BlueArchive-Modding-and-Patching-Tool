@@ -1,7 +1,7 @@
 import * as Photo from "./photography/controller.js";
 import * as Camera from "./lobby-camera.js";
 import { notify } from "./popup.js";
-import { modJob, progressName } from "./job-progress.js";
+import { modJob, progressName } from "./core/job-progress.js";
 // Detail screen, built from the game's own prefab (UICharacterDetail) by ngui.js: the prefab supplies every frame,
 // sprite, tint, incline and position; this file swaps labels and textures, hides what the tool has no use for, and adds
 // what the game has no screen for (variant chips, the expression strip, the portrait and lobby switchers). A family is
@@ -17,8 +17,8 @@ import { horizontalScroll } from "./horizontal-scroll.js";
 import { explorerLayout } from "./explorer-button.js";
 import { latestLoad, loadPlayer } from "./spine-load.js";
 import { ensureSpine, spineAllowed } from "./spine-runtime.js";
-import { decodeAll } from "./image-decode.js";
-import { withPreviewTimeout, withTimeout, nextFrame } from "./async.js";
+import { decodeAll } from "./core/image-decode.js";
+import { withPreviewTimeout, withTimeout, nextFrame } from "./core/async.js";
 import { previewError } from "./preview-error.js";
 import { attachHint } from "./hover-hint.js";
 import * as Loading from "./app/loading.js";
@@ -33,17 +33,17 @@ import * as Visual from "./visual-mode.js";
 import { QUEUEABLE, current as modsState, entryLabel, listSep, refused } from "./mod-switch.js";
 import * as Prompts from "./app/prompts.js";
 import { anyOpen as popupOpen } from "./popup.js";
-import { rpc, spineBase, spinePrefix, loadSpineAssets, waitJob } from "./api.js";
-import { L, T, errorText, language, platform } from "./i18n.js";
+import { rpc, spineBase, spinePrefix, loadSpineAssets, waitJob } from "./core/api.js";
+import { L, T, errorText, language, platform } from "./core/i18n.js";
 import { forget, idleAnimation, prioritise, thumbnailScope } from "./thumbs.js";
 import { modelThumbnail, modelStillVersion } from "./model-still.js";
 import { lazyThumbnail } from "./lazy-thumbnail.js";
 import { portraitViewport } from "./portrait-view.js";
 import { colourSwitchCard } from "./switch-card.js";
 import { clearUnseen, hasUnseen as hasFresh, shownUnseen, switchUnseen } from "./unseen-assets.js";
-import { crossName, customAliases as aliasesOf, modName, modOriginalName, studentName } from "./names.js";
+import { crossName, customAliases as aliasesOf, modName, modOriginalName, studentName } from "./core/names.js";
 import { setTitle } from "./app/nav.js";
-import { KEYS, deltaOf, pacer, typing } from "./step-keys.js";
+import { KEYS, deltaOf, pacer, typing } from "./core/step-keys.js";
 import {
   closable,
   closed as popupClosed,
@@ -110,7 +110,7 @@ import {
   text,
   widget,
   wrapPath,
-} from "./util.js";
+} from "./core/util.js";
 
 const { node, sprite, label, find, rect } = NGUI;
 const fitText = (...a) => NGUI.fitText(...a);

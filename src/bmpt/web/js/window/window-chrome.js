@@ -1,8 +1,8 @@
-import { on, rpc } from "../api.js";
-import { T } from "../i18n.js";
+import { on, rpc } from "../core/api.js";
+import { T } from "../core/i18n.js";
 import { reflowTopActions } from "../app/nav.js";
 import { alignTopBar } from "./top-bar.js";
-import { fitStage } from "../util.js";
+import { fitStage } from "../core/util.js";
 import { paintTopBar } from "./top-bar-background.js";
 import { naturalTextWidth } from "./top-bar-measure.js";
 import { headerGeometry, rowLayout, isImmersive, dragRegions, expandRect } from "./window-layout.js";

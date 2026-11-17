@@ -69,7 +69,7 @@ globalThis.performance ??= { now: () => Date.now() };
 
 const Stage = await import("../../src/bmpt/web/js/lobby-stage.js");
 const GL = await import("../../src/bmpt/web/js/particles-gl.js");
-const Linear = await import("../../src/bmpt/web/js/linear.js");
+const Linear = await import("../../src/bmpt/web/js/core/linear.js");
 const P = await import("../../src/bmpt/web/js/particles.js");
 
 // The layers and effects of three lobbies as lobby.json gives them (the queues of their atlas pages and of their

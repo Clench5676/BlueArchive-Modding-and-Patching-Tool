@@ -1356,7 +1356,7 @@ globalThis.spine = {
   },
 };
 globalThis.performance ??= { now: () => Date.now() };
-const Linear = await import("../../src/bmpt/web/js/linear.js");
+const Linear = await import("../../src/bmpt/web/js/core/linear.js");
 const GL = await import("../../src/bmpt/web/js/particles-gl.js");
 
 function player(gl, layer) {

@@ -144,8 +144,8 @@ globalThis.fetch = async (url) => ({
   },
 });
 const { renderNav } = await import("../../src/bmpt/web/js/app/nav.js");
-const { setStrings } = await import("../../src/bmpt/web/js/i18n.js");
-const { S } = await import("../../src/bmpt/web/js/util.js");
+const { setStrings } = await import("../../src/bmpt/web/js/core/i18n.js");
+const { S } = await import("../../src/bmpt/web/js/core/util.js");
 const flat = (value, prefix = "", out = {}) => {
   for (const [key, item] of Object.entries(value)) {
     if (typeof item === "object") flat(item, `${prefix}${key}.`, out);

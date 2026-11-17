@@ -7,7 +7,7 @@
 // lobby reads them (attachInput). One view at a time; hide() frees its WebGL context at once.
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { straightTextureLoader } from "./png-decode.js";
+import { straightTextureLoader } from "./core/png-decode.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { chibiMaterial, disposeDefaults, outlineMaterial, setOutlineScale } from "./chibi-materials.js";
 import { createModelFx } from "./model-fx.js";

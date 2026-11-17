@@ -3,7 +3,7 @@
 // animation is involved.
 import { fragmentSource } from "./particles-gl.js";
 import { toLinear, toSrgb } from "./app/touch-fx.js";
-import { uiExportUrl } from "./api.js";
+import { uiExportUrl } from "./core/api.js";
 import { applyDir, euler } from "./particles.js";
 
 /**

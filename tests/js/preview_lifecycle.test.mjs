@@ -7,7 +7,7 @@ import {
   previewTimer,
 } from "../../src/bmpt/web/js/preview-lifecycle.js";
 import { latestLoad, loadPlayer } from "../../src/bmpt/web/js/spine-load.js";
-import { nextFrame } from "../../src/bmpt/web/js/async.js";
+import { nextFrame } from "../../src/bmpt/web/js/core/async.js";
 
 const tick = () => new Promise(setImmediate);
 function globals(t, env) {
@@ -522,7 +522,7 @@ test("a Spine player restarted under Now Loading draws again once it ends", asyn
 
 test("a clip fetch waiting for a job on the server does not reach its 15 s cap", async (t) => {
   const { setLibraryWaiting } = await import("../../src/bmpt/web/js/preview-lifecycle.js");
-  const { withPreviewTimeout } = await import("../../src/bmpt/web/js/async.js");
+  const { withPreviewTimeout } = await import("../../src/bmpt/web/js/core/async.js");
   t.mock.timers.enable({ apis: ["setTimeout"] });
   let now = 0;
   const realNow = performance.now;

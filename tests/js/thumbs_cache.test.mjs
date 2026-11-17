@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { spineBase, spinePrefix, spineAssetBase } from "../../src/bmpt/web/js/api.js";
+import { spineBase, spinePrefix, spineAssetBase } from "../../src/bmpt/web/js/core/api.js";
 import {
   thumb,
   forget,

@@ -11,7 +11,7 @@ import {
   captionMinimum,
 } from "../../src/bmpt/web/js/ui-tokens.js";
 import { stack as layoutStack } from "../../src/bmpt/web/js/ui-grid.js";
-import { withTimeout } from "../../src/bmpt/web/js/async.js";
+import { withTimeout } from "../../src/bmpt/web/js/core/async.js";
 class Element {
   constructor(id = "") {
     this.id = id;

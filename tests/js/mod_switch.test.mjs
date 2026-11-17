@@ -442,7 +442,7 @@ const strings = Object.fromEntries(
     flat(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8"))),
   ).filter(([k]) => k.startsWith("webui.")),
 );
-const I18n = await import("../../src/bmpt/web/js/i18n.js");
+const I18n = await import("../../src/bmpt/web/js/core/i18n.js");
 I18n.setStrings("en-US", strings);
 const S = (key) => strings[`webui.${key}`];
 
@@ -1160,7 +1160,7 @@ test("Troubleshoot Mods shows only in pre-release builds, and Apply Official to 
 
 test("the help fits its opening lines together in every locale, with and without action rows", async () => {
   const NGUI = await import("../../src/bmpt/web/js/ngui.js");
-  const { S: scale } = await import("../../src/bmpt/web/js/util.js");
+  const { S: scale } = await import("../../src/bmpt/web/js/core/util.js");
   try {
     for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
       const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
@@ -2904,7 +2904,7 @@ test("the drift prompt asks the impacts of the mods its entries are configured w
       // with the tick box in the corner (the update list): whole, and short of the box on every kind's card
       const Pop = await import("../../src/bmpt/web/js/popup.js");
       const { switchGrid } = await import("../../src/bmpt/web/js/switch-layout.js");
-      const { TAN10 } = await import("../../src/bmpt/web/js/util.js");
+      const { TAN10 } = await import("../../src/bmpt/web/js/core/util.js");
       for (const kind of [null, "spr", "lobby", "model"]) {
         const card = switchGrid(kind, Pop.listCardBox(Pop.listLayout(false, kind)).w).card;
         const room = Pop.badgeRoom(card);

@@ -1,6 +1,6 @@
 // UICharacterCollection's search field and list tools, shared with Batch Import.
 import * as NGUI from "./ngui.js";
-import { S, clone, advanceOf, glyphsOf } from "./util.js";
+import { S, clone, advanceOf, glyphsOf } from "./core/util.js";
 import { emptyBlock } from "./empty-block.js";
 import { CONTROL, SPACE } from "./ui-tokens.js";
 import { row } from "./ui-grid.js";
@@ -78,7 +78,7 @@ export function pickerItems(items, { query = "", sort = "default", ascending = t
   return ascending ? list : list.reverse();
 }
 
-import { T } from "./i18n.js";
+import { T } from "./core/i18n.js";
 import { SORTS, filtering } from "./roster-order.js";
 const { find, node, label, fitText } = NGUI;
 

@@ -5,8 +5,8 @@
 import * as Loading from "./loading.js";
 import * as Popup from "../popup.js";
 import * as ModSwitch from "../mod-switch.js";
-import { rpc, waitJob } from "../api.js";
-import { T } from "../i18n.js";
+import { rpc, waitJob } from "../core/api.js";
+import { T } from "../core/i18n.js";
 
 const MAX_NAMES = 10; // file names a result lists; the rest are counted
 

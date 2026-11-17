@@ -216,7 +216,7 @@ test("generic Settings rows render names, every target file, status and actions 
   }));
   try {
     const NGUI = await import(new URL("ngui.js", web));
-    const { wrapPath } = await import(new URL("util.js", web));
+    const { wrapPath } = await import(new URL("core/util.js", web));
     const h = harness();
     const Rows = await import(new URL("settings-rows.js", web));
     const ButtonsModule = await import(new URL("game-buttons.js", web));

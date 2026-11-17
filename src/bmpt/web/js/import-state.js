@@ -1,4 +1,4 @@
-import { T } from "./i18n.js";
+import { T } from "./core/i18n.js";
 // Batch import's RPC contract and session state, independent of the screen and its artwork.
 export const STATES = Object.freeze([
   "ready",

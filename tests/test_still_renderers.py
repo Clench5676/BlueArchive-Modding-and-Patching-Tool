@@ -82,7 +82,7 @@ def test_a_change_to_a_pixel_file_changes_only_its_renderers_revision(tmp_path):
     assert before["model"] != before["spine"]
     changed = tmp_path / "changed"
     shutil.copytree(tmp_path, changed, ignore=shutil.ignore_patterns("changed"))
-    with (changed / "js/png-decode.js").open("a") as file:
+    with (changed / "js/core/png-decode.js").open("a") as file:
         file.write("\n// changed\n")
     assert stills.revision("model", changed) != before["model"]
     assert stills.revision("spine", changed) == before["spine"]

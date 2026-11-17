@@ -1,9 +1,9 @@
-// Tests for web/js/step-keys.js (the detail screen's previous / next student keys), run by tests/test_step_keys.py
+// Tests for web/js/core/step-keys.js (the detail screen's previous / next student keys), run by tests/test_step_keys.py
 // with Node's test runner: node --test tests/js/step_keys.test.mjs
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { KEYS, deltaOf, pacer, typing } from "../../src/bmpt/web/js/step-keys.js";
+import { KEYS, deltaOf, pacer, typing } from "../../src/bmpt/web/js/core/step-keys.js";
 
 const key = (k, extra = {}) => ({
   key: k,

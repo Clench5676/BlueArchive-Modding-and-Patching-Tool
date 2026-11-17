@@ -2,8 +2,8 @@
 // backend writes user-space files; browser HTTP/storage caches never retain heavy art. Every ticket names the
 // renderer that draws its still ("model", "spine"): the backend keys the entry by that renderer's code too
 // (webui/stills.py).
-import { rpc } from "./api.js";
-import { withTimeout } from "./async.js";
+import { rpc } from "./core/api.js";
+import { withTimeout } from "./core/async.js";
 
 const MAX_PNG = 2 * 1024 * 1024;
 async function hashKey(key) {

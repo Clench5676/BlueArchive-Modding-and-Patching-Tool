@@ -8,12 +8,12 @@
 // independent of page changes.
 import { loadingLabel, loadingLetterSprites, loadingInkLine, alphaBounds } from "../ngui-label.js";
 import { alignBaseline, domBaseline, publishAligned } from "./loading-baseline.js";
-import { spriteUrl } from "../api.js";
+import { spriteUrl } from "../core/api.js";
 import * as NGUI from "../ngui.js";
 import * as Popup from "../popup.js";
-import { T } from "../i18n.js";
-import { fitLine, modLine } from "../job-progress.js";
-import { S } from "../util.js";
+import { T } from "../core/i18n.js";
+import { fitLine, modLine } from "../core/job-progress.js";
+import { S } from "../core/util.js";
 import { freezeShown } from "../preview-lifecycle.js";
 
 const STAGE_UNITS_H = 1080 / S; // 1665 units: the stage is taller than the prefabs' 2960 x 1440 frame

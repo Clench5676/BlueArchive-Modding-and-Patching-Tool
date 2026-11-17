@@ -1,4 +1,4 @@
-// Tests for web/js/i18n.js: the name language of each UI language and what stands in for a missing name. Run by
+// Tests for web/js/core/i18n.js: the name language of each UI language and what stands in for a missing name. Run by
 // tests/test_i18n.py with Node's test runner: node --test tests/js/i18n.test.mjs
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -6,7 +6,7 @@ import { importOf } from "./helpers/source-text.mjs";
 
 globalThis.document = { documentElement: { lang: "" } };
 const { L, NAME_LANG, T, language, nameKeys, setStrings, languageRefresh } = await import(
-  "../../src/bmpt/web/js/i18n.js"
+  "../../src/bmpt/web/js/core/i18n.js"
 );
 
 const names = { "zh-CN": "星野", "zh-TW": "星野", en: "Hoshino", ja: "ホシノ", ko: "호시노" };
@@ -127,7 +127,7 @@ test("a failed locale read preserves the active table and can be retried", async
 // wrong: ")
 test("errorText gives a coded error its string and an uncoded one error.internal with a detail or none at all", async () => {
   const { readFileSync } = await import("node:fs");
-  const { errorText } = await import("../../src/bmpt/web/js/i18n.js");
+  const { errorText } = await import("../../src/bmpt/web/js/core/i18n.js");
   const flat = (o, p = "webui") =>
     Object.entries(o).flatMap(([k, v]) => (typeof v === "object" ? flat(v, `${p}.${k}`) : [[`${p}.${k}`, v]]));
   class RpcError extends Error {
@@ -231,7 +231,7 @@ test("the other copies of that expression use the shared errorText too", async (
     assert.doesNotMatch(source, /const errorText =/, `${name} has no errorText of its own`);
     assert.match(
       source,
-      new RegExp(`import \\{[^}]*\\berrorText\\b[^}]*\\} from "${importOf(name, "i18n.js")}"`),
+      new RegExp(`import \\{[^}]*\\berrorText\\b[^}]*\\} from "${importOf(name, "core/i18n.js")}"`),
       `${name} imports the shared one`,
     );
     assert.match(source, /\berrorText\(/, name);

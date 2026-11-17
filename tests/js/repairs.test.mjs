@@ -13,7 +13,7 @@ const flat = (o, p = "", out = {}) => {
   return out;
 };
 const strings = flat(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8")));
-const I18n = await import("../../src/bmpt/web/js/i18n.js");
+const I18n = await import("../../src/bmpt/web/js/core/i18n.js");
 I18n.setStrings("en-US", strings);
 const T = I18n.T;
 const S = (key) => strings[`webui.${key}`];

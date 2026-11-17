@@ -5,7 +5,7 @@
 // times at the app's voice volume, never when muted. A tap on the lobby skips it, as the game's does: the timeline jumps
 // to its end, where the wrap mode None puts back what it changed and Hold (Shiroko) keeps its last frame. The intro
 // takes over the track its Spine clips play on.
-import * as Linear from "./linear.js";
+import * as Linear from "./core/linear.js";
 import * as Dof from "./lobby-dof.js";
 import { IDENTITY, mul, euler } from "./particles.js";
 

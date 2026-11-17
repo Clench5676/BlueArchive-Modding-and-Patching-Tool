@@ -23,9 +23,9 @@ import {
   SELECTION_SLOT,
 } from "./selected-frames.js";
 import { frameOutline } from "./row-thumbnail.js";
-import { T } from "./i18n.js";
+import { T } from "./core/i18n.js";
 import { codeOf, noticeNames, withCode } from "./app/error-codes.js";
-import { withTimeout } from "./async.js";
+import { withTimeout } from "./core/async.js";
 import { TEXT_VIEWER, frameClass, frameGeometry, popupContent } from "./popup-frames.js";
 import { STATS_BOX_S, boxHeight, statsBox, valueRoom } from "./stats-box.js";
 import {
@@ -44,7 +44,7 @@ import {
   STATS_BOX,
   captionMinimum,
 } from "./ui-tokens.js";
-import { DOT, RECRUIT, S, TAN10, clone, glyphsOf, hitButton, markedLabel, wrapPath } from "./util.js";
+import { DOT, RECRUIT, S, TAN10, clone, glyphsOf, hitButton, markedLabel, wrapPath } from "./core/util.js";
 
 import { container, grid, row, stack as layoutStack, textItem, toNode } from "./ui-grid.js";
 

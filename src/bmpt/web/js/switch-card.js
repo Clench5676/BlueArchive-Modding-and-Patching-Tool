@@ -1,5 +1,5 @@
 // The picture's right edge continues behind the labels, with enough contrast throughout the faded colours.
-import { withTimeout } from "./async.js";
+import { withTimeout } from "./core/async.js";
 
 const FALLBACK = [239, 243, 247],
   MIN_CONTRAST = 4.5;

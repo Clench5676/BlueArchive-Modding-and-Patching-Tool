@@ -6,7 +6,7 @@
 // (touch-fx.js simulates it) is drawn on two canvases over the window, idle while nothing animates. Without a game the
 // system cursor stays and there is no effect.
 import * as FX from "./touch-fx.js";
-import { textureUrl } from "../api.js";
+import { textureUrl } from "../core/api.js";
 
 const POINTER = "PCIcon_MousePoint";
 const TEXTURES = {

@@ -199,7 +199,7 @@ function player(gl, slots, layer) {
   return p;
 }
 
-const Linear = await import("../../src/bmpt/web/js/linear.js");
+const Linear = await import("../../src/bmpt/web/js/core/linear.js");
 
 test("empty ungraded targets are detected even when the final pass adds an opaque clear colour", () => {
   const gl = fakeGL(),

@@ -211,7 +211,7 @@ test("the real stage fitter spans the window with the non-native toolbar and cle
     ["document", "innerWidth", "innerHeight", "bamtWindowChrome", "bamtHeaderGeometry"].map((k) => [k, globalThis[k]]),
   );
   globalThis.document = { createElement: () => ({ getContext: () => ({}) }) };
-  const { fitStage } = await import("../../src/bmpt/web/js/util.js");
+  const { fitStage } = await import("../../src/bmpt/web/js/core/util.js");
   const style = () => ({
     setProperty(key, value) {
       this[key] = value;

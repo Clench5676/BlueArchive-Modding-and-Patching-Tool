@@ -467,8 +467,8 @@ console.warn = (...args) => {
 
 const Popup = await import("../../src/bmpt/web/js/popup.js");
 const Update = await import("../../src/bmpt/web/js/app/update.js");
-const { S } = await import("../../src/bmpt/web/js/util.js");
-const { setStrings } = await import("../../src/bmpt/web/js/i18n.js");
+const { S } = await import("../../src/bmpt/web/js/core/util.js");
+const { setStrings } = await import("../../src/bmpt/web/js/core/i18n.js");
 const { setSpineConsent } = await import("../../src/bmpt/web/js/spine-runtime.js");
 setSpineConsent(true);
 const runtime = vm.createContext({
@@ -852,7 +852,7 @@ test("compatibility details scroll the complete list and return to the same Rema
 test("the compatibility result's list, rule, inline Details and smaller footer fit in every locale", async () => {
   const Compatibility = await import("../../src/bmpt/web/js/mod-compatibility.js");
   const NGUI = await import("../../src/bmpt/web/js/ngui.js");
-  const { glyphsOf } = await import("../../src/bmpt/web/js/util.js");
+  const { glyphsOf } = await import("../../src/bmpt/web/js/core/util.js");
   const { CONTROL, POPUP_FRAME, SMALL_BUTTON, XS_BUTTON, STATS_BOX, TYPE } = await import(
     "../../src/bmpt/web/js/ui-tokens.js"
   );
@@ -2634,7 +2634,7 @@ test("errors use an answerable game popup, plain notices stay silent and the toa
   const root = new URL("../../src/bmpt/web/", import.meta.url);
   assert.doesNotMatch(readFileSync(new URL("index.html", root), "utf8"), /id="toast"|class="toast"/);
   assert.doesNotMatch(readFileSync(new URL("css/app.css", root), "utf8"), /\.toast\b/);
-  assert.doesNotMatch(readFileSync(new URL("js/util.js", root), "utf8"), /export function toast\b/);
+  assert.doesNotMatch(readFileSync(new URL("js/core/util.js", root), "utf8"), /export function toast\b/);
 });
 
 test("an error notification waits while the loading screen covers every popup, then opens answerable", async () => {
@@ -7645,7 +7645,7 @@ test("a plain line's inline button is as high as the line's text and stays insid
 
 test("the held entries' Details fit their wide frame with four mods, Go To and Fix and Apply on one line each, in every locale", async () => {
   await Popup.ready();
-  const I18n = await import("../../src/bmpt/web/js/i18n.js");
+  const I18n = await import("../../src/bmpt/web/js/core/i18n.js");
   const Impact = await import("../../src/bmpt/web/js/app/update-impact.js");
   const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   const { XS_BUTTON } = await import("../../src/bmpt/web/js/ui-tokens.js");

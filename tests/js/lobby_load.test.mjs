@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { latestLoad, loadPlayer } from "../../src/bmpt/web/js/spine-load.js";
-import { withTimeout } from "../../src/bmpt/web/js/async.js";
+import { withTimeout } from "../../src/bmpt/web/js/core/async.js";
 import { atStep } from "../../src/bmpt/web/js/preview-error.js";
 import { validRect } from "../../src/bmpt/web/js/lobby-health.js";
 

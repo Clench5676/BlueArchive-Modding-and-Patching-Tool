@@ -5,15 +5,15 @@
 // moved (lobby.js cameraParams), saved as a new Memorial Lobby choice of the student (lobby.camera.save, a job;
 // docs/webui/lobby-and-photography.md), its art the source the lobby shows; its still flies into the album at
 // the bottom left, which opens the student's Switch Memorial Lobby (detail.js) over the framing.
-import { rpc, waitJob } from "./api.js";
-import { T } from "./i18n.js";
+import { rpc, waitJob } from "./core/api.js";
+import { T } from "./core/i18n.js";
 import * as NGUI from "./ngui.js";
 import * as Lobby from "./lobby.js";
-import { S, hitButton } from "./util.js";
+import { S, hitButton } from "./core/util.js";
 import { visualButton as whiteButton, galleryBox } from "./photography/controller.js";
 import { cameraFeedback } from "./photography/feedback.js";
 import * as Loading from "./app/loading.js";
-import { modJob } from "./job-progress.js";
+import { modJob } from "./core/job-progress.js";
 import { prepareBack } from "./visual-mode.js";
 import { anchoredCentre } from "./visual-view.js";
 import { buttonCenter } from "./student-hall-icons.js";

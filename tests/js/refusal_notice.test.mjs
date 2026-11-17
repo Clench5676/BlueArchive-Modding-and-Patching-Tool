@@ -109,7 +109,7 @@ console.warn = (...args) => {
 };
 
 const Popup = await import("../../src/bmpt/web/js/popup.js");
-const { setStrings } = await import("../../src/bmpt/web/js/i18n.js");
+const { setStrings } = await import("../../src/bmpt/web/js/core/i18n.js");
 const locales = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"];
 const webui = (locale) =>
   JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
@@ -292,7 +292,7 @@ test("information is still silent, and an empty text shows nothing", async () =>
 });
 
 test("a Failed popup appends the reference to its last line in all six locales; Notices never do", async () => {
-  const { errorText } = await import("../../src/bmpt/web/js/i18n.js");
+  const { errorText } = await import("../../src/bmpt/web/js/core/i18n.js");
   try {
     for (const locale of locales) {
       const ui = webui(locale);

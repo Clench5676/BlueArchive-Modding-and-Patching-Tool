@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { L, T, setStrings } from "../../src/bmpt/web/js/i18n.js";
-import { modName, studentName } from "../../src/bmpt/web/js/names.js";
+import { L, T, setStrings } from "../../src/bmpt/web/js/core/i18n.js";
+import { modName, studentName } from "../../src/bmpt/web/js/core/names.js";
 
 globalThis.document = {
   documentElement: {},

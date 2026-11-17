@@ -1,8 +1,8 @@
 // UICharacterCollection/SeletControl/Top/BG_W/Bg, Common_Top_Menu_Bg: 310/20 source cuts and exact 172/11
 // stage-pixel caps.
 import { slicedImage } from "../ngui.js";
-import { spriteUrl } from "../api.js";
-import { withTimeout } from "../async.js";
+import { spriteUrl } from "../core/api.js";
+import { withTimeout } from "../core/async.js";
 export const BAR_CUTS = Object.freeze([0, 20, 0, 310]);
 export const BAR_BORDER_SCALES = Object.freeze([0, 11 / 20, 0, 172 / 310]);
 /**

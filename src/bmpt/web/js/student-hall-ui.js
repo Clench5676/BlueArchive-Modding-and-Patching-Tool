@@ -3,12 +3,12 @@
 import * as NGUI from "./ngui.js";
 import * as Popup from "./popup.js";
 import * as Loading from "./app/loading.js";
-import { withTimeout } from "./async.js";
+import { withTimeout } from "./core/async.js";
 import * as Buttons from "./game-buttons.js";
 import { searchTree, orderBody, toolbarLayout, toolbarTree } from "./roster-widgets.js";
-import { clone, S, hitButton } from "./util.js";
-import { T } from "./i18n.js";
-import { spriteUrl } from "./api.js";
+import { clone, S, hitButton } from "./core/util.js";
+import { T } from "./core/i18n.js";
+import { spriteUrl } from "./core/api.js";
 import { bindScale } from "./student-hall-scale.js";
 import { POPUP, POPUP_FRAME, XS_BUTTON, CONTROL, TYPE, SPACE, captionMinimum } from "./ui-tokens.js";
 import { stack as layoutStack } from "./ui-grid.js";

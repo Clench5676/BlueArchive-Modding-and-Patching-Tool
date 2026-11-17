@@ -22,7 +22,7 @@ RENDERERS: dict[str, tuple[str, ...]] = {
     "model": (
         "js/model-still.js",
         "js/model.js",
-        "js/png-decode.js",
+        "js/core/png-decode.js",
         "js/chibi-materials.js",
         # the halo's particle effects (model-fx.js) with the lobby simulation and programs they run on
         "js/model-fx.js",
@@ -49,10 +49,10 @@ RENDERERS: dict[str, tuple[str, ...]] = {
 # imports of pixel files that never change a still's pixels
 NOT_PIXELS = frozenset(
     {
-        "js/api.js",
-        "js/async.js",
-        "js/capture-priority.js",
-        "js/capture-retries.js",
+        "js/core/api.js",
+        "js/core/async.js",
+        "js/core/capture-priority.js",
+        "js/core/capture-retries.js",
         "js/lobby-touch.js",
         "js/ngui.js",
         "js/preview-cache.js",
@@ -61,7 +61,7 @@ NOT_PIXELS = frozenset(
         "js/switch-sources.js",
         "vendor/three-0.160.0/examples/jsm/controls/OrbitControls.js",
         # particles-gl.js's lobby drawing only (create()): the 3D model view uses its shader sources alone
-        "js/linear.js",
+        "js/core/linear.js",
         "js/mesh-fx.js",
     }
 )

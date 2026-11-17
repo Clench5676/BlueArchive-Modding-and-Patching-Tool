@@ -1,4 +1,4 @@
-import { previewTimer } from "./preview-lifecycle.js";
+import { previewTimer } from "../preview-lifecycle.js";
 
 /**
  * Wait for the next animation frame. Hidden or unfocused WebKit windows may stop their frame clock; resource
