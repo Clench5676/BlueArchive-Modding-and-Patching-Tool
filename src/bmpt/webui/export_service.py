@@ -14,11 +14,11 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
-from .. import devmode, mod_origin
+from .. import atlas_remap, devmode, mod_origin
 from ..errors import ServiceError
 from ..openfiles import temporary_directory
-from ..library import integrity, mod_progress
-from ..library.judge import core_of
+from ..library import ba_mod, integrity, mod_progress
+from ..library.judge import core_of, kind_of_file
 from ..library.storage import sync_directory
 from .batch_import import BatchImport, Candidate, ImportSettings
 
@@ -158,6 +158,144 @@ def _prepare(services: Any, library: Any, source: str, pin: Any, target: dict,
                       "name": library._label(record)}
 
 
+def _member_path(directory: str, name: str) -> str:
+    return f"{directory}/{name}" if directory else name
+
+
+def _contents(path: Path) -> integrity.Contents:
+    """The text assets and texture names of a bundle, as the package manifest needs them."""
+    return integrity.inspect(path, allow_unknown=True)
+
+
+def _generated(library: Any, record: dict | None) -> bool:
+    """Whether a library mod is made by the App (an Optimize Physics copy, a lobby camera, a roster photograph): its
+    changed files are ``generated`` in the package manifest."""
+    from ..library import lobby_camera, portrait_edit
+
+    return bool(record) and bool(library._optimized_from(record) or lobby_camera.meta_of(record)
+                                 or record.get(portrait_edit.TAG))
+
+
+class _Package:
+    """What one exported mod's ``ba-mod.json`` says, worked out from the prepared files and the target install's
+    verified official copies: each file's role, the official bundles holding the .skel and .atlas files the mod lacks
+    (a Spine package carries them), and per skeleton which parts are the mod's. Best effort: a part that cannot be
+    read is left out of ``skeletons`` and a file without a verified official copy counts as the mod's."""
+
+    def __init__(self, library: Any, pin: Any, live: dict[str, Path], record: dict | None, paths: list[Path],
+                 kind: str | None):
+        from ..library import lobby_camera
+
+        self.library, self.pin, self.live = library, pin, live
+        camera = lobby_camera.meta_of(record)
+        names = [path.name for path in paths]
+        library_kind = record["kind"] if record else (kind or kind_of_file(names[0]) or "other")
+        self.kind = "lobby" if camera else ba_mod.kind_of(library_kind, names)
+        self.core = camera["core"] if camera else core_of(names[0])
+        self.generated = _generated(library, record)
+        self.camera = camera is not None
+        self._official: dict[str, Path | None] = {}
+        self._read: dict[Path, integrity.Contents] = {}
+
+    def contents(self, path: Path) -> integrity.Contents:
+        """A bundle's text assets and texture names, read once per export of this mod."""
+        if path not in self._read:
+            self._read[path] = _contents(path)
+        return self._read[path]
+
+    def official(self, name: str) -> Path | None:
+        """The verified official copy of the target install's file of this name, None when there is none."""
+        if name not in self._official:
+            live = self.live.get(name)
+            try:
+                self._official[name] = self.library._official_for(live, self.pin) if live else None
+            except (OSError, ServiceError):
+                self._official[name] = None
+        return self._official[name]
+
+    def role(self, path: Path, digest: str) -> str:
+        official = self.official(path.name)
+        try:
+            if official is not None and ba_mod.sha256(official) == digest:
+                return ba_mod.OFFICIAL
+        except OSError:
+            pass
+        return ba_mod.GENERATED if self.generated else ba_mod.MOD
+
+    def companions(self, paths: list[Path]) -> list[tuple[Path, str]]:
+        """The official bundles of a Spine core that hold the .skel and .atlas files of the pages the mod paints and
+        that the mod lacks, as (copy, member name): a Spine package carries them. A core with several scenes (Spine
+        backgrounds) carries only the rigs of the scenes the mod paints; a lobby camera carries only its prefab."""
+        if self.kind not in ba_mod.SPINE_KINDS or self.camera:
+            return []
+        names = {path.name for path in paths}
+        try:
+            parts = self.library._spine_parts(self.core, self.pin)
+        except (OSError, ServiceError):
+            return []
+        try:
+            painted: set[str] | None = {key for path in paths for key in self.contents(path).textures}
+        except Exception:  # unreadable here: every rig of the core is carried
+            painted = None
+        replaced = {integrity.replacement_key(name) for name in names}
+        result = []
+        for part in parts:
+            if part.name in names or integrity.replacement_key(part.name) in replaced:
+                continue
+            official = self.official(part.name)
+            if official is None:
+                continue
+            try:
+                contents = self.contents(official)
+                pages = {atlas_remap.texture_key(page) for name, text in contents.atlases.items()
+                         for page in atlas_remap.parse_atlas(text, name).pages}
+            except Exception:  # an unreadable part is not carried; the package stays a plain mod for it
+                continue
+            if (contents.atlases or contents.skeletons) and (painted is None or pages & painted):
+                result.append((official, part.name))
+        return result
+
+    def skeletons(self, files: list[tuple[Path, str, str]]) -> list[dict]:
+        """Per skeleton of the package, whether its .atlas, .skel and textures are the mod's or official ones."""
+        if self.kind not in ba_mod.SPINE_KINDS:
+            return []
+        try:
+            mine = integrity.Contents()
+            holders: dict[str, str] = {}
+            for path, _name, role in files:
+                contents = self.contents(path)
+                mine.merge(contents)
+                for key in contents.textures:
+                    if holders.get(key) != ba_mod.MOD:
+                        holders[key] = ba_mod.OFFICIAL if role == ba_mod.OFFICIAL else ba_mod.MOD
+            official = integrity.Contents()
+            for part in self.library._spine_parts(self.core, self.pin):
+                copy = self.official(part.name)
+                if copy is not None:
+                    official.merge(self.contents(copy))
+        except Exception:  # best effort: the manifest is still written, without skeletons
+            return []
+        atlas_of = atlas_remap.pair_atlases(mine.atlases, mine.skeletons)
+        result = []
+        for name in sorted(mine.skeletons):
+            entry = {"name": ba_mod.skeleton_name(name),
+                     "skel": ba_mod.OFFICIAL if official.skeletons.get(name) == mine.skeletons[name] else ba_mod.MOD}
+            atlas = atlas_of.get(name)
+            if atlas is not None:
+                entry["atlas"] = (ba_mod.OFFICIAL if official.atlases.get(atlas) == mine.atlases[atlas]
+                                  else ba_mod.MOD)
+                try:
+                    pages = {atlas_remap.texture_key(page)
+                             for page in atlas_remap.parse_atlas(mine.atlases[atlas], atlas).pages}
+                except (atlas_remap.RemapError, ValueError, UnicodeError):
+                    pages = set()
+                roles = {holders[key] for key in pages if key in holders}
+                if roles:
+                    entry["textures"] = ba_mod.MOD if ba_mod.MOD in roles else ba_mod.OFFICIAL
+            result.append({key: entry[key] for key in ("name", "atlas", "skel", "textures") if key in entry})
+        return result
+
+
 def export_zip(services: Any, library: Any, pin: Any, *, scope: str, target: str | None,
                folder: Path, server: str, platform: str, kind: str | None,
                log: Any, progress: Any) -> dict:
@@ -173,6 +311,10 @@ def export_zip(services: Any, library: Any, pin: Any, *, scope: str, target: str
             raise ServiceError("export_empty")
         manifest = {"version": 1, "scope": scope, "target": {"server": server, "platform": platform},
                     "mods": [], "assignments": assignments}
+        live = {path.name: path for group in library._index(pin).values() for path in group} if pin else {}
+        release = ba_mod.release_of(list(pin.dirs), server, platform) if pin else {}
+        from ..updater import current_version
+        created_by = {"tool": "BMPT", "version": current_version()}
         try:
             with tempfile.NamedTemporaryFile(prefix=".mod-export-", suffix=".tmp", dir=folder, delete=False) as stream:
                 temporary_zip = Path(stream.name)
@@ -190,22 +332,36 @@ def export_zip(services: Any, library: Any, pin: Any, *, scope: str, target: str
                         paths, metadata = _prepare(services, library, source, pin, manifest["target"],
                                                    Path(staging), log, lambda p: line.step(p["step"]), kind)
                         line.done()
-                        directory = _safe_name(source)
+                        # one mod per archive sits at its root, beside its ba-mod.json; several get a folder each
+                        directory = "" if scope == "single" else _safe_name(source)
                         names = [_member_name(path) for path in paths]
+                        package = _Package(library, pin, live, record, paths, kind)
+                        companions = package.companions(paths)
+                        names += [name for _, name in companions]
+                        sources_ = [*paths, *(path for path, _ in companions)]
                         keys = [unicodedata.normalize("NFC", name).casefold() for name in names]
                         if len(set(keys)) != len(keys):
                             raise ServiceError("game_file_conflict", file=next(
                                 name for name, key in zip(names, keys) if keys.count(key) > 1))
-                        members = []
-                        for path, name in zip(paths, names):
+                        members, described = [], []
+                        for index, (path, name) in enumerate(zip(sources_, names)):
                             before = path.stat()
-                            archive.write(path, f"{directory}/{name}")
-                            members.append({"name": name, "size": path.stat().st_size,
-                                            "sha256": _sha256(path)})
+                            digest = _sha256(path)
+                            archive.write(path, _member_path(directory, name))
+                            role = ba_mod.OFFICIAL if index >= len(paths) else package.role(path, digest)
+                            members.append({"name": name, "size": path.stat().st_size, "sha256": digest, "role": role})
+                            described.append((path, name, role))
                             after = path.stat()
                             if (before.st_ino, before.st_size, before.st_mtime_ns, before.st_ctime_ns) != (
                                     after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns):
                                 raise ServiceError("entry_changed")
+                        document = ba_mod.document(
+                            created_by=created_by, kind=package.kind, core=package.core, server=server,
+                            platform=platform, release=release,
+                            files=[{"path": member["name"], "sha256": member["sha256"], "role": member["role"]}
+                                   for member in members],
+                            skeletons=package.skeletons(described))
+                        archive.writestr(_member_path(directory, ba_mod.FILE_NAME), ba_mod.dumps(document))
                         manifest["mods"].append({**metadata, "directory": directory, "files": members})
                     archive.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
             with zipfile.ZipFile(temporary_zip) as archive:
@@ -213,7 +369,7 @@ def export_zip(services: Any, library: Any, pin: Any, *, scope: str, target: str
                     raise ServiceError("library_io_error", file=str(destination))
                 for mod in manifest["mods"]:
                     for member in mod["files"]:
-                        with archive.open(f'{mod["directory"]}/{member["name"]}') as stream:
+                        with archive.open(_member_path(mod["directory"], member["name"])) as stream:
                             if hashlib.file_digest(stream, "sha256").hexdigest() != member["sha256"]:
                                 raise ServiceError("entry_changed")
             with temporary_zip.open("rb") as stream:

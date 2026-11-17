@@ -16,7 +16,7 @@ from bmpt.webui import batch_import
 from bmpt.webui import export_service
 from bmpt.webui.rpc import RpcRegistry
 
-from test_library import game_bundle, make_mod, setup_library
+from test_library import game_bundle, make_mod, setup_library  # noqa: F401 - fixtures
 from test_mod_origin import REAL_SHARING_KEYS, inspect_bundle, bundle_metadata, official_bundle, old_bundle
 
 
@@ -49,7 +49,7 @@ def test_library_export_prepares_existing_mods_without_mutating_library_or_game(
     assert manifest["target"] == {"server": "global", "platform": "windows"}
     entry, = manifest["mods"]
     assert entry["source"] == f"mod:{mod.id}"
-    assert files[f'{entry["directory"]}/{source.name}'] == source.read_bytes()
+    assert files[export_service._member_path(entry["directory"], source.name)] == source.read_bytes()
     assert (env.root / "state.json").read_bytes() == state
     assert env.original.read_bytes() == game
     assert sorted(path.suffix for path in (env.tmp / "exports").iterdir()) == [".zip"]
@@ -149,7 +149,7 @@ def test_single_original_variant_archive_uses_current_bundle_names(setup_library
         env.original.write_bytes(make_mod(env.original, env.tmp / "external").read_bytes())
     manifest, files = contents(run(env, "single", "variant:test"))
     entry, = manifest["mods"]
-    assert files[f'{entry["directory"]}/{env.original.name}'] == expected
+    assert files[export_service._member_path(entry["directory"], env.original.name)] == expected
 
 
 @pytest.mark.parametrize("source_platform", [13, 9])
@@ -168,7 +168,7 @@ def test_foreign_platform_mod_is_rebuilt_with_real_unity_payload(setup_library, 
     manifest, files = contents(run(env, "single", f'mod:{record["id"]}'))
     entry, = manifest["mods"]
     output = env.tmp / "prepared.bundle"
-    output.write_bytes(files[f'{entry["directory"]}/{env.original.name}'])
+    output.write_bytes(files[export_service._member_path(entry["directory"], env.original.name)])
     bundle = Bundle.load(output)
     assert bundle.platform_info[0] == "StandaloneWindows64"
     assert bundle.env.objects[0].read().m_Script == "modded"
@@ -192,7 +192,7 @@ def test_cross_server_mod_is_prepared_against_selected_target(setup_library, mon
     manifest, files = contents(result)
     entry, = manifest["mods"]
     output = env.tmp / "japan.bundle"
-    output.write_bytes(files[f'{entry["directory"]}/{env.original.name}'])
+    output.write_bytes(files[export_service._member_path(entry["directory"], env.original.name)])
     bundle = Bundle.load(output)
     assert bundle.env.objects[0].read().m_Script == "global mod"
     inspection = integrity.Inspection()
@@ -227,3 +227,102 @@ def test_source_change_during_archive_write_cannot_publish(setup_library, monkey
     with pytest.raises(ServiceError, match="entry_changed"):
         run(env)
     assert not list((env.tmp / "exports").iterdir())
+
+
+ATLAS = b"test_spr.png\nsize:4,4\nfilter:Linear,Linear\nface\nbounds:0,0,2,2\n"
+
+
+def package(result, directory=""):
+    with zipfile.ZipFile(result["archive"]) as archive:
+        return json.loads(archive.read(export_service._member_path(directory, "ba-mod.json")))
+
+
+def test_each_exported_mod_carries_a_package_manifest(setup_library):
+    env = setup_library
+    catalog = env.game_dir / "Catalog"
+    (catalog / "Windows").mkdir(parents=True)
+    (catalog / "BundleRevision").write_bytes("﻿478339".encode())
+    (catalog / "Windows" / "catalog_Windows.hash").write_text("01a02066e18c3b4540fbb2278c8d7b06")
+    source = make_mod(env.original, env.tmp / "upload", fixed=True)
+    mod, = env.library.add([source])
+    result = run(env)
+    manifest, files = contents(result)
+    entry, = manifest["mods"]
+    data = package(result, entry["directory"])
+    assert data["format_version"] == "1.0" and data["created_by"]["tool"] == "BMPT"
+    assert (data["kind"], data["core"]) == ("portrait", "test_spr")
+    assert data["target"] == {"server": "global", "platform": "windows", "release": {
+        "bundle_revision": 478339, "catalog_hash": "01a02066e18c3b4540fbb2278c8d7b06"}}
+    item, = data["files"]
+    assert item == {"path": source.name, "sha256": entry["files"][0]["sha256"], "role": "mod"}
+    assert "skeletons" not in data  # nothing of the header-only test bundles reads as Spine
+
+
+def test_an_official_variant_export_marks_its_files_official(setup_library):
+    env = setup_library
+    result = run(env, "single", "variant:test")
+    data = package(result)
+    assert [item["role"] for item in data["files"]] == ["official"]
+    assert "release" not in data["target"]
+
+
+def test_a_portrait_export_carries_the_official_skel_and_atlas_it_lacks(setup_library, monkeypatch):
+    env = setup_library
+    rig = game_bundle(env.game_dir, part="002", payload=b"official rig")
+    source = make_mod(env.original, env.tmp / "upload", fixed=True)
+    mod, = env.library.add([source])
+
+    def read(path):
+        if "_002_" in path.name:
+            return integrity.Contents(atlases={"test_spr.atlas": ATLAS}, skeletons={"test_spr.skel": b"skel"})
+        return integrity.Contents(textures={"test_spr": (4, 4)})
+
+    monkeypatch.setattr(export_service, "_contents", read)
+    result = run(env, "single", f"mod:{mod.id}")
+    _, files = contents(result)
+    assert files[rig.name] == rig.read_bytes()
+    data = package(result)
+    assert {item["path"]: item["role"] for item in data["files"]} == {source.name: "mod", rig.name: "official"}
+    assert data["skeletons"] == [{"name": "test_spr", "atlas": "official", "skel": "official", "textures": "mod"}]
+    # the verification step reads the carried bundle back like the mod's own
+    manifest, _ = contents(result)
+    assert [member["name"] for member in manifest["mods"][0]["files"]] == [source.name, rig.name]
+
+
+def test_a_mod_with_its_own_atlas_carries_no_official_one(setup_library, monkeypatch):
+    env = setup_library
+    rig = game_bundle(env.game_dir, part="002", payload=b"official rig")
+    texture = make_mod(env.original, env.tmp / "upload", fixed=True)
+    atlas = make_mod(rig, env.tmp / "upload", payload=b"own rig!", fixed=True)
+    mod, = env.library.add([texture, atlas])
+
+    def read(path):
+        if "_002_" in path.name:
+            own = path.read_bytes() == atlas.read_bytes()
+            return integrity.Contents(atlases={"test_spr.atlas": ATLAS + (b"\n" if own else b"")},
+                                      skeletons={"test_spr.skel": b"skel"})
+        return integrity.Contents(textures={"test_spr": (4, 4)})
+
+    monkeypatch.setattr(export_service, "_contents", read)
+    data = package(run(env, "single", f"mod:{mod.id}"))
+    assert sorted(item["path"] for item in data["files"]) == sorted([texture.name, rig.name])
+    assert data["skeletons"] == [{"name": "test_spr", "atlas": "mod", "skel": "official", "textures": "mod"}]
+
+
+def test_a_scene_export_carries_only_the_rigs_of_the_pages_it_paints(setup_library, monkeypatch):
+    env = setup_library
+    painted = game_bundle(env.game_dir, part="002", payload=b"rig one")
+    other = game_bundle(env.game_dir, part="004", payload=b"rig two")
+    mod, = env.library.add([make_mod(env.original, env.tmp / "upload", fixed=True)])
+
+    def read(path):
+        if "_002_" in path.name:
+            return integrity.Contents(atlases={"test_spr.atlas": ATLAS}, skeletons={"test_spr.skel": b"skel"})
+        if "_004_" in path.name:
+            return integrity.Contents(atlases={"scene.atlas": ATLAS.replace(b"test_spr.png", b"scene.png")},
+                                      skeletons={"scene.skel": b"skel"})
+        return integrity.Contents(textures={"test_spr": (4, 4)})
+
+    monkeypatch.setattr(export_service, "_contents", read)
+    _, files = contents(run(env, "single", f"mod:{mod.id}"))
+    assert painted.name in files and other.name not in files

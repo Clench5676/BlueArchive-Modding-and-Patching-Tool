@@ -23,7 +23,7 @@ from ..config import install_needs_crc
 from ..errors import ServiceError
 from ..gameassets.spine import PREVIEW_TYPES, Composition, spine_revision
 from ..gameassets.discovery import cab_names
-from ..library import import_archive, integrity, staging, manual_identity
+from ..library import ba_mod, import_archive, integrity, staging, manual_identity
 from ..library.rebuild import UpdateScope, rebuild
 from ..library.judge import core_of, kind_of, part_of
 from ..library.storage import Fingerprints, atomic_clone, verify_file
@@ -114,6 +114,8 @@ class Candidate:
     missing_cabs: set[str] = field(default_factory=set)
     # the import preview composed this row (``BatchImport.preview``): a refusal of such a row is marked in reports
     previewed: bool = False
+    # the trusted package manifest beside this row's files that lists them all (``ba_mod.read``)
+    package: dict | None = None
 
 
 @dataclass
@@ -126,6 +128,15 @@ class ImportResult:
 
     def to_json(self) -> dict:
         return {"results": self.results}
+
+
+def claimed_first(choices: list[dict], package: dict | None) -> list[dict]:
+    """The guessed sources of a row, the one its trusted package manifest names first: a claim only orders the
+    guesses the files allow, it never adds one or rules one out."""
+    if not package:
+        return choices
+    claim = (package["target"]["server"], package["target"]["platform"])
+    return sorted(choices, key=lambda choice: (choice["server"], choice["platform"]) != claim)
 
 
 def source_file(candidate: Candidate) -> str:
@@ -560,6 +571,8 @@ class BatchImport:
             nonlocal skipped
             path = path.expanduser().resolve()
             devmode.check_read(path)
+            if path.name == ba_mod.FILE_NAME:
+                return  # a package manifest is read with the bundles beside it, never a file left out
             if path in seen or not path.name.endswith((".bundle", ".bundle.backup")):
                 skipped += 1
             else:
@@ -667,6 +680,7 @@ class BatchImport:
                     path.parent, core, version, kind, variant)
             groups.setdefault(key, []).append((path, name, error, failure))
         candidates = []
+        packages: dict[Path, dict | None] = {}
         for (_, core_name, _, kind, variant), items in groups.items():
             files, parts, sources, error, failure = {}, {}, [], None, None
             for path, name, problem, detail in items:
@@ -700,6 +714,13 @@ class BatchImport:
                      "state": "blocked", "reason": error, "libraryId": None, "preview": None,
                      "source": None, "target": mod_origin.target_of(self.services.settings, library.current_pin())}
             candidate = Candidate(files, entry, error, failure=failure)
+            folders = {path.parent for path in sources}
+            if len(folders) == 1:
+                folder = folders.pop()
+                if folder not in packages:
+                    packages[folder] = ba_mod.read(folder)
+                if ba_mod.covers(packages[folder], folder, sources):
+                    candidate.package = packages[folder]
             try:
                 candidate.identity = self._identity_of(files)
             except OSError:
@@ -973,8 +994,8 @@ class BatchImport:
                 targets.update(library._other_targets(resolution.older, pin) if generic else resolution.updated)
             targets = [path for path in live if path in targets]
             inferred = entry["source"] is None
-            choices = (mod_origin.candidates(names, selected, official_contents, entry["target"]) if inferred
-                       else [entry["source"]])
+            choices = (claimed_first(mod_origin.candidates(names, selected, official_contents, entry["target"]),
+                                     candidate.package) if inferred else [entry["source"]])
             matched_targets, last_failure = None, None
             for choice in choices:
                 converting = conversion(choice)
