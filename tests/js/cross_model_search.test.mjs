@@ -1,6 +1,7 @@
 // Exercise detail.js's search and check queue without starting the app or its renderers.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { statementEnd } from "./helpers/source-text.mjs";
 import { test } from "node:test";
 import vm from "node:vm";
 import * as Sources from "../../src/bmpt/web/js/switch-sources.js";
@@ -807,7 +808,7 @@ async function optimizeAnswer(result, locale = "en-US") {
     },
   });
   const start = source.indexOf("const optimizeSource ="),
-    end = source.indexOf("\n", start);
+    end = statementEnd(source, start);
   vm.runInContext(`${source.slice(start, end)}\n${functionSource("runOptimize")}`, ctx);
   await ctx.runOptimize({ kind: "variant", variant: { key: "costume" }, key: "v:costume" });
   return { messages, pending: ctx.pending, web };

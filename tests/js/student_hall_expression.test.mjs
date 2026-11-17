@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFile } from "node:fs/promises";
 let source = await readFile(new URL("../../src/bmpt/web/js/student-hall-portraits.js", import.meta.url), "utf8");
-source = source.replace(/^import .*;$/gm, "");
+source = source.replace(/^import [^;]*;$/gm, "");
 source = `import { VISIBLE_ALPHA } from "${new URL("../../src/bmpt/web/js/student-hall-framing.js", import.meta.url).href}";\n${source}`;
 const { talkExpression } = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
 function fixture(names = ["Idle_01", "00", "02", "04", "05", "Talk", "Eye_Close_01"]) {

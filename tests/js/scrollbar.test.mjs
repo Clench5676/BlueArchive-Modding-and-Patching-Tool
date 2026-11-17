@@ -45,7 +45,7 @@ globalThis.scrollFixture = {
 };
 globalThis.document = { createElement: () => ({ style: {} }), getElementById: () => null };
 let source = await readFile(new URL("../../src/bmpt/web/js/scrollbar.js", import.meta.url), "utf8");
-source = source.replace(/^import .*;$/gm, "");
+source = source.replace(/^import [^;]*;$/gm, "");
 const { scrollbar, scrollbarTrack } = await import(
   `data:text/javascript;base64,${Buffer.from("const {clone,NGUI}=globalThis.scrollFixture;\n" + source).toString("base64")}`
 );

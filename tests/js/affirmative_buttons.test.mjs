@@ -1,4 +1,5 @@
 import { test } from "node:test";
+import { compact, flat } from "./helpers/source-text.mjs";
 import assert from "node:assert/strict";
 import { hasAffirmative, skinAffirmatives } from "../../src/bmpt/web/js/affirmative-buttons.js";
 test("affirmative styling preserves secondary and disabled semantics", () => {
@@ -48,7 +49,7 @@ test("names and translated captions cannot imply an affirmative action", () => {
 
 test("the source picker, gallery and Settings use explicit treatment in all locales", async () => {
   const { readFile } = await import("node:fs/promises");
-  const popup = await readFile(new URL("../../src/bmpt/web/js/popup.js", import.meta.url), "utf8");
+  const popup = flat(await readFile(new URL("../../src/bmpt/web/js/popup.js", import.meta.url), "utf8"));
   assert.match(popup, /child.actionSemantic = action.semantic \|\| \(action.primary \? "confirm" : "secondary"\)/);
   assert.match(popup, /buttons: buttons.map/);
   assert.ok(!popup.includes('[T("popup.apply"),T("act.update")'));
@@ -56,8 +57,9 @@ test("the source picker, gallery and Settings use explicit treatment in all loca
     new URL("../../src/bmpt/web/js/photography/controller.js", import.meta.url),
     "utf8",
   );
-  assert.match(controller, /\[P\('export'\),safe\(exportPhoto\),false,'export'\]/);
-  assert.match(controller, /label:P\('saveSelection'\),fn:safe\(saveSelection\),primary:true,semantic:'save'/);
+  const dense = compact(controller);
+  assert.match(dense, /\[P\("export"\),safe\(exportPhoto\),false,"export"\]/);
+  assert.match(dense, /label:P\("saveSelection"\),fn:safe\(saveSelection\),primary:true,semantic:"save"/);
   for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
     const data = JSON.parse(await readFile(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8"));
     assert.ok(data.webui.export.applied.includes("Mod"));

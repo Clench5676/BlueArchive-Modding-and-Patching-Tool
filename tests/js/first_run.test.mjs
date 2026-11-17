@@ -3,6 +3,7 @@
 // refreshConfiguration() run for real on stub collaborators.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { flat } from "./helpers/source-text.mjs";
 import { test } from "node:test";
 const source = readFileSync(new URL("../../src/bmpt/web/js/main.js", import.meta.url), "utf8");
 const refresh = source.slice(
@@ -303,9 +304,10 @@ test("a game found while boot() is still waiting leaves the sequence to boot(), 
 });
 
 test("the sequence has one entry, guarded, and boot() and the refresh both go through it", () => {
-  assert.equal(source.split("Cursor.init()").length - 1, 1);
-  assert.equal(source.split("...startPopups()]").length - 1, 1);
-  assert.equal(source.split("Tours.start(").length - 1, 1);
+  const text = flat(source);
+  assert.equal(text.split("Cursor.init()").length - 1, 1);
+  assert.equal(text.split("...startPopups()]").length - 1, 1);
+  assert.equal(text.split("Tours.start(").length - 1, 1);
   assert.match(refresh, /firstRun\(\)\.catch\(console\.error\)/);
   assert.match(source, /Loading\.init\(info\);[^\n]*\n\s*startWithGame = !!info\.gameFound;/);
   assert.match(source, /async function boot\(\)[\s\S]*sessionReady = rpc\("app\.ready"[\s\S]*await firstRun\(\);/);

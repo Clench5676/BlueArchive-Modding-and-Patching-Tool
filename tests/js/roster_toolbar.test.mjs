@@ -26,7 +26,7 @@ const fit = (value, size, min, width) => ({
   lines: 1,
 });
 let source = await readFile(new URL("../../src/bmpt/web/js/roster-widgets.js", import.meta.url), "utf8");
-source = source.replace(/^import .*;$/gm, "");
+source = source.replace(/^import [^;]*;$/gm, "");
 // ink as the page font draws it: 0.72 em above the baseline, 0.2 below for a letter with a descender, in a box 1.15 em a line
 const ink = (str, px) => {
   const lines = String(str).split("\n"),

@@ -2,6 +2,7 @@
 // Error Report button. web/js/popup.js runs for real on a stand-in DOM without a game folder (every prefab is
 // missing), so the messages are drawn plain, which carries the same buttons.
 import assert from "node:assert/strict";
+import { flat } from "./helpers/source-text.mjs";
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { afterEach, test } from "node:test";
@@ -383,6 +384,6 @@ test("the classic modal is not a failure and passes no error", () => {
 
 test("a greyed Apply names its reason as the same refusal as the greyed switch", () => {
   const prompts = readFileSync(new URL("../../src/bmpt/web/js/prompts.js", import.meta.url), "utf8");
-  assert.match(prompts, /notify\(b\.why \|\| "", \{ kind: "error", error: b\.whyError \}\)/);
-  assert.match(prompts, /why: blocked, whyError: \{ code: s\.reason, params: s\.reasonParams \}/);
+  assert.match(flat(prompts), /notify\(b\.why \|\| "", \{ kind: "error", error: b\.whyError \}\)/);
+  assert.match(flat(prompts), /why: blocked, whyError: \{ code: s\.reason, params: s\.reasonParams \}/);
 });

@@ -110,7 +110,7 @@ globalThis.hallControlsHarness = {
   lobby,
 };
 let source = await readFile(new URL("../../src/bmpt/web/js/student-hall.js", import.meta.url), "utf8");
-source = source.replace(/^import .*;$/gm, "");
+source = source.replace(/^import [^;]*;$/gm, "");
 source =
   `import { CONTROL, XS_BUTTON, SPACE } from "${new URL("../../src/bmpt/web/js/ui-tokens.js", import.meta.url).href}";\nimport { row } from "${new URL("../../src/bmpt/web/js/ui-grid.js", import.meta.url).href}";\n` +
   source;

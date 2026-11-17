@@ -244,7 +244,7 @@ globalThis.chromeFixture = {
 };
 const lockedRows = new Set();
 let source = readFileSync(new URL("../../src/bmpt/web/js/window-chrome.js", import.meta.url), "utf8").replace(
-  /^import .*;$/gm,
+  /^import [^;]*;$/gm,
   "",
 );
 source = `const {on,rpc,T,reflowTopActions,alignTopBar,fitStage,naturalTextWidth,paintTopBar,headerGeometry,rowLayout,isImmersive,dragRegions,expandRect,chromeMotion,lockOutside}=globalThis.chromeFixture;\n${source}`;

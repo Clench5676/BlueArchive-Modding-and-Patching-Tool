@@ -2,6 +2,7 @@
 // sites that draw through it are checked in popup.test.mjs (the details panel, the file details, the messages, the update
 // dialog); the tokens against the prefab in tests/test_ui_tokens.py.
 import assert from "node:assert/strict";
+import { flat } from "./helpers/source-text.mjs";
 import { readFileSync, readdirSync } from "node:fs";
 import { test } from "node:test";
 import { STATS_BOX as B } from "../../src/bmpt/web/js/ui-tokens.js";
@@ -220,9 +221,9 @@ test("the room a value gets is the box less 30 each side, the captions, what the
 
 test("the module touches no page: it uses the text measure, the path wrap and the tokens, nothing else", () => {
   const source = read("js/stats-box.js");
-  assert.doesNotMatch(source, /document\.|window\.|innerWidth|getElementById/);
+  assert.doesNotMatch(flat(source), /document\.|window\.|innerWidth|getElementById/);
   assert.deepEqual(
-    [...source.matchAll(/^import .* from "(.+)";$/gm)].map((m) => m[1]),
+    [...source.matchAll(/^import [^;]* from "(.+)";$/gm)].map((m) => m[1]),
     ["./ngui.js", "./ui-tokens.js", "./util.js"],
   );
 });
@@ -254,10 +255,10 @@ test("the four sites build their box with statsBox()", () => {
     ["js/update.js", 2],
   ]) {
     const source = read(file);
-    assert.match(source, /import \{[^}]*\bstatsBox\b[^}]*\} from "\.\/stats-box\.js";/, file);
+    assert.match(flat(source), /import \{[^}]*\bstatsBox\b[^}]*\} from "\.\/stats-box\.js";/, file);
     assert.equal(source.match(/\bstatsBox\(/g).length, calls, `${file}: its calls to statsBox()`);
   }
   assert.match(read("js/popup.js"), /name: "Fields"/);
-  assert.match(read("js/popup.js"), /name: "Box", names: \{ value: "Row", divider: "Dot" \}/);
+  assert.match(flat(read("js/popup.js")), /name: "Box", names: \{ value: "Row", divider: "Dot" \}/);
   assert.match(read("js/detail.js"), /name: "Summary"/);
 });

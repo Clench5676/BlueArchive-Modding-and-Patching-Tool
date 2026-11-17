@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { flat } from "./helpers/source-text.mjs";
 import { test } from "node:test";
 import { labelEffect, labelBaselineInset, loadingLabel } from "../../src/bmpt/web/js/ngui-label.js";
 const n = (name, pos, widgets = [], children = []) => ({ name, pos, widgets, children, scale: [1, 1], active: true });
@@ -31,7 +32,7 @@ test("loading progress clones the prefab label effect and NGUI renders its exact
   );
   const renderer = readFileSync(new URL("../../src/bmpt/web/js/ngui.js", import.meta.url), "utf8");
   assert.match(renderer, /textShadow: labelEffect\(w, sy \* S\)/);
-  const css = readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
+  const css = flat(readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8"));
   assert.match(css, /\.loading-progress\.prefab-label \{ inset: 0/);
   assert.match(css, /\.loading-edge \{[^}]*z-index: 0/);
 });

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFileSync } from "node:fs";
+import { flat } from "./helpers/source-text.mjs";
 import {
   headerGeometry,
   rowLayout,
@@ -27,7 +28,7 @@ const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-7, `${a} != ${b}`);
 const textWidth = (text, font) => [...text].reduce((w, c) => w + font * (/[^\x00-\x7f]/.test(c) ? 1 : 0.65), 0);
 const prefabs = cornerPrefabs.UICharacterCollection,
   right = "NUITop_Scenes/Top/Right/";
-const cssSource = readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
+const cssSource = flat(readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8"));
 const borderLeft = Number(/border-width: 0 11px 0 (\d+)px/.exec(cssSource)[1]);
 const marginLeft = Number(/\.mod-switch \{[^}]*margin-left: (-?[\d.]+)px/.exec(cssSource)[1]);
 const hallMargin = Number(/\.topbar\.hall-home \.mod-switch \{ margin-left: (-?[\d.]+)px/.exec(cssSource)[1]);

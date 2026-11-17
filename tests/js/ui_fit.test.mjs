@@ -2,6 +2,7 @@
 // every shipped language: the real locale strings through the fit logic of web/js/ngui.js against the prefabs' numbers (a
 // stand-in canvas, see helpers/fit_canvas.mjs: what is asserted is the logic, not a font).
 import assert from "node:assert/strict";
+import { flat } from "./helpers/source-text.mjs";
 import { test } from "node:test";
 import { LOCALES, installFitPage, text } from "./helpers/fit_canvas.mjs";
 import { makeImportLayouts } from "./import_prefabs.mjs";
@@ -412,12 +413,15 @@ test("a Japanese word wider than the button breaks between characters rather tha
 const { markedLabel } = await import("../../src/bmpt/web/js/util.js");
 test("the prompt cards draw the pieces this test measures", () => {
   const popup = readFileSync(new URL("../../src/bmpt/web/js/popup.js", import.meta.url), "utf8");
-  assert.match(popup, /LIST_CARD_NAME = Object\.freeze\(\{ fs: 34, fsMin: 24, lines: 2, padY: 22, pitch: 1\.2 \}\)/);
   assert.match(
-    popup,
+    flat(popup),
+    /LIST_CARD_NAME = Object\.freeze\(\{ fs: 34, fsMin: 24, lines: 2, padY: 22, pitch: 1\.2 \}\)/,
+  );
+  assert.match(
+    flat(popup),
     /markedLabel\(it\.label, \{ fs: LIST_CARD_NAME.fs, fsMin: LIST_CARD_NAME.fsMin, color: "#ffffff\/1\.00", maxW: w - 56 - \(it\.nameEdit \? 60 : 0\), mark: false, maxLines: LIST_CARD_NAME.lines \}\)/,
   );
-  assert.match(popup, /export function listLayout[\s\S]*?card: \{ w: 250, h: 226, bar: 68 \}/);
+  assert.match(flat(popup), /export function listLayout[\s\S]*?card: \{ w: 250, h: 226, bar: 68 \}/);
   const prompts = readFileSync(new URL("../../src/bmpt/web/js/prompts.js", import.meta.url), "utf8");
   assert.doesNotMatch(
     prompts.slice(prompts.indexOf("export function card(")),
@@ -467,7 +471,7 @@ const hall = await (async () => {
     XS_BUTTON,
     layoutStack,
   };
-  source = source.replace(/^import .*;$/gm, "");
+  source = source.replace(/^import [^;]*;$/gm, "");
   source = `const { Popup, clone, NGUI, Loading, withTimeout, T, POPUP, POPUP_FRAME, CONTROL, TYPE, SPACE, XS_BUTTON, layoutStack } = globalThis.hallHarness; const S = 1920 / 2960;\n${source}\n//# sourceURL=hall-ui-fit.js`;
   return import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
 })();

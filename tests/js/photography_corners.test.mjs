@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { statementOf } from "./helpers/source-text.mjs";
 import vm from "node:vm";
 import { test } from "node:test";
 import { bindCorner, CORNER_MARGIN } from "../../src/bmpt/web/js/corner-layout.js";
@@ -23,11 +24,11 @@ const source = readFileSync(new URL("../../src/bmpt/web/js/photography/controlle
 const visualSource = readFileSync(new URL("../../src/bmpt/web/js/visual-mode.js", import.meta.url), "utf8");
 // Run the shared fullscreen renderer too; only asset loading and the DOM are stand-ins.
 const backCode =
-  visualSource.match(/^const CENTRE = .*$/m)[0] +
+  statementOf(visualSource, "const CENTRE =") +
   "\n" +
-  visualSource.match(/^const HIT = .*$/m)[0] +
+  statementOf(visualSource, "const HIT =") +
   "\n" +
-  visualSource.match(/^const CORNERS = .*$/m)[0] +
+  statementOf(visualSource, "const CORNERS =") +
   "\n" +
   visualSource
     .slice(visualSource.indexOf("export async function prepare("), visualSource.indexOf("// open({parts"))
@@ -39,7 +40,7 @@ const backCode =
 const code =
   backCode +
   "\n" +
-  source.match(/^const CHOICE_ICONS=.*$/m)[0] +
+  statementOf(source, source.match(/const CHOICE_ICONS ?=/)[0]) +
   "\n" +
   source.slice(source.indexOf("let whiteTemplate;"), source.indexOf("export function attach")) +
   source.slice(source.indexOf("async function modeButton("), source.indexOf("async function choicePanel(")) +

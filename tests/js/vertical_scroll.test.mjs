@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { flat } from "./helpers/source-text.mjs";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
@@ -344,11 +345,14 @@ test("pointer, keyboard, blur, visibility and motion preference changes cancel n
 
 test("the roster uses the shared controller for its virtual position and cancels it on hide or rebuild", () => {
   const source = readFileSync(new URL("../../src/bmpt/web/js/roster.js", import.meta.url), "utf8");
-  assert.match(source, /wheelScroller\(\{ read: \(\) => view.scroll/);
-  assert.match(source, /view.scroll = top; applyScroll\(\)/);
-  assert.match(source, /if \(motion.wheel\(ev\)\) return;/);
+  assert.match(flat(source), /wheelScroller\(\{ read: \(\) => view.scroll/);
+  assert.match(flat(source), /view.scroll = top; applyScroll\(\)/);
+  assert.match(flat(source), /if \(motion.wheel\(ev\)\) return;/);
   for (const name of ["relist", "buildFrame", "hide"])
-    assert.match(source, new RegExp(`(?:async )?function ${name}\\([^)]*\\) \\{\\s*wheelMotion\\?\\.stop\\(\\);`));
+    assert.match(
+      flat(source),
+      new RegExp(`(?:async )?function ${name}\\([^)]*\\) \\{\\s*wheelMotion\\?\\.stop\\(\\);`),
+    );
   const main = readFileSync(new URL("../../src/bmpt/web/js/main.js", import.meta.url), "utf8");
-  assert.match(main, /installVerticalWheel\(\);/);
+  assert.match(flat(main), /installVerticalWheel\(\);/);
 });

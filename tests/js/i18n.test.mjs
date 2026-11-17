@@ -189,6 +189,7 @@ test("errorText gives a coded error its string and an uncoded one error.internal
 
 test("the sites the review lists draw their error text through the shared errorText", async () => {
   const { readFileSync } = await import("node:fs");
+  const { flat } = await import("./helpers/source-text.mjs");
   const read = (name) => readFileSync(new URL(`../../src/bmpt/web/js/${name}`, import.meta.url), "utf8");
   for (const name of ["consent.js", "update.js", "quit.js", "settings.js"]) {
     const source = read(name);
@@ -201,7 +202,7 @@ test("the sites the review lists draw their error text through the shared errorT
     4,
     "the asset consent, the folder change, the Spine consent and the scan consent",
   );
-  const main = read("main.js");
+  const main = flat(read("main.js"));
   assert.match(
     main,
     /catch \(err\) \{ notify\(errorText\(err\), \{ kind: "error", error: err \}\); \}/,
@@ -209,7 +210,7 @@ test("the sites the review lists draw their error text through the shared errorT
   );
   assert.match(
     main,
-    /\} catch \(err\) \{\n {6}notify\(errorText\(err\), \{ kind: "error", error: err \}\);/,
+    /\} catch \(err\) \{ notify\(errorText\(err\), \{ kind: "error", error: err \}\);/,
     "files dropped on the window",
   );
 });

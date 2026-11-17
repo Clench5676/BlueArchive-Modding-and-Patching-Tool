@@ -7,7 +7,7 @@ import { overwrittenLines } from "../../src/bmpt/web/js/repairs.js";
 const web = new URL("../../src/bmpt/web/js/", import.meta.url);
 const source = readFileSync(new URL("settings-other.js", web), "utf8");
 const settings = readFileSync(new URL("settings.js", web), "utf8");
-const strip = (s) => s.replace(/^import .*;\n/gm, "").replace(/^export /gm, "");
+const strip = (s) => s.replace(/^import [^;]*;\n/gm, "").replace(/^export /gm, "");
 function harness({ locale = "en-US", answer = "ok", used = true, error = null, result = {} } = {}) {
   const strings = JSON.parse(
     readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8"),

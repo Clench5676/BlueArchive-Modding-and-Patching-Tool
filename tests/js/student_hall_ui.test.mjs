@@ -113,7 +113,7 @@ globalThis.uiHarness = {
   },
 };
 let source = await readFile(new URL("../../src/bmpt/web/js/student-hall-ui.js", import.meta.url), "utf8");
-source = source.replace(/^import .*;$/gm, "");
+source = source.replace(/^import [^;]*;$/gm, "");
 source = `const {Popup,clone,NGUI,Loading,withTimeout,T,POPUP,POPUP_FRAME,XS_BUTTON,CONTROL,TYPE,SPACE,layoutStack,captionMinimum}=globalThis.uiHarness; const Buttons={disable:(...args)=>globalThis.uiHarness.Buttons.disable(...args)}; const S=1920/2960;\n${source}\nexport function areaFixture(fn){area=fn;} export function assetsFixture(value){assets=value;} export function readinessFixture(host,fn){visibleReadiness.set(host,fn);} export {pictureReadiness};\n//# sourceURL=hall-ui-fixture.js`;
 const UI = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
 UI.areaFixture((host, box, height, key) => {

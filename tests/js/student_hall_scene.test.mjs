@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { flat } from "./helpers/source-text.mjs";
 import { test } from "node:test";
 import { readFile } from "node:fs/promises";
 import {
@@ -162,7 +163,7 @@ globalThis.sceneHarness = {
   },
 };
 let source = await readFile(new URL("../../src/bmpt/web/js/student-hall.js", import.meta.url), "utf8");
-source = source.replace(/^import .*;$/gm, "");
+source = source.replace(/^import [^;]*;$/gm, "");
 source =
   `import { CONTROL, XS_BUTTON, SPACE } from "${new URL("../../src/bmpt/web/js/ui-tokens.js", import.meta.url).href}";\nimport { row } from "${new URL("../../src/bmpt/web/js/ui-grid.js", import.meta.url).href}";\n` +
   source;
@@ -794,5 +795,8 @@ test("ordinary Hall memorials keep their view bounds with the full camera; immer
   Hall.immersiveFixture(false);
   Hall.configureMemorial(player);
   assert.deepEqual(changes, [false, true, false]);
-  assert.match(source, /onChange: \(active\) => \{ memorials\?\.current\(\)\?\.player.setDialogueFullscreen\(active\)/);
+  assert.match(
+    flat(source),
+    /onChange: \(active\) => \{ memorials\?\.current\(\)\?\.player.setDialogueFullscreen\(active\)/,
+  );
 });

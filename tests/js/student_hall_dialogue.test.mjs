@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { flat } from "./helpers/source-text.mjs";
 import { test } from "node:test";
 import { readFile } from "node:fs/promises";
 import { dialogueText } from "../../src/bmpt/web/js/dialogue-text.js";
@@ -65,7 +66,7 @@ globalThis.hallDialogueHarness = {
   freezeWhileLoading,
 };
 let source = await readFile(new URL("../../src/bmpt/web/js/student-hall-dialogue.js", import.meta.url), "utf8");
-source = source.replace(/^import .*;$/gm, "");
+source = source.replace(/^import [^;]*;$/gm, "");
 source = `const {NGUI, defaultRpc, language, S, talkExpression, setTimeout, clearTimeout, URL, spriteBorders, sliceAxis, slicePoint, dialogueText, freezeWhileLoading} = globalThis.hallDialogueHarness;\n${source}`;
 const {
   createDialogue,
@@ -1141,9 +1142,9 @@ test("balloon subtitle transitions preserve the 260 ms sequence and immediate la
 test("the Hall and memorial lobby use one prepareBalloon and CSS contributes no subtitle look", async () => {
   const lobby = await readFile(new URL("../../src/bmpt/web/js/lobby.js", import.meta.url), "utf8");
   const css = await readFile(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
-  assert.match(lobby, /import\("\.\/student-hall-dialogue.js"\)/);
+  assert.match(flat(lobby), /import\("\.\/student-hall-dialogue.js"\)/);
   assert.equal((source.match(/function prepareBalloon\(/g) || []).length, 1);
-  assert.equal((source.match(/prepareBalloon\(template|prepareBalloon\(saved/g) || []).length, 3);
+  assert.equal((flat(source).match(/prepareBalloon\(template|prepareBalloon\(saved/g) || []).length, 3);
   for (const rule of css.matchAll(/[^{}]*\.lobby-subtitle[^{}]*\{([^}]*)\}/g))
     assert.doesNotMatch(rule[1], /background|border-radius|color|font|padding|bottom:|left:/);
 });

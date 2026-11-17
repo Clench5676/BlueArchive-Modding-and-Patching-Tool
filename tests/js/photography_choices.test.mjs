@@ -2,6 +2,7 @@
 // dialogue as the detail screen does, never by its clip name (UI-17). Run by Node's test runner.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { compact, flat } from "./helpers/source-text.mjs";
 import { test } from "node:test";
 import { otherMode, actionCaption, choiceLayout } from "../../src/bmpt/web/js/photography/camera.js";
 
@@ -9,6 +10,7 @@ import { CONTROL, XS_BUTTON, SPACE, FULLSCREEN_BUTTON } from "../../src/bmpt/web
 import { row } from "../../src/bmpt/web/js/ui-grid.js";
 const web = new URL("../../src/bmpt/web/js/", import.meta.url);
 const controller = readFileSync(new URL("photography/controller.js", web), "utf8");
+const dense = compact(controller);
 const LOCALES = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"];
 const ui = (locale) =>
   JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
@@ -140,15 +142,9 @@ test("a skin with both modes keeps the right edge and names the mode it switches
   }
 });
 test("the camera draws the mode button through that check, and switching still refuses without the mode", () => {
-  assert.match(
-    controller,
-    /async function modeButton\(host\)\{\s*\/\/[^\n]*\n\s*if\(!otherMode\(mode,bridge\.info\(\)\)\)return;/,
-  );
-  assert.match(
-    controller,
-    /const next=otherMode\(mode,bridge\.info\(\)\);\s*if\(!next\)throw new Error\(P\('noAssets'\)\);/,
-  );
-  assert.match(controller, /modeButton\(layer\)/);
+  assert.match(dense, /async function modeButton\(host\)\{\/\/.*?if\(!otherMode\(mode,bridge\.info\(\)\)\)return;/);
+  assert.match(dense, /const next=otherMode\(mode,bridge\.info\(\)\);if\(!next\)throw new Error\(P\("noAssets"\)\);/);
+  assert.match(dense, /modeButton\(layer\)/);
 });
 
 test("a dialogue is captioned like the detail screen, never by its clip name", () => {
@@ -175,13 +171,13 @@ test("an idle pose has no dialogue number and no label yet: it keeps its clip na
   assert.equal(actionCaption({ anim: "Idle_01" }, T), "Idle_01");
 });
 test("the Dialogue / Actions list captions its buttons through actionCaption in both name and label", () => {
-  assert.match(controller, /UI\.button\(actionArea,'Sequence'\+index,actionCaption\(sequences\[index\],T\),/);
-  assert.doesNotMatch(controller, /UI\.button\(actionArea,'Sequence'\+index,sequences\[index\]\.anim,/);
+  assert.match(dense, /UI\.button\(actionArea,"Sequence"\+index,actionCaption\(sequences\[index\],T\),/);
+  assert.doesNotMatch(dense, /UI\.button\(actionArea,"Sequence"\+index,sequences\[index\]\.anim,/);
   assert.equal(choiceLayout("lobby", 5).columns, 3, "unchanged: the list keeps its geometry");
 });
 
 // Blank space in the Expressions / Actions list is the list's, not the pan surface's: no grab cursor, no pan or zoom there.
-const css = readFileSync(new URL("../../src/bmpt/web/css/photography.css", import.meta.url), "utf8");
+const css = flat(readFileSync(new URL("../../src/bmpt/web/css/photography.css", import.meta.url), "utf8"));
 const rule = (selector) =>
   [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)]
     .filter(([, sel]) =>
@@ -223,12 +219,12 @@ test("the choice list covers its whole box and its scroll area takes the pointer
     assert.equal(shield.className, "photo-choice-shield");
   }
   assert.match(
-    controller,
+    dense,
     /choiceShield\(panelHost,box\);await choicePanel\(panelHost,box\);/,
     "drawn with every expanded list",
   );
-  assert.match(rule(".photo-choice-shield"), /pointer-events:auto/);
-  assert.match(rule("#photo-overlay .popup-cards"), /pointer-events:auto/, "the gaps between cards scroll the list");
+  assert.match(rule(".photo-choice-shield"), /pointer-events: ?auto/);
+  assert.match(rule("#photo-overlay .popup-cards"), /pointer-events: ?auto/, "the gaps between cards scroll the list");
   assert.doesNotMatch(rule(".photo-choice-shield"), /cursor/, "the game pointer, not the pan surface's grab");
 });
 

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { compact } from "./helpers/source-text.mjs";
 import { test } from "node:test";
 const source = await readFile(new URL("../../src/bmpt/web/js/photography/camera.js", import.meta.url), "utf8");
 const { FRAME, portraitCaptureView, lobbyCaptureView, portraitMinimum, lobbyMaximumWidth, choiceLayout } = await import(
@@ -108,6 +109,6 @@ test("composed occlusion control keeps the right edge, centred neighbours and sc
       assert.ok(box[3] * scale >= 44);
       near((box[1] + box[3] / 2) * scale, (25 + (FULLSCREEN_BUTTON.h * S) / 2) * scale); // every control of the row has the fullscreen buttons' one height
     }
-  assert.match(controller, /P\('occlusion'\),boxes\.occlusion/);
-  assert.doesNotMatch(controller, /getComputedStyle/);
+  assert.match(compact(controller), /P\("occlusion"\),boxes\.occlusion/);
+  assert.doesNotMatch(compact(controller), /getComputedStyle/);
 });

@@ -4058,7 +4058,10 @@ test("variant chips are 272 x 72 with the caption at 40 down to 28, the second c
       Math.abs(parseFloat(caption.style.fontSize) - NGUI.fontSizeFor(caption.textContent, CHIP.fs) * S) < 0.02,
       "caption size 40",
     );
-    const source = readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8");
+    const source = readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8").replace(
+      /\s+/g,
+      " ",
+    );
     assert.match(source, /const CHIP_FS = CHIP\.fs, CHIP_W = CHIP\.w, CHIP_PITCH = CHIP\.pitch;/);
     assert.doesNotMatch(source, /CHIP_FS = 38/);
     Detail.hide();

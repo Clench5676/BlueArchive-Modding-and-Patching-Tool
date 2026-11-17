@@ -40,7 +40,7 @@ test("both states use NGUI single-image paint, with no separately composited CSS
   assert.ok(!segment.includes("::before"));
   const source = await readFile(new URL("../../src/bmpt/web/js/mod-switch.js", import.meta.url), "utf8");
   assert.match(source, /NGUI.render\(segmentTree/);
-  assert.match(source, /revision!==skinRevision/);
+  assert.match(source, /revision ?!== ?skinRevision/);
 });
 
 test("the shared raster accepts effective DPI without reducing smoothing or logical geometry", async () => {

@@ -6,6 +6,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFile } from "node:fs/promises";
+import { flat } from "./helpers/source-text.mjs";
 
 const WIDE = /[⺀-鿿　-ヿ＀-￯가-힯฀-๿]/;
 const ctx = {
@@ -35,7 +36,8 @@ const text = (locale, key) => {
   assert.equal(typeof value, "string", `${locale}: ${key}`);
   return value;
 };
-const source = async (file) => readFile(new URL(`../../src/bmpt/web/js/${file}`, import.meta.url), "utf8");
+const raw = async (file) => readFile(new URL(`../../src/bmpt/web/js/${file}`, import.meta.url), "utf8");
+const source = async (file) => flat(await raw(file));
 
 const widest = (f) => Math.max(...f.text.split("\n").map((l) => glyphWidth(l, f.fs)));
 const tall = (f) => f.lines * fontSizeFor(f.text, f.fs) * LINE_PITCH;
@@ -68,7 +70,7 @@ test("the picker's constants are the ones asserted here", async () => {
   // the actions' captions 34 down to 24 on XS bodies, 30 down to 22 on XXS ones, the button's padding each side
   assert.match(
     popup,
-    /Object\.freeze\(\{ control: CONTROL\.buttonXS, fs: 34, min: 24 \}\),\n  Object\.freeze\(\{ control: CONTROL\.buttonXXS, fs: 30, min: 22 \}\),/,
+    /Object\.freeze\(\{ control: CONTROL\.buttonXS, fs: 34, min: 24 \}\), Object\.freeze\(\{ control: CONTROL\.buttonXXS, fs: 30, min: 22 \}\),?/,
   );
   assert.match(popup, /const ACTION_CLEAR = 2 \* BTN\.pad, ACTION_TEXT_H = BTN\.h - 8;/);
   assert.match(popup, /left: bounds\(detailBox\)/);
@@ -289,7 +291,10 @@ for (const locale of LOCALES)
     assert.match(roster, /fitGroup\(filters\.flat\(\), segFs, 22, segW - 26, 2, \{ maxH: 96 \}\)/);
     // the list popups' three go through the same toolbarFit, as one filter
     assert.match(popup, /toolbarFit\(\{ left, right, filters: segs \? \[segs\.map\(segText\)\] : \[\]/);
-    assert.match(popup, /const segText = \(seg\) => \(typeof seg === "string" \? T\(seg\) : seg\?\.text \?\? ""\);/);
+    assert.match(
+      popup,
+      /const segText = \(seg\) => \(typeof seg === "string" \? T\(seg\) : \(?seg\?\.text \?\? ""\)?\);/,
+    );
     document.documentElement.lang = locale;
     for (const [segW, segFs] of [
       [230, 44],
@@ -539,7 +544,7 @@ for (const locale of LOCALES)
 for (const locale of LOCALES)
   test(`the 3D model's action captions fit their cards in ${locale}`, async () => {
     const detail = await source("detail.js"),
-      model = await source("model.js");
+      model = await raw("model.js");
     assert.match(detail, /const CARD = \{ w: 242, h: 209 \};/);
     // (the action bar's group cards bring their own fit: action_list.test.mjs)
     assert.match(detail, /const f = captionFit \|\| fitText\(caption, 56, 28, w - 50\)[,;]/);

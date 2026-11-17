@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { compact } from "./helpers/source-text.mjs";
 import { test } from "node:test";
 import { CONTROL, SPACE } from "../../src/bmpt/web/js/ui-tokens.js";
 import { row } from "../../src/bmpt/web/js/ui-grid.js";
 const source = readFileSync(new URL("../../src/bmpt/web/js/photography/controller.js", import.meta.url), "utf8");
+const dense = compact(source);
 const code = source.slice(source.indexOf("async function deletePhoto()"), source.indexOf("async function applyGame()"));
 test("gallery cards consume only the target-scoped Applied flag; the official card counts when the game shows it", async () => {
   const drawCode = source.slice(
@@ -158,16 +160,16 @@ test("a failed deletion cannot change selection or publish thumbnail success", a
   assert.equal(h.repository().photos[0].id, "capture");
 });
 test("official and runtime gallery entries omit Delete; persisted generated photos remain managed", () => {
-  assert.match(source, /provenance:'official',managed:false/);
-  assert.match(source, /provenance:'runtime',managed:false/);
-  assert.match(source, /deletable=entry\?\.managed!==false&&entry\?\.provenance!=='official'/);
-  assert.match(source, /\.\.\.\(deletable\?\[\[P\('delete'\),safe\(deletePhoto\)\]\]:\[\]\)/);
+  assert.match(dense, /provenance:"official",managed:false/);
+  assert.match(dense, /provenance:"runtime",managed:false/);
+  assert.match(dense, /deletable=entry\?\.managed!==false&&entry\?\.provenance!=="official"/);
+  assert.match(dense, /\.\.\.\(deletable\?\[\[P\("delete"\),safe\(deletePhoto\)\]\]:\[\]\)/);
   assert.ok(!source.includes("enabled:!selectedPhoto.original"));
 });
 
 test("the gallery reuses the stored default card and retains separate skin defaults", () => {
-  const start = source.indexOf("const galleryPhotos=");
-  const code = source.slice(start, source.indexOf("const photo=", start));
+  const start = source.search(/const galleryPhotos ?=/);
+  const code = source.slice(start, start + source.slice(start).search(/const photo ?=/));
   const cards = new Function(
     "repository",
     "sessionVariant",

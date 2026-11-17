@@ -39,7 +39,7 @@ globalThis.iconHarness = {
   },
 };
 let source = await readFile(new URL("../../src/bmpt/web/js/student-hall-icons.js", import.meta.url), "utf8");
-source = source.replace(/^import .*;$/gm, "");
+source = source.replace(/^import [^;]*;$/gm, "");
 source = `const {NGUI,spriteUrl,document}=globalThis.iconHarness;\n${source}\n//# sourceURL=hall-icons-fixture.js`;
 const Icons = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
 const close = (a, b) => assert.ok(Math.abs(a - b) < 1e-7, `${a} != ${b}`);

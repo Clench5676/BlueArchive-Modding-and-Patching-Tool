@@ -3,6 +3,7 @@ import { fitLine, modLine } from "../../src/bmpt/web/js/job-progress.js";
 import { loadingLabel, loadingLetterSprites, loadingInkLine, alphaBounds } from "../../src/bmpt/web/js/ngui-label.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { flat } from "./helpers/source-text.mjs";
 import { test } from "node:test";
 
 const source = readFileSync(new URL("../../src/bmpt/web/js/loading.js", import.meta.url), "utf8");
@@ -255,7 +256,7 @@ async function harness({
     },
   };
   globalThis.loadingDeps = d;
-  const code = `const {document,performance,setTimeout,clearTimeout,requestAnimationFrame,getComputedStyle,NGUI,Popup,T,S,loadingLabel,loadingLetterSprites,loadingInkLine,alphaBounds,alignBaseline,domBaseline,publishAligned,modLine,fitLine,freezeShown = () => {}} = globalThis.loadingDeps;\n${source.replace(/^import .*;$/gm, "")}\n// ${seq++}`;
+  const code = `const {document,performance,setTimeout,clearTimeout,requestAnimationFrame,getComputedStyle,NGUI,Popup,T,S,loadingLabel,loadingLetterSprites,loadingInkLine,alphaBounds,alignBaseline,domBaseline,publishAligned,modLine,fitLine,freezeShown = () => {}} = globalThis.loadingDeps;\n${source.replace(/^import [^;]*;$/gm, "")}\n// ${seq++}`;
   const loading = await import(`data:text/javascript;base64,${Buffer.from(code).toString("base64")}`);
   if (infoReady) loading.init({ consent, uiCached, gameFound: true });
   const advance = async (ms) => {
@@ -462,7 +463,7 @@ test("a cancelled scene hands its cover to the newer navigation", async () => {
 });
 
 test("writer progress keeps Loading in the right corner", () => {
-  const css = readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
+  const css = flat(readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8"));
   assert.match(css, /\.loading-fallback \{[^}]*right: 84px/);
   assert.doesNotMatch(css, /with-progress \.loading-(?:fallback|ind)\s*\{/);
   assert.match(css, /\.loading-progress \{[^}]*left: 84px/);
@@ -587,8 +588,8 @@ test("the initial cover measures the fallback and sprite portions through reveal
 });
 
 test("the stage stays hidden at its default scale until the first fit, so the start screen is black", async () => {
-  const css = readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
-  assert.match(css, /\.stage \{[^}]*scale\(var\(--scale, \.5\)\)[^}]*visibility: hidden;/);
+  const css = flat(readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8"));
+  assert.match(css, /\.stage \{[^}]*scale\(var\(--scale, 0?\.5\)\)[^}]*visibility: hidden;/);
   const old = Object.fromEntries(
     ["document", "innerWidth", "innerHeight", "bamtHeaderGeometry"].map((k) => [k, globalThis[k]]),
   );
@@ -687,10 +688,10 @@ test("boot adopts the neutral indicator and relabels it when locale strings arri
 
 test("the initial document uses a neutral system style before modules and locale strings arrive", () => {
   const html = readFileSync(new URL("../../src/bmpt/web/index.html", import.meta.url), "utf8");
-  const css = readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
+  const css = flat(readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8"));
   assert.match(html, /class="loading full on neutral" id="loading-boot"/);
   assert.match(html, /id="loading-boot"[\s\S]*?class="loading-plain"><span><\/span>/);
-  const fallback = readFileSync(new URL("../../src/bmpt/web/css/fallback.css", import.meta.url), "utf8");
+  const fallback = flat(readFileSync(new URL("../../src/bmpt/web/css/fallback.css", import.meta.url), "utf8"));
   assert.match(fallback, /\.loading-plain \{[^}]*system-ui, sans-serif/);
   assert.match(
     fallback,
@@ -922,8 +923,8 @@ test("a writer under the start cover shows its progress only, and its own indica
 });
 
 test("the stylesheets hide the writer's indicator over a cover and an empty neutral box", () => {
-  const css = readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
-  const fallback = readFileSync(new URL("../../src/bmpt/web/css/fallback.css", import.meta.url), "utf8");
+  const css = flat(readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8"));
+  const fallback = flat(readFileSync(new URL("../../src/bmpt/web/css/fallback.css", import.meta.url), "utf8"));
   assert.match(
     css,
     /\.loading\.over-cover \.loading-ind, \.loading\.over-cover \.loading-edge \{ visibility: hidden; \}/,

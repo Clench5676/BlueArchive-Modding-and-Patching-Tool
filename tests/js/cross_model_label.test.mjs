@@ -2,6 +2,7 @@
 // and in the name Optimize Physics gives its copy. detail.js's own lines run here without starting the app.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { flat, statementOf } from "./helpers/source-text.mjs";
 import { test } from "node:test";
 import vm from "node:vm";
 import { LOCALES, installFitPage, text } from "./helpers/fit_canvas.mjs";
@@ -10,16 +11,8 @@ const page = installFitPage();
 const { crossName, studentName } = await import("../../src/bmpt/web/js/names.js");
 const { glyphsOf, markedLabel } = await import("../../src/bmpt/web/js/util.js");
 const source = readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8");
-const lineOf = (prefix) => {
-  const at = source.indexOf(prefix);
-  assert.ok(at >= 0, prefix);
-  return source.slice(at, source.indexOf("\n", at));
-};
-const blockOf = (prefix) => {
-  const at = source.indexOf(prefix);
-  assert.ok(at >= 0, prefix);
-  return source.slice(at, source.indexOf("\n};\n", at) + 4);
-};
+const lineOf = (prefix) => statementOf(source, prefix);
+const blockOf = lineOf;
 const functionSource = (name) => {
   const at = source.indexOf(`function ${name}(`);
   return source.slice(source.lastIndexOf("\n", at) + 1, source.indexOf("\n}\n", at) + 2);
@@ -196,7 +189,7 @@ test("Optimize Physics on the student's own cards keeps its names", async () => 
 // --- the card bar: 34 down to 24, two lines, 250 - 56 wide (popup.js listCard) ---
 const catalog = JSON.parse(readFileSync(new URL("../../src/bmpt/catalog/data/catalog.json", import.meta.url), "utf8"));
 test("the card label fitting is the one these tests measure", () => {
-  const popup = readFileSync(new URL("../../src/bmpt/web/js/popup.js", import.meta.url), "utf8");
+  const popup = flat(readFileSync(new URL("../../src/bmpt/web/js/popup.js", import.meta.url), "utf8"));
   assert.match(popup, /LIST_CARD_NAME = Object\.freeze\(\{ fs: 34, fsMin: 24, lines: 2, padY: 22, pitch: 1\.2 \}\)/);
   assert.match(
     popup,

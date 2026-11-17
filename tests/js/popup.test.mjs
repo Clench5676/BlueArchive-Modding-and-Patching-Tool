@@ -2,6 +2,7 @@
 // several cards ticked, the start sequence), web/js/update.js and detail.js's preview actions, on a small stand-in
 // DOM. Run by tests/test_popup.py with Node's test runner: node --test tests/js/popup.test.mjs
 import assert from "node:assert/strict";
+import { flat } from "./helpers/source-text.mjs";
 import { readFileSync } from "node:fs";
 import { register } from "node:module";
 import { afterEach, test } from "node:test";
@@ -1862,11 +1863,11 @@ test("the log popup's plain fallback uses only classes the style sheet defines",
     source.indexOf("export function textViewer("),
     source.indexOf("// --- ordinary refusals ---"),
   );
-  const fallback = viewer.slice(viewer.indexOf("} catch (err) {"));
+  const fallback = viewer.slice(viewer.indexOf("} catch (err) {")).replace(/\s+/g, " ");
   const css = readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
-  assert.match(fallback, /plainMessage\(layer, \{ title, width: TEXT_VIEWER.w, height: TEXT_VIEWER.h/);
-  assert.match(fallback, /TEXT_VIEWER.box.width/);
-  assert.match(fallback, /TEXT_VIEWER.box.height/);
+  assert.match(flat(fallback), /plainMessage\(layer, \{ title, width: TEXT_VIEWER.w, height: TEXT_VIEWER.h/);
+  assert.match(flat(fallback), /TEXT_VIEWER.box.width/);
+  assert.match(flat(fallback), /TEXT_VIEWER.box.height/);
   const shared = source.slice(
     source.indexOf("export function plainMessage("),
     source.indexOf("// a fixed size (max equals min)"),

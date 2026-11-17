@@ -8,7 +8,7 @@ import * as Intro from "../../src/bmpt/web/js/lobby-intro.js";
 import { withTimeout } from "../../src/bmpt/web/js/async.js";
 
 const source = (await readFile(new URL("../../src/bmpt/web/js/lobby.js", import.meta.url), "utf8"))
-  .replace(/^import .*;$/gm, "")
+  .replace(/^import [^;]*;$/gm, "")
   .replace(/^export /gm, "");
 const deferred = () => {
   let resolve, reject;

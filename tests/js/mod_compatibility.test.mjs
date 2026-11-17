@@ -175,7 +175,7 @@ async function harness(locale = "en-US", button = "cancel", accept = false) {
       },
     },
   };
-  const code = `const { T, language, rpc, waitJob, Loading, Popup, Compare, ensureSpine, jobProgress, isIdentity, modJob, RigGeometry } = globalThis.compatibilityDeps;\n${source.replace(/^import .*;$/gm, "")}\n// ${sequence++}`;
+  const code = `const { T, language, rpc, waitJob, Loading, Popup, Compare, ensureSpine, jobProgress, isIdentity, modJob, RigGeometry } = globalThis.compatibilityDeps;\n${source.replace(/^import [^;]*;$/gm, "")}\n// ${sequence++}`;
   const mod = await import(`data:text/javascript;base64,${Buffer.from(code).toString("base64")}`);
   return {
     mod,

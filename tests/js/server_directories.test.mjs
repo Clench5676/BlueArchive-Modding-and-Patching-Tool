@@ -6,7 +6,7 @@ import { controls } from "./control_prefabs.mjs";
 const web = new URL("../../src/bmpt/web/js/", import.meta.url);
 const source = readFileSync(new URL("settings.js", web), "utf8");
 const locales = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"];
-const strip = (s) => s.replace(/^import .*;\n/gm, "").replace(/^export /gm, "");
+const strip = (s) => s.replace(/^import [^;]*;\n/gm, "").replace(/^export /gm, "");
 class El {
   style = {};
   children = [];

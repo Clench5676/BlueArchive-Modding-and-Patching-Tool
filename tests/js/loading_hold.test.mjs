@@ -659,7 +659,7 @@ test("the toolbar row the lock reaches is the one the window chrome builds, and 
   const chrome = readFileSync(new URL("../../src/bmpt/web/js/window-chrome.js", import.meta.url), "utf8");
   const loading = readFileSync(new URL("../../src/bmpt/web/js/loading.js", import.meta.url), "utf8");
   const css = readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
-  assert.match(chrome, /wrapper\.className = 'window-header'[\s\S]*unlockHeader = lockOutside\(wrapper\)/);
+  assert.match(chrome, /wrapper\.className = ["']window-header["'][\s\S]*unlockHeader = lockOutside\(wrapper\)/);
   assert.match(loading, /export function lockOutside/);
   assert.match(css, /\.now-loading-cover \.window-header \{[^}]*visibility: hidden/);
 });
