@@ -166,8 +166,8 @@ def restore(
             if key not in by_key:
                 continue
             for core, entry in sorted((folder.get("configured") or {}).items()):
-                if core not in before and isinstance(entry, dict) and isinstance(entry.get("variant"), str):
-                    library.apply(entry["variant"], "official", log=log, kind=entry.get("kind"), pin=by_key[key])
+                if core not in before and isinstance(entry, dict) and isinstance(entry.get("alt"), str):
+                    library.apply(entry["alt"], "official", log=log, kind=entry.get("kind"), pin=by_key[key])
 
     def put(data: dict) -> bool:
         for key, folder in (data.get("folders") or {}).items():

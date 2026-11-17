@@ -57,12 +57,12 @@ export function changeText(mod, sep = T("mods.impact.sep")) {
 /**
  * "student - kind - mod name" (the mod's own name left out where it only repeats the student's), then "Applied"
  * for a mod its student is configured with (mods.impact's configured: whatever the switch says).
- * @param {(entry: object) => string} [nameOf] Names the mod's variant.
+ * @param {(entry: object) => string} [nameOf] Names the mod's alt.
  */
-export function modName(mod, nameOf = (e) => e?.variant || e?.core || "") {
+export function modName(mod, nameOf = (e) => e?.alt || e?.core || "") {
   const applied = mod?.configured ? ` - ${T("status.applied")}` : "";
   if (mod?.kind === "other") return `${mod.label || mod.core || ""} - ${T("settings.mods.other")}${applied}`;
-  const entry = { variant: mod?.target, core: mod?.core, kind: mod?.kind };
+  const entry = { alt: mod?.target, core: mod?.core, kind: mod?.kind };
   const named = entryLabel(entry, nameOf, " - ");
   return `${mod?.label && mod.label !== nameOf(entry) ? `${named} - ${mod.label}` : named}${applied}`;
 }
@@ -71,7 +71,7 @@ export function modName(mod, nameOf = (e) => e?.variant || e?.core || "") {
  * A mod's lines: its name with Go To (none for a generic mod: no student page) and, for a held mod (fix), Fix
  * after it; then what changed in its official parts.
  * @param {object} mod The mod as mods.impact lists it.
- * @param {(entry: object) => string} nameOf Names the mod's variant.
+ * @param {(entry: object) => string} nameOf Names the mod's alt.
  * @param {object} [options]
  * @param {number} [options.indent] The indent of the change line.
  * @param {boolean} [options.marker] Hang a bullet before the line.
@@ -123,7 +123,7 @@ export function heldKeys(entries, impacts) {
 
 // --- the page ---
 
-let names = async () => (e) => e?.variant || e?.core || "";
+let names = async () => (e) => e?.alt || e?.core || "";
 let goTo = async () => {}; // main.js: a mod's student page with its switch open on the mod
 let busy = false;
 let pending = null; // a check's outcome waiting for the first screen: {result, reapplied, failed}
@@ -146,9 +146,7 @@ export function init(options = {}) {
 
 /** Go To: the mod's student page with its switch open on the mod. */
 export const open = (mod) =>
-  Promise.resolve(goTo({ id: mod.id, variant: mod.target, kind: mod.kind })).catch((err) =>
-    console.error("impact", err),
-  );
+  Promise.resolve(goTo({ id: mod.id, alt: mod.target, kind: mod.kind })).catch((err) => console.error("impact", err));
 
 // the progress of a check (Loading.task's update): its step, or the mod at hand while the mods are classified and
 // applied again (job-progress.js modLine)
@@ -291,8 +289,8 @@ export const modKey = (mod) => mod?.id || `${mod?.core || ""}`;
  * A mod's card: the student's name, its own picture (none for a 3D model), the kind and Applied as chips, the
  * Outdated badge.
  */
-export function card(mod, nameOf = (e) => e?.variant || e?.core || "") {
-  const entry = { variant: mod.target, core: mod.core, kind: mod.kind };
+export function card(mod, nameOf = (e) => e?.alt || e?.core || "") {
+  const entry = { alt: mod.target, core: mod.core, kind: mod.kind };
   const base = mod.kind === "model" || mod.kind === "other" || !mod.id ? null : spineBase("mod", mod.id);
   const lobby = mod.kind === "lobby";
   // an Official chip over the details' one line of the official changes
@@ -507,13 +505,13 @@ async function applyRepaired(mod, id) {
   if (!mod.configured) return;
   // under the loading screen, with its line: the student, the kind, the mod and the write
   const line = modJob(
-    { variant: mod.target, kind: mod.kind, core: mod.core || "", name: mod.label || "" },
-    { nameOf: Loading.variantName, action: "progress.actionApply" },
+    { alt: mod.target, kind: mod.kind, core: mod.core || "", name: mod.label || "" },
+    { nameOf: Loading.altName, action: "progress.actionApply" },
   );
   await Loading.task(
     async (update) => {
       update(line());
-      return waitJob(await rpc("actions.apply", { variant: mod.target, source: `mod:${id}`, kind: mod.kind }), (p) =>
+      return waitJob(await rpc("actions.apply", { alt: mod.target, source: `mod:${id}`, kind: mod.kind }), (p) =>
         update(line(p)),
       );
     },
@@ -531,7 +529,7 @@ async function fix(mods, nameOf, { review = false } = {}) {
   for (const mod of mods) {
     const subject = modName({ ...mod, configured: false }, nameOf);
     // who the mod is on the progress line of its check, repair or update (job-progress.js modJob)
-    const who = { variant: mod.target, kind: mod.kind, core: mod.core || "", name: mod.label || "" };
+    const who = { alt: mod.target, kind: mod.kind, core: mod.core || "", name: mod.label || "" };
     try {
       if (mod.repaired_id) {
         await applyRepaired(mod, mod.repaired_id);
@@ -557,7 +555,7 @@ async function fix(mods, nameOf, { review = false } = {}) {
           });
           if (answer.button !== "ok") continue;
         }
-        const line = modJob(who, { nameOf: Loading.variantName, action: "progress.actionRepair" });
+        const line = modJob(who, { nameOf: Loading.altName, action: "progress.actionRepair" });
         await Loading.task(
           async (update) => {
             update(line());
@@ -599,13 +597,13 @@ async function fix(mods, nameOf, { review = false } = {}) {
 }
 
 /**
- * The mods.state entries a game update's rig change holds ({install, core, variant, kind, source, label}) as
+ * The mods.state entries a game update's rig change holds ({install, core, alt, kind, source, label}) as
  * the summary's mods (applied by definition).
  */
 export const heldMods = (entries) =>
   (entries || []).map((e) => ({
     id: /^mod:(.+)$/.exec(e?.source || "")?.[1] || "",
-    target: e?.variant,
+    target: e?.alt,
     core: e?.core,
     kind: e?.kind,
     label: e?.label || "",

@@ -82,7 +82,7 @@ def test_batch_import_analyzes_differently_dated_parts_as_one_row_and_applies_al
     sources = dated_sources(env, targets)
     (entry,) = analyze(env, [sources[0].parent])["entries"]
     assert entry["paths"] == sorted(map(str, sources))
-    assert (entry["variant"], entry["core"], entry["kind"], entry["state"], entry["reason"]) == (
+    assert (entry["alt"], entry["core"], entry["kind"], entry["state"], entry["reason"]) == (
         "test",
         "test_spr",
         "spr",

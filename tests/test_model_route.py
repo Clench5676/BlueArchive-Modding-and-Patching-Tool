@@ -17,7 +17,7 @@ from bmpt.webui.state import UiState
 class RouteCatalog:
     def variant(self, key):
         if key not in ("ch0242", "ch0252"):
-            raise ServiceError("catalog_variant_not_found", key=key)
+            raise ServiceError("catalog_alt_not_found", key=key)
         return SimpleNamespace(key=key, model="ch0242" if key == "ch0242" else None)
 
 
@@ -93,7 +93,7 @@ def test_model_route_uses_verified_official_or_own_mod_sources(tmp_path):
 
     def costume(target, other):  # another variant's costume on the slot; the library refuses the rest
         if (target, other) != ("ch0242", "ch0242_swimsuit"):
-            raise ServiceError("source_unsupported", source=f"variant:{other}")
+            raise ServiceError("source_unsupported", source=f"alt:{other}")
         return costume_parts
 
     s = Services(
@@ -110,7 +110,7 @@ def test_model_route_uses_verified_official_or_own_mod_sources(tmp_path):
         assert calls[-1] == ("ch0242", official, "reads:official")
         assert s.asset("model/ch0242.glb", {"source": "mod:own"}).body == b"glTF"
         assert calls[-1] == ("ch0242", mod_parts, "reads:configured")
-        assert s.asset("model/ch0242.glb", {"source": "variant:ch0242_swimsuit"}).body == b"glTF"
+        assert s.asset("model/ch0242.glb", {"source": "alt:ch0242_swimsuit"}).body == b"glTF"
         assert calls[-1] == ("ch0242", costume_parts, "reads:official")
         import pytest
 
@@ -118,7 +118,7 @@ def test_model_route_uses_verified_official_or_own_mod_sources(tmp_path):
             with pytest.raises(KeyError):
                 s.asset("model/ch0242.glb", {"source": source})
         with pytest.raises(ServiceError, match="source_unsupported"):
-            s.asset("model/ch0242.glb", {"source": "variant:ch0252"})
+            s.asset("model/ch0242.glb", {"source": "alt:ch0252"})
     finally:
         s.close()
 
@@ -187,7 +187,7 @@ class CostumeCatalog:
 
     def variant(self, key):
         if key not in self.variants:
-            raise ServiceError("catalog_variant_not_found", key=key)
+            raise ServiceError("catalog_alt_not_found", key=key)
         model, field, family = self.variants[key]
         return SimpleNamespace(key=key, model=model, field_model=field, family=family, spr=self.portraits.get(key))
 
@@ -282,10 +282,10 @@ def test_a_costume_past_the_stretch_limit_is_shown_for_a_preview_only(tmp_path):
     s.library.costume_preview = unfit
     api = build_api(s)
     try:
-        job = api.call("model.checkCostumes", {"variant": "hina", "others": ["np0009"]})["result"]
+        job = api.call("model.checkCostumes", {"alt": "hina", "others": ["np0009"]})["result"]
         assert s.jobs.wait(job, 10) and s.jobs.get(job).result == {"np0009": "preview"}
-        assert api.call("model.costumes", {"variant": "hina", "others": ["np0009"]})["result"] == {"np0009": "preview"}
-        assert s.asset("model/hina.glb", {"source": "variant:np0009"}).body == b"glTF"  # its preview draws
+        assert api.call("model.costumes", {"alt": "hina", "others": ["np0009"]})["result"] == {"np0009": "preview"}
+        assert s.asset("model/hina.glb", {"source": "alt:np0009"}).body == b"glTF"  # its preview draws
     finally:
         s.close()
 
@@ -301,19 +301,19 @@ def test_costume_rpcs_offer_only_pairs_checked_to_their_end(tmp_path):
     try:
         # another student's model is a source too (the switch's search); a variant without one, itself not
         others = ["ch0230", "np0009", "momoi", "hina", "midori"]
-        assert api.call("model.costumes", {"variant": "hina", "others": others})["result"] == {
+        assert api.call("model.costumes", {"alt": "hina", "others": others})["result"] == {
             "ch0230": None,
             "np0009": None,
             "momoi": None,
             "hina": "refused",
             "midori": "refused",
         }
-        job = api.call("model.checkCostumes", {"variant": "hina", "others": ["ch0230", "np0009", "momoi", "midori"]})[
+        job = api.call("model.checkCostumes", {"alt": "hina", "others": ["ch0230", "np0009", "momoi", "midori"]})[
             "result"
         ]
         assert s.jobs.wait(job, 10)
         assert s.jobs.get(job).result == {"ch0230": "refused", "np0009": "ok", "momoi": "ok", "midori": "refused"}
-        assert api.call("model.costumes", {"variant": "hina", "others": others})["result"] == {
+        assert api.call("model.costumes", {"alt": "hina", "others": others})["result"] == {
             "ch0230": "refused",
             "np0009": "ok",
             "momoi": "ok",
@@ -325,12 +325,12 @@ def test_costume_rpcs_offer_only_pairs_checked_to_their_end(tmp_path):
         import pytest
 
         with pytest.raises(KeyError):
-            s.asset("model/hina.glb", {"source": "variant:ch0230"})
+            s.asset("model/hina.glb", {"source": "alt:ch0230"})
         assert sorted(built) == ["ch0230", "momoi", "np0009"]
         for bad in (
-            {"variant": "hina", "others": "np0009"},
-            {"variant": "hina", "others": ["x"] * 65},
-            {"variant": "", "others": []},
+            {"alt": "hina", "others": "np0009"},
+            {"alt": "hina", "others": ["x"] * 65},
+            {"alt": "", "others": []},
         ):
             assert api.call("model.costumes", bad)["error"]["code"] == "bad_params"
     finally:
@@ -348,11 +348,9 @@ def test_costume_cautions_name_what_offered_pairs_may_draw_differently_in_the_ga
     api = build_api(s)
     try:
         assert api.call(
-            "model.costumeCautions", {"variant": "hina", "others": ["np0009", "momoi", "ch0230", "midori", "hina"]}
+            "model.costumeCautions", {"alt": "hina", "others": ["np0009", "momoi", "ch0230", "midori", "hina"]}
         )["result"] == {"np0009": ["ex_parts"], "momoi": ["carried_shader", "ex_parts"]}
-        assert (
-            api.call("model.costumeCautions", {"variant": "hina", "others": "np0009"})["error"]["code"] == "bad_params"
-        )
+        assert api.call("model.costumeCautions", {"alt": "hina", "others": "np0009"})["error"]["code"] == "bad_params"
     finally:
         s.close()
 
@@ -374,26 +372,26 @@ def test_optimize_physics_runs_as_a_library_job_on_the_official_model_or_a_costu
     try:
         for source, result in (
             ("official", {"unneeded": True, "reason": "official"}),
-            ("variant:np0009", {"mod": "copy"}),
+            ("alt:np0009", {"mod": "copy"}),
         ):
-            job = api.call("model.optimize", {"variant": "hina", "source": source, "name": "Pajamas"})["result"]
+            job = api.call("model.optimize", {"alt": "hina", "source": source, "name": "Pajamas"})["result"]
             assert s.jobs.wait(job, 10) and s.jobs.get(job).result == result
-        assert asked == [("hina", "official", "Pajamas", "pin"), ("hina", "variant:np0009", "Pajamas", "pin")]
+        assert asked == [("hina", "official", "Pajamas", "pin"), ("hina", "alt:np0009", "Pajamas", "pin")]
         for bad in (
-            {"variant": "hina", "source": "", "name": ""},
-            {"variant": "hina", "source": "official", "name": "x" * 201},
-            {"variant": "", "source": "official", "name": ""},
+            {"alt": "hina", "source": "", "name": ""},
+            {"alt": "hina", "source": "official", "name": "x" * 201},
+            {"alt": "", "source": "official", "name": ""},
         ):
             assert api.call("model.optimize", bad)["error"]["code"] == "bad_params"
         # a variant without a model, a mod: not a source of Optimize Physics; another student's model is
-        for source in ("variant:midori", "mod:abc"):
+        for source in ("alt:midori", "mod:abc"):
             assert (
-                api.call("model.optimize", {"variant": "hina", "source": source, "name": ""})["error"]["code"]
+                api.call("model.optimize", {"alt": "hina", "source": source, "name": ""})["error"]["code"]
                 == "source_unsupported"
             )
         assert len(asked) == 2
-        job = api.call("model.optimize", {"variant": "hina", "source": "variant:momoi", "name": "Momoi"})["result"]
-        assert s.jobs.wait(job, 10) and asked[-1] == ("hina", "variant:momoi", "Momoi", "pin")
+        job = api.call("model.optimize", {"alt": "hina", "source": "alt:momoi", "name": "Momoi"})["result"]
+        assert s.jobs.wait(job, 10) and asked[-1] == ("hina", "alt:momoi", "Momoi", "pin")
     finally:
         s.close()
 
@@ -414,28 +412,28 @@ def test_another_students_model_is_a_preview_source_and_past_the_stretch_limit_s
     s.library.current_pin = lambda: SimpleNamespace(key="pin")
     api = build_api(s)
     try:
-        job = api.call("model.checkCostumes", {"variant": "hina", "others": ["momoi"]})["result"]
+        job = api.call("model.checkCostumes", {"alt": "hina", "others": ["momoi"]})["result"]
         assert s.jobs.wait(job, 10) and s.jobs.get(job).result == {"momoi": "preview"}
-        assert api.call("model.costumes", {"variant": "hina", "others": ["momoi"]})["result"] == {"momoi": "preview"}
-        assert s.asset("model/hina.glb", {"source": "variant:momoi"}).body == b"glTF"
-        sources = api.call("ui.preview", {"variant": "hina", "kind": "model", "source": "variant:momoi"})
-        assert sources["result"]["model"] == "variant:momoi"
+        assert api.call("model.costumes", {"alt": "hina", "others": ["momoi"]})["result"] == {"momoi": "preview"}
+        assert s.asset("model/hina.glb", {"source": "alt:momoi"}).body == b"glTF"
+        sources = api.call("ui.preview", {"alt": "hina", "kind": "model", "source": "alt:momoi"})
+        assert sources["result"]["model"] == "alt:momoi"
         # the portrait: the student's own variants only, as before
         assert (
-            api.call("ui.preview", {"variant": "hina", "kind": "spr", "source": "variant:ch0230"})["result"]["spr"]
-            == "variant:ch0230"
+            api.call("ui.preview", {"alt": "hina", "kind": "spr", "source": "alt:ch0230"})["result"]["spr"]
+            == "alt:ch0230"
         )
         assert (
-            api.call("ui.preview", {"variant": "hina", "kind": "spr", "source": "variant:momoi"})["error"]["code"]
+            api.call("ui.preview", {"alt": "hina", "kind": "spr", "source": "alt:momoi"})["error"]["code"]
             == "bad_params"
         )
         # a refusal stays one for another student's model too
         saved["momoi"] = {"ok": False, "reason": "static model", "detail": {}}
-        assert api.call("model.costumes", {"variant": "hina", "others": ["momoi"]})["result"] == {"momoi": "refused"}
+        assert api.call("model.costumes", {"alt": "hina", "others": ["momoi"]})["result"] == {"momoi": "refused"}
         import pytest
 
         with pytest.raises(KeyError):
-            s.asset("model/hina.glb", {"source": "variant:momoi"})
+            s.asset("model/hina.glb", {"source": "alt:momoi"})
     finally:
         s.close()
 
@@ -502,7 +500,7 @@ def test_a_cancelled_costume_check_stops_between_its_phases_and_saves_no_verdict
     s.library.costume_preview = slow
     api = build_api(s)
     try:
-        job = api.call("model.checkCostumes", {"variant": "hina", "others": ["np0009", "ch0230"]})["result"]
+        job = api.call("model.checkCostumes", {"alt": "hina", "others": ["np0009", "ch0230"]})["result"]
         assert building.wait(5)
         assert api.call("jobs.cancel", {"id": job})["result"] == "running"
         gate.set()
@@ -513,15 +511,15 @@ def test_a_cancelled_costume_check_stops_between_its_phases_and_saves_no_verdict
         # a queued check never runs
         gate.clear()
         building.clear()
-        first = api.call("model.checkCostumes", {"variant": "hina", "others": ["np0009"]})["result"]
+        first = api.call("model.checkCostumes", {"alt": "hina", "others": ["np0009"]})["result"]
         assert building.wait(5)
-        queued = api.call("model.checkCostumes", {"variant": "hina", "others": ["ch0230"]})["result"]
+        queued = api.call("model.checkCostumes", {"alt": "hina", "others": ["ch0230"]})["result"]
         assert api.call("jobs.cancel", {"id": queued})["result"] == "cancelled"
         gate.set()
         assert s.jobs.wait(first, 5) and s.jobs.wait(queued, 5)
         assert s.jobs.get(first).result == {"np0009": "ok"} and "ch0230" not in built and "ch0230" not in saved
         # checked again next time
-        again = api.call("model.checkCostumes", {"variant": "hina", "others": ["ch0230"]})["result"]
+        again = api.call("model.checkCostumes", {"alt": "hina", "others": ["ch0230"]})["result"]
         assert s.jobs.wait(again, 5) and s.jobs.get(again).result == {"ch0230": "ok"}
         # only the kinds a page may stop
         other = s.submit("compatibility", lambda log, progress: time.sleep(0.01))

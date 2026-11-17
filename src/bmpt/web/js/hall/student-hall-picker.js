@@ -10,7 +10,7 @@ import { lazyThumbnail } from "../ui/lazy-thumbnail.js";
 import { spineBase } from "../core/api.js";
 import { L, T, language } from "../core/i18n.js";
 
-const titleOf = (choice) => [L(choice.names)?.full || choice.variant, choice.label].filter(Boolean).join(" - ");
+const titleOf = (choice) => [L(choice.names)?.full || choice.alt, choice.label].filter(Boolean).join(" - ");
 /**
  * Open the Hall's picker: the modal that chooses a portrait source (the student, then its portrait) or a
  * memorial lobby, with previews and a search.
@@ -87,7 +87,7 @@ export function openPicker({
   const item = (choice, key = sourceKey(choice)) => ({
     key,
     full: titleOf(choice),
-    label: choice.label || L(choice.names)?.full || choice.variant,
+    label: choice.label || L(choice.names)?.full || choice.alt,
     thumb: picture(choice),
   });
   const canAdd = (choice) =>

@@ -13,6 +13,7 @@ from uuid import uuid4
 
 from ..core.errors import ServiceError
 from ..core.openfiles import remove_tree
+from .migrations import migrate_journal_names
 from .judge import core_of
 from .storage import atomic_copy, atomic_json
 
@@ -113,7 +114,7 @@ class Deletion:
         """
         store = self.library.photographs
         self.data["photo"] = {
-            "variant": variant,
+            "alt": variant,
             "key": key,
             "entry": copy.deepcopy(store._entry(variant, key)),
             "selected": [v for v, chosen in store._read()["selected"].items() if chosen == key],
@@ -263,6 +264,7 @@ def recover(library):
         try:
             data = json.loads(journal.read_text(encoding="utf-8"))
             _validate(library, journal.parent, data)
+            migrate_journal_names(data, journal)
             if data["phase"] != "committed":
                 deletion = Deletion(library, journal.parent, data)
                 library._asset_deletion = deletion

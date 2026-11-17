@@ -995,7 +995,7 @@ def files_of(*paths):
 def apply_call(entry, path, source="mod:1"):
     return cl.QueuedCall(
         "actions.apply",
-        {"variant": entry[1], "source": source, "kind": "spr"},
+        {"alt": entry[1], "source": source, "kind": "spr"},
         entries=(entry,),
         pins={entry[0]: PINS[entry[0]]},
         files={entry: files_of(path)},
@@ -1046,7 +1046,7 @@ def test_the_latest_action_for_an_entry_wins(tmp_path):
     q.add(toggle(False, True), intent=True)
     restore = cl.QueuedCall(
         "actions.restore",
-        {"variant": "hoshino", "kind": "spr"},
+        {"alt": "hoshino", "kind": "spr"},
         entries=(entry,),
         pins={A: PINS[A]},
         files={entry: files_of(f)},
@@ -1082,7 +1082,7 @@ def test_a_drift_action_is_narrowed_by_a_later_action_on_one_of_its_entries(tmp_
         q.add(
             cl.QueuedCall(
                 "actions.restore",
-                {"variant": "b", "kind": "lobby"},
+                {"alt": "b", "kind": "lobby"},
                 entries=(e2,),
                 pins={B: PINS[B]},
                 files={e2: files_of(f2)},

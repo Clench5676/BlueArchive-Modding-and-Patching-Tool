@@ -51,7 +51,7 @@ def test_zip_bundles_import_like_files_and_nested_archives_stay_packed(env):
     result = analyze(env, [archive])
     (entry,) = result["entries"]
     assert result["skipped"] == 3
-    assert (entry["variant"], entry["core"], entry["kind"], entry["state"]) == ("test", "test_spr", "spr", "ready")
+    assert (entry["alt"], entry["core"], entry["kind"], entry["state"]) == ("test", "test_spr", "spr", "ready")
     (folder,) = unpacked(env)
     assert entry["paths"] == [str(folder / "Mod folder" / source.name)]
     # nothing of the nested archive was unpacked

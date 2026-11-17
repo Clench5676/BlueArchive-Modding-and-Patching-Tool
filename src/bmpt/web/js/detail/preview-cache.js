@@ -79,17 +79,17 @@ export function createPreviewCache({
         return null;
       }
     },
-    async modelTicket(key, variant, source) {
+    async modelTicket(key, alt, source) {
       const current = ticket(key, "model");
       if (!current) return null;
       try {
-        const reply = await call("preview.modelRevision", { variant, source });
+        const reply = await call("preview.modelRevision", { alt, source });
         if (!valid(current)) return null;
         observe(reply);
         if (!valid(current) || !/^[a-f0-9]{64}$/.test(reply?.revision || "")) return null;
         return {
           ...ticket(JSON.stringify([key, reply.revision]), "model"),
-          model: { variant, source },
+          model: { alt, source },
           modelRevision: reply.revision,
         };
       } catch {

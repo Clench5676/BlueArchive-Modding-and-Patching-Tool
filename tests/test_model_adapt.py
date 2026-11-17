@@ -2123,38 +2123,38 @@ def test_official_costume_apply_restore_and_preview_on_clones(tmp_path):
 
     # with mods off the costume is saved, nothing is written, and the choice stays (a field-only source has no slot)
     assert not library.toggle(False, True).failed
-    result = library.apply("hina", "variant:np0009", kind="model")
+    result = library.apply("hina", "alt:np0009", kind="model")
     assert result.deferred
     library._prune_quietly()
-    assert library.configured("hina").get("model") == "variant:np0009"
+    assert library.configured("hina").get("model") == "alt:np0009"
     assert {path.name: hashlib.sha1(path.read_bytes()).hexdigest() for path in slot} == official_bytes
     # mods on: the master switch writes it
     assert not library.toggle(True, False).failed
-    assert library.configured("hina").get("model") == "variant:np0009"
+    assert library.configured("hina").get("model") == "alt:np0009"
     switched = {path.name: hashlib.sha1(path.read_bytes()).hexdigest() for path in slot}
     assert switched != official_bytes
     # the written costume is the library's own: never offered as an outside mod to add
     states = {e.state for e in library.scan().entries if e.core == "hina_original"}
     assert "untracked" not in states, states
-    result = library.apply("hina", "variant:np0009", kind="model")
+    result = library.apply("hina", "alt:np0009", kind="model")
     assert result.unchanged or result.files
     data = game.model_glb("hina_original")
     doc = json.loads(data[20 : 20 + struct.unpack_from("<I", data, 12)[0]])
     assert "OL_NP0009_Body" in {m["name"] for m in doc["meshes"]}
-    assert library.configured("hina").get("model") == "variant:np0009"
+    assert library.configured("hina").get("model") == "alt:np0009"
     library.restore("hina", kind="model")
     assert {path.name: hashlib.sha1(path.read_bytes()).hexdigest() for path in slot} == official_bytes
     with pytest.raises(Exception, match="source_unsupported"):
-        library.apply("hina", "variant:hina", kind="model")
+        library.apply("hina", "alt:hina", kind="model")
 
     # Optimize Physics: the switch above built Rule A; the action keeps a Rule B build as a model mod, once
     assert library.optimize_costume("hina", "official", "Hina") == {"unneeded": True, "reason": "official"}
-    made = library.optimize_costume("hina", "variant:np0009", "Pajamas")
+    made = library.optimize_costume("hina", "alt:np0009", "Pajamas")
     entry = next(m for m in library.mods() if m.id == made["mod"])
     assert (entry.kind, entry.target, entry.optimized_from, entry.label_base) == (
         "model",
         "hina",
-        "variant:np0009",
+        "alt:np0009",
         "Pajamas",
     )
     assert "Pajamas" in entry.label and entry.label != "Pajamas"  # model.optimizedName
@@ -2162,7 +2162,7 @@ def test_official_costume_apply_restore_and_preview_on_clones(tmp_path):
         path.name: hashlib.sha1(path.read_bytes()).hexdigest() for path in library._paths(library._record(entry.id))
     }
     assert copy.keys() <= official_bytes.keys() and any(switched[name] != sha for name, sha in copy.items())
-    assert library.optimize_costume("hina", "variant:np0009", "Pajamas") == made
+    assert library.optimize_costume("hina", "alt:np0009", "Pajamas") == made
     library.apply("hina", f"mod:{entry.id}", kind="model")
     assert {
         name: switched_now

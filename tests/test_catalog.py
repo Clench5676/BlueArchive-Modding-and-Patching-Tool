@@ -80,7 +80,7 @@ def test_grouping_and_base_playable_story_order(catalog: Catalog):
 def test_no_install_and_missing_portraits_are_excluded(catalog: Catalog):
     assert Catalog(None, None, Path("missing.json")).families() == []
     assert Catalog(None, None).variant_for_core("hoshino_home") is None
-    with pytest.raises(ServiceError, match="catalog_variant_not_found"):
+    with pytest.raises(ServiceError, match="catalog_alt_not_found"):
         catalog.variant("ch9000")
     with pytest.raises(ServiceError) as failure:
         catalog.family("missing")
@@ -240,7 +240,7 @@ def test_shipped_aliases_reach_families_and_variants(game: FakeGame, tmp_path: P
     assert catalog.variant("ch0010").aliases == ["\u5c0f\u661f\uff08\u6cf3\u88c5\uff09"]
     assert catalog.variant("hoshino").aliases == []
     assert family.to_json()["aliases"] == ["\u5c0f\u661f"]
-    assert family.to_json()["variants"][1]["aliases"] == ["\u5c0f\u661f\uff08\u6cf3\u88c5\uff09"]
+    assert family.to_json()["alts"][1]["aliases"] == ["\u5c0f\u661f\uff08\u6cf3\u88c5\uff09"]
 
 
 @pytest.mark.parametrize("aliases", ["\u5c0f\u661f", [""], [3], {"zh-CN": "x"}])
@@ -335,7 +335,7 @@ def test_shared_dev_alias_cannot_claim_another_variants_lobby(game: FakeGame, tm
 def test_json_records_and_callers_cannot_mutate_cache(catalog: Catalog):
     family = catalog.family("hoshino")
     payload = family.to_json()
-    assert payload["variants"][0] == family.variants[0].to_json()
+    assert payload["alts"][0] == family.variants[0].to_json()
     json.dumps(payload)
     payload["names"]["en"] = "Changed"
     family.names["en"] = "Also changed"

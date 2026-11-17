@@ -108,7 +108,7 @@ class SwitchingMixin:
                     continue
                 matching = resolver.same_prefix(sources, target)
                 if not matching:
-                    raise ServiceError("mod_target_mismatch", id=record["id"], variant=core_of(target.name))
+                    raise ServiceError("mod_target_mismatch", id=record["id"], alt=core_of(target.name))
                 result = rebuild(
                     matching,
                     [original],
@@ -210,7 +210,7 @@ class SwitchingMixin:
 
         Args:
             variant_key: Destination variant key, or generic other:/other-set: target for kind other.
-            source: official, mod:<id>, or variant:<key>; a model variant source fits its costume.
+            source: official, mod:<id>, or alt:<key>; a model variant source fits its costume.
             log: Receives user-facing operation messages.
             progress: Receives apply progress; None disables reporting.
             kind: Slot kind; None selects all kinds for official, a mod's own kind, or both Spine kinds
@@ -293,10 +293,10 @@ class SwitchingMixin:
                     if (kind is not None and record["kind"] != kind) or (
                         self._variant(target_variant).family != variant.family
                     ):
-                        raise ServiceError("mod_target_mismatch", id=record["id"], variant=variant_key)
+                        raise ServiceError("mod_target_mismatch", id=record["id"], alt=variant_key)
                     targets = self._game_files(variant_key, record["kind"], pin)
                     if not targets:
-                        raise ServiceError("game_file_not_found", variant=variant_key)
+                        raise ServiceError("game_file_not_found", alt=variant_key)
                     cores = [
                         getattr(variant, "model").lower() if record["kind"] == "model" else core_of(targets[0].name)
                     ]
@@ -306,7 +306,7 @@ class SwitchingMixin:
                     if (record["kind"] == "model" and not own_model) or (
                         record["kind"] == "lobby" and core_of(record["files"][0]) != cores[0]
                     ):
-                        raise ServiceError("mod_target_mismatch", id=record["id"], variant=variant_key)
+                        raise ServiceError("mod_target_mismatch", id=record["id"], alt=variant_key)
                     if not on:
                         return self._defer(pin, variant_key, {record["kind"]: cores[0]}, source)
                     kinds = {record["kind"]: cores[0]}
@@ -337,18 +337,18 @@ class SwitchingMixin:
                             lambda: self._stage_adapted(sources, targets, work / record["kind"], log, pin),
                             build_keys,
                         )
-                    else:  # a lobby mod of another core of this variant: not offered, never written there
+                    else:  # a lobby mod of another core of this alt: not offered, never written there
                         raise ServiceError("game_file_outside_resources", file=targets[0])
                     kinds = {record["kind"]: cores[0]}
-                elif source.startswith("variant:") and kind == "model":
+                elif source.startswith("alt:") and kind == "model":
                     # another variant's costume put on this variant's model slot (gameassets.model_adapt)
-                    other = source[8:]
+                    other = source[4:]
                     if other == variant_key:
                         raise ServiceError("source_unsupported", source=source)
                     own = getattr(variant, "model", None)
                     targets = self._game_files(variant_key, "model", pin)
                     if not own or not targets:
-                        raise ServiceError("game_file_not_found", variant=variant_key)
+                        raise ServiceError("game_file_not_found", alt=variant_key)
                     verdict = self._verdicts().get(self._costume_signature(variant_key, other, pin)[0])
                     if not self._costume_allowed(verdict):  # refused: never saved or written
                         raise ServiceError("source_unsupported", source=verdict.get("reason") or source)
@@ -366,8 +366,8 @@ class SwitchingMixin:
                         ),
                         build_keys,
                     )
-                elif source.startswith("variant:"):
-                    other = source[8:]
+                elif source.startswith("alt:"):
+                    other = source[4:]
                     self._variant(other)
                     if kind == "model":
                         raise ServiceError("source_unsupported", source=source)
@@ -380,7 +380,7 @@ class SwitchingMixin:
                             continue
                         kinds[current] = core_of(targets[0].name)
                     if not kinds:
-                        raise ServiceError("game_file_not_found", variant=variant_key)
+                        raise ServiceError("game_file_not_found", alt=variant_key)
                     change.configure(kinds)
                     if on:
                         for current in kinds:
@@ -397,7 +397,7 @@ class SwitchingMixin:
                                 )
                             )
                     if not kinds:
-                        raise ServiceError("game_file_not_found", variant=variant_key)
+                        raise ServiceError("game_file_not_found", alt=variant_key)
                     if not on:
                         return self._defer(pin, variant_key, kinds, source)
                 else:
@@ -503,7 +503,7 @@ class SwitchingMixin:
             raise ServiceError("source_unsupported", source=source)
         record = self._record(source[4:])
         if record["kind"] != "other" or record["target"] != target:
-            raise ServiceError("mod_target_mismatch", id=record["id"], variant=target)
+            raise ServiceError("mod_target_mismatch", id=record["id"], alt=target)
         targets = self._game_files(target, "other", pin)
         kinds = {core_of(path.name): core_of(path.name) for path in targets}
         if not profiles_mod.enabled(self.profiles.read()):
@@ -600,7 +600,7 @@ class SwitchingMixin:
         self.profiles.read()
         targets = self._game_files(variant_key, kind, pin)
         if not targets:
-            raise ServiceError("game_file_not_found", variant=variant_key)
+            raise ServiceError("game_file_not_found", alt=variant_key)
         try:
             replacements = {path: self._official_for(path, pin) for path in targets}
             files = self._commit(replacements, "official", log, progress=progress, pin=pin, prune=False)
@@ -661,7 +661,7 @@ class SwitchingMixin:
         core = self._core_map(pin).slot(core)
         targets = self._spine_parts(core, pin)
         if not targets:
-            raise ServiceError("game_file_not_found", variant=core)
+            raise ServiceError("game_file_not_found", alt=core)
         kind = self._kind(core, pin) or "spr"
         with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
             work = Path(temporary)
@@ -677,7 +677,7 @@ class SwitchingMixin:
                     if record["kind"] == "model" and any(
                         core_of(name) not in self._core_map(pin).slot_cores(core) for name in record["files"]
                     ):
-                        raise ServiceError("mod_target_mismatch", id=record["id"], variant=core)
+                        raise ServiceError("mod_target_mismatch", id=record["id"], alt=core)
                     if record["kind"] in ("other", "model") or core_of(record["files"][0]) == core:
                         replacements = self._cached_build(
                             self._paths(record),
@@ -695,22 +695,22 @@ class SwitchingMixin:
                             lambda: self._stage_adapted(sources, targets, work / kind, log, pin),
                             build_keys,
                         )
-                elif source.startswith("variant:") and kind == "model":
-                    _, inputs = self._costume_source(source[8:], pin)
+                elif source.startswith("alt:") and kind == "model":
+                    _, inputs = self._costume_source(source[4:], pin)
                     replacements = self._cached_build(
                         inputs,
                         targets,
                         pin,
                         lambda: self._stage_costume(
-                            source[8:], targets, work / kind, log, pin, fraction=fraction or _item_fraction(progress)
+                            source[4:], targets, work / kind, log, pin, fraction=fraction or _item_fraction(progress)
                         ),
                         build_keys,
                     )
-                elif source.startswith("variant:"):
-                    other = self._core_map(pin).core(source[8:], kind)
+                elif source.startswith("alt:"):
+                    other = self._core_map(pin).core(source[4:], kind)
                     sources = self._index(pin).get(other.lower(), []) if other else []
                     if not sources:
-                        raise ServiceError("game_file_not_found", variant=source[8:])
+                        raise ServiceError("game_file_not_found", alt=source[4:])
                     official = [self._official_for(path, pin) for path in sources]
                     replacements = self._cached_build(
                         official,

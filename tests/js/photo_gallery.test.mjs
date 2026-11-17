@@ -56,9 +56,9 @@ function harness(count, { selected = "p0", repository = {} } = {}) {
     photo: (id) => photos.find((item) => item.id === id),
     selectedKey: (key) => key,
     normalized: (value) => value,
-    Loading: { task: (fn) => fn(() => {}), variantName: (e) => e?.variant || "" },
+    Loading: { task: (fn) => fn(() => {}), altName: (e) => e?.alt || "" },
     modJob: () => () => ({ text: "" }),
-    sessionVariant: "v",
+    sessionAlt: "v",
     waitJob: async () => {},
     call: async (name, params) => {
       calls.push([name, params]);

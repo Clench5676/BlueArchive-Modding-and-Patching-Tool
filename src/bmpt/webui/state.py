@@ -1,6 +1,6 @@
 """Small UI state kept between launches, in webui.json.
 
-It holds the asset consent, recently opened variants, seen mods, the user's own aliases of the variants and the web
+It holds the asset consent, recently opened alts, seen mods, the user's own aliases of the alts and the web
 UI's own preferences (voice volume, the mod library folder, scan and Spine consents, the mod switch's and the classic
 hand-off's flags, the data directory's id). It is kept apart from config.toml, which the classic GUI rewrites with only
 its own keys.
@@ -35,6 +35,7 @@ from typing import Any
 # the lock and the replace shared with the mod library (bmpt.core.filelock)
 from ..core.filelock import file_lock as _file_lock, replace as _replace
 from ..core.logging_utils import log_failure
+from ..library.migrations import migrate_ui_names
 
 logger = logging.getLogger(__name__)
 
@@ -209,11 +210,15 @@ class UiState:
         not consulted: stale state must not stand in for the file.
         """
         try:
-            return self._parse(self.path)
+            data = self._parse(self.path)
         except FileNotFoundError:
             return {}
+        if migrate_ui_names(data):
+            self._write(data)
+            logger.info("Migrated API names in %s", self.path)
+        return data
 
-    def _load(self) -> tuple[dict[str, Any] | None, str]:
+    def _load_raw(self) -> tuple[dict[str, Any] | None, str]:
         """Return (the content now, the file's state), with the file lock held.
 
         The state is "ok" (webui.json parsed, and it is the content), "bad" (it exists but cannot be read) or
@@ -243,6 +248,14 @@ class UiState:
             logger.warning("UI state missing, reading previous copy")
         return data, state
 
+    def _load(self) -> tuple[dict[str, Any] | None, str]:
+        data, state = self._load_raw()
+        if data is not None and migrate_ui_names(data):
+            self._write(data, bad=state == "bad")
+            logger.info("Migrated API names in %s", self.path)
+            state = "ok"
+        return data, state
+
     def _current(self) -> dict[str, Any]:
         """Return the state as the file holds it now; another instance may have written it.
 
@@ -257,6 +270,7 @@ class UiState:
                 with _file_lock(self._lock_path):
                     signature = self._signature()
                     data, state = self._load()
+                    signature = self._signature()
             except OSError:  # the lock not had in time (Windows gives up after 10 s): what was last known
                 logger.warning("cannot lock %s", self._lock_path, exc_info=True)
                 return self._data
@@ -363,22 +377,22 @@ class UiState:
         return self.get("preview_cache") is not False
 
     def recent(self) -> list[str]:
-        """Return the keys of the recently opened variants, the latest first."""
+        """Return the keys of the recently opened alts, the latest first."""
         return _recent_of(self._current())
 
-    def preview_sources(self, install: str, variant: str) -> dict[str, str]:
-        """Return the saved view choice of one variant.
+    def preview_sources(self, install: str, alt: str) -> dict[str, str]:
+        """Return the saved view choice of one alt.
 
         Args:
             install: The install's id.
-            variant: The variant key.
+            alt: The alt id.
 
         Returns:
             Asset kind (``spr``, ``lobby`` or ``model``) mapped to the chosen source: ``official`` or ``mod:<id>``.
         """
         data = self._current().get("asset_previews", {})
         folder = data.get(install, {}) if isinstance(data, dict) else {}
-        sources = folder.get(variant, {}) if isinstance(folder, dict) else {}
+        sources = folder.get(alt, {}) if isinstance(folder, dict) else {}
         return (
             {
                 kind: source
@@ -396,36 +410,36 @@ class UiState:
             install: The install's id.
 
         Returns:
-            Variant key mapped to what ``preview_sources`` returns for it.
+            Alt key mapped to what ``preview_sources`` returns for it.
         """
         data = self._current().get("asset_previews", {})
         folder = data.get(install, {}) if isinstance(data, dict) else {}
         return (
             {
-                variant: {
+                alt: {
                     kind: source
                     for kind, source in sources.items()
                     if kind in ("spr", "lobby", "model") and isinstance(source, str)
                 }
-                for variant, sources in folder.items()
-                if isinstance(variant, str) and isinstance(sources, dict)
+                for alt, sources in folder.items()
+                if isinstance(alt, str) and isinstance(sources, dict)
             }
             if isinstance(folder, dict)
             else {}
         )
 
-    def set_preview_source(self, install: str, variant: str, kind: str, source: str) -> None:
+    def set_preview_source(self, install: str, alt: str, kind: str, source: str) -> None:
         """Remember a view choice independently of the library's game configuration.
 
         Args:
             install: The install's id.
-            variant: The variant key.
+            alt: The alt id.
             kind: The asset kind, ``spr``, ``lobby`` or ``model``.
             source: ``official`` or ``mod:<id>``.
         """
 
         def change(data: dict[str, Any]) -> None:
-            data.setdefault("asset_previews", {}).setdefault(install, {}).setdefault(variant, {})[kind] = source
+            data.setdefault("asset_previews", {}).setdefault(install, {}).setdefault(alt, {})[kind] = source
 
         self._update(change)
 
@@ -437,15 +451,15 @@ class UiState:
 
         Args:
             source: The removed source, ``mod:<id>``.
-            fallback: ``fallback(variant, kind)`` returns the source to use instead, or a falsy value for none.
+            fallback: ``fallback(alt, kind)`` returns the source to use instead, or a falsy value for none.
         """
 
         def change(data):
             for folder in data.get("asset_previews", {}).values():
-                for variant, choices in folder.items():
+                for alt, choices in folder.items():
                     for kind, selected in list(choices.items()):
                         if selected == source:
-                            replacement = fallback(variant, kind)
+                            replacement = fallback(alt, kind)
                             if replacement:
                                 choices[kind] = replacement
                             else:
@@ -457,17 +471,17 @@ class UiState:
                 for group, kind in [("portraits", "spr"), ("memorials", "lobby")]:
                     kept = []
                     existing = {
-                        (entry["variant"], entry["source"]): entry["id"]
+                        (entry["alt"], entry["source"]): entry["id"]
                         for entry in hall.get(group, [])
                         if entry.get("source") != source
                     }
                     for entry in hall.get(group, []):
                         if entry.get("source") == source:
                             changed = True
-                            replacement = fallback(entry["variant"], kind)
+                            replacement = fallback(entry["alt"], kind)
                             if not replacement:
                                 continue
-                            identity = (entry["variant"], replacement)
+                            identity = (entry["alt"], replacement)
                             if identity in existing:
                                 replacements[entry["id"]] = existing[identity]
                                 continue
@@ -483,16 +497,16 @@ class UiState:
 
         self._update(change)
 
-    def visit(self, variant_key: str) -> None:
-        """Move a variant to the front of the recent list, which keeps ``RECENT_MAX`` keys.
+    def visit(self, alt_id: str) -> None:
+        """Move an alt to the front of the recent list, which keeps ``RECENT_MAX`` keys.
 
         Args:
-            variant_key: The variant opened.
+            alt_id: The alt opened.
         """
 
         def change(data: dict[str, Any]) -> None:
-            recent = [v for v in _recent_of(data) if v != variant_key]
-            data["recent"] = [variant_key, *recent][:RECENT_MAX]
+            recent = [v for v in _recent_of(data) if v != alt_id]
+            data["recent"] = [alt_id, *recent][:RECENT_MAX]
 
         self._update(change)
 
@@ -539,19 +553,19 @@ class UiState:
 
         self._update(change)
 
-    # --- the user's own aliases, by variant key ---
+    # --- the user's own aliases, by alt key ---
 
     def aliases(self, legacy_targets: dict[str, str] | None = None) -> dict[str, list[str]]:
-        """Return every variant's own aliases, cleaned as ``custom_aliases`` does.
+        """Return every alt's own aliases, cleaned as ``custom_aliases`` does.
 
-        Ordinary family keys identify the original variant. Special-only families need a catalog-selected target;
-        their entries are moved once under the shared lock, preserving any explicitly saved variant aliases.
+        Ordinary student keys identify the original alt. Special-only students need a catalog-selected target;
+        their entries are moved once under the shared lock, preserving any explicitly saved alt aliases.
 
         Args:
-            legacy_targets: Family key mapped to the variant that takes the aliases stored under the family key.
+            legacy_targets: Student key mapped to the alt that takes the aliases stored under the student key.
 
         Returns:
-            Variant key mapped to its aliases; variants without aliases are left out.
+            Alt key mapped to its aliases; alts without aliases are left out.
         """
         table = self._current().get("aliases")
         if isinstance(table, dict) and legacy_targets and any(key in table for key in legacy_targets):
@@ -560,27 +574,27 @@ class UiState:
                 aliases = data.get("aliases")
                 if not isinstance(aliases, dict):
                     return
-                for family, variant in legacy_targets.items():
-                    if family in aliases:
-                        aliases.setdefault(variant, aliases.pop(family))
+                for student, alt in legacy_targets.items():
+                    if student in aliases:
+                        aliases.setdefault(alt, aliases.pop(student))
 
             self._update(migrate)
             table = self._current().get("aliases")
         if not isinstance(table, dict):
             return {}
         out = {}
-        for variant, value in table.items():
+        for alt, value in table.items():
             names = custom_aliases(value)
-            if isinstance(variant, str) and names:
-                out[variant] = names
+            if isinstance(alt, str) and names:
+                out[alt] = names
         return out
 
-    def set_aliases(self, variant: str, names: list[str]) -> list[str]:
-        """Keep a variant's own aliases; only this variant's entry of the file changes.
+    def set_aliases(self, alt: str, names: list[str]) -> list[str]:
+        """Keep an alt's own aliases; only this alt's entry of the file changes.
 
         Args:
-            variant: The variant key.
-            names: The aliases as typed; an empty result forgets the variant's entry.
+            alt: The alt id.
+            names: The aliases as typed; an empty result forgets the alt's entry.
 
         Returns:
             The aliases as kept, cleaned by ``custom_aliases``.
@@ -592,9 +606,9 @@ class UiState:
             if not isinstance(table, dict):
                 table = data["aliases"] = {}
             if kept:
-                table[variant] = kept
+                table[alt] = kept
             else:
-                table.pop(variant, None)
+                table.pop(alt, None)
 
         self._update(change)
         return kept

@@ -172,7 +172,7 @@ def test_a_retry_holds_an_entry_whose_rig_changed_and_apply_mod_configuration_wr
         {
             "install": key(env),
             "core": "test_spr",
-            "variant": "test",
+            "alt": "test",
             "kind": "spr",
             "source": f"mod:{entry.id}",
             "label": entry.label,
@@ -249,7 +249,7 @@ def test_the_impact_check_names_each_mod_in_its_progress(spine):
             "total": 1,
             "action": "check",
             "step": "import.step.check",
-            "variant": "test",
+            "alt": "test",
             "kind": "spr",
             "core": entry.core,
             "name": "",

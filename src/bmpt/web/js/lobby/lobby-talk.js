@@ -56,7 +56,7 @@ export function talkPart(S, L) {
   }
   function voice(clip) {
     if (S.current?.suspended || S.current?.backgroundPaused || S.current?.loadingPaused) return;
-    const a = new Audio(`/asset/voice/${encodeURIComponent(S.current.variant)}/${encodeURIComponent(clip)}.ogg`);
+    const a = new Audio(`/asset/voice/${encodeURIComponent(S.current.alt)}/${encodeURIComponent(clip)}.ogg`);
     a.volume = S.volume;
     S.audios.push(a);
     a.play().catch(() => {});

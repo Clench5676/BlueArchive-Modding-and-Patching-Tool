@@ -113,7 +113,7 @@ def test_entry_shapes_grouping_stable_ids_and_recursive_scan(env):
     assert set(entry) == {
         "id",
         "paths",
-        "variant",
+        "alt",
         "core",
         "kind",
         "files",
@@ -126,7 +126,7 @@ def test_entry_shapes_grouping_stable_ids_and_recursive_scan(env):
         "target",
     }
     assert entry["paths"] == sorted(map(str, [texture, text]))
-    assert (entry["variant"], entry["core"], entry["kind"], entry["state"]) == ("test", "test_spr", "spr", "ready")
+    assert (entry["alt"], entry["core"], entry["kind"], entry["state"]) == ("test", "test_spr", "spr", "ready")
     assert entry["reason"] is None and entry["libraryId"] is None
     assert entry["size"] == texture.stat().st_size + text.stat().st_size
     assert all(set(f) == {"path", "size", "target"} for f in entry["files"])
@@ -286,7 +286,7 @@ def test_model_prefab_and_dependencies_analyze_update_add_and_apply(batch_model_
             make_mod(path, env.tmp / "input", payload=f"mod {i}".encode()) for i, path in enumerate(env.parts[:2])
         ]
     (entry,) = analyze(env, sources)["entries"]
-    assert (entry["kind"], entry["variant"], entry["core"], entry["state"], entry["reason"]) == (
+    assert (entry["kind"], entry["alt"], entry["core"], entry["state"], entry["reason"]) == (
         "model",
         "hoshino",
         "hoshino_original",
@@ -1544,7 +1544,7 @@ def test_generic_batch_multi_target_import_apply_library_and_settings_rpc(batch_
     env = batch_other_env
     sources = [make_mod(p, env.tmp / "incoming", payload=f"mod {i}".encode()) for i, p in enumerate(env.parts)]
     (entry,) = analyze(env, [sources[0].parent])["entries"]
-    assert entry["kind"] == "other" and entry["variant"] is None
+    assert entry["kind"] == "other" and entry["alt"] is None
     assert entry["state"] == "ready" and entry["reason"] is None
     assert {f["target"] for f in entry["files"]} == {p.name for p in env.parts}
     (result,) = run(env, [entry], backup=True)
@@ -1556,10 +1556,10 @@ def test_generic_batch_multi_target_import_apply_library_and_settings_rpc(batch_
     assert row["id"] == mod.id and row["selected"] and row["state"] == "active"
     (duplicate,) = analyze(env, sources)["entries"]
     assert duplicate["state"] == "done" and duplicate["libraryId"] == mod.id
-    finish(env, rpc(env, "actions.restore", variant=mod.target, kind="other"))
+    finish(env, rpc(env, "actions.restore", alt=mod.target, kind="other"))
     assert rpc(env, "mods.other")[0]["state"] == "official"
     assert all(p.read_bytes() == data for p, data in env.official.items())
-    finish(env, rpc(env, "actions.apply", variant=mod.target, source=f"mod:{mod.id}", kind="other"))
+    finish(env, rpc(env, "actions.apply", alt=mod.target, source=f"mod:{mod.id}", kind="other"))
     finish(env, rpc(env, "mods.remove", id=mod.id, confirm=True))
     assert rpc(env, "mods.other") == []
     assert all(p.read_bytes() == data for p, data in env.official.items())
@@ -1652,9 +1652,7 @@ def test_generic_classic_queue_pins_every_target_slot(batch_other_env):
 
     env = batch_other_env
     (mod,) = env.library.add_files("other", [make_mod(p, env.tmp / "incoming") for p in env.parts])
-    count = env.services.queue_call(
-        "actions.apply", {"variant": mod.target, "kind": "other", "source": f"mod:{mod.id}"}
-    )
+    count = env.services.queue_call("actions.apply", {"alt": mod.target, "kind": "other", "source": f"mod:{mod.id}"})
     assert count == 1
     (call,) = env.services.queue.items()
     assert {core for _, core in call.entries} == {core_of(p.name) for p in env.parts}
@@ -1962,7 +1960,7 @@ def test_a_stored_mod_whose_install_fails_stays_in_the_library_row(env, monkeypa
     (entry,) = analyze(env, [source])["entries"]
 
     def refuse(*args, **kwargs):
-        raise ServiceError("mod_target_mismatch", id="x", variant="test")
+        raise ServiceError("mod_target_mismatch", id="x", alt="test")
 
     monkeypatch.setattr(env.library, "apply_import", refuse)
     (result,) = run(env, [entry])
@@ -2182,7 +2180,7 @@ def test_official_3d_slot_with_one_file_omitted_then_completed_on_clones(tmp_pat
         with monkeypatch.context() as patch:
             patch.setattr(integrity.Inspection, "inspect", selected_only)
             (row,) = analyze(environment, uploads[:-1])["entries"]
-        assert (row["state"], row["kind"], row["variant"]) == ("incomplete", "model", "ch0258")
+        assert (row["state"], row["kind"], row["alt"]) == ("incomplete", "model", "ch0258")
         assert row["missing"]["found"] == [{"path": str(omitted), "name": omitted.name, "size": omitted.stat().st_size}]
         (completed,) = analyze(environment, uploads)["entries"]
         assert completed["state"] == "ready" and "missing" not in completed

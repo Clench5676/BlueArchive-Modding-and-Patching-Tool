@@ -299,7 +299,7 @@ def test_lobby_lines_in_english(api):
         "Talk_01_M": ["Hoshino_MemorialLobby_1"],
         "Talk_03_M": ["hoshino_memoriallobby_3_1", "hoshino_memoriallobby_3_2"],
     }
-    lines = rpc.call("lobby.lines", {"variant": "hoshino", "talks": talks, "lang": "en"})["result"]
+    lines = rpc.call("lobby.lines", {"alt": "hoshino", "talks": talks, "lang": "en"})["result"]
     assert (
         lines["hoshino_memoriallobby_1"]["en"].startswith("Wow") and lines["hoshino_memoriallobby_1"]["voice"] is True
     )
@@ -309,7 +309,7 @@ def test_lobby_lines_in_english(api):
         "voice": False,
     }
     # without the skeleton's clips, Kivo's clip names place the rows (here one clip for both rows of Talk_03_M)
-    lines = rpc.call("lobby.lines", {"variant": "hoshino", "lang": "en"})["result"]
+    lines = rpc.call("lobby.lines", {"alt": "hoshino", "lang": "en"})["result"]
     assert lines["hoshino_memoriallobby_3_1"]["en"] == "Is it okay? I shouldn't worry about that? All right, then."
 
 
@@ -326,7 +326,7 @@ def test_lobby_lines_default_to_the_ui_language(api, monkeypatch, ui, key):
     }
     s.global_lines = Fetcher(json.dumps(table).encode())
     monkeypatch.setattr(i18n_manager, "lang", ui)
-    lines = rpc.call("lobby.lines", {"variant": "hoshino", "talks": {"Talk_04_M": ["h_2"], "Talk_01_M": ["h_1"]}})
+    lines = rpc.call("lobby.lines", {"alt": "hoshino", "talks": {"Talk_04_M": ["h_2"], "Talk_01_M": ["h_1"]}})
     lines = lines["result"]
     assert s.global_lines.urls == [globallines.URLS[0]]
     if key == "ko":
@@ -341,7 +341,7 @@ def test_lobby_lines_default_to_the_ui_language(api, monkeypatch, ui, key):
 
 def test_lobby_lines_in_chinese_never_read_the_global_table(api):
     s, rpc = api
-    lines = rpc.call("lobby.lines", {"variant": "hoshino", "lang": "zh-CN"})["result"]
+    lines = rpc.call("lobby.lines", {"alt": "hoshino", "lang": "zh-CN"})["result"]
     assert lines["hoshino_memoriallobby_1"] == {"zh-CN": "\u6b38\u563f", "ja": "\u3078\u3048", "voice": True}
     assert s.global_lines.urls == []
 
@@ -349,25 +349,25 @@ def test_lobby_lines_in_chinese_never_read_the_global_table(api):
 def test_thai_lines_keep_kivo_voice_without_inventing_thai_text(api):
     s, rpc = api
     s.global_lines = Fetcher(error=OSError("offline"))
-    lines = rpc.call("lobby.lines", {"variant": "hoshino", "lang": "th"})["result"]
+    lines = rpc.call("lobby.lines", {"alt": "hoshino", "lang": "th"})["result"]
     assert lines["hoshino_memoriallobby_1"]["voice"] is True
     assert all("th" not in line for line in lines.values())
     s.kivo = Kivo(fail=True)
-    assert rpc.call("lobby.lines", {"variant": "hoshino", "lang": "th"})["error"]["code"] == "lines_unavailable"
+    assert rpc.call("lobby.lines", {"alt": "hoshino", "lang": "th"})["error"]["code"] == "lines_unavailable"
 
 
 def test_lobby_lines_without_kivo_or_global(api):
     s, rpc = api
     s.kivo = Kivo(fail=True)
-    lines = rpc.call("lobby.lines", {"variant": "hoshino", "talks": {"Talk_02_M": ["h_2"]}, "lang": "en"})["result"]
+    lines = rpc.call("lobby.lines", {"alt": "hoshino", "talks": {"Talk_02_M": ["h_2"]}, "lang": "en"})["result"]
     assert lines == {"h_2": {"en": "Look! It's a fish! Hahaha. It's so cute!", "voice": False}}
     s.global_lines = Fetcher(error=OSError("offline"))
-    assert rpc.call("lobby.lines", {"variant": "hoshino", "lang": "en"})["error"]["code"] == "lines_unavailable"
+    assert rpc.call("lobby.lines", {"alt": "hoshino", "lang": "en"})["error"]["code"] == "lines_unavailable"
     # malformed clips from the page are ignored
     s.kivo = Kivo()
     assert (
         "hoshino_memoriallobby_1"
-        in rpc.call("lobby.lines", {"variant": "hoshino", "talks": [1, 2], "lang": "en"})["result"]
+        in rpc.call("lobby.lines", {"alt": "hoshino", "talks": [1, 2], "lang": "en"})["result"]
     )
 
 
@@ -393,7 +393,7 @@ def test_lobby_lines_do_not_wait_long_for_a_slow_global_table(api, monkeypatch):
 
     def call():
         start = time.monotonic()
-        lines = rpc.call("lobby.lines", {"variant": "hoshino", "talks": talks, "lang": "en"})["result"]
+        lines = rpc.call("lobby.lines", {"alt": "hoshino", "talks": talks, "lang": "en"})["result"]
         results.append((time.monotonic() - start, lines))
 
     # several calls meanwhile (the page moving through lobbies): each answers with Kivo's lines in time
@@ -412,5 +412,5 @@ def test_lobby_lines_do_not_wait_long_for_a_slow_global_table(api, monkeypatch):
     deadline = time.monotonic() + 5
     while s.global_lines._table is None and time.monotonic() < deadline:
         time.sleep(0.02)
-    lines = rpc.call("lobby.lines", {"variant": "hoshino", "talks": talks, "lang": "en"})["result"]
+    lines = rpc.call("lobby.lines", {"alt": "hoshino", "talks": talks, "lang": "en"})["result"]
     assert lines["hoshino_memoriallobby_1"]["en"].startswith("Wow")

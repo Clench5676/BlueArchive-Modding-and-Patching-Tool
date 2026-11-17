@@ -3,19 +3,19 @@ import { L, T } from "./i18n.js";
 import { customAliases, studentName } from "./names.js";
 
 /**
- * The name a job's progress gives a student: the student's name (the user's alias, else the family's base
- * name), then in the language's brackets the costume's short name (omitted for the family's own variant or a
- * variant with aliases) and the kind of file.
+ * The name a job's progress gives a student: the student's name (the user's alias, else the student's base
+ * name), then in the language's brackets the costume's short name (omitted for the student's own alt or an
+ * alt with aliases) and the kind of file.
  * @param {string} kind The kind of file, as the job names it.
  * @param {string} [fallback] The name when the data has none.
- * @param {object} [family] The variant's family.
+ * @param {object} [student] The alt's student.
  */
-export function progressName(variant, kind, fallback = "", family = variant?.family) {
-  const names = L(variant?.names),
-    catalogBase = L(family?.base || family?.names);
-  const base = studentName(variant, catalogBase || names?.full || fallback);
-  const variantName = !customAliases(variant).length && catalogBase && variant?.key !== family?.key ? names?.short : "";
-  const parts = [variantName, kind].filter(Boolean).join(T("progress.comma"));
+export function progressName(alt, kind, fallback = "", student = alt?.student) {
+  const names = L(alt?.names),
+    catalogBase = L(student?.base || student?.names);
+  const base = studentName(alt, catalogBase || names?.full || fallback);
+  const altName = !customAliases(alt).length && catalogBase && alt?.key !== student?.key ? names?.short : "";
+  const parts = [altName, kind].filter(Boolean).join(T("progress.comma"));
   return parts ? T("progress.subject", { name: base, parts }) : base;
 }
 
@@ -93,7 +93,7 @@ export function jobProgress({ action, name, current = 1, total = 1, step = "", f
 
 // --- a job over mods: one line per item at hand (library/mod_progress.py) ---
 // "Processing Mods (3/13): Hoshino (Swimsuit) - Chibi - My Swim Edit - 42% - Saving Bundle": the job's verb and the
-// item at hand of all, who it is, its kind, the mod's own name (or the variant whose costume it takes), how far it is
+// item at hand of all, who it is, its kind, the mod's own name (or the alt whose costume it takes), how far it is
 // and its step. A one-item job leaves the count out.
 const KIND_KEYS = {
   spr: "tab.portrait",
@@ -112,28 +112,28 @@ const MOD_ACTIONS = {
 };
 export const SHRINK_NAME = 1,
   SHRINK_WHO = 2;
-const plainName = (entry) => entry?.variant || entry?.core || "";
+const plainName = (entry) => entry?.alt || entry?.core || "";
 
 /**
  * A job's progress as a line over mods.
- * @param {object} [p] A job's progress: {current, total, action, variant, kind, core, name, source, step,
+ * @param {object} [p] A job's progress: {current, total, action, alt, kind, core, name, source, step,
  *     fraction}.
  * @param {object} [options]
- * @param {(entry: {variant?: string, core?: string}) => string} [options.nameOf] Names a variant as the roster
+ * @param {(entry: {alt?: string, core?: string}) => string} [options.nameOf] Names an alt as the roster
  *     does.
  * @param {string} [options.action] A string key that overrides the job's verb.
  * @returns {{text: string, parts: Array<[string, number]>}|null} parts are [text, shrink], shrink 0 for text
  *     that always stays; null for progress of no mod item.
  */
 export function modLine(p = {}, { nameOf = plainName, action = "" } = {}) {
-  if (!p || (!p.variant && !p.core)) return null;
+  if (!p || (!p.alt && !p.core)) return null;
   const current = Number(p.current) || 0,
     total = Number(p.total) || 0;
   const verb = T(action || MOD_ACTIONS[p.action] || MOD_ACTIONS.process);
   const head =
     total > 1 ? T("progress.modCount", { action: verb, current, total }) : T("progress.modHead", { action: verb });
   const sep = T("progress.sep");
-  const who = (p.kind === "other" ? p.core : nameOf({ variant: p.variant, core: p.core })) || p.core || p.variant || "";
+  const who = (p.kind === "other" ? p.core : nameOf({ alt: p.alt, core: p.core })) || p.core || p.alt || "";
   const parts = [
     [head, 0],
     [who, SHRINK_WHO],
@@ -143,7 +143,7 @@ export function modLine(p = {}, { nameOf = plainName, action = "" } = {}) {
     p.name && p.name !== who && p.name !== p.core
       ? p.name
       : p.source
-        ? T("progress.from", { name: nameOf({ variant: p.source }) || p.source })
+        ? T("progress.from", { name: nameOf({ alt: p.source }) || p.source })
         : "";
   if (own) parts.push([sep, 0], [own, SHRINK_NAME]);
   const percent = percentText(p.fraction);
@@ -157,10 +157,10 @@ export function modLine(p = {}, { nameOf = plainName, action = "" } = {}) {
  * Make the progress line of a one-mod job (a student page's, Settings' or a repair's action): who it is stays
  * as given, the step and share come from the job's progress as they arrive; a report of files written (no step,
  * their own count) keeps the step and share shown.
- * @param {{variant: string, kind: string, core?: string, name?: string, source?: string}} identity Who the job
+ * @param {{alt: string, kind: string, core?: string, name?: string, source?: string}} identity Who the job
  *     is for.
  * @param {object} [options]
- * @param {(entry: object) => string} [options.nameOf] Names a variant.
+ * @param {(entry: object) => string} [options.nameOf] Names an alt.
  * @param {string} [options.action] The verb's string key.
  * @returns {(progress?: object) => object|null} Gives the line for each progress snapshot.
  */
@@ -172,7 +172,7 @@ export function modJob(identity, { nameOf = plainName, action = "progress.action
     return modLine(
       {
         ...identity,
-        variant: identity?.variant || identity?.kind || "",
+        alt: identity?.alt || identity?.kind || "",
         current: 1,
         total: 1,
         step,

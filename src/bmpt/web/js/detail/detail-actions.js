@@ -1,4 +1,4 @@
-// The detail screen's actions: jobs on the shown variant (update, rebuild, compatibility, remap, export), the mod
+// The detail screen's actions: jobs on the shown alt (update, rebuild, compatibility, remap, export), the mod
 // name and favourite edits, and applying a chosen candidate.
 import { notify, message, notice } from "../ui/popup.js";
 import { modJob, progressName } from "../core/job-progress.js";
@@ -15,15 +15,15 @@ import { $ } from "../core/util.js";
 import {
   ctx,
   fam,
-  variantKey,
+  altId,
   pageToken,
   open,
   fullName,
-  variant,
+  alt,
   isFav,
   modLabel,
   repairedId,
-  readFamily,
+  readStudent,
   candidates,
   judgeCross,
   unfitCostume,
@@ -60,7 +60,7 @@ export async function reveal(path) {
   if (path) await call(() => rpc("os.reveal", { path }));
 }
 export async function copyName() {
-  const name = baseName(gameFile(variant(), tabKind()));
+  const name = baseName(gameFile(alt(), tabKind()));
   try {
     await navigator.clipboard.writeText(name);
   } catch (err) {
@@ -82,8 +82,8 @@ export function editModName(mod, redraw = null) {
   );
 }
 export async function toggleFav() {
-  const v = variant();
-  await call(() => rpc("favorites.set", { variant: v.key, on: !isFav(v) }));
+  const v = alt();
+  await call(() => rpc("favorites.set", { alt: v.key, on: !isFav(v) }));
   v.favorite = !isFav(v);
   ctx.invalidateRoster();
   renderAll();
@@ -93,11 +93,11 @@ export function addMods() {
   location.hash = "#/import";
 }
 
-// a job with a sticky progress line; the family is re-read afterwards (after(ok, result) instead, when given).
+// a job with a sticky progress line; the student is re-read afterwards (after(ok, result) instead, when given).
 // A switch the classic UI's open window refuses opens the classic modal, which can queue it (mod-switch.js).
 // An apply while mods are off only saves the choice (deferred): a notice says so ("Saved, applied when mods are on").
 export async function job(method, params, options = {}) {
-  const { onDone, after = () => reload(), name = fullName(variant()) } = options;
+  const { onDone, after = () => reload(), name = fullName(alt()) } = options;
   if (busy) {
     notify(T("error.busy"), { kind: "error", error: { code: "busy" } });
     return false;
@@ -116,22 +116,20 @@ export async function job(method, params, options = {}) {
       "mods.remove": "delete",
       "model.optimize": "optimize",
     }[method] || "process";
-  const mod = fam?.variants
+  const mod = fam?.alts
     ?.flatMap((v) => v.modList || [])
     .find((m) => m.id === (params.mod || params.id || params.target?.replace(/^mod:/, "")));
-  const targetKey = params.variant || (params.target?.startsWith("variant:") ? params.target.slice(8) : mod?.target);
-  const target = fam?.variants?.find((v) => v.key === targetKey) || variant();
+  const targetKey = params.alt || (params.target?.startsWith("alt:") ? params.target.slice(4) : mod?.target);
+  const target = fam?.alts?.find((v) => v.key === targetKey) || alt();
   const kind = params.kind || mod?.kind || switchKind() || "spr";
-  // the progress line (job-progress.js modJob): the student, the kind, the mod's own name or the variant whose
+  // the progress line (job-progress.js modJob): the student, the kind, the mod's own name or the alt whose
   // files it takes, how far a build is (a 3D model's costume) and the step; one item, so no count
   const who = progressName(target, "", name, fam);
-  const sourceKey =
-    typeof params.source === "string" && params.source.startsWith("variant:") ? params.source.slice(8) : "";
-  const sourceVariant = sourceKey ? fam?.variants?.find((v) => v.key === sourceKey) : null;
-  const nameOf = (entry) =>
-    entry?.variant === sourceKey && sourceKey ? progressName(sourceVariant, "", sourceKey, fam) : who;
+  const sourceKey = typeof params.source === "string" && params.source.startsWith("alt:") ? params.source.slice(4) : "";
+  const sourceAlt = sourceKey ? fam?.alts?.find((v) => v.key === sourceKey) : null;
+  const nameOf = (entry) => (entry?.alt === sourceKey && sourceKey ? progressName(sourceAlt, "", sourceKey, fam) : who);
   const progress = modJob(
-    { variant: target?.key || targetKey || kind, kind, name: mod ? modLabel(mod) : "", source: sourceKey },
+    { alt: target?.key || targetKey || kind, kind, name: mod ? modLabel(mod) : "", source: sourceKey },
     { nameOf, action: `progress.action${action[0].toUpperCase()}${action.slice(1)}` },
   );
   const running = progress();
@@ -175,7 +173,7 @@ export async function job(method, params, options = {}) {
     // Refusals can require an answer. Release the strict job lock before opening their controls.
     if (refusal) {
       if (page === pageToken && open && refusal.code === "original_unavailable" && QUEUEABLE.includes(method))
-        await overwrittenMessage(variant(), params.kind || "spr");
+        await overwrittenMessage(alt(), params.kind || "spr");
       // an untested game build's confirmation makes the call again, from this same page only
       else if (QUEUEABLE.includes(method))
         await refused(refusal, method, params, page === pageToken && open ? () => job(method, params, options) : null);
@@ -199,9 +197,9 @@ export function shownMod() {
 // who a mod's repair or check is (mod-compatibility.js progressTask, job-progress.js modJob)
 export function modProgressName(c) {
   const mod = c.mod || c,
-    target = fam.variants.find((v) => v.key === mod.target) || variant();
+    target = fam.alts.find((v) => v.key === mod.target) || alt();
   return {
-    variant: target?.key || mod.target,
+    alt: target?.key || mod.target,
     kind: mod.kind || switchKind(),
     core: mod.core || "",
     name: c.label || "",
@@ -252,14 +250,14 @@ export async function runUpdate(c = shownMod()) {
 // Update of an Optimize Physics copy: its costume built again under the current costume rule, in place; where
 // the student's model is configured with it, applied again
 async function runRebuild(c) {
-  const v = variant(),
+  const v = alt(),
     applied = isApplied(v, "model", c.key);
   const done = await job(
     "actions.update",
     { mod: c.id },
     { name: c.label, after: (ok) => reload(ok ? ["model"] : []) },
   );
-  if (done && applied && open && variant() === v) await applyCandidate(c.key, "model", { again: true });
+  if (done && applied && open && alt() === v) await applyCandidate(c.key, "model", { again: true });
   return done;
 }
 export async function runCompatibility() {
@@ -290,7 +288,7 @@ let wanted = null;
 const WANTED_MS = 30000;
 /**
  * Remember a Go To request from the update summary, for takeWanted().
- * @param {{variant: string, kind?: string, id: string}|null} request The mod to show: its variant, the kind of
+ * @param {{alt: string, kind?: string, id: string}|null} request The mod to show: its alt, the kind of
  *     its page and its id; null forgets the request.
  */
 export function want(request) {
@@ -304,13 +302,13 @@ export function want(request) {
 export async function takeWanted() {
   const w = wanted;
   wanted = null;
-  if (!w || Date.now() - w.at > WANTED_MS || !open || variantKey !== w.variant) return;
+  if (!w || Date.now() - w.at > WANTED_MS || !open || altId !== w.alt) return;
   const kind = ["lobby", "model"].includes(w.kind) ? w.kind : "spr";
   if (switchKind() !== kind) return;
   if (popupKind !== kind || $("popup").hidden) await openPopup(kind);
-  if (!open || $("popup").hidden || popupKind !== kind || variantKey !== w.variant) return;
+  if (!open || $("popup").hidden || popupKind !== kind || altId !== w.alt) return;
   const key = `m:${w.id}`;
-  if (!candidates(variant(), kind).some((c) => c.key === key)) return;
+  if (!candidates(alt(), kind).some((c) => c.key === key)) return;
   setPending(key);
   await renderPopup();
   [...$("popup").querySelectorAll("[data-key]")]
@@ -320,18 +318,18 @@ export async function takeWanted() {
 export function runExport() {
   const c = shownMod();
   if (busy) return;
-  const target = c ? `mod:${c.id}` : `variant:${variant().key}`;
+  const target = c ? `mod:${c.id}` : `alt:${alt().key}`;
   ModExport.open({ scope: "single", target, kind: switchKind() || "spr" });
 }
-// switch: the chosen source is written into the variant's game files of that kind, so the game shows it; the library
+// switch: the chosen source is written into the alt's game files of that kind, so the game shows it; the library
 // keeps what it replaces (an official file until it is official again, a mod in the library)
 // again: the applied choice written again (a costume swap or Optimize Physics copy built under an older rule)
 export async function applyCandidate(key, kind = "spr", { again = false } = {}) {
-  const v = variant();
+  const v = alt();
   if (!kind || !coreOf(v, kind) || busy || (!again && isApplied(v, kind, key)) || unfitCostume(v, kind, key)) return;
   await job(
     "actions.apply",
-    { variant: v.key, source: sourceOf(key), kind },
+    { alt: v.key, source: sourceOf(key), kind },
     {
       onDone: (result) => {
         if (result?.files?.length) {
@@ -346,10 +344,10 @@ export async function applyCandidate(key, kind = "spr", { again = false } = {}) 
         if (!ok) return reload();
         if (result?.unchanged) return reload();
         resetPreview(kind);
-        if (!open) return null; // the screen was left meanwhile: the next show reads the family again
+        if (!open) return null; // the screen was left meanwhile: the next show reads the student again
         return changeInPlace(async () => {
           const read = fam;
-          const data = await call(() => readFamily(read.key));
+          const data = await call(() => readStudent(read.key));
           if (data && fam !== read) return; // the screen was read anew meanwhile
           if (data) setFam(data);
           await Promise.all([renderAll(), renderLeft()]);
@@ -361,14 +359,14 @@ export async function applyCandidate(key, kind = "spr", { again = false } = {}) 
 }
 
 export async function saveCandidate(key, kind) {
-  const v = variant(),
-    family = fam;
+  const v = alt(),
+    student = fam;
   await call(() =>
     Loading.hold(
       async () => {
-        const sources = await rpc("ui.preview", { variant: v.key, kind, source: sourceOf(key) });
+        const sources = await rpc("ui.preview", { alt: v.key, kind, source: sourceOf(key) });
         ctx.invalidateRoster();
-        if (!open || fam !== family || variant() !== v) return;
+        if (!open || fam !== student || alt() !== v) return;
         v.previewSources = sources;
         if (kind === "model") judgeCross(v);
         resetPreview(kind);

@@ -412,7 +412,7 @@ class _Part:
     path: Path
     size: int
     mtime: int
-    carried: str  # "official", "unknown", "damaged", "removed", "mod:<id>", "variant:<key>"
+    carried: str  # "official", "unknown", "damaged", "removed", "mod:<id>", "alt:<key>"
     official: bool  # the file holds official bytes
     matched: bool  # unchanged since the library's record of it
     changed: bool  # a record exists and the file changed since
@@ -445,7 +445,7 @@ class _Entry:
         return self.pin.key, self.core
 
     def item(self) -> dict[str, str]:
-        return {"install": self.pin.key, "core": self.core, "variant": self.variant, "kind": self.kind}
+        return {"install": self.pin.key, "core": self.core, "alt": self.variant, "kind": self.kind}
 
 
 def _rebuilt(index: dict[str, list[Path]], path: Path) -> Path | None:
@@ -558,15 +558,15 @@ class _View:
             return True
         if source.startswith("mod:"):
             return source[4:] in self.mods or (held and source[4:] in self.held)
-        if source.startswith("variant:"):
+        if source.startswith("alt:"):
             if kind == "model":  # a costume: any other model of the student, field-mode ones (no slot) included
                 try:
-                    other = self.library._variant(source[8:])
+                    other = self.library._variant(source[4:])
                 except ServiceError:
                     return False
                 return bool(getattr(other, "model", None) or getattr(other, "field_model", None))
             cores = self.maps.get(key)
-            return bool(cores and cores.core(source[8:], kind))
+            return bool(cores and cores.core(source[4:], kind))
         return False
 
     def records_of(self, pin: Pin, core: str) -> list[tuple[Path, dict]]:
@@ -823,7 +823,7 @@ class _View:
             any(not part.official and part.carried != "damaged" and copies[str(part.path)] is None for part in parts)
             and self.allow != "recorded"
         )
-        variant = self.maps[pin.key].key(core) or (config or {}).get("variant") or core
+        variant = self.maps[pin.key].key(core) or (config or {}).get("alt") or core
         if kind == "other" and files:
             variant = parse_filename(files[0].name).core
         entry = _Entry(

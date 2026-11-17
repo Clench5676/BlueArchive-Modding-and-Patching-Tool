@@ -14,12 +14,12 @@ import { controls, insert } from "./control_prefabs.mjs";
 // A popup.js imported with a query is a fresh copy of the popups: the modules split from it import one another
 // with the same query, so the copy's list and message popups read the copy's prefabs.
 register(
-  `data:text/javascript,${encodeURIComponent(`const FAMILY = ${JSON.stringify(POPUP_MODULES)};
+  `data:text/javascript,${encodeURIComponent(`const STUDENT = ${JSON.stringify(POPUP_MODULES)};
 export async function resolve(spec, ctx, next) {
   const resolved = await next(spec, ctx);
-  if (!ctx.parentURL?.includes("/web/js/ui/") || !FAMILY.includes(spec.replace(/^\\.\\//, ""))) return resolved;
+  if (!ctx.parentURL?.includes("/web/js/ui/") || !STUDENT.includes(spec.replace(/^\\.\\//, ""))) return resolved;
   const parent = new URL(ctx.parentURL);
-  if (!parent.search || !FAMILY.some((name) => parent.pathname.endsWith("/ui/" + name))) return resolved;
+  if (!parent.search || !STUDENT.some((name) => parent.pathname.endsWith("/ui/" + name))) return resolved;
   const url = new URL(resolved.url);
   url.search = parent.search;
   return { ...resolved, url: url.href };
@@ -688,7 +688,7 @@ test("photo deletion warnings fit the UIPopup_Sort frame in all six locales", as
         readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8"),
       ).webui;
       setStrings(locale, Object.fromEntries(strings(ui)));
-      for (const warning of [ui.error.asset_delete_confirm, ui.error.photo_delete_other_variant]) {
+      for (const warning of [ui.error.asset_delete_confirm, ui.error.photo_delete_other_alt]) {
         const pending = Popup.message({
           title: ui.photo.delete,
           lines: [warning],
@@ -1948,16 +1948,16 @@ import { setupScreenTest } from "./detail-screen.js";
 import { setupChipsTest } from "./detail-chips.js";
 import { setupStripTest } from "./detail-strip.js";
 export function setupPreviewTest(data, kind, onLeft = async () => {}) {
-  fam = data; variantKey = data.variants[0].key; ctx = { invalidateRoster() {} };
+  fam = data; altId = data.alts[0].key; ctx = { invalidateRoster() {} };
   open = true; setupActionsTest(); tab = kind === "lobby" ? "lobby" : "portrait";
-  setupSwitchersTest(kind, () => { pending = shownSource(variant(), kind); }, pageToken);
+  setupSwitchersTest(kind, () => { pending = shownSource(alt(), kind); }, pageToken);
   previewEnabled = modsOn();
-  expression = "03"; mainPlayer = { cached: true }; lobbyShot = "cached";
+  face = "03"; mainPlayer = { cached: true }; lobbyShot = "cached";
   lobbySeq = "talk"; lobbyAll = true; lobbyStale = false; shownLeft = tab; shownKey = "cached";
   setupScreenTest(); setupChipsTest(); setupStripTest();
   renderLeft = onLeft;
 }
-export const previewTestState = () => ({ expression, mainPlayer, lobbyShot, lobbySeq, lobbyAll, lobbyStale, shownKey, pending });
+export const previewTestState = () => ({ face, mainPlayer, lobbyShot, lobbySeq, lobbyAll, lobbyStale, shownKey, pending });
 `,
   [detailUrl("detail-actions.js")]: "\nexport function setupActionsTest() { busy = false; }\n",
   [detailUrl("detail-switchers.js")]: `
@@ -1968,7 +1968,7 @@ export function setupSwitchersTest(kind, setPending, pageToken) {
 `,
   [detailUrl("detail-screen.js")]: "\nexport function setupScreenTest() { renderScreen = async () => {}; }\n",
   [detailUrl("detail-chips.js")]: "\nexport function setupChipsTest() { renderChips = async () => {}; }\n",
-  [detailUrl("detail-strip.js")]: "\nexport function setupStripTest() { renderExpressions = async () => {}; }\n",
+  [detailUrl("detail-strip.js")]: "\nexport function setupStripTest() { renderFaces = async () => {}; }\n",
   [detailUrl("detail-files.js")]: "\nexport { detailsBody };\n",
 };
 const thumbsTest = `
@@ -2002,10 +2002,10 @@ const Detail = Object.assign({}, ...(await Promise.all(Object.keys(detailTest).m
 const Mods = await import("../../src/bmpt/web/js/mods/mod-switch.js");
 const Thumbs = await import(THUMBS);
 const switchHost = host("popup");
-const previewFamily = () => ({
+const previewStudent = () => ({
   key: "a",
   version: "rv1",
-  variants: [
+  alts: [
     {
       key: "a",
       spr: "a_spr",
@@ -2038,14 +2038,14 @@ async function modsEnabled(enabled) {
   await Mods.refresh();
 }
 
-test("detail variant candidates preview official assets independently of the source's live mod", () => {
-  const fam = previewFamily(),
-    source = fam.variants[1];
+test("detail alt candidates preview official assets independently of the source's live mod", () => {
+  const fam = previewStudent(),
+    source = fam.alts[1];
   assert.equal(
-    Detail.baseOf({ kind: "variant", core: source.spr, variant: source }),
+    Detail.baseOf({ kind: "alt", core: source.spr, alt: source }),
     "/asset/spine/official-spr/b_spr/skeleton",
   );
-  assert.equal(Detail.baseOf({ kind: "self", core: fam.variants[0].spr }), "/asset/spine/official-spr/a_spr/skeleton");
+  assert.equal(Detail.baseOf({ kind: "self", core: fam.alts[0].spr }), "/asset/spine/official-spr/a_spr/skeleton");
 });
 
 test("Update reloads a configured portrait or lobby rebuilt under the same mod id while mods are off", async () => {
@@ -2056,7 +2056,7 @@ test("Update reloads a configured portrait or lobby rebuilt under the same mod i
     ["spr", "p"],
     ["lobby", "l"],
   ]) {
-    const fam = previewFamily(),
+    const fam = previewStudent(),
       draws = [];
     handlers.set("actions.compatibilityStamp", ({ mod }) => ({ result: `stamp-${mod}` }));
     Detail.setupPreviewTest(fam, kind, async () => draws.push(Detail.previewTestState()));
@@ -2067,7 +2067,7 @@ test("Update reloads a configured portrait or lobby rebuilt under the same mod i
     handlers.set("jobs.get", ({ id }) => ({
       result: { state: "done", result: id === "compatibility" ? { official: inputs, mod: inputs } : {} },
     }));
-    handlers.set("family.get", () => ({ result: structuredClone(fam) }));
+    handlers.set("student.get", () => ({ result: structuredClone(fam) }));
     Thumbs.forgotten.length = 0;
     const updating = Detail.runUpdate();
     (await drawn(dialog, "ok")).click();
@@ -2075,10 +2075,10 @@ test("Update reloads a configured portrait or lobby rebuilt under the same mod i
     await new Promise(setImmediate);
     for (const layer of [...dialog.children].reverse()) (await drawn(layer, "close")).click();
     assert.deepEqual(Thumbs.forgotten, [`/asset/spine/mod/${id}`]);
-    assert.equal(draws.length, 1, `${kind} reloads even when family.get has no changed source key or game file`);
+    assert.equal(draws.length, 1, `${kind} reloads even when student.get has no changed source key or game file`);
     if (kind === "spr") {
       assert.equal(draws[0].mainPlayer, null);
-      assert.equal(draws[0].expression, "00");
+      assert.equal(draws[0].face, "00");
       assert.equal(draws[0].lobbyShot, "cached", "the other preview stays cached");
     } else {
       assert.equal(draws[0].lobbyStale, true);
@@ -2105,7 +2105,7 @@ test("Update reloads a configured portrait or lobby rebuilt under the same mod i
 test("a compatibility check never updates an existing mod even when its bundle date differs", async () => {
   setStrings("en-US", Object.fromEntries(strings(english)));
   await modsEnabled(false);
-  const fam = previewFamily();
+  const fam = previewStudent();
   Detail.setupPreviewTest(fam, "spr");
   const inputs = { skeletons: {}, atlases: {}, textures: {} };
   handlers.set("actions.compatibility", () => ({ result: "compatibility" }));
@@ -2121,7 +2121,7 @@ test("a compatibility check never updates an existing mod even when its bundle d
 test("Update of a portrait drawn on a rig the App no longer has shows why and changes nothing", async () => {
   setStrings("en-US", Object.fromEntries(strings(english)));
   await modsEnabled(false);
-  const fam = previewFamily();
+  const fam = previewStudent();
   Detail.setupPreviewTest(fam, "spr");
   const inputs = { skeletons: {}, atlases: {}, textures: {} };
   handlers.set("actions.compatibilityStamp", () => "stamp");
@@ -2153,7 +2153,7 @@ test("Update of a portrait drawn on a rig the App no longer has shows why and ch
 test("the impact list's Fix leaves a portrait drawn on a rig the App no longer has held, with no update", async () => {
   setStrings("en-US", Object.fromEntries(strings(english)));
   await modsEnabled(false);
-  const fam = previewFamily();
+  const fam = previewStudent();
   Detail.setupPreviewTest(fam, "spr");
   const Impact = await import("../../src/bmpt/web/js/app/update-impact.js");
   const inputs = { skeletons: {}, atlases: {}, textures: {} };
@@ -2187,7 +2187,7 @@ test("each mod card exposes a read-only compatibility check for its own mod", as
     ["spr", "p"],
     ["lobby", "l"],
   ]) {
-    const fam = previewFamily();
+    const fam = previewStudent();
     Detail.setupPreviewTest(fam, kind);
     let checks = 0;
     handlers.set("actions.compatibility", (params) => {
@@ -2223,16 +2223,16 @@ test("switch cards and details label manifest choices Applied with either switch
     for (const [kind, source] of [
       ["spr", "mod:p"],
       ["lobby", "mod:l"],
-      ["spr", "variant:b"],
+      ["spr", "alt:b"],
     ]) {
       for (const enabled of [false, true]) {
         await modsEnabled(enabled);
-        const fam = previewFamily();
-        fam.variants[0].configured[kind] = source;
-        fam.variants[0].selection = { [kind]: { source, installed: enabled } };
+        const fam = previewStudent();
+        fam.alts[0].configured[kind] = source;
+        fam.alts[0].selection = { [kind]: { source, installed: enabled } };
         if (enabled)
           Object.assign(
-            fam.variants[0].state.files.find((f) => f.kind === kind),
+            fam.alts[0].state.files.find((f) => f.kind === kind),
             { applied: source, official: false },
           );
         Detail.setupPreviewTest(fam, kind);
@@ -2241,7 +2241,7 @@ test("switch cards and details label manifest choices Applied with either switch
         const caption = ui.status.applied;
         // the card's badge and the details' chip; the details have no State row
         assert.equal(captions.filter((c) => c === caption).length, 2, `${lang} ${kind} ${source}: badge and chip`);
-        const key = source.startsWith("mod:") ? `m:${source.slice(4)}` : `v:${source.slice(8)}`;
+        const key = source.startsWith("mod:") ? `m:${source.slice(4)}` : `v:${source.slice(4)}`;
         assert.ok(walk(switchHost).some((el) => el.dataset.path === `Card_${key}/Select/AppliedBadge`));
         assert.equal(
           walk(switchHost).find((el) => el.dataset.path === `Card_${key}/Select/AppliedLabel`).textContent,
@@ -2466,8 +2466,8 @@ test("repair review displays both pages and warnings; Accept alone stores the re
 test("repaired names carry their localized tag and originals jump to their repaired card", async () => {
   setStrings("en-US", Object.fromEntries(strings(english)));
   await modsEnabled(false);
-  const fam = previewFamily(),
-    mods = fam.variants[0].modList;
+  const fam = previewStudent(),
+    mods = fam.alts[0].modList;
   mods[0].repaired_id = "fixed";
   mods.push({ ...mods[0], id: "fixed", repaired_from: mods[0].id, repaired_id: "" });
   Detail.setupPreviewTest(fam, "spr");
@@ -2485,13 +2485,13 @@ test("repaired names carry their localized tag and originals jump to their repai
 test("Go To from the update summary opens the switch on its mod once the student page of its kind is in", async () => {
   setStrings("en-US", Object.fromEntries(strings(english)));
   await modsEnabled(false);
-  const fam = previewFamily();
-  fam.variants[0].modList.push({ id: "q", target: "a", kind: "spr", label: "Second portrait mod" });
-  // another variant, another kind's tab, a request the page did not reach soon: the switch stays closed
+  const fam = previewStudent();
+  fam.alts[0].modList.push({ id: "q", target: "a", kind: "spr", label: "Second portrait mod" });
+  // another alt, another kind's tab, a request the page did not reach soon: the switch stays closed
   for (const [request, at] of [
-    [{ id: "p", variant: "b", kind: "spr" }, 0],
-    [{ id: "l", variant: "a", kind: "lobby" }, 0],
-    [{ id: "p", variant: "a", kind: "spr" }, 31000],
+    [{ id: "p", alt: "b", kind: "spr" }, 0],
+    [{ id: "l", alt: "a", kind: "lobby" }, 0],
+    [{ id: "p", alt: "a", kind: "spr" }, 31000],
   ]) {
     Detail.setupPreviewTest(fam, "spr");
     switchHost.hidden = true;
@@ -2507,7 +2507,7 @@ test("Go To from the update summary opens the switch on its mod once the student
   }
   Detail.setupPreviewTest(fam, "spr");
   switchHost.hidden = true;
-  Detail.want({ id: "q", variant: "a", kind: "spr" });
+  Detail.want({ id: "q", alt: "a", kind: "spr" });
   await Detail.takeWanted();
   assert.equal(switchHost.hidden, false);
   assert.equal(Detail.previewTestState().pending, "m:q", "the mod's card selected, its details with Update");
@@ -2600,7 +2600,7 @@ test("the single Update action checks fresh inputs and routes a mixed page misma
     },
   };
   try {
-    const fam = previewFamily();
+    const fam = previewStudent();
     Detail.setupPreviewTest(fam, "spr");
     await Detail.renderPopup();
     assert.equal(walk(switchHost).filter((el) => el.getAttribute("aria-label") === english.act.update).length, 1);
@@ -2700,7 +2700,7 @@ test("clean Update asks Cancel / Update and reuses the checked report; problems 
   setStrings("en-US", Object.fromEntries(strings(english)));
   await modsEnabled(false);
   const inputs = { skeletons: {}, atlases: {}, textures: {} },
-    fam = previewFamily();
+    fam = previewStudent();
   let stamp = "force-current",
     checks = 0,
     updates = 0,
@@ -2714,7 +2714,7 @@ test("clean Update asks Cancel / Update and reuses the checked report; problems 
     updates++;
     return { result: "force-update" };
   });
-  handlers.set("family.get", () => ({ result: structuredClone(fam) }));
+  handlers.set("student.get", () => ({ result: structuredClone(fam) }));
   handlers.set("jobs.get", ({ id }) => ({
     result: {
       state: "done",
@@ -2765,7 +2765,7 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
     setStrings(locale, Object.fromEntries(strings(ui)));
     await modsEnabled(false);
     const inputs = { skeletons: {}, atlases: {}, textures: {} },
-      fam = previewFamily();
+      fam = previewStudent();
     let updates = 0;
     handlers.set("actions.compatibilityStamp", () => ({ result: `unchecked-${locale}` }));
     handlers.set("actions.compatibility", () => ({ result: "unchecked-check" }));
@@ -2773,7 +2773,7 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
       updates++;
       return { result: "unchecked-update" };
     });
-    handlers.set("family.get", () => ({ result: structuredClone(fam) }));
+    handlers.set("student.get", () => ({ result: structuredClone(fam) }));
     handlers.set("jobs.get", ({ id }) => ({
       result: {
         state: "done",
@@ -2806,7 +2806,7 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
     const previous = navigator.clipboard,
       copied = [];
     setStrings(locale, Object.fromEntries(strings(ui)));
-    Detail.setupPreviewTest(previewFamily(), "spr");
+    Detail.setupPreviewTest(previewStudent(), "spr");
     try {
       navigator.clipboard = {
         writeText: async (name) => {
@@ -7714,7 +7714,7 @@ test("the held entries' Details fit their wide frame with four mods, Go To and F
       const entries = [1, 2, 3, 4].map((i) => ({
         install: "/g",
         core: "hoshino_swimsuit_spr",
-        variant: "hoshino_swimsuit",
+        alt: "hoshino_swimsuit",
         kind: "spr",
         source: `mod:${i}`,
         label: `Swimsuit Hoshino v${i}`,

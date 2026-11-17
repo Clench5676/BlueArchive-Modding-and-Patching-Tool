@@ -1,4 +1,4 @@
-// The real detail and NGUI modules, with mod-backed family data and stand-in browser/Spine loaders.
+// The real detail and NGUI modules, with mod-backed student data and stand-in browser/Spine loaders.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { register } from "node:module";
@@ -260,7 +260,7 @@ let imageMode = "ready",
 let blankThumbnailCore = "";
 let decodeMode = "ready",
   thumbMode = "pending",
-  portraitExpressions = ["00", "01"];
+  portraitFaces = ["00", "01"];
 const thumbnailPlayers = [],
   pendingThumbnails = [];
 const pendingDecodes = [],
@@ -351,7 +351,7 @@ globalThis.spine = {
         this.stopRequestAnimationFrame = false;
       };
       if (el.className !== "thumb-player") previewPlayers.push(this);
-      const animations = ["Idle_01", ...portraitExpressions].map((name) => ({ name, timelines: [] }));
+      const animations = ["Idle_01", ...portraitFaces].map((name) => ({ name, timelines: [] }));
       this.skeleton = {
         data: {
           animations,
@@ -557,7 +557,7 @@ const atlas = {
 };
 atlas.Common.Common_Icon_Change = { width: 80, height: 80 };
 const reply = (data, status = 200) => ({ ok: status === 200, status, json: async () => data });
-let family,
+let student,
   indexMode = "ready",
   layoutMode = "ready",
   lobbyMode = "pending",
@@ -567,7 +567,7 @@ let modsInstall = null,
   modelAdoption = null;
 let seenReply = async () => ({ result: null });
 const saveAlias = async ({ id, label }) => {
-  const mod = family.variants.flatMap((v) => v.modList || []).find((m) => m.id === id);
+  const mod = student.alts.flatMap((v) => v.modList || []).find((m) => m.id === id);
   mod.defaultLabel ||= mod.label;
   mod.alias = label.trim();
   mod.label = mod.alias || mod.defaultLabel;
@@ -588,14 +588,14 @@ globalThis.fetch = async (url, opts = {}) => {
     if (method === "mods.rename") return reply(await renameReply(request.params));
     if (method === "aliases.set") return reply({ result: request.params.aliases.map((s) => s.trim()).filter(Boolean) });
     if (method === "ui.preview") {
-      const { variant, kind, source } = request.params;
-      const v = family.variants.find((v) => v.key === variant);
+      const { alt, kind, source } = request.params;
+      const v = student.alts.find((v) => v.key === alt);
       (v.previewSources ||= {})[kind] = source;
       return reply({ result: { ...v.previewSources } });
     }
     if (method === "actions.apply") {
-      const { variant, kind, source } = request.params;
-      const v = family.variants.find((v) => v.key === variant);
+      const { alt, kind, source } = request.params;
+      const v = student.alts.find((v) => v.key === alt);
       (v.configured ||= {})[kind] = source === "official" ? null : source;
       if (modsEnabled) for (const file of v.state.files.filter((f) => f.kind === kind)) file.applied = source;
       return reply({ result: "apply-test" });
@@ -607,7 +607,7 @@ globalThis.fetch = async (url, opts = {}) => {
       return reply({ result: { state: "done", result: modelAdoption() } });
     return reply({
       result:
-        method === "family.get" ? family : method === "mods.state" ? { enabled: modsEnabled, ...modsInstall } : null,
+        method === "student.get" ? student : method === "mods.state" ? { enabled: modsEnabled, ...modsInstall } : null,
     });
   }
   assetRequests.push(url);
@@ -717,7 +717,7 @@ register(
   const exposed = {
     "detail-screen.js": "screenTree, nameplateRow, switchTextLayout",
     "detail-chips.js": "chipBoxes",
-    "detail-strip.js": "expressionBoxes, pileBoxes",
+    "detail-strip.js": "faceBoxes, pileBoxes",
     "detail-files.js": "detailsBody",
   }[url.split("/web/js/detail/")[1]];
   if (exposed) {
@@ -792,11 +792,11 @@ const context = {
   step() {},
   go() {},
 };
-function modFamily(kind = "spr", id = "test") {
+function modStudent(kind = "spr", id = "test") {
   return {
     key: "ibuki",
     version: id,
-    variants: [
+    alts: [
       {
         key: "ibuki",
         spr: "ibuki_spr",
@@ -845,7 +845,7 @@ const closeLeftMessages = () => {
   hosts.dialog.hidden = true;
 };
 async function showPortrait(t, key = "ibuki") {
-  const showing = Detail.show(context, family, key);
+  const showing = Detail.show(context, student, key);
   await flush();
   await finish(t, showing);
   if (tabButton(1)) {
@@ -861,9 +861,9 @@ test("a failed detail layout cannot prevent the installed portrait from loading"
     errors.length = 0;
     layoutMode = "error";
     imageMode = "pending";
-    family = modFamily();
+    student = modStudent();
     const start = playerRequests.length;
-    const showing = Detail.show(context, family, "ibuki");
+    const showing = Detail.show(context, student, "ibuki");
     await flush();
     t.mock.timers.tick(1300);
     await flush();
@@ -884,9 +884,9 @@ test("the installed portrait starts while the detail layout is pending", async (
   try {
     errors.length = 0;
     layoutMode = "pending";
-    family = modFamily();
+    student = modStudent();
     const start = playerRequests.length;
-    const showing = Detail.show(context, family, "ibuki");
+    const showing = Detail.show(context, student, "ibuki");
     await flush();
     assert.ok(layoutReplies.length, "the layout has not answered yet");
     assert.ok(playerRequests.slice(start).some((url) => url.includes("/spr/ibuki_spr/")));
@@ -910,8 +910,8 @@ test("detail waits for UI images and bounds optional thumbnails before reveal", 
   try {
     imageMode = "pending";
     optionalPending = true;
-    family = modFamily();
-    const showing = Detail.show(context, family, "ibuki");
+    student = modStudent();
+    const showing = Detail.show(context, student, "ibuki");
     await flush();
     assert.ok(
       switchButton()?.listeners.click.length,
@@ -940,8 +940,8 @@ test("detail waits for UI images and bounds optional thumbnails before reveal", 
     imageMode = "ready";
     pendingImages.splice(0).forEach((img) => img.onload?.());
     await flush();
-    family = modFamily("spr", "recovered");
-    const retry = Detail.show(context, family, "ibuki");
+    student = modStudent("spr", "recovered");
+    const retry = Detail.show(context, student, "ibuki");
     await flush();
     await finish(t, retry);
     const recovered = walk(hosts.ngui).find((e) => e.dataset.path?.endsWith("Active/Bg"));
@@ -961,14 +961,14 @@ test("detail waits for UI images and bounds optional thumbnails before reveal", 
 test("ready detail controls publish while optional thumbnails continue filling locally", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    family = modFamily();
-    family.variants[0].spr = "late_spr";
-    portraitExpressions = ["00", "01", "02", "03", "04", "05"];
+    student = modStudent();
+    student.alts[0].spr = "late_spr";
+    portraitFaces = ["00", "01", "02", "03", "04", "05"];
     imageMode = "ready";
     const previous = [...hosts.ngui.children],
-      previousExpressions = [...hosts["ngui-expr"].children];
+      previousFaces = [...hosts["ngui-expr"].children];
     let ready = false;
-    const showing = Detail.show(context, family, "ibuki").then(() => {
+    const showing = Detail.show(context, student, "ibuki").then(() => {
       ready = true;
     });
     await flush();
@@ -976,7 +976,7 @@ test("ready detail controls publish while optional thumbnails continue filling l
     await flush();
     assert.equal(ready, true, "never-settling optional thumbnails cannot hold the ready primary preview");
     assert.notDeepEqual(hosts.ngui.children, previous);
-    assert.notDeepEqual(hosts["ngui-expr"].children, previousExpressions);
+    assert.notDeepEqual(hosts["ngui-expr"].children, previousFaces);
     thumbMode = "ready";
     pendingThumbnails.splice(0).forEach((done) => done());
     await flush();
@@ -994,7 +994,7 @@ test("ready detail controls publish while optional thumbnails continue filling l
   } finally {
     Detail.hide();
     thumbMode = "pending";
-    portraitExpressions = ["00", "01"];
+    portraitFaces = ["00", "01"];
     await flush();
     t.mock.timers.reset();
   }
@@ -1003,10 +1003,10 @@ test("ready detail controls publish while optional thumbnails continue filling l
 test("leaving a page revealed at its deadline cancels thumbnail players, retries and late DOM writes", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    family = modFamily();
-    family.variants[0].spr = "cancelled_spr";
+    student = modStudent();
+    student.alts[0].spr = "cancelled_spr";
     const start = thumbnailPlayers.length;
-    const showing = Detail.show(context, family, "ibuki");
+    const showing = Detail.show(context, student, "ibuki");
     await flush();
     t.mock.timers.tick(15000);
     await flush();
@@ -1072,12 +1072,12 @@ test("NGUI keeps a queued thumbnail beyond fifteen seconds and cancels abandoned
 test("the first detail reveal waits for its preview and decoded background", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    family = modFamily();
+    student = modStudent();
     imageMode = "ready";
     playerMode = "pending";
     decodeMode = "pending";
     let ready = false;
-    const showing = Detail.show(context, family, "ibuki").then(() => {
+    const showing = Detail.show(context, student, "ibuki").then(() => {
       ready = true;
     });
     await flush();
@@ -1106,11 +1106,11 @@ test("the first detail reveal waits for its preview and decoded background", asy
 test("main preview and decoded UI remain required while optional thumbnails do not", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    family = modFamily();
-    family.variants[0].spr = "slow_main_spr";
+    student = modStudent();
+    student.alts[0].spr = "slow_main_spr";
     playerMode = decodeMode = "pending";
     let ready = false;
-    const showing = Detail.show(context, family, "ibuki").then(() => {
+    const showing = Detail.show(context, student, "ibuki").then(() => {
       ready = true;
     });
     await flush();
@@ -1168,8 +1168,8 @@ test("a mod portrait setup exception is observed, settled and reported", async (
   try {
     errors.length = 0;
     playerMode = "broken";
-    family = modFamily("spr", "broken");
-    const showing = Detail.show(context, family, "ibuki");
+    student = modStudent("spr", "broken");
+    const showing = Detail.show(context, student, "ibuki");
     await flush();
     t.mock.timers.tick(1300);
     await flush();
@@ -1190,10 +1190,10 @@ test("the main portrait retries a rejected live revision after a cold load", asy
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
     errors.length = 0;
-    family = modFamily();
+    student = modStudent();
     playerMode = "stale";
     const start = playerRequests.length;
-    const showing = Detail.show(context, family, "ibuki");
+    const showing = Detail.show(context, student, "ibuki");
     await flush();
     t.mock.timers.tick(1300);
     await flush();
@@ -1218,9 +1218,9 @@ for (const status of [404, 500])
     try {
       errors.length = 0;
       warnings.length = 0;
-      family = modFamily();
+      student = modStudent();
       portraitStatus = status;
-      const showing = Detail.show(context, family, "ibuki");
+      const showing = Detail.show(context, student, "ibuki");
       await flush();
       t.mock.timers.tick(1300);
       await flush();
@@ -1246,8 +1246,8 @@ test("a lobby switch stays covered until its failed preview settles and can retr
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
     errors.length = 0;
-    family = modFamily("lobby", "lobby");
-    const showing = Detail.show(context, family, "ibuki");
+    student = modStudent("lobby", "lobby");
+    const showing = Detail.show(context, student, "ibuki");
     await flush();
     t.mock.timers.tick(1300);
     await flush();
@@ -1334,12 +1334,12 @@ for (const core of ["arona_workpage_daytime", "np0032_npc"])
             files: [{ kind: "lobby", applied: "mod:special-day", official: false, restorable: true, crc: "fixed" }],
           },
         };
-        family = { key: "arona", version: "special", variants: [modFamily().variants[0], v] };
+        student = { key: "arona", version: "special", alts: [modStudent().alts[0], v] };
         const start = playerRequests.length,
           fetchStart = assetRequests.length,
           rpcStart = rpcRequests.length;
         let ready = false;
-        const showing = Detail.show(context, family, v.key).then(() => {
+        const showing = Detail.show(context, student, v.key).then(() => {
           ready = true;
         });
         await flush();
@@ -1347,11 +1347,7 @@ for (const core of ["arona_workpage_daytime", "np0032_npc"])
         await flush();
         assert.equal(ready, false, "a pending background cannot release the loading cover early");
         await finish(t, showing);
-        assert.equal(
-          Detail.currentVariant(),
-          v.key,
-          "the requested background stays selected alongside a portrait variant",
-        );
+        assert.equal(Detail.currentAlt(), v.key, "the requested background stays selected alongside a portrait alt");
         assert.equal(switchButton().getAttribute("aria-label"), "Switch L2D");
         assert.ok(switchButton().listeners.click.length);
         for (const path of [
@@ -1483,21 +1479,21 @@ for (const mode of ["pending", "error", "empty", "partial", "invalid"])
     }
   });
 
-for (const configured of ["mod:configured", "variant:dress"])
+for (const configured of ["mod:configured", "alt:dress"])
   test(`mods off keeps the configured portrait source ${configured}`, async (t) => {
     t.mock.timers.enable({ apis: ["setTimeout"] });
     try {
       modsEnabled = false;
       await ModSwitch.refresh();
-      family = modFamily("spr", "configured");
-      const v = family.variants[0];
+      student = modStudent("spr", "configured");
+      const v = student.alts[0];
       delete v.lobby;
       v.state.files[0].applied = "official";
       v.state.files[0].official = true;
       v.configured = { spr: configured };
-      family.variants.push({ key: "dress", spr: "dress_spr", names: v.names });
+      student.alts.push({ key: "dress", spr: "dress_spr", names: v.names });
       const start = playerRequests.length;
-      const showing = Detail.show(context, family, "ibuki");
+      const showing = Detail.show(context, student, "ibuki");
       await flush();
       t.mock.timers.tick(1300);
       await flush();
@@ -1562,11 +1558,11 @@ test("long portrait and lobby names only resize their own info cell in every loc
       for (const kind of ["spr", "lobby"]) {
         const snapshots = [];
         for (const name of ["ibuki_spr", "azusa_swimsuit_spr", "azusa_swimsuit_spr".repeat(20), "ibuki_spr"]) {
-          family = modFamily(kind, name);
-          const v = family.variants[0];
+          student = modStudent(kind, name);
+          const v = student.alts[0];
           v.date = v.state.files[0].date = "2024-11-18";
           if (kind === "spr") delete v.lobby;
-          const showing = Detail.show(context, family, "ibuki");
+          const showing = Detail.show(context, student, "ibuki");
           await flush();
           t.mock.timers.tick(16000);
           await flush();
@@ -1633,26 +1629,26 @@ const currentCell = () =>
     (el) => el.dataset.path?.endsWith(`${INFO}/Status/Label_Life/Data_Widget/Data`) && el.style.fontSize,
   );
 
-test("student aliases lead the existing name band, keep the variant's original, and update on save and clear in every locale", async (t) => {
+test("student aliases lead the existing name band, keep the alt's original, and update on save and clear in every locale", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
     for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
       const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url), "utf8"));
       setStrings(lang, flat(ui));
-      family = modFamily();
-      family.variants[0].custom = ["My <Ibuki> & friend", "Search nickname"];
-      const base = structuredClone(family.variants[0]);
+      student = modStudent();
+      student.alts[0].custom = ["My <Ibuki> & friend", "Search nickname"];
+      const base = structuredClone(student.alts[0]);
       base.custom = ["Original nickname"];
-      family.variants[0].key = "ibuki_dress";
-      family.variants.push(base);
+      student.alts[0].key = "ibuki_dress";
+      student.alts.push(base);
       const original = "Ibuki (Dress) ".repeat(10);
-      family.variants[0].names = { en: { full: original, short: "Dress" } };
+      student.alts[0].names = { en: { full: original, short: "Dress" } };
       await showPortrait(t, "ibuki_dress");
       const part = (name) =>
         walk(hosts.ngui).find((el) => el.dataset.path?.endsWith(`${PLATE}/${name}`) && el.style.fontSize);
       const main = part("Label_Name"),
         secondary = part("Label_OriginalName");
-      assert.equal(main.getAttribute("aria-label"), family.variants[0].custom[0]);
+      assert.equal(main.getAttribute("aria-label"), student.alts[0].custom[0]);
       assert.equal(secondary.getAttribute("aria-label"), original);
       assert.ok(parseFloat(main.style.fontSize) > parseFloat(secondary.style.fontSize));
       const a = NGUI.rect(main),
@@ -1674,7 +1670,7 @@ test("student aliases lead the existing name band, keep the variant's original, 
       await flush();
       assert.equal(part("Label_Name").getAttribute("aria-label"), "Changed name");
       assert.equal(part("Label_Name").children.length, 0, "a name that fits never ends in an ellipsis");
-      assert.equal(rpcRequests.findLast((r) => r.method === "aliases.set").params.variant, "ibuki_dress");
+      assert.equal(rpcRequests.findLast((r) => r.method === "aliases.set").params.alt, "ibuki_dress");
       assert.deepEqual(base.custom, ["Original nickname"]);
       assert.equal(invalidations, invalidated + 1, "roster will reload aliases and name order");
       await pencil().click();
@@ -1706,7 +1702,7 @@ test("student aliases lead the existing name band, keep the variant's original, 
   }
 });
 
-test("variant aliases name detail chips, switch cards and variant picker cards in every locale", async (t) => {
+test("alt aliases name detail chips, switch cards and alt picker cards in every locale", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const labelled = (host, caption) =>
     walk(host).some(
@@ -1718,9 +1714,9 @@ test("variant aliases name detail chips, switch cards and variant picker cards i
         lang,
         flat(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url), "utf8"))),
       );
-      family = modFamily();
-      family.variants[0].custom = ["Base Ink"];
-      family.variants.push(
+      student = modStudent();
+      student.alts[0].custom = ["Base Ink"];
+      student.alts.push(
         ...Array.from({ length: 8 }, (_, i) => ({
           key: `skin_${i}`,
           spr: `skin_${i}_spr`,
@@ -1728,7 +1724,7 @@ test("variant aliases name detail chips, switch cards and variant picker cards i
           recruitable: true,
           modList: [],
           custom: i === 0 ? ["Skin Ink"] : [],
-          names: { en: { full: `Variant ${i}`, short: `Skin ${i}` } },
+          names: { en: { full: `Alt ${i}`, short: `Skin ${i}` } },
         })),
       );
       await showPortrait(t);
@@ -1788,10 +1784,10 @@ test("mod aliases save and clear from the current value and both switch pencils 
       const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url), "utf8"));
       setStrings(lang, flat(ui));
       for (const kind of ["spr", "lobby"]) {
-        family = modFamily(kind);
+        student = modStudent(kind);
         const core = kind === "spr" ? "ibuki_spr" : "ibuki_home";
-        Object.assign(family.variants[0].modList[0], { core, file: `/mods/test/${core}.bundle` });
-        delete family.variants[0][kind === "spr" ? "lobby" : "spr"];
+        Object.assign(student.alts[0].modList[0], { core, file: `/mods/test/${core}.bundle` });
+        delete student.alts[0][kind === "spr" ? "lobby" : "spr"];
         await showPortrait(t);
         const pencil = walk(hosts.ngui).find((e) => e.dataset.part?.endsWith("/ModAliasBtn"));
         assert.equal(pencil.getAttribute("aria-label"), ui.webui.modAlias.title);
@@ -1876,13 +1872,13 @@ test("mod aliases save and clear from the current value and both switch pencils 
   }
 });
 
-test("an alias on another variant's mod replaces the entire display name", async (t) => {
+test("an alias on another alt's mod replaces the entire display name", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    family = modFamily();
-    const mod = family.variants[0].modList[0];
+    student = modStudent();
+    const mod = student.alts[0].modList[0];
     Object.assign(mod, { alias: "Only alias", label: "Original name", core: "ibuki_dress_spr", target: "dress" });
-    family.variants.push({
+    student.alts.push({
       key: "dress",
       spr: "ibuki_dress_spr",
       names: { en: { full: "Ibuki Dress", short: "Dress" } },
@@ -1905,7 +1901,7 @@ test("an alias on another variant's mod replaces the entire display name", async
     assert.equal(currentCell().getAttribute("aria-label"), "Only alias");
     assert.ok(
       !walk(hosts["ngui-chips"]).some((e) => e.dataset.path?.endsWith("/ModAliasBtn")),
-      "variant chips show student names",
+      "alt chips show student names",
     );
   } finally {
     Detail.hide();
@@ -1924,8 +1920,8 @@ test("repaired names and own aliases keep a separate repair tag in every locale"
         for (const alias of ["", "Own alias"]) {
           modsEnabled = enabled;
           await ModSwitch.refresh();
-          family = modFamily("spr", "fixed");
-          const v = family.variants[0],
+          student = modStudent("spr", "fixed");
+          const v = student.alts[0],
             mod = v.modList[0];
           const name = alias || ui.webui.remap.name.replace("{name}", "Painted");
           Object.assign(mod, { alias, label: name, repaired_from: "original" });
@@ -1996,8 +1992,8 @@ for (const parentPresent of [true, false])
     try {
       setStrings("en-US", localeTable("en-US"));
       thumbMode = playerMode = "ready";
-      family = modFamily("spr", "locale-repair");
-      const v = family.variants[0],
+      student = modStudent("spr", "locale-repair");
+      const v = student.alts[0],
         repaired = v.modList[0],
         sourceName = parentPresent ? "Source alias" : "Stored source";
       Object.assign(repaired, {
@@ -2037,7 +2033,7 @@ for (const parentPresent of [true, false])
           assert.equal(previewPlayers.length, players);
         }
       }
-      assert.ok(!rpcRequests.slice(before).some((r) => ["family.get", "roster.list"].includes(r.method)));
+      assert.ok(!rpcRequests.slice(before).some((r) => ["student.get", "roster.list"].includes(r.method)));
     } finally {
       Detail.hide();
       thumbMode = "pending";
@@ -2112,7 +2108,7 @@ test("failed alias saves keep the draft, and repeated Enter submits once", async
 test("leaving detail closes the mod alias editor", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    family = modFamily();
+    student = modStudent();
     await showPortrait(t);
     await walk(hosts.ngui)
       .find((e) => e.dataset.part?.endsWith("/ModAliasBtn"))
@@ -2131,11 +2127,11 @@ test("leaving detail closes the mod alias editor", async (t) => {
 test("new mod dots survive visits and tab changes, then clear for the switch's offered mods", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    family = modFamily();
-    const v = family.variants[0];
+    student = modStudent();
+    const v = student.alts[0];
     v.model = "ibuki_model";
     v.modList = ["spr", "lobby"].map((kind) => ({ id: kind, target: v.key, kind, fresh: true }));
-    family.variants.push({
+    student.alts.push({
       ...v,
       key: "dress",
       spr: "dress_spr",
@@ -2181,9 +2177,9 @@ test("new mod dots survive visits and tab changes, then clear for the switch's o
     assert.equal(tabDot(1), undefined);
     assert.equal(tabDot(2), undefined);
     assert.equal(chipDot(v.key), undefined);
-    assert.ok(chipDot("dress"), "the other variant still has an unseen lobby mod");
+    assert.ok(chipDot("dress"), "the other alt still has an unseen lobby mod");
     assert.deepEqual(rpcRequests.filter((r) => r.method === "mods.seen").at(-1).params, { ids: ["spr", "dress-spr"] });
-    assert.equal(family.variants[1].modList[1].fresh, true);
+    assert.equal(student.alts[1].modList[1].fresh, true);
     assert.equal(invalidations - invalidated, 2, "Back fetches the roster's updated marks immediately");
     await closeSwitch();
     const before = rpcRequests.filter((r) => r.method === "mods.seen").length;
@@ -2209,8 +2205,8 @@ for (const kind of ["spr", "portrait", "lobby"])
       t.mock.timers.enable({ apis: ["setTimeout"] });
       try {
         const assetKind = kind === "portrait" ? "spr" : kind;
-        family = modFamily(assetKind, `import-${assetKind}`);
-        const v = family.variants[0],
+        student = modStudent(assetKind, `import-${assetKind}`);
+        const v = student.alts[0],
           imported = v.modList[0];
         imported.fresh = true;
         v.fresh = true;
@@ -2220,7 +2216,7 @@ for (const kind of ["spr", "portrait", "lobby"])
         await ModSwitch.refresh();
         const invalidated = invalidations,
           start = rpcRequests.length;
-        const showing = Detail.show(context, family, v.key, { kind });
+        const showing = Detail.show(context, student, v.key, { kind });
         await flush();
         await finish(t, showing);
         await flush();
@@ -2253,10 +2249,10 @@ for (const kind of ["spr", "lobby"])
   test(`an auto-applied ${kind} mod has no card dot when another source is picked`, async (t) => {
     t.mock.timers.enable({ apis: ["setTimeout"] });
     try {
-      family = modFamily(kind);
-      family.variants[0].modList[0].fresh = true;
-      family.variants[0].configured = { [kind]: "mod:test" };
-      family.variants[0].selection = { [kind]: { source: "mod:test", installed: true } };
+      student = modStudent(kind);
+      student.alts[0].modList[0].fresh = true;
+      student.alts[0].configured = { [kind]: "mod:test" };
+      student.alts[0].selection = { [kind]: { source: "mod:test", installed: true } };
       seenReply = async () => ({ error: { code: "internal" } });
       await showPortrait(t);
       const tab = kind === "lobby" ? 2 : 1;
@@ -2294,8 +2290,8 @@ for (const kind of ["spr", "lobby"])
 test("a failed seen write keeps the dots and can be retried by opening the mod card", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    family = modFamily();
-    family.variants[0].modList[0].fresh = true;
+    student = modStudent();
+    student.alts[0].modList[0].fresh = true;
     seenReply = async () => ({ error: { code: "internal" } });
     await showPortrait(t);
     const popup = switchButton().click();
@@ -2324,9 +2320,9 @@ for (const after of ["closed", "aliases", "reopened", "left"])
     t.mock.timers.enable({ apis: ["setTimeout"] });
     let finish;
     try {
-      family = modFamily();
-      family.variants[0].modList[0].fresh = true;
-      Object.assign(family.variants[0].state.files[0], { applied: "official", official: true });
+      student = modStudent();
+      student.alts[0].modList[0].fresh = true;
+      Object.assign(student.alts[0].state.files[0], { applied: "official", official: true });
       await showPortrait(t);
       seenReply = () =>
         new Promise((resolve) => {
@@ -2358,7 +2354,7 @@ for (const after of ["closed", "aliases", "reopened", "left"])
       await popup;
       await flush();
       assert.equal(invalidations - invalidated, 1);
-      assert.equal(family.variants[0].modList[0].fresh, false);
+      assert.equal(student.alts[0].modList[0].fresh, false);
       assert.equal(rpcRequests.slice(start).filter((r) => r.method === "mods.seen").length, 1);
       if (after === "aliases") {
         assert.equal(hosts.popup.querySelector(".alias-input"), input, "the alias editor keeps its unsaved input");
@@ -2390,9 +2386,9 @@ for (const after of ["closed", "aliases", "reopened", "left"])
 test("the 3D tab dot only follows mods of its own kind", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    family = modFamily("model");
-    family.variants[0].model = "ibuki_model";
-    family.variants[0].modList[0].fresh = true;
+    student = modStudent("model");
+    student.alts[0].model = "ibuki_model";
+    student.alts[0].modList[0].fresh = true;
     await showPortrait(t);
     assert.equal(tabDot(1), undefined);
     assert.equal(tabDot(2), undefined);
@@ -2405,13 +2401,13 @@ test("the 3D tab dot only follows mods of its own kind", async (t) => {
   }
 });
 
-test("a variant with only a field or NPC model draws it on the 3D tab", async (t) => {
+test("an alt with only a field or NPC model draws it on the 3D tab", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
     errors.length = 0;
     closeLeftMessages();
-    family = modFamily("model");
-    const v = family.variants[0];
+    student = modStudent("model");
+    const v = student.alts[0];
     v.model = null;
     v.fieldModel = "np0143";
     v.state.files = [];
@@ -2423,7 +2419,7 @@ test("a variant with only a field or NPC model draws it on the 3D tab", async (t
       await flush();
     }
     await finish(t, switching);
-    assert.equal(modelRequests.at(-1)?.key, v.key, "the model viewer was asked for the variant's model");
+    assert.equal(modelRequests.at(-1)?.key, v.key, "the model viewer was asked for the alt's model");
   } finally {
     closeLeftMessages();
     Detail.hide();
@@ -2438,8 +2434,8 @@ test("an official 3D model with no official copy left opens the overwritten mess
   try {
     errors.length = 0;
     closeLeftMessages();
-    family = modFamily("model");
-    const v = family.variants[0];
+    student = modStudent("model");
+    const v = student.alts[0];
     v.model = "ibuki_model";
     v.state.files = [{ kind: "model", applied: "official", official: true, restorable: true, crc: "ok" }];
     modsEnabled = false;
@@ -2477,7 +2473,7 @@ test("the detail portrait resumes focus and rebuilds after a hidden context loss
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
     errors.length = 0;
-    family = modFamily();
+    student = modStudent();
     playerMode = thumbMode = "ready";
     await showPortrait(t);
     const p = previewPlayers.at(-1),
@@ -2521,7 +2517,7 @@ test("the detail portrait resumes focus and rebuilds after a hidden context loss
 test("detail action patterns follow their resized bodies", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    family = modFamily();
+    student = modStudent();
     await showPortrait(t);
     const part = (path) => walk(hosts.ngui).find((e) => e.dataset.path?.endsWith(path));
     const near = (a, b) => assert.ok(Math.abs(a - b) < 0.02, `${a} != ${b}`);
@@ -2547,8 +2543,8 @@ for (const background of ["/asset/art/bg/Original_Collection", null])
   test(`the portrait switch keeps the prefab card without ${background ? "the student's" : "the prefab's"} artwork under its bust`, async (t) => {
     t.mock.timers.enable({ apis: ["setTimeout"] });
     try {
-      family = modFamily();
-      family.variants[0].bg = background;
+      student = modStudent();
+      student.alts[0].bg = background;
       await showPortrait(t);
       const bust = walk(hosts.ngui).find((e) => e.dataset.path?.endsWith("Normal/Bust"));
       assert.ok(!bust.style.backgroundImage, "no background picture on the portrait card");
@@ -2569,15 +2565,15 @@ for (const core of ["ibuki_home", "arona_workpage_daytime", "np0032_npc"])
       warnings.length = 0;
       lobbyMode = "ready";
       playerMode = "lobby-ready";
-      family = modFamily("lobby");
-      const v = family.variants[0];
+      student = modStudent("lobby");
+      const v = student.alts[0];
       v.bg = "/asset/art/bg/Portrait_Only";
       if (core !== "ibuki_home") {
         v.key = `special:${core}`;
         v.spr = null;
         v.lobby = core;
       }
-      const showing = Detail.show(context, family, v.key);
+      const showing = Detail.show(context, student, v.key);
       await flush();
       await finish(t, showing);
       if (tabButton(2)) {
@@ -2613,7 +2609,7 @@ test("re-entering a torn-down lobby rebuilds its players and keeps the Portrait 
   try {
     lobbyMode = "ready";
     playerMode = "lobby-ready";
-    family = modFamily("lobby", "route-recovery");
+    student = modStudent("lobby", "route-recovery");
     await showPortrait(t);
     const switching = tabButton(2).click();
     await flush();
@@ -2622,15 +2618,15 @@ test("re-entering a torn-down lobby rebuilds its players and keeps the Portrait 
     assert.ok(before.length);
     assert.equal(hosts.lobby.hidden, false);
     Detail.hide();
-    assert.equal(Detail.currentVariant(), null);
+    assert.equal(Detail.currentAlt(), null);
     assert.ok(before.every((p) => p.disposed));
     const requests = playerRequests.length;
-    const returning = Detail.show(context, family, "ibuki");
+    const returning = Detail.show(context, student, "ibuki");
     await flush();
     await finish(t, returning);
-    assert.ok(playerRequests.length > requests, "the same variant gets fresh lobby players after hide");
+    assert.ok(playerRequests.length > requests, "the same alt gets fresh lobby players after hide");
     assert.equal(hosts.lobby.hidden, false);
-    assert.equal(Detail.currentVariant(), "ibuki");
+    assert.equal(Detail.currentAlt(), "ibuki");
     const portrait = tabButton(1).click();
     await flush();
     await finish(t, portrait);
@@ -2651,13 +2647,13 @@ for (const kind of ["portrait", "lobby", "model"])
   test(`repeated locale changes preserve the active ${kind} player and route`, async (t) => {
     t.mock.timers.enable({ apis: ["setTimeout"] });
     try {
-      family = modFamily("spr", `locale-${kind}`);
-      family.variants[0].model = "ibuki_model";
-      family.variants[0].names.ja = { full: "Localized Ibuki", short: "Localized" };
+      student = modStudent("spr", `locale-${kind}`);
+      student.alts[0].model = "ibuki_model";
+      student.alts[0].names.ja = { full: "Localized Ibuki", short: "Localized" };
       lobbyMode = "ready";
       playerMode = "lobby-ready";
       thumbMode = "ready";
-      const showing = Detail.show(context, family, "ibuki", { kind });
+      const showing = Detail.show(context, student, "ibuki", { kind });
       await flush();
       await finish(t, showing);
       const players = previewPlayers.filter((p) => !p.disposed),
@@ -2681,8 +2677,8 @@ for (const kind of ["portrait", "lobby", "model"])
         assert.equal(apply.attrs["aria-label"], localeTable(lang)["webui.popup.apply"]);
       }
       assert.ok(
-        !rpcRequests.slice(before).some((r) => ["roster.list", "family.get", "ui.visit"].includes(r.method)),
-        "locale refresh reuses loaded family data",
+        !rpcRequests.slice(before).some((r) => ["roster.list", "student.get", "ui.visit"].includes(r.method)),
+        "locale refresh reuses loaded student data",
       );
       if (kind === "lobby")
         assert.equal(rpcRequests.filter((r) => r.method === "lobby.lines").at(-1).params.lang, "ja");
@@ -2700,8 +2696,8 @@ for (const kind of ["portrait", "lobby", "model"])
 test("an open source picker relabels while keeping its unsaved selection and scroll", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    family = modFamily("spr", "localized-picker");
-    family.variants[0].previewSources = { spr: "official" };
+    student = modStudent("spr", "localized-picker");
+    student.alts[0].previewSources = { spr: "official" };
     thumbMode = playerMode = "ready";
     await showPortrait(t);
     await switchButton().click();
@@ -2720,7 +2716,7 @@ test("an open source picker relabels while keeping its unsaved selection and scr
     assert.equal(save.getAttribute("aria-label"), localeTable("ja-JP")["webui.popup.save"]);
     assert.equal(previewPlayers.length, players);
     await finish(t, save.click());
-    assert.equal(family.variants[0].previewSources.spr, "mod:localized-picker");
+    assert.equal(student.alts[0].previewSources.spr, "mod:localized-picker");
   } finally {
     Detail.hide();
     thumbMode = "pending";
@@ -2735,8 +2731,8 @@ for (const enabled of [true, false])
     t.mock.timers.enable({ apis: ["setTimeout"] });
     try {
       errors.length = 0;
-      family = modFamily("model");
-      const v = family.variants[0];
+      student = modStudent("model");
+      const v = student.alts[0];
       v.model = "ibuki_model";
       v.configured = { model: "mod:test" };
       v.selection = { model: { source: "mod:test", installed: enabled } };
@@ -2799,7 +2795,7 @@ for (const enabled of [true, false])
 test("detail action cards remove skill bases and plus badges and contain their replacement icons", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    family = modFamily();
+    student = modStudent();
     await showPortrait(t);
     for (const card of ["SkillData_EX", "SkillData_EX (1)", "SkillData_EX (2)", "SkillData_EX (3)"]) {
       const prefix = `${INFO}/Skill/${card}/Normal/SkillIconBg`;
@@ -2829,8 +2825,8 @@ test("switch subtitles retain the selected name and use a plain separator in all
       const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url), "utf8"));
       setStrings(lang, flat(ui));
       for (const installed of [false, true]) {
-        family = modFamily("spr", "hina_spr");
-        const v = family.variants[0];
+        student = modStudent("spr", "hina_spr");
+        const v = student.alts[0];
         v.configured = { spr: "mod:hina_spr" };
         v.selection = { spr: { source: "mod:hina_spr", installed } };
         await showPortrait(t);
@@ -2860,8 +2856,8 @@ test("a failed portrait capture keeps the shared placeholder and reports the exa
   try {
     thumbMode = "ready";
     blankThumbnailCore = "pajamas_missing_spr";
-    family = modFamily();
-    family.variants.push({
+    student = modStudent();
+    student.alts.push({
       key: "pajamas",
       spr: blankThumbnailCore,
       portrait: "/asset/art/portrait/pajamas",
@@ -2869,10 +2865,10 @@ test("a failed portrait capture keeps the shared placeholder and reports the exa
       modList: [],
       state: { files: [] },
     });
-    const v = family.variants[0];
+    const v = student.alts[0];
     v.portrait = "/asset/art/portrait/original";
-    v.configured = { spr: "variant:pajamas" };
-    v.selection = { spr: { source: "variant:pajamas", installed: false } };
+    v.configured = { spr: "alt:pajamas" };
+    v.selection = { spr: { source: "alt:pajamas", installed: false } };
     await showPortrait(t);
     await switchButton().click();
     await flush();
@@ -2903,14 +2899,14 @@ test("a failed portrait capture keeps the shared placeholder and reports the exa
   }
 });
 
-test("a failed Mod portrait never displays the variant's official collection art", async (t) => {
+test("a failed Mod portrait never displays the alt's official collection art", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
     thumbMode = "ready";
     blankThumbnailCore = "/mod/test/";
     portraitRevision = "f";
-    family = modFamily();
-    const v = family.variants[0];
+    student = modStudent();
+    const v = student.alts[0];
     v.portrait = "/asset/art/portrait/official-hina";
     v.configured = { spr: "mod:test" };
     await showPortrait(t);
@@ -2936,9 +2932,9 @@ test("a failed Mod portrait never displays the variant's official collection art
 test("switch and detail captures can recover after the detail thumbnail reveal deadline", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    family = modFamily();
-    family.variants[0].spr = "popup_after_deadline_spr";
-    const showing = Detail.show(context, family, "ibuki");
+    student = modStudent();
+    student.alts[0].spr = "popup_after_deadline_spr";
+    const showing = Detail.show(context, student, "ibuki");
     await flush();
     t.mock.timers.tick(15000);
     await flush();
@@ -2981,15 +2977,15 @@ test("switch and detail captures can recover after the detail thumbnail reveal d
 test("a timed-out switch candidate logs its source and updates both card and panel after an idle retry", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    family = modFamily();
-    family.variants.push({
+    student = modStudent();
+    student.alts.push({
       key: "swimsuit",
       spr: "hina_swimsuit_retry_spr",
       names: { en: { full: "Hina (Swimsuit)", short: "Swimsuit" } },
       modList: [],
       state: { files: [] },
     });
-    family.variants[0].configured = { spr: "variant:swimsuit" };
+    student.alts[0].configured = { spr: "alt:swimsuit" };
     await showPortrait(t);
     const start = rpcRequests.length;
     await switchButton().click();
@@ -3036,8 +3032,8 @@ for (const enabled of [false, true])
     t.mock.timers.enable({ apis: ["setTimeout"] });
     try {
       thumbMode = playerMode = imageMode = decodeMode = "ready";
-      family = modFamily();
-      const v = family.variants[0];
+      student = modStudent();
+      const v = student.alts[0];
       v.configured = {};
       v.previewSources = { spr: "official" };
       modsEnabled = enabled;
@@ -3096,8 +3092,8 @@ for (const kind of ["spr", "lobby", "model"])
       try {
         lobbyMode = "ready";
         playerMode = "lobby-ready";
-        family = modFamily(kind, `library-only-${kind}`);
-        const v = family.variants[0];
+        student = modStudent(kind, `library-only-${kind}`);
+        const v = student.alts[0];
         Object.assign(v, {
           spr: null,
           lobby: null,
@@ -3111,10 +3107,10 @@ for (const kind of ["spr", "lobby", "model"])
         const assetsBefore = assetRequests.length,
           modelsBefore = modelRequests.length,
           rpcsBefore = rpcRequests.length;
-        const showing = Detail.show(context, family, v.key);
+        const showing = Detail.show(context, student, v.key);
         await flush();
         await finish(t, showing);
-        assert.equal(Detail.currentVariant(), v.key);
+        assert.equal(Detail.currentAlt(), v.key);
         assert.ok(switchButton(), "the own Mod can still be selected for preview");
         const apply = walk(hosts.ngui).find((e) => e.dataset.part?.endsWith("SkillData_EX (3)/Bg"));
         assert.equal(apply.disabled, true);
@@ -3153,7 +3149,7 @@ test("detail Back calls the session history callback", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   let returned = 0;
   try {
-    family = modFamily();
+    student = modStudent();
     const showing = Detail.show(
       {
         ...context,
@@ -3161,7 +3157,7 @@ test("detail Back calls the session history callback", async (t) => {
           returned += 1;
         },
       },
-      family,
+      student,
       "ibuki",
     );
     await flush();
@@ -3178,8 +3174,8 @@ test("detail Back calls the session history callback", async (t) => {
 test("an unselected library-only Mod can be saved for preview without applying", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    family = modFamily("spr", "library-only-pick");
-    const v = family.variants[0];
+    student = modStudent("spr", "library-only-pick");
+    const v = student.alts[0];
     Object.assign(v, {
       spr: null,
       lobby: null,
@@ -3254,8 +3250,8 @@ for (const enabled of [true, false])
       setStrings("en-US", localeTable("en-US"));
       modsEnabled = enabled;
       await ModSwitch.refresh();
-      family = modFamily("spr", `fullscreen-${enabled}`);
-      const selected = structuredClone(family.variants[0]);
+      student = modStudent("spr", `fullscreen-${enabled}`);
+      const selected = structuredClone(student.alts[0]);
       selected.key = "selected-skin";
       selected.spr = "selected_skin_spr";
       selected.lobby = "selected_skin_home";
@@ -3265,7 +3261,7 @@ for (const enabled of [true, false])
         { id: "portrait-preview", target: selected.key, kind: "spr" },
         { id: "library-only-lobby", target: selected.key, kind: "lobby" },
       ];
-      family.variants.push(selected);
+      student.alts.push(selected);
       await showPortrait(t, selected.key);
       await walk(hosts["ngui-expr"])
         .filter((el) => el.tagName === "BUTTON")[1]
@@ -3286,7 +3282,7 @@ for (const enabled of [true, false])
       visualButton("Btn_HideUI").focus();
       await clickFullscreen(t, visualButton("Btn_HideUI"));
       assert.equal(hosts.stage.classList.contains("fullscreen"), true);
-      assert.equal(Detail.currentVariant(), selected.key);
+      assert.equal(Detail.currentAlt(), selected.key);
       assert.equal(hosts.lobby.hidden, false);
       assert.equal(hosts["visual-ui"].querySelector(".visual-touch"), null, "Lobby input has no portrait overlay");
       assert.equal(visualButton("Btn_HideUI").getAttribute("aria-label"), "Switch Portrait");
@@ -3307,7 +3303,7 @@ for (const enabled of [true, false])
       assert.equal(hosts["fs-exit"].hidden, true, "The portrait keeps its own Back control");
       assert.equal(visualButton("Btn_HideUI").getAttribute("aria-label"), "Switch Memorial Lobby");
       const player = [...hosts.portrait.querySelectorAll(".layer")].at(-1).player;
-      assert.equal(player.trackNames[1], "01", "The selected expression survives the round trip");
+      assert.equal(player.trackNames[1], "01", "The selected face survives the round trip");
       assert.equal(document.activeElement, visualButton("Btn_HideUI"));
       assertPhotographyCorner("portrait");
       assert.ok(playerRequests.slice(assets).some((url) => url.includes("/mod/library-only-lobby/")));
@@ -3346,9 +3342,9 @@ for (const enabled of [true, false])
 test("a skin without a lobby omits the switch even when another skin has a lobby", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    family = modFamily();
-    const selected = { ...structuredClone(family.variants[0]), key: "portrait-only", lobby: null };
-    family.variants.push(selected);
+    student = modStudent();
+    const selected = { ...structuredClone(student.alts[0]), key: "portrait-only", lobby: null };
+    student.alts.push(selected);
     await showPortrait(t, selected.key);
     await clickFullscreen(t, zoomButton());
     assert.equal(visualButton("Btn_HideUI"), undefined);
@@ -3371,7 +3367,7 @@ for (const viaSwitch of [true, false])
     try {
       lobbyMode = "ready";
       playerMode = "lobby-ready";
-      family = modFamily();
+      student = modStudent();
       await showPortrait(t);
       if (!viaSwitch) await clickFullscreen(t, tabButton(2));
       zoomButton().focus();
@@ -3400,7 +3396,7 @@ test("Escape while a fullscreen switch is loading cannot reopen fullscreen with 
   t.mock.timers.enable({ apis: ["setTimeout"] });
   closeLeftMessages();
   try {
-    family = modFamily();
+    student = modStudent();
     lobbyMode = "pending";
     await showPortrait(t);
     await clickFullscreen(t, zoomButton());
@@ -3661,15 +3657,15 @@ for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
 // --- accessible names and pressed states of the detail screen's controls, from the locale files ---
 const everyLocale = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"];
 
-test("the student arrows, the copy button and the variant chips are named, and the shown chip is pressed, in every locale", async (t) => {
+test("the student arrows, the copy button and the alt chips are named, and the shown chip is pressed, in every locale", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
     for (const lang of everyLocale) {
       const table = localeTable(lang);
       setStrings(lang, table);
-      family = modFamily();
-      family.variants[0].state.files[0].file = "/game/ibuki_spr.bundle";
-      family.variants.push(
+      student = modStudent();
+      student.alts[0].state.files[0].file = "/game/ibuki_spr.bundle";
+      student.alts.push(
         ...["alt", "dress"].map((key, i) => ({
           key,
           spr: `${key}_spr`,
@@ -3690,7 +3686,7 @@ test("the student arrows, the copy button and the variant chips are named, and t
       const copy = part("Char_CVCollectionBtn").getAttribute("aria-label");
       assert.ok(copy.startsWith(table["webui.window.copy"]), `${lang}: the copy button says Copy: ${copy}`);
       assert.ok(copy.includes("ibuki_spr"), `${lang}: and the file it copies: ${copy}`);
-      // chips: the caption names each, the shown variant's is pressed, the others are not
+      // chips: the caption names each, the shown alt's is pressed, the others are not
       const chips = walk(hosts["ngui-chips"]).filter((e) => e.tagName === "BUTTON");
       assert.equal(chips.length, 3);
       assert.ok(
@@ -3700,7 +3696,7 @@ test("the student arrows, the copy button and the variant chips are named, and t
       assert.deepEqual(
         chips.map((chip) => chip.getAttribute("aria-pressed")),
         ["true", "false", "false"],
-        `${lang}: the shown variant is pressed`,
+        `${lang}: the shown alt is pressed`,
       );
       assert.ok(chips[1].getAttribute("aria-label").includes("Skin alt"));
       Detail.hide();
@@ -3713,21 +3709,21 @@ test("the student arrows, the copy button and the variant chips are named, and t
   }
 });
 
-test("a variant list with more chips than fit names its More chip with the count", async (t) => {
+test("an alt list with more chips than fit names its More chip with the count", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
     for (const lang of everyLocale) {
       const table = localeTable(lang);
       setStrings(lang, table);
-      family = modFamily();
-      family.variants.push(
+      student = modStudent();
+      student.alts.push(
         ...Array.from({ length: 12 }, (_, i) => ({
           key: `skin_${i}`,
           spr: `skin_${i}_spr`,
           order: i + 1,
           recruitable: true,
           modList: [],
-          names: { en: { full: `Variant ${i}`, short: `Skin ${i}` } },
+          names: { en: { full: `Alt ${i}`, short: `Skin ${i}` } },
         })),
       );
       await showPortrait(t);
@@ -3752,15 +3748,15 @@ test("a variant list with more chips than fit names its More chip with the count
   }
 });
 
-test("the expression strip's cards, its pile and Collapse are named, and the picked face is pressed, in every locale", async (t) => {
+test("the face strip's cards, its pile and Collapse are named, and the picked face is pressed, in every locale", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    portraitExpressions = ["00", "01", "02", "03", "04", "05"];
+    portraitFaces = ["00", "01", "02", "03", "04", "05"];
     playerMode = thumbMode = "ready";
     for (const lang of everyLocale) {
       const table = localeTable(lang);
       setStrings(lang, table);
-      family = modFamily();
+      student = modStudent();
       await showPortrait(t);
       const cards = () => walk(hosts["ngui-expr"]).filter((e) => e.tagName === "BUTTON");
       // three faces and the pile
@@ -3811,7 +3807,7 @@ test("the expression strip's cards, its pile and Collapse are named, and the pic
     }
   } finally {
     Detail.hide();
-    portraitExpressions = ["00", "01"];
+    portraitFaces = ["00", "01"];
     playerMode = "ready";
     thumbMode = "pending";
     await flush();
@@ -3820,13 +3816,13 @@ test("the expression strip's cards, its pile and Collapse are named, and the pic
   }
 });
 
-// --- the unfolded expression strip scrolls with the wheel through horizontalScroll, as Popup.scrollArea does ---
-test("the unfolded expression strip takes the wheel and a drag picks no face", async (t) => {
+// --- the unfolded face strip scrolls with the wheel through horizontalScroll, as Popup.scrollArea does ---
+test("the unfolded face strip takes the wheel and a drag picks no face", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    portraitExpressions = ["00", "01", "02", "03", "04", "05", "06", "07", "08"];
+    portraitFaces = ["00", "01", "02", "03", "04", "05", "06", "07", "08"];
     playerMode = thumbMode = "ready";
-    family = modFamily();
+    student = modStudent();
     await showPortrait(t);
     const clip = () => walk(hosts["ngui-expr"]).find((e) => e.classList.contains("expr-clip"));
     const cards = () => walk(hosts["ngui-expr"]).filter((e) => e.tagName === "BUTTON");
@@ -3882,7 +3878,7 @@ test("the unfolded expression strip takes the wheel and a drag picks no face", a
     Detail.hide();
   } finally {
     Detail.hide();
-    portraitExpressions = ["00", "01"];
+    portraitFaces = ["00", "01"];
     playerMode = "ready";
     thumbMode = "pending";
     await flush();
@@ -3898,7 +3894,7 @@ test("the Show in Finder button's caption and folder icon are placed by the expl
     for (const lang of everyLocale) {
       const table = localeTable(lang);
       setStrings(lang, table);
-      family = modFamily();
+      student = modStudent();
       await showPortrait(t);
       const at = (suffix) =>
         walk(hosts.ngui).find((e) => e.dataset.path?.endsWith(suffix) && (e.textContent || e.dataset.tex));
@@ -3924,7 +3920,7 @@ test("the Show in Finder button's caption and folder icon are placed by the expl
 
 // --- Job E: composed detail parts at the default 1920 x 1080 viewport ---
 for (const lang of ["en-US", "zh-CN"])
-  test(`detail keeps its prefab cards and composes the edit row, chips and expression pile in ${lang}`, async (t) => {
+  test(`detail keeps its prefab cards and composes the edit row, chips and face pile in ${lang}`, async (t) => {
     t.mock.timers.enable({ apis: ["setTimeout"] });
     const { SPACE, CONTROL, CHIP } = await import("../../src/bmpt/web/js/ui/ui-tokens.js");
     const { centreOf, toNode } = await import("../../src/bmpt/web/js/ui/ui-grid.js");
@@ -3932,11 +3928,11 @@ for (const lang of ["en-US", "zh-CN"])
       near = (a, b, eps = 0.025) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b}`);
     try {
       setStrings(lang, localeTable(lang));
-      portraitExpressions = ["00", "01", "02", "03", "04", "05"];
+      portraitFaces = ["00", "01", "02", "03", "04", "05"];
       playerMode = thumbMode = "ready";
-      family = modFamily("spr", `detail-layout-${lang}`);
+      student = modStudent("spr", `detail-layout-${lang}`);
       const localizedName = localeTable(lang)["webui.field.folder"];
-      family.variants[0].names = { en: { full: localizedName, short: localizedName } };
+      student.alts[0].names = { en: { full: localizedName, short: localizedName } };
       await showPortrait(t);
       const tree = Detail.screenTree();
       assert.equal(
@@ -3982,8 +3978,8 @@ for (const lang of ["en-US", "zh-CN"])
           [272, 72],
         ],
       );
-      const native = Detail.expressionBoxes(3, true),
-        unfolded = Detail.expressionBoxes(7);
+      const native = Detail.faceBoxes(3, true),
+        unfolded = Detail.faceBoxes(7);
       const frame = { cx: 0, cy: 0, w: 0, h: 0 };
       assert.deepEqual(
         native.map((b) => toNode(b, 4, frame)[0]),
@@ -4010,7 +4006,7 @@ for (const lang of ["en-US", "zh-CN"])
       const rendered = walk(hosts["ngui-expr"]).filter((e) => /^Item_\d+$/.test(e.dataset.path || ""));
       for (let i = 1; i < rendered.length; i++)
         near(NGUI.rect(rendered[i])[0] - NGUI.rect(rendered[i - 1])[0], 245.7 * S);
-      family.variants[0].state.files[0].file = "C:/synthetic/ibuki_spr.bundle";
+      student.alts[0].state.files[0].file = "C:/synthetic/ibuki_spr.bundle";
       const detailsButton = walk(hosts.ngui).find((e) => e.dataset.part === `${INFO}/Detail_Btn`);
       await detailsButton.click();
       await flush();
@@ -4028,7 +4024,7 @@ for (const lang of ["en-US", "zh-CN"])
       }
     } finally {
       Detail.hide();
-      portraitExpressions = ["00", "01"];
+      portraitFaces = ["00", "01"];
       playerMode = "ready";
       thumbMode = "pending";
       await flush();
@@ -4039,14 +4035,14 @@ for (const lang of ["en-US", "zh-CN"])
 
 // --- design tokens, item E: the nameplate's chips are the prefab chip (Char_Target/Type/MainType/BG): 272 x 72,
 // caption 40 down to 28 ---
-test("variant chips are 272 x 72 with the caption at 40 down to 28, the second column 290 on", async (t) => {
+test("alt chips are 272 x 72 with the caption at 40 down to 28, the second column 290 on", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const { CHIP } = await import("../../src/bmpt/web/js/ui/ui-tokens.js");
   const S = 1920 / 2960;
   try {
     setStrings("en-US", localeTable("en-US"));
-    family = modFamily();
-    family.variants.push(
+    student = modStudent();
+    student.alts.push(
       ...Array.from({ length: 3 }, (_, i) => ({
         key: `skin_${i}`,
         spr: `skin_${i}_spr`,
@@ -4054,7 +4050,7 @@ test("variant chips are 272 x 72 with the caption at 40 down to 28, the second c
         recruitable: true,
         modList: [],
         custom: [],
-        names: { en: { full: `Variant ${i}`, short: `Skin ${i}` } },
+        names: { en: { full: `Alt ${i}`, short: `Skin ${i}` } },
       })),
     );
     await showPortrait(t);
@@ -4094,7 +4090,7 @@ test("variant chips are 272 x 72 with the caption at 40 down to 28, the second c
 
 // --- the chips are drawn in their own layer, in Char_Target's frame read from the prefab; with the plate where
 // the game puts it they stay in the white panel under the dark band, whatever the name and the language ---
-test("variant chips stay under the nameplate's band, in the plate's prefab frame, for short and long names in every locale", async (t) => {
+test("alt chips stay under the nameplate's band, in the plate's prefab frame, for short and long names in every locale", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   // UICharacterDetail of the 2026-11 game build: LeftInfo at (0, 1) and CharInfo at (-1480, -743) put Char_Target
   // at (-1480, -742); its BG (906 x 171, bottom-left pivot) ends at y 226 and BG2 (886 x 202, top-centre pivot)
@@ -4130,10 +4126,10 @@ test("variant chips stay under the nameplate's band, in the plate's prefab frame
       setStrings(lang, localeTable(lang));
       for (const [i, name] of own.entries())
         for (const aliased of [false, true]) {
-          family = modFamily();
-          family.variants[0].names = { [nameKey[lang]]: { full: name, short: name } };
-          family.variants[0].custom = aliased ? [name] : [];
-          family.variants.push(
+          student = modStudent();
+          student.alts[0].names = { [nameKey[lang]]: { full: name, short: name } };
+          student.alts[0].custom = aliased ? [name] : [];
+          student.alts.push(
             ...Array.from({ length: 5 }, (_, k) => ({
               key: `skin_${k}`,
               spr: `skin_${k}_spr`,
@@ -4141,7 +4137,7 @@ test("variant chips stay under the nameplate's band, in the plate's prefab frame
               recruitable: true,
               modList: [],
               custom: [],
-              names: { en: { full: `Variant ${k}`, short: `Skin ${k}` } },
+              names: { en: { full: `Alt ${k}`, short: `Skin ${k}` } },
             })),
           );
           await showPortrait(t);
@@ -4208,9 +4204,9 @@ test("incomplete mods use the existing card and popup status widgets in all loca
     for (const lang of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"]) {
       const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url), "utf8"));
       setStrings(lang, flat(ui));
-      family = modFamily();
-      family.variants[0].modList[0].incomplete = true;
-      family.variants[0].configured = { spr: "mod:test" };
+      student = modStudent();
+      student.alts[0].modList[0].incomplete = true;
+      student.alts[0].configured = { spr: "mod:test" };
       await showPortrait(t);
       await switchButton().click();
       await flush();
@@ -4247,8 +4243,8 @@ test("the overwritten model message adds the model core with Mods off and refres
   };
   try {
     closeLeftMessages();
-    family = modFamily("model");
-    const v = family.variants[0];
+    student = modStudent("model");
+    const v = student.alts[0];
     v.model = "ibuki_model";
     v.state.files = [{ kind: "model", applied: "unknown", official: false, restorable: false, crc: "fixed" }];
     modsEnabled = false;

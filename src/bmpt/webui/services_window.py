@@ -122,7 +122,7 @@ class WindowMixin:
 
         Raises:
             ServiceError: ``bad_params`` for another method or invalid parameters; ``game_file_not_found`` for a
-                variant with no files.
+                an alt with no files.
         """
         if method not in QUEUE_METHODS or not isinstance(params, dict):
             raise ServiceError("bad_params", method=method)
@@ -136,10 +136,10 @@ class WindowMixin:
             )
             count = self.queue.add(call, intent=library.intent()["enabled"])
         elif method in ("actions.apply", "actions.restore"):
-            variant, kind = params.get("variant"), params.get("kind", "spr")
-            if not isinstance(variant, str) or kind not in ("spr", "lobby", "model", "other"):
-                raise ServiceError("bad_params", key="variant")
-            clean: dict[str, Any] = {"variant": variant, "kind": kind}
+            alt, kind = params.get("alt"), params.get("kind", "spr")
+            if not isinstance(alt, str) or kind not in ("spr", "lobby", "model", "other"):
+                raise ServiceError("bad_params", key="alt")
+            clean: dict[str, Any] = {"alt": alt, "kind": kind}
             if method == "actions.apply":
                 if not isinstance(params.get("source"), str):
                     raise ServiceError("bad_params", key="source")
@@ -148,10 +148,10 @@ class WindowMixin:
             if kind == "other":
                 from ..library.judge import core_of
 
-                states = library.state(variant, pin=pin).files
+                states = library.state(alt, pin=pin).files
                 entries = tuple(sorted({(pin.key, core_of(f.file.name)) for f in states}))
                 if not entries:
-                    raise ServiceError("game_file_not_found", variant=variant)
+                    raise ServiceError("game_file_not_found", alt=alt)
                 files = {
                     entry: stat_files([str(f.file) for f in states if core_of(f.file.name) == entry[1]])
                     for entry in entries
@@ -161,11 +161,11 @@ class WindowMixin:
                 self.publish_state()
                 return count
             try:
-                found = self.catalog.variant(variant)
+                found = self.catalog.variant(alt)
             except KeyError as error:
-                raise ServiceError("variant_not_found", variant=variant) from error
+                raise ServiceError("alt_not_found", alt=alt) from error
             core = getattr(found, kind, None) or ""
-            files = [str(f.file) for f in library.state(variant, pin=pin).files if f.kind == kind]
+            files = [str(f.file) for f in library.state(alt, pin=pin).files if f.kind == kind]
             entry = (pin.key, core.lower())
             call = QueuedCall(
                 method, clean, entries=(entry,), pins={pin.key: pin}, files={entry: stat_files(files)}, current=True

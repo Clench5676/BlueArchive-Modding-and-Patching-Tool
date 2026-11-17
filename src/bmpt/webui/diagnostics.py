@@ -42,7 +42,7 @@ _ASSET_FIELD = re.compile(r"(?:[^\r\n\"'=,;<>]|(?<=\w)'(?=\w))+")
 _ASSET_EXTENSION = re.compile(r"(?i)\.(" + _EXTENSIONS + r")(?![\w.])")
 _ASSET_VALUE = re.compile(r"(?is)^.+?\.(" + _EXTENSIONS + r")$")
 _HOME = re.compile(r"(?i)(?:[A-Z]:[/\\](?:Users|Documents and Settings)[/\\]|/(?:Users|home)/)[^/\\\r\n\"']+")
-# The game's own names stay: official bundle file names, CAB ids and the App's model URLs (a variant key). They name
+# The game's own names stay: official bundle file names, CAB ids and the App's model URLs (an alt key). They name
 # game data, never the user, and a report without them cannot tell which game file a check refused. Official bundles
 # end in _assets_all_<n> or _scenes_all_<n>, or are Unity's built-in shaders (<32 hex>_unitybuiltinshaders_<n>); an
 # apostrophe occurs only inside a name (a raid scene, "netzach's"), so quotes around a name stay outside it. A match

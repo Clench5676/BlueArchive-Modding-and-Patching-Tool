@@ -38,11 +38,11 @@ export const refusedNames = (refused) =>
   Object.entries(refused || {}).map(([name, reasons]) =>
     T("compatibility.refusedAnimation", { name, why: joined([].concat(reasons || []).map(reason)) }),
   );
-// subject: who the mod is ({variant, kind, core, name}: the line of a job over mods, job-progress.js modJob), or a
+// subject: who the mod is ({alt, kind, core, name}: the line of a job over mods, job-progress.js modJob), or a
 // name (the converter's)
 function progressTask(action, subject, run) {
   if (isIdentity(subject)) {
-    const line = modJob(subject, { nameOf: Loading.variantName, action: `progress.action${action}` });
+    const line = modJob(subject, { nameOf: Loading.altName, action: `progress.action${action}` });
     return Loading.task(
       (update) => {
         update(line());

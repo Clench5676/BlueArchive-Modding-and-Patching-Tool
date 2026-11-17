@@ -896,7 +896,7 @@ class _Library:
         return []
 
     def live_bundles(self, core, pin=None):
-        raise ServiceError("game_file_not_found", variant=core)
+        raise ServiceError("game_file_not_found", alt=core)
 
 
 def test_lobby_fx_texture_route(tmp_path):

@@ -152,7 +152,7 @@ def test_start_finds_a_bad_built_copy_and_the_repair_drops_it(updated):
     found = env.library.crc_repair_due()
     assert found["due"]
     assert found["entries"] == [
-        {"install": pin.key, "core": "test_spr", "variant": "test", "kind": "spr", "built": True, "game": False}
+        {"install": pin.key, "core": "test_spr", "alt": "test", "kind": "spr", "built": True, "game": False}
     ]
     result = env.library.repair_crc()
     assert [item["core"] for item in result.dropped] == ["test_spr"] and not result.rewritten and not result.failed

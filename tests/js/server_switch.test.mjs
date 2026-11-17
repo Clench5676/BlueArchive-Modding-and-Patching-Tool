@@ -68,7 +68,7 @@ test("old roster responses cannot replace a new server snapshot", async () => {
   )(() => new Promise((r) => (resolve = r)));
   const old = api.roster();
   api.change();
-  resolve({ families: ["global"] });
+  resolve({ students: ["global"] });
   await assert.rejects(old, { name: "AbortError" });
   assert.equal(api.data(), null);
 });
@@ -85,13 +85,13 @@ test("roster readers share one roster.list, and a read begun before an invalidat
   api.invalidate();
   const c = api.roster();
   assert.equal(calls.length, 2, "an invalidation asks again");
-  calls[0]({ families: ["old"] });
-  assert.deepEqual(await a, { families: ["old"] });
+  calls[0]({ students: ["old"] });
+  assert.deepEqual(await a, { students: ["old"] });
   assert.equal(await b, await a);
   assert.equal(api.stale(), true, "the older answer leaves the roster stale");
-  calls[1]({ families: ["new"] });
-  assert.deepEqual(await c, { families: ["new"] });
+  calls[1]({ students: ["new"] });
+  assert.deepEqual(await c, { students: ["new"] });
   assert.equal(api.stale(), false);
-  assert.deepEqual(await api.roster(), { families: ["new"] });
+  assert.deepEqual(await api.roster(), { students: ["new"] });
   assert.equal(calls.length, 2);
 });

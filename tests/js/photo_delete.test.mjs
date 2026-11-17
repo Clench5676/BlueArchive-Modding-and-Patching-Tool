@@ -95,7 +95,7 @@ function setup({
   )(env);
   return { ...api, requests, prompts, changed: () => changed };
 }
-const otherVariantWarnings = {
+const otherAltWarnings = {
   "en-US": "In use by another alt",
   "zh-CN": "正在被另一换皮使用",
   "zh-TW": "正在被另一換皮使用",
@@ -103,7 +103,7 @@ const otherVariantWarnings = {
   "ko-KR": "다른 바리에이션에서 사용 중",
   "th-TH": "กำลังใช้กับชุดอื่น",
 };
-for (const [locale, otherWarning] of Object.entries(otherVariantWarnings)) {
+for (const [locale, otherWarning] of Object.entries(otherAltWarnings)) {
   for (const [state, used_here, used_elsewhere] of [
     ["shown skin", true, false],
     ["other skin", false, true],
@@ -170,11 +170,11 @@ test("the gallery reuses the stored default card and retains separate skin defau
   const code = source.slice(start, start + source.slice(start).search(/const photo ?=/));
   const cards = new Function(
     "repository",
-    "sessionVariant",
+    "sessionAlt",
     `const DEFAULT='generated',OFFICIAL='official',P=k=>k,generatedThumbnail='runtime',defaultThumbnail='official';${code};return galleryPhotos();`,
   );
-  const own = { id: "stored", variant: "a", builtin: "generated", url: "stored.png", applied: true };
-  const other = { id: "skin", variant: "b", builtin: "generated", url: "skin.png" };
+  const own = { id: "stored", alt: "a", builtin: "generated", url: "stored.png", applied: true };
+  const other = { id: "skin", alt: "b", builtin: "generated", url: "skin.png" };
   assert.deepEqual(
     cards({ photos: [own, other] }, "a").map((p) => p.id),
     ["official", "stored", "skin"],
