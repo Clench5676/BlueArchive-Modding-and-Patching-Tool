@@ -684,12 +684,12 @@ async function route() {
   }
 }
 
-// The first-run sequence: the cursor, the start popups, the update check and the feature tour. It needs a game folder, so
-// it runs once per session: at the start, or, when the start found none, as soon as the folder is chosen on the no-game
-// screen (refreshConfiguration), without a restart. sessionReady is set by boot() once the page has told the server it is
-// up; until then boot() itself starts the sequence if a game is found. startWithGame: start() gave the consent and the
-// loading screen the data of a start with a game; without it they still hold their no-game data and are given the data
-// of the game that was found.
+// The first-run sequence: the cursor, the start popups, the update check and the feature tour. It needs a game
+// folder, so it runs once per session: at the start, or, when the start found none, as soon as the folder is
+// chosen on the no-game screen (refreshConfiguration), without a restart. sessionReady is set by boot() once the
+// page has told the server it is up; until then boot() itself starts the sequence if a game is found.
+// startWithGame: start() gave the consent and the loading screen the data of a start with a game; without it
+// they still hold their no-game data and are given the data of the game that was found.
 let sessionReady = null,
   firstRunStarted = false,
   startWithGame = false,

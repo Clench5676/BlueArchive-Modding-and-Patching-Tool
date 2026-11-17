@@ -1,13 +1,28 @@
-// A temporary scene camera shared by every portrait and the office background; layout data stays unchanged.
+// A temporary scene camera shared by every portrait and the office background; the layout data stays unchanged.
 import { wheelKind, wheelStep } from "./lobby-touch.js";
 
 const HOME = Object.freeze({ scale: 1, x: 0, y: 0 });
 const clamp = (n, low, high) => Math.max(low, Math.min(high, n));
+/**
+ * The scene camera's view: a zoom and the offset of the stage's top left corner, in stage pixels.
+ * @typedef {{scale: number, x: number, y: number}} SceneView
+ */
+
+/**
+ * Keep a scene view valid: the scale 1 to 3 and the offset so the scene covers the stage.
+ * @returns {SceneView}
+ */
 export function constrainScene(view) {
   const scale = clamp(Number(view.scale) || 1, 1, 3);
   const axis = (n, length) => clamp(Number(n) || 0, length * (1 - scale), 0);
   return { scale, x: axis(view.x, 1920), y: axis(view.y, 1080) };
 }
+/**
+ * Move a rect of the scene into the view.
+ * @param {{x: number, y: number, width: number, height: number}} rect The rect in scene units.
+ * @param {SceneView} [view] The view; the home view by default.
+ * @returns {{x: number, y: number, width: number, height: number}} The rect on the stage.
+ */
 export function sceneRect(rect, view = HOME) {
   return {
     x: rect.x * view.scale + view.x,
@@ -16,6 +31,11 @@ export function sceneRect(rect, view = HOME) {
     height: rect.height * view.scale,
   };
 }
+/**
+ * The part of the scene a view shows, as a spine viewport.
+ * @param {SceneView} [view] The view; the home view by default.
+ * @returns {{x: number, y: number, width: number, height: number}} The viewport in scene units, y up.
+ */
 export function sceneViewport(view = HOME) {
   return {
     x: -view.x / view.scale,
@@ -24,6 +44,14 @@ export function sceneViewport(view = HOME) {
     height: 1080 / view.scale,
   };
 }
+/**
+ * Make the scene camera: wheel and pinch zoom at the pointer and drag pan the shared scene.
+ * @param {object} options
+ * @param {() => boolean} [options.enabled]
+ * @param {() => boolean} [options.blocked] Whether input is held, for a popup or a drag.
+ * @param {(view: SceneView) => void} [options.onChange]
+ * @param {object} [options.env] The window, for the tests.
+ */
 export function createSceneCamera({
   host,
   enabled = () => true,
@@ -85,7 +113,8 @@ export function createSceneCamera({
       ratio = scale / target.scale;
     change({ scale, x: x - (x - target.x) * ratio, y: y - (y - target.y) * ratio });
   };
-  // A pan has no easing: the scene stays under the pointer or the fingers. A zoom still gliding carries on from the moved view.
+  // A pan has no easing: the scene stays under the pointer or the fingers. A zoom still gliding carries on from
+  // the moved view.
   const pan = (dx, dy) => {
     const gliding = view.scale !== target.scale || view.x !== target.x || view.y !== target.y;
     target = constrainScene({ ...target, x: target.x + dx, y: target.y + dy });
@@ -185,9 +214,9 @@ export function createSceneCamera({
   return {
     view: () => ({ ...view }),
     target: () => ({ ...target }),
-    // The portraits' renderer calls this at the top of its frame: the camera steps first, so the portraits it is about to
-    // draw, the background and the hit areas show one view. Otherwise a renderer frame that runs before the camera's own
-    // draws the previous frame's view, and the portraits trail the background while the scene moves.
+    // The portraits' renderer calls this at the top of its frame: the camera steps first, so the portraits it is
+    // about to draw, the background and the hit areas show one view. Otherwise a renderer frame that runs before the
+    // camera's own draws the previous frame's view, and the portraits trail the background while the scene moves.
     flush() {
       if (disposed || frame == null) return;
       cancel(frame);

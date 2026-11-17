@@ -126,7 +126,7 @@ test("repacked bounds and prefab scale frame posed vertices, independent of the 
 test("the full lobby measurement frames renamed idle art beyond the official camera and clamps a stale touch bone", () => {
   const source = readFileSync(new URL("../../src/bmpt/web/js/lobby.js", import.meta.url), "utf8");
   const code = source
-    .slice(source.indexOf("const CELL ="), source.indexOf("// switch between the left view"))
+    .slice(source.indexOf("const CELL ="), source.indexOf("export function frame("))
     .replaceAll("export function", "function")
     .replaceAll("export const", "const");
   const G = { x: -1480, y: -832.5, w: 2960, h: 1665 };

@@ -1,4 +1,17 @@
-// Hall owns its immersive UI independently of the detail screen and its shared exit button.
+/**
+ * Make the Hall's immersive mode. The Hall owns its immersive UI independently of the detail screen and its
+ * shared exit button.
+ * @param {object} options
+ * @param {HTMLElement} options.root The Hall's root element.
+ * @param {HTMLElement} options.chrome The Hall's controls that hide in the immersive mode.
+ * @param {() => Promise<void>|void} options.prepareExit
+ * @param {Document} [options.document] The document, for the tests.
+ * @param {(on: boolean) => void} [options.onChange]
+ * @param {() => void} [options.returnFocus] Gives the focus back after leaving.
+ * @returns
+ *     {{enter: Function, leave: Function, active: () => boolean, pending: () => boolean, relabel: (label: string) => void, dispose: () => void}}
+ *     The mode's controls.
+ */
 export function createFullscreen({
   root,
   stage,

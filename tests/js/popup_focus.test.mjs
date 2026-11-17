@@ -69,7 +69,8 @@ class El {
   click() {
     for (const fn of this.listeners.click || []) fn({ type: "click" });
   }
-  // focus() works on a tab stop or on an element with a tabindex (even -1); a hidden, inert or disabled one keeps it away
+  // focus() works on a tab stop or on an element with a tabindex (even -1); a hidden, inert or disabled one keeps
+  // it away
   focus() {
     if (this.hidden || this.inert || this.disabled || !this.isConnected || this.tabIndex === undefined) return;
     if (!STOPS.has(this.tagName) && !this.hasAttribute("tabindex") && this.tabIndex < 0) return;

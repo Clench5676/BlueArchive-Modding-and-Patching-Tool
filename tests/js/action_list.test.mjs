@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { LOCALES, installFitPage, text } from "./helpers/fit_canvas.mjs";
 
 const page = installFitPage();
-const { glyphWidth, fontSizeFor, LINE_PITCH, fitText } = await import("../../src/bmpt/web/js/ngui.js");
+const { glyphWidth, fontSizeFor, LINE_PITCH } = await import("../../src/bmpt/web/js/ngui.js");
 const { ACTION_DEFS, actionLabel, actionsOf, groupLabel, menuOf, parseClip, sectionLabel } = await import(
   "../../src/bmpt/web/js/clip-names.js"
 );

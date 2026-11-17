@@ -1,25 +1,28 @@
-// The game's touch effect, Resources/UI/FX_Touch: TouchEffectCreater (Persistent in level1) shows it at the pointer
-// through the UI camera on every press, moves it while the button is held and stops it 60 frames
-// (FXTouch.Duration, the system's 1 s) after the release. Its parts, read from the prefab's ParticleSystem and
-// TrailRenderer typetrees and their materials:
-//   arc     MeshTri: 2 thin rings (mesh Cylinder002, radius 1 to 1.0637) spinning and growing, cut by a dissolve
-//           threshold over FX_TEX_Grad_Ring3's alpha along the ring (Shader Graphs/FX_SHADER_Dissolve_GachaGauge_P,
-//           blend SrcAlpha One)
-//   flash   ring: 1 disc (FX_TEX_Circle_01, DSFX/FX_SHADER_AlphaBlend_Add, blend One OneMinusSrcAlpha: its colour is
-//           added, its alpha only hides what is behind)
-//   burst   Ring (3): 4 triangles (FX_TEX_Triangle_02_1, two frames) leaving a circle edge, twinkling (additive)
-//   drag    Ring (4): the same triangles, 5 per unit of drag
-//   trail   Trail: a 0.3 s TrailRenderer, 0.005 units wide (FX_TEX_Trail_03 stretched along it, additive)
-// Pure data and simulation, no DOM (cursor.js draws it). Units are the UI camera's world units (orthographic size 1:
-// the screen is 2 units high), times are seconds. Colours: the game runs in linear colour space; vertex colours and
-// material Color properties are converted from sRGB (Unity's GammaToLinearSpace: HDR values above 1 by a 2.2 power).
+// The game's touch effect, Resources/UI/FX_Touch: TouchEffectCreater shows it at the pointer on every press,
+// moves it while the button is held and stops it 60 frames after the release. Its parts, read
+// from the prefab's ParticleSystem and TrailRenderer typetrees and their materials, are an arc (two thin
+// spinning rings cut by a dissolve), a flash (one additive disc), a burst (four twinkling triangles leaving a
+// circle edge), the same triangles along a drag, and a 0.3 s trail. Pure data and simulation, no DOM (cursor.js
+// draws it). Units are the UI camera's world units (orthographic size 1: the screen is 2 units high), times are
+// seconds. The game runs in linear colour space: vertex colours and material Color properties are converted from
+// sRGB (Unity's GammaToLinearSpace: HDR values above 1 by a 2.2 power).
 
+/**
+ * Decode an sRGB channel (0..1) to linear light; HDR values above 1 take a 2.2 power, as Unity's
+ * GammaToLinearSpace does.
+ */
 export const toLinear = (c) =>
   c <= 0.04045 ? c / 12.92 : c < 1 ? Math.pow((c + 0.055) / 1.055, 2.4) : Math.pow(c, 2.2);
+/**
+ * Encode a linear channel to sRGB, clamped to 0..1.
+ */
 export const toSrgb = (c) =>
   c <= 0 ? 0 : c >= 1 ? 1 : c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
 
-// an AnimationCurve: keys [time, value, inSlope, outSlope] with unweighted tangents (cubic Hermite), constant outside
+/**
+ * An AnimationCurve: keys [time, value, inSlope, outSlope] with unweighted tangents (cubic Hermite), constant
+ * outside.
+ */
 export function curve(keys, t) {
   if (t <= keys[0][0]) return keys[0][1];
   const last = keys[keys.length - 1];
@@ -47,10 +50,14 @@ function ramp(keys, t) {
     f = (t - t0) / (t1 - t0);
   return Array.isArray(a) ? a.map((x, k) => x + (b[k] - x) * f) : a + (b - a) * f;
 }
+/**
+ * A gradient at t: [r, g, b, a].
+ */
 export const gradient = (g, t) => [...ramp(g.colors, t), ramp(g.alphas, t)];
 
 // the FX_Touch prefab, as stored
-const SPARK_SCALE = 0.3078823983669281; // Ring (3) and Ring (4) transform scale (scaling mode Local: shape, size, speed)
+// Ring (3) and Ring (4) transform scale (scaling mode Local: shape, size, speed)
+const SPARK_SCALE = 0.3078823983669281;
 const SPARK = {
   scale: SPARK_SCALE,
   start: 0.5377358198165894, // start colour (grey)
@@ -189,8 +196,12 @@ function spark(def, x, y, now, rand) {
   };
 }
 
-// a press at (x, y), in world units: the bursts stay there (ox, oy: world simulation space), the head (x, y) follows
-// the pointer while it is held and the trail starts from it
+/**
+ * A press at (x, y), in world units: the bursts stay there (ox, oy: world simulation space), the head (x, y)
+ * follows the pointer while it is held and the trail starts from it.
+ * @param {number} now The time in seconds.
+ * @param {() => number} [rand] A random source, 0 to 1.
+ */
 export function press(x, y, now, rand = Math.random) {
   const items = [];
   for (let i = 0; i < FX.arc.count; i++) {
@@ -208,8 +219,15 @@ export function press(x, y, now, rand = Math.random) {
   return { ox: x, oy: y, x, y, pressed: true, released: null, items, trail: [{ x, y, t: now }], carry: 0, last: now };
 }
 
-// a drag to (x, y): the trail gets a point once the pointer is minDistance away from the last one, and Ring (4)
-// emits along the way (rate over distance); { trail, sparks } false under reduced motion
+/**
+ * A drag to (x, y): the trail gets a point once the pointer is minDistance away from the last one, and Ring (4)
+ * emits along the way (rate over distance).
+ * @param {object} fx The effect, from press().
+ * @param {number} now The time in seconds.
+ * @param {object} [options]
+ * @param {boolean} [options.trail] False under reduced motion: no trail point.
+ * @param {boolean} [options.sparks] False under reduced motion: no sparks.
+ */
 export function drag(fx, x, y, now, rand = Math.random, { trail = true, sparks = true } = {}) {
   const dx = x - fx.x,
     dy = y - fx.y,
@@ -237,12 +255,18 @@ export function drag(fx, x, y, now, rand = Math.random, { trail = true, sparks =
   }
 }
 
+/**
+ * The button was released: the effect stops 60 frames after.
+ */
 export function release(fx, now) {
   fx.pressed = false;
   fx.released = now;
 }
 
-// advance to now: spin the arcs, drop what has expired; false once nothing is left to draw
+/**
+ * Advance to now: spin the arcs, drop what has expired.
+ * @returns {boolean} False once nothing is left to draw.
+ */
 export function step(fx, now) {
   const dt = Math.max(0, Math.min(0.1, now - fx.last));
   fx.last = now;
@@ -259,7 +283,9 @@ export function step(fx, now) {
   return fx.items.length > 0 || fx.trail.length > 0;
 }
 
-// what to draw for each part, in linear light (values above 1 saturate)
+/**
+ * What to draw for the arc at a time, in linear light (values above 1 saturate).
+ */
 export function arcState(p, now) {
   const a = FX.arc,
     t = (now - p.born) / p.life;
@@ -274,6 +300,9 @@ export function arcState(p, now) {
   };
 }
 
+/**
+ * What to draw for the flash at a time, in linear light.
+ */
 export function flashState(p, now) {
   const f = FX.flash,
     t = (now - p.born) / p.life;
@@ -282,10 +311,13 @@ export function flashState(p, now) {
   return { size: f.size * curve(f.sizeCurve, t), color: [toLinear(r) * k, toLinear(g) * k, toLinear(b) * k], alpha };
 }
 
-// The page composites in sRGB values, the game in linear light. The flash's blend (One OneMinusSrcAlpha),
-//   result = behind * (1 - alpha) + color   (linear)
-// is drawn as behind * keep (a multiply layer), then screened with add (a screen layer): exact over black and over
-// white, close in between (a screen in sRGB values is near an addition in linear light). Per channel, sRGB values.
+/**
+ * The flash's blend (One OneMinusSrcAlpha, result = behind * (1 - alpha) + color, in linear light) as two
+ * layers of the page, which composites in sRGB values: behind * keep (a multiply layer), then screened with add
+ * (a screen layer): exact over black and over white, close in between (a screen in sRGB values is near an
+ * addition in linear light). Per channel, sRGB values.
+ * @returns {{add: number[], keep: number[]}} The colour to add and the share of what is behind that is kept.
+ */
 export function overBlend(color, alpha) {
   const add = color.map(toSrgb);
   const keep = color.map((c, i) =>
@@ -294,6 +326,9 @@ export function overBlend(color, alpha) {
   return { add, keep };
 }
 
+/**
+ * What to draw for one spark at a time.
+ */
 export function sparkState(p, now) {
   const age = now - p.born,
     t = age / p.life,
@@ -310,8 +345,10 @@ export function sparkState(p, now) {
   };
 }
 
-// the trail from the head (the effect's position) back to its oldest point: vertices with u along its length (0 at
-// the head) and the colour of each segment at its middle, without the texture
+/**
+ * The trail from the head (the effect's position) back to its oldest point: vertices with u along its length (0
+ * at the head) and the colour of each segment at its middle, without the texture.
+ */
 export function trailState(fx) {
   const pts = [{ x: fx.x, y: fx.y }, ...fx.trail.slice().reverse()];
   const lens = [0];

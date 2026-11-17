@@ -1,7 +1,8 @@
-// The list popups' toolbar (every list popup the L class): the student roster's toolbar fitted by its own steps
-// (roster-widgets.js toolbarFit), the three segments, search, sort and order, without a checkbox (Switch 3D Model's "Show
-// other students" stands under the details, the toolbar has no room for it at this width), in every shipped language, longest first (English, Thai), against the locale files' real strings. Text is measured on the fit
-// tests' stand-in canvas (helpers/fit_canvas.mjs), so what is asserted is the logic, not a font.
+// The list popups' toolbar (every list popup is class L): the student roster's toolbar fitted by its own steps
+// (roster-widgets.js toolbarFit), the three segments, search, sort and order, without a checkbox (Switch 3D Model's
+// "Show other students" stands under the details; the toolbar has no room for it at this width), in every shipped
+// language, longest first (English, Thai), against the locale files' real strings. Text is measured on the fit tests'
+// stand-in canvas (helpers/fit_canvas.mjs): the logic is asserted, not a font.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { LOCALES, installFitPage, text, webui } from "./helpers/fit_canvas.mjs";
@@ -82,7 +83,8 @@ for (const locale of ORDER)
 for (const locale of ORDER)
   test(`the list toolbar stays inside the list and the window at every size in ${locale}`, () => {
     const { boxes } = layoutFor(locale);
-    // the default window is 1600 x 1000 (the stage is 1920 x 1080 units scaled to the smaller side); also the smallest and a large one
+    // the default window is 1600 x 1000 (the stage is 1920 x 1080 units scaled to the smaller side); also the
+    // smallest and a large one
     for (const [width, height] of [
       [960, 540],
       [1600, 1000],
@@ -102,13 +104,14 @@ for (const locale of ORDER)
             `${locale} ${width}x${height}@${density}: ${right}`,
           );
           assert.ok(left >= 0 && right <= width * density);
-          // every control keeps its prefab height (116 for the icons and the sort button, 104 for the checkbox and the segments)
+          // every control keeps its prefab height (116 for the icons and the sort button, 104 for the checkbox and the
+          // segments)
           assert.ok([CONTROL.toolbar.h, 116].includes(box.h));
         }
       }
   });
 
-// the agreed wording for the new caption (and the other languages in the same short style), the same key in every file
+// the caption's wording (the other languages in the same short style), the same key in every file
 const WORDING = {
   "zh-CN": "显示其他角色",
   "zh-TW": "顯示其他角色",

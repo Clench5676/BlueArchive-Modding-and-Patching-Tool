@@ -209,7 +209,7 @@ test("cleanup restores UI without refocusing the departing route, and relabel af
 test("Hall immersion holds a window-anchored toolbar outside the stage and restores its focus", async () => {
   const f = fixture(),
     top = new Element(f.doc);
-  // The real header is now a document sibling of the scaled stage.
+  // The real header is a document sibling of the scaled stage.
   f.doc.querySelector = (selector) => (selector === ".topbar" ? top : null);
   top.append(f.entry);
   f.entry.focus();

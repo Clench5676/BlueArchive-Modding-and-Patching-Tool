@@ -1,10 +1,33 @@
-// The design system's layout primitives (docs/design-system/layout.md). A composed screen describes its parts as containers, a
-// 12-column grid, rows and stacks, and places its prefab clones into the boxes they return, instead of computing each
-// position by hand. Everything is in prefab units, in a container's own frame: x to the right and y down from its top left
-// corner. toNode turns a box into the NGUI position of a widget with a given pivot (y up, from the container's centre).
-// Pure functions: no DOM and no NGUI import, so the layout of every screen can be tested in Node.
+// The design system's layout primitives (docs/design-system/layout.md): a composed screen describes its parts as
+// containers, a 12-column grid, rows and stacks and places its prefab clones into the boxes they return.
+// Everything is in prefab units, in a container's own frame (x to the right, y down from its top left corner);
+// toNode turns a box into the NGUI position of a widget. Pure functions with no DOM and no NGUI import, so the
+// layout of every screen can be tested in Node.
 import { GRID } from "./ui-tokens.js";
 
+/**
+ * A rectangle in a container's frame, in prefab units.
+ * @typedef {{x: number, y: number, w: number, h: number}} Box
+ */
+
+/**
+ * Padding as in CSS: one number, [vertical, horizontal] or [top, right, bottom, left].
+ * @typedef {number | number[]} Padding
+ */
+
+/**
+ * An item of a row or a stack: a fixed size, or in a row a share of the width left over (grow). Any other fields come
+ * back on the item's box.
+ * @typedef {object} LayoutItem
+ * @property {number} [w] The width.
+ * @property {number} [h] The height.
+ * @property {number} [grow] In a row, the item's share of the width left over; its height is the row's unless it has
+ *     one.
+ * @property {number[]} [ink] [top, bottom] of the item's ink from its top, for a text.
+ * @property {number} [mid] The item's visual centre from its top, where it gives one.
+ */
+
+/** Make a box. */
 export const box = (x, y, w, h) => ({ x, y, w, h });
 
 // padding: one number, [vertical, horizontal] or [top, right, bottom, left], as in CSS
@@ -14,20 +37,34 @@ function sides(padding) {
   return padding;
 }
 
-// The box inside b once padding is taken off.
+/**
+ * The box inside another once padding is taken off.
+ * @returns {Box}
+ */
 export function inset(b, padding) {
   const [top, right, bottom, left] = sides(padding);
   return box(b.x + left, b.y + top, b.w - left - right, b.h - top - bottom);
 }
 
-// A container: its outer box (w x h at x, y) and its content box inside the padding.
+/**
+ * Make a container: its outer box and its content box inside the padding.
+ * @param {{x?: number, y?: number, w: number, h: number, padding?: Padding}} options The outer box (w x h at x,
+ *     y) and the padding.
+ * @returns {{outer: Box, inner: Box}} The two boxes.
+ */
 export function container({ x = 0, y = 0, w, h, padding = 0 }) {
   const outer = box(x, y, w, h);
   return { outer, inner: inset(outer, padding) };
 }
 
-// The 12-column grid of a box (the Bootstrap model): span(n, offset) covers n columns and the n - 1 gutters between them,
-// offset columns in; at(n) is where column n (0-based) starts. Spans are as tall as the box.
+/**
+ * The 12-column grid of a box (the Bootstrap model).
+ * @param {{columns?: number, gutter?: number}} [options] The column count and the gutter between columns.
+ * @returns {{pitch: number, column: number, at: (n: number) => number, span: (n: number, offset?: number) =>
+ *     Box}} The
+ * column pitch and width; at(n) is where column n (0-based) starts; span(n, offset) covers n columns and the n
+ * - 1 gutters between them, offset columns in, as tall as the box.
+ */
 export function grid(b, { columns = GRID.columns, gutter = GRID.gutter } = {}) {
   const pitch = (b.w + gutter) / columns;
   return {
@@ -38,16 +75,27 @@ export function grid(b, { columns = GRID.columns, gutter = GRID.gutter } = {}) {
   };
 }
 
-// An item's visual centre from its top: mid where the item gives one (a text's: its script's reference glyph, so the lines
-// of one language share a centre line whatever their letters), else its ink's middle (ink = [top, bottom] from the item's
-// top), else its box's.
+/**
+ * An item's visual centre from its top: mid where the item gives one (a text's: its script's reference glyph,
+ * so the lines of one language share a centre line whatever their letters), else the middle of its ink, else
+ * its box's.
+ * @returns {number} The distance from the item's top.
+ */
 export const centreOf = (item) => item.mid ?? (item.ink ? (item.ink[0] + item.ink[1]) / 2 : item.h / 2);
 
-// Items side by side. Each item is { w, h } (a fixed size), { grow } (a share of the width left over; its h is the row's) or
-// both; an item may carry ink (text) and any other fields, which come back on its box. align, across the row: "start",
-// "end" or "center" (default), where centre means the visual centre: a text's ink, a widget's box (the game's rule: every
-// element's visual centre on the bar's centre line). justify, along it: "start", "end", "center" or "between". The row is
-// as tall as h, or as the room its items need around the shared centre line. Returns { boxes, w, h, centre }.
+/**
+ * Place items side by side.
+ * Each item is a fixed size, a share of the width left over (grow), or both; any other field of an item comes
+ * back on its box. The row is as tall as h, or as the room its items need around the shared centre line.
+ * @param {object} [options] The row's frame and layout.
+ * @param {number|null} [options.w] The width, or the items' own.
+ * @param {number|null} [options.h] The height, or what the items need.
+ * @param {"start"|"end"|"center"} [options.align] Across the row; centre means the visual centre: a text's ink,
+ *     a widget's box (the game's rule: every element's visual centre on the bar's centre line).
+ * @param {"start"|"end"|"center"|"between"} [options.justify]
+ * @returns {{boxes: (LayoutItem & Box)[], w: number, h: number, centre: number|null}} The items' boxes, the
+ *     row's size and the centre line (null unless centred).
+ */
 export function row(items, { x = 0, y = 0, w = null, h = null, gap = 0, align = "center", justify = "start" } = {}) {
   const fixed = items.reduce((sum, item) => sum + (item.grow ? 0 : item.w), 0) + gap * Math.max(0, items.length - 1);
   const grows = items.reduce((sum, item) => sum + (item.grow || 0), 0);
@@ -81,8 +129,16 @@ export function row(items, { x = 0, y = 0, w = null, h = null, gap = 0, align = 
   return { boxes, w: width, h: height, centre: centre == null ? null : y + centre };
 }
 
-// Items one under the other, gap apart. align, across the stack: "start" (default), "center", "end" or "stretch" (each item
-// as wide as the stack). justify, along it: "start" (default), "center" or "end" within h. Returns { boxes, w, h }.
+/**
+ * Place items one under the other.
+ * @param {object} [options] The stack's frame and layout.
+ * @param {number|null} [options.w] The width, or the widest item's.
+ * @param {number|null} [options.h] The height, or the items' together.
+ * @param {"start"|"center"|"end"|"stretch"} [options.align] Across the stack; stretch makes each item as wide
+ *     as the stack.
+ * @param {"start"|"center"|"end"} [options.justify] Along the stack, within h.
+ * @returns {{boxes: (LayoutItem & Box)[], w: number, h: number}} The items' boxes and the stack's size.
+ */
 export function stack(items, { x = 0, y = 0, w = null, h = null, gap = 0, align = "start", justify = "start" } = {}) {
   const width = w ?? Math.max(0, ...items.map((item) => item.w || 0));
   const used = items.reduce((sum, item) => sum + item.h, 0) + gap * Math.max(0, items.length - 1);
@@ -99,10 +155,17 @@ export function stack(items, { x = 0, y = 0, w = null, h = null, gap = 0, align 
   return { boxes, w: width, h: height };
 }
 
-// A text item for row and stack: its fitted text and size, its box (the label's lines at NGUI's pitch, drawn from the box's
-// top), its ink (the band its glyphs cover) and mid (the centre of its script's reference glyph, what centres it: the
-// rule badges follow). ui supplies NGUI's measures (fitText, glyphWidth, fontSizeFor, inkBand, inkShift, LINE_PITCH); type
-// is a TYPE role ({ fs, min }); maxW the width it may take; lines the most it may wrap to.
+/**
+ * Make a text item for a row or a stack: its fitted text and size, its box (the label's lines at NGUI's pitch,
+ * drawn from the box's top), its ink (the band its glyphs cover) and mid (the centre of its script's reference
+ * glyph, what centres it: the rule badges follow).
+ * @param {object} ui NGUI's measures: fitText, glyphWidth, fontSizeFor, inkBand, inkShift and LINE_PITCH.
+ * @param {{fs: number, min: number}} type
+ * @param {{maxW?: number, lines?: number}} [options] The width the text may take and the most lines it may wrap
+ *     to.
+ * @returns {{text: string, fs: number, px: number, w: number, h: number, ink: number[]|null, mid: number|null,
+ *     lines: number}} The item.
+ */
 export function textItem(ui, text, type, { maxW = Infinity, lines = 1 } = {}) {
   const fit = ui.fitText(String(text ?? ""), type.fs, type.min, maxW, lines);
   const rows = String(fit.text).split("\n");
@@ -116,8 +179,11 @@ export function textItem(ui, text, type, { maxW = Infinity, lines = 1 } = {}) {
   return { text: fit.text, fs: fit.fs, px, w, h, ink, mid, lines: rows.length };
 }
 
-// A control whose width follows its caption (CONTROL entries: { h, fs, pad, minW }): the caption's width and pad on each side,
-// at least minW. measure(caption, fs) is the caption's width at its size.
+/**
+ * The width of a control that follows its caption: the caption's width and the pad on each side, at least minW.
+ * @param {{fs: number, pad: number, minW?: number}} control
+ * @param {(caption: string, fs: number) => number} measure The caption's width at a size.
+ */
 export const controlWidth = (control, caption, measure) =>
   Math.max(control.minW ?? 0, measure(caption, control.fs) + 2 * control.pad);
 
@@ -125,8 +191,14 @@ export const controlWidth = (control, caption, measure) =>
 const PIVOT_X = [0, 0.5, 1, 0, 0.5, 1, 0, 0.5, 1];
 const PIVOT_Y = [0, 0, 0, 0.5, 0.5, 0.5, 1, 1, 1];
 
-// The NGUI position (y up) of a widget with this pivot that fills box b of a container whose frame centre sits at
-// [cx, cy] in the parent's NGUI space and is w x h.
+/**
+ * The NGUI position of a widget with a pivot that fills a box of a container.
+ * @param {Box} b The box in the container's frame.
+ * @param {number|undefined} pivot The NGUI pivot, 0 (top left) to 8 (bottom right); 4 (centre) by default.
+ * @param {{cx: number, cy: number, w: number, h: number}} frame The container: its centre in the parent's NGUI
+ *     space and its size.
+ * @returns {number[]} The position [x, y], y up.
+ */
 export function toNode(b, pivot, frame) {
   const left = frame.cx - frame.w / 2 + b.x,
     top = frame.cy + frame.h / 2 - b.y;

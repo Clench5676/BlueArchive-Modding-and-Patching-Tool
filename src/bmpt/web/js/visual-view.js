@@ -17,7 +17,12 @@ export const ZOOM_MAX = 4;
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
-// the spine-player viewport showing a view in a box of the stage's size, and back
+/**
+ * The spine-player viewport showing a view in a box of the stage's size.
+ * @param {{cx: number, cy: number, k: number}} view The view: the centre in skeleton units and the zoom (stage
+ *     px per unit).
+ * @param {{width: number, height: number}} [box] The box; the stage by default.
+ */
 export function viewport(view, box = STAGE) {
   const w = box.width / view.k,
     h = box.height / view.k;
@@ -32,12 +37,16 @@ export function viewport(view, box = STAGE) {
     padBottom: 0,
   };
 }
+/** The view a spine-player viewport shows in a box (the inverse of viewport). */
 export function viewOf(vp, box = STAGE) {
   return { cx: vp.x + vp.width / 2, cy: vp.y + vp.height / 2, k: box.width / vp.width };
 }
 
-// the art's box in skeleton units [x0, y0, x1, y1]: the skeleton's own bounds (SkeletonData x, y, width, height, as
-// the Spine editor exported them), else the setup pose's
+/**
+ * The art's box in skeleton units [x0, y0, x1, y1]: the skeleton's own bounds (SkeletonData x, y, width,
+ * height, as the Spine editor exported them), else the setup pose's.
+ * @param {number[]|null} [measured] The setup pose's bounds [x, y, width, height].
+ */
 export function artBox(data, measured = null) {
   if (data && data.width > 0 && data.height > 0) return [data.x, data.y, data.x + data.width, data.y + data.height];
   if (measured && measured[2] > 0 && measured[3] > 0)
@@ -45,18 +54,26 @@ export function artBox(data, measured = null) {
   return [-1000, -1000, 1000, 1500];
 }
 
-// The whole art: the body in the middle of the screen at CharacterPos's scale. The game reads the body's centre from
-// its CharacterIllustCoordinate table; without it, across: the skeleton's origin, which every portrait puts on the
-// character (a weapon or a prop beside her only widens the bounds); down: the middle of the art.
+/**
+ * The whole art: the body in the middle of the screen at CharacterPos's scale. The game reads the body's centre
+ * from its CharacterIllustCoordinate table; without it, across it is the skeleton's origin, which every
+ * portrait puts on the character (a weapon or a prop beside her only widens the bounds), and down the middle of
+ * the art.
+ * @param {number[]} box The art's box.
+ * @param {object} [options]
+ * @param {number} [options.s] The coordinate table's entry.
+ * @param {number} [options.scale] The zoom of the whole art.
+ */
 export function homeView(box, { s, scale = FULL_SCALE } = {}) {
   const [x0, y0, x1, y1] = box;
   return { cx: clamp(0, x0, x1), cy: (y0 + y1) / 2, k: (scale > 0 ? scale : FULL_SCALE) * SKELETON_SCALE * s };
 }
 
-// how far a view may go: from the whole art to ZOOM_MAX times closer; the stage's centre stays on the art
+/** How far a view may go: from the whole art to ZOOM_MAX times closer; the stage's centre stays on the art. */
 export function limits(box, home) {
   return { box, kMin: home.k, kMax: home.k * ZOOM_MAX };
 }
+/** Bring a view inside the limits. */
 export function clampView(v, lim) {
   if (lim.photoFrame)
     return portraitCaptureView({ ...v, k: clamp(v.k, lim.kMin, lim.kMax) }, lim.photoBounds, lim.photoFrame);
@@ -64,7 +81,15 @@ export function clampView(v, lim) {
   return { cx: clamp(v.cx, x0, x1), cy: clamp(v.cy, y0, y1), k: clamp(v.k, lim.kMin, lim.kMax) };
 }
 
-// zoom by f with the skeleton point under the stage point (sx, sy) staying there (until the limits move it)
+/**
+ * Zoom by a factor with the skeleton point under the stage point staying there (until the limits move it).
+ * @param {{cx: number, cy: number, k: number}} v The view.
+ * @param {number} f The factor; above 1 zooms in.
+ * @param {number} sx The point's x in stage px.
+ * @param {number} sy The point's y in stage px.
+ * @param {object} lim The limits.
+ * @param {{width: number, height: number}} [box] The box; the stage by default.
+ */
 export function zoomAt(v, f, sx, sy, lim, box = STAGE) {
   const k = clamp(v.k * f, lim.kMin, lim.kMax);
   const dx = sx - box.width / 2,
@@ -73,15 +98,22 @@ export function zoomAt(v, f, sx, sy, lim, box = STAGE) {
     py = v.cy - dy / v.k;
   return clampView({ cx: px - dx / k, cy: py + dy / k, k }, lim);
 }
-// the art follows the pointer: (dx, dy) stage px, y down
+/**
+ * Pan: the art follows the pointer.
+ * @param {number} dx The pointer's move in stage px.
+ * @param {number} dy The pointer's move in stage px, y down.
+ */
 export function panBy(v, dx, dy, lim) {
   return clampView({ cx: v.cx - dx / v.k, cy: v.cy + dy / v.k, k: v.k }, lim);
 }
-// a view between two (t from 0 to 1): the centre in a line, the zoom at a steady rate
+/**
+ * A view between two: the centre in a line, the zoom at a steady rate.
+ * @param {number} t From 0 (a) to 1 (b).
+ */
 export function mix(a, b, t) {
   return { cx: a.cx + (b.cx - a.cx) * t, cy: a.cy + (b.cy - a.cy) * t, k: a.k * Math.pow(b.k / a.k, t) };
 }
-// the view is the whole art (the reset button greys out): within a hundredth of a stage px
+/** Whether the view is the whole art (the reset button greys out): within a hundredth of a stage px. */
 export function atHome(v, home) {
   return (
     Math.abs(v.k / home.k - 1) < 1e-4 &&
@@ -92,8 +124,11 @@ export function atHome(v, home) {
 
 // --- the prefab's layout ---
 
-// the stage point of a widget anchored to the screen's edges (NGUI anchors [relative, absolute] per side, the
-// target the screen): its centre, in NGUI units around the screen's centre. null without anchors.
+/**
+ * The stage point of a widget anchored to the screen's edges (NGUI anchors [relative, absolute] per side, the
+ * target the screen): its centre, in NGUI units around the screen's centre.
+ * @returns {number[]|null} [x, y]; null without anchors.
+ */
 export function anchoredCentre(widget, screen = SCREEN) {
   const a = widget?.anchors;
   if (!a?.leftAnchor || !a.rightAnchor || !a.bottomAnchor || !a.topAnchor) return null;
@@ -102,8 +137,9 @@ export function anchoredCentre(widget, screen = SCREEN) {
   return [(x(a.leftAnchor) + x(a.rightAnchor)) / 2, (y(a.bottomAnchor) + y(a.topAnchor)) / 2];
 }
 
-// UIAni_CharacterVisualMode_PC (legacy clip, 60 fps): the buttons slide in from the screen's edges. Keys of their x
-// as offsets from where they stop: [time s, value, in slope, out slope] (Unity Hermite keys, not weighted).
+// UIAni_CharacterVisualMode_PC (a legacy clip at 60 fps): the buttons slide in from the screen's edges. The keys
+// of their x are offsets from where they stop: [time s, value, in slope, out slope] (Unity Hermite keys, not
+// weighted).
 export const SLIDE = Object.freeze({
   Btn_Back: [
     [0, -300, 0, 0],
@@ -123,7 +159,7 @@ export const SLIDE = Object.freeze({
 });
 export const SLIDE_S = 0.31666666;
 
-// a Unity animation curve's value at t (Hermite between keys, held before the first and after the last)
+/** A Unity animation curve's value at t (Hermite between keys, held before the first and after the last). */
 export function hermite(keys, t) {
   if (t <= keys[0][0]) return keys[0][1];
   const last = keys[keys.length - 1];
@@ -138,7 +174,10 @@ export function hermite(keys, t) {
     s3 = s2 * s;
   return (2 * s3 - 3 * s2 + 1) * p0 + (s3 - 2 * s2 + s) * out0 * d + (-2 * s3 + 3 * s2) * p1 + (s3 - s2) * in1 * d;
 }
-// the curve sampled at the clip's frame rate: [{offset 0..1, value}]
+/**
+ * The curve sampled at the clip's frame rate.
+ * @returns {{offset: number, value: number}[]} The samples; offset is 0 to 1 along the clip.
+ */
 export function slideFrames(keys, fps = 60) {
   const end = keys[keys.length - 1][0],
     n = Math.max(1, Math.round(end * fps));

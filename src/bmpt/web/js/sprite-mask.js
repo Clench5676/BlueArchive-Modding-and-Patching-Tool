@@ -31,6 +31,10 @@ function localToStage(style) {
   return multiply(multiply(translate(x + w / 2, y + h / 2), transform), translate(-w / 2, -h / 2));
 }
 
+/**
+ * The transform that maps the target's local space onto the source's, both read from their inline styles, for
+ * placing a mask.
+ */
 export function spriteMaskTransform(source, target) {
   const a = localToStage(target),
     det = a[0] * a[3] - a[1] * a[2];
@@ -45,9 +49,12 @@ export function spriteMaskTransform(source, target) {
   return multiply(inverse, localToStage(source));
 }
 
-// The body sprites include their own bevel and drop shadow. Decoration belongs
-// to the near-opaque painted surface, not those outer pixels. Normalize by the
-// sprite's tint so the same extraction works for blue, yellow and grey buttons.
+/**
+ * The near-opaque painted surface of a body sprite: the sprites include their own bevel and drop shadow, but
+ * decoration belongs to the surface, not those outer pixels. The result is normalised by the sprite's tint so
+ * the same extraction works for blue, yellow and grey buttons.
+ * @param {{data: Uint8ClampedArray, width: number, height: number}} image The sprite's RGBA pixels.
+ */
 export function spriteSurface({ data, width, height }) {
   const peak = [0, 0, 0, 0];
   for (let i = 0; i < data.length; i += 4) {
@@ -65,8 +72,18 @@ export function spriteSurface({ data, width, height }) {
   return { data: result, width, height };
 }
 
-// A mask drawn on a canvas with no backing store comes out empty; kept, it would hide every widget sharing it for the
-// rest of the session. It is never kept: the widget shows unmasked and the next render draws the mask again.
+/**
+ * Mask a target element with a sprite's shape. A mask drawn on a canvas with no backing store comes out empty;
+ * kept, it would hide every widget sharing it for the rest of the session, so it is never kept: the widget
+ * shows unmasked and the next render draws the mask again.
+ * @param {HTMLElement} source The element whose sprite gives the shape.
+ * @param {HTMLElement} target The element to mask.
+ * @param {(url: string) => Promise<HTMLImageElement>} load Loads the sprite's image.
+ * @param {object} [options]
+ * @param {boolean} [options.surface] Mask by the painted surface (spriteSurface), without the bevel and shadow.
+ * @param {Function} [options.report] Reports a canvas failure, for the tests.
+ * @returns {Promise<boolean>} Whether the mask was applied.
+ */
 export async function maskWithSprite(source, target, load, { surface = false, report = canvasFailed } = {}) {
   const match = /^url\(["']?(.*?)["']?\)$/.exec(source.style.backgroundImage || "");
   if (!match || !load) return false;

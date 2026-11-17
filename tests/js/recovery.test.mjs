@@ -289,7 +289,7 @@ test("concurrent requests retain grace until the last body settles, then idle de
     second = h.api.request();
   await h.advance(45000);
   first();
-  first(); // An owner may clean up twice without releasing another request.
+  first(); // A holder may clean up twice without releasing another request.
   await h.advance(45000);
   assert.equal(h.panel(), undefined);
   second();

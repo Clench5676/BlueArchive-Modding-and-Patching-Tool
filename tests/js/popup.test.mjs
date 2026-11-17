@@ -1290,9 +1290,10 @@ test("switch detail actions retain the prefab pattern at every button width and 
       const body = findPart(path),
         corner = findPart(`${path}/Corner`),
         box = (el) => ["left", "top", "width", "height"].map((key) => parseFloat(el.style[key]));
-      const [x, y, w, h] = box(body),
+      const [x, y, w, _h] = box(body),
         [dx, dy, dw, dh] = box(corner),
-        k = ((count < 4 ? 104 : 88) / 177) * S; // the Sort prefab's 177-high body drawn at the XS height, four on one XXS row
+        // the Sort prefab's 177-high body drawn at the XS height, four on one XXS row
+        k = ((count < 4 ? 104 : 88) / 177) * S;
       near(x + w - dx - dw, 4 * k);
       near(dy - y, 6 * k);
       near(dw, 126 * k);
@@ -1506,7 +1507,7 @@ test("download failures stay inside the popup, allow retry, and resolve only whe
     handlers.set("app.update", () => ({ error: code === "internal" ? {} : { code } }));
     const failed = Update.check(consent);
     (await drawn(consent, "update")).click();
-    // an error with nothing to say: error.internal without its empty detail (UI-37)
+    // an error with nothing to say: error.internal without its empty detail
     await until(
       () => part("Status")?.textContent === english.error[code].replace(/\{\w+\}/g, "").replace(/[\s:]+$/, ""),
     );
@@ -1856,7 +1857,7 @@ test("the log popup preserves literal text, opens at the bottom and Copy leaves 
   assert.equal(dialog.hidden, true);
 });
 
-// UI-31: the log popup's fallback (no game frame) draws with the plain popup's styles, sized to the log
+// the log popup's fallback (no game frame) draws with the plain popup's styles, sized to the log
 test("the log popup's plain fallback uses only classes the style sheet defines", () => {
   const source = readFileSync(new URL("../../src/bmpt/web/js/popup.js", import.meta.url), "utf8");
   const viewer = source.slice(
@@ -1927,7 +1928,6 @@ export { baseOf, detailsBody, renderPopup, runUpdate, runCompatibility, copyName
 export function setupPreviewTest(data, kind, onLeft = async () => {}) {
   fam = data; variantKey = data.variants[0].key; ctx = { invalidateRoster() {} };
   open = true; busy = false; tab = kind === "lobby" ? "lobby" : "portrait";
-  leftPage = new Promise(() => {});
   popupKind = kind; popupSeg = 0; pending = shownSource(variant(), kind); previewEnabled = modsOn();
   switchThumbnails?.cancel(); switchThumbnails = thumbnailScope(); switchPopupPage = pageToken;
   expression = "03"; mainPlayer = { cached: true }; lobbyShot = "cached";
@@ -2915,7 +2915,7 @@ test("switch geometry: per-kind columns, aspects, card bounds, labels and portra
         const cards = items.map((it) => box(`Card_${it.key}`));
         const ratio = cards[0][2] / cards[0][3];
         if (kind === "spr") {
-          const still = box("Details/Picture/Texture");
+          box("Details/Picture/Texture");
           assert.ok(Math.abs(1 / ratio - 2.2) < 0.01, "portrait height follows the latest 2.2:1 sketch");
         }
         if (kind === "lobby") assert.ok(Math.abs(ratio - 16 / 9) < 0.02);
@@ -3018,7 +3018,8 @@ test("portrait spacing fits four tall cards at the standard width and selects ho
 
 // Measure rendered CSS rectangles independently of switch-layout's calculations. Include each widget's shear.
 // The cards are placed by their envelope as a chosen card (its selection frame and check): a card's body stays
-// where it is whichever card is chosen, or with the chosen one hidden by a segment; the new dot stands over the envelope.
+// where it is whichever card is chosen, or with the chosen one hidden by a segment; the new dot stands over the
+// envelope.
 test("every kind left-aligns outer corners, with compact portrait gaps and balanced vertical grids, wherever the chosen card is", async () => {
   const { rect } = await import("../../src/bmpt/web/js/ngui.js");
   const { switchGrid } = await import("../../src/bmpt/web/js/switch-layout.js");
@@ -3100,7 +3101,8 @@ test("every kind left-aligns outer corners, with compact portrait gaps and balan
             Math.abs(left - 40 * S) <= 1,
             `${kind}, ${count} cards, row ${start}: fixed left inset, no centring offset`,
           );
-          // a full row of two or more spreads edge to edge; a single column stays at the left (the lobby in the L class)
+          // a full row of two or more spreads edge to edge; a single column stays at the left (the lobby in the L
+          // class)
           if (kind !== "spr" && row.length === columns && columns > 1)
             assert.ok(Math.abs(left - right) <= 1, `${kind}: equal insets for a full row`);
           if (kind !== "spr" || count <= columns)
@@ -3922,7 +3924,8 @@ test("release-note button captions fit the resized UIPopup_Sort branches in all 
       for (const [i, child] of controls.entries()) {
         const w = labels[i],
           body = NGUI.find(child, "BG (1)");
-        assert.deepEqual(child.pos, [(i - 0.5) * (bodyW + POPUP_FRAME.footer.gap), 0]); // two bodies, the shared gap apart
+        // two bodies, the shared gap apart
+        assert.deepEqual(child.pos, [(i - 0.5) * (bodyW + POPUP_FRAME.footer.gap), 0]);
         assert.deepEqual(child.scale, [1, 1]);
         assert.deepEqual(body.pos, [0, 0]);
         assert.deepEqual([body.widgets[0].w_, body.widgets[0].h_], [bodyW, control.h]);
@@ -3951,7 +3954,7 @@ test("release-note button captions fit the resized UIPopup_Sort branches in all 
   }
 });
 
-// UI-32: the offer's three captions wrap to two lines before they shrink, in the default footer's range, at one size
+// the offer's three captions wrap to two lines before they shrink, in the default footer's range, at one size
 test("the update offer's captions wrap before they shrink, share one size and fit in every locale", async () => {
   const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   await Popup.ready();
@@ -3978,8 +3981,9 @@ test("the update offer's captions wrap before they shrink, share one size and fi
         const fs = widgets[0].fontSize,
           what = `${lang} ${ok}`;
         assert.equal(new Set(widgets.map((w) => w.fontSize)).size, 1, `${what}: one size`);
-        // this file's stand-in canvas is 0.6 em a character, harsher than the real font: where a caption cannot hold its size
-        // in it, the group takes the next sizes down (never under the footer's floor); the logic is the shared fit
+        // this file's stand-in canvas is 0.6 em a character, harsher than the real font: where a caption cannot hold
+        // its size in it, the group takes the next sizes down (never under the footer's floor); the logic is the shared
+        // fit
         assert.ok(fs >= range.fsMin && fs <= range.fs, `${what}: ${fs}`);
         for (const [i, w] of widgets.entries()) {
           assert.equal(w.text.replace(/\s/g, ""), texts[i].replace(/\s/g, ""), what);
@@ -3995,8 +3999,8 @@ test("the update offer's captions wrap before they shrink, share one size and fi
               );
             }
         }
-        // wrapping comes first: the largest size of the range that holds all three on at most two lines, unless one line
-        // loses no more than two steps (4) to it, the shared rule of every popup's buttons (NGUI.fitGroup)
+        // wrapping comes first: the largest size of the range that holds all three on at most two lines, unless one
+        // line loses no more than two steps (4) to it, the shared rule of every popup's buttons (NGUI.fitGroup)
         const holds = (size) => {
           const at = texts.map((text) => ({ text }));
           NGUI.fitLabels(at, texts, size, size, W, 2, { maxH: H });
@@ -4006,11 +4010,11 @@ test("the update offer's captions wrap before they shrink, share one size and fi
         while (best > range.fsMin && !holds(best)) best -= 2;
         if (widgets.some((w) => w.text.includes("\n"))) assert.equal(fs, best, what);
         else assert.ok(fs >= best - 4, `${what}: one line at ${fs}, two lines at ${best}`);
-        // never smaller than the old single line
+        // never smaller than the single-line fit
         assert.ok(fs >= NGUI.fitGroup(texts, range.fs, 34, W, 1)[0].fs, what);
       }
     }
-    // the review's case: Open Download Page in English drew all three at 34 on one line
+    // the long case: Open Download Page in English must not draw all three at 34 on one line
     setStrings("en-US", Object.fromEntries(strings(english)));
     const widgets = [english.update.later, english.update.notes, english.update.page].map((text) => ({ text }));
     Update.offerCaptions(widgets);
@@ -4251,9 +4255,9 @@ for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
       assert.equal(byPath("Log/Value").textContent, ui.settings.notSet);
       const row = NGUI.rect(byPath("Tours")),
         button = NGUI.rect(byPath("Tours/Btn_0"));
-      // UIPopup_Option_PC: the card (1552 wide, padding 58, title 17 from its top, dotted line 109 down) and ETCSetting/ButtonBg
-      // (308 x 104 now): the content box starts SPACE.m (20) under the dotted line, ends SPACE.l (28) above the foot and holds the
-      // button against its right edge, 58 in from the card's.
+      // UIPopup_Option_PC: the card (1552 wide, padding 58, title 17 from its top, dotted line 109 down) and
+      // ETCSetting/ButtonBg (308 x 104): the content box starts SPACE.m (20) under the dotted line, ends SPACE.l
+      // (28) above the foot and holds the button against its right edge, 58 in from the card's.
       near(row[2], 1552 * S);
       near(row[3], (109 + 20 + 104 + 28) * S);
       const titleRect = NGUI.rect(title);
@@ -5082,7 +5086,8 @@ test("the display settings open over a dialog: above it in the page and on the s
   assert.deepEqual(closes, ["escape", "escape"]);
 });
 
-// Options side by side are one kind of control: every sort key, and every filter option of every group, draws at one size
+// Options side by side are one kind of control: every sort key, and every filter option of every group, draws at
+// one size
 test("the display settings' sort keys and filter options each share one font size in every language", async (t) => {
   const collection = n(
     "UICharacterCollection",
@@ -5323,7 +5328,7 @@ for (const lang of ADD_LOCALES)
               `${label}: ${key} button on the stage`,
             );
           }
-          // long ones scroll in the frame, short ones lay out as before
+          // long ones scroll in the frame, short ones lay out without scrolling
           const area = walk(dialog).find((e) => e.className === "popup-cards");
           assert.equal(!!area, expected.scroll, label);
           if (area) {
@@ -5409,7 +5414,7 @@ test("Settings is on the popup stack: Escape and the backdrop close it, and a po
   }
 });
 
-// UI-15: Mod Alias and the repair preview are layers of their own in #dialog, like the message popups
+// Mod Alias and the repair preview are layers of their own in #dialog, like the message popups
 const layers = () => dialog.children.filter((el) => el.className === "popup-layer");
 test("Mod Alias is a layer of its own: a failed save's message draws above it, and Escape closes the visible layer", async () => {
   const ModAlias = await import("../../src/bmpt/web/js/mod-alias.js");
@@ -5538,7 +5543,7 @@ test("the repair preview is a layer of its own: a message over it, Escape on the
   assert.equal(dialog.hidden, true);
 });
 
-// UI-22: a search or segment with no match says so in the list paper, and confirming a hidden choice is blocked
+// a search or segment with no match says so in the list paper, and confirming a hidden choice is blocked
 const noMatch = () =>
   walk(prompt).filter((e) => e.textContent === english.hall.noCandidates && e.dataset.path === "Empty");
 test("a list whose segment shows nothing says so in the paper, and its primary button answers nothing", async () => {
@@ -5569,7 +5574,8 @@ test("a list whose segment shows nothing says so in the paper, and its primary b
     assert.equal(plainOk.disabled ?? false, false);
     plainOk.click();
     assert.deepEqual(asked, ["ok"]);
-    // the chosen card filtered out (the caller's segment removed it): the paper still lists the others, Apply is blocked
+    // the chosen card filtered out (the caller's segment removed it): the paper still lists the others, Apply is
+    // blocked
     asked.length = 0;
     await Popup.listPopup(options(everything.slice(1), "a"));
     assert.equal(noMatch().length, 0, "other cards are shown: no empty message");
@@ -5618,7 +5624,7 @@ test("a list whose segment shows nothing says so in the paper, and its primary b
 });
 const NGUI_rect = (el) => ["left", "top", "width", "height"].map((k) => parseFloat(el.style[k]));
 
-// UI-34: Escape in a list popup's search box closes the search and the popup stays, as the roster's does
+// Escape in a list popup's search box closes the search and the popup stays, as the roster's does
 test("Escape in a list popup's search closes the search first; the next one closes the popup", async (t) => {
   const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   const collection = n("UICharacterCollection", [0, 0]);
@@ -5780,7 +5786,7 @@ test("a search that matches nothing blocks the primary button until the match is
   }
 });
 
-// --- UI-13: the asset consent's Agree and Decline are named by their captions ---
+// --- the asset consent's Agree and Decline are named by their captions ---
 test("the asset consent names Agree and Decline with their captions in every language", async () => {
   const Consent = await import("../../src/bmpt/web/js/consent.js");
   try {
@@ -5808,7 +5814,7 @@ test("the asset consent names Agree and Decline with their captions in every lan
   }
 });
 
-// --- UI-36: a failed asset consent shows its error and can be answered again; a repeat click sends nothing ---
+// --- a failed asset consent shows its error and can be answered again; a repeat click sends nothing ---
 test("a failed asset consent shows the error, keeps the popup to retry, and a repeat click sends nothing", async () => {
   const Consent = await import("../../src/bmpt/web/js/consent.js");
   setStrings("en-US", Object.fromEntries(strings(english)));
@@ -5848,7 +5854,7 @@ test("a failed asset consent shows the error, keeps the popup to retry, and a re
   }
 });
 
-// --- UI-14: the Settings sliders are range inputs over the game's slider ---
+// --- the Settings sliders are range inputs over the game's slider ---
 const sliderOf = (name) => walk(settings).find((e) => e.tagName === "INPUT" && e.attrs["aria-label"] === name);
 async function openSound(prefs = {}, tabName = "sound") {
   const saved = [],
@@ -6034,20 +6040,7 @@ test("the custom zoom-out limit's slider is a range input with the value as its 
 // --- design-system popup anatomy, independent of the Sort prefab's original dimensions ---
 const Tokens = await import("../../src/bmpt/web/js/ui-tokens.js");
 const Frames = await import("../../src/bmpt/web/js/popup-frames.js");
-const { FOOTER, POPUP, POPUP_FOOTER, POPUP_FRAME, CONTROL, SPACE, TYPE } = Tokens;
-const STAGE_HALF = 540 / S;
-const unitsOf = (el) => {
-  const [top, height, left, width] = ["top", "height", "left", "width"].map((key) => parseFloat(el.style[key]));
-  return {
-    cx: (left + width / 2 - 960) / S,
-    cy: (540 - (top + height / 2)) / S,
-    w: width / S,
-    h: height / S,
-    top: (540 - top) / S,
-    bottom: (540 - top - height) / S,
-  };
-};
-const measure = (root, path) => unitsOf(walk(root).find((e) => e.dataset.path === path));
+const { POPUP, POPUP_FOOTER, POPUP_FRAME, CONTROL, SPACE, TYPE } = Tokens;
 const near2 = (a, b, eps = 0.02) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b}`);
 
 for (const lang of ["en-US", "zh-CN"])
@@ -6069,7 +6062,8 @@ for (const lang of ["en-US", "zh-CN"])
               close = NGUI.find(bg, "Btn_Close");
             assert.deepEqual([bg.widgets[0].w_, bg.widgets[0].h_], [f.w, f.h]);
             assert.equal(bg.widgets[0].sprite, "Common_Popup_Bg");
-            // the title one size under the game's (POPUP_TYPE.title), centred where the game's 72 stood under the top's 36
+            // the title one size under the game's (POPUP_TYPE.title), centred where the game's 72 stood under the top's
+            // 36
             const big = (await import("../../src/bmpt/web/js/ui-grid.js")).textItem(NGUI, ui.quit.title, TYPE.display, {
               lines: 1,
             });
@@ -6095,7 +6089,8 @@ for (const lang of ["en-US", "zh-CN"])
               if (i) near2(btn.children[i].pos[0] - btn.children[i - 1].pos[0] - widths[i], 33);
             }
             near2(btn.children[0].pos[0] + btn.children.at(-1).pos[0], 0);
-            // the default footer's bodies are as wide as the captions need (Confirm in this language), a row of three is scaled to the frame
+            // the default footer's bodies are as wide as the captions need (Confirm in this language), a row of three
+            // is scaled to the frame
             assert.equal(
               widths[0],
               Popup.footerLayout(
@@ -6176,7 +6171,7 @@ for (const lang of ["en-US", "zh-CN"])
     const NGUI = await import("../../src/bmpt/web/js/ngui.js");
     await Popup.ready();
     const layout = Popup.listLayout(true),
-      { content, frame } = layout;
+      { frame } = layout;
     near2(layout.left.l, -frame.w / 2 + 40);
     near2(layout.list.r, frame.w / 2 - 40);
     near2(layout.list.l - layout.left.r, 40);
@@ -6321,7 +6316,8 @@ for (const lang of ["en-US", "zh-CN", "th-TH"])
           if (kind === "model")
             assert.ok(NGUI.find(tree, "Name").pos[1] > chipY[0] + 1, `${what}: the model's chips under its name`);
           // the chips are the S chip and the actions are tagged as buttons
-          assert.ok([Tokens.CHIP_TIERS.S.h, Tokens.CHIP_TIERS.XS.h].includes(NGUI.find(tree, "Chip_0").widgets[0].h_)); // XS where S would not fit
+          // XS where S would not fit
+          assert.ok([Tokens.CHIP_TIERS.S.h, Tokens.CHIP_TIERS.XS.h].includes(NGUI.find(tree, "Chip_0").widgets[0].h_));
           assert.equal(NGUI.find(tree, "Chip_0").widgets[0].tier, "chip");
           assert.equal(NGUI.find(tree, "Act_0/Body").widgets.find((w) => "sprite" in w).tier, "button");
         }
@@ -6346,7 +6342,8 @@ test("the list popups' footer is the XS button every popup has", async () => {
   );
 });
 
-// --- design tokens, item C: one backdrop, the prefab's resting 0.80 (BlackBgClickArea's TweenAlpha runs 0 to 0.80, not the sprite's 0.94) ---
+// --- design tokens, item C: one backdrop, the prefab's resting 0.80 (BlackBgClickArea's TweenAlpha runs 0 to
+// 0.80, not the sprite's 0.94) ---
 test("every popup frame draws the one backdrop token", async () => {
   const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   await Popup.ready();
@@ -6358,7 +6355,8 @@ test("every popup frame draws the one backdrop token", async () => {
     [2458, 1400],
   ])
     assert.equal(colour(Popup.popupFrame("T", w, h, { ok: "OK" })), Tokens.BACKDROP);
-  // the consent and update dialogs are popupFrame's now; the list popup, the display settings and Settings set the same token
+  // the consent and update dialogs take it from popupFrame; the list popup, the display settings and Settings set
+  // the same token
   for (const file of ["popup.js", "display.js", "settings.js"]) {
     const source = readFileSync(new URL(`../../src/bmpt/web/js/${file}`, import.meta.url), "utf8");
     const sites =
@@ -6455,11 +6453,13 @@ for (const lang of LOCALE_LIST)
 test("value rows lay their 308 x 104 buttons right-aligned 328 apart in the card's content box and wrap to a second line, never shrinking one", async () => {
   const Rows = await import("../../src/bmpt/web/js/settings-rows.js");
   const { XS_BUTTON: B, SPACE, PANEL } = Tokens;
-  // the content box: the 1552-wide card less its padding (58 each side), SPACE.m under the dotted line (109 down), SPACE.l above the foot
+  // the content box: the 1552-wide card less its padding (58 each side), SPACE.m under the dotted line (109 down),
+  // SPACE.l above the foot
   const left = -1552 / 2 + PANEL.padCard,
     right = 1552 / 2 - PANEL.padCard,
     top = 109 + SPACE.m;
-  // beside the value: three buttons to a line (the value keeps its four grid columns, 452); under it: four (the line is 1436 wide)
+  // beside the value: three buttons to a line (the value keeps its four grid columns, 452); under it: four (the
+  // line is 1436 wide)
   assert.deepEqual(
     [0, 1, 2, 3, 4, 5, 6, 7].map((n) => Rows.buttonLines(n)),
     [[], [1], [2], [3], [3, 1], [3, 2], [3, 3], [3, 3, 1]],
@@ -6737,7 +6737,8 @@ for (const lang of LOCALE_LIST)
     }
   });
 
-// --- design tokens, item E: chips in four sizes (CHIP_TIERS), the details panel's the S chip, as wide as its caption ---
+// --- design tokens, item E: chips in four sizes (CHIP_TIERS), the details panel's the S chip, as wide as its
+// caption ---
 test("chipPlaces stands chips as wide as their captions in centred rows inside the panel, SPACE.s apart", () => {
   const { CHIP_TIERS, SPACE } = Tokens,
     h = CHIP_TIERS.S.h,
@@ -6770,7 +6771,8 @@ test("chipPlaces stands chips as wide as their captions in centred rows inside t
         [...places.map((p) => p.row)].sort((a, b) => a - b),
       );
     }
-  // the four sizes: L the prefab chip, S the time limit badge, XS the card badge, M between; heights and captions step down
+  // the four sizes: L the prefab chip, S the time limit badge, XS the card badge, M between; heights and captions
+  // step down
   assert.equal(CHIP_TIERS.L.h, Tokens.CHIP.h);
   assert.equal(CHIP_TIERS.S.h, Tokens.CONTROL.badge.h);
   const order = ["XS", "S", "M", "L"].map((k) => CHIP_TIERS[k]);
@@ -7159,7 +7161,7 @@ const messageTop = (layout) => Popup.FRAME_Y + layout.height / 2 - layout.y0;
 
 test("explicit frame heights use POPUP_FRAME.minH through 1560; omitted or zero heights retain the exemplar", () => {
   for (const key of ["S", "M", "L", "XL"]) {
-    // XL is L now: no popup wider
+    // XL shares L's frame: no popup is wider
     const exemplar = POPUP_FRAME[key === "XL" ? "L" : key].h;
     assert.equal(Frames.frameGeometry(key).h, exemplar);
     assert.equal(Frames.frameGeometry(key, 0).h, exemplar);
@@ -7315,7 +7317,7 @@ test("Mod Alias and Export fit their unchanged row envelopes and centre the whol
 });
 
 test("scrolling text viewer and picker heights retain their pre-fit viewports", () => {
-  // the XL prefab's content box (885) over the XS footer: the frames lose the old footer's padding (94)
+  // the XL prefab's content box (885) over the XS footer: the frames lose the footer's padding (94)
   assert.equal(Frames.TEXT_VIEWER.h, 1259);
   assert.equal(Frames.TEXT_VIEWER.box.height, 885);
   // every list popup as high as the Hall's editors (POPUP_FRAME.panelH)
@@ -7684,7 +7686,7 @@ test("the held entries' Details fit their wide frame with four mods, Go To and F
         ]) {
           assert.ok(button.h <= line.f.fs, `${lang} ${label}: within the text's height`);
           assert.ok(fit.text === label, `${lang} ${label}: caption whole, on one line`);
-          // the small button fits its caption again within its width less its inset: still one line
+          // the small button fits its caption within its width less its inset: still one line
           assert.ok(
             !NGUI.fitText(label, fit.fs, fit.fs, button.w - XS_BUTTON.fitInset + 1e-6).text.includes("\n"),
             `${lang} ${label}: drawn on one line`,

@@ -1,6 +1,11 @@
-// Collection FilterBtn widgets, rasterized by NGUI before the inclined edge is composited.
-// A single image replaces WebKit's independently sampled CSS mask/border-image patches.
+// Collection FilterBtn widgets, rasterized by NGUI before the inclined edge is composited: a single image
+// replaces WebKit's independently sampled CSS mask and border-image patches.
 export const SEGMENT_SCALE = 40 / 104;
+/**
+ * The tree of one segment of the Enable Mods switch.
+ * @param {boolean} pressed Whether the segment is the one pressed (on).
+ * @param {boolean} [flipped] Mirror the segment.
+ */
 export function segmentTree(width, pressed, flipped = false) {
   const inset = pressed ? 0.8 : 0,
     height = pressed ? 38 : 40;
@@ -26,10 +31,16 @@ export function segmentTree(width, pressed, flipped = false) {
     ],
   };
 }
+/**
+ * The origin of a segment's drawing.
+ */
 export function segmentOrigin(width, pressed) {
   return [width / 2, (pressed ? 38 : 40) / 2];
 }
 
+/**
+ * The raster density of the segments.
+ */
 export function segmentDensity(dpi = 1, stageScale = 1) {
   return Math.max(2, dpi * stageScale);
 }

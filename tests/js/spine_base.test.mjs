@@ -33,7 +33,8 @@ test("another install's entry reads its own files through <core>@<id>, under the
     "the current install's",
   );
   assert.equal(spineBase("lobby", "ch0251_home", ""), spineBase("lobby", "ch0251_home"));
-  // the library.changed handler's prefix covers both installs' bases, so neither shows the other's picture after a switch
+  // the library.changed handler's prefix covers both installs' bases, so neither shows the other's picture after a
+  // switch
   for (const id of [null, "a1b2c3d4e5f6"])
     assert.ok(spineBase("spr", "CH0164_spr", id).startsWith(spinePrefix("spr", "CH0164_spr")), String(id));
   assert.notEqual(spineBase("spr", "CH0164_spr", "a1b2c3d4e5f6"), spineBase("spr", "CH0164_spr"));

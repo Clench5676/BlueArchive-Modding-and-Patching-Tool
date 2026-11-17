@@ -1,6 +1,7 @@
-// The top bar's content centred on the bar's fill. The layout numbers are in top-bar-layout.js. Text is centred by
-// the ink of its script's reference glyph, drawn pictures (the switch, the "?" badge, Settings, Home, the divider) by the ink
-// of the bitmaps NGUI drew, so every element's visual centre lies on the same line whatever its box, pivot or padding is.
+// The top bar's content centred on the bar's fill. The layout numbers are in top-bar-layout.js. Text is centred
+// by the ink of its script's reference glyph, drawn pictures (the switch, the "?" badge, Settings, Home, the
+// divider) by the ink of the bitmaps NGUI drew, so every element's visual centre lies on the same line whatever
+// its box, pivot or padding is.
 import * as NGUI from "./ngui.js";
 import { inkBounds } from "./student-hall-icons.js";
 import { barCentre, barPadding, extent, inkRect, moveBy } from "./top-bar-layout.js";
@@ -67,6 +68,10 @@ const moveTo = (el, dy) => {
   el.style.translate = dy ? `0 ${dy.toFixed(2)}px` : "";
 };
 
+/**
+ * Move the top bar's text and pictures so every element's visual centre lies on the centre of the bar's fill.
+ * @returns {Promise<void>} Settles when the bar is aligned.
+ */
 export async function alignTopBar() {
   const bar = document.querySelector(".topbar");
   if (!bar) return;
@@ -97,8 +102,11 @@ export async function alignTopBar() {
   }
 }
 
-// Keeps the alignment up to date: any change under the bar (a language, a skin drawn again, Home shown or hidden),
-// the fonts arriving and the sprite being read. The measuring writes only styles, which are not observed.
+/**
+ * Keep the alignment up to date: any change under the bar (a language, a skin drawn again, Home shown or
+ * hidden), the fonts arriving and the sprite being read. The measuring writes only styles, which are not
+ * observed.
+ */
 export function watchTopBar() {
   const bar = document.querySelector(".topbar");
   if (!bar || watching) return;

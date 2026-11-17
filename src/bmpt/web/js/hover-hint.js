@@ -9,8 +9,10 @@ const GAP = 12; // units between the box's visible edge and the control
 // Common_Tooltip_Bg's visible box inside its sprite rect (its soft shadow around it): left, top, right, bottom
 export const BOX_INSET = { left: 25, top: 12, right: 25, bottom: 38 };
 
-// the prefab's numbers: the box sprite, the text style and the text's room inside the box (BG's anchors: 46 above and
-// 60 below the content; Label_Info sits 62 inside the box's left edge)
+/**
+ * The prefab's numbers for a hint: the box sprite, the text style and the text's room inside the box (BG's
+ * anchors: 46 above and 60 below the content; Label_Info sits 62 inside the box's left edge).
+ */
 export function hintStyle(prefab) {
   const bg = NGUI.find(prefab, "Default/BG"),
     info = NGUI.find(prefab, "Label_Info");
@@ -28,9 +30,15 @@ export function hintStyle(prefab) {
   };
 }
 
-// Where the hint goes for ``button`` ([left, top, width, height], stage px) in a host ``hostW`` x ``hostH`` px: the
-// text's size and lines (two at most, down to 30 units), the box in units, its centre (the render origin, stage px) and
-// the side ("top": above the control, "bottom": below it).
+/**
+ * Where the hint goes for a button in a host: the text's size and lines (two at most, down to 30 units), the
+ * box in units, its centre (the render origin, stage px) and the side ("top": above the control, "bottom":
+ * below it).
+ * @param {number[]} button [left, top, width, height] in stage px.
+ * @param {number} hostW The host's width in px.
+ * @param {number} hostH The host's height in px.
+ * @param {object} style The prefab's numbers (hintStyle).
+ */
 export function hintLayout(text, button, hostW, hostH, style) {
   const fit = NGUI.fitText(text, style.fs, Math.min(30, style.fs), style.maxW, 2);
   const lines = String(fit.text).split("\n");
@@ -58,6 +66,7 @@ export function hintLayout(text, button, hostW, hostH, style) {
   };
 }
 
+/** The tree of a hint for a layout. */
 export function hintTree(layout, style) {
   const { box, color } = style;
   return NGUI.node(
@@ -79,9 +88,13 @@ export function hintTree(layout, style) {
   );
 }
 
-// Where the hint of a control is drawn: the control's own layer, or, for a control inside a scrolling card list
-// (popup.js scrollArea: .popup-cards around .popup-cards-inner, which clips), the layer around that list, so a card's
-// hint is not cut off by the list's edges. Returns the host and the offset (px) from the control's layer to it.
+/**
+ * Where the hint of a control is drawn: the control's own layer, or, for a control inside a scrolling card list
+ * (popup.js scrollArea: .popup-cards around .popup-cards-inner, which clips), the layer around that list, so a
+ * card's hint is not cut off by the list's edges.
+ * @returns {{host: HTMLElement, dx: number, dy: number}} The host and the offset in px from the control's layer
+ *     to it.
+ */
 export function hintHost(button) {
   let host = button.parentElement,
     dx = 0,
@@ -95,8 +108,14 @@ export function hintHost(button) {
   return { host, dx, dy };
 }
 
-// Show ``text`` by ``button`` while the pointer is over it (the button keeps the pointer: aria-disabled, not
-// disabled). Nothing shows when the game's tooltip prefab cannot be read.
+/**
+ * Show a text by a button while the pointer is over it (the button keeps the pointer: aria-disabled, not
+ * disabled). Nothing shows when the game's tooltip prefab cannot be read.
+ * @param {HTMLElement} button The control.
+ * @param {object} [options]
+ * @param {() => Promise<NguiNode>} [options.load] Loads the tooltip prefab, for the tests.
+ * @returns {() => void} Hides the hint.
+ */
 export function attachHint(button, text, { load = () => NGUI.layout(HINT_PREFAB) } = {}) {
   let shown = null,
     token = 0;

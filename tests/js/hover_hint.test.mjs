@@ -1,5 +1,5 @@
 // The hover hint (web/js/hover-hint.js): the game's description tooltip box (UIDescriptionTooltip/Default) above a
-// control, in every shipped language. The prefab's numbers are the Global client's (2026-04-06 tooltip bundle).
+// control, in every shipped language. The prefab's numbers are the Global client's (tooltip bundle of 2026-04-06).
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { LOCALES, installFitPage, text } from "./helpers/fit_canvas.mjs";

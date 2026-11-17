@@ -198,8 +198,9 @@ test("the card label fitting is the one these tests measure", () => {
   assert.match(popup, /export function listLayout[\s\S]*?card: \{ w: 250, h: 226, bar: 68 \}/);
 });
 
-// The card fitting shrinks a long name below its 24 floor, never past the bar: two lines at most, every line inside the
-// bar's room. The playable students' costumes (the ones looked for) all stay at 24 or more; the long NPC and enemy names shrink most.
+// The card fitting shrinks a long name below its 24 floor, never past the bar: two lines at most, every line
+// inside the bar's room. The playable students' costumes (the ones looked for) all stay at 24 or more; the long
+// NPC and enemy names shrink most.
 const MAX_W = 250 - 56;
 for (const locale of LOCALES)
   test(`every real student and costume fits the card bar on two lines in ${locale}`, () => {

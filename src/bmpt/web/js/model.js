@@ -1,10 +1,10 @@
 // 3D chibi for the detail screen's third tab. The GLB is exported from the user's game files in memory
-// (gameassets/model.py): the game's material constants are in the material extras, the halo follower (FxFollower)
-// in the root extras, and each clip's slot, loop flag, SetMouthTile events and renderer switches in the animation
-// extras; the halo's particle effects (root extras, haloFx) play as model-fx.js draws them. The materials are ports of
-// the game's character shaders (chibi-materials.js), the camera starts at the
-// formation screen's view of one character (FORMATION_VIEW) and orbits freely; the wheel, pinches and swipes are read
-// as the fullscreen lobby reads them (attachInput). One view at a time; hide() frees its WebGL context at once.
+// (gameassets/model.py): the game's material constants are in the material extras, the halo follower
+// (FxFollower) in the root extras, and each clip's slot, loop flag, SetMouthTile events and renderer switches in
+// the animation extras; the halo's particle effects (haloFx) play as model-fx.js draws them. The materials are
+// ports of the game's character shaders (chibi-materials.js); the camera starts at the formation screen's view
+// of one character (FORMATION_VIEW) and orbits freely; the wheel, pinches and swipes are read as the fullscreen
+// lobby reads them (attachInput). One view at a time; hide() frees its WebGL context at once.
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { straightTextureLoader } from "./png-decode.js";
@@ -26,12 +26,9 @@ const CTRL_PINCH = 0.01; // Chromium's pinch as ctrl + wheel: the fingers' scale
 const SCROLL_MS = 120; // wheel events this close together belong to one scroll
 const PINCH_HOLD = 300; // ms: WebKit's ctrl + wheel events beside its gesture events are left to the gesture
 
-// The formation screen's view of one character (UIFormation under GameMain's camera): the game camera (vertical
-// field of view 10, at the origin, level) shows the NGUI root 11.43 ahead, 2 units high (2 / 1665 of a unit per NGUI
-// unit at 16:9), and each character at its slot (UnitPositions/Position1-4): 630 NGUI units to the character's unit,
-// 316.4 toward the camera and 222.6 below Position_Set, whose anchors put it 56.25 below the screen's centre. In the
-// character's units the camera stands 14.6 away and 0.44 above its feet, looking level: the screen's centre lies at
-// that height, and a character takes the same share of the screen's height whatever its size.
+// The formation screen's view of one character (UIFormation under GameMain's camera): the camera's vertical
+// field of view is 10 and it stands 14.6 character units away and 0.44 above the character's feet, looking
+// level, so a character takes the same share of the screen's height whatever its size.
 export const FORMATION_VIEW = (() => {
   const s = 2 / 1665,
     k = 630 * s;
@@ -48,9 +45,17 @@ const FRAMES = {
 };
 const TWEEN = 450;
 
-// The camera distance (character units) for a frame: the formation screen's, or further back where the chibi's box
-// (halo and props included; relative to the orbit target, x across and y up) would leave the host around the frame
-// point (stage px, a margin kept) or reach below its floor.
+/**
+ * The camera distance (character units) for a frame: the formation screen's, or further back where the chibi's
+ * box (halo and props included; relative to the orbit target, x across and y up) would leave the host around
+ * the frame point (stage px, a margin kept) or reach below its floor.
+ * @param {THREE.Box3} box The chibi's box around the orbit target.
+ * @param {{x: number, y: number, w: number, h: number, floor: number}} frame The host's size and the frame
+ *     point and floor in stage px.
+ * @param {number} [fov] The vertical field of view in degrees.
+ * @param {number} [base] The formation screen's distance.
+ * @param {number} [margin] The margin kept in stage px.
+ */
 export function frameDistance(box, frame, fov = FORMATION_VIEW.fov, base = FORMATION_VIEW.distance, margin = 24) {
   const t = 2 * Math.tan(THREE.MathUtils.degToRad(fov) / 2); // the visible height per unit of distance
   const at = (units, px) => (units > 0 ? (units * frame.h) / (t * Math.max(px, 1)) : 0); // `units` over `px`
@@ -63,50 +68,76 @@ export function frameDistance(box, frame, fov = FORMATION_VIEW.fov, base = FORMA
   );
 }
 
-// The closest camera distance for a frame: the bust. Closing in lifts the orbit target to the face (`face`: its
-// height above the target), which then lies on the frame point; the bust is where the box's top (the halo) reaches
-// the host's top edge, a margin kept. Between a tenth and 0.45 of the frame's distance (`fit`), so a box whose top
-// lies at or below the face still closes in.
+/**
+ * The closest camera distance for a frame: the bust. Closing in lifts the orbit target to the face (`face`: its
+ * height above the target), which then lies on the frame point; the bust is where the box's top (the halo)
+ * reaches the host's top edge, a margin kept. Between a tenth and 0.45 of the frame's distance (`fit`), so a
+ * box whose top lies at or below the face still closes in.
+ * @param {THREE.Box3} box The chibi's box around the orbit target.
+ * @param {number} face The face's height above the target.
+ * @param {{y: number, h: number}} frame The frame point and the host's height in stage px.
+ * @param {number} [fov] The vertical field of view in degrees.
+ * @param {number} [margin] The margin kept in stage px.
+ */
 export function bustDistance(box, face, frame, fit, fov = FORMATION_VIEW.fov, margin = 24) {
   const t = 2 * Math.tan(THREE.MathUtils.degToRad(fov) / 2);
   const d = ((box.max.y - face) * frame.h) / (t * Math.max(frame.y - margin, 1));
   return THREE.MathUtils.clamp(d, fit * 0.1, fit * 0.45);
 }
 
-// The zoom's place between the fit (0) and the bust (1) of a zoom range {fit, min}, in the zoom's own steps (a notch
-// or a pinch multiplies the distance); below 0 further back than the fit.
+/**
+ * The zoom's place between the fit (0) and the bust (1) of a zoom range, in the zoom's own steps (a notch or a
+ * pinch multiplies the distance); below 0 further back than the fit.
+ * @param {object} options
+ */
 export function zoomShare(distance, { fit, min }) {
   return fit > min && distance > 0 ? Math.log(fit / distance) / Math.log(fit / min) : 0;
 }
 
-// How far the orbit target has risen to the face (0 at the fit and further back, 1 at the bust): the face comes to the
-// frame point evenly, a notch or a pinch at a time, so closing in zooms towards the face instead of first dropping the
-// chibi (an eased lift by distance did two thirds of it in the first fifth of the zoom).
+/**
+ * How far the orbit target has risen to the face (0 at the fit and further back, 1 at the bust): the face comes
+ * to the frame point evenly, a notch or a pinch at a time, so closing in zooms towards the face instead of
+ * first dropping the chibi.
+ * @param {{fit: number, min: number}} range
+ * @returns {number} The share, 0 to 1.
+ */
 export function liftShare(distance, range) {
   const s = clamp(zoomShare(distance, range), 0, 1);
   return clamp(1 - ((1 - s) * distance) / range.fit, 0, 1);
 }
 
-// A distance carried over to another framing: closer than the fit, as the same share of the way to the bust (the
-// target's lift goes on from where it was); further back, as the same multiple of the fit (up to 1.3).
+/**
+ * A distance carried over to another framing: closer than the fit, as the same share of the way to the bust
+ * (the target's lift goes on from where it was); further back, as the same multiple of the fit (up to 1.3).
+ * @param {{fit: number, min: number}} from
+ * @param {{fit: number, min: number}} to
+ */
 export function carryZoom(distance, from, to) {
   if (distance < from.fit) return to.fit * Math.pow(to.min / to.fit, Math.min(1, zoomShare(distance, from)));
   return to.fit * Math.min(distance / from.fit, 1.3);
 }
 
-// The camera distance's factor for a wheel step of `px` pixels (> 0 backs away) in a zoom range whose bust is `span`
-// = ln(fit / bust) in: a notch is at least NOTCH px, NOTCHES of them from the fit to the bust; a faster spin's bigger
-// steps zoom further.
+/**
+ * The camera distance's factor for a wheel step (> 0 backs away) in a zoom range: a notch is at least NOTCH px,
+ * NOTCHES of them from the fit to the bust; a faster spin's bigger steps zoom further.
+ * @param {number} px The wheel step in pixels.
+ * @param {number} span ln(fit / bust) of the zoom range.
+ */
 export function wheelZoom(px, span) {
   return px ? Math.exp((Math.sign(px) * Math.max(Math.abs(px), NOTCH) * span) / (NOTCH * NOTCHES)) : 1;
 }
 
-// The camera distance's factor for a pinch whose fingers spread by `scale` (> 1 closes in)
+/** The camera distance's factor for a pinch whose fingers spread by a scale (> 1 closes in). */
 export const pinchZoom = (scale) => (scale > 0 ? Math.pow(scale, -PINCH) : 1);
 
-// The pan (the orbit target's offset from the lifted target, world units) kept inside the chibi's box as far as the
-// zoom allows: none at the fit and further back, the whole box at the bust. `box` lies around the formation target,
-// `lift` is the target's rise above it. Clamps `pan` in place.
+/**
+ * Keep the pan (the orbit target's offset from the lifted target, world units) inside the chibi's box as far as
+ * the zoom allows: none at the fit and further back, the whole box at the bust. Clamps `pan` in place.
+ * @param {number} share The zoom's place (zoomShare).
+ * @param {THREE.Box3} box The chibi's box around the formation target.
+ * @param {number} lift The target's rise above the formation target.
+ * @returns {THREE.Vector3}
+ */
 export function clampPan(pan, share, box, lift) {
   const s = clamp(share, 0, 1);
   pan.x = clamp(pan.x, s * box.min.x, s * box.max.x);
@@ -115,21 +146,20 @@ export function clampPan(pan, share, box, lift) {
   return pan;
 }
 
-// The view's wheel, pinch and pan input, read as the fullscreen lobby reads it (lobby-touch.js):
-// - a mouse wheel zooms (wheelZoom); a trackpad swipe, a Magic Mouse scroll or a horizontal wheel pans while zoomed in
-//   (as far as the fingers moved); a scroll that starts like a notch and turns out a swipe takes its zoom back.
-// - a pinch zooms (pinchZoom): ctrl + wheel in Chromium and WebView2 (ctrl + a mouse wheel zooms by notches), gesture
-//   events in WebKit (the macOS app), two fingers on a touch screen.
-// - a right- or middle-button drag pans.
-// `sink`: zoom(factor) multiplies the distance the zoom heads for, zoomSave() and zoomRestore(saved) take and put back
-// the zoom's state (saveZoom), span() is the zoom range's (wheelZoom), pan(dx, dy) moves the chibi by CSS px. Returns
-// the detach function.
-// the zoom's state before a scroll that may turn out a swipe (attachInput), and putting it back: during a glide its
-// own easing of the distance resumes (a glide the swipe outlived ends where it headed); a glide begun since owns the
-// distance. `view`: goal (the distance a zoom eases to, or null), tween (the glide, or null), distance(), setZoomGoal(d).
+/**
+ * Take the zoom's state before a scroll that may turn out a swipe (attachInput).
+ * @param {{goal: number|null, tween: object|null, distance: () => number}} view The view: goal (the distance a
+ *     zoom eases to), tween (the glide) and distance().
+ * @returns {{goal: number|null, tween: object|null, zoomed: boolean, distance: number}}
+ */
 export function saveZoom(view) {
   return { goal: view.goal, tween: view.tween, zoomed: !!view.tween?.zoomed, distance: view.distance() };
 }
+/**
+ * Put the zoom's state back: during a glide its own easing of the distance resumes (a glide the swipe outlived
+ * ends where it headed); a glide begun since owns the distance.
+ * @param {{goal: number|null, tween: object|null, zoomed: boolean, distance: number}} saved
+ */
 export function restoreZoom(view, saved) {
   if (view.tween && view.tween === saved.tween) {
     view.goal = saved.goal;
@@ -137,6 +167,17 @@ export function restoreZoom(view, saved) {
   } else if (!view.tween) view.setZoomGoal(saved.goal ?? saved.tween?.dist1 ?? saved.distance);
 }
 
+/**
+ * Read the view's wheel, pinch and pan input on an element, as the fullscreen lobby reads it (lobby-touch.js).
+ * A mouse wheel zooms (wheelZoom); a trackpad swipe, a Magic Mouse scroll or a horizontal wheel pans while
+ * zoomed in (as far as the fingers moved), and a scroll that starts like a notch and turns out a swipe takes
+ * its zoom back (saveZoom, restoreZoom). A pinch zooms (pinchZoom): ctrl + wheel in Chromium and WebView2,
+ * gesture events in WebKit, two fingers on a touch screen. A right- or middle-button drag pans.
+ * @param {object} sink What the input drives: zoom(factor) multiplies the distance the zoom heads for,
+ *     zoomSave() and zoomRestore(saved) take and put back the zoom's state, span() is the zoom range's
+ *     (wheelZoom), pan(dx, dy) moves the chibi by CSS px.
+ * @returns {() => void} Detaches the input.
+ */
 export function attachInput(el, sink) {
   let scroll = { kind: null, at: -Infinity },
     pinchUntil = -Infinity,
@@ -243,8 +284,15 @@ export function attachInput(el, sink) {
 // the front view, level, as on the formation screen
 const HOME = new THREE.Vector3(0, 0, 1);
 
-// Frame the rendered silhouette, including the halo and props but excluding transparent mesh margins.
-// WebGL rows start at the bottom; camera view offsets start at the top. The second draw keeps full resolution.
+/**
+ * Frame the rendered silhouette, including the halo and props but excluding transparent mesh margins. WebGL
+ * rows start at the bottom; camera view offsets start at the top.
+ * @param {Uint8Array} pixels The RGBA pixels.
+ * @param {number} width The width in pixels.
+ * @param {number} height The height in pixels.
+ * @param {number} [margin] The margin kept in pixels.
+ * @returns {{x: number, y: number, w: number, h: number}|null} The frame; null when nothing is drawn.
+ */
 export function visibleStillFrame(pixels, width, height, margin = 24) {
   let left = width,
     right = -1,
@@ -265,9 +313,15 @@ export function visibleStillFrame(pixels, width, height, margin = 24) {
   return { x: (left + right + 1 - w) / 2, y: height - (bottom + top + 1 + h) / 2, w, h };
 }
 
-// The switch card's still is taken from its own camera: the live one's lens, at the front view at the fit distance
-// from the orbit target, the target on the frame's point of a w x h host. The live camera's orbit and zoom do not
-// matter (seen from straight above, the box's height shrinks to nothing on the canvas).
+/**
+ * The camera of the switch card's still: the live one's lens, at the front view at the fit distance from the
+ * orbit target, the target on the frame's point of a w x h host. The live camera's orbit and zoom do not matter
+ * (seen from straight above, the box's height shrinks to nothing on the canvas).
+ * @param {THREE.PerspectiveCamera} camera
+ * @param {THREE.Vector3} target
+ * @param {{x: number, y: number}} frame The frame point in px.
+ * @returns {THREE.PerspectiveCamera}
+ */
 export function stillCamera(camera, target, fit, frame, w, h) {
   const c = camera.clone();
   c.position.copy(target).addScaledVector(HOME, fit);
@@ -278,8 +332,14 @@ export function stillCamera(camera, target, fit, frame, w, h) {
   return c;
 }
 
-// the still's crop of a W x H canvas rendered by `camera`: the upper body, from the chibi's box (around the target)
-// as projected: its height, its centre over the root
+/**
+ * The still's crop of a W x H canvas rendered by a camera: the upper body, from the chibi's box (around the
+ * target) as projected: its height, its centre over the root.
+ * @param {THREE.Vector3} target
+ * @param {THREE.Box3} box The chibi's box around the target.
+ * @param {number} aspect The crop's width over its height.
+ * @returns {{x: number, y: number, w: number, h: number}} The crop in canvas pixels.
+ */
 export function stillCrop(camera, target, box, W, H, aspect) {
   const at = (y) => new THREE.Vector3(target.x, target.y + y, target.z).project(camera);
   const top = at(box.max.y),
@@ -313,6 +373,12 @@ export const ACTIONS = {
 // a story model's own cutscene clips (slots Story_1, Story_2, ...): actions story1, story2, ..., each played
 // once and held on its last frame
 const STORY = /^Story_(\d+)$/;
+/**
+ * The actions of a story model's own cutscene clips (slots Story_1, Story_2, ...), each played once and held on
+ * its last frame.
+ * @param {Map<string, *>|undefined} clips The model's clips by slot.
+ * @returns {string[]} The action names story1, story2, ... in order.
+ */
 export const storyActions = (clips) =>
   [...(clips?.keys() || [])]
     .map((slot) => STORY.exec(slot)?.[1])
@@ -320,12 +386,23 @@ export const storyActions = (clips) =>
     .map(Number)
     .sort((a, b) => a - b)
     .map((n) => `story${n}`);
+/**
+ * The definition of a story action.
+ * @returns {{slots: string[], hold: boolean}|null} The slots to play; null when the name is not a story action.
+ */
 export const storyAction = (name) =>
   /^story\d+$/.test(name) ? { slots: [`Story_${name.slice(5)}`], hold: true } : null;
 
 // The skeleton's paired bones and trunk the facing is read from: a biped's (3ds Max's "Bip001 L Thigh", any rig's
 // left/right thigh and clavicle or shoulder, its pelvis or hips and its head); null without a pair and the trunk.
 const SIDE = /(?:^|[\s_.:-])(l|r|left|right)[\s_.:-]*(thigh|upleg|upperleg|clavicle|shoulder)$/i;
+/**
+ * The skeleton's paired bones and trunk the facing is read from: a biped's (3ds Max's "Bip001 L Thigh", any
+ * rig's left and right thigh or arm) and the head and hips.
+ * @param {THREE.Object3D|undefined} root
+ * @returns {{head: THREE.Object3D, hips: THREE.Object3D, pairs: THREE.Object3D[][]}|null} The bones; null when
+ *     the rig lacks them.
+ */
 export function facingBones(root) {
   const found = {};
   root?.traverse((o) => {
@@ -345,16 +422,28 @@ export function facingBones(root) {
     : null;
 }
 
-// The head's own forward, in its local space: `front` (the front view's direction) as the head is turned now, read
-// while the formation idle looks into the formation camera; null without the bones.
+/**
+ * The head's own forward, in its local space: `front` (the front view's direction) as the head is turned now,
+ * read while the formation idle looks into the formation camera; null without the bones.
+ * @param {object|null} bones The bones, as facingBones gives them.
+ * @param {THREE.Vector3} [front] The front view's direction.
+ * @returns {THREE.Vector3|null}
+ */
 export function headFront(bones, front = HOME) {
   if (!bones) return null;
   return front.clone().applyQuaternion(bones.head.getWorldQuaternion(new THREE.Quaternion()).invert());
 }
 
-// The way a posed character faces, level (unit, y 0): where the face looks, with the head's forward (headFront),
-// else the body's: the trunk (hips to head) crossed with its left-to-right line (each pair's right bone less its
-// left, summed); null when the pose gives none (lying flat along that line, or the face straight up or down).
+/**
+ * The way a posed character faces, level (unit, y 0): where the face looks, with the head's forward
+ * (headFront), else the body's: the trunk (hips to head) crossed with its left-to-right line (each pair's right
+ * bone less its left, summed); null when the pose gives none (lying flat along that line, or the face straight
+ * up or down).
+ * @param {object|null} bones The bones, as facingBones gives them.
+ * @param {THREE.Vector3} [out]
+ * @param {THREE.Vector3|null} [front] The head's forward (headFront).
+ * @returns {THREE.Vector3|null}
+ */
 export function facingOf(bones, out = new THREE.Vector3(), front = null) {
   if (!bones) return null;
   if (front) {
@@ -372,8 +461,13 @@ export function facingOf(bones, out = new THREE.Vector3(), front = null) {
   return out.lengthSq() > 1e-8 ? out.normalize() : null;
 }
 
-// The camera's direction from the orbit target that sees the character's front: its facing, at the camera's
-// height angle now (the orbit's elevation kept, so only the yaw turns).
+/**
+ * The camera's direction from the orbit target that sees the character's front: its facing, at the camera's
+ * height angle now (the orbit's elevation kept, so only the yaw turns).
+ * @param {THREE.Vector3} facing
+ * @param {THREE.Vector3} offset The camera's offset from the orbit target.
+ * @returns {THREE.Vector3} The direction, a unit vector.
+ */
 export function frontView(facing, offset) {
   const length = offset.length();
   const sin = length > 0 ? THREE.MathUtils.clamp(offset.y / length, -1, 1) : 0;
@@ -384,8 +478,11 @@ export function frontView(facing, offset) {
     .normalize();
 }
 
-// The node the view follows: the hips (3ds Max's Bip001, else a pelvis or hips bone), whose horizontal
-// travel a clip's walk, run or cutscene path makes; null without one (the view then stays put).
+/**
+ * The node the view follows: the hips (3ds Max's Bip001, else a pelvis or hips bone), whose horizontal travel a
+ * clip's walk, run or cutscene path makes; null without one (the view then stays put).
+ * @param {THREE.Object3D|undefined} root
+ */
 export function anchorNode(root) {
   let found = root?.getObjectByName("Bip001") || null;
   root?.traverse((o) => {
@@ -394,16 +491,26 @@ export function anchorNode(root) {
   return found;
 }
 
-// The orbit target's horizontal shift that keeps the anchor where it stood when the view was measured: the camera
-// moves with the character, which then acts in place whatever its clip does (height is the clip's own: jumps and
-// crouches still show).
+/**
+ * The orbit target's horizontal shift that keeps the anchor where it stood when the view was measured: the
+ * camera moves with the character, which then acts in place whatever its clip does (height is the clip's own:
+ * jumps and crouches still show).
+ * @param {THREE.Vector3} position
+ * @param {THREE.Vector3} rest The anchor when the view was measured.
+ * @param {THREE.Vector3} [out]
+ * @returns {THREE.Vector3}
+ */
 export function followOffset(position, rest, out = new THREE.Vector3()) {
   return out.set(position.x - rest.x, 0, position.z - rest.z);
 }
 
-// Where the orbit target stands across the floor: over the prefab's root, as on the formation screen, unless the
-// hips stand further than `far` from it (a cutscene's model, placed off its own root, e.g. Arona's): then over the
-// hips, so the character is in the frame's point rather than beside it.
+/**
+ * Where the orbit target stands across the floor: over the prefab's root, as on the formation screen, unless
+ * the hips stand further than `far` from it (a cutscene's model, placed off its own root, e.g. Arona's): then
+ * over the hips, so the character is in the frame's point rather than beside it.
+ * @param {{x: number, z: number}} origin
+ * @param {number} [far] The distance beyond which the hips are used.
+ */
 export function standPoint(origin, hips, far = 0.2) {
   const off = hips ? Math.hypot(hips.x - origin.x, hips.z - origin.z) : 0;
   return off > far ? { x: hips.x, z: hips.z } : { x: origin.x, z: origin.z };
@@ -431,7 +538,8 @@ async function readGlb(url, signal) {
   signal?.throwIfAborted();
   return loader.parseAsync(bytes, "");
 }
-// a GLB's textures: colour textures decoded from sRGB, masks and direction maps as data (the game's linear colour space)
+// a GLB's textures: colour textures decoded from sRGB, masks and direction maps as data (the game's linear
+// colour space)
 async function gltfTextures(gltf) {
   const json = gltf.parser.json;
   const textures = await Promise.all((json.textures || []).map((_, i) => gltf.parser.getDependency("texture", i)));
@@ -451,10 +559,17 @@ function discardScene(scene) {
   });
 }
 
-// A clip added on demand (the model route's ?clip=, model.py export_clip) made to play on the shown model: the
-// clip's GLB holds the model's hierarchy in the shown GLB's node order, so each track's node is the shown model's node
-// of the same index (renamed to its uuid, which the mixer finds whatever the names). Returns null when the hierarchy
-// is not the shown one's (another source answered).
+/**
+ * Make a clip added on demand (the model route's ?clip=, model.py export_clip) play on the shown model: the
+ * clip's GLB holds the model's hierarchy in the shown GLB's node order, so each track's node is the shown
+ * model's node of the same index (renamed to its uuid, which the mixer finds whatever the names).
+ * @param {object} clipJson The clip GLB's JSON.
+ * @param {THREE.Object3D[]} clipNodes The clip GLB's nodes.
+ * @param {THREE.Object3D[]} nodes The shown model's nodes.
+ * @param {object} json The shown GLB's JSON.
+ * @returns {THREE.AnimationClip|null} The clip on the shown model; null when the hierarchy is not the shown
+ *     one's (another source answered).
+ */
 export function retarget(clip, clipJson, clipNodes, nodes, json) {
   const count = clipJson.extras?.hierarchy;
   if (
@@ -915,7 +1030,8 @@ class ChibiView {
     const offset = this.camera.position.clone().sub(this.controls.target);
     const keep = !snap && !!this.fit && offset.lengthSq() > 0;
     const from = this.range(); // gliding: where it is now
-    const distance = keep ? carryZoom(this.goal ?? offset.length(), from, range) : fit; // a zoom under way: where it heads
+    // a zoom under way: where it heads
+    const distance = keep ? carryZoom(this.goal ?? offset.length(), from, range) : fit;
     this.fit = fit;
     this.limits = { min: range.min, max: fit * 1.3 }; // the bust, a step back
     this.camera.near = fit / 50;
@@ -1382,15 +1498,26 @@ class ChibiView {
   }
 }
 
+/**
+ * Make a view for stills of the model, not shown on screen.
+ * @param {object} [options]
+ */
 export const createStillView = (options = {}) => new ChibiView(null, null, { ...options, still: true });
 
 let view = null,
   token = 0;
 
-// show(variantKey, host, {frame, onAction}): load and show a variant's chibi; resolves with the action names once
-// the first frame is drawn, or null when another show or a hide came first. onAction(name) follows the current
-// action when it changes by itself (a tap, a reaction ending). The shown view is kept for the same variant of the
-// same install (version: the game's resource version; another game folder or file source loads it again).
+/**
+ * Load and show a variant's chibi. The shown view is kept for the same variant of the same install (version:
+ * the game's resource version; another game folder or file source loads it again).
+ * @param {object} [options]
+ * @param {string} [options.frame] The framing, "left" or "full".
+ * @param {((name: string) => void)|null} [options.onAction] Follows the current action when it changes by
+ *     itself (a tap, a reaction ending).
+ * @param {string|null} [options.version] The game's resource version.
+ * @returns {Promise<string[]|null>} The action names once the first frame is drawn; null when another show or a
+ *     hide came first.
+ */
 export async function show(key, host, { frame: mode = "left", onAction = null, version = null, source = "live" } = {}) {
   if (view?.key === key && view.host === host && view.version === version && view.source === source) {
     view.onAction = onAction;
@@ -1425,7 +1552,7 @@ export async function show(key, host, { frame: mode = "left", onAction = null, v
   return v.ready;
 }
 
-// free the view and its WebGL context
+/** Free the view and its WebGL context. */
 export function hide(host) {
   token += 1;
   if (view) {
@@ -1435,37 +1562,71 @@ export function hide(host) {
   if (host) host.replaceChildren();
 }
 
+/**
+ * Change the framing: the camera glides to it.
+ * @param {"left"|"full"} mode
+ */
 export function frame(mode) {
   view?.frameTo(mode);
 }
-// resolves once the camera has arrived at its framing (a change of framing glides there)
+/** Wait until the camera has arrived at its framing. */
 export function settled() {
   return new Promise((resolve) => {
     const check = () => (view?.tween ? requestAnimationFrame(check) : resolve());
     check();
   });
 }
+/**
+ * The shown model's actions.
+ * @returns {object[]} The actions; empty before a model is shown.
+ */
 export const actions = () => view?.actions() || [];
+/**
+ * The action in play.
+ * @returns {string|null}
+ */
 export const current = () => view?.current || null;
+/**
+ * Play an action by its name.
+ * @returns {boolean} False when it cannot play.
+ */
 export function play(name) {
   return view?.act(name, { quiet: true }) || false;
 }
-// the shown model's clips by name (the GLB's extras.clips) and its prefab's dev name, for the action bar
-// (clip-names.js actionsOf); empty before a model is shown
+/**
+ * The shown model's clips by name (the GLB's extras.clips), for the action bar (clip-names.js actionsOf); empty
+ * before a model is shown.
+ * @returns {string[]}
+ */
 export const clipNames = () => view?.json?.extras?.clips || [];
+/**
+ * The shown model's prefab dev name.
+ * @returns {string} The name; empty before a model is shown.
+ */
 export const devName = () => view?.json?.extras?.dev || "";
-// whether every clip named is there to play (the GLB's, or added)
+/**
+ * Whether every clip named is there to play (the GLB's, or added).
+ * @param {string[]} names
+ * @returns {boolean} True when they are.
+ */
 export const hasClips = (names) => !!view?.named && (names || []).every((n) => view.named.has(n));
-// the clips named that the GLB does not carry, added to the shown view (ChibiView.addClips); resolves false when the
-// view changed meanwhile
+/**
+ * Add the clips named that the GLB does not carry to the shown view (ChibiView.addClips).
+ * @param {string[]} names
+ * @returns {Promise<boolean>} Settles false when the view changed meanwhile.
+ */
 export async function loadClips(names, { signal } = {}) {
   const v = view;
   if (!v?.named) return false;
   await v.addClips(names, { signal });
   return v === view && !v.disposed;
 }
-// An action of the bar ({ key, id, form, clips }): today's actions (ACTIONS) of the first battle form play as before,
-// by their slots; any other by its clips (actClips), which must be there (hasClips). False when it cannot play.
+/**
+ * Play an action of the bar: today's actions (ACTIONS) of the first battle form play by their slots; any other
+ * by its clips (actClips), which must be there (hasClips).
+ * @param {{key: string, id: string, form?: number, clips?: string[]}} a
+ * @returns {boolean} False when it cannot play.
+ */
 export function playAction(a) {
   if (!view || !a) return false;
   if (ACTIONS[a.id] && (a.form || 0) <= 1 && view.act(a.id, { quiet: true })) {
@@ -1474,9 +1635,16 @@ export function playAction(a) {
   }
   return view.actClips(a.key, a.clips, { like: ACTIONS[a.id] ? a.id : null });
 }
+/**
+ * The shown view's state, for checks.
+ * @returns {object|null} The state; null without a view.
+ */
 export const snapshot = () => view?.snapshot() || null;
-// for checks: the camera's distance, the zoom's goal, range and place, the target's lift, the pan and the follow, and
-// where the anchor (the hips) projects on the canvas (-1..1 across and up)
+/**
+ * For checks: the camera's distance, the zoom's goal, range and place, the target's lift, the pan and the
+ * follow, and where the anchor (the hips) projects on the canvas (-1..1 across and up).
+ * @returns {object|null}
+ */
 export function zoomState() {
   if (!view?.limits) return null;
   const d = view.distance(),

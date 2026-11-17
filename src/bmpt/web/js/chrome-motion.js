@@ -1,10 +1,11 @@
-// The top bar and the bottom menu, moved as the game's lobby moves them (UILobby's UIAni_Lobby, ui-tokens.js LOBBY_ENTRY).
-// - Entry: both wait off the screen until the first screen shows (enter()), then come in on the clip's own curves.
-// - Immersive scenes (window-layout.js isImmersive: detail and Hall fullscreen, photography) send both away. A pointer at
-//   the window's top or bottom edge brings that edge's bar back, usable, until the pointer has been off it for HIDE_DELAY;
-//   leaving the window over a bar keeps it. The scenes' own controls make room (corner-layout.js, bamtChromeInsets).
-// - The macOS window buttons travel with the top bar: the same offsets go to the native side (window.motion).
-// Offsets are viewport CSS pixels away from the screen: up for the top bar, down for the bottom menu.
+// The top bar and the bottom menu, moved as the game's lobby moves them (UILobby's UIAni_Lobby, ui-tokens.js
+// LOBBY_ENTRY). At the start both wait off the screen until the first screen shows (enter()), then come in on
+// the clip's own curves. Immersive scenes (window-layout.js isImmersive: detail and Hall fullscreen,
+// photography) send both away; a pointer at the window's top or bottom edge brings that edge's bar back, usable,
+// until the pointer has been off it for HIDE_DELAY, and leaving the window over a bar keeps it. The scenes' own
+// controls make room (corner-layout.js, bamtChromeInsets). The macOS window buttons travel with the top bar: the
+// same offsets go to the native side (window.motion). Offsets are viewport CSS pixels away from the screen: up
+// for the top bar, down for the bottom menu.
 import { LOBBY_ENTRY } from "./ui-tokens.js";
 import { reflowCorners } from "./corner-layout.js";
 import { rpc } from "./api.js";
@@ -16,7 +17,11 @@ export const HIDE_DELAY = 500; // ms off a revealed bar before it leaves
 export const EXTENT_MARGIN = 8; // px past a bar's lowest (highest) painted edge, hanging Back art included
 export const ENTRY_FALLBACK = 30000; // ms: the bars come in even if the first screen never reports
 
-// Unity's AnimationCurve between unweighted keys [time, value, slope]: a cubic Hermite segment.
+/**
+ * Unity's AnimationCurve between unweighted keys [time, value, slope]: a cubic Hermite segment.
+ * @param {number[][]} keys The curve's keys.
+ * @param {number} t The time in seconds.
+ */
 export function hermite(keys, t) {
   if (t <= keys[0][0]) return keys[0][1];
   for (let i = 1; i < keys.length; i++) {
@@ -31,20 +36,39 @@ export function hermite(keys, t) {
   }
   return keys.at(-1)[1];
 }
+/**
+ * The length of a clip in seconds.
+ */
 export const duration = (keys) => keys.at(-1)[0];
-// The share of the clip's travel still ahead at t: 1 at the start, 0 at the end.
+/**
+ * The share of the clip's travel still ahead at t: 1 at the start, 0 at the end.
+ */
 export const remaining = (keys, t) => hermite(keys, t) / keys[0][1];
+/**
+ * The offset of a bar at t on its way between two offsets.
+ * @param {number} from The offset the clip starts at.
+ * @param {number} to The offset it ends at.
+ */
 export const offsetAt = (keys, from, to, t) =>
   t >= duration(keys) ? to : to + (from - to) * remaining(keys, Math.max(0, t));
-// The offsets at FRAME steps, the last one exactly `to`: what the native window buttons play.
+/**
+ * The offsets at FRAME steps, the last one exactly `to`: what the native window buttons play.
+ */
 export function frames(keys, from, to) {
   const out = [];
   for (let i = 0; i * FRAME < duration(keys); i++) out.push(offsetAt(keys, from, to, i * FRAME));
   out.push(to);
   return out;
 }
+/**
+ * How far a bar travels on entry, in CSS pixels at a stage scale.
+ */
 export const entryDistance = (keys, scale) => Math.abs(keys[0][1]) * UNIT * scale;
 
+/**
+ * Make the motion of the top bar and bottom menu.
+ * @param {object} [env] The page, for the tests.
+ */
 export function createChromeMotion(env = {}) {
   const doc = env.document ?? globalThis.document,
     view = env.window ?? globalThis;
@@ -291,4 +315,7 @@ export function createChromeMotion(env = {}) {
 }
 
 let shared = null;
+/**
+ * The shared motion of the page.
+ */
 export const chromeMotion = () => (shared ||= createChromeMotion());

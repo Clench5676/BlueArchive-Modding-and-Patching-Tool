@@ -144,7 +144,8 @@ for (const locale of locales)
     assert.equal(line.parts.map(([text]) => text).join(""), line.text);
     // the count is of the item at hand: the first of 13 reads 1/13, never 0/13
     assert.ok(modLine({ current: 1, total: 13, variant: "ch0063", kind: "spr" }, { nameOf }).text.includes("1"));
-    // a costume swap names the variant whose costume it takes; one item leaves the count out; no fraction, no percentage
+    // a costume swap names the variant whose costume it takes; one item leaves the count out; no fraction, no
+    // percentage
     const swap = modLine(
       {
         action: "apply",

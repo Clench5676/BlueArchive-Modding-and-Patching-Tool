@@ -1,6 +1,7 @@
-// Text fit of the Batch Import header and name plate, the option rows, the roster's cards and the Show in Explorer button, in
-// every shipped language: the real locale strings through the fit logic of web/js/ngui.js against the prefabs' numbers (a
-// stand-in canvas, see helpers/fit_canvas.mjs: what is asserted is the logic, not a font).
+// Text fit of the Batch Import header and name plate, the option rows, the roster's cards and the Show in
+// Explorer button, in every shipped language: the real locale strings through the fit logic of web/js/ngui.js
+// against the prefabs' numbers (a stand-in canvas, see helpers/fit_canvas.mjs: what is asserted is the logic,
+// not a font).
 import assert from "node:assert/strict";
 import { flat } from "./helpers/source-text.mjs";
 import { test } from "node:test";
@@ -19,14 +20,15 @@ const widest = (value, fs) => Math.max(...lines(value).map((line) => glyphWidth(
 const stack = (value, fs) => lines(value).length * fontSizeFor(value, fs) * LINE_PITCH;
 const artwork = () => importArtwork({ ...NGUI, translate: (key) => key }, makeImportLayouts());
 
-// --- UI-9: the Import State filter's caption (Items SortBtn/Btn_Normal/Type_2/Text: 336 wide, 56, body 456 x 116) ---
+// --- the Import State filter's caption (Items SortBtn/Btn_Normal/Type_2/Text: 336 wide, 56, body 456 x 116) ---
 const STATES = ["ready", "convert", "update", "library", "installed", "blocked", "done"];
 const filterCaptions = (locale, n) =>
   [text(locale, "seg.all"), ...STATES.map((state) => text(locale, `import.state.${state}`))].map((state) =>
     text(locale, "import.filterCount", { state, n }),
   );
 
-// the largest size (steps of 2 down from the prefab's 56) at which the caption fits on one line, or on two split at a space
+// the largest size (steps of 2 down from the prefab's 56) at which the caption fits on one line, or on two split
+// at a space
 function bestSize(caption, room, budget) {
   for (let fs = 56; fs >= 20; fs -= 2) {
     const words = caption.split(" "),
@@ -69,8 +71,8 @@ for (const locale of LOCALES)
           `${locale} ${JSON.stringify(w.text)}: ${stack(w.text, w.fontSize)} tall`,
         );
         assert.ok(w.h_ >= stack(w.text, w.fontSize) - 1e-9);
-        // the prefab's own range is 56 down to 70 %: 39.2. Under it only where the words allow no larger size on two lines, and
-        // then by a step or two
+        // the prefab's own range is 56 down to 70 %: 39.2. Under it only where the words allow no larger size on two
+        // lines, and then by a step or two
         assert.ok(w.fontSize >= 36, `${locale} ${JSON.stringify(w.text)} shrinks to ${w.fontSize}`);
         // wrapping comes before shrinking: no step of the size is given away where the words allow a larger one
         if (locale !== "zh-CN" && locale !== "zh-TW" && locale !== "ja-JP") {
@@ -96,8 +98,9 @@ test("a caption that fits on one line keeps the prefab's size, a longer one wrap
   assert.ok(long.fontSize >= 36 && long.fontSize < 56, `${long.fontSize}`);
 });
 
-// --- UI-10: the Batch Import name plate (Items Equip_Target: BG 1246 x 204 at y 98, Label_Name 104 at y 93, room 1160) ---
-// a breakable name whose one-line width at the prefab's floor (72.8) is at least `target`, built from a variant's parts
+// --- the Batch Import name plate (Items Equip_Target: BG 1246 x 204 at y 98, Label_Name 104 at y 93,
+// room 1160) --- a breakable name whose one-line width at the prefab's floor (72.8) is at least `target`, built
+// from a variant's parts
 function nameOfWidth(target, parts, from = 0) {
   let name = parts[from];
   for (let i = from + 1; glyphWidth(name, 72.8) < target; i++)
@@ -106,7 +109,7 @@ function nameOfWidth(target, parts, from = 0) {
 }
 const LATIN = ["Hoshino (Armed", "Gun", "Pistol", "Wounded", "Rifle", "Sniper", "Mace", "Bow", "Axe", "Club"];
 const KANA = ["ホシノ（武装", "銃", "拳銃", "負傷", "ライフル", "水着", "私服", "冬服", "祭り", "盾"];
-// the review's lengths: 1160 (one line at the floor), up to the longest catalog name, 1849 units
+// the widths to check: 1160 (one line at the floor), up to the longest catalog name, 1849 units
 const WIDTHS = [600, 1100, 1160, 1161, 1300, 1500, 1700, 1849, 2000];
 
 for (const [locale, parts] of [
@@ -175,7 +178,7 @@ test("a name with no word break to wrap at is not cut off by the plate", () => {
   );
 });
 
-// --- UI-11: options side by side share one size (settings-rows.js radioRow: Language, Match Strategy, Spine ...) ---
+// --- options side by side share one size (settings-rows.js radioRow: Language, Match Strategy, Spine ...) ---
 const { radioRow } = await import("../../src/bmpt/web/js/settings-rows.js");
 // the language picker's order (i18n.py UI_LANGUAGES), each option named in its own language
 const LANGUAGES = ["zh-CN", "zh-TW", "en-US", "ja-JP", "ko-KR", "th-TH"];
@@ -183,9 +186,9 @@ const LANGUAGES = ["zh-CN", "zh-TW", "en-US", "ja-JP", "ko-KR", "th-TH"];
 const optionLabels = (row) =>
   row.tree.children.filter((c) => /^Opt_\d+$/.test(c.name)).map((c) => find(c, "Label").widgets[0]);
 const noop = () => {};
-// the pitch and the room the row fits a label to (settings-rows.js): the option's pitch (508, or the content box's 1552 less
-// 2 x 58 shared by the columns) less the radio (60), its gap to the label (19), the clear of the next option (12) and the
-// fit's slack (20)
+// the pitch and the room the row fits a label to (settings-rows.js): the option's pitch (508, or the content
+// box's 1552 less 2 x 58 shared by the columns) less the radio (60), its gap to the label (19), the clear of the
+// next option (12) and the fit's slack (20)
 const roomOf = (columns) => Math.min(508, (1552 - 2 * 58) / columns) - (60 + 19 + 12 + 20);
 // a text fits at X when fitText holds it there with nothing smaller allowed, and its lines stay in the band
 const fitsAt = (value, fs, room, lang = null, band = 96) => {
@@ -207,8 +210,8 @@ function assertSharedRow(row, texts, columns, where, langs = []) {
       widest(w.text, w.fontSize) <= room + 1e-9,
       `${where}: ${JSON.stringify(w.text)} is ${widest(w.text, w.fontSize)} wide in ${room}`,
     );
-    // under the dotted line (109 below the row's top, 4 thick) and above the row's bottom (240) round the option's centre at
-    // 174.5, and no taller than the 100 between option lines where the options take more than one row
+    // under the dotted line (109 below the row's top, 4 thick) and above the row's bottom (240) round the option's
+    // centre at 174.5, and no taller than the 100 between option lines where the options take more than one row
     const band = texts.length > columns ? 96 : 120;
     assert.ok(
       stack(w.text, w.fontSize) <= band + 1e-9,
@@ -219,7 +222,8 @@ function assertSharedRow(row, texts, columns, where, langs = []) {
       `${where}: leaves the row`,
     );
   });
-  // the largest size at which every one fits, give or take the step or two that wrapping must win to be worth it (fitGroup)
+  // the largest size at which every one fits, give or take the step or two that wrapping must win to be worth it
+  // (fitGroup)
   const fs = labels[0].fontSize;
   if (fs <= 42 && lines(labels[0].text).length === 1)
     assert.ok(
@@ -323,7 +327,7 @@ for (const locale of LOCALES)
     }
   });
 
-// --- UI-19: text that sank far under its floor ---
+// --- text that sank far under its floor ---
 import { readFileSync } from "node:fs";
 const catalog = JSON.parse(readFileSync(new URL("../../src/bmpt/catalog/data/catalog.json", import.meta.url), "utf8"));
 const NAME_KEY = { "en-US": "en", "zh-CN": "zh-CN", "zh-TW": "zh-TW", "ja-JP": "ja", "ko-KR": "ko", "th-TH": "th" };

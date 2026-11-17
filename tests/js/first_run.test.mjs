@@ -1,5 +1,5 @@
-// FUN-15: the first-run sequence (cursor, start popups, update check, feature tour) runs once per session, also when the
-// game folder is chosen on the no-game screen after a start without one. main.js's boot(), firstRun() and
+// The first-run sequence (cursor, start popups, update check, feature tour) runs once per session, also when the game
+// folder is chosen on the no-game screen after a start without one. main.js's boot(), firstRun() and
 // refreshConfiguration() run for real on stub collaborators.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";

@@ -1,5 +1,16 @@
-// Bind the native slider; optional percentage fields retain partial text while typing.
+// Bind the native slider; the optional percentage fields keep partial text while typing.
 import { HALL_SCALE } from "./student-hall-framing.js";
+/**
+ * Bind the Hall's scale slider, its percentage field and its reset button.
+ * @param {HTMLInputElement} range
+ * @param {HTMLInputElement|null} number
+ * @param {object} options
+ * @param {(value: number) => void} options.change
+ * @param {(value: number) => void} [options.paint] Called to paint the new scale at once.
+ * @param {() => boolean} [options.enabled]
+ * @param {{min: number, max: number, default: number}} [options.limits]
+ * @returns {{value: () => number, reset: () => void}} The scale's controls.
+ */
 export function bindScale(
   range,
   number,

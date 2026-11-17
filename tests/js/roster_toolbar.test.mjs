@@ -27,7 +27,8 @@ const fit = (value, size, min, width) => ({
 });
 let source = await readFile(new URL("../../src/bmpt/web/js/roster-widgets.js", import.meta.url), "utf8");
 source = source.replace(/^import [^;]*;$/gm, "");
-// ink as the page font draws it: 0.72 em above the baseline, 0.2 below for a letter with a descender, in a box 1.15 em a line
+// ink as the page font draws it: 0.72 em above the baseline, 0.2 below for a letter with a descender, in a box
+// 1.15 em a line
 const ink = (str, px) => {
   const lines = String(str).split("\n"),
     span = (lines.length - 1) * px * 1.15,
@@ -88,7 +89,7 @@ test("shared roster toolbar fits every control in one row and keeps anchors fixe
   }
 });
 
-// UI-13: the six segments and Group Alts have names and pressed states
+// the six segments and Group Alts have names and pressed states
 test("the segments and Group Alts are named by their captions and pressed while their setting is on", () => {
   const lay = toolbarLayout({ sort: "name" });
   const view = { mods: "mods", recruit: "all", merged: true };
@@ -101,7 +102,8 @@ test("the segments and Group Alts are named by their captions and pressed while 
     hits.map((h) => h.pressed),
     [false, true, false, true, false, false, true],
   );
-  // where they were: the filters' three slots each (the right edge of a filter is its centre plus 2.5 slots), Group Alts over its toggle
+  // where they were: the filters' three slots each (the right edge of a filter is its centre plus 2.5 slots),
+  // Group Alts over its toggle
   assert.deepEqual(
     hits.slice(0, 3).map((h) => h.box[0]),
     [0, 1, 2].map((i) => lay.seg1 - (2.5 - i) * lay.segW),
@@ -153,8 +155,7 @@ test("every shipped language names the segments and Group Alts with its own capt
   }
 });
 
-// UI-18: the empty list's picture and message sit on the middle of the paper the eye sees
-const UNITS = 2960 / 1920; // NGUI units per stage px: S is stage px per unit
+// the empty list's picture and message sit on the middle of the paper the eye sees
 const PAPER_TOP = 334.5,
   PAPER_BOTTOM = -714.5,
   SEARCH_LIST_TOP = 314 - 112 - 20; // roster.js: the whole paper, and what the open search box leaves

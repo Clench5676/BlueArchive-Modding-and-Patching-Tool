@@ -1,5 +1,6 @@
 /* Built-in fallback shared by the no-game screen, loading cover and startup recovery. */
-/* black like the game's loading screen: from the first painted frame nothing but black shows until the indicator or a popup */
+/* black like the game's loading screen: from the first painted frame nothing but black shows until the indicator
+   or a popup */
 .loading.neutral .loading-back {
   background: #000 !important;
 }
@@ -67,8 +68,8 @@
   gap: 28px;
   margin-top: 18px;
 }
-/* the fallback button, one look with app.css's .plain-line-button: #8de4ff with #314665 ink on the game's Raius10px corner (6.49 px at
-   the stage's scale), flat: no skew and no shadow */
+/* the fallback button, one look with app.css's .plain-line-button: #8de4ff with #314665 ink on the game's Raius10px
+   corner (6.49 px at the stage's scale), flat: no skew and no shadow */
 .message-button,
 #bamt-recovery button {
   min-width: 240px;

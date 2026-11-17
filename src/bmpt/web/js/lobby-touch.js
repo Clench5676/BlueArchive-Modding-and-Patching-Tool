@@ -1,16 +1,11 @@
-// Fullscreen memorial lobby interaction, as in the game and from its own data (lobby.json: the prefab's SpineDragIK
-// and SpineCharacterBodyTouch boxes; lobby.js plays the clips):
-// - press and hold on the head: after the trigger delay the pat clips play and the Touch_Point bone follows the pointer
-//   inside its box (the skeleton's own constraints make the hair and face follow); on release the end clips play and
-//   the bone eases back. Cheek pinch, hand follow and the other drag kinds work the same way on their bones.
-// - press and drag anywhere else: the eyes follow (Touch_Eye). During a dialogue only the bone follows and the
-//   dialogue goes on; any other drag ends it.
-// - tap on the body: the next dialogue.
-// - zoom at the pointer with a mouse wheel or a trackpad pinch (ctrl + wheel in Chromium and WebView2, gesture events
-//   in WebKit); pan with a two-finger trackpad swipe in any direction, the horizontal wheel, or a right- or
-//   middle-button drag. Panning only moves while zoomed in. A Magic Mouse scrolls like a trackpad: ctrl + scroll zooms.
-// Positions are NGUI units (lobby.js): the stage shows the current view, each skeleton sits at its prefab offset and
-// scale. Lobbies without prefab data get boxes around the character's own bones (medians over the game's lobbies).
+// Fullscreen memorial lobby interaction, as in the game and from its own data (lobby.json: the prefab's SpineDragIK and
+// SpineCharacterBodyTouch boxes; lobby.js plays the clips). Press and hold on the head: after the trigger delay the pat
+// clips play and the Touch_Point bone follows the pointer inside its box; on release the end clips play and the bone
+// eases back; the other drag kinds work the same way on their bones. Press and drag anywhere else: the eyes follow
+// (Touch_Eye); during a dialogue only the bone follows. A tap on the body starts the next dialogue. The wheel or a
+// trackpad pinch zooms at the pointer; a two-finger swipe, the horizontal wheel or a right- or middle-button drag pans,
+// only while zoomed in. Positions are NGUI units (lobby.js); lobbies without prefab data get boxes around the
+// character's own bones.
 
 const SLOP = { mouse: 10, pen: 10, touch: 24 }; // stage px a tap may move (NGUI's mouse click threshold is 10)
 const WHEEL = 0.0015; // zoom by exp(-deltaY * WHEEL) per wheel pixel
@@ -27,6 +22,10 @@ let lobby = null,
   pointer = null,
   gesture = 1;
 let panOnly = false; // the camera framing: every drag moves the view, the character is not touched
+/**
+ * Switch the pointer between the full interaction and panning only.
+ * @param {boolean} on True for panning only.
+ */
 export function setPanOnly(on) {
   panOnly = !!on;
 }
@@ -35,7 +34,11 @@ let scroll = { kind: null, at: -Infinity },
   traceSink = null;
 const clamp = (v, a, b) => Math.max(Math.min(a, b), Math.min(Math.max(a, b), v));
 
-// per lobby: the drags resolved to their skeletons' bones, the body boxes; null clears
+/**
+ * Set the interaction up for a lobby: the drags resolved to their skeletons' bones and the body boxes; null
+ * clears.
+ * @param {{main?: object, players: object[]}|null} api The lobby's players and data.
+ */
 export function setup(api) {
   detach();
   lobby = api;
@@ -259,16 +262,14 @@ function up(e) {
   }
   cursor(...(pointer || []));
 }
-// What one wheel event says about its device: "notch" (a mouse wheel), "maybe" (a wheel, or a trackpad step that
-// happens to look like one) or "smooth" (a trackpad, a Magic Mouse).
-// - Lines or pages (deltaMode 1, 2): a wheel.
-// - Both axes, or neither (a trackpad's gesture start): a trackpad. A wheel moves one axis.
-// - WebKit (Safari, the macOS app's WKWebView) gives wheelDeltaY = 3 x deltaY for every device (wheel ticks of 40 px;
-//   Chromium on macOS does the same for a trackpad), so there it says nothing. A wheel notch is the system's line
-//   delta times 40 px instead: macOS accelerates notches in tenths of a line, kept in 16.16 fixed point, so a notch is
-//   k x 4 px off by a hair (4.000244, 7.99988, 12.000732 ...) and a whole number only at half lines (k a multiple of
-//   5). A trackpad's steps are whole pixels: 8 px is a trackpad, 4.000244 a wheel, 20 or 40 either.
-// - Chromium and WebView2 count whole notches in wheelDeltaY, in steps of 120.
+/**
+ * What one wheel event says about its device: "notch" (a mouse wheel), "maybe" (a wheel, or a trackpad step
+ * that happens to look like one) or "smooth" (a trackpad, a Magic Mouse).
+ * Lines or pages (deltaMode 1, 2) are a wheel; both axes or neither a trackpad. Where the engine reports
+ * wheelDeltaY as 3 x deltaY for every device (WebKit, Chromium on macOS for a trackpad), the pixel step itself
+ * tells: a macOS notch is k x 4 px off by a hair, a trackpad's steps are whole pixels. Chromium and WebView2
+ * count whole notches in wheelDeltaY, in steps of 120.
+ */
 export function wheelStep(e) {
   if (e.deltaMode === 1 || e.deltaMode === 2) return "notch";
   const dx = e.deltaX || 0,
@@ -285,9 +286,15 @@ export function wheelStep(e) {
   }
   return w && w % 120 === 0 ? "notch" : "smooth";
 }
-// A mouse wheel zooms, a trackpad swipe pans. Events this close together are one scroll and keep its kind, so a
-// trackpad step or its momentum that looks like a notch still pans; but a scroll read as a wheel turns out a trackpad
-// at the first event a wheel never sends.
+/**
+ * Tell a mouse (the wheel zooms) from a trackpad (the swipe pans) for a wheel event.
+ * Events this close together are one scroll and keep its kind, so a trackpad step or its momentum that looks
+ * like a notch still pans; but a scroll read as a wheel turns out a trackpad at the first event a wheel never
+ * sends.
+ * @param {number} [now] The time of the event in milliseconds.
+ * @param {{at: number, kind: string|null}} [last] The previous scroll: its time and the kind it was read as.
+ * @returns {"mouse"|"trackpad"}
+ */
 export function wheelKind(e, now = performance.now(), last = scroll) {
   const step = wheelStep(e);
   if (!(now - last.at < SCROLL_MS && last.kind)) return step === "smooth" ? "trackpad" : "mouse";
@@ -389,6 +396,7 @@ const handlers = [
   ["webkitmouseforcewillbegin", noDrag],
   ["webkitmouseforcedown", noDrag],
 ];
+/** Start listening for the lobby's pointer, wheel and gesture events on an element. */
 export function attach(el) {
   if (!el || host === el || !lobby) return;
   detach();
@@ -396,7 +404,7 @@ export function attach(el) {
   for (const [type, fn, opts] of handlers) host.addEventListener(type, fn, opts);
   if (traceSink) for (const type of SPY) document.addEventListener(type, spy, true);
 }
-// leaving fullscreen: a running drag ends as if released
+/** Leave fullscreen: stop listening; a running drag ends as if released. */
 export function detach() {
   if (press && !press.pan) {
     clearTimeout(press.timer);
@@ -413,9 +421,14 @@ export function detach() {
   host = null;
 }
 
-// every frame, after the animation and before the world transform (lobby.js): the dragged bones follow the pointer
-// (SkeletonUtilityBone override), clamped to their box in the parent bone's space, and ease back to rest when let go.
-// The game's per-frame follow factors are for 60 fps; here they are frame-rate independent.
+/**
+ * Move the dragged bones; called every frame, after the animation and before the world transform (lobby.js).
+ * The bones follow the pointer (SkeletonUtilityBone override), clamped to their box in the parent bone's space,
+ * and ease back to rest when let go. The game's per-frame follow factors are for 60 fps; here they are
+ * frame-rate independent.
+ * @param {object} player The spine-player whose frame it is.
+ * @param {number} delta The frame time in seconds.
+ */
 export function apply(player, delta) {
   // Only lobby.js players created after ensureSpine() install this frame hook.
   if (!items.length) return;
@@ -463,7 +476,11 @@ let traceBuf = [],
   traceTimer = null,
   traceLast = {},
   traceDropped = 0;
-// sink(events) receives batches of plain objects; null turns the trace off
+/**
+ * Turn the input trace on or off (the app started with --debug): what the lobby receives, throttled, for a bug
+ * report.
+ * @param {((events: object[]) => void)|null} sink Receives batches of plain objects; null turns the trace off.
+ */
 export function setTrace(sink) {
   traceSink = sink || null;
   traceBuf = [];
@@ -526,7 +543,10 @@ function flushTrace() {
     }
 }
 
-// for checks: the boxes and the drag state
+/**
+ * For checks: the boxes and the drag state.
+ * @returns {{drags: object[]}} The drags: kind, bone, rect, started and the current position.
+ */
 export const state = () => ({
   drags: items.map((it) => ({
     kind: it.d.kind,

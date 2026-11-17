@@ -613,12 +613,12 @@ test("filter redraws reset the logical viewport instead of restoring a stale old
   modal.close();
 });
 
-// UI-34: Hall's search box, a search field, shows no browser clear button and closes the search on Escape
+// Hall's search box, a search field, shows no browser clear button and closes the search on Escape
 test("Hall's search box closes the search on Escape and shows no browser clear button", async () => {
   const vm = await import("node:vm"),
     { readFileSync } = await import("node:fs");
   const code = source.slice(
-    source.indexOf("// onEscape: Escape in the box"),
+    source.indexOf("export async function search("),
     source.indexOf("export async function checkbox("),
   );
   const box = (onEscape) => {

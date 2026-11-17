@@ -1,10 +1,11 @@
-// Item 1's prompts (docs/webui/mods-switch.md, "Mods already in use"): the mods the last scan found outside the library ("Mods
-// Not in the Library"), the configured entries a Steam check, a repair or a game update put back to official ("Mods
-// Back to Official"), and the messages of an overwritten entry (no official copy anywhere): Add First while its mod is
-// not in the library, the Overwritten message with the repair lines once it is. Every list comes from the scan
-// (mods.entries), so the prompts exist only with the scan consent; the messages need none (the detail screen judges its
-// files cheaply). The pure parts (which entries a prompt lists, its cards and details, what its buttons do, the drift
-// result) are tested in Node (tests/js/prompts.test.mjs).
+// The prompts of the mods already in use (docs/webui/mods-switch.md, "Mods already in use"): the mods the last
+// scan found outside the library ("Mods Not in the Library"), the configured entries a Steam check, a repair or
+// a game update put back to official ("Mods Back to Official"), and the messages of an overwritten entry (no
+// official copy anywhere): Add First while its mod is not in the library, the Overwritten message with the
+// repair lines once it is. Every list comes from the scan (mods.entries), so the prompts exist only with the
+// scan consent; the messages need none (the detail screen judges its files cheaply). The pure parts (which
+// entries a prompt lists, its cards and details, what its buttons do, the drift result) are tested in Node
+// (tests/js/prompts.test.mjs).
 import { notify } from "./popup.js";
 import * as Loading from "./loading.js";
 import * as ModSwitch from "./mod-switch.js";
@@ -18,15 +19,19 @@ import * as Impact from "./update-impact.js";
 
 // --- pure parts ---
 
+/** The key of a scan entry: its install and its core. */
 export const entryKey = (e) => `${e?.install}|${e?.core}`;
 
-// an alternate lobby core's suffix ("gl", "teen"), shown after the kind; none for the primary core and portraits
+/**
+ * An alternate lobby core's suffix ("gl", "teen"), shown after the kind; none for the primary core and
+ * portraits.
+ */
 export function lobbySuffix(core) {
   const m = /_home_([a-z0-9]+)$/i.exec(String(core || ""));
   return m ? m[1].toLowerCase() : "";
 }
 
-// the kind chip: Portrait, Memorial Lobby, or the memorial lobby of an alternate core with its suffix
+/** The kind chip: Portrait, Memorial Lobby, or the memorial lobby of an alternate core with its suffix. */
 export function kindLabel(entry) {
   const kind = entry?.kind || (/_spr$/i.test(entry?.core || "") ? "spr" : "lobby");
   if (kind === "other") return T("settings.mods.other");
@@ -35,27 +40,38 @@ export function kindLabel(entry) {
   return suffix ? `${T("tab.lobby")} ${suffix}` : T("tab.lobby");
 }
 
-// the install an entry is in, from mods.state.installs
+/** The install an entry is in, from mods.state.installs. */
 export const installOf = (state, key) => (state?.installs || []).find((i) => i.key === key) || null;
 
-// the id that names another install's files in a skeleton URL (<core>@<id>); null for the current install's
+/**
+ * The id that names another install's files in a skeleton URL (<core>@<id>); null for the current install's.
+ */
 export function installId(state, key) {
   if (!key || key === state?.current) return null;
   return installOf(state, key)?.id || null;
 }
 
-// a card's skeleton: the entry's core in its own install, so a card never shows the current install's file of the
-// same name
+/**
+ * A card's skeleton: the entry's core in its own install, so a card never shows the current install's file of
+ * the same name; null for kinds without a skeleton.
+ */
 export const entryBase = (entry, state) =>
   ["model", "other"].includes(entry?.kind)
     ? null
     : spineBase(entry?.kind === "lobby" ? "lobby" : "spr", entry?.core, installId(state, entry?.install));
 
-// the entries a prompt lists, from the last scan (mods.entries), leaving out the dismissed ones unless asked (Settings'
-// Check lists them again):
-//   drift: the reset entries ("listed", while mods are on; a game update's updated ones are the update summary's,
-//          update-impact.js), and the stuck ones (pending, overwritten), which no repair brought back, apart ("apart")
-//   untracked: the untracked entries and the configured changed ones ("listed"), the damaged ones apart
+/**
+ * The entries a prompt lists, from the last scan (mods.entries), leaving out the dismissed ones unless asked
+ * (Settings' Check lists them again). For "drift": the reset entries ("listed", while mods are on; a game
+ * update's updated ones are the update summary's, update-impact.js) and the stuck ones (pending, overwritten),
+ * which no repair brought back, apart ("apart"). For "untracked": the untracked entries and the configured
+ * changed ones ("listed"), the damaged ones apart.
+ * @param {object[]} entries The scan's entries.
+ * @param {object} [options]
+ * @param {boolean} [options.dismissed] Include the dismissed entries.
+ * @param {boolean} [options.enabled] Whether mods are on.
+ * @returns {{listed: object[], apart: object[]}}
+ */
 export function promptEntries(entries, which, { dismissed = false, enabled = true } = {}) {
   const open = (e) => dismissed || !e.dismissed;
   const list = (entries || []).filter((e) => e && typeof e === "object");
@@ -71,13 +87,20 @@ export function promptEntries(entries, which, { dismissed = false, enabled = tru
   };
 }
 
-// whether a scan's entries give a prompt something new to show: an entry it lists that it has not shown in this state
+/**
+ * Whether a scan's entries give a prompt something new to show: an entry it lists that it has not shown in this
+ * state.
+ * @param {object[]} listed The entries the prompt lists.
+ * @param {Set<string>} shown The `key|state` pairs shown already.
+ */
 export function fresh(listed, shown) {
   return listed.some((e) => !shown.has(`${entryKey(e)}|${e.state}`));
 }
 
-// the official copy of an entry's non-official files, as its details name it: Kept, Backup, Other Folder, or No
-// Official Copy
+/**
+ * The official copy of an entry's non-official files, as its details name it: Kept, Backup, Other Folder, or No
+ * Official Copy.
+ */
 export function copyText(entry) {
   const files = (entry?.files || []).filter((f) => !f.official);
   if (!files.length) return T("mods.copy.kept");
@@ -89,8 +112,10 @@ export function copyText(entry) {
   return T(best === "game" ? "mods.copy.kept" : `mods.copy.${best}`);
 }
 
-// an entry's CRC state as the details name it: Fixed (trailing bytes), Needs Fix (only from a switch's record), else
-// Not Needed
+/**
+ * An entry's CRC state as the details name it: Fixed (trailing bytes), Needs Fix (only from a switch's record),
+ * else Not Needed.
+ */
 export function crcText(entry) {
   const states = (entry?.files || []).filter((f) => !f.official).map((f) => f.crc);
   if (states.includes("needs_fix")) return T("crc.needed");
@@ -98,12 +123,20 @@ export function crcText(entry) {
   return T("crc.original");
 }
 
-// sizes as the prompts show them
+/** A size as the prompts show it. */
 export const sizeText = (bytes) => ModSwitch.sizeText(bytes);
 
-// card(entry, {state, nameOf, kind}): one card of a prompt, for popup.js listPopup (its thumbnail is added by the page):
-//   the variant's name (the kind is a chip of the details panel, not part of the label), the kind and install chips (the install only when more than one is known), "No Official Copy"
-//   on an overwritten entry; damaged and stuck entries cannot be ticked and are drawn dim with their state
+/**
+ * One card of a prompt, for popup.js listPopup (its thumbnail is added by the page): the variant's name (the
+ * kind is a chip of the details panel, not part of the label), the kind and install chips (the install only
+ * when more than one is known), "No Official Copy" on an overwritten entry; damaged and stuck entries cannot be
+ * ticked and are drawn dim with their state.
+ * @param {object} entry The scan entry.
+ * @param {object} [options]
+ * @param {object|null} [options.state] mods.state.
+ * @param {(entry: object) => string} [options.nameOf] Names the entry's variant.
+ * @param {string} [options.which] The prompt, "untracked" or "drift".
+ */
 export function card(entry, { state = null, nameOf = (e) => e?.variant || e?.core || "", which = "untracked" } = {}) {
   const name = nameOf(entry) || entry?.variant || entry?.core || "";
   // the card's label is the name alone, at the most room the card has; the kind is the details panel's first chip
@@ -137,8 +170,13 @@ export function card(entry, { state = null, nameOf = (e) => e?.variant || e?.cor
   };
 }
 
-// details(entry, which): the panel on the left: File, Size, CRC state and Official Copy; a damaged or stuck entry's
-// Details button opens its repair lines
+/**
+ * The panel on the left of a prompt: File, Size, CRC state and Official Copy; a damaged or stuck entry's
+ * Details button opens its repair lines.
+ * @param {object} entry The scan entry.
+ * @param {object} [options]
+ * @param {string} [options.which] The prompt, "untracked" or "drift".
+ */
 export function details(entry, { which = "untracked" } = {}) {
   const files = entry?.files || [];
   // the files not official (an entry back to official: all of them)
@@ -157,16 +195,26 @@ export function details(entry, { which = "untracked" } = {}) {
   return { title: kindLabel(entry), fields, repair };
 }
 
-// the footer of a prompt: the ticked cards and, for what Add to Library copies, their total size
+/**
+ * The footer of a prompt: the ticked cards and, for what Add to Library copies, their total size.
+ * @param {Set<string>} selection The ticked keys.
+ * @param {object} [options]
+ * @param {boolean} [options.size] Show the total size (Add to Library copies; the drift prompt does not).
+ */
 export function footer(items, selection, { sep = ModSwitch.listSep(), size = true } = {}) {
   const ticked = items.filter((it) => selection.has(it.key));
   const count = T("mods.selected", { n: ticked.length });
   return size ? `${count}${sep}${T("mods.size", { size: sizeText(Popup.sizeOf(items, selection)) })}` : count;
 }
 
-// what the untracked prompt's buttons do: add the ticked cards (and, with Add and Turn On Mods, turn mods on after);
-// with Don't Ask Again ticked, the cards not added are dismissed (by their files' names, sizes and dates). Later adds
-// nothing, and with the box ticked dismisses every card.
+/**
+ * What the untracked prompt's buttons do: add the ticked cards (and, with Add and Turn On Mods, turn mods on
+ * after); with Don't Ask Again ticked, the cards not added are dismissed (by their files' names, sizes and
+ * dates). Later adds nothing, and with the box ticked dismisses every card.
+ * @param {Set<string>} selection The ticked keys.
+ * @param {boolean} [dontAsk] Whether Don't Ask Again is ticked.
+ * @returns {{adopt: object[], dismiss: object[], turnOn: boolean}} What to do.
+ */
 export function untrackedOutcome(button, items, selection, dontAsk = false) {
   const entries = (pick) => items.filter(pick).map((it) => ({ install: it.entry.install, core: it.entry.core }));
   const adding = button === "add" || button === "addTurnOn";
@@ -175,9 +223,11 @@ export function untrackedOutcome(button, items, selection, dontAsk = false) {
   return { adopt, dismiss, turnOn: button === "addTurnOn" };
 }
 
-// Apply Mod Configuration's result: no popup when everything was done; otherwise the failed entries with their error
-// strings, and the ones skipped because their files changed since the scan (another tool, the classic UI) with
-// "Game files changed, check again"
+/**
+ * Apply Mod Configuration's result: no popup when everything was done (null); otherwise the failed entries with
+ * their error strings, and the ones skipped because their files changed since the scan (another tool, the
+ * classic UI) with "Game files changed, check again".
+ */
 export function driftSummary(result, nameOf) {
   const list = (k) => result?.[k] || [];
   const skipped = list("skipped").filter((s) => ["changed", "untracked", "entry_changed"].includes(s.why));
@@ -198,8 +248,10 @@ export function driftSummary(result, nameOf) {
   return { title: T("mods.driftTitle"), lines };
 }
 
-// the message for an overwritten entry's files: Add First while the mod in the game is not in the library (no library
-// source carries its non-official parts), else the Overwritten message with the repair lines
+/**
+ * The message for an overwritten entry's files: Add First while the mod in the game is not in the library (no
+ * library source carries its non-official parts), else the Overwritten message with the repair lines.
+ */
 export function overwrittenKind(files) {
   const modded = (files || []).filter(
     (f) => !(typeof f.official === "boolean" ? f.official : f.applied === "official"),
@@ -213,8 +265,13 @@ let names = async () => (e) => e?.variant || e?.core || "";
 const shown = { drift: new Set(), untracked: new Set() }; // entry|state shown by each prompt in this page
 let busy = false; // a prompt is open (or its action runs)
 let started = false; // the start sequence reached its prompts: later scans may show them
+/** Whether a prompt's job is running. */
 export const isBusy = () => busy; // includes async card preparation before the popup joins the stack
 
+/**
+ * Follow the scan: a scan after the start (the window back in front, the classic window closed, a game folder
+ * change) shows the prompts that have something new once no other popup is open.
+ */
 export function init(options = {}) {
   if (options.names) names = options.names;
   // the tray's Back to Official: the drift prompt, or the update summary when only a game update put entries back
@@ -230,14 +287,19 @@ export function init(options = {}) {
   });
 }
 
-// Ready scan results keep startup priority. An unfinished background scan never holds the usable first screen's tour.
-// reconcile(entries, s): a game update's overwritten entries (state updated) that need no repair are applied again by
-// themselves while mods are on, no prompt (the configuration says they are applied; with the switch
-// on, or once it is turned on again, the drift is reconciled). Those whose configured mod's rig changed stay held.
-// While the install's game update check is due (Later at the start question, or the question not answered yet),
-// its entries wait: only the check applies them again, never a scan before it.
-// Resolves true when it wrote; a refusal (the game running, Steam busy) leaves them for the next scan.
+// Ready scan results keep startup priority. An unfinished background scan never holds the usable first screen's
+// tour. While the install's game update check is due (Later at the start question, or the question not answered
+// yet), its entries wait: only the check applies them again, never a scan before it.
 let reconciling = false;
+/**
+ * Apply again, by themselves, the game update's overwritten entries (state updated) that need no repair while
+ * mods are on, with no prompt: the configuration says they are applied, and once the switch is turned on again
+ * the drift is reconciled. Those whose configured mod's rig changed stay held. A refusal (the game running,
+ * Steam busy) leaves them for the next scan.
+ * @param {object[]} entries The scan's entries.
+ * @param {object} s mods.state.
+ * @returns {Promise<boolean>} True when it wrote.
+ */
 export async function reconcile(entries, s) {
   if (reconciling || s?.enabled === false || s?.scan !== true || s?.available === false) return false;
   let updated = (entries || []).filter((e) => e?.state === "updated" && !e.dismissed);
@@ -265,6 +327,7 @@ export async function reconcile(entries, s) {
   }
 }
 
+/** Show the start prompt a name asks for, if it has something to show. */
 export async function start(which, info) {
   try {
     const s = await ModSwitch.refresh();
@@ -299,8 +362,13 @@ async function later() {
   }
 }
 
-// show(which, {entries, dismissed, force}): a prompt over the current screen. force: from Settings' Check or the tray,
-// whatever was shown before (an empty list needs no popup)
+/**
+ * Show a prompt over the current screen. An empty list needs no popup.
+ * @param {object} [options]
+ * @param {object[]|null} [options.entries] The entries; the last scan's by default.
+ * @param {boolean} [options.dismissed] Include the dismissed entries.
+ * @param {boolean} [options.force] From Settings' Check or the tray: show it whatever was shown before.
+ */
 export async function show(which, { entries = null, dismissed = false, force = false } = {}) {
   if (busy) return null;
   const s = ModSwitch.current() || (await ModSwitch.refresh()) || {};
@@ -389,8 +457,10 @@ function repairMessage(items, s) {
   return Popup.message({ title, lines: overwrittenLines({ names: named, installs }, T), ok: T("picker.ok") });
 }
 
-// heldCards(items, held): the cards of entries whose configured mod's rig a game update changed (``held``: their keys)
-// carry the Rig Changed badge; they start unticked, so Apply Mod Configuration writes them only when ticked
+/**
+ * Mark the cards of entries whose configured mod's rig a game update changed (`held`: their keys): they carry
+ * the Rig Changed badge and start unticked, so Apply Mod Configuration writes them only when ticked.
+ */
 export function heldCards(items, held) {
   return items.map((it) =>
     held.has(it.key) && !it.disabled
@@ -441,8 +511,12 @@ async function driftPrompt(lists, s) {
   return answer.button;
 }
 
-// Apply Mod Configuration: the job, its progress, and its result; refused while the classic UI is open, the classic
-// modal (which can keep it for when the window closes). The update summary's Apply Mod Configuration too.
+/**
+ * Apply Mod Configuration: the job, its progress, and its result; refused while the classic UI is open, the
+ * classic modal (which can keep it for when the window closes). The update summary's Apply Mod Configuration
+ * too.
+ * @param {object[]} entries The entries to restore.
+ */
 export async function applyDrift(entries) {
   const params = { entries };
   let id;
@@ -502,7 +576,10 @@ async function untrackedPrompt(lists, s) {
   return answer.button;
 }
 
-// Add to Library: the library.adopt job (allowed while the game runs), with a result popup for failures.
+/**
+ * Add to Library: the library.adopt job (allowed while the game runs), with a result popup for failures.
+ * @param {object[]} entries The entries to add.
+ */
 export async function adopt(entries) {
   let id;
   try {
@@ -538,9 +615,12 @@ export async function adopt(entries) {
   }
 }
 
-// the message of an overwritten entry of the current install (the switch popup's greyed cards, an
-// original_unavailable refusal): Add First, whose Add to Library adopts this entry, or the Overwritten message with
-// the repair lines of its install; resolves once it closes (true when the entry was added)
+/**
+ * The message for an overwritten entry of the current install (the switch popup's greyed cards, an
+ * original_unavailable refusal): Add First, whose Add to Library adopts this entry, or the Overwritten message
+ * with the repair lines of its install.
+ * @returns {Promise<boolean>} Resolves once it closes: true when the entry was added.
+ */
 export async function overwritten({ name, core, files }) {
   const s = currentState();
   const install = s.current;

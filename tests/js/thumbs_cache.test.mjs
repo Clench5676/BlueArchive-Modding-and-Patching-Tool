@@ -1656,12 +1656,12 @@ test("cancelling a delayed disk thumbnail read never publishes late art or start
   }
 });
 
-// Keep Loading.hold's real ownership/cancellation logic while stubbing its decorative overlay.
+// Keep Loading.hold's real ownership and cancellation logic while stubbing its decorative overlay.
 async function modalLoadingHold() {
   const { readFile } = await import("node:fs/promises");
   const source = await readFile(new URL("../../src/bmpt/web/js/loading.js", import.meta.url), "utf8");
   const start = source.indexOf("export async function hold("),
-    end = source.indexOf("// Read-only previews", start);
+    end = source.indexOf("export function page(", start);
   const code = source.slice(start, end).replace("export async function", "async function");
   const el = { classList: { add() {}, remove() {} }, addEventListener() {} },
     holds = new Set();

@@ -1,18 +1,11 @@
 import { portraitMinimum } from "./photography/camera.js";
-// The portrait's fullscreen view: the game's visual mode (UICharacterVisualMode), which UICharacterDetail opens from
-// its ZoomButton, the nameplate's square button with the rotate-phone icon (Char_ZoomBtn). Drawn from the prefab's PC
-// group (Inventory_ListControl_PC):
-// - BG: the student's collection background (4533 x 3400 units, larger than the detail screen's) under two light
-//   patterns (Bg_Pt_1, Bg_Pt_2) whose TweenAlpha ping-pongs between 0.2 and 0.5 every 1.25 s, in opposite phase;
-// - the portrait's own player (detail.js), so the face and the blink go on, framed by visual-view.js: the whole art,
-//   the body in the middle;
-// - TouchArea, a full-screen button whose press drags the portrait, and the zoom;
-// - Btn_Back top left (leaves), Btn_HideUI top right (switches to this skin's memorial lobby when available),
-//   Btn_RefreshPos bottom right (UI_BUTTON_RESET_POS: back to the whole art; greyed out as
-//   Btn_RefreshPos_Disable while there), sliding in from the screen's edges with UIAni_CharacterVisualMode_PC.
-// Not reproduced: the phone's gyroscope moving the art (mobile only) and the button sounds.
-// Input: press and drag (any button, a finger) moves the art; the mouse wheel zooms at the pointer; a trackpad pinches
-// (ctrl + wheel in Chromium and WebView2, gesture events in WebKit) and swipes; two fingers pinch.
+// The portrait's fullscreen view: the game's visual mode (UICharacterVisualMode), which UICharacterDetail opens from its
+// ZoomButton. It is drawn from the prefab's PC group: the student's collection background under two pulsing light
+// patterns, the portrait's own player (detail.js; framed by visual-view.js: the whole art, the body in the middle), the
+// full-screen TouchArea whose press drags the portrait and the zoom, and the buttons Btn_Back (leaves), Btn_HideUI
+// (switches to this skin's memorial lobby when available) and Btn_RefreshPos (back to the whole art; greyed out while
+// there). The phone's gyroscope and the button sounds are not reproduced. Press and drag moves the art; the wheel zooms
+// at the pointer; a trackpad pinches and swipes; two fingers pinch.
 import * as NGUI from "./ngui.js";
 import { anyOpen as popupOpen } from "./popup.js";
 import { bindCorner } from "./corner-layout.js";
@@ -69,10 +62,18 @@ let st = null;
 const clamp01 = (t) => Math.max(0, Math.min(1, t));
 const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
+/** Whether the visual mode is open and not closing. */
 export const isOpen = () => !!st && !st.closing;
 
-// prepare({layout, bg, strings}): the prefab's background and buttons rendered off screen, for one open(); null
-// without the prefab. strings: {reset, back, switch}; omit switch for skins without a memorial lobby.
+/**
+ * Render the prefab's background and buttons off screen, for one open().
+ * @param {object} options
+ * @param {NguiNode} options.layout The UICharacterVisualMode layout.
+ * @param {object} options.bg The student's collection background.
+ * @param {{reset: string, back: string, switch?: string}} options.strings The captions; omit `switch` for skins
+ *     without a memorial lobby.
+ * @returns {Promise<object|null>} The prepared parts; null without the prefab.
+ */
 export async function prepare({ layout, bg, strings }) {
   const pc = layout ? NGUI.find(layout, "Inventory_ListControl_PC") : null;
   if (!pc) return null;
@@ -80,8 +81,15 @@ export async function prepare({ layout, bg, strings }) {
   return { pc, bg: back, groups };
 }
 
-// The memorial lobby reuses the exact portrait switch widget, without a portrait touch area or reset control.
-// Return it detached so the detail screen can discard a superseded request before publishing it.
+/**
+ * Prepare the switch button: the memorial lobby reuses the exact portrait switch widget, without a portrait
+ * touch area or reset control. It is returned detached so the detail screen can discard a superseded request
+ * before publishing it.
+ * @param {object} options
+ * @param {NguiNode} options.layout The UICharacterVisualMode layout.
+ * @param {() => void} options.onSwitch Called when it is pressed.
+ * @returns {Promise<HTMLElement|null>} The button; null without the prefab.
+ */
 export async function prepareSwitch({ layout, label, onSwitch }) {
   const pc = layout ? NGUI.find(layout, "Inventory_ListControl_PC") : null;
   if (!pc || !label) return null;
@@ -89,7 +97,14 @@ export async function prepareSwitch({ layout, label, onSwitch }) {
   return groups.Btn_HideUI || null;
 }
 
-// Cameras reuse the fullscreen Back's complete body, icon and BoxCollider, with their existing leave action.
+/**
+ * Prepare the Back button: cameras reuse the fullscreen Back's complete body, icon and BoxCollider, with their
+ * own leave action.
+ * @param {object} options
+ * @param {NguiNode} options.layout The UICharacterVisualMode layout.
+ * @param {() => void} options.onBack Called when it is pressed.
+ * @returns {Promise<HTMLElement|null>} The button; null without the prefab.
+ */
 export async function prepareBack({ layout, label, onBack }) {
   const pc = layout ? NGUI.find(layout, "Inventory_ListControl_PC") : null;
   if (!pc) return null;
@@ -97,7 +112,11 @@ export async function prepareBack({ layout, label, onBack }) {
   return groups.Btn_Back || null;
 }
 
-// The same complete Back widget for memorial lobby and model fullscreen.
+/**
+ * Draw the same complete Back widget for memorial lobby and model fullscreen.
+ * @param {HTMLElement} host The element to draw into.
+ * @param {NguiNode} layout The UICharacterVisualMode layout.
+ */
 export async function exitControl(host, layout) {
   const source = NGUI.find(layout, "Inventory_ListControl_PC/LeftTop/Btn_Back");
   if (!source) return;
@@ -119,10 +138,20 @@ export async function exitControl(host, layout) {
   bindCorner(host, [parseFloat(host.style.left), parseFloat(host.style.top), w, h], { corner: "top-left" });
 }
 
-// open({parts, skeleton, detail, host, bgHost, uiHost, players, onBack}): the portrait glides from the detail screen's
-// viewport (detail) to the whole art while the prepared parts come in; without parts (no prefab) there is no
-// background and no button, and the caller gives a way out. players(): every portrait player on the stage. The glide's
-// clock starts with its first frame, as the page's own transitions do.
+/**
+ * Open the visual mode: the portrait glides from the detail screen's viewport to the whole art while the
+ * prepared parts come in. Without parts (no prefab) there is no background and no button, and the caller gives
+ * a way out. The glide's clock starts with its first frame, as the page's own transitions do.
+ * @param {object} o What it opens on.
+ * @param {object|null} o.parts What prepare() gave.
+ * @param {object} o.skeleton The portrait's skeleton.
+ * @param {object} o.detail The detail screen's viewport.
+ * @param {HTMLElement} o.host The element for the portrait.
+ * @param {HTMLElement} o.bgHost The element for the background.
+ * @param {HTMLElement} o.uiHost The element for the buttons.
+ * @param {() => object[]} o.players Gives every portrait player on the stage.
+ * @param {() => void} o.onBack Called when Back is pressed.
+ */
 export async function open(o) {
   if (!(await ensureSpine()) || o.alive?.() === false) return false;
   close({ instant: true });
@@ -172,8 +201,13 @@ export async function open(o) {
   return true;
 }
 
-// close(): the buttons slide out, the background fades and the portrait glides back to the detail screen's framing;
-// instant: at once (the screen is being left)
+/**
+ * Close: the buttons slide out, the background fades and the portrait glides back to the detail screen's
+ * framing.
+ * @param {object} [options]
+ * @param {boolean} [options.instant] Close at once (the screen is being left).
+ * @param {boolean} [options.restore] Give the detail screen's framing back.
+ */
 export function close({ instant = false, restore = true } = {}) {
   const s = st;
   if (!s) return;
@@ -212,13 +246,13 @@ function finish(s, restore = true) {
   }
 }
 
-// Every fullscreen view of the detail screen (this one, the memorial lobby's, the 3D model's) slides the screen's UI
-// out (app.css .stage.fullscreen). uiOut(parts): while out, the parts are inert, so a control nobody sees neither
-// takes the keyboard's focus nor acts; the focused one lets go. uiBack(parts): they come back, the visual mode closes
-// whichever tab the screen shows by then (a tab changed meanwhile must not leave its full-screen touch area over the
-// screen), and the control that had the focus gets it back (refocus: false while the screen is being left).
-// fallback resolves its replacement when a fullscreen view switch rebuilt the detail controls.
+// Every fullscreen view of the detail screen (this one, the memorial lobby's, the 3D model's) slides the
+// screen's UI out (app.css .stage.fullscreen); uiOut and uiBack handle the screen's parts meanwhile.
 let asideFocus = null;
+/**
+ * Make the screen's parts inert while they are slid out, so a control nobody sees neither takes the keyboard's
+ * focus nor acts; the focused one lets go.
+ */
 export function uiOut(parts) {
   const live = parts.filter(Boolean),
     focused = document.activeElement;
@@ -228,6 +262,16 @@ export function uiOut(parts) {
   }
   for (const p of live) p.inert = true;
 }
+/**
+ * Bring the screen's parts back: the visual mode closes whichever tab the screen shows by then (a tab changed
+ * meanwhile must not leave its full-screen touch area over the screen), and the control that had the focus gets
+ * it back.
+ * @param {object[]} parts The parts uiOut made inert.
+ * @param {object} [options]
+ * @param {boolean} [options.refocus] False while the screen is being left.
+ * @param {() => (HTMLElement|null)} [options.fallback] Resolves the control's replacement when a fullscreen
+ *     view switch rebuilt the detail controls.
+ */
 export function uiBack(parts, { refocus = true, fallback } = {}) {
   close();
   for (const p of parts) if (p) p.inert = false;
@@ -237,8 +281,11 @@ export function uiBack(parts, { refocus = true, fallback } = {}) {
   if (refocus && target?.isConnected && !target.closest("[inert]")) target.focus({ preventScroll: true });
 }
 
-// spine-player's per-frame hook (detail.js passes it as the portrait players' config.frame): before the player
-// frames its camera, the view of this frame
+/**
+ * spine-player's per-frame hook (detail.js passes it as the portrait players' config.frame): sets the view of
+ * this frame before the player frames its camera.
+ * @param {object} player The portrait's spine-player.
+ */
 export function frame(player) {
   const s = st;
   if (!s || !player?.currentViewport) return;
@@ -554,7 +601,7 @@ function onKey(e) {
   st.o.onBack();
 }
 
-// for checks: the view, the home view and the limits
+/** For checks: the view, the home view and the limits. */
 export const state = () =>
   st
     ? {
@@ -568,7 +615,10 @@ export const state = () =>
       }
     : null;
 
-// Photography constrains only the framing guide while retaining the native portrait player.
+/**
+ * Photography constrains only the framing guide while the native portrait player stays.
+ * @param {boolean} on Whether photography is on.
+ */
 export function photography(on, frame) {
   if (!st) return;
   st.lim.photoFrame = on ? frame : null;
@@ -581,6 +631,7 @@ export function photography(on, frame) {
     Math.max(full.y + full.height, st.lim.box[3]),
   ];
 }
+/** Whether the portrait is ready to be captured. */
 export function captureReady() {
   if (st) {
     st.glide = null;
@@ -588,9 +639,11 @@ export function captureReady() {
     syncReset(st);
   }
 }
+/** Pan the portrait by the camera's drag. */
 export function panCapture(dx, dy) {
   if (ready(st)) pan(st, dx, dy);
 }
+/** Zoom the portrait by the camera's wheel or pinch at a stage point. */
 export function zoomCapture(factor, x, y) {
   if (ready(st)) zoomTo(st, factor, x, y);
 }

@@ -1,10 +1,10 @@
-// Settings, on the game's PC options popup (UIPopup_Option_PC): tabs on the left, the white panel on the right with
-// the game's option rows: radio rows (UIPopup_Option_Toggle), the sound slider row (UIPopup_Option_SoundToggle), and
-// folder rows built from the same pieces (title with its tag, dotted line, the value, the popup's light-blue buttons).
-// The Mods tab (second, after General) holds the Enable Mods switch with its square "?", where the switch shows, the
-// startup file checks, the tray icon, Settings' Check of the game files, plus the size and cleanup of the mod cache.
-// Whether the classic UI asks before it opens is a General row,
-// under More Settings.
+// Settings, on the game's PC options popup (UIPopup_Option_PC): tabs on the left, the white panel on the right
+// with the game's option rows: radio rows (UIPopup_Option_Toggle), the sound slider row
+// (UIPopup_Option_SoundToggle), and folder rows built from the same pieces (title with its tag, dotted line, the
+// value, the popup's light-blue buttons). The Mods tab (second, after General) holds the Enable Mods switch with
+// its square "?", where the switch shows, the startup file checks, the tray icon, Settings' Check of the game
+// files, and the size and cleanup of the mod cache. Whether the classic UI asks before it opens is a General
+// row, under More Settings.
 import { notify } from "./popup.js";
 import * as ModSwitch from "./mod-switch.js";
 import * as NGUI from "./ngui.js";
@@ -109,7 +109,9 @@ function filesValue(m) {
   return parts.length ? parts.join(ModSwitch.listSep()) : T("settings.mods.clean");
 }
 
-// the Configuration Drift Check row's "?": what configuration drift is
+/**
+ * The lines of the Configuration Drift Check row's "?" help: what configuration drift is.
+ */
 export function driftLines() {
   return [T("settings.mods.driftHelp.what")];
 }
@@ -140,10 +142,11 @@ async function checkFiles() {
   render();
 }
 
-// --- a value with buttons on the right (folders, version, cache); long values wrap, never cut ---
-// The geometry (the content box, the buttons right-aligned SPACE.m apart, the value's room, the wrapping of a second line of
-// buttons) is settings-rows.js valueGeometry. The value is a description: TYPE.caption, in the label box NGUI gives a line.
-// note: a line under the dotted line, above the value and the buttons (settings-rows.js NOTE, the option's red note).
+// --- a value with buttons on the right (folders, version, cache); long values wrap, never cut --- The geometry
+// (the content box, the buttons right-aligned SPACE.m apart, the value's room, the wrapping of a second line of
+// buttons) is settings-rows.js valueGeometry. The value is a description: TYPE.caption, in the label box NGUI
+// gives a line. note: a line under the dotted line, above the value and the buttons (settings-rows.js NOTE, the
+// option's red note).
 const LABEL_BOX = 1.3;
 function valueRow(name, y, title, value, buttons, { below = false, showValue = true, note = "" } = {}) {
   const f = wrapPath(
@@ -688,13 +691,14 @@ async function saveSetting(key, value) {
   return next;
 }
 
-// --- the sliders: a native range input over the game's slider, as the Hall's size slider has it. The pointer, the arrow keys,
-// Home, End and Page Up and Down move it, a screen reader reads it (name, value); the game's thumb follows it (and the value
-// label, if any), and the value is saved when the input commits (the pointer's release, each key press). The input is
-// unseen: its focus shows as a ring on the thumb. A drag the system cancels (pointercancel) is undone: the thumb and the
-// input go back to the saved value and nothing is saved.
-// s: {path, name, value (0 to 1), steps, set(f), label?, text?(f)} ---
-export const SLIDER_THUMB = 40; // px: the input's native thumb (app.css .slider-range), so its centre travels the drawn thumb's 632 units
+// --- the sliders: a native range input over the game's slider, as the Hall's size slider has it. The pointer,
+// the arrow keys, Home, End and Page Up and Down move it, a screen reader reads it (name, value); the game's
+// thumb follows it (and the value label, if any), and the value is saved when the input commits (the pointer's
+// release, each key press). The input is unseen: its focus shows as a ring on the thumb. A drag the system
+// cancels (pointercancel) is undone: the thumb and the input go back to the saved value and nothing is saved. A
+// slider is {path, name, value (0 to 1), steps, set(f), label?, text?(f)} ---
+// px: the input's native thumb (app.css .slider-range), so its centre travels the drawn thumb's 632 units
+export const SLIDER_THUMB = 40;
 function wireSlider(host, view, s) {
   const bar = view.nodes.get(s.path)?.els[0],
     thumbEntry = view.nodes.get(`${s.path}/Thumb`);
@@ -850,6 +854,9 @@ async function render({ builtSize = null, sizeError = null } = {}) {
   }
 }
 
+/**
+ * Close Settings.
+ */
 export function close() {
   const host = $("settings");
   host.hidden = true;
@@ -881,7 +888,11 @@ function follow() {
   });
 }
 
-// open(onChange, initialTab): onChange(key, prefs) after a setting was saved
+/**
+ * Open Settings, on a tab.
+ * @param {(key: string, prefs: object) => void} changed Called after a setting was saved.
+ * @param {string|null} [initialTab] The tab to open on; the last one by default.
+ */
 export async function open(changed, initialTab = null) {
   onChange = changed;
   if (TABS.includes(initialTab)) {
@@ -902,6 +913,9 @@ export async function open(changed, initialTab = null) {
   await render();
 }
 
+/**
+ * The settings as last read from the server.
+ */
 export const current = () => prefs;
 
 // Prefabs and derived UI values belong to the selected installation.

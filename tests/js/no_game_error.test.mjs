@@ -50,7 +50,7 @@ test("no error text in main.js reads a missing code as a key", () => {
   assert.ok(!/error\.\$\{error\.code\}/.test(source));
 });
 
-// UI-1: the screen's hint is the existing "Detect it, or choose the game folder", not the line that sends the user to a
+// the screen's hint is "Detect it, or choose the game folder", not the line that sends the user to a
 // Settings that cannot open without a game; the Settings button always answers.
 function screen({ native = false, detected = [] } = {}) {
   const shown = [],

@@ -3,8 +3,10 @@
 // (`missing.cabs`) and the files of the same slot in its folders (`missing.found`).
 import { withCode } from "./error-codes.js";
 
-// An error text with the file it names left out (the details list each file), when the name opens or ends the text:
-// "{file}, build target ..." or "Not a valid bundle: {file}". A name inside a sentence stays.
+/**
+ * An error text with the file it names left out (the details list each file), when the name opens or ends the
+ * text: "{file}, build target ..." or "Not a valid bundle: {file}". A name inside a sentence stays.
+ */
 export function withoutFile(T, key, params = {}) {
   const marker = "\u0000",
     text = T(key, { ...params, file: marker });
@@ -17,10 +19,16 @@ export function withoutFile(T, key, params = {}) {
   return trimmed.includes(marker) ? T(key, params) : trimmed;
 }
 
+/**
+ * Whether an import entry has details to show: it is blocked or incomplete.
+ */
 export const hasDetails = (entry) => entry?.state === "blocked" || entry?.state === "incomplete";
 
-// One paragraph for the reason, one for each file (its name, build target, Unity version) and one each for the unresolved
-// dependencies and the files found: lines of a paragraph sit at the text's line pitch, paragraphs at the popup's gap.
+/**
+ * The details' lines: one paragraph for the reason, one for each file (its name, build target, Unity version)
+ * and one each for the unresolved dependencies and the files found. Lines of a paragraph sit at the text's line
+ * pitch, paragraphs at the popup's gap.
+ */
 export function detailLines(entry, { reason = "", T, separator = ", " }) {
   const error = entry.error || { code: entry.reason || (entry.state === "incomplete" ? "mod_parts_missing" : null) };
   const lines = reason ? [withCode(reason, error, T)] : [];

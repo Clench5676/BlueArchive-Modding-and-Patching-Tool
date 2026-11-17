@@ -107,7 +107,8 @@ test("composed occlusion control keeps the right edge, centred neighbours and sc
     for (const box of [boxes.occlusion, boxes.grid, boxes.mode]) {
       assert.ok(box[2] * scale >= 44);
       assert.ok(box[3] * scale >= 44);
-      near((box[1] + box[3] / 2) * scale, (25 + (FULLSCREEN_BUTTON.h * S) / 2) * scale); // every control of the row has the fullscreen buttons' one height
+      // every control of the row has the fullscreen buttons' one height
+      near((box[1] + box[3] / 2) * scale, (25 + (FULLSCREEN_BUTTON.h * S) / 2) * scale);
     }
   assert.match(compact(controller), /P\("occlusion"\),boxes\.occlusion/);
   assert.doesNotMatch(compact(controller), /getComputedStyle/);

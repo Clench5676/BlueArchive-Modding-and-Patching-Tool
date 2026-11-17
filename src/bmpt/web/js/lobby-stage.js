@@ -1,18 +1,10 @@
 // A memorial lobby drawn the way the game's camera draws it: every skeleton and particle effect of the lobby into one
-// target, in the order Unity sorts them. spine-unity gives each submesh of a skeleton the material of its atlas page,
-// and Unity sorts every submesh and particle renderer by sorting order, render queue, then back to front, whichever
-// renderer it belongs to. So the skeletons of one lobby interleave: Wakamo's lobby draws the scenery pages of both its
-// skeletons (2800, 2900), her fire (3000), her own page (3050), the front fire (3100) and the parked intro scene's
-// front page (3150); Shigure's and Yuuka (Track)'s lobbies put their bokeh and dust between their scenery and them.
-// One canvas per skeleton, stacked, can only draw each skeleton whole above the one before: the effects that sort
-// between two pages of the bottom skeleton went over the character with the skeleton above.
-//
-// So a lobby of several skeletons draws them all in the bottom player's WebGL context (the host): the other players
-// (guests) are made with that context and their canvases stay empty; once loaded their own frame loops stop and the
-// host runs their frames (animation, clips, drags) at the start of its own, then draws every skeleton part (one per
-// render queue of a skeleton's pages, skeleton-parts.js) and the effects between them (particles-gl.js) in the game's
-// order, into its linear framebuffer, post-processed once (linear.js). A lobby whose bottom skeleton fails to load
-// keeps one context per skeleton, stacked (lobby.js), each drawing its own parts.
+// target, in the order Unity sorts them (sorting order, render queue, then back to front), so the skeletons of one lobby
+// interleave, which one canvas per skeleton cannot do. A lobby of several skeletons therefore draws them all in the
+// bottom player's WebGL context (the host): the other players (guests) are made with that context and their canvases
+// stay empty; the host draws every skeleton part (skeleton-parts.js) and the effects between them (particles-gl.js) into
+// its linear framebuffer, post-processed once (linear.js). A lobby whose bottom skeleton fails to load keeps one context
+// per skeleton, stacked (lobby.js).
 import * as Linear from "./linear.js";
 import * as Parts from "./skeleton-parts.js";
 import { compareKeys, queuesOf, sortKey } from "./particles.js";
@@ -24,11 +16,17 @@ const hidden = new WeakSet(); // players not drawn now: the scenes only a lobby'
 let interleave = true,
   latest = null; // for checks: the order mode, and the host installed last (a WeakRef)
 
-// The order of a lobby's skeleton parts. layers: the players' layers (sortingLayer, order, queue, pages, z) in stacking
-// order; each draws in the parts of queuesOf, one per render queue of its pages, lowest first. Returns [{layer, part,
-// sortingLayer, order, queue, z}]: merged (one target), all of them as Unity sorts transparent submeshes, by sorting
-// layer, sorting order, render queue, then back to front (particles.js sortKey), equal keys in stacking order; else
-// layer after layer, as stacked canvases draw them.
+/**
+ * The order of a lobby's skeleton parts: one part per render queue of each layer's pages, lowest first.
+ * Merged (one target) sorts them all as Unity sorts transparent submeshes, by sorting layer, sorting order,
+ * render queue, then back to front (particles.js sortKey), equal keys in stacking order; otherwise it goes
+ * layer after layer, as stacked canvases draw them.
+ * @param {{sortingLayer?: number, order?: number, queue?: number, pages?: object, z?: number}[]} layers The
+ *     players' layers in stacking order.
+ * @param {boolean} [merged] Whether the parts share one target.
+ * @returns {{layer: number, part: number, sortingLayer: number, order: number, queue: number, z: number}[]} The
+ *     parts in drawing order.
+ */
 export function order(layers, merged = true) {
   const out = layers.flatMap((l, layer) =>
     queuesOf(l).map((queue, part) => ({
@@ -44,9 +42,12 @@ export function order(layers, merged = true) {
   return out.sort((a, b) => compareKeys(sortKey(a), sortKey(b)) || a.layer - b.layer || a.part - b.part);
 }
 
-// create() makes a spine-player; with a host (the lobby's bottom player), one that draws with the host's WebGL context:
-// the canvas it makes asks for a context while the player is made, and gets the host's. Losing and restoring the
-// host's context reaches the guest's textures and shaders too.
+/**
+ * Make a spine-player; with a host (the lobby's bottom player), one that draws with the host's WebGL context:
+ * the canvas it makes asks for a context while the player is made, and gets the host's. Losing and restoring
+ * the host's context reaches the guest's textures and shaders too.
+ * @param {() => object} create
+ */
 export function make(host, create) {
   const gl = host?.context?.gl;
   if (!gl || typeof HTMLCanvasElement === "undefined") return create();
@@ -69,7 +70,10 @@ export function make(host, create) {
   return player;
 }
 
-// the player whose context a player draws with, or null
+/**
+ * The player whose context a player draws with.
+ * @returns {object|null} The host, or null.
+ */
 export const hostOf = (player) => hosts.get(player) || null;
 
 // a player's element on the page: hidden, and left out of the stills and fades taken of the lobby's canvases
@@ -80,20 +84,28 @@ function showElement(player, on) {
   el.style.visibility = on ? "" : "hidden";
   el.classList.toggle("lobby-off", !on);
 }
-// A player shown or hidden (a scene only the intro shows). Drawn by a host, its parts are left out of the host's
-// frame, where the rest of the lobby and the effects keep their order; on a canvas of its own, its element is hidden.
-// The host's element always shows: it carries the whole lobby.
+/**
+ * Show or hide a player (a scene only the intro shows). Drawn by a host, its parts are left out of the host's
+ * frame, where the rest of the lobby and the effects keep their order; on a canvas of its own, its element is
+ * hidden. The host's element always shows: it carries the whole lobby.
+ */
 export function setShown(player, on) {
   if (!player) return;
   if (on) hidden.delete(player);
   else hidden.add(player);
   if (!plans.get(player)?.guests.length) showElement(player, on);
 }
+/**
+ * Whether a player is shown.
+ * @returns {boolean} True unless setShown hid it.
+ */
 export const shown = (player) => !hidden.has(player);
 
-// A player is loaded (its success hook, before its first frame). A guest stops drawing and running on its own: its
-// renderer draws nothing when its own frame asks, its frame loop stops (the host runs its frames) and a window resize
-// no longer runs one. Any other player draws its skeleton's parts (install() adds what goes between them).
+/**
+ * A player is loaded (its success hook, before its first frame). A guest stops drawing and running on its own:
+ * its renderer draws nothing when its own frame asks, its frame loop stops (the host runs its frames) and a
+ * window resize runs none. Any other player draws its skeleton's parts (install() adds what goes between them).
+ */
 export function ready(player) {
   const renderer = player?.sceneRenderer;
   if (!renderer || own.has(player)) return;
@@ -116,9 +128,12 @@ export function ready(player) {
   renderer.drawSkeleton = (skeleton, ...args) => draw(player, skeleton, args);
 }
 
-// Every player of a lobby is in (players: in stacking order, the host first; fx: the lobby's effects, particles-gl.js,
-// or null): the order every part and effect draws in. Guests of the host go into its plan, the effects into the slots
-// of the parts they sort after.
+/**
+ * Every player of a lobby is in: fix the order every part and effect draws in. Guests of the host go into its
+ * plan, the effects into the slots of the parts they sort after.
+ * @param {object[]} players The players in stacking order, the host first.
+ * @param {object|null} fx The lobby's effects (particles-gl.js).
+ */
 export function install(players, fx) {
   const host = players[0];
   if (!host) return;
@@ -145,16 +160,22 @@ export function install(players, fx) {
   latest = typeof WeakRef === "undefined" ? null : new WeakRef(host);
 }
 
-// for checks: the skeletons of the lobby installed last interleaved by render queue in their one context (true, as
-// the game draws them) or one after another in stacking order (false, as one canvas per skeleton drew them)
+/**
+ * For checks: draw the skeletons of the lobby installed last interleaved by render queue in their one context
+ * (true, as the game draws them) or one after another in stacking order (false, as one canvas per skeleton drew
+ * them).
+ */
 export function setInterleaved(on) {
   interleave = !!on;
   const plan = plans.get(latest?.deref());
   if (plan?.players) install(plan.players, plan.fx);
 }
 
-// for checks: what the lobby installed last draws, in order: [skeleton, render queue] per part of a skeleton, with
-// true after it where effects draw next
+/**
+ * For checks: what the lobby installed last draws, in order.
+ * @returns {Array<[string|undefined, number, boolean]>} [skeleton, render queue, whether effects draw next] per
+ *     part.
+ */
 export function drawn() {
   const players = plans.get(latest?.deref())?.players || [];
   return players.flatMap((p) => {
@@ -163,8 +184,10 @@ export function drawn() {
   });
 }
 
-// In the host's frame hook, before anything else: its guests' frames (time, clips, animation, drags, camera), so it
-// draws them posed for this frame; the viewport each of them set goes back to the host's
+/**
+ * In the host's frame hook, before anything else: run its guests' frames (time, clips, animation, drags,
+ * camera), so it draws them posed for this frame; the viewport each of them set goes back to the host's.
+ */
 export function frame(player) {
   const guests = plans.get(player)?.guests;
   if (!guests?.length) return;

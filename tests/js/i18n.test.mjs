@@ -122,7 +122,8 @@ test("a failed locale read preserves the active table and can be retried", async
   assert.equal(T("caption"), "retried");
 });
 
-// UI-37: one error text for the whole UI: never a raw key (error.undefined) or an empty detail ("Something went wrong: ")
+// one error text for the whole UI: never a raw key (error.undefined) or an empty detail ("Something went
+// wrong: ")
 test("errorText gives a coded error its string and an uncoded one error.internal with a detail or none at all", async () => {
   const { readFileSync } = await import("node:fs");
   const { errorText } = await import("../../src/bmpt/web/js/i18n.js");

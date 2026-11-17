@@ -1,6 +1,16 @@
 // UICharacterCollection top bar; all native rectangles are viewport CSS pixels.
 import { barCentre } from "./top-bar-layout.js";
 
+/**
+ * The geometry of the page's header row for a window: the stage's scale, the row's height (at least 44 px and 4
+ * px under the native controls), its centre line and the content's scale. The native row overlays the stage, as
+ * the prefab bar does; reserving extra height would letterbox an otherwise 16:9 client area at the minimum
+ * size.
+ * @param {number} width The window's width in CSS pixels.
+ * @param {number} height The window's height in CSS pixels.
+ * @param {number} [nativeBottom] The bottom of the native window controls, which the row clears.
+ * @param {boolean} [immersive] Whether a fullscreen scene is shown.
+ */
 export function headerGeometry(width, height, nativeBottom = 0, immersive = false) {
   const scale = Math.min(width / 1920, height / 1080);
   const rowHeight = Math.max(64 * scale, 44, nativeBottom + 4);
@@ -10,20 +20,34 @@ export function headerGeometry(width, height, nativeBottom = 0, immersive = fals
   return { scale, rowHeight, centre: barCentre(undefined, rowHeight), extra, contentScale: scale };
 }
 
-// Detail portrait/L2D share fullscreen; photography also owns an independent
-// root flag while preparing or switching those two renderers. Hall is separate.
+/**
+ * Whether the page is in an immersive scene: the detail portrait and L2D share fullscreen; photography also
+ * owns an independent root flag while preparing or switching those two renderers. The Hall is separate.
+ * @param {Set<string>|string[]} stageClasses The stage's classes.
+ * @param {Set<string>|string[]} rootClasses The root element's classes.
+ */
 export function isImmersive(stageClasses, rootClasses) {
   const stage = new Set(stageClasses),
     root = new Set(rootClasses);
   return stage.has("fullscreen") || stage.has("hall-fullscreen") || root.has("photo-active");
 }
 
+/**
+ * The regions of the header row that drag the window: the row less the native controls and the exclusions, none
+ * while the page is blocked.
+ * @param {object} options
+ * @param {object|null} [options.bounds] The native controls' rect.
+ * @param {boolean} [options.immersive] Whether an immersive scene is shown.
+ * @param {boolean} [options.blocked] Whether input is held.
+ * @param {object[]} [options.exclusions] Rects of controls that take their own clicks.
+ */
 export function dragRegions({ width, height, bounds, immersive = false, blocked = false, exclusions = [] }) {
   if (blocked || immersive) return [];
   const background = { left: 0, top: 0, right: width, bottom: height };
   return subtractRegions(background, [...exclusions, ...(bounds ? [expandRect(bounds, 8)] : [])]);
 }
 
+/** Lay out the header row's parts: the mods switch and the caption, against the native controls. */
 export function rowLayout({
   scale,
   nativeLeft = 0,
@@ -43,6 +67,12 @@ export function rowLayout({
   return { shift, compact: hideCaption, modsLeft, modsWidth: mods };
 }
 
+/**
+ * Subtract rectangles from a rectangle.
+ * @param {{left: number, top: number, right: number, bottom: number}} background The rectangle.
+ * @param {object[]} exclusions The rectangles to cut out.
+ * @returns {object[]} The rectangles that remain.
+ */
 export function subtractRegions(background, exclusions) {
   let regions = [background];
   for (const cut of exclusions) {
@@ -63,6 +93,10 @@ export function subtractRegions(background, exclusions) {
   return regions;
 }
 
+/**
+ * Grow a rectangle on every side.
+ * @param {number} [gap] How much, in the rectangle's units.
+ */
 export const expandRect = (r, gap = 4) => ({
   left: r.left - gap,
   top: r.top - gap,
@@ -70,6 +104,11 @@ export const expandRect = (r, gap = 4) => ({
   bottom: r.bottom + gap,
 });
 
-// Cover the shared stage/overlay antialiasing footprint with the opaque loading
-// backdrop. One device pixel hides the stage colour at every fractional origin.
+/**
+ * How far the loading backdrop reaches past the stage so it covers the shared stage and overlay antialiasing
+ * footprint: one device pixel hides the stage colour at every fractional origin.
+ * @param {number} scale The stage's scale.
+ * @param {number} [dpi] The device pixel ratio.
+ * @returns {number} The bleed in stage pixels.
+ */
 export const stageCoverBleed = (scale, dpi = 1) => 1 / (scale * dpi);

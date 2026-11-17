@@ -183,7 +183,8 @@ export function selection(){return selected;} export {selectPortrait,onKey};
 export function draft(){return store;} export {controls,saveDraft,cancelDraft,renderScene,portraitActions,createHoverOwner,memorial,step,refreshMemorialCaptions,configureMemorial};
 export function cameraFixture(view){sceneCamera={view:()=>view,sync(){},dispose(){}};}
 export function hitsNow(){originalHits();return hits;}`;
-// The fixture is intentionally DOM-only; actual Spine identities and GPU resource reuse are covered by student_hall.test.
+// The fixture is intentionally DOM-only; actual Spine identities and GPU resource reuse are covered by
+// student_hall.test.
 source += "\n//# sourceURL=hall-scene-fixture.js";
 const Hall = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
 function setup() {

@@ -3,6 +3,14 @@ import * as NGUI from "./ngui.js";
 import { spriteUrl } from "./api.js";
 
 const metrics = new Map();
+/**
+ * Measure the opaque ink of an icon.
+ * @param {object} options The icon's pixels.
+ * @param {Uint8ClampedArray} options.data
+ * @param {boolean} [body] Measure the body of the icon, leaving its thin outer marks.
+ * @param {number} [alphaCutoff] The alpha above which a pixel counts as ink.
+ * @returns {object|null} The ink's bounds, centres and mass; null when there is none.
+ */
 export function inkBounds({ width, height, data }, body = false, alphaCutoff = 128) {
   let left = width,
     top = height,
@@ -35,6 +43,14 @@ export function inkBounds({ width, height, data }, body = false, alphaCutoff = 1
     centerY: weight ? weightedY / weight : height / 2,
   };
 }
+/**
+ * Fit an icon's ink into a box.
+ * @param {object} ink The ink, as inkBounds gives it.
+ * @param {{x: number, y: number}} body The centre of the body the icon sits in.
+ * @param {object} [options]
+ * @param {"mass"|"box"} [options.center]
+ * @returns {object} The icon's size and position.
+ */
 export function fitInk(
   ink,
   body,
@@ -85,6 +101,10 @@ function remember(key, read) {
   }
   return metrics.get(key);
 }
+/**
+ * The centre of a button's body, read from its drawn background.
+ * @returns {Promise<{x: number, y: number}>} The centre in the button's own units.
+ */
 export async function buttonCenter(background) {
   const bodyUrl = /^url\((?:"([^"]+)"|'([^']+)'|(.+))\)$/.exec(background.style.backgroundImage);
   const source = bodyUrl?.[1] || bodyUrl?.[2] || bodyUrl?.[3];
@@ -99,6 +119,13 @@ export async function buttonCenter(background) {
     y: parseFloat(background.style.top) + height / 2 + dy,
   };
 }
+/**
+ * Centre an icon's ink on its button's body.
+ * @param {RenderView} view What render() drew.
+ * @param {string} path The icon's node path.
+ * @param {string} backgroundPath The body's node path.
+ * @returns {Promise<void>} Settles when the icon is placed.
+ */
 export async function alignIcon(view, path, backgroundPath, options = {}) {
   const entry = view.nodes.get(path),
     element = entry.els[0],

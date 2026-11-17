@@ -11,6 +11,23 @@ import { spineBase } from "./api.js";
 import { L, T, language } from "./i18n.js";
 
 const titleOf = (choice) => [L(choice.names)?.full || choice.variant, choice.label].filter(Boolean).join(" - ");
+/**
+ * Open the Hall's picker: the modal that chooses a portrait source (the student, then its portrait) or a
+ * memorial lobby, with previews and a search.
+ * @param {object} options
+ * @param {string} options.kind The kind of source: "lobby" for a memorial lobby.
+ * @param {object[]} options.choices
+ * @param {(entry: object) => void} options.onPreview
+ * @param {(change: object) => void} options.onChange
+ * @param {() => void} options.onSave
+ * @param {() => void} options.onCancel
+ * @param {() => void} options.onDone Called when the picker has closed.
+ * @param {(error: Error) => void} options.onError
+ * @param {(viewed: object) => void} options.onViewed
+ * @param {(entry: object) => void} options.onReplace Called to replace a placed portrait.
+ * @param {() => boolean} [options.isSaving]
+ * @returns {{modal: object, redraw: Function, closeNested: Function, close: Function}} The picker's controls.
+ */
 export function openPicker({
   kind,
   choices,

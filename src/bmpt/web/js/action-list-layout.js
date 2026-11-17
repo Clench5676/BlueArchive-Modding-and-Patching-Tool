@@ -1,9 +1,9 @@
-// The 3D tab's action bar (row 4): one card per action group, and above the pressed one its action list. The list is
-// the game's anchored description tooltip, as the hover hints draw it (hover-hint.js: UIDescriptionTooltip's
-// Default box, Common_Tooltip_Bg, without its arrow), holding the group's sections as UIShortcutTooltip's list title
-// bars (GetList/TitleBG: Common_Bg_Raius5px, #334a66, 60 high, 44 white) and its actions as UISortObjectListUnit radio
-// keys in their Label_Text form, one to a line. Pure geometry and text fit in the detail screen's units (y up, the
-// prefab's centre at the stage's [960, 515] px), for action-list.js, detail.js and the tests.
+// The 3D tab's action bar (row 4): one card per action group, and above the pressed one its action list. The
+// list is the game's anchored description tooltip, as the hover hints draw it (hover-hint.js:
+// UIDescriptionTooltip's Default box, Common_Tooltip_Bg, without its arrow), holding the group's sections as
+// UIShortcutTooltip's list title bars and its actions as UISortObjectListUnit radio keys, one to a line. Pure
+// geometry and text fit in the detail screen's units (y up, the prefab's centre at the stage's [960, 515] px),
+// for action-list.js, detail.js and the tests.
 import * as NGUI from "./ngui.js";
 import { BOX_INSET } from "./hover-hint.js";
 import { BAR_HEIGHT } from "./top-bar-layout.js";
@@ -26,17 +26,16 @@ export const HEAD = { h: 60, gap: 20, inset: 30, fs: 44, min: 36, slant: 60 * TA
 // a key: the radio's centre 30 inside the content, Label_On 61.5 right of it; a line every ROW, its underline
 // (UISortObjectListUnit Line) under it
 export const ROW = { pitch: 120, radioX: 30, labelX: 61.5, end: 20, maxLabelW: 590 };
-// a key's label box: left-aligned labelX right of the radio, ending at the content's right edge (a wider box would
-// make the list scroll sideways, and its scroll fade would wash out the title bars' right ends)
+/**
+ * A key's label box width: left-aligned labelX right of the radio, ending at the content's right edge (a wider
+ * box would make the list scroll sideways, and its scroll fade would wash out the title bars' right ends).
+ */
 export const keyLabelWidth = (cw) => Math.min(ROW.maxLabelW, cw - ROW.radioX - ROW.labelX);
 export const KEY_TYPE = POPUP_TYPE.card.option; // 42 down to 30, as the roster's sort keys
-// a group card's texts (detail.js stripCard: 242 wide, the visible body 196 high). The names are siblings: one size
-// for every card, the list keys' size (42 down to 28), wrapped onto two lines before they shrink, 182 wide (30 clear at
-// either side, so the card's 10-degree lean keeps them off its edges) and 12 clear of the body above and below, centred
-// on the card. The playing group's card (selected: Card_Select_Line_Blue and its check, Common_Icon_Check_B 56 x 54,
-// centred 26 under the body's top and 30 in from its right side, along the lean) shows the playing action's name alone
-// instead, at the names' size, never larger: smaller (down to 20, three lines) only when it does not fit there. It is
-// centred too; only when its first line's ink would reach under the check does it move down, as far as clears it.
+// A group card's texts (detail.js stripCard: 242 wide, the visible body 196 high): the names are siblings with
+// one size for every card, wrapped onto two lines before they shrink; the playing group's card shows the playing
+// action's name alone instead, at the names' size, never larger (down to 20, three lines, only when it does not
+// fit), and moves down only as far as it takes to clear the check.
 export const CARD_TEXT = {
   w: 182,
   room: 196 - 2 * 12,
@@ -45,8 +44,13 @@ export const CARD_TEXT = {
   check: { left: 242 / 2 - 30 + (98 - 26) * TAN10 - 56 / 2, bottom: 98 - 26 - 54 / 2, clear: 0 },
 };
 
-// the list's rows from the top of its content (y down is negative): [{ kind: "head"|"key", y, section | action }]
-// and the content's height. A group of one section has no title bar: its card names it.
+/**
+ * The list's rows from the top of its content (y down is negative) and the content's height. A group of one
+ * section has no title bar: its card names it.
+ * @param {boolean} [titled] Whether sections get title bars.
+ * @returns {{rows: {kind: "head"|"key", y: number, section?: object, action?: object}[], height: number}} The
+ *     rows and the content's height.
+ */
 export function stackList(sections, titled = sections.length > 1) {
   const rows = [];
   let y = 0;
@@ -67,17 +71,24 @@ export function stackList(sections, titled = sections.length > 1) {
   return { rows, height: -y };
 }
 
-// the box's content width for the fitted texts: the widest key (radio, gap, label) or title, within the box's limits
+/**
+ * The box's content width for the fitted texts: the widest key (radio, gap, label) or title, within the box's
+ * limits.
+ */
 export function contentWidth(keyWidths, headWidths) {
   const keys = Math.max(0, ...keyWidths) + ROW.radioX + ROW.labelX + ROW.end;
   const heads = Math.max(0, ...headWidths) + 2 * HEAD.inset + HEAD.slant;
   return Math.min(BOX.maxW - 2 * BOX.padX, Math.max(BOX.minW, Math.ceil(Math.max(keys, heads))));
 }
 
-// Where the list goes for a card (button: { left, right, top } in units, its visible body): the box's sprite rect
-// { left, top, w, h } in units, the content's visible height (view) and whether it scrolls. The box's visible bottom edge
-// stands GAP over the card, centred on it, shifted only as far as the stage (less EDGE) needs; as tall as the content,
-// at most up to the stage's top bar.
+/**
+ * Where the list goes for a card: the box's visible bottom edge stands GAP over the card, centred on it,
+ * shifted only as far as the stage (less EDGE) needs; as tall as the content, at most up to the stage's top
+ * bar.
+ * @param {{left: number, right: number, top: number}} button The card's visible body in units.
+ * @returns {object} The box's sprite rect {left, top, w, h} in units, the content's visible height (view) and
+ *     whether it scrolls.
+ */
 export function placeList(button, contentW, contentH) {
   const w = contentW + 2 * BOX.padX,
     visW = w - BOX_INSET.left - BOX_INSET.right;
@@ -99,7 +110,12 @@ export function placeList(button, contentW, contentH) {
   };
 }
 
-// the list's texts: the titles one line each, the keys one size (two lines at most, within a line's height)
+/**
+ * The list's texts: the titles one line each, the keys one size (two lines at most, within a line's height).
+ * @param {object[]} heads The section titles.
+ * @param {string[]} keys The action names.
+ * @param {string|null} [lang] The language of the texts when it is not the page's.
+ */
 export function fitList(heads, keys, lang = null) {
   return {
     heads: heads.map((h) =>

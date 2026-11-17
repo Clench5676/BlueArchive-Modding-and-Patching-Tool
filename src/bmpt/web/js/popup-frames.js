@@ -2,15 +2,38 @@
 import { CONTROL, POPUP_FOOTER, POPUP_FRAME, SPACE } from "./ui-tokens.js";
 import { container, stack, toNode } from "./ui-grid.js";
 
-// No popup is wider than the L class (every wide popup down to Display Settings' 2098): a call
-// for XL, or for a width over L's, gets L, and its layout follows the frame's content box.
+/**
+ * A popup frame in prefab units.
+ * @typedef {object} PopupFrame
+ * @property {number} w The width.
+ * @property {number} h The height.
+ * @property {number} cx The centre's x.
+ * @property {number} cy The centre's y.
+ */
+
+/**
+ * No popup is wider than the L class (every wide popup down to Display Settings' 2098): a call for XL, or for a
+ * width over L's, gets L, and its layout follows the frame's content box.
+ */
 export const WIDEST = "L";
+/**
+ * The size class of a popup frame.
+ * @param {string|number} [width] A class name ("S", "M", "L" or "XL") or the width the content needs; the
+ *     smallest class that holds it.
+ * @returns {{w: number, h: number}} The class entry of POPUP_FRAME: the frame's width and its default height.
+ */
 export function frameClass(width = "S") {
   if (width === "XL") return POPUP_FRAME[WIDEST];
   if (typeof width === "string" && POPUP_FRAME[width]?.w) return POPUP_FRAME[width];
   return ["S", "M", "L"].map((key) => POPUP_FRAME[key]).find((size) => size.w >= width) || POPUP_FRAME[WIDEST];
 }
-// Explicit heights fit the content; omitted heights retain the scrolling viewer's exemplar height.
+/**
+ * The geometry of a popup frame.
+ * Explicit heights fit the content; omitted heights keep the scrolling viewer's exemplar height.
+ * @param {string|number} width A class name or the width the content needs.
+ * @param {number} [height] The height the content needs, clamped to the frame's range; 0 for the class's own.
+ * @returns {PopupFrame}
+ */
 export function frameGeometry(width, height = 0) {
   const size = frameClass(width);
   return {
@@ -20,8 +43,15 @@ export function frameGeometry(width, height = 0) {
     cy: POPUP_FRAME.frameY,
   };
 }
-// Text and panel content share their top and footer clearance (POPUP_FOOTER). With no footer, keep the panel padding at the
-// bottom.
+/**
+ * The content box of a popup frame.
+ * Text and panel content share their top and footer clearance (POPUP_FOOTER); without a footer the panel
+ * padding stays at the bottom.
+ * @param {string|number} width A class name or the width the content needs.
+ * @param {{text?: boolean, footer?: boolean}} [options] text: the wider side padding of text; footer: leave
+ *     room for the footer buttons.
+ * @returns {Box} The box inside the padding, in the frame's own coordinates.
+ */
 export function popupContent(width, height, { text = false, footer = true } = {}) {
   const { w, h } = frameGeometry(width, height);
   return container({
@@ -38,8 +68,11 @@ export function popupContent(width, height, { text = false, footer = true } = {}
 const frame = (w, h) => frameGeometry(w, h);
 const place = (box, f, pivot = 4) => toNode(box, pivot, f);
 
-// The content box the XL prefab (UIPopup_GachaCharList) leaves over its buttonL footer (885): the XL popups (the text viewer,
-// the list popups) keep it, their frame that box over the XS footer, so only the footer's padding goes.
+/**
+ * The content box the XL prefab (UIPopup_GachaCharList) leaves over its buttonL footer (885). The XL popups
+ * (the text viewer, the list popups) keep it and size their frame by it over the XS footer, so only the
+ * footer's padding goes.
+ */
 export const XL_CONTENT_H =
   POPUP_FRAME.XL.h - POPUP_FRAME.contentTop - (POPUP_FRAME.footer.bottom + CONTROL.buttonL.h + SPACE.m);
 const viewerFrame = frame("XL", POPUP_FRAME.contentTop + XL_CONTENT_H + POPUP_FOOTER.clearance);
@@ -59,6 +92,11 @@ export const ALIAS = {
   bottom: POPUP_FOOTER.clearance + SPACE.xxxl / 2,
   max: 8,
 };
+/**
+ * The frame of the alias editor for a number of rows.
+ * @returns {PopupFrame & {ys: number[], bottom: number, content: Box}} The frame, the y
+ *     of each row, the lowest edge and the content box.
+ */
 export function aliasFrame(n) {
   const f = frame("M", POPUP_FRAME.contentTop + n * ALIAS.rowH + Math.max(0, n - 1) * SPACE.m + POPUP_FOOTER.clearance);
   const content = popupContent(f.w, f.h, { text: true });
@@ -78,6 +116,11 @@ export const DETAILS = {
   title: POPUP_FRAME.contentTop,
   bottom: POPUP_FOOTER.clearance,
 };
+/**
+ * The frame of the details popup around a body.
+ * @returns {PopupFrame & {top: number, bottom: number, content: Box}} The frame and the
+ *     body's top and bottom.
+ */
 export function detailsFrame(bodyHeight) {
   const f = frame("L", bodyHeight + DETAILS.title + DETAILS.bottom),
     content = popupContent(f.w, f.h);
@@ -102,6 +145,14 @@ export const MOD_ALIAS = {
 };
 MOD_ALIAS.bottom = MOD_ALIAS.input.y + MOD_ALIAS.hint.dy - MOD_ALIAS.hint.h / 2;
 
+/**
+ * The frame of the comparison popup and its rows.
+ * @param {boolean} review Whether the popup is a review with a footer, at full height.
+ * @returns
+ *     {PopupFrame & {rows: object, scroll: object, lift: number, bottom: number, content: Box}}
+ *     The frame, the rows' placement (first y, pitch, height, the most that fit), the scroll area, and the
+ *     content box.
+ */
 export function compareFrame(review, count = 0) {
   const cap = Math.floor(popupContent("L", 1180, { text: true, footer: review }).h / SPACE.xxl);
   const bodyHeight = Math.max(1, Math.min(count, cap)) * SPACE.xxl;

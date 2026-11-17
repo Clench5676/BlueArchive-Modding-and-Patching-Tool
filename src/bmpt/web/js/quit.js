@@ -7,12 +7,16 @@ import { errorText } from "./i18n.js";
 // the display settings, the settings, the shared message and list popups, the detail screen's own
 export const HOSTS = Object.freeze(["consent", "display", "settings", "dialog", "prompt", "popup", "picker"]);
 
-// whether a key press opens the quit prompt: Escape alone, on the student list, when nothing else takes it. Never
-// when another handler took the key (the search box, the display settings), while an input method composes (keyCode
-// 229 is WebKit's key that ends a conversion), for a held key's repeat, with a modifier, while a popup is open, or
-// behind the loading screen.
-//   byId(id)  the page's element of that id (document.getElementById)
-//   covering  the loading screen covers the stage (Loading.covering())
+/**
+ * Whether a key press opens the quit prompt: Escape alone, on the student list, when nothing else takes it.
+ * Never when another handler took the key (the search box, the display settings), while an input method
+ * composes (keyCode 229 is WebKit's key that ends a conversion), for a held key's repeat, with a modifier,
+ * while a popup is open, or behind the loading screen.
+ * @param {object} options
+ * @param {(id: string) => (HTMLElement|null)} options.byId The page's element of an id
+ *     (document.getElementById).
+ * @param {boolean} [options.covering] The loading screen covers the stage (Loading.covering()).
+ */
 export function quitKey(ev, { byId, covering = false }) {
   if (!ev || ev.key !== "Escape") return false;
   if (ev.defaultPrevented || ev.isComposing || ev.keyCode === 229 || ev.repeat) return false;
@@ -39,6 +43,18 @@ export const CONFIRM_KEYS = Object.freeze(["Enter", " "]);
 // Resolves with "cancel", "quit" or the refusal's error code (busy while a writer job runs, native_unavailable with
 // --serve).
 let asking = false;
+/**
+ * Ask whether to quit and quit.
+ * @param {object} options
+ * @param {(opts: object) => Promise<{button: string}>} options.message The shared message popup (popup.js).
+ * @param {Function} options.rpc The page's RPC call.
+ * @param {Function} options.T The page's translate function.
+ * @param {Function} options.notify The page's error notice.
+ * @param {boolean} [options.native] The app runs in its own window (app.quit closes it).
+ * @param {() => void} options.closed Shows that the app has quit.
+ * @returns {Promise<string>} "cancel", "quit" or the refusal's error code (busy while a writer job runs,
+ *     native_unavailable with --serve).
+ */
 export async function confirmQuit({ message, rpc, T, notify, native = false, closed }) {
   if (asking) return "cancel";
   asking = true;

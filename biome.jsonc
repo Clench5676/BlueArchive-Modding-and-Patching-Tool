@@ -37,9 +37,7 @@
         // Callbacks keep the parameters of the signature they implement.
         "noUnusedFunctionParameters": "off",
         // do { ... } while (true) loops that end with a break.
-        "noConstantCondition": "off",
-        // Not yet met by the existing code: set back to the preset once the code passes it.
-        "noUnusedVariables": "off"
+        "noConstantCondition": "off"
       },
       "complexity": {
         "useArrowFunction": "off",

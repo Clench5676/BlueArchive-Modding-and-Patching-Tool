@@ -10,7 +10,14 @@ export class RpcError extends Error {
   }
 }
 
-// timeout (ms) is opt-in: a read can wait on a writer's library lock for as long as an apply runs
+/**
+ * Call a method of the Python side (POST /api/rpc). The timeout is opt-in: a read can wait on a writer's
+ * library lock for as long as an apply runs.
+ * @param {object} [options]
+ * @param {number} [options.timeout] The longest wait in milliseconds; 0 waits as long as it takes.
+ * @param {AbortSignal} [options.signal] Cancels the call.
+ * @returns {Promise<*>} The method's result. Rejects with an RpcError.
+ */
 export async function rpc(method, params = {}, { timeout = 0, signal } = {}) {
   const controller = new AbortController();
   const abort = () => controller.abort();
@@ -42,7 +49,11 @@ export async function rpc(method, params = {}, { timeout = 0, signal } = {}) {
 const listeners = new Map();
 let source = null;
 
-// on("job.done", (data) => ...); returns an unsubscribe function
+/**
+ * Subscribe to a server event (Server-Sent Events from /api/events): on("job.done", (data) => ...).
+ * @param {(data: object) => void} fn Called with the event's data.
+ * @returns {() => void} Unsubscribes.
+ */
 export function on(event, fn) {
   if (!listeners.has(event)) listeners.set(event, new Set());
   listeners.get(event).add(fn);
@@ -80,10 +91,20 @@ function connect() {
   }
 }
 
-// a job's end as a promise (resolves with the result, rejects with RpcError; "cancelled" for a job the page stopped,
-// jobs.cancel). Events can arrive before this
-// subscribes, or be lost while the event stream reconnects, so the job's state is also polled. Runtime is unbounded
-// by default: sleeping or preparing a large batch does not mean the backend job failed. Each status read is bounded.
+/**
+ * A job's end as a promise (resolves with the result, rejects with RpcError; "cancelled" for a job the page
+ * stopped, jobs.cancel). Events can arrive before this subscribes, or be lost while the event stream
+ * reconnects, so the job's state is also polled. Runtime is unbounded by default: sleeping or preparing a large
+ * batch does not mean the backend job failed. Each status read is bounded.
+ * @param {(progress: object) => void} [onProgress] Called with the job's progress.
+ * @param {object} [options]
+ * @param {number} [options.pollEvery] The polling interval in milliseconds.
+ * @param {number} [options.maxErrors] The most failed status reads in a row before the wait fails.
+ * @param {number} [options.timeout] The longest wait in milliseconds; 0 waits as long as it takes.
+ * @param {number} [options.requestTimeout] The longest one status read may take in milliseconds.
+ * @param {(connected: boolean) => void} [options.onConnection] Called when the event stream drops or comes
+ *     back.
+ */
 export function waitJob(
   id,
   onProgress,
@@ -217,13 +238,19 @@ export function waitJob(
 }
 
 // asset URLs
-// The bootstrap epoch bypasses legacy max-age entries. Every new light response
+// The bootstrap epoch bypasses stale max-age entries. Every new light response
 // also revalidates its schema/content ETag, including after game resource changes.
 let assetContext = "";
+/**
+ * Set the context of the asset URLs (the game resource version): the bootstrap epoch bypasses stale max-age
+ * entries, and every new light response also revalidates its schema and content ETag, including after game
+ * resource changes.
+ */
 export function setAssetContext(value) {
   assetContext = value || "";
   forgetSpineAssets();
 }
+/** The URL of a UI export, kept to its path and query so it works behind any origin. */
 export function uiExportUrl(url) {
   const epoch = globalThis.document?.querySelector?.('meta[name="bamt-ui-exports"]')?.content;
   if ((!epoch && !assetContext) || !url.startsWith("/asset/ui/")) return url;
@@ -232,30 +259,46 @@ export function uiExportUrl(url) {
   if (assetContext) parsed.searchParams.set("resource", assetContext);
   return `${parsed.pathname}${parsed.search}`;
 }
+/** The URL of an atlas sprite's image. */
 export const spriteUrl = (atlas, name) =>
   uiExportUrl(`/asset/ui/sprite/${encodeURIComponent(atlas)}/${encodeURIComponent(name)}.png`);
+/** The URL of a UI texture's image. */
 export const textureUrl = (name) => uiExportUrl(`/asset/ui/texture/${encodeURIComponent(name)}.png`);
-// what every skeleton URL of a core starts with, whatever the file: the library.changed handler forgets the
-// thumbnails under it once the core's game files were switched
+/**
+ * What every skeleton URL of a core starts with, whatever the file: the library.changed handler forgets the
+ * thumbnails under it once the core's game files were switched.
+ */
 export const spinePrefix = (kind, key) => `/asset/spine/${kind}/${encodeURIComponent(key)}`;
-// a skeleton's base path: <base>.skel and <base>.atlas; the atlas pages resolve next to them. install: the id of
-// another known install (mods.state.installs[].id), whose own files the core segment <core>@<id> reads (an entry card
-// of that install); none for the current install's. The id is in the path, not a query: the player fetches every
-// file relative to the base.
+/**
+ * A skeleton's base path: <base>.skel and <base>.atlas; the atlas pages resolve next to them. The id is in the
+ * path, not a query: the player fetches every file relative to the base.
+ * @param {string} kind "spr", "lobby" or "model".
+ * @param {string} key The core.
+ * @param {string|null} [install] The id of another known install (mods.state.installs[].id), whose own files
+ *     the core segment <core>@<id> reads (an entry card of that install); none for the current install's.
+ */
 export const spineBase = (kind, key, install = null) =>
   `${spinePrefix(kind, key)}${install ? `@${encodeURIComponent(install)}` : ""}/skeleton`;
 
-// Resolve on every load: the logical source can carry different files after a switch or a mod update. Keep the
-// revision in the directory so the player also requests atlas pages from that same revision. A missing original
-// returns null and uses the existing empty thumbnail treatment.
-// Requests for one directory that overlap (a card and its big picture, the same skeleton asked for twice) share one
-// answer; a request after it settled asks again.
+// spineAssetBase resolves on every load: the logical source can carry different files after a switch or a mod
+// update. The revision is kept in the directory so the player also requests atlas pages from that same revision.
+// A missing original returns null and uses the existing empty thumbnail treatment. Requests for one directory
+// that overlap (a card and its big picture, the same skeleton asked for twice) share one answer; a request after
+// it settled asks again.
 const resolving = new Map();
+/** Forget the resolved skeleton directories under a prefix (all of them by default). */
 export function forgetSpineAssets(prefix = "") {
   const want = prefix.toLowerCase();
   for (const dir of resolving.keys()) if (dir.toLowerCase().startsWith(want)) resolving.delete(dir);
 }
 
+/**
+ * Resolve a skeleton's base to its current revision's directory.
+ * @param {string} base A skeleton's base path (spineBase).
+ * @param {object} [options]
+ * @param {AbortSignal} [options.signal] Cancels the caller's wait; it does not cancel an unrelated reader of
+ *     the same directory.
+ */
 export function spineAssetBase(base, { signal } = {}) {
   if (!base || /\/[a-f0-9]{64}\/skeleton$/.test(base)) return Promise.resolve(base);
   const dir = base.slice(0, base.lastIndexOf("/"));
@@ -300,8 +343,15 @@ export function spineAssetBase(base, { signal } = {}) {
   return resolving.get(dir);
 }
 
-// A cold extraction can overlap a source change after its manifest answered. Retry that composition once, with
-// the current manifest; every skeleton, atlas and page of an attempt still belongs to one revision.
+/**
+ * Load a skeleton's files from one revision. A cold extraction can overlap a source change after its manifest
+ * answered; the composition is retried once with the current manifest, so every skeleton, atlas and page of an
+ * attempt still belongs to one revision.
+ * @param {string} base A skeleton's base path.
+ * @param {(resolved: string) => Promise<*>} load Loads the files under the resolved directory.
+ * @param {object} [options]
+ * @param {AbortSignal} [options.signal] Cancels the load.
+ */
 export async function loadSpineAssets(base, load, { signal } = {}) {
   let resolved = await spineAssetBase(base, { signal });
   for (let attempt = 0; ; attempt++) {
