@@ -1,5 +1,4 @@
-"""
-scripts/extract_version.py
+"""Write the engine's _version.py and the build's version outputs from pyproject.toml.
 
 从 pyproject.toml 提取版本号并生成 _version.py 文件
 用于 GitHub Actions workflow 中，统一处理版本号提取逻辑。
@@ -12,7 +11,10 @@ import tomllib
 
 
 def get_git_info() -> dict[str, str]:
-    """获取 Git 信息（仅在 CI 环境中从环境变量获取）"""
+    """Return the commit, branch and tag from the GitHub Actions environment; empty values outside CI.
+
+    获取 Git 信息（仅在 CI 环境中从环境变量获取）
+    """
     info = {
         "commit_hash": "",
         "commit_hash_short": "",
@@ -36,6 +38,11 @@ def get_git_info() -> dict[str, str]:
 
 
 def main():
+    """Write ``src/ba_modding_toolkit/_version.py`` and the version and numeric file version for Nuitka.
+
+    Pre-releases get the file version ``x.y.z.8888``. The values go to the step's outputs in GitHub Actions, else to
+    standard output.
+    """
     # 获取构建时间（UTC）
     build_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 

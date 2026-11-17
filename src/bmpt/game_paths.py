@@ -1,4 +1,3 @@
-# game_paths.py
 """Locate Blue Archive installations.
 
 Windows: the uninstall entries in the registry, then the libraries of the Steam client.
@@ -50,10 +49,14 @@ _SKIPPED_SUPPORT_DIRS = {
 
 
 def find_game_dirs(region: GameRegion) -> list[Path]:
-    """Return the existing install directories found for a region, most likely first.
+    """Return the existing install directories found for a region, most likely first, without duplicates.
 
     When ``BAMT_GAME_DIRS_GLOBAL`` / ``BAMT_GAME_DIRS_JAPAN`` is set (devmode), the folders it names are returned and
     nothing is searched. Dev mode (``BAMT_DEV_ROOTS``) never searches and drops named folders outside the dev roots.
+    Outside Windows the paths are returned with links resolved.
+
+    Args:
+        region: ``"global"`` (registry, Steam libraries) or ``"japan"`` (the publisher's launcher entry only).
     """
     named = devmode.game_dirs(region)
     if named is not None:
@@ -111,7 +114,14 @@ def _unix_candidates(region: GameRegion) -> Iterator[Path]:
 
 
 def wine_prefix_candidates(prefix: Path, region: GameRegion) -> Iterator[Path]:
-    """Install directories recorded in one Wine prefix (registry first, then Steam libraries)"""
+    """Yield the install directories recorded in one Wine prefix, registry first, then Steam libraries.
+
+    The directories are host paths and may not exist.
+
+    Args:
+        prefix: The Wine prefix (the folder holding ``system.reg`` and ``drive_c``).
+        region: ``"global"`` also searches the libraries of a Windows Steam client in the prefix.
+    """
 
     def to_host(windows_path: str) -> Path | None:
         return wine_to_host(prefix, windows_path)
@@ -131,7 +141,7 @@ def wine_prefix_candidates(prefix: Path, region: GameRegion) -> Iterator[Path]:
 
 
 def _wine_prefixes() -> Iterator[Path]:
-    """Wine prefixes in the usual places"""
+    """Wine prefixes in the usual places."""
     home = Path.home()
     if env_prefix := os.environ.get("WINEPREFIX"):
         yield Path(env_prefix)
@@ -157,7 +167,15 @@ def _native_steam_dirs() -> list[Path]:
 
 
 def wine_to_host(prefix: Path, windows_path: str) -> Path | None:
-    """Map a Windows path inside a Wine prefix to the host path through the prefix's drive links"""
+    """Map a Windows path inside a Wine prefix to the host path through the prefix's drive links.
+
+    Args:
+        prefix: The Wine prefix.
+        windows_path: An absolute path with a drive letter, either separator.
+
+    Returns:
+        The host path (which may not exist), or None for a path without a drive letter.
+    """
     match = re.match(r"([A-Za-z]):[\\/]*(.*)", windows_path.strip())
     if not match:
         return None
@@ -169,9 +187,15 @@ def wine_to_host(prefix: Path, windows_path: str) -> Path | None:
 
 
 def reg_value(registry: str, key_path: str, name: str) -> str | None:
-    """Read a string value from the text of a Wine registry file (system.reg holds HKEY_LOCAL_MACHINE)
+    r"""Read a string value from the text of a Wine registry file, unescaped.
 
-    Key paths may start with "SOFTWARE\\" like on Windows; matching ignores case.
+    Args:
+        registry: The file's text; ``system.reg`` holds HKEY_LOCAL_MACHINE.
+        key_path: The key without its hive, as on Windows (``SOFTWARE\...``); matched ignoring case.
+        name: The value's name, matched ignoring case.
+
+    Returns:
+        The value, or None when the key or a string value of that name is missing.
     """
     header = re.compile(r"^\[" + re.escape(key_path.replace("\\", "\\\\")) + r"\]", re.IGNORECASE | re.MULTILINE)
     key_match = header.search(registry)
@@ -184,7 +208,7 @@ def reg_value(registry: str, key_path: str, name: str) -> str | None:
 
 
 def _unescape_reg(value: str) -> str:
-    """Undo the escaping of Wine registry strings (\\\\, \\" and \\x#### for non-ASCII characters)"""
+    r"""Undo the escaping of Wine registry strings (\\, \" and \x#### for non-ASCII characters)."""
 
     def replace(match: re.Match) -> str:
         escaped = match[1]
@@ -199,9 +223,13 @@ def _unescape_reg(value: str) -> str:
 
 
 def steam_app_dirs(steam_dir: Path, to_host: Callable[[str], Path | None]) -> Iterator[Path]:
-    """Install directories of Blue Archive in every library of a Steam client
+    """Yield the install directories of the game in every library of a Steam client.
 
-    to_host maps the library paths written in libraryfolders.vdf to host paths.
+    The directories are named by the app manifests and may not exist.
+
+    Args:
+        steam_dir: The Steam client's folder; it is a library itself.
+        to_host: Maps a library path written in ``libraryfolders.vdf`` to a host path, or None to skip it.
     """
     libraries = [steam_dir]
     try:
@@ -221,7 +249,7 @@ def steam_app_dirs(steam_dir: Path, to_host: Callable[[str], Path | None]) -> It
 
 
 def steam_app_manifest(game_folder: Path) -> Path | None:
-    """The app manifest of the Steam library holding a game folder, or None outside a Steam library
+    """Return the game's app manifest in the Steam library holding a game folder, or None outside a Steam library.
 
     The folder may be the install root (steamapps/common/<installdir>) or a resource folder below it: the walk goes
     up to an ancestor named "common" whose parent is "steamapps", first along the folder as given (a link to the
@@ -245,7 +273,10 @@ def steam_app_manifest(game_folder: Path) -> Path | None:
 
 
 def vdf_values(text: str, key: str) -> list[str]:
-    """Values of a key in Valve KeyValues text (libraryfolders.vdf, appmanifest_*.acf)"""
+    """Return every value of a key in Valve KeyValues text (``libraryfolders.vdf``, ``appmanifest_*.acf``).
+
+    The key matches at any depth, ignoring case; escaped backslashes are undone.
+    """
     pattern = r'"' + re.escape(key) + r'"\s+"((?:[^"\\]|\\.)*)"'
     return [value.replace("\\\\", "\\") for value in re.findall(pattern, text, re.IGNORECASE)]
 
@@ -254,7 +285,7 @@ def vdf_values(text: str, key: str) -> list[str]:
 
 
 def _unique_dirs(candidates: Iterable[Path]) -> list[Path]:
-    """Existing directories in order, without duplicates (compared after resolving links)
+    """Existing directories in order, without duplicates (compared after resolving links).
 
     Outside Windows the resolved path is returned, so Wine drive links are not shown.
     """
@@ -282,7 +313,7 @@ def _subdirs(root: Path) -> list[Path]:
 
 
 def _find_app_bundles(root: Path, depth: int) -> Iterator[Path]:
-    """*.app bundles at most depth levels below root, without entering bundles, links or Apple's data folders"""
+    """*.app bundles at most depth levels below root, without entering bundles, links or Apple's data folders."""
     try:
         entries = sorted(os.scandir(root), key=lambda entry: entry.name)
     except OSError:

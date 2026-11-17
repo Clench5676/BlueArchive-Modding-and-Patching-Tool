@@ -46,6 +46,8 @@ _ignored_game_dirs: set[str] = set()  # dev mode: game folders outside the dev r
 
 @dataclass(frozen=True)
 class Field:
+    """One setting of ``config.toml``: its group, its default and the type its values are coerced to."""
+
     group: str
     default: Any  # a value, or a callable returning one
     # the value's type (bool, int or str): values read from the file are coerced to it, so a callable default (game
@@ -53,6 +55,7 @@ class Field:
     kind: type | None = None
 
     def __post_init__(self) -> None:
+        """Infer the type from a plain default; a callable default must name it."""
         if self.kind is None:
             if callable(self.default):
                 raise TypeError("a field with a callable default needs its kind")
@@ -60,8 +63,11 @@ class Field:
 
 
 def install_needs_crc(file_source: object) -> bool:
-    """Whether an install of this file source needs the CRC fix: the Windows clients check every bundle's CRC against
-    its file name, Android ones do not. Fails closed: any source not known to be Android needs it."""
+    """Whether an install of this file source needs the CRC fix.
+
+    The Windows clients check every bundle's CRC against its file name, Android ones do not. Fails closed: any source
+    not known to be Android (``adb_*``) needs it.
+    """
     return not str(file_source).startswith("adb_")
 
 
@@ -154,10 +160,18 @@ def _coerce(key: str, value: Any) -> Any:
 
 
 def migrate_game_directories(directories: dict, detect: Callable[[str], str | None]) -> dict:
-    """Assign a legacy folder only when install detection identifies Japan unambiguously.
+    """Move a single legacy game folder to the Japan key when install detection identifies it as Japan only.
 
-    Keep the existing Global/Japan keys so older versions can still read both folders.
-    Explicit pairs and unrecognized folders retain their original assignments.
+    The Global and Japan keys stay as they are, so older versions can still read both folders. Explicit pairs and
+    unrecognised folders keep their assignments.
+
+    Args:
+        directories: The ``Directories`` table read from the file; returned as is when it is not a table.
+        detect: Returns the game folder detected for a region (``"global"``, ``"japan"``), or None or empty.
+
+    Returns:
+        The table, with ``game_resource_dir`` moved to ``game_resource_dir_japan`` when only the Japan install
+        detected lies in the same install as the legacy folder.
     """
     if not isinstance(directories, dict):
         return directories
@@ -195,6 +209,14 @@ class Settings:
     """
 
     def __init__(self, path: Path = CONFIG_FILE):
+        """Read the settings file.
+
+        Args:
+            path: The settings file; ``config.toml`` in the data folder by default.
+
+        Raises:
+            ServiceError: ``dev_path_outside`` in dev mode, for a file outside the dev roots.
+        """
         devmode.check_read(path)
         self.path = Path(path)
         self.bad = self.path.with_name(f"{self.path.name}.bad")
@@ -210,9 +232,12 @@ class Settings:
     # --- file ---
 
     def _read_file(self, *, reload: bool) -> tuple[dict | None, Exception | None]:
-        """(the file's tables, None); ({}, None) while it is missing; (None, why) when it exists but cannot be read
+        """Read and parse the file.
+
+        (the file's tables, None); ({}, None) while it is missing; (None, why) when it exists but cannot be read
         or parsed as a whole. On a reload a file without content counts as unreadable as well: it is what a save in
-        progress leaves for a moment, and an empty file is never the app's own."""
+        progress leaves for a moment, and an empty file is never the app's own.
+        """
         try:
             text = self.path.read_text(encoding="utf-8")
             if reload and not text.strip():
@@ -224,8 +249,14 @@ class Settings:
             return None, error
 
     def load(self) -> bool:
-        """Read config.toml into the settings. Returns False when the file exists but cannot be read as a whole: at
-        the first read everything is then default, afterwards nothing changes (a failed read is never applied)."""
+        """Read the file into the settings.
+
+        Missing keys take their defaults; a missing game folder is detected.
+
+        Returns:
+            False when the file exists but cannot be read as a whole: at the first read everything is then default,
+            afterwards nothing changes (a failed read is never applied).
+        """
         with self._lock:
             signature = self._stat()
             data, error = self._read_file(reload=self._applied)
@@ -288,6 +319,10 @@ class Settings:
             return error is None
 
     def save(self) -> None:
+        """Write the settings, with the groups and keys this schema does not know, in one replace.
+
+        A file on disk that cannot be parsed is first copied to ``config.toml.bad``.
+        """
         with self._lock:
             data: dict[str, dict] = {g: dict(v) for g, v in self._extra.items()}
             for key, f in FIELDS.items():
@@ -300,8 +335,10 @@ class Settings:
             self._mtime, self._failed = self._stat(), None
 
     def _keep_unreadable(self) -> None:
-        """Copy a config.toml that cannot be parsed as a whole to config.toml.bad before a save replaces it: the user
-        may want it back. A file without content, or one that cannot be copied, has nothing to keep."""
+        """Copy a config.toml that cannot be parsed as a whole to config.toml.bad before a save replaces it.
+
+        The user may want it back. A file without content, or one that cannot be copied, has nothing to keep.
+        """
         data, _ = self._read_file(reload=False)
         if data is not None:
             return
@@ -318,8 +355,13 @@ class Settings:
                     os.unlink(name)
 
     def reload_if_changed(self) -> bool:
-        """Reload when the file changed on disk since the last load or save. Returns whether it reloaded. A file that
-        cannot be read as a whole (a save in progress) changes nothing, and is read again once it changes."""
+        """Reload when the file changed on disk since the last load or save, then call the ``on_change`` listeners.
+
+        A file that cannot be read as a whole (a save in progress) changes nothing, and is read again once it changes.
+
+        Returns:
+            Whether it reloaded.
+        """
         with self._lock:
             current = self._stat()
             if current == self._mtime or (current is not None and current == self._failed):
@@ -331,6 +373,7 @@ class Settings:
         return True
 
     def on_change(self, listener: Callable[[], None]) -> None:
+        """Call ``listener`` after each reload that picked up a change on disk."""
         self._listeners.append(listener)
 
     def _stat(self) -> tuple[int, int] | None:
@@ -343,29 +386,51 @@ class Settings:
     # --- values ---
 
     def get(self, key: str) -> Any:
+        """Return a setting's value; raises KeyError for a key ``FIELDS`` does not have."""
         with self._lock:
             return self._values[key]
 
     def set(self, key: str, value: Any) -> None:
+        """Set a setting in memory (``save`` writes it), coerced to the field's type.
+
+        Args:
+            key: A key of ``FIELDS``.
+            value: The new value; one that cannot be coerced becomes the default.
+
+        Raises:
+            KeyError: The key is not a setting.
+        """
         if key not in FIELDS:
             raise KeyError(key)
         with self._lock:
             self._values[key] = _coerce(key, value)
 
     def as_dict(self) -> dict[str, Any]:
+        """Return a copy of all settings by key."""
         with self._lock:
             return dict(self._values)
 
     # --- derived values (mirrors the builders in gui/app.py) ---
 
     def is_adb_mode(self) -> bool:
+        """Whether the file source is a phone over ADB rather than a local install."""
         return str(self.get("file_source")).startswith("adb_")
 
     def server_region(self) -> str:
+        """Return the file source's server: ``"japan"`` or ``"global"``."""
         return "japan" if self.get("file_source") in ("windows_japan", "adb_japan") else "global"
 
     def game_dir(self, region: str | None = None) -> Path | None:
-        """The local game folder for the current file source, or None in ADB mode or when it is not set."""
+        """Return the local game folder set for a server.
+
+        In dev mode a folder outside the dev roots is logged once and not used.
+
+        Args:
+            region: ``"global"`` or ``"japan"``; None uses the current file source.
+
+        Returns:
+            The folder, or None in ADB mode, when it is not set, or when dev mode refuses it.
+        """
         source = self.get("file_source") if region is None else f"windows_{region}"
         key = {"windows_global": "game_resource_dir", "windows_japan": "game_resource_dir_japan"}.get(source)
         value = self.get(key) if key else ""
@@ -379,13 +444,14 @@ class Settings:
         return Path(value).expanduser()
 
     def resource_dirs(self) -> list[Path]:
-        """The existing resource folders of the local game (empty when there is none)."""
+        """Return the existing resource folders of the current local game (empty when there is none)."""
         from bmpt.engine import get_search_dirs
 
         base = self.game_dir()
         return get_search_dirs(base) if base and base.exists() else []
 
     def asset_types(self) -> set[str]:
+        """Return the asset types a mod install replaces: ``{"ALL"}``, or the checked ones by Unity type name."""
         if self.get("replace_all"):
             return {"ALL"}
         names = {
@@ -397,6 +463,11 @@ class Settings:
         return {v for k, v in names.items() if self.get(k)}
 
     def save_options(self, perform_crc: bool) -> SaveOptions:
+        """Return the engine's bundle save options from the settings.
+
+        Args:
+            perform_crc: Whether the saved bundle gets the CRC fix, as ``crc_needed`` decides for the install.
+        """
         return SaveOptions(
             perform_crc=perform_crc,
             extra_bytes=parse_hex_bytes(self.get("extra_bytes")),
@@ -406,9 +477,12 @@ class Settings:
     def crc_needed(self, target: Path | None = None) -> bool:
         """Whether files written for the selected install get the CRC fix.
 
-        ``auto`` follows the install (``install_needs_crc``), never the live ``target``: that file may be another tool's
-        mod or unreadable, and a wrong "no" would write a whole group unfixed. ``target`` is accepted for the callers
-        and does not change the answer."""
+        ``"true"`` and ``"false"`` force it; ``"auto"`` follows the install (``install_needs_crc``).
+
+        Args:
+            target: Accepted for the callers; it does not change the answer. ``auto`` never reads the live file:
+                it may be another tool's mod or unreadable, and a wrong "no" would write a whole group unfixed.
+        """
         setting = self.get("enable_crc_correction")
         if setting == "true":
             return True
@@ -417,6 +491,11 @@ class Settings:
         return install_needs_crc(self.get("file_source"))
 
     def spine_options(self, upgrade: bool = True) -> SkelConvertOptions:
+        """Return the options of the external Spine converter.
+
+        Args:
+            upgrade: True for the conversion to the game's Spine version, False for the downgrade to an older one.
+        """
         if upgrade:
             return SkelConvertOptions(
                 enabled=self.get("enable_spine_conversion"),
@@ -430,12 +509,13 @@ class Settings:
         )
 
     def anim_check_options(self) -> AnimCheckOptions:
+        """Return the animation check options, with the Spine viewer backend when its program exists."""
         path = self._viewer_path()
         backend = get_spine_backend("spine_viewer", path) if path is not None and path.is_file() else None
         return AnimCheckOptions(enabled=self.get("check_animations"), backend=backend)
 
     def anim_check_key(self) -> tuple[bool, str]:
-        """The animation check settings as plain values, for keys that must stay equal between calls."""
+        """Return the animation check settings as plain values, for keys that must stay equal between calls."""
         path = self._viewer_path()
         return bool(self.get("check_animations")), str(path) if path is not None else ""
 
@@ -444,6 +524,14 @@ class Settings:
         return Path(path) if path else None
 
     def output_subdir(self, name: str) -> Path:
+        """Return a folder of the output folder, created when missing.
+
+        Args:
+            name: The subfolder's name, a fixed name chosen by the caller.
+
+        Raises:
+            ServiceError: ``dev_path_outside`` in dev mode, for a folder outside the dev roots.
+        """
         path = Path(self.get("output_dir")) / name
         devmode.check_read(path)
         path.mkdir(parents=True, exist_ok=True)
@@ -451,7 +539,7 @@ class Settings:
 
 
 def user_cache_dir() -> Path:
-    """Where light game UI assets may be cached after the user agreed (never next to the program).
+    """Return where light game UI assets may be cached after the user agreed (never next to the program).
 
     With ``BAMT_DATA_DIR`` (devmode) the cache is ``<BAMT_DATA_DIR>/cache``, never the released app's.
     """
@@ -459,7 +547,16 @@ def user_cache_dir() -> Path:
 
 
 def managed_cache_dir(parent: str | None = None) -> Path:
-    """Use Settings' selected cache parent, shared by the App and CLI."""
+    """Return the cache folder under the parent chosen in Settings, shared by the App and the CLI.
+
+    The cache under the old folder name there is removed.
+
+    Args:
+        parent: The chosen parent folder; empty or None uses ``user_cache_dir``.
+
+    Raises:
+        ServiceError: ``dev_path_outside`` in dev mode, for a parent outside the dev roots.
+    """
     if not parent:
         return user_cache_dir()
     chosen = Path(parent)

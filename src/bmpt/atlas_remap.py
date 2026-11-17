@@ -19,16 +19,25 @@ class RemapError(ValueError):
     """A remap failure with locale parameters, including the offending asset."""
 
     def __init__(self, code: str, **params):
+        """Create the error with its ``ServiceError`` code and locale parameters."""
         super().__init__(f"{code}: {params}")
         self.code, self.params = code, params
 
 
 def texture_key(name: str) -> str:
+    """Return the key a page and its texture are matched by: the file name, lower case, without folder or ``.png``."""
     return name.replace("\\", "/").rsplit("/", 1)[-1].lower().removesuffix(".png")
 
 
 @dataclass(frozen=True)
 class Region:
+    """An atlas region, sizes and positions in page pixels.
+
+    ``xy`` is its top left on the page, ``size`` its trimmed size before rotation, ``original`` its size before
+    trimming, ``offset`` the trim offset from the bottom left (as Spine measures it), ``degrees`` its rotation on the
+    page and ``index`` its sequence index (-1 for none).
+    """
+
     name: str
     index: int
     page: str
@@ -40,15 +49,19 @@ class Region:
 
     @property
     def key(self) -> tuple[str, int]:
+        """The region's identity across atlases: (name, index)."""
         return self.name, self.index
 
     @property
     def label(self) -> str:
+        """The region's name as shown, with its index when it has one."""
         return self.name if self.index == -1 else f"{self.name} [{self.index}]"
 
 
 @dataclass
 class Page:
+    """An atlas page: its name, declared size ((0, 0) when undeclared), premultiplied alpha and pixel format."""
+
     name: str
     size: tuple[int, int] = (0, 0)
     pma: bool = False
@@ -57,13 +70,25 @@ class Page:
 
 @dataclass
 class Atlas:
+    """A parsed atlas: pages by name, regions by (page, name, index), and the file name errors show."""
+
     pages: dict[str, Page] = field(default_factory=dict)
     regions: dict[tuple[str, str, int], Region] = field(default_factory=dict)
     file: str = field(default="—", compare=False)
 
 
 def parse_atlas(text: str | bytes, file: str = "—") -> Atlas:
-    """Read legacy xy/size/orig/offset and modern bounds/offsets syntax."""
+    """Parse an atlas in the Spine 3 (``xy``/``size``/``orig``/``offset``) or Spine 4 (``bounds``/``offsets``) syntax.
+
+    Args:
+        text: The atlas; bytes are read as UTF-8.
+        file: The name errors show.
+
+    Raises:
+        RemapError: ``atlas_remap_property`` for text that is not UTF-8 or a value out of place,
+            ``atlas_remap_structure`` for a page line holding a colon or no page at all, ``atlas_remap_page_ambiguous``
+            or ``atlas_remap_region_ambiguous`` for a page or region given twice.
+    """
     if isinstance(text, bytes):
         try:
             text = text.decode("utf-8-sig")
@@ -161,7 +186,17 @@ def parse_atlas(text: str | bytes, file: str = "—") -> Atlas:
 
 
 def pair_atlases(old: dict, new: dict) -> dict[str, str]:
-    """Pair by asset basename, with the preview's single remaining pair fallback."""
+    """Pair asset names by their stem (``texture_key`` without extension), as the page's preview pairs them.
+
+    When exactly one name on each side is left unpaired, those two pair as well.
+
+    Args:
+        old: Assets by name; only the names are used.
+        new: Assets by name; only the names are used.
+
+    Returns:
+        ``{new name: old name}``.
+    """
     result = {}
     remaining = set(old)
     for target in new:
@@ -176,7 +211,12 @@ def pair_atlases(old: dict, new: dict) -> dict[str, str]:
 
 
 def region_layout(region: Region, atlas: Atlas) -> tuple:
-    """Drawing coordinates, independent of page density and atlas spelling."""
+    """Return a region's drawing coordinates, independent of page density and atlas spelling.
+
+    Returns:
+        The page's texture key, the rotation, x and width over the page width, y and height over the page height,
+        and the trim offset and trimmed size over the size before trimming.
+    """
     width, height = atlas.pages[region.page].size
     return (
         texture_key(region.page),
@@ -189,7 +229,13 @@ def region_layout(region: Region, atlas: Atlas) -> tuple:
 
 
 def skeleton_regions(skeletons: dict[str, bytes]) -> set[str] | None:
-    """Filter JSON atlases here; binary attachment paths are read by the web runtime."""
+    """Return the regions JSON skeletons' attachments draw, a sequence's frames each by name.
+
+    Binary skeletons are read by the page's runtime instead.
+
+    Returns:
+        The region names, or None without skeletons or when any is not a readable JSON skeleton.
+    """
     if not skeletons:
         return None
     result = set()
@@ -217,6 +263,16 @@ def skeleton_regions(skeletons: dict[str, bytes]) -> set[str] | None:
 
 
 def layout_changes(old: dict[str, bytes], new: dict[str, bytes], regions: set[str] | None = None) -> list[str]:
+    """Return the names of the atlases whose region layout changed, sorted.
+
+    An atlas without a counterpart on the other side counts as changed (with ``regions``, only when it holds one of
+    them); a pair counts when its regions' ``region_layout`` differs.
+
+    Args:
+        old: Atlas texts by name, before.
+        new: Atlas texts by name, after.
+        regions: The region names compared; None compares all.
+    """
     pairs = pair_atlases(old, new)
 
     def layout(atlas: Atlas) -> dict:
@@ -242,6 +298,12 @@ def layout_changes(old: dict[str, bytes], new: dict[str, bytes], regions: set[st
 
 
 def page_size_mismatch(atlases: dict[str, bytes], textures: dict[str, tuple[int, int]]) -> bool:
+    """Whether a page of the atlases has no size, no texture, or a texture of another aspect ratio than declared.
+
+    Args:
+        atlases: Atlas texts by name.
+        textures: Texture sizes (width, height) by texture key.
+    """
     for name, data in atlases.items():
         for page in parse_atlas(data, name).pages.values():
             size = textures.get(texture_key(page.name))
@@ -353,7 +415,27 @@ def remap_pages(
     official_pages: dict[str, Image.Image],
     required: set[str] | None = None,
 ) -> tuple[dict[str, Image.Image], dict]:
-    """Move only painted pixels onto transparent pages; refuse unavailable required regions."""
+    """Move the mod's painted regions onto transparent pages of the official atlas's layout.
+
+    Regions pair by name and index (repeated names by page order); each is cut from the mod's page, untrimmed,
+    re-trimmed and scaled to the official region, converted to the official page's alpha mode and turned as it packs.
+    A page image smaller than its declared size is scaled up first.
+
+    Args:
+        old: The mod's atlas.
+        new: The official atlas.
+        mod_pages: The mod's page images by texture key; a page without one has nothing to give.
+        official_pages: The official page images by texture key, for their sizes.
+        required: The region names the mod must supply; None requires every official region.
+
+    Returns:
+        The new pages by page name, and the report: regions ``moved`` (laid out differently), ``added`` (no source,
+        left transparent), ``dropped`` (only the mod has them) and the ``upscaled`` pages.
+
+    Raises:
+        RemapError: ``atlas_remap_regions_missing`` when a required region has no source, and the page, bounds and
+            ambiguity errors of the atlases.
+    """
     mod_pages, official_pages = dict(mod_pages), dict(official_pages)
     upscaled = []
     for atlas, images in ((old, mod_pages), (new, official_pages)):
@@ -441,6 +523,12 @@ def remap_pages(
 
 @dataclass
 class Inputs:
+    """Spine assets read from bundles.
+
+    Atlas and skeleton TextAssets by name, textures by texture key (RGBA), and each texture's container key for a
+    patch.
+    """
+
     atlases: dict[str, bytes] = field(default_factory=dict)
     skeletons: dict[str, bytes] = field(default_factory=dict)
     textures: dict[str, Image.Image] = field(default_factory=dict)
@@ -448,6 +536,13 @@ class Inputs:
 
 
 def read_inputs(paths: list[Path]) -> Inputs:
+    """Read the atlases, skeletons and textures of bundles; a later bundle's asset of the same name wins.
+
+    Raises:
+        RemapError: ``bundle_invalid`` for a file that is not a bundle, ``atlas_remap_invalid`` for a texture that
+            is refused or cannot be decoded.
+        ServiceError: ``dev_path_outside`` in dev mode, for a file outside the dev roots.
+    """
     result = Inputs()
     for path in paths:
         devmode.check_read(path)
@@ -475,6 +570,15 @@ def read_inputs(paths: list[Path]) -> Inputs:
 
 
 def skeleton_warnings(old: dict[str, bytes], new: dict[str, bytes]) -> list[dict]:
+    """Return what differs between paired skeletons, as ``{"key", "name"}`` per new skeleton.
+
+    ``version`` when the Spine versions differ; ``rig`` when a skeleton has no counterpart, or its bones, slots or
+    skins differ. Binary skeletons cannot be compared here, so any difference between them counts as ``rig``.
+
+    Args:
+        old: Skeletons by name, before.
+        new: Skeletons by name, after.
+    """
     warnings = []
     pairs = pair_atlases(old, new)
     for name, target in new.items():
@@ -507,9 +611,20 @@ def rig_gains(
     official_atlases: dict[str, bytes],
     official_skeletons: dict[str, bytes],
 ) -> dict:
-    """What the official rig has that a mod carrying its own atlas or skeleton lacks, per official asset name:
-    ``animations`` the mod's counterpart skeleton does not declare, ``regions`` its counterpart atlas does not hold.
-    Assets without a counterpart in the mod, and ones that cannot be read, are left out."""
+    """Return what the official rig has that a mod carrying its own atlas or skeleton lacks.
+
+    Assets without a counterpart in the mod, and ones that cannot be read, are left out.
+
+    Args:
+        mod_atlases: The mod's atlas texts by name.
+        mod_skeletons: The mod's skeletons by name.
+        official_atlases: The official atlas texts by name.
+        official_skeletons: The official skeletons by name.
+
+    Returns:
+        ``{"animations": {skeleton: [...]}, "regions": {atlas: [...]}}`` by official asset name: the animations the
+        mod's counterpart skeleton does not declare, the region labels its counterpart atlas does not hold.
+    """
     result: dict[str, dict[str, list[str]]] = {"animations": {}, "regions": {}}
     for name, source in pair_atlases(mod_skeletons, official_skeletons).items():
         try:
@@ -544,9 +659,22 @@ def rerigged(
     official_skeletons: dict[str, bytes],
     textures: Iterable[str],
 ) -> dict[str, str | None]:
-    """The official atlases a mod's own atlas should give way to (``rig_gains``), each with its official skeleton:
-    the mod's skeleton lacks animations the official one has, or the mod brings no skeleton and its atlas lacks
-    regions the official skeleton draws. Only atlases the mod has a page texture for (``textures``: texture keys)."""
+    """Return the official atlases a mod's own atlas should give way to, each with its official skeleton.
+
+    An atlas gives way when the mod's skeleton lacks animations the official one has, or the mod brings no skeleton
+    and its atlas lacks regions the official one holds. Only atlases the mod has a page texture for count.
+
+    Args:
+        gains: What the official rig has that the mod lacks, from ``rig_gains``.
+        mod_atlases: The mod's atlas texts by name.
+        mod_skeletons: The mod's skeletons by name.
+        official_atlases: The official atlas texts by name.
+        official_skeletons: The official skeletons by name.
+        textures: Texture keys of the mod's textures.
+
+    Returns:
+        ``{official atlas: official skeleton}``; the skeleton is None when none pairs with the atlas.
+    """
     textures = set(textures)
     skeleton_of = pair_atlases(official_skeletons, official_atlases)
     carried = set(pair_atlases(mod_skeletons, official_skeletons))
@@ -564,8 +692,11 @@ def rerigged(
 
 
 def same_rig(mod: bytes, official: bytes) -> bool:
-    """Whether a mod's skeleton declares nothing the official one lacks (bones with their parents, slots with
-    their bones, animations): an earlier official skeleton, as far as names tell."""
+    """Whether a mod's skeleton declares nothing the official one lacks: an earlier official skeleton, by names.
+
+    Compared are bones with their parents, slots with their bones, and animations; an unreadable skeleton is not the
+    same rig.
+    """
     try:
         left, right = spine_names.read(mod), spine_names.read(official)
     except ValueError:
@@ -579,10 +710,12 @@ def same_rig(mod: bytes, official: bytes) -> bool:
 
 @dataclass
 class OldRig:
-    """A texture-only portrait mod set on the rig its textures were drawn for (``old_rig_plan``). ``atlases``: per
-    official atlas name the set's atlas text, the name of the official skeleton it stands in for and the set's
-    skeleton. ``animations``: per official skeleton the animations it has that the set's lacks, which the game calls
-    by name. ``complete``: every recorded rig could be set up."""
+    """A texture-only portrait mod set on the rig its textures were drawn for (``old_rig_plan``).
+
+    ``atlases``: per official atlas name the set's atlas text, the name of the official skeleton it stands in for and
+    the set's skeleton. ``animations``: per official skeleton the animations it has that the set's lacks, which the
+    game calls by name. ``complete``: every recorded rig could be set up.
+    """
 
     atlases: dict[str, tuple[bytes, str, bytes]] = field(default_factory=dict)
     animations: dict[str, list[str]] = field(default_factory=dict)
@@ -590,6 +723,7 @@ class OldRig:
 
     @property
     def available(self) -> bool:
+        """Whether the set can be applied as it is: something set up, complete, and no animation missing."""
         return bool(self.atlases) and self.complete and not self.animations
 
 
@@ -605,13 +739,23 @@ def old_rig_plan(
     mod_textures: Iterable[str],
     official_textures: Iterable[str],
 ) -> OldRig:
-    """The set that applies a portrait mod's textures with the rig they were drawn for: per official atlas of
-    ``sources`` (atlas name to a ``fingerprint.painted`` entry, the atlas ``text`` and the base64 ``skeleton``), that
-    atlas with the mod's own skeleton of the official one's stem, else the recorded one, in place of the official
-    atlas and the official skeleton that draws it. An entry is left out, and the plan is incomplete, when no official
-    skeleton draws its atlas, it has no skeleton, its skeleton is of another Spine version (major and minor) than the
-    official one or cannot be read, or a page of its atlas is not one the mod paints (``mod_textures``) in a texture
-    the official parts hold (``official_textures``, both texture keys)."""
+    """Plan the set that applies a portrait mod's textures with the rig they were drawn for.
+
+    Per official atlas of ``sources``, that atlas goes with the mod's own skeleton of the official one's stem, else the
+    recorded one, in place of the official atlas and the official skeleton that draws it. An entry is left out, and
+    the plan is incomplete, when no official skeleton draws its atlas, it has no skeleton, its skeleton is of another
+    Spine version (major and minor) than the official one or cannot be read, or a page of its atlas is not one the mod
+    paints in a texture the official parts hold.
+
+    Args:
+        sources: Official atlas name to a ``fingerprint.painted`` entry: the atlas ``text`` and the base64
+            ``skeleton`` recorded for the mod's date.
+        official_atlases: The official atlas texts by name.
+        official_skeletons: The official skeletons by name.
+        mod_skeletons: The mod's skeletons by name.
+        mod_textures: Texture keys of the textures the mod paints.
+        official_textures: Texture keys of the textures the official parts hold.
+    """
     mod_textures, official_textures = set(mod_textures), set(official_textures)
     drawn_by = pair_atlases(official_skeletons, dict.fromkeys(sources))
     own = pair_atlases(mod_skeletons, official_skeletons)
@@ -649,6 +793,25 @@ def old_rig_plan(
 
 
 def prepare_patch(mod: Inputs, official: Inputs) -> tuple[Patch, dict]:
+    """Remap the mod's painted regions onto every official atlas's pages (``remap_pages``) as a texture patch.
+
+    Pages several atlases share take each atlas's regions only; a mod atlas without an official counterpart is
+    dropped whole.
+
+    Args:
+        mod: The mod's assets.
+        official: The official assets the patch is made for.
+
+    Returns:
+        The patch (container key to page image, every official texture) and the report: ``moved``, ``added``,
+        ``dropped`` (``<atlas> - <region>``), ``upscaled``, ``warnings``, ``partial`` and ``unchanged`` (the pages equal
+        the mod's own).
+
+    Raises:
+        RemapError: ``atlas_remap_atlas_missing`` when no atlas pairs, ``atlas_remap_regions_missing`` for an
+            official atlas without a counterpart or with required regions missing, ``atlas_remap_page_missing`` for
+            a page without a texture, and the errors of ``remap_pages``.
+    """
     pairs = pair_atlases(mod.atlases, official.atlases)
     if not pairs:
         raise RemapError("atlas_remap_atlas_missing", file=", ".join(official.atlases) or "*.atlas")

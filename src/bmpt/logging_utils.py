@@ -33,7 +33,16 @@ def _private_message(error: Exception) -> str:
 
 
 def log_failure(logger: logging.Logger, level: int, context: str, error: Exception, *, code: str | None = None) -> None:
-    """Log only sanitized strings; callers supply a path-free operation label."""
+    """Log a failure with its exception type and codes, the message stripped of paths.
+
+    Args:
+        logger: The logger written to.
+        level: The logging level.
+        context: A path-free label of the failed operation, logged as given.
+        error: The exception. Its message is replaced by ``[path]`` whole when it may hold a path (a separator, a
+            dotted name, a drive letter); otherwise only its quoted values are.
+        code: The code to log; None takes the exception's ``code``, then ``winerror`` or ``returncode``.
+    """
     code = code or getattr(error, "code", None)
     if code is None:
         code = getattr(error, "winerror", None) or getattr(error, "returncode", None)

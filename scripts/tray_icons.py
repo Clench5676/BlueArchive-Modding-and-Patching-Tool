@@ -42,8 +42,10 @@ Point = tuple[float, float]
 
 @dataclass
 class Shape:
-    """One ``<path>``: its fill colour and its subpaths, each a list of segments (``("L", p)`` or
-    ``("C", c1, c2, p)``) after a start point."""
+    """One ``<path>``: its fill colour and its subpaths.
+
+    Each subpath is a start point and a list of segments, ``("L", p)`` or ``("C", c1, c2, p)``.
+    """
 
     fill: tuple[int, int, int]
     subpaths: list[tuple[Point, list[tuple]]]
@@ -51,6 +53,8 @@ class Shape:
 
 @dataclass
 class Drawing:
+    """An SVG source: its viewBox size in SVG units and its paths in paint order."""
+
     width: float
     height: float
     paths: list[Shape]
@@ -62,6 +66,13 @@ _TOKEN = re.compile(r"[A-Za-z]|[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?")
 
 
 def parse_path(d: str) -> list[tuple[Point, list[tuple]]]:
+    """Parse a path's ``d`` data into subpaths of absolute line and cubic segments.
+
+    H and V become lines, and Z closes a subpath with a line back to its start.
+
+    Raises:
+        ValueError: A command other than M, L, H, V, C and Z, or data before the first M.
+    """
     tokens = _TOKEN.findall(d)
     subpaths: list[tuple[Point, list[tuple]]] = []
     i, cmd = 0, None
@@ -135,6 +146,12 @@ def _colour(value: str) -> tuple[int, int, int]:
 
 
 def read_svg(path: Path) -> Drawing:
+    """Read an icon source.
+
+    Raises:
+        ValueError: The viewBox does not start at 0 0, or an element other than ``<path>``, ``<g>``, ``<title>`` and
+            ``<desc>``, or an unsupported fill.
+    """
     root = ET.parse(path).getroot()
     box = [float(v) for v in root.get("viewBox", "").replace(",", " ").split()]
     if len(box) != 4 or box[0] or box[1]:
@@ -173,8 +190,15 @@ def _flatten(start: Point, segments: list[tuple]) -> list[Point]:
 
 
 def coverage(path: Shape, scale: float, size: tuple[int, int]) -> Image.Image:
-    """A path's coverage as an 8-bit mask: the subpaths filled even-odd at SUPERSAMPLE x SUPERSAMPLE samples per
-    pixel, then averaged."""
+    """Return a path's coverage as an 8-bit mask.
+
+    The subpaths are filled even-odd at SUPERSAMPLE x SUPERSAMPLE samples per pixel, then averaged.
+
+    Args:
+        path: The path.
+        scale: Pixels per SVG unit.
+        size: The mask's (width, height) in pixels.
+    """
     big = (size[0] * SUPERSAMPLE, size[1] * SUPERSAMPLE)
     mask = Image.new("1", big, 0)
     f = scale * SUPERSAMPLE
@@ -186,7 +210,7 @@ def coverage(path: Shape, scale: float, size: tuple[int, int]) -> Image.Image:
 
 
 def render(drawing: Drawing, width: int, height: int | None = None) -> Image.Image:
-    """The drawing at ``width`` pixels (``height`` keeps the aspect ratio), its paths painted in order."""
+    """Return the drawing at ``width`` pixels, its paths painted in order; ``height`` None keeps the aspect ratio."""
     height = height or round(width * drawing.height / drawing.width)
     scale = width / drawing.width
     out = Image.new("RGBA", (width, height), (0, 0, 0, 0))
@@ -206,7 +230,7 @@ def _num(value: float) -> str:
 
 
 def pdf_bytes(drawing: Drawing) -> bytes:
-    """A one-page PDF of the drawing in points (1 SVG unit = 1 pt), each path filled even-odd with its colour."""
+    """Return a one-page PDF of the drawing in points (1 SVG unit = 1 pt), each path filled even-odd with its colour."""
     h = drawing.height
     ops: list[str] = []
     for path in drawing.paths:
@@ -243,8 +267,10 @@ def pdf_bytes(drawing: Drawing) -> bytes:
 
 
 def ico_bytes(frames: list[Image.Image]) -> bytes:
-    """A Windows icon with one 32-bit frame per image (BGRA rows bottom-up and the AND mask, the format every
-    Windows version reads)."""
+    """Return a Windows icon with one 32-bit frame per image.
+
+    Each frame holds BGRA rows bottom-up and the AND mask, the format every Windows version reads.
+    """
     images = []
     for frame in frames:
         frame = frame.convert("RGBA")
@@ -276,6 +302,7 @@ def ico_bytes(frames: list[Image.Image]) -> bytes:
 
 
 def png_bytes(image: Image.Image, dpi: int) -> bytes:
+    """Return an image as an optimised PNG that records ``dpi``."""
     buf = io.BytesIO()
     image.save(buf, "PNG", dpi=(dpi, dpi), optimize=True)
     return buf.getvalue()
@@ -299,7 +326,7 @@ def build(out_dir: Path, src_dir: Path = ICON_DIR) -> list[Path]:
 
 
 def same_pixels(a: Image.Image, b: Image.Image, tolerance: int = 2) -> bool:
-    """Whether two renderings match, allowing for small differences between Pillow versions."""
+    """Whether two renderings match within ``tolerance`` (0-255) per channel, which absorbs Pillow's differences."""
     if a.size != b.size:
         return False
     diff = ImageChops.difference(a.convert("RGBA"), b.convert("RGBA"))
@@ -307,12 +334,13 @@ def same_pixels(a: Image.Image, b: Image.Image, tolerance: int = 2) -> bool:
 
 
 def ico_frames(path: Path) -> dict[int, Image.Image]:
+    """Return an icon file's frames by width."""
     with Image.open(path) as ico:
         return {size[0]: ico.ico.getimage(size).convert("RGBA") for size in ico.ico.sizes()}
 
 
 def check(src_dir: Path = ICON_DIR) -> list[str]:
-    """The built files that no longer match their SVG sources."""
+    """Return the names of the built files that no longer match their SVG sources in ``src_dir``."""
     stale = []
     with tempfile.TemporaryDirectory() as tmp:
         fresh = Path(tmp)
@@ -379,6 +407,16 @@ def _tint(alpha: Image.Image, bg: tuple[int, int, int], ink: tuple[int, int, int
 
 
 def preview(out: Path, src_dir: Path = ICON_DIR, zoom: int = 6) -> Path:
+    """Write the review sheet the module docstring describes.
+
+    Args:
+        out: The PNG written; its folder is created.
+        src_dir: The folder of the sources and built files.
+        zoom: The enlargement of the enlarged tiles.
+
+    Returns:
+        ``out``.
+    """
     menubar = read_svg(src_dir / "menubar.svg")
     tray = read_svg(src_dir / "tray.svg")
     pdf = src_dir / "menubar.pdf"
@@ -419,6 +457,7 @@ def preview(out: Path, src_dir: Path = ICON_DIR, zoom: int = 6) -> Path:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Build the icons, check them (``--check``) or write a review sheet (``--preview``); return the exit status."""
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--check", action="store_true", help="only report built files that differ from the SVGs")
     parser.add_argument("--preview", type=Path, metavar="PNG", help="write a review sheet")

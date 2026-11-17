@@ -74,12 +74,15 @@ RELEASE_INDEX = {"japan": 0, "global": 1}
 
 
 def read_json(path: Path | None) -> dict:
-    """Load optional override data without requiring the prototype at runtime."""
+    """Load an optional JSON override file; None reads as an empty table, so no override file is required."""
     return json.loads(path.read_text(encoding="utf-8")) if path is not None else {}
 
 
 def load_schaledb(directory: Path) -> dict[str, dict[str, dict]]:
-    """Load localized student tables keyed by the SchaleDB student id."""
+    """Load the localised student tables of a SchaleDB export folder, by language, each keyed by student id.
+
+    ``students.th.json`` is optional; the other languages' files are required.
+    """
     result = {}
     for lang, suffix in LANGUAGES.items():
         if lang == "th" and not (directory / "students.th.json").exists():
@@ -91,7 +94,15 @@ def load_schaledb(directory: Path) -> dict[str, dict[str, dict]]:
 
 
 def match_student(row: dict, students: dict[str, dict]) -> list[dict]:
-    """Match file ids, shared dev forms, then localized given-name and skin pairs."""
+    """Find the SchaleDB students a character map row draws, the default order first.
+
+    Matched by file id against path and dev names (shared dev forms included), then by the English given name and
+    skin; of several matches, those whose given name is the row's.
+
+    Args:
+        row: A character map row.
+        students: SchaleDB's English student table by id.
+    """
     key = row["file_id"].lower()
     matches = [
         student
@@ -129,7 +140,12 @@ def kivo_name(row: dict, student: dict) -> str:
 
 
 def portrait_name(entry: dict, student: dict) -> str:
-    """Resolve collection texture names, including legacy and shared-form names."""
+    """Return the collection portrait texture name of a variant, including legacy and shared-form names.
+
+    Args:
+        entry: The variant's catalog entry.
+        student: Its SchaleDB student.
+    """
     key = entry["file_id"].lower()
     stem = PORTRAIT_ALIASES.get(key)
     if stem is None:
@@ -149,7 +165,19 @@ def build_catalog(
     wiki_path: Path | None = None,
     variants_path: Path | None = None,
 ) -> dict:
-    """Merge local source tables and return deterministic, asset-free metadata."""
+    """Merge local source tables and return deterministic, asset-free metadata.
+
+    Args:
+        csv_path: The character map (CSV).
+        schaledb: The SchaleDB export folder.
+        names_path: Curated names (families, variants, rules); None for none.
+        wiki_path: Wiki name proposals by variant; None for none.
+        variants_path: Curated variant families (kinds, collection art, schools); None for none.
+
+    Returns:
+        The catalog: ``version``, ``students``, ``variants``, a ``summary`` of kinds, name sources, fallbacks,
+        conflicts and aliases, and the naming ``rules``.
+    """
     rows = read_character_map(csv_path)
     localized = load_schaledb(schaledb)
     names, wiki, curated = read_json(names_path), read_json(wiki_path), read_json(variants_path)
@@ -392,6 +420,14 @@ def add_aliases(
     cn wording. A variant's aliases are its zh-CN name with those names, its own row's name_cn
     and the server's costume words (cn_words), and SchaleDB's cn name of a playable variant.
     Only non-empty lists are written.
+
+    Args:
+        students: The catalog's students by id; changed in place.
+        entries: The catalog's variants by key; changed in place.
+        row_map: The character map rows by variant key.
+        matches: The SchaleDB student matched to each variant key.
+        schale_cn: SchaleDB's cn student table by id.
+        words: The CN server's costume words, from ``cn_words``.
     """
     server: dict[str, set[str]] = defaultdict(set)
     heads: dict[str, str] = {}
@@ -425,7 +461,15 @@ def add_aliases(
 
 
 def validate_game(data: dict, directory: Path) -> list[dict[str, str]]:
-    """Report missing collection textures by reading names with UnityPy only."""
+    """Report the collection textures the catalog names that a game folder lacks, reading names with UnityPy only.
+
+    Args:
+        data: The catalog.
+        directory: The game folder.
+
+    Returns:
+        ``{"key", "field", "name"}`` per missing ``bg`` or ``portrait`` texture.
+    """
     import UnityPy
     from ba_modding_toolkit.searching import get_search_dirs
 
@@ -454,7 +498,14 @@ def validate_game(data: dict, directory: Path) -> list[dict[str, str]]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Write compact sorted JSON and log source counts, conflicts and mismatches."""
+    """Write compact sorted JSON and log source counts, conflicts and mismatches.
+
+    Args:
+        argv: Command-line arguments; None reads ``sys.argv``.
+
+    Returns:
+        The exit status, 0.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--csv", type=Path, required=True)
     parser.add_argument("--schaledb", type=Path, required=True)

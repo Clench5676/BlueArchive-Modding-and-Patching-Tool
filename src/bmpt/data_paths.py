@@ -1,4 +1,9 @@
-"""User folder names and the startup migration, independent of a compiled build."""
+"""User folder names and the startup migration, independent of a compiled build.
+
+The data folder and the cache are named ``bluearchive-modding-patching-tool``; a folder still named
+``BA-Modding-Toolkit`` is renamed at start, and the absolute paths stored in its settings and library state are
+rewritten to the new folder.
+"""
 
 from __future__ import annotations
 
@@ -181,9 +186,16 @@ def _rewrite_paths(old: Path, new: Path) -> bool:
 def migrate_data_dir(parent: Path, override: Path | None = None) -> Path:
     """Select the data folder before config, logging, the normal instance lock or bundled Addons are opened.
 
-    An override bypasses all migration. An old folder still in use (an older version running) or a failed same-volume
-    rename keeps the old folder for this run. The journal moves with the folder, so an interrupted path rewrite is
-    retried at every start until it is done.
+    An old folder still in use (an older version running) or a failed same-volume rename keeps the old folder for this
+    run. The journal moves with the folder, so an interrupted path rewrite is retried at every start until it is done.
+    Nothing here stops the start: failures are logged.
+
+    Args:
+        parent: The folder holding the old and the new data folder (Application Support on macOS).
+        override: A data folder named on the command line or by ``BAMT_DATA_DIR``; returned as is, with no migration.
+
+    Returns:
+        The data folder for this run.
     """
     if override is not None:
         return override
@@ -241,7 +253,16 @@ def migrate_data_dir(parent: Path, override: Path | None = None) -> Path:
 
 
 def migrate_cache_dir(old: Path, new: Path, override: Path | None = None) -> Path:
-    """Discard only the obsolete cache itself; game files rebuild it on demand. Never remove its parent."""
+    """Remove the cache under its old folder name and return the new cache folder.
+
+    Only the old cache itself is removed, never its parent; game files rebuild it on demand. A cache outside the dev
+    roots is left alone.
+
+    Args:
+        old: The cache folder under the old name.
+        new: The cache folder under the new name.
+        override: A data folder that overrides the default; its ``cache`` subfolder is returned with no migration.
+    """
     if override is not None:
         return override / "cache"
     if not devmode.allows_read(old) or not devmode.allows_read(new):
@@ -255,6 +276,15 @@ def migrate_cache_dir(old: Path, new: Path, override: Path | None = None) -> Pat
 
 
 def default_cache_dir(override: Path | None = None, data_dir: Path | None = None) -> Path:
+    """Return the platform's cache folder for the App, removing the cache under the old folder name.
+
+    The cache lies in Local AppData on Windows, in the data folder on macOS and in ``XDG_CACHE_HOME`` elsewhere.
+
+    Args:
+        override: A data folder that overrides the default; its ``cache`` subfolder is used.
+        data_dir: The data folder ``migrate_data_dir`` chose; on macOS its ``cache`` is used when it is the new or
+            the old App folder, so a run that kept the old folder keeps its cache.
+    """
     if override is not None:
         return override / "cache"
     if sys.platform == "win32":

@@ -18,9 +18,7 @@ CAP = 0.99  # the highest fraction before the item ends: never 100 % while it ru
 
 
 class Meter:
-    """The fraction done of one item, from ``weights``: the phases in order, each with its share (any scale; a phase
-    left out of ``weights`` counts as nothing). ``report(fraction)`` is called when the shown percent grows, at most
-    every ``every`` seconds."""
+    """The fraction done of one item, from the phases a build marks."""
 
     def __init__(
         self,
@@ -30,6 +28,17 @@ class Meter:
         every: float | None = None,
         clock: Callable[[], float] = time.monotonic,
     ):
+        """Create a meter at 0.
+
+        Args:
+            report: Called with the fraction (0..``CAP``) when the shown whole percent grows, at most every
+                ``every`` seconds; a ``phase`` attribute on it is also called with each phase entered. None reports
+                nothing.
+            weights: The phases in order, each with its share of the build's time (any scale, negatives count as
+                0). A phase left out counts as nothing.
+            every: Seconds between two reports at most; None uses ``EVERY``.
+            clock: The time source for that throttle.
+        """
         pairs = list(weights.items()) if isinstance(weights, Mapping) else list(weights)
         total = sum(max(0.0, float(w)) for _, w in pairs) or 1.0
         self._start: dict[str, tuple[float, float]] = {}
@@ -48,7 +57,7 @@ class Meter:
         self.fraction = 0.0
 
     def phase(self, name: str, done: float = 0, count: float = 1) -> None:
-        """The build is in ``name``, ``done`` of ``count`` through it."""
+        """Mark the build as ``done`` of ``count`` through phase ``name``; an unknown phase is ignored."""
         start = self._start.get(name)
         if start is None:
             return

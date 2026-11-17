@@ -54,7 +54,7 @@ def _join(a: str, b: str) -> str:
 
 
 def one_line(text: Any) -> str:
-    """A row's text on one line (the game breaks lines by hand)."""
+    """Return a row's text on one line (the game breaks lines by hand): joined without a space between CJK text."""
     out = ""
     for part in str(text or "").split("\n"):
         out = _join(out, part.strip())
@@ -62,7 +62,16 @@ def one_line(text: Any) -> str:
 
 
 def dialogues(rows: Iterable[dict[str, Any]]) -> dict[int, Dialogues]:
-    """``{character id: {talk animation: [{lang: text}, ...]}}`` from the rows of the CharacterDialog table."""
+    """Collect the memorial lobby dialogues from the rows of the CharacterDialog table.
+
+    Teen-mode rows are left out. A group without a talk animation of its own plays ``Talk_<group id>_M``.
+
+    Args:
+        rows: The table's rows.
+
+    Returns:
+        ``{character id: {talk animation: [{lang: text}, ...]}}``, rows in display order, texts on one line.
+    """
     groups: dict[tuple[int, int], list[dict[str, Any]]] = {}
     for row in rows:
         if not isinstance(row, dict) or row.get("DialogCategory") != CATEGORY or row.get("TeenMode"):
@@ -86,7 +95,19 @@ def dialogues(rows: Iterable[dict[str, Any]]) -> dict[int, Dialogues]:
 
 
 def portrait_dialogues(rows: Iterable[dict[str, Any]]) -> dict[int, dict[int, list[dict[str, Any]]]]:
-    """Ordinary lobby Idle groups; greetings and memorial scenes are different voice sequences."""
+    """Collect the ordinary lobby's Idle dialogues from the rows of the CharacterDialog table.
+
+    Greetings, anniversary lines and memorial scenes are different voice sequences and are left out, as are teen-mode
+    rows.
+
+    Args:
+        rows: The table's rows.
+
+    Returns:
+        ``{character id: {group id: [row, ...]}}``, rows in display order. A row holds its text by language (line
+        breaks kept), and when the table has them ``expression`` (the face animation), ``duration`` (seconds) and
+        ``voiceIds``.
+    """
     groups: dict[tuple[int, int], list[dict]] = {}
     for row in rows:
         if (
@@ -130,7 +151,22 @@ def portrait_dialogues(rows: Iterable[dict[str, Any]]) -> dict[int, dict[int, li
 
 
 def portrait_by_clip(groups: dict, clips: dict[str, list[str | None]]) -> dict[str, dict[str, Any]]:
-    """Keep timed expression rows on the voice they continue, including rows with no new VoiceId."""
+    """Put the ordinary lobby rows of each dialogue group on its voice clips.
+
+    A row with voice ids starts a new clip's segment; a row without one continues the segment before, so its timed
+    expression stays on the voice it continues. A table without voice ids gives each row a segment. Segments go on the
+    clips in order and the rest join the last clip. Expression cues are timed by the rows' durations up to the first
+    row without one: a later offset is never guessed.
+
+    Args:
+        groups: ``{group id: rows}`` of one character, as ``portrait_dialogues`` gives them.
+        clips: ``{group id: [clip id or None, ...]}``, the group's voice clips in order; None keeps a missing
+            recording's place.
+
+    Returns:
+        ``{clip id: {lang: text, "expression", "expressionCues": [{"time", "expression"}]}}``, the expression keys
+        only when a row names one.
+    """
     out = {}
     for group, ids in clips.items():
         rows = groups.get(group) or []
@@ -167,7 +203,18 @@ def portrait_by_clip(groups: dict, clips: dict[str, list[str | None]]) -> dict[s
 
 
 def portrait_voice_lines(groups: dict, clips: Iterable[str]) -> dict[str, dict[str, Any]]:
-    """Ordinary flat Lobby_N clips count voices, not dialogue groups (a group may contain two voices)."""
+    """Match the ordinary lobby voice clips (``<name>_lobby_<n>[_<part>]``) to the dialogue groups and their lines.
+
+    When every row carries voice ids and the clips have no part numbers, ``n`` counts voices across the groups in
+    order, not groups: a group may contain two voices. Otherwise clip ``n`` belongs to group ``n``, parts in order.
+
+    Args:
+        groups: ``{group id: rows}`` of one character, as ``portrait_dialogues`` gives them.
+        clips: Clip ids; ids that are not lobby clips are ignored.
+
+    Returns:
+        The lines by clip id, as ``portrait_by_clip`` gives them.
+    """
     groups = {str(key): rows for key, rows in groups.items()}
     sources: dict[str, list[tuple[int, int | None, str]]] = {}
     for clip in clips:
@@ -194,7 +241,10 @@ def portrait_voice_lines(groups: dict, clips: Iterable[str]) -> dict[str, dict[s
 
 
 def talks_of(clips: Iterable[str]) -> dict[str, list[str]]:
-    """Voice clips by talk animation, from their names (``hoshino_memoriallobby_3_2`` plays in Talk_03_M)."""
+    """Group memorial lobby clip ids by the talk animation their names point to, in part order.
+
+    ``hoshino_memoriallobby_3_2`` plays in ``Talk_03_M``; ids of other clips are ignored.
+    """
     found: dict[str, list[tuple[int, str]]] = {}
     for clip in clips:
         m = CLIP.search(clip)
@@ -204,7 +254,15 @@ def talks_of(clips: Iterable[str]) -> dict[str, list[str]]:
 
 
 def by_clip(talks: Dialogues, clips: dict[str, list[str]]) -> dict[str, dict[str, str]]:
-    """Each dialogue's rows on its voice clips (``clips``: {talk animation: [clip ids in order]})."""
+    """Put each memorial lobby dialogue's rows on its voice clips, as the module docstring describes.
+
+    Args:
+        talks: One character's dialogues, as ``dialogues`` gives them.
+        clips: ``{talk animation: [clip ids in order]}``.
+
+    Returns:
+        ``{clip id: {lang: text}}`` for the clips that get a line.
+    """
     out: dict[str, dict[str, str]] = {}
     for anim, ids in clips.items():
         rows = talks.get(anim) or []
@@ -221,8 +279,18 @@ def by_clip(talks: Dialogues, clips: dict[str, list[str]]) -> dict[str, dict[str
 
 
 def merge(kivo: dict[str, dict[str, str]], official: dict[str, dict[str, str]]) -> dict[str, dict[str, Any]]:
-    """``{clip: {lang: text, "voice": bool}}``: zh-CN from Kivo (the CN server's text or Kivo's translation), en, zh-TW,
-    ko and th from the Global server, ja from Kivo else the Global server; voices are Kivo's."""
+    """Combine Kivo's lines and the Global server's by clip.
+
+    zh-CN comes from Kivo (the CN server's text or Kivo's translation); en, zh-TW, ko and th from the Global server;
+    ja from Kivo, else the Global server.
+
+    Args:
+        kivo: Kivo's lines by clip id (``zh-CN``, ``ja``, ``audio``).
+        official: The Global server's lines by clip id.
+
+    Returns:
+        ``{clip id: {lang: text, "voice": bool}}``; ``voice`` says whether Kivo has the clip's audio.
+    """
     out: dict[str, dict[str, Any]] = {}
     for clip in sorted(set(kivo) | set(official)):
         k, g = kivo.get(clip, {}), official.get(clip, {})
@@ -251,6 +319,7 @@ class GlobalLines:
     """The Global server's memorial lobby lines, fetched once per session and kept in memory."""
 
     def __init__(self) -> None:
+        """Start with nothing fetched."""
         self._lock = threading.Lock()
         self._table: dict[int, Dialogues] | None = None
         self._portraits: dict[int, dict[int, list[dict[str, str]]]] = {}
@@ -283,9 +352,20 @@ class GlobalLines:
         return _gunzip(data) if gzipped else data
 
     def dialogues(self, character_id: int | str) -> Dialogues:
-        """The memorial lobby dialogues of a character (its SchaleDB id is the game's character id); ``{}`` when the
-        Global server has none. ``lines_unavailable`` when the table cannot be read (asked again after a while)."""
-        # one reader at a time: callers that come in during the download wait for its result
+        """Return the memorial lobby dialogues of a character, reading the table on first use.
+
+        One reader at a time: callers that come in during the download wait for its result.
+
+        Args:
+            character_id: The game's character id (the same as the SchaleDB id).
+
+        Returns:
+            The dialogues as ``dialogues`` gives them for one character; ``{}`` when the Global server has none.
+
+        Raises:
+            ServiceError: ``lines_unavailable`` when the table cannot be read; it is asked for again after
+                ``RETRY_AFTER`` seconds.
+        """
         with self._lock:
             if self._table is None:
                 if time.monotonic() - self._failed_at < RETRY_AFTER:
@@ -318,7 +398,11 @@ class GlobalLines:
         return None
 
     def portrait_dialogues(self, character_id: int | str) -> dict[int, list[dict[str, str]]]:
-        """Reuse the same single-flight table read for ordinary lobby translations."""
+        """Return a character's ordinary lobby dialogues, as ``portrait_dialogues`` gives them, from the same table.
+
+        Raises:
+            ServiceError: ``lines_unavailable`` when the table cannot be read.
+        """
         self.dialogues(character_id)
         try:
             return self._portraits.get(int(character_id), {})
@@ -326,7 +410,11 @@ class GlobalLines:
             return {}
 
     def cached_portrait_dialogues(self, character_id: int | str) -> dict[int, list[dict[str, str]]] | None:
-        """Return published captions without waiting on a download that holds the table lock."""
+        """Return a character's ordinary lobby dialogues without waiting on a download that holds the table lock.
+
+        Returns:
+            The dialogues as ``portrait_dialogues`` gives them, or None while the table is not read yet.
+        """
         if self._table is None:
             return None
         try:

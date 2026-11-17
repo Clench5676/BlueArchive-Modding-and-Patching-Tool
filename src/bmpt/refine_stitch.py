@@ -13,6 +13,7 @@ from .refine_composite import movement_check
 
 
 def detail(rgb):
+    """Return each pixel's luminance gradient magnitude (backward differences), in the input's units."""
     grey = np.asarray(rgb, np.float32) @ np.array([0.299, 0.587, 0.114], np.float32)
     return np.hypot(np.diff(grey, axis=1, prepend=grey[:, :1]), np.diff(grey, axis=0, prepend=grey[:1]))
 
@@ -22,6 +23,15 @@ def minimum_seam(cost):
 
     Dynamic programming fits rectangular overlaps and makes the actual cut
     inspectable. No registration or displacement of either crop is performed.
+
+    Args:
+        cost: (rows, columns) finite costs.
+
+    Returns:
+        The seam's row in each column.
+
+    Raises:
+        ValueError: The cost is empty, not two-dimensional or not finite.
     """
     cost = np.asarray(cost, np.float64)
     if cost.ndim != 2 or not cost.size or not np.isfinite(cost).all():
@@ -46,6 +56,18 @@ def seam_mask(a, b, *, incoming_below=True, blend=2, agreement=6.0, preference=0
 
     Disagreement and either source's detail dominate the weak position prior.
     A positive preference favours the incoming crop by moving the seam outward.
+
+    Args:
+        a: The existing observation of the overlap strip, (rows, columns, 3) RGB.
+        b: The incoming observation, the same grid.
+        incoming_below: The incoming crop owns the rows after the seam; False, the rows before it.
+        blend: Half-width in pixels of the band around the seam where pixels may mix.
+        agreement: The largest disagreement and gradient (0-255) at which band pixels mix.
+        preference: Share of the strip height the preferred seam position moves outward.
+
+    Returns:
+        ``(weight, band, path)``: the incoming crop's weight per pixel (0..1), the seam band, and the seam's row per
+        column.
     """
     a, b = np.asarray(a, np.float32), np.asarray(b, np.float32)
     if a.shape != b.shape or a.ndim != 3 or a.shape[2] != 3:
@@ -80,6 +102,15 @@ def double_edge_count(a, b, merged, band, *, contrast=16.0, separation=6, locati
     Count horizontal and vertical profiles with two local dark extrema separated
     by 2..6 pixels. This detects cross-faded contours; it is not semantic proof
     about every line in a drawing. Identical source pairs are never counted.
+
+    Args:
+        a: The existing observation, RGB.
+        b: The incoming observation, the same grid.
+        merged: The stitched result.
+        band: The pixels counted.
+        contrast: The least depth of a ridge, in 0-255 grey.
+        separation: The widest gap between the two ridges of a pair, in pixels.
+        locations: Return the hits as ``[x, y, axis, gap]`` instead of their count.
     """
     grey = [np.asarray(c, np.float32) @ np.array([0.299, 0.587, 0.114]) for c in (a, b, merged)]
     count = 0
@@ -114,6 +145,22 @@ def stitch(existing, incoming, covered, *, head=False, feather=48, blend=2, agre
     Body tiles arrive in row order and may have top and left overlaps. A head
     arrives last, using four perimeter seams; its priority is a weak seam cost
     preference. The head's interior follows from those cuts, not a box overwrite.
+
+    Args:
+        existing: The master window, (rows, columns, 3) RGB in 0-255.
+        incoming: The crop's observation on the same grid.
+        covered: The window's pixels earlier crops already cover.
+        head: Whether the crop is the head, stitched by four perimeter seams.
+        feather: The deepest seam strip of a head, in pixels.
+        blend: As for ``seam_mask``.
+        agreement: As for ``seam_mask``.
+
+    Returns:
+        ``(merged, band, paths, weight)``: the stitched window, the seam bands, each seam's side and points (x, y in
+        the window), and the incoming crop's weight per pixel.
+
+    Raises:
+        ValueError: The covered part is neither top and left strips nor the whole window of a head.
     """
     h, w = covered.shape
     weight = np.ones((h, w), np.float32)
@@ -181,6 +228,18 @@ def native_movement(official, generated, *, density, min_iou=0.96, max_offset=1.
 
     Translation search is a rejection control only: its result is never applied.
     It catches a coherent small drift even when a nearest-line percentile hides it.
+
+    Args:
+        official: The official crop.
+        generated: The returned crop, the same grid.
+        density: Crop pixels per native (official texture) pixel.
+        min_iou: As for ``movement_check``.
+        max_offset: The largest p95 distance, in native pixels, from an official line to a returned one.
+        max_shift: The largest coherent translation in native pixels before ``coherent_drift``.
+
+    Returns:
+        The ``movement_check`` report with the line offset measured from the official lines, the native size, the
+        translation found and the flags.
     """
     size = tuple(max(1, round(s / density)) for s in official.size)
     a = official.convert("RGBA").resize(size, Image.Resampling.LANCZOS)
@@ -229,6 +288,14 @@ def gross_disagreement(a, b, visible, *, block=8, limit=48.0, max_share=0.1):
 
     A large-area part change survives the box average; a narrow independent line
     placement does not dominate the gate. Limits are a contrast/area policy.
+
+    Args:
+        a: One observation of the overlap, RGB in 0-255.
+        b: The other observation, the same grid.
+        visible: The pixels compared; a block needs a quarter of its pixels visible.
+        block: The block side in pixels.
+        limit: The block mean difference (RGB distance over the square root of 3) above which a block is gross.
+        max_share: The largest share of gross blocks that passes.
     """
     a, b = np.asarray(a, np.float32), np.asarray(b, np.float32)
     h, w = visible.shape
@@ -255,6 +322,17 @@ def nearest_inside(colour, seeds, query, *, radius=12, return_matched=False):
 
     The caller supplies a smooth fill for queries without a seed in that radius.
     This keeps large empty backgrounds out of the search and reports coverage.
+
+    Args:
+        colour: (rows, columns, channels) values.
+        seeds: The pixels whose colour may be copied.
+        query: The pixels given their nearest seed's colour.
+        radius: The search radius in pixels.
+        return_matched: Return the mask of matched queries instead of the count of unmatched ones.
+
+    Returns:
+        ``(colour, unmatched)``: the colours with the matched queries filled, and the number of queries without a
+        seed in the radius (or the matched mask).
     """
     result = colour.copy()
     possible = np.asarray(Image.fromarray(np.uint8(seeds) * 255).filter(ImageFilter.MaxFilter(2 * radius + 1))) > 0
@@ -291,6 +369,17 @@ def nearest_colour(colour, seeds, query, *, radius=12, direction=None):
 
     A spatially nearest pale surface is not the colour reference for a thin dark
     contour when the same ink continues slightly farther inside the outline.
+
+    Args:
+        colour: (rows, columns, 3) RGB.
+        seeds: The interior pixels sampled.
+        query: The pixels given the nearest colour.
+        radius: The search radius in pixels.
+        direction: A unit RGB direction; when given, also return per query the highest projection on it of the seeds
+            in the radius.
+
+    Returns:
+        ``(colour, matched)``, plus that envelope when ``direction`` is given.
     """
     out = colour.copy()
     yy, xx = np.nonzero(query)
@@ -329,6 +418,16 @@ def despill_key_band(rgb, alpha, key, band, *, tolerance=4 / 255):
     is a safe fallback seed when a narrow part has no deep interior. Removal
     follows the positive RGB key vector and stops at neutral or the selected
     interior chroma, so it cannot invent the key's complement or amplify RGB.
+
+    Args:
+        rgb: Straight colour, (rows, columns, 3) in 0..1.
+        alpha: Alpha in 0..1.
+        key: The key colour in 0..1.
+        band: The pixels cleaned.
+        tolerance: Key chroma (0..1) a pixel may keep, and a seed may show.
+
+    Returns:
+        The cleaned colour.
     """
     rgb = np.asarray(rgb, np.float32)
     k = np.asarray(key, np.float32)
@@ -362,7 +461,20 @@ def despill_key_band(rgb, alpha, key, band, *, tolerance=4 / 255):
 def key_fringe_gate(
     image, key, *, density=1.0, max_rate=0.001, band_native=3, lean_threshold=40.0, excess_threshold=8.0
 ):
-    """Visible spill towards the key, with opaque silhouette samples included."""
+    """Measure visible spill towards the key along the silhouette, opaque samples included.
+
+    Args:
+        image: The keyed image.
+        key: The key colour in 0-255.
+        density: Image pixels per native pixel.
+        max_rate: The most spilled pixels per outline pixel that pass.
+        band_native: The silhouette band's half-width, in native pixels.
+        lean_threshold: How far (0-255) the key's channels must lead the others for a pixel to lean to the key.
+        excess_threshold: How far (0-255) a leaning pixel may pass its interior colour towards the key.
+
+    Returns:
+        The counts, the spill per outline pixel and ``key_gate_passed``.
+    """
     a = np.asarray(image.convert("RGBA"), np.float32)
     rgb, alpha = a[..., :3], a[..., 3] / 255
     outside = Image.fromarray(np.uint8(alpha < 0.5) * 255)
@@ -414,6 +526,20 @@ def fringe_gate(
     Raw distance and complement share remain visible. Gate excess over the same
     reference pixels so intentional dark contours and translucent parts do not
     fail an exact identity. Unpaired changed pixels use a length-normalised rate.
+
+    Args:
+        image: The keyed image.
+        key: The key colour in 0-255.
+        reference: The official image the excess is measured over; None measures the raw values.
+        max_distance: The largest p95 excess distance (0-255) of an outline colour from the interior that passes.
+        max_complement_share: The largest share of outline pixels leaning towards the key's complement that passes.
+        density: Image pixels per native pixel.
+        max_unpaired_rate: The most changed outline pixels without interior colour per outline pixel that pass.
+        max_key_rate: As ``max_rate`` of ``key_fringe_gate``.
+        band_native: As for ``key_fringe_gate``.
+
+    Returns:
+        The raw and excess measures, the key gate's report and ``passed``.
     """
     a = np.asarray(image.convert("RGBA"), np.float32)
     alpha, rgb = a[..., 3] / 255, a[..., :3]
@@ -527,7 +653,13 @@ def frame_background(mask):
 
 
 def translate_rgb(values, shift, fill=(255, 0, 255)):
-    """One rigid subpixel translation, no registration warp; identity is exact."""
+    """Translate an image rigidly by a subpixel shift (bicubic, no warp); a zero shift returns an exact copy.
+
+    Args:
+        values: (rows, columns, 3) floats.
+        shift: (dx, dy) in pixels.
+        fill: The colour of pixels shifted in from outside.
+    """
     dx, dy = map(float, shift)
     if max(abs(dx), abs(dy)) < 1e-8:
         return values.copy()
@@ -554,6 +686,17 @@ def estimate_translation(a, b, visible, *, density=1.0, search=3.0):
 
     A coarse search followed by 1/8-native-pixel refinement. No image is moved
     here. The caller enforces the correction cap and applies the shift once.
+
+    Args:
+        a: The reference observation, (rows, columns, 3) RGB in 0-255.
+        b: The observation to shift, the same grid.
+        visible: The pixels compared.
+        density: Grid pixels per native pixel.
+        search: How far the coarse search goes each way, in native pixels.
+
+    Returns:
+        ``shift_native`` ([dx, dy], zero unless 5 % better than none), its ``error``, the ``zero_error`` and the
+        number of ``samples``.
     """
     h, w = visible.shape
     size = (max(1, round(w / density)), max(1, round(h / density)))

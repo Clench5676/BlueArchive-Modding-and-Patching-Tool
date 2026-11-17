@@ -129,12 +129,16 @@ if TYPE_CHECKING:
 
 
 def source_of(name: str) -> tuple[str, str | None]:
-    """The engine module (full dotted name) and attribute an exported name comes from."""
+    """Return the engine module (full dotted name) and attribute an exported name comes from.
+
+    The attribute is None for a name that exports the module itself; an unknown name raises KeyError.
+    """
     module, attribute = _EXPORTS[name]
     return f"{ENGINE_PACKAGE}.{module}", attribute
 
 
 def __getattr__(name: str) -> Any:
+    """Import an exported name's engine module on first use and return the module or its current attribute."""
     if name not in _EXPORTS:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
     module_name, attribute = source_of(name)
@@ -143,4 +147,5 @@ def __getattr__(name: str) -> Any:
 
 
 def __dir__() -> list[str]:
+    """List this module's own names with the exported ones."""
     return sorted({*globals(), *_EXPORTS})

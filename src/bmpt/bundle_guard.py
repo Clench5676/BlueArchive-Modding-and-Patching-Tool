@@ -28,9 +28,19 @@ MAX_DIRECTORY_BYTES = 4 << 20
 def check_bundle(path: Path, file: str | None = None) -> Layout | None:
     """Refuse a bundle whose declared sizes are out of bounds, before anything decompresses it.
 
-    Returns the layout, or None for a file that is not UnityFS. A UnityFS file whose header or block table cannot be
-    read is refused as well. Raises ``ServiceError("bundle_invalid", file=file)`` (``file`` defaults to the file name)
-    and lets file-system errors (OSError) through."""
+    A UnityFS file whose header or block table cannot be read is refused as well.
+
+    Args:
+        path: The bundle file.
+        file: The name the error shows; None uses the file name of ``path``.
+
+    Returns:
+        The bundle's layout, or None for a file that is not UnityFS.
+
+    Raises:
+        ServiceError: ``bundle_invalid`` with ``file``, for a refused bundle.
+        OSError: The file could not be read.
+    """
     name = file if file is not None else Path(path).name
     try:
         layout = read_layout(Path(path), MAX_DIRECTORY_BYTES)

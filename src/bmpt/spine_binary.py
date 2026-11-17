@@ -24,8 +24,9 @@
 # ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 # THE SPINE RUNTIMES, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-"""A Spine 4.2 binary skeleton walked in the layout the Spine runtime reads (spine-runtimes, branch 4.2,
-``SkeletonBinary`` of spine-ts and spine-csharp), keeping where every part is.
+"""A Spine 4.2 binary skeleton walked in the layout the Spine runtime reads, keeping where every part is.
+
+The layout is that of spine-runtimes, branch 4.2 (``SkeletonBinary`` of spine-ts and spine-csharp).
 
 This module is a direct derivative of the Spine Runtimes and is licensed under the Spine Runtimes License Agreement
 above, not under the GPLv3 (the README's GPLv3 section 7 additional permission covers the combination). It runs only
@@ -55,7 +56,7 @@ Remap = Callable[[str, int], int]
 
 
 def varint_bytes(value: int) -> bytes:
-    """A varint as ``readInt(true)`` reads it; a negative value goes out as five bytes."""
+    """Return a varint as ``readInt(true)`` reads it; a negative value goes out as five bytes."""
     value &= 0xFFFFFFFF
     out = bytearray()
     while True:
@@ -69,10 +70,12 @@ def varint_bytes(value: int) -> bytes:
 
 
 def signed_varint_bytes(value: int) -> bytes:
+    """Return a possibly negative int (a draw-order shift) as a varint of its 32-bit two's complement."""
     return varint_bytes(value & 0xFFFFFFFF)
 
 
 def string_bytes(text: str | None) -> bytes:
+    """Return a string as the runtime reads it: its UTF-8 length plus one as a varint, then the bytes; None is 0."""
     if text is None:
         return b"\x00"
     raw = text.encode("utf-8")
@@ -80,16 +83,29 @@ def string_bytes(text: str | None) -> bytes:
 
 
 def floats_bytes(*values: float) -> bytes:
+    """Return floats as the runtime reads them: 32-bit, big-endian."""
     return struct.pack(f">{len(values)}f", *values)
 
 
 class Skeleton:
-    """The walk over one binary skeleton. Positions are byte offsets into ``data``; ``refs`` lists (start, end, kind,
-    value) of every reference varint, kinds ``str`` (shared string, 0 for none), ``bone``, ``slot``, ``skin``,
-    ``event``, ``ik``, ``transform``, ``path``, ``physics`` and ``physics1`` (a physics constraint index plus one, 0
-    for all)."""
+    """The walk over one binary skeleton.
+
+    Positions are byte offsets into ``data``. ``refs`` lists (start, end, kind, value) of every reference varint, in
+    file order; kinds are ``str`` (shared string, 0 for none), ``bone``, ``slot``, ``skin``, ``event``, ``ik``,
+    ``transform``, ``path``, ``physics`` and ``physics1`` (a physics constraint index plus one, 0 for all). ``ness``
+    lists the (start, end) spans that exist only with nonessential data.
+    """
 
     def __init__(self, data: bytes):
+        """Walk a skeleton.
+
+        Args:
+            data: The binary skeleton, Spine 4.2.
+
+        Raises:
+            ValueError: The data is not a 4.2 skeleton, is cut short or longer than its sections, or refers to a part
+                it does not have.
+        """
         self.data = bytes(data)
         self.pos = 0
         self.size = len(self.data)
@@ -173,7 +189,7 @@ class Skeleton:
         return count
 
     def s(self, index: int) -> str | None:
-        """The shared string a ``str`` reference names (None for 0)."""
+        """Return the shared string a ``str`` reference names (None for 0); ValueError when it is out of range."""
         if index == 0:
             return None
         if not 0 < index <= len(self.strings):
@@ -563,8 +579,15 @@ class Skeleton:
     def emit(
         self, start: int, end: int, remap: Remap | None = None, patches: Mapping[tuple[int, int], bytes] | None = None
     ) -> bytes:
-        """Bytes ``start``..``end`` with every reference in them mapped (``remap(kind, value)``) and every span of
-        ``patches`` ({(a, b): bytes}, a == b to insert) inside them replaced."""
+        """Return a byte range of the skeleton with its references mapped and given spans replaced.
+
+        Args:
+            start: First byte of the range.
+            end: Byte after the range.
+            remap: Gives the value a reference of a kind takes in the output; None keeps every value.
+            patches: ``{(a, b): bytes}`` replacing the bytes ``a..b`` inside the range; ``a == b`` inserts. A patch
+                goes before a reference at the same position, and references inside a patch are dropped.
+        """
         marks = [(a, b, None, data) for (a, b), data in (patches or {}).items() if start <= a and b <= end]
         marks += [(a, b, kind, value) for a, b, kind, value in self.refs if start <= a < end]
         marks.sort(key=lambda m: (m[0], m[2] is not None, m[1]))  # at one position a patch goes first
@@ -580,16 +603,18 @@ class Skeleton:
         return bytes(out)
 
     def slot_index(self, name: str) -> int | None:
+        """Return the index of the first slot of that name, or None."""
         for index, slot in enumerate(self.slots):
             if slot["name"] == name:
                 return index
         return None
 
     def refs_in(self, start: int, end: int) -> list[tuple[int, int, str, int]]:
+        """Return the references that start in the byte range ``start..end``."""
         return [ref for ref in self.refs if start <= ref[0] < end]
 
     def attachments(self) -> dict[tuple[str, str, str], dict]:
-        """{(skin name, slot name, key): attachment} over every skin."""
+        """Return every skin's attachments by (skin name, slot name, key)."""
         out = {}
         for skin in self.skins:
             for entry in skin["entries"]:
@@ -602,7 +627,18 @@ class Skeleton:
 
 
 def draw_order(offsets: list[tuple[int, int]], count: int) -> list[int]:
-    """A draw-order frame as the runtime decodes it: the slot index at each position."""
+    """Decode a draw-order frame as the runtime does.
+
+    Args:
+        offsets: The frame's (slot index, shift) pairs, slots in ascending order.
+        count: The skeleton's number of slots.
+
+    Returns:
+        The slot index at each draw position.
+
+    Raises:
+        ValueError: The offsets do not decode to an order of ``count`` slots.
+    """
     order = [-1] * count
     unchanged: list[int] = []
     original = 0
@@ -629,8 +665,13 @@ def draw_order(offsets: list[tuple[int, int]], count: int) -> list[int]:
 
 
 def draw_order_bytes(order: list[int]) -> bytes:
-    """A draw-order frame's offsets (count, then slot and shift pairs) that decode to ``order``: the slots off their
-    own index, or every slot when the unlisted ones would not fall into place."""
+    """Encode a draw order as a frame's offsets: their count, then slot and shift pairs.
+
+    The pairs list the slots off their own index, or every slot when the unlisted ones would not fall into place.
+
+    Args:
+        order: The slot index at each draw position, a permutation of the slot indices.
+    """
     position = {slot: index for index, slot in enumerate(order)}
     moved = [(slot, position[slot] - slot) for slot in range(len(order))]
     listed = [(slot, shift) for slot, shift in moved if shift]
@@ -645,7 +686,7 @@ def draw_order_bytes(order: list[int]) -> bytes:
 
 
 def strings_patch(skeleton: Skeleton, added: list[str]) -> dict[tuple[int, int], bytes]:
-    """Patches that append ``added`` to the shared strings."""
+    """Return the patches for ``emit`` that append ``added`` to the skeleton's shared strings."""
     if not added:
         return {}
     return {
@@ -655,8 +696,16 @@ def strings_patch(skeleton: Skeleton, added: list[str]) -> dict[tuple[int, int],
 
 
 def events_patch(skeleton: Skeleton, source: Skeleton, names: list[str]) -> dict[tuple[int, int], bytes]:
-    """Patches that append the events ``names`` of ``source``, their records as they are, at the end of the
-    skeleton's event list: no event index of the skeleton moves, and an event record refers to nothing else."""
+    """Return the patches for ``emit`` that append events of another skeleton to this one's event list.
+
+    The records are copied as they are: an event record refers to nothing else, and no event index of the skeleton
+    moves.
+
+    Args:
+        skeleton: The skeleton the events go into.
+        source: The skeleton the events come from.
+        names: The events' names in ``source``, in the order they are appended.
+    """
     if not names:
         return {}
     added = b"".join(source.data[slice(*source.event_spans[source.events.index(name)])] for name in names)
@@ -668,6 +717,7 @@ def events_patch(skeleton: Skeleton, source: Skeleton, names: list[str]) -> dict
 
 
 def count_patch(at: int, end: int, count: int) -> dict[tuple[int, int], bytes]:
+    """Return the patch for ``emit`` that rewrites the count varint at ``at..end`` as ``count``."""
     return {(at, end): varint_bytes(count)}
 
 
@@ -690,10 +740,24 @@ def attachment_record(
     region: tuple[float, ...] | None = None,
     vertices: list[float] | None = None,
 ) -> bytes:
-    """An attachment's record (after its key) for a file that does (``nonessential``) or does not hold nonessential
-    data, references mapped by ``remap``. ``name``/``path``: shared-string references written in place of the
-    attachment's own (the flags follow). ``region``: a region attachment's seven floats (rotation, x, y, scale x,
-    scale y, width, height). ``vertices``: an unweighted mesh's vertex positions."""
+    """Return an attachment's record (after its key) for another skeleton file.
+
+    Args:
+        source: The skeleton the attachment comes from.
+        attachment: The attachment as ``Skeleton`` walked it.
+        remap: Maps the record's references to the target file's.
+        nonessential: Whether the target file holds nonessential data; the record's tail is cut or added to match.
+        name: A shared-string reference written in place of the attachment's own name; the flags follow.
+        path: A shared-string reference written in place of its own path; the flags follow.
+        region: A region attachment's seven floats (rotation, x, y, scale x, scale y, width, height) written in
+            place of its own.
+        vertices: An unweighted mesh's vertex positions (x, y pairs in bone space) written in place of its own,
+            as many as it has.
+
+    Raises:
+        ValueError: ``region`` for an attachment that is not a region, or ``vertices`` for one that is not an
+            unweighted mesh of that size.
+    """
     flags = attachment["flags"]
     kind = attachment["kind"]
     patches: dict[tuple[int, int], bytes] = {}
@@ -748,8 +812,25 @@ def mesh_record(
     size: tuple[float, float],
     path: int | None = None,
 ) -> bytes:
-    """A region attachment as an unweighted mesh record over the same pixels: its name, path, colour and sequence
-    kept, ``vertices`` (bone space), ``uvs`` (over the region, v down) and ``triangles`` given, no edges."""
+    """Return a region attachment's record rewritten as an unweighted mesh over the same pixels.
+
+    The name, path, colour and sequence are kept; the mesh has no edges.
+
+    Args:
+        source: The skeleton the attachment comes from.
+        attachment: The region attachment as ``Skeleton`` walked it.
+        remap: Maps the record's references to the target file's.
+        nonessential: Whether the target file holds nonessential data (no edges and ``size``).
+        vertices: x, y pairs in bone space.
+        uvs: u, v pairs over the region, 0..1 with v down.
+        triangles: Vertex indices, three per triangle.
+        hull: The number of vertices on the hull.
+        size: Width and height in pixels, written as nonessential data.
+        path: A shared-string reference written as the path; None keeps the region's own.
+
+    Raises:
+        ValueError: The attachment is not a region.
+    """
     if attachment["kind"] != REGION:
         raise ValueError("not a region attachment")
     flags = attachment["flags"]
@@ -773,6 +854,15 @@ def mesh_record(
 
 
 def slot_record(source: Skeleton, slot: dict, remap: Remap, nonessential: bool) -> bytes:
+    """Return a slot's record for another skeleton file.
+
+    Args:
+        source: The skeleton the slot comes from.
+        slot: The slot as ``Skeleton`` walked it.
+        remap: Maps the record's references to the target file's.
+        nonessential: Whether the target file holds nonessential data; the slot's visible flag is cut, or added as
+            visible, to match.
+    """
     raw = source.emit(slot["start"], slot["end"], remap)
     if nonessential == source.nonessential:
         return raw
@@ -780,7 +870,7 @@ def slot_record(source: Skeleton, slot: dict, remap: Remap, nonessential: bool) 
 
 
 def strip_nonessential(data: bytes) -> bytes:
-    """The skeleton as an export without nonessential data has it."""
+    """Return the skeleton as an export without nonessential data has it."""
     skeleton = Skeleton(data)
     if not skeleton.nonessential:
         return skeleton.data
