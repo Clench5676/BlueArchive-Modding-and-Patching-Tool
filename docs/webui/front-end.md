@@ -85,8 +85,8 @@ given back on leave.
 ## Popups
 
 The detail screen's popups are drawn on the game's popup frame (UIPopup_Sort) with its dark backdrop (`BACKDROP` in
-`ui-tokens.js`); a click on the backdrop or Escape closes them. The shared module (`popup.js`, tested in Node on a
-stand-in DOM) reads its prefabs once and provides:
+`ui-tokens.js`); a click on the backdrop or Escape closes them. The shared module (`popup.js`, with the `popup-*.js`
+modules split from it, tested in Node on a stand-in DOM) reads its prefabs once and provides:
 
 - **Hosts.** `#popup` and `#picker` inside the detail screen; `#prompt` and `#dialog` on the stage, so a popup shows
   on any screen. Each message popup is a layer of its own in `#dialog`, so one opened from another shows over it.

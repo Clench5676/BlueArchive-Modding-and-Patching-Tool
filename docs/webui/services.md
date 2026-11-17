@@ -101,8 +101,9 @@ metadata, confined to the installation and checked by device, inode, size, mtime
 tails. The GLB
 carries what the game's shaders need (materials, constants, keywords, outline, blend state, samplers, clip toggles);
 `web/js/model/chibi-materials.js` ports the game's shaders from their compiled programs, and `model.js` opens at the
-formation screen's view with the formation screen's light, both read from the game's own data and checked against
-in-game screenshots. Input is wheel/pinch zoom, pan and orbit with eased framing (`attachInput`).
+formation screen's view (its camera in `model-camera.js`) with the formation screen's light, both read from the game's
+own data and checked against in-game screenshots. Input is wheel/pinch zoom, pan and orbit with eased framing
+(`attachInput`).
 
 `AssetNotFound` (a `KeyError`) when a name is unknown. Layout nodes use the schema
 `{name, active, pos[x, y], scale[x, y], rotZ, widgets[], children?}`; atlas and texture references are resolved to
