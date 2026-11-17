@@ -1,0 +1,5 @@
+# Mechanical formatting commits: git blame skips them with
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+1d3f0d7787d3bb4a0b40b5563a05107b590c2685
+acbb26f7fe9c784b34ae293f35f0b9804c9540d0
+46b4dbb8089443457f4dd91a5b763e655eba4fe1

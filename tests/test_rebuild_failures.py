@@ -1,4 +1,5 @@
 """Required Mod assets must survive extraction and application as a complete set."""
+
 from types import SimpleNamespace
 
 import pytest
@@ -38,24 +39,25 @@ def asset(name, kind, failure=None, payload=b"mod"):
             return b"archive:/CAB-missing/CAB-missing.resS"
         return payload
 
-    return SimpleNamespace(type=kind, peek_name=lambda: name, read=read, get_raw_data=raw,
-                           set_raw_data=lambda value: None)
+    return SimpleNamespace(
+        type=kind, peek_name=lambda: name, read=read, get_raw_data=raw, set_raw_data=lambda value: None
+    )
 
 
 def bundle(path, objects):
     return Bundle(path, SimpleNamespace(objects=objects, file=SimpleNamespace(files={})))
 
 
-@pytest.mark.parametrize('changed', [False, True])
+@pytest.mark.parametrize("changed", [False, True])
 def test_texture_application_decodes_target_once_without_changing_pixel_comparison(tmp_path, changed):
-    current = Image.new('RGBA', (7, 9), (10, 40, 90, 123))
+    current = Image.new("RGBA", (7, 9), (10, 40, 90, 123))
     incoming = current.copy()
     if changed:
         incoming.putpixel((3, 4), (200, 80, 20, 42))
     reads, writes = [], []
 
     class Data:
-        m_Name = 'page'
+        m_Name = "page"
         m_Width, m_Height, m_TextureFormat = 7, 9, 4
 
         def get_image_data(self):
@@ -73,10 +75,10 @@ def test_texture_application_decodes_target_once_without_changing_pixel_comparis
         def save(self):
             pass
 
-    obj = asset('page', AssetType.Texture2D)
+    obj = asset("page", AssetType.Texture2D)
     obj.read = Data
-    target = bundle(tmp_path / 'target.bundle', [obj])
-    result = target.apply_patch({('page', 'Texture2D'): incoming}, 'name_type')
+    target = bundle(tmp_path / "target.bundle", [obj])
+    result = target.apply_patch({("page", "Texture2D"): incoming}, "name_type")
     assert reads == [1]
     assert result.applied_count == int(changed) and result.skipped_count == int(not changed)
     assert len(writes) == int(changed)
@@ -84,14 +86,24 @@ def test_texture_application_decodes_target_once_without_changing_pixel_comparis
         assert writes[0].size == incoming.size and writes[0].tobytes() == incoming.tobytes()
 
 
-@pytest.mark.parametrize("kind,failure", [(AssetType.Texture2D, "extract"), (AssetType.Mesh, "extract"),
-    (AssetType.TextAsset, "read"), (AssetType.Texture2D, "read")])
+@pytest.mark.parametrize(
+    "kind,failure",
+    [
+        (AssetType.Texture2D, "extract"),
+        (AssetType.Mesh, "extract"),
+        (AssetType.TextAsset, "read"),
+        (AssetType.Texture2D, "read"),
+    ],
+)
 def test_update_rejects_partial_extraction(tmp_path, monkeypatch, kind, failure):
     source, target = tmp_path / "mod.bundle", tmp_path / "official.bundle"
     broken = "required.atlas" if kind == AssetType.TextAsset else "required"
-    bundles = {source: bundle(source, [asset("note", AssetType.TextAsset), asset(broken, kind, failure)]),
-               target: bundle(target, [asset("note", AssetType.TextAsset, payload=b"official"),
-                                       asset(broken, kind, payload=b"official")])}
+    bundles = {
+        source: bundle(source, [asset("note", AssetType.TextAsset), asset(broken, kind, failure)]),
+        target: bundle(
+            target, [asset("note", AssetType.TextAsset, payload=b"official"), asset(broken, kind, payload=b"official")]
+        ),
+    }
     saved = []
     monkeypatch.setattr(Bundle, "load", lambda path, *args: bundles[path])
     monkeypatch.setattr(Bundle, "save", lambda *args: (saved.append(args) or True, "saved"))
@@ -103,9 +115,16 @@ def test_update_rejects_partial_extraction(tmp_path, monkeypatch, kind, failure)
 
 def test_update_rejects_partial_application_before_saving(tmp_path, monkeypatch):
     source, target = tmp_path / "mod.bundle", tmp_path / "official.bundle"
-    bundles = {source: bundle(source, [asset(name, AssetType.TextAsset) for name in ("note", "required.atlas")]),
-               target: bundle(target, [asset("note", AssetType.TextAsset, payload=b"official"),
-                                       asset("required.atlas", AssetType.TextAsset, "apply", b"official")])}
+    bundles = {
+        source: bundle(source, [asset(name, AssetType.TextAsset) for name in ("note", "required.atlas")]),
+        target: bundle(
+            target,
+            [
+                asset("note", AssetType.TextAsset, payload=b"official"),
+                asset("required.atlas", AssetType.TextAsset, "apply", b"official"),
+            ],
+        ),
+    }
     saved = []
     monkeypatch.setattr(Bundle, "load", lambda path, *args: bundles[path])
     monkeypatch.setattr(Bundle, "save", lambda *args: (saved.append(args) or True, "saved"))
@@ -118,14 +137,17 @@ def test_update_rejects_partial_application_before_saving(tmp_path, monkeypatch)
 @pytest.mark.parametrize("split", [False, True])
 def test_every_required_key_must_be_applied_across_targets(tmp_path, monkeypatch, split):
     source, first, second = [tmp_path / name for name in ("mod.bundle", "first.bundle", "second.bundle")]
-    bundles = {source: bundle(source, [asset(name, AssetType.TextAsset) for name in ("note", "required.atlas")]),
-               first: bundle(first, [asset("note", AssetType.TextAsset, payload=b"official")]),
-               second: bundle(second, [asset("required.atlas", AssetType.TextAsset, payload=b"official")])}
+    bundles = {
+        source: bundle(source, [asset(name, AssetType.TextAsset) for name in ("note", "required.atlas")]),
+        first: bundle(first, [asset("note", AssetType.TextAsset, payload=b"official")]),
+        second: bundle(second, [asset("required.atlas", AssetType.TextAsset, payload=b"official")]),
+    }
     saved = []
     monkeypatch.setattr(Bundle, "load", lambda path, *args: bundles[path])
     monkeypatch.setattr(Bundle, "save", lambda *args: (saved.append(args) or True, "saved"))
-    result = rebuild([source], [first, second] if split else [first], tmp_path,
-                     {"ALL"}, SaveOptions(), match_strategy="name_type")
+    result = rebuild(
+        [source], [first, second] if split else [first], tmp_path, {"ALL"}, SaveOptions(), match_strategy="name_type"
+    )
     assert result.success and saved
     assert len(result.file_pairs) == (2 if split else 1)
     assert result.not_transferred == ([] if split else ["[TextAsset] required.atlas"])
@@ -133,9 +155,12 @@ def test_every_required_key_must_be_applied_across_targets(tmp_path, monkeypatch
 
 def test_extraction_rejects_a_truncated_mesh_stream(tmp_path):
     from bmpt.errors import ServiceError
+
     obj = asset("required_mesh", AssetType.Mesh)
-    obj.read = lambda: SimpleNamespace(m_Name="required_mesh", m_StreamData=SimpleNamespace(
-        path="archive:/CAB-stream/CAB-stream.resS", offset=2, size=8))
+    obj.read = lambda: SimpleNamespace(
+        m_Name="required_mesh",
+        m_StreamData=SimpleNamespace(path="archive:/CAB-stream/CAB-stream.resS", offset=2, size=8),
+    )
     obj.get_raw_data = lambda: b"archive:/CAB-stream/CAB-stream.resS"
     source = bundle(tmp_path / "mod.bundle", [obj])
     source.env.file.files["CAB-stream.resS"] = SimpleNamespace(bytes=b"short")
@@ -148,12 +173,17 @@ def test_extraction_rejects_a_truncated_mesh_stream(tmp_path):
 @pytest.mark.parametrize("changed_obsolete", [False, True])
 @pytest.mark.parametrize("strategy", ["name_type", "cont_name_type", "path_id"])
 def test_update_skips_obsolete_assets_without_an_own_release_baseline(
-        tmp_path, monkeypatch, changed_obsolete, strategy):
+    tmp_path, monkeypatch, changed_obsolete, strategy
+):
     original, target = tmp_path / "mod.bundle", tmp_path / "new.bundle"
     bundles = {
-        original: bundle(original, [asset("A", AssetType.TextAsset, payload=b"changed A"),
-                                    asset("B", AssetType.TextAsset,
-                                          payload=b"changed B" if changed_obsolete else b"stock B")]),
+        original: bundle(
+            original,
+            [
+                asset("A", AssetType.TextAsset, payload=b"changed A"),
+                asset("B", AssetType.TextAsset, payload=b"changed B" if changed_obsolete else b"stock B"),
+            ],
+        ),
         target: bundle(target, [asset("A", AssetType.TextAsset, payload=b"new A")]),
     }
     for item in bundles.values():
@@ -163,8 +193,7 @@ def test_update_skips_obsolete_assets_without_an_own_release_baseline(
     saved = []
     monkeypatch.setattr(Bundle, "load", lambda path, *args: bundles[path])
     monkeypatch.setattr(Bundle, "save", lambda *args: (saved.append(args) or True, "saved"))
-    result = rebuild([original], [target], tmp_path / "output", {"TextAsset"},
-                     SaveOptions(), match_strategy=strategy)
+    result = rebuild([original], [target], tmp_path / "output", {"TextAsset"}, SaveOptions(), match_strategy=strategy)
     assert result.success and result.file_pairs and saved, result.message
     assert len(result.not_transferred) == 1
     assert result.not_transferred[0] in result.message
@@ -179,12 +208,15 @@ def test_undecodable_texture_is_optional_only_when_serialized_content_matches(tm
     raw = b"texture metadata" + (b" CAB-stream.resS" if stream else b"")
     incoming.get_raw_data = lambda: raw + (b" changed" if changed and not stream else b"")
     official.get_raw_data = lambda: raw
-    bundles = {source: bundle(source, [asset("note", AssetType.TextAsset), incoming]),
-               target: bundle(target, [asset("note", AssetType.TextAsset, payload=b"official"), official])}
+    bundles = {
+        source: bundle(source, [asset("note", AssetType.TextAsset), incoming]),
+        target: bundle(target, [asset("note", AssetType.TextAsset, payload=b"official"), official]),
+    }
     if stream:
         for path in (source, target):
             bundles[path].env.file.files["CAB-stream.resS"] = SimpleNamespace(
-                bytes=b"changed pixels" if changed and path == source else b"stock pixels")
+                bytes=b"changed pixels" if changed and path == source else b"stock pixels"
+            )
     saved = []
     monkeypatch.setattr(Bundle, "load", lambda path, *args: bundles[path])
     monkeypatch.setattr(Bundle, "save", lambda *args: (saved.append(args) or True, "saved"))
@@ -200,10 +232,13 @@ def test_undecodable_texture_is_optional_only_when_serialized_content_matches(tm
 @pytest.mark.parametrize("unreadable", [False, True])
 def test_update_skips_removed_assets_and_reports_them(tmp_path, monkeypatch, unreadable):
     source, target = tmp_path / "mod.bundle", tmp_path / "official.bundle"
-    removed = asset("obsolete_stock", AssetType.Texture2D if unreadable else AssetType.TextAsset,
-                    "extract" if unreadable else None)
-    bundles = {source: bundle(source, [asset("note", AssetType.TextAsset), removed]),
-               target: bundle(target, [asset("note", AssetType.TextAsset, payload=b"official")])}
+    removed = asset(
+        "obsolete_stock", AssetType.Texture2D if unreadable else AssetType.TextAsset, "extract" if unreadable else None
+    )
+    bundles = {
+        source: bundle(source, [asset("note", AssetType.TextAsset), removed]),
+        target: bundle(target, [asset("note", AssetType.TextAsset, payload=b"official")]),
+    }
     monkeypatch.setattr(Bundle, "load", lambda path, *args: bundles[path])
     monkeypatch.setattr(Bundle, "save", lambda *args: (True, "saved"))
     result = rebuild([source], [target], tmp_path, {"ALL"}, SaveOptions(), match_strategy="name_type")
@@ -214,12 +249,13 @@ def test_update_skips_removed_assets_and_reports_them(tmp_path, monkeypatch, unr
 
 def test_update_still_requires_a_nonempty_match(tmp_path, monkeypatch):
     source, target = tmp_path / "mod.bundle", tmp_path / "official.bundle"
-    bundles = {source: bundle(source, [asset("obsolete_stock", AssetType.TextAsset)]),
-               target: bundle(target, [asset("unrelated", AssetType.TextAsset)])}
+    bundles = {
+        source: bundle(source, [asset("obsolete_stock", AssetType.TextAsset)]),
+        target: bundle(target, [asset("unrelated", AssetType.TextAsset)]),
+    }
     monkeypatch.setattr(Bundle, "load", lambda path, *args: bundles[path])
     lines = []
-    result = rebuild([source], [target], tmp_path, {"ALL"}, SaveOptions(), match_strategy="name_type",
-                     log=lines.append)
+    result = rebuild([source], [target], tmp_path, {"ALL"}, SaveOptions(), match_strategy="name_type", log=lines.append)
     assert not result.success and not result.file_pairs
     assert result.no_match and not any(result.message in line for line in lines)  # the caller decides
 
@@ -228,7 +264,6 @@ def test_other_failures_are_logged_and_not_a_missing_match(tmp_path, monkeypatch
     source, target = tmp_path / "mod.bundle", tmp_path / "official.bundle"
     monkeypatch.setattr(Bundle, "load", lambda path, *args: None)
     lines = []
-    result = rebuild([source], [target], tmp_path, {"ALL"}, SaveOptions(), match_strategy="name_type",
-                     log=lines.append)
+    result = rebuild([source], [target], tmp_path, {"ALL"}, SaveOptions(), match_strategy="name_type", log=lines.append)
     assert not result.success and not result.no_match
     assert lines[-1] == f"❌ {result.message}"

@@ -113,8 +113,9 @@ def read_info(data_dir: Path) -> dict[str, Any] | None:
     if not isinstance(data, dict):
         return None
     port, token = data.get("port"), data.get("raise_token")
-    if not (isinstance(port, int) and not isinstance(port, bool) and 0 < port < 65536 and isinstance(token, str)
-            and token):
+    if not (
+        isinstance(port, int) and not isinstance(port, bool) and 0 < port < 65536 and isinstance(token, str) and token
+    ):
         return None
     return data
 
@@ -125,8 +126,12 @@ def raise_running(data_dir: Path, *, opener: Any = None, timeout: float = RAISE_
     info = read_info(data_dir)
     if info is None:
         return False
-    request = urllib.request.Request(f"http://127.0.0.1:{info['port']}{RAISE_PATH}", data=b"{}", method="POST",
-                                     headers={RAISE_HEADER: info["raise_token"], "Content-Type": "application/json"})
+    request = urllib.request.Request(
+        f"http://127.0.0.1:{info['port']}{RAISE_PATH}",
+        data=b"{}",
+        method="POST",
+        headers={RAISE_HEADER: info["raise_token"], "Content-Type": "application/json"},
+    )
     opener = opener or urllib.request.build_opener(urllib.request.ProxyHandler({}))
     try:
         with opener.open(request, timeout=timeout) as response:

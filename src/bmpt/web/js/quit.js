@@ -20,7 +20,10 @@ export function quitKey(ev, { byId, covering = false }) {
   if (covering) return false;
   const roster = byId("screen-roster");
   if (!roster || roster.hidden) return false;
-  return !HOSTS.some((id) => { const host = byId(id); return !!host && !host.hidden; });
+  return !HOSTS.some((id) => {
+    const host = byId(id);
+    return !!host && !host.hidden;
+  });
 }
 
 // The PC client's key mapping (PCKeyMappingSO) binds the confirm of its popups (UIPopup_System and UIPopup_Sort,
@@ -41,7 +44,11 @@ export async function confirmQuit({ message, rpc, T, notify, native = false, clo
   asking = true;
   try {
     const { button } = await message({
-      title: T("quit.title"), lines: [T("quit.ask")], ok: T("picker.ok"), cancel: T("popup.cancel"), confirmKeys: CONFIRM_KEYS,
+      title: T("quit.title"),
+      lines: [T("quit.ask")],
+      ok: T("picker.ok"),
+      cancel: T("popup.cancel"),
+      confirmKeys: CONFIRM_KEYS,
     });
     if (button !== "ok") return "cancel";
     try {

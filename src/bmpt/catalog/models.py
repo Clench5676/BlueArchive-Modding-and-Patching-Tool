@@ -64,7 +64,9 @@ class CoreMap:
     names: dict[str, dict[str, dict[str, str]]]  # variant key -> the shipped names, for the keys the data has
 
     model: dict[str, str] = field(default_factory=dict)  # variant key -> installed 3D model core
-    model_cores: dict[str, tuple[str, ...]] = field(default_factory=dict)  # variant key -> prefab first, own dependencies
+    model_cores: dict[str, tuple[str, ...]] = field(
+        default_factory=dict
+    )  # variant key -> prefab first, own dependencies
 
     def slot(self, core: str) -> str:
         """The choice key of a physical core; a model's dependencies share its prefab's choice."""

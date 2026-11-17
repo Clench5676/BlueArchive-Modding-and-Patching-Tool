@@ -7,13 +7,29 @@ from bmpt.errors import ServiceError
 
 PAGE = {
     "voice": [
-        {"description": "Hoshino_MemorialLobby_1.ogg", "text": "欸嘿嘿", "text_original": "へえ～ すごい。\nこんなところ初めて。",
-         "file": "//static.kivo.wiki/voices/a.ogg"},
-        {"description": "Hoshino_MemorialLobby_1_new.ogg", "text": "", "text_original": "", "file": "//static.kivo.wiki/voices/b.ogg"},
+        {
+            "description": "Hoshino_MemorialLobby_1.ogg",
+            "text": "欸嘿嘿",
+            "text_original": "へえ～ すごい。\nこんなところ初めて。",
+            "file": "//static.kivo.wiki/voices/a.ogg",
+        },
+        {
+            "description": "Hoshino_MemorialLobby_1_new.ogg",
+            "text": "",
+            "text_original": "",
+            "file": "//static.kivo.wiki/voices/b.ogg",
+        },
         {"description": "Hoshino_Lobby_1.ogg", "text": "x", "file": "//static.kivo.wiki/voices/c.ogg"},
-        {"description": "Hoshino_MemorialLobby_2.ogg", "text": "翻译", "text_original": "原文", "file": "https://evil.example/x.ogg"},
+        {
+            "description": "Hoshino_MemorialLobby_2.ogg",
+            "text": "翻译",
+            "text_original": "原文",
+            "file": "https://evil.example/x.ogg",
+        },
     ],
-    "voice_cn": [{"description": "hoshino_memoriallobby_2.ogg", "text": "国服文本", "file": "//static.kivo.wiki/voices/cn.ogg"}],
+    "voice_cn": [
+        {"description": "hoshino_memoriallobby_2.ogg", "text": "国服文本", "file": "//static.kivo.wiki/voices/cn.ogg"}
+    ],
 }
 
 
@@ -26,14 +42,20 @@ def test_lobby_lines():
     lines = kivo.lobby_lines(PAGE)
     assert set(lines) == {"hoshino_memoriallobby_1", "hoshino_memoriallobby_2"}
     one = lines["hoshino_memoriallobby_1"]
-    assert one == {"zh-CN": "欸嘿嘿", "ja": "へえ～すごい。こんなところ初めて。", "audio": "https://static.kivo.wiki/voices/a.ogg"}
+    assert one == {
+        "zh-CN": "欸嘿嘿",
+        "ja": "へえ～すごい。こんなところ初めて。",
+        "audio": "https://static.kivo.wiki/voices/a.ogg",
+    }
     # the CN server's text wins over Kivo's translation
     assert lines["hoshino_memoriallobby_2"]["zh-CN"] == "国服文本"
 
 
 def test_audio_only_from_kivo(monkeypatch):
     k = kivo.Kivo()
-    monkeypatch.setattr(k, "_get", lambda url: __import__("json").dumps(PAGE).encode() if "api.kivo.wiki" in url else b"OggS")
+    monkeypatch.setattr(
+        k, "_get", lambda url: __import__("json").dumps(PAGE).encode() if "api.kivo.wiki" in url else b"OggS"
+    )
     assert k.audio("76", "hoshino_memoriallobby_1") == b"OggS"
     with pytest.raises(KeyError):
         k.audio("76", "hoshino_memoriallobby_2")  # not on Kivo's voice host
@@ -54,6 +76,7 @@ def test_offline_is_a_service_error(monkeypatch):
 
 
 def test_chinese_lines_lose_the_spaces_kivo_wraps_with():
-    page = {"voice": [{"description": "CH0187_MemorialLobby_1_1", "text": "这里， 老师。\n好。",
-                       "text_original": "ここ。"}]}
+    page = {
+        "voice": [{"description": "CH0187_MemorialLobby_1_1", "text": "这里， 老师。\n好。", "text_original": "ここ。"}]
+    }
     assert kivo.lobby_lines(page)["ch0187_memoriallobby_1_1"]["zh-CN"] == "这里，老师。好。"

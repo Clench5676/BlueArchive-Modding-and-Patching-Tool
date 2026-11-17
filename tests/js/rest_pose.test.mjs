@@ -3,7 +3,10 @@ import { test } from "node:test";
 import { lobbyIdle } from "../../src/bmpt/web/js/rest-pose.js";
 import * as Lobby from "../../src/bmpt/web/js/lobby.js";
 
-const data = (names) => ({ animations: names.map((name) => ({ name })), findAnimation: (n) => (names.includes(n) ? { name: n } : null) });
+const data = (names) => ({
+  animations: names.map((name) => ({ name })),
+  findAnimation: (n) => (names.includes(n) ? { name: n } : null),
+});
 
 test("a lobby rests in the prefab's idle, else Idle_01, never in an intro", () => {
   assert.equal(lobbyIdle(data(["Start_Idle_01", "Idle_01", "Idle_02"]), { idle: "Idle_02" }), "Idle_02");

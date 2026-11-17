@@ -31,14 +31,20 @@ const states = new WeakMap();
 
 function program(gl, fs) {
   const prog = gl.createProgram();
-  for (const [type, src] of [[gl.VERTEX_SHADER, VS], [gl.FRAGMENT_SHADER, fs]]) {
+  for (const [type, src] of [
+    [gl.VERTEX_SHADER, VS],
+    [gl.FRAGMENT_SHADER, fs],
+  ]) {
     const s = gl.createShader(type);
     gl.shaderSource(s, src);
     gl.compileShader(s);
     gl.attachShader(prog, s);
     const log = gl.getShaderParameter(s, gl.COMPILE_STATUS) ? null : gl.getShaderInfoLog(s) || "shader";
     gl.deleteShader(s);
-    if (log) { gl.deleteProgram(prog); throw new Error(log); }
+    if (log) {
+      gl.deleteProgram(prog);
+      throw new Error(log);
+    }
   }
   gl.bindAttribLocation(prog, 0, "p");
   gl.linkProgram(prog);
@@ -51,7 +57,8 @@ function program(gl, fs) {
 }
 
 function resources(gl) {
-  const vao = gl.createVertexArray(), buf = gl.createBuffer();
+  const vao = gl.createVertexArray(),
+    buf = gl.createBuffer();
   gl.bindVertexArray(vao);
   gl.bindBuffer(gl.ARRAY_BUFFER, buf);
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
@@ -79,11 +86,17 @@ function targets(gl, r, w, h) {
   r.tex = [];
   r.fbo = [];
   for (let i = 0; i < 2; i++) {
-    const t = gl.createTexture(), f = gl.createFramebuffer();
+    const t = gl.createTexture(),
+      f = gl.createFramebuffer();
     gl.bindTexture(gl.TEXTURE_2D, t);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.SRGB8_ALPHA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-    for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR],
-      [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+    for (const [k, v] of [
+      [gl.TEXTURE_MIN_FILTER, gl.LINEAR],
+      [gl.TEXTURE_MAG_FILTER, gl.LINEAR],
+      [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE],
+      [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE],
+    ])
+      gl.texParameteri(gl.TEXTURE_2D, k, v);
     gl.bindFramebuffer(gl.FRAMEBUFFER, f);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
     if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) return false;
@@ -102,10 +115,21 @@ export const tapPixels = (radius, screenW) => 1.33333333 * radius * (screenW / 1
 function pass(gl, src, st, w, h, screen) {
   if (!st.on) return null;
   if (!st.res) {
-    try { st.res = resources(gl); } catch (err) { console.warn("depth of field", err); st.on = false; return null; }
+    try {
+      st.res = resources(gl);
+    } catch (err) {
+      console.warn("depth of field", err);
+      st.on = false;
+      return null;
+    }
   }
-  const res = st.res, hw = Math.max(1, Math.ceil(w / 2)), hh = Math.max(1, Math.ceil(h / 2));
-  if (!targets(gl, res, hw, hh)) { st.on = false; return null; }
+  const res = st.res,
+    hw = Math.max(1, Math.ceil(w / 2)),
+    hh = Math.max(1, Math.ceil(h / 2));
+  if (!targets(gl, res, hw, hh)) {
+    st.on = false;
+    return null;
+  }
   const step = tapPixels(st.radius, (screen?.[2] || 1) * w);
   gl.disable(gl.BLEND);
   gl.viewport(0, 0, hw, hh);
@@ -134,12 +158,19 @@ export function set(player, dof, Linear) {
   if (!gl || typeof WebGL2RenderingContext === "undefined" || !(gl instanceof WebGL2RenderingContext)) return;
   let st = states.get(player);
   if (!dof) {
-    if (st?.installed) { Linear.setPrepass(player, null); st.installed = false; }
+    if (st?.installed) {
+      Linear.setPrepass(player, null);
+      st.installed = false;
+    }
     return;
   }
   if (!st) {
     st = { on: true, res: null, radius: 1, installed: false };
-    st.restorable = { restore: () => { st.res = null; } }; // a lost context freed them: made again on the next frame
+    st.restorable = {
+      restore: () => {
+        st.res = null;
+      },
+    }; // a lost context freed them: made again on the next frame
     player.context.addRestorable?.(st.restorable);
     states.set(player, st);
   }

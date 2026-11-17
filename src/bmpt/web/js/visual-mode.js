@@ -1,4 +1,4 @@
-import {portraitMinimum} from './photography/camera.js';
+import { portraitMinimum } from "./photography/camera.js";
 // The portrait's fullscreen view: the game's visual mode (UICharacterVisualMode), which UICharacterDetail opens from
 // its ZoomButton, the nameplate's square button with the rotate-phone icon (Char_ZoomBtn). Drawn from the prefab's PC
 // group (Inventory_ListControl_PC):
@@ -21,20 +21,49 @@ import { wheelKind, wheelStep } from "./lobby-touch.js";
 import { S, clone, hitButton } from "./util.js";
 import { FULLSCREEN_BUTTON } from "./ui-tokens.js";
 import {
-  SLIDE, SLIDE_S, STAGE, anchoredCentre, artBox, atHome, homeView, limits, mix, panBy, slideFrames, viewOf, viewport, zoomAt,
+  SLIDE,
+  SLIDE_S,
+  STAGE,
+  anchoredCentre,
+  artBox,
+  atHome,
+  homeView,
+  limits,
+  mix,
+  panBy,
+  slideFrames,
+  viewOf,
+  viewport,
+  zoomAt,
 } from "./visual-view.js";
 
-const CENTRE = [960, 540];      // the screen's centre on the stage
-const GLIDE_MS = 450;           // in and out, in step with the UI slide (app.css .45s)
-const RESET_MS = 300;           // Btn_RefreshPos: back to the whole art
-const ZOOM_TAU = 0.08;          // s: a wheel zoom eases to its target, as in the lobby
-const WHEEL = 0.0015, LINE = 40, PINCH = 0.01, SCROLL_MS = 120; // as lobby-touch.js
+const CENTRE = [960, 540]; // the screen's centre on the stage
+const GLIDE_MS = 450; // in and out, in step with the UI slide (app.css .45s)
+const RESET_MS = 300; // Btn_RefreshPos: back to the whole art
+const ZOOM_TAU = 0.08; // s: a wheel zoom eases to its target, as in the lobby
+const WHEEL = 0.0015,
+  LINE = 40,
+  PINCH = 0.01,
+  SCROLL_MS = 120; // as lobby-touch.js
 // the buttons' BoxColliders [width, height, centre y] in NGUI units around their node; the greyed reset has none. They
 // grow with the bodies' fullscreen height (fullscreenBody): the prefab's bodies are 116 high.
-const HIT = { Btn_Back: [228.83, 165 + FULLSCREEN_BUTTON.h - 116, 0], Btn_HideUI: [228.83, 165 + FULLSCREEN_BUTTON.h - 116, 0], Btn_RefreshPos: [228.83, 195.2 + FULLSCREEN_BUTTON.h - 116, 32] };
-const CORNERS = [["LeftTop", ["Btn_Back"]], ["RightTop", ["Btn_HideUI"]], ["RightBottom", ["Btn_RefreshPos", "Btn_RefreshPos_Disable"]]];
+const HIT = {
+  Btn_Back: [228.83, 165 + FULLSCREEN_BUTTON.h - 116, 0],
+  Btn_HideUI: [228.83, 165 + FULLSCREEN_BUTTON.h - 116, 0],
+  Btn_RefreshPos: [228.83, 195.2 + FULLSCREEN_BUTTON.h - 116, 32],
+};
+const CORNERS = [
+  ["LeftTop", ["Btn_Back"]],
+  ["RightTop", ["Btn_HideUI"]],
+  ["RightBottom", ["Btn_RefreshPos", "Btn_RefreshPos_Disable"]],
+];
 // the buttons the clip moves, and their keys
-const MOVING = { Btn_Back: SLIDE.Btn_Back, Btn_HideUI: SLIDE.Btn_HideUI, Btn_RefreshPos: SLIDE.Btn_RefreshPos, Btn_RefreshPos_Disable: SLIDE.Btn_RefreshPos };
+const MOVING = {
+  Btn_Back: SLIDE.Btn_Back,
+  Btn_HideUI: SLIDE.Btn_HideUI,
+  Btn_RefreshPos: SLIDE.Btn_RefreshPos,
+  Btn_RefreshPos_Disable: SLIDE.Btn_RefreshPos,
+};
 
 let st = null;
 const clamp01 = (t) => Math.max(0, Math.min(1, t));
@@ -72,12 +101,20 @@ export async function prepareBack({ layout, label, onBack }) {
 export async function exitControl(host, layout) {
   const source = NGUI.find(layout, "Inventory_ListControl_PC/LeftTop/Btn_Back");
   if (!source) return;
-  const tree = fullscreenBody(clone(source)), body = tree.widgets.find((w) => "sprite" in w);
+  const tree = fullscreenBody(clone(source)),
+    body = tree.widgets.find((w) => "sprite" in w);
   tree.pos = [0, 0];
-  const w = body.w_ * S, h = body.h_ * S, next = document.createElement("div");
+  const w = body.w_ * S,
+    h = body.h_ * S,
+    next = document.createElement("div");
   await NGUI.render(tree, next, { scale: S, origin: [w / 2, h / 2] });
   await NGUI.decoded([...(next.children || [])], Infinity);
-  Object.assign(host.style, { left: `${960 + source.pos[0] * S - w / 2}px`, top: `${540 - source.pos[1] * S - h / 2}px`, width: `${w}px`, height: `${h}px` });
+  Object.assign(host.style, {
+    left: `${960 + source.pos[0] * S - w / 2}px`,
+    top: `${540 - source.pos[1] * S - h / 2}px`,
+    width: `${w}px`,
+    height: `${h}px`,
+  });
   host.replaceChildren(...next.childNodes);
   bindCorner(host, [parseFloat(host.style.left), parseFloat(host.style.top), w, h], { corner: "top-left" });
 }
@@ -91,14 +128,28 @@ export async function open(o) {
   close({ instant: true });
   const parts = o.parts || null;
   const box = artBox(o.skeleton?.data, measure(o.skeleton));
-  const home = homeView(box, { s: S, scale: parts ? NGUI.find(parts.pc, "Character/CharacterPos")?.scale?.[0] : undefined });
+  const home = homeView(box, {
+    s: S,
+    scale: parts ? NGUI.find(parts.pc, "Character/CharacterPos")?.scale?.[0] : undefined,
+  });
   const detail = viewOf(o.detail);
-  const s = st = {
-    o, home, lim: limits(box, home), detail, view: o.instant ? home : detail, target: home, last: null,
+  const s = (st = {
+    o,
+    home,
+    lim: limits(box, home),
+    detail,
+    view: o.instant ? home : detail,
+    target: home,
+    last: null,
     glide: o.instant ? null : { from: detail, to: home, t0: null, ms: GLIDE_MS, kind: "open" },
-    groups: parts?.groups || {}, homeShown: null, ptrs: new Map(), pinch: null,
-    scroll: { kind: null, at: -Infinity }, pinchUntil: -Infinity, gesture: 1,
-  };
+    groups: parts?.groups || {},
+    homeShown: null,
+    ptrs: new Map(),
+    pinch: null,
+    scroll: { kind: null, at: -Infinity },
+    pinchUntil: -Infinity,
+    gesture: 1,
+  });
   const touch = document.createElement("div");
   touch.className = "visual-touch";
   for (const [type, fn, opts] of HANDLERS) touch.addEventListener(type, fn, opts);
@@ -126,7 +177,10 @@ export async function open(o) {
 export function close({ instant = false, restore = true } = {}) {
   const s = st;
   if (!s) return;
-  if (instant) { finish(s, restore); return; }
+  if (instant) {
+    finish(s, restore);
+    return;
+  }
   if (s.closing) return;
   s.closing = true;
   removeEventListener("keydown", onKey);
@@ -147,8 +201,15 @@ function finish(s, restore = true) {
   removeEventListener("keydown", onKey);
   // exactly the detail screen's framing again
   const { x, y, width, height } = s.o.detail;
-  if (restore) for (const p of s.o.players()) if (p?.currentViewport) Object.assign(p.currentViewport, { x, y, width, height, padLeft: 0, padRight: 0, padTop: 0, padBottom: 0 });
-  for (const host of [s.o.bgHost, s.o.uiHost]) { host.hidden = true; host.replaceChildren(); host.classList.remove("on"); }
+  if (restore)
+    for (const p of s.o.players())
+      if (p?.currentViewport)
+        Object.assign(p.currentViewport, { x, y, width, height, padLeft: 0, padRight: 0, padTop: 0, padBottom: 0 });
+  for (const host of [s.o.bgHost, s.o.uiHost]) {
+    host.hidden = true;
+    host.replaceChildren();
+    host.classList.remove("on");
+  }
 }
 
 // Every fullscreen view of the detail screen (this one, the memorial lobby's, the 3D model's) slides the screen's UI
@@ -159,7 +220,8 @@ function finish(s, restore = true) {
 // fallback resolves its replacement when a fullscreen view switch rebuilt the detail controls.
 let asideFocus = null;
 export function uiOut(parts) {
-  const live = parts.filter(Boolean), focused = document.activeElement;
+  const live = parts.filter(Boolean),
+    focused = document.activeElement;
   if (focused && live.some((p) => p.contains(focused))) {
     asideFocus = focused;
     focused.blur();
@@ -204,14 +266,19 @@ function step(s, now) {
   }
   if (s.view === s.target) return;
   const next = mix(s.view, s.target, 1 - Math.exp(-dt / ZOOM_TAU));
-  s.view = Math.abs(next.k / s.target.k - 1) < 1e-4 && Math.abs((next.cx - s.target.cx) * next.k) < 0.05
-    && Math.abs((next.cy - s.target.cy) * next.k) < 0.05 ? s.target : next;
+  s.view =
+    Math.abs(next.k / s.target.k - 1) < 1e-4 &&
+    Math.abs((next.cx - s.target.cx) * next.k) < 0.05 &&
+    Math.abs((next.cy - s.target.cy) * next.k) < 0.05
+      ? s.target
+      : next;
 }
 
 // the setup pose's bounds, for a skeleton without exported ones
 function measure(sk) {
   if (!sk || (sk.data.width > 0 && sk.data.height > 0) || !globalThis.spine) return null;
-  const off = new spine.Vector2(), size = new spine.Vector2();
+  const off = new spine.Vector2(),
+    size = new spine.Vector2();
   sk.getBounds(off, size, []);
   return [off.x, off.y, size.x, size.y];
 }
@@ -222,21 +289,29 @@ async function renderBg(pc, bg) {
   const node = NGUI.find(pc, "BG");
   if (!node) return [];
   const host = document.createElement("div");
-  await NGUI.render(clone(node), host, { scale: S, origin: CENTRE, rootPath: "Inventory_ListControl_PC", textures: bg ? { BG: bg } : undefined });
+  await NGUI.render(clone(node), host, {
+    scale: S,
+    origin: CENTRE,
+    rootPath: "Inventory_ListControl_PC",
+    textures: bg ? { BG: bg } : undefined,
+  });
   return [...host.children];
 }
 
 // every white body of a button tree (the prefab's 171 x 116 Common_Bg_Raius5px_Shadow) at the fullscreen views' one
 // button size, about its own centre
 function fullscreenBody(tree) {
-  for (const w of tree.widgets || []) if (w.sprite === "Common_Bg_Raius5px_Shadow") Object.assign(w, { w_: FULLSCREEN_BUTTON.w, h_: FULLSCREEN_BUTTON.h });
+  for (const w of tree.widgets || [])
+    if (w.sprite === "Common_Bg_Raius5px_Shadow")
+      Object.assign(w, { w_: FULLSCREEN_BUTTON.w, h_: FULLSCREEN_BUTTON.h });
   for (const child of tree.children || []) fullscreenBody(child);
   return tree;
 }
 
 // one layer per button, so each slides on its own; the corners are anchored to the screen's edges
 async function renderButtons(pc, strings, corners = CORNERS, onPress = press) {
-  const groups = {}, made = [];
+  const groups = {},
+    made = [];
   const labels = { Btn_Back: strings.back, Btn_HideUI: strings.switch, Btn_RefreshPos: strings.reset };
   for (const [corner, names] of corners) {
     const c = NGUI.find(pc, corner);
@@ -256,16 +331,36 @@ async function renderButtons(pc, strings, corners = CORNERS, onPress = press) {
       }
       let hitBox;
       if (HIT[name]) {
-        const [w, h, dy] = HIT[name], x = CENTRE[0] + (at[0] + n.pos[0]) * S, y = CENTRE[1] - (at[1] + n.pos[1] + dy) * S;
-        hitBox = [x - w * S / 2, y - h * S / 2, w * S, h * S];
+        const [w, h, dy] = HIT[name],
+          x = CENTRE[0] + (at[0] + n.pos[0]) * S,
+          y = CENTRE[1] - (at[1] + n.pos[1] + dy) * S;
+        hitBox = [x - (w * S) / 2, y - (h * S) / 2, w * S, h * S];
       }
-      made.push(NGUI.render(tree, el, { scale: S, origin: CENTRE, rootPath: "Inventory_ListControl_PC", texts: { Label_Locale_Reset: "" } }).then((view) => {
-        const path = `Inventory_ListControl_PC/${corner}/${name}${corner === "RightBottom" ? "/Btn_RefreshPos" : ""}`;
-        const body = view.nodes.get(path)?.els[0];
-        if (body) bindCorner(el, NGUI.rect(body), { corner: corner === "LeftTop" ? "top-left" : corner === "RightTop" ? "top-right" : "bottom-right" });
-      }));
+      made.push(
+        NGUI.render(tree, el, {
+          scale: S,
+          origin: CENTRE,
+          rootPath: "Inventory_ListControl_PC",
+          texts: { Label_Locale_Reset: "" },
+        }).then((view) => {
+          const path = `Inventory_ListControl_PC/${corner}/${name}${corner === "RightBottom" ? "/Btn_RefreshPos" : ""}`;
+          const body = view.nodes.get(path)?.els[0];
+          if (body)
+            bindCorner(el, NGUI.rect(body), {
+              corner: corner === "LeftTop" ? "top-left" : corner === "RightTop" ? "top-right" : "bottom-right",
+            });
+        }),
+      );
       if (hitBox) {
-        const hit = hitButton(el, hitBox, (e) => { e.stopPropagation(); return onPress(name); }, labels[name]);
+        const hit = hitButton(
+          el,
+          hitBox,
+          (e) => {
+            e.stopPropagation();
+            return onPress(name);
+          },
+          labels[name],
+        );
         hit.dataset.visualAction = name;
       }
       groups[name] = el;
@@ -285,7 +380,10 @@ function press(name) {
 
 // a button's slide (UIAni_CharacterVisualMode_PC), in or out (the clip backwards)
 function slide(el, keys, out) {
-  const frames = slideFrames(keys).map(({ offset, value }) => ({ offset, transform: `translateX(${(value * S).toFixed(2)}px)` }));
+  const frames = slideFrames(keys).map(({ offset, value }) => ({
+    offset,
+    transform: `translateX(${(value * S).toFixed(2)}px)`,
+  }));
   el.slideRun?.cancel();
   el.slideRun = el.animate?.(frames, { duration: SLIDE_S * 1000, fill: "both", direction: out ? "reverse" : "normal" });
   return el.slideRun;
@@ -293,7 +391,8 @@ function slide(el, keys, out) {
 
 // the reset button greys out while the whole art is shown
 function syncReset(s) {
-  const on = s.groups.Btn_RefreshPos, offBtn = s.groups.Btn_RefreshPos_Disable;
+  const on = s.groups.Btn_RefreshPos,
+    offBtn = s.groups.Btn_RefreshPos_Disable;
   if (!on || !offBtn || s.closing) return;
   const home = (!s.glide && atHome(s.target, s.home)) || s.glide?.kind === "open";
   if (home === s.homeShown) return;
@@ -344,7 +443,11 @@ function down(e) {
   if (!ready(s) || (e.pointerType === "mouse" && e.button > 2)) return;
   if (e.button === 1 || e.button === 2) e.preventDefault();
   interrupt(s);
-  try { s.touch.setPointerCapture?.(e.pointerId); } catch { /* the drag goes on without capture */ }
+  try {
+    s.touch.setPointerCapture?.(e.pointerId);
+  } catch {
+    /* the drag goes on without capture */
+  }
   s.ptrs.set(e.pointerId, stagePoint(s, e));
   s.pinch = pinchOf(s);
   s.touch.classList.add("grabbing");
@@ -352,9 +455,13 @@ function down(e) {
 function move(e) {
   const s = st;
   if (!s || !s.ptrs.has(e.pointerId) || s.closing) return;
-  const p = stagePoint(s, e), was = s.ptrs.get(e.pointerId);
+  const p = stagePoint(s, e),
+    was = s.ptrs.get(e.pointerId);
   s.ptrs.set(e.pointerId, p);
-  if (s.ptrs.size === 1) { pan(s, p[0] - was[0], p[1] - was[1]); return; }
+  if (s.ptrs.size === 1) {
+    pan(s, p[0] - was[0], p[1] - was[1]);
+    return;
+  }
   // two fingers: the art follows their middle and their spread
   const g = pinchOf(s);
   if (s.pinch && g) {
@@ -374,8 +481,11 @@ function wheel(e) {
   const s = st;
   e.preventDefault();
   if (!ready(s)) return;
-  const [sx, sy] = stagePoint(s, e), unit = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 800 : 1, now = performance.now();
-  const r = s.o.host.getBoundingClientRect(), k = r.width ? STAGE.width / r.width : 1;
+  const [sx, sy] = stagePoint(s, e),
+    unit = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 800 : 1,
+    now = performance.now();
+  const r = s.o.host.getBoundingClientRect(),
+    k = r.width ? STAGE.width / r.width : 1;
   const step = wheelStep(e);
   if (e.ctrlKey) {
     s.scroll = { kind: null, at: -Infinity };
@@ -383,7 +493,8 @@ function wheel(e) {
     zoomTo(s, step !== "smooth" ? notchZoom(e, unit) : Math.exp(-e.deltaY * unit * PINCH), sx, sy);
     return;
   }
-  const fresh = !(now - s.scroll.at < SCROLL_MS && s.scroll.kind), kind = wheelKind(e, now, s.scroll);
+  const fresh = !(now - s.scroll.at < SCROLL_MS && s.scroll.kind),
+    kind = wheelKind(e, now, s.scroll);
   if (fresh) {
     // a scroll that starts like a wheel keeps the view it started from, to go back to if it turns out a trackpad
     const zooms = kind === "mouse" && !e.deltaMode && Math.abs(e.deltaY) >= Math.abs(e.deltaX);
@@ -394,11 +505,20 @@ function wheel(e) {
     s.scroll.kind = kind;
     s.scroll.at = now;
   }
-  if (kind === "mouse" && Math.abs(e.deltaY) >= Math.abs(e.deltaX)) { zoomTo(s, notchZoom(e, unit), sx, sy); return; }
+  if (kind === "mouse" && Math.abs(e.deltaY) >= Math.abs(e.deltaX)) {
+    zoomTo(s, notchZoom(e, unit), sx, sy);
+    return;
+  }
   pan(s, -e.deltaX * unit * k, kind === "mouse" ? 0 : -e.deltaY * unit * k);
 }
 // Safari and WKWebView trackpad pinch
-function gestureStart(e) { e.preventDefault(); if (st) { st.gesture = 1; st.pinchUntil = performance.now() + 300; } }
+function gestureStart(e) {
+  e.preventDefault();
+  if (st) {
+    st.gesture = 1;
+    st.pinchUntil = performance.now() + 300;
+  }
+}
 function gestureChange(e) {
   e.preventDefault();
   const s = st;
@@ -408,12 +528,24 @@ function gestureChange(e) {
   zoomTo(s, e.scale / s.gesture, sx, sy);
   s.gesture = e.scale;
 }
-function gestureEnd(e) { e.preventDefault(); if (st) st.pinchUntil = performance.now() + 300; }
+function gestureEnd(e) {
+  e.preventDefault();
+  if (st) st.pinchUntil = performance.now() + 300;
+}
 const prevent = (e) => e.preventDefault();
 
-const HANDLERS = [["pointerdown", down], ["pointermove", move], ["pointerup", up], ["pointercancel", up],
-  ["wheel", wheel, { passive: false }], ["gesturestart", gestureStart], ["gesturechange", gestureChange],
-  ["gestureend", gestureEnd], ["contextmenu", prevent], ["dragstart", prevent]];
+const HANDLERS = [
+  ["pointerdown", down],
+  ["pointermove", move],
+  ["pointerup", up],
+  ["pointercancel", up],
+  ["wheel", wheel, { passive: false }],
+  ["gesturestart", gestureStart],
+  ["gesturechange", gestureChange],
+  ["gestureend", gestureEnd],
+  ["contextmenu", prevent],
+  ["dragstart", prevent],
+];
 
 // Escape leaves, like the game's back key; not when a popup took it or is open over the view (the top layer has it)
 function onKey(e) {
@@ -423,19 +555,42 @@ function onKey(e) {
 }
 
 // for checks: the view, the home view and the limits
-export const state = () => (st ? {
-  view: { ...st.view }, target: { ...st.target }, home: { ...st.home }, kMax: st.lim.kMax, box: [...st.lim.box],
-  glide: st.glide?.kind || null, closing: !!st.closing,
-} : null);
+export const state = () =>
+  st
+    ? {
+        view: { ...st.view },
+        target: { ...st.target },
+        home: { ...st.home },
+        kMax: st.lim.kMax,
+        box: [...st.lim.box],
+        glide: st.glide?.kind || null,
+        closing: !!st.closing,
+      }
+    : null;
 
 // Photography constrains only the framing guide while retaining the native portrait player.
-export function photography(on,frame) {
-  if(!st)return;
-  st.lim.photoFrame=on?frame:null;
-  st.lim.kMin=on?portraitMinimum(st.lim.box,st.home.k,frame):st.home.k;
-  const full=viewport(st.home);
-  st.lim.photoBounds=[Math.min(full.x,st.lim.box[0]),Math.min(full.y,st.lim.box[1]),Math.max(full.x+full.width,st.lim.box[2]),Math.max(full.y+full.height,st.lim.box[3])];
+export function photography(on, frame) {
+  if (!st) return;
+  st.lim.photoFrame = on ? frame : null;
+  st.lim.kMin = on ? portraitMinimum(st.lim.box, st.home.k, frame) : st.home.k;
+  const full = viewport(st.home);
+  st.lim.photoBounds = [
+    Math.min(full.x, st.lim.box[0]),
+    Math.min(full.y, st.lim.box[1]),
+    Math.max(full.x + full.width, st.lim.box[2]),
+    Math.max(full.y + full.height, st.lim.box[3]),
+  ];
 }
-export function captureReady() { if(st){st.glide=null;st.view=st.target=st.home;syncReset(st);} }
-export function panCapture(dx,dy) { if(ready(st))pan(st,dx,dy); }
-export function zoomCapture(factor,x,y) { if(ready(st))zoomTo(st,factor,x,y); }
+export function captureReady() {
+  if (st) {
+    st.glide = null;
+    st.view = st.target = st.home;
+    syncReset(st);
+  }
+}
+export function panCapture(dx, dy) {
+  if (ready(st)) pan(st, dx, dy);
+}
+export function zoomCapture(factor, x, y) {
+  if (ready(st)) zoomTo(st, factor, x, y);
+}

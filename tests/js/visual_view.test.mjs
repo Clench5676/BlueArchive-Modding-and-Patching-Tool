@@ -5,14 +5,34 @@ import { test } from "node:test";
 
 import { SKELETON_SCALE, stagePoint } from "../../src/bmpt/web/js/portrait-view.js";
 import {
-  FULL_SCALE, SCREEN, SLIDE, SLIDE_S, STAGE, ZOOM_MAX, anchoredCentre, artBox, atHome, clampView, hermite, homeView, limits,
-  mix, panBy, slideFrames, viewOf, viewport, zoomAt,
+  FULL_SCALE,
+  SCREEN,
+  SLIDE,
+  SLIDE_S,
+  STAGE,
+  ZOOM_MAX,
+  anchoredCentre,
+  artBox,
+  atHome,
+  clampView,
+  hermite,
+  homeView,
+  limits,
+  mix,
+  panBy,
+  slideFrames,
+  viewOf,
+  viewport,
+  zoomAt,
 } from "../../src/bmpt/web/js/visual-view.js";
 
 const S = 1920 / 2960; // stage px per prefab unit (util.js)
 const BOX = { left: 0, top: 0, width: STAGE.width, height: STAGE.height };
 const near = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b}`);
-const nearPt = (p, q, eps = 1e-6) => { near(p[0], q[0], eps); near(p[1], q[1], eps); };
+const nearPt = (p, q, eps = 1e-6) => {
+  near(p[0], q[0], eps);
+  near(p[1], q[1], eps);
+};
 // skeleton bounds of real portraits (SkeletonData x, y, width, height): Hoshino, Eimi (Armed) with her long gun on
 // the left, and the tallest one, an NPC without Idle_01
 const HOSHINO = { x: -580, y: -747, width: 1161, height: 2074 };
@@ -25,7 +45,9 @@ test("a view and its spine-player viewport are the same framing", () => {
   near(vp.width / vp.height, STAGE.width / STAGE.height);
   assert.deepEqual([vp.padLeft, vp.padRight, vp.padTop, vp.padBottom], [0, 0, 0, 0]);
   const back = viewOf(vp);
-  near(back.cx, v.cx); near(back.cy, v.cy); near(back.k, v.k);
+  near(back.cx, v.cx);
+  near(back.cy, v.cy);
+  near(back.k, v.k);
   // spine-player's own camera puts the view's centre on the stage's centre, k px per skeleton unit
   nearPt(stagePoint(vp, BOX, v.cx, v.cy), [960, 540], 1e-6);
   nearPt(stagePoint(vp, BOX, v.cx + 100, v.cy + 100), [960 + 100 * v.k, 540 - 100 * v.k], 1e-6);
@@ -33,7 +55,8 @@ test("a view and its spine-player viewport are the same framing", () => {
 
 test("the whole art: the body in the middle at CharacterPos's scale, every portrait inside the screen", () => {
   for (const data of [HOSHINO, EIMI_ARMED, BLACKSUIT]) {
-    const box = artBox(data), home = homeView(box, { s: S });
+    const box = artBox(data),
+      home = homeView(box, { s: S });
     near(home.k, FULL_SCALE * SKELETON_SCALE * S);
     // across: the skeleton's origin, where the character stands (a weapon beside her does not move her)
     near(home.cx, 0);
@@ -55,10 +78,14 @@ test("the art box: the skeleton's exported bounds, else the measured pose, else 
 });
 
 test("zoom at the pointer keeps the skeleton point under it, between the whole art and ZOOM_MAX", () => {
-  const box = artBox(HOSHINO), home = homeView(box, { s: S }), lim = limits(box, home);
-  const at = [1100, 300], vp0 = viewport(home);
+  const box = artBox(HOSHINO),
+    home = homeView(box, { s: S }),
+    lim = limits(box, home);
+  const at = [1100, 300],
+    vp0 = viewport(home);
   // the skeleton point under the pointer
-  const px = home.cx + (at[0] - 960) / home.k, py = home.cy - (at[1] - 540) / home.k;
+  const px = home.cx + (at[0] - 960) / home.k,
+    py = home.cy - (at[1] - 540) / home.k;
   const z = zoomAt(home, 1.5, at[0], at[1], lim);
   near(z.k, home.k * 1.5);
   nearPt(stagePoint(viewport(z), BOX, px, py), at, 1e-6);
@@ -67,11 +94,13 @@ test("zoom at the pointer keeps the skeleton point under it, between the whole a
   near(zoomAt(home, 100, 960, 540, lim).k, home.k * ZOOM_MAX);
   near(zoomAt(home, 0.01, 960, 540, lim).k, home.k);
   // ZOOM_MAX is about twice the detail screen's size (CharacterPos scale 101)
-  near(lim.kMax / (101 * SKELETON_SCALE * S), ZOOM_MAX * FULL_SCALE / 101);
+  near(lim.kMax / (101 * SKELETON_SCALE * S), (ZOOM_MAX * FULL_SCALE) / 101);
 });
 
 test("a drag moves the art with the pointer; the stage's centre stays on the art", () => {
-  const box = artBox(EIMI_ARMED), home = homeView(box, { s: S }), lim = limits(box, home);
+  const box = artBox(EIMI_ARMED),
+    home = homeView(box, { s: S }),
+    lim = limits(box, home);
   const moved = panBy(home, 30, -12, lim);
   const p = [home.cx, home.cy];
   nearPt(stagePoint(viewport(moved), BOX, ...p), [960 + 30, 540 - 12], 1e-6);
@@ -82,10 +111,13 @@ test("a drag moves the art with the pointer; the stage's centre stays on the art
 });
 
 test("a glide between views, and the home check the reset button follows", () => {
-  const a = { cx: 0, cy: 0, k: 0.2 }, b = { cx: 100, cy: -50, k: 0.8 };
+  const a = { cx: 0, cy: 0, k: 0.2 },
+    b = { cx: 100, cy: -50, k: 0.8 };
   assert.deepEqual(mix(a, b, 0), a);
   const end = mix(a, b, 1);
-  near(end.cx, b.cx); near(end.cy, b.cy); near(end.k, b.k);
+  near(end.cx, b.cx);
+  near(end.cy, b.cy);
+  near(end.k, b.k);
   near(mix(a, b, 0.5).k, 0.4); // a steady zoom rate
   assert.ok(atHome({ ...b }, b));
   assert.ok(!atHome({ ...b, cx: b.cx + 1 }, b));
@@ -94,9 +126,15 @@ test("a glide between views, and the home check the reset button follows", () =>
 
 test("the corners are anchored to the screen's edges as in the PC prefab", () => {
   // Inventory_ListControl_PC's UIWidgets, 2960 x 1440, anchored to the top right, bottom right and top left
-  const rightTop = { anchors: { leftAnchor: [1, -2960], rightAnchor: [1, 0], bottomAnchor: [1, -1474], topAnchor: [1, -34] } };
-  const rightBottom = { anchors: { leftAnchor: [1, -2960], rightAnchor: [1, 0], bottomAnchor: [0, 0], topAnchor: [0, 1440] } };
-  const leftTop = { anchors: { leftAnchor: [0, 0], rightAnchor: [0, 2960], bottomAnchor: [1, -1474], topAnchor: [1, -34] } };
+  const rightTop = {
+    anchors: { leftAnchor: [1, -2960], rightAnchor: [1, 0], bottomAnchor: [1, -1474], topAnchor: [1, -34] },
+  };
+  const rightBottom = {
+    anchors: { leftAnchor: [1, -2960], rightAnchor: [1, 0], bottomAnchor: [0, 0], topAnchor: [0, 1440] },
+  };
+  const leftTop = {
+    anchors: { leftAnchor: [0, 0], rightAnchor: [0, 2960], bottomAnchor: [1, -1474], topAnchor: [1, -34] },
+  };
   nearPt(anchoredCentre(rightTop), [0, SCREEN.h / 2 - 34 - 720]);
   nearPt(anchoredCentre(rightBottom), [0, -SCREEN.h / 2 + 720]);
   nearPt(anchoredCentre(leftTop), [0, SCREEN.h / 2 - 754]);
@@ -124,6 +162,8 @@ test("the buttons' slide follows UIAni_CharacterVisualMode_PC", () => {
     }
   }
   // the middle key's slope: Btn_HideUI moves 378.9 units a second there
-  const k = SLIDE.Btn_HideUI, t = k[1][0], h = 1e-5;
+  const k = SLIDE.Btn_HideUI,
+    t = k[1][0],
+    h = 1e-5;
   near((hermite(k, t + h) - hermite(k, t)) / h, k[1][3], 0.05);
 });

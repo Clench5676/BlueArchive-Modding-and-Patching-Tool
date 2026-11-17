@@ -7,31 +7,67 @@ import { test } from "node:test";
 // --- a stand-in DOM: a tree of nodes, the focus, the window's key listeners and a clock ---
 class Node {
   constructor(name = "div") {
-    Object.assign(this, { name, children: [], parent: null, hidden: false, inert: false, style: {}, className: "", listeners: {} });
+    Object.assign(this, {
+      name,
+      children: [],
+      parent: null,
+      hidden: false,
+      inert: false,
+      style: {},
+      className: "",
+      listeners: {},
+    });
     const names = new Set();
     this.classList = { add: (c) => names.add(c), remove: (c) => names.delete(c), contains: (c) => names.has(c) };
   }
-  appendChild(child) { child.remove(); child.parent = this; this.children.push(child); return child; }
-  replaceChildren(...kids) { for (const c of [...this.children]) c.remove(); for (const k of kids) this.appendChild(k); }
+  appendChild(child) {
+    child.remove();
+    child.parent = this;
+    this.children.push(child);
+    return child;
+  }
+  replaceChildren(...kids) {
+    for (const c of [...this.children]) c.remove();
+    for (const k of kids) this.appendChild(k);
+  }
   remove() {
     if (!this.parent) return;
     this.parent.children = this.parent.children.filter((c) => c !== this);
     this.parent = null;
   }
-  contains(node) { for (let n = node; n; n = n.parent) if (n === this) return true; return false; }
+  contains(node) {
+    for (let n = node; n; n = n.parent) if (n === this) return true;
+    return false;
+  }
   closest(selector) {
     assert.equal(selector, "[inert]");
     for (let n = this; n; n = n.parent) if (n.inert) return n;
     return null;
   }
-  get isConnected() { return document.body.contains(this); }
-  focus() { document.activeElement = this; }
-  blur() { if (document.activeElement === this) document.activeElement = document.body; }
-  addEventListener(type, fn) { (this.listeners[type] ||= new Set()).add(fn); }
-  removeEventListener(type, fn) { this.listeners[type]?.delete(fn); }
-  getBoundingClientRect() { return { left: 0, top: 0, width: 1920, height: 1080 }; }
-  get offsetWidth() { return 0; }
-  getContext() { return { font: "", measureText: () => ({ width: 0 }) }; }
+  get isConnected() {
+    return document.body.contains(this);
+  }
+  focus() {
+    document.activeElement = this;
+  }
+  blur() {
+    if (document.activeElement === this) document.activeElement = document.body;
+  }
+  addEventListener(type, fn) {
+    (this.listeners[type] ||= new Set()).add(fn);
+  }
+  removeEventListener(type, fn) {
+    this.listeners[type]?.delete(fn);
+  }
+  getBoundingClientRect() {
+    return { left: 0, top: 0, width: 1920, height: 1080 };
+  }
+  get offsetWidth() {
+    return 0;
+  }
+  getContext() {
+    return { font: "", measureText: () => ({ width: 0 }) };
+  }
 }
 const body = new Node("body");
 globalThis.document = { body, activeElement: body, createElement: (name) => new Node(name), querySelector: () => null };
@@ -39,7 +75,13 @@ const windowListeners = {};
 globalThis.addEventListener = (type, fn) => (windowListeners[type] ||= new Set()).add(fn);
 globalThis.removeEventListener = (type, fn) => windowListeners[type]?.delete(fn);
 const press = (key) => {
-  const ev = { key, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } };
+  const ev = {
+    key,
+    defaultPrevented: false,
+    preventDefault() {
+      this.defaultPrevented = true;
+    },
+  };
   for (const fn of [...(windowListeners.keydown || [])]) fn(ev);
   return ev;
 };
@@ -56,7 +98,9 @@ globalThis.spine = {};
 const DETAIL = { x: -1480, y: -1000, width: 2960, height: 1665 };
 function screen() {
   const stage = body.appendChild(new Node("stage"));
-  const [left, right, topbar, nav, bgHost, uiHost] = ["left", "right", "topbar", "nav", "visual-bg", "visual-ui"].map((n) => stage.appendChild(new Node(n)));
+  const [left, right, topbar, nav, bgHost, uiHost] = ["left", "right", "topbar", "nav", "visual-bg", "visual-ui"].map(
+    (n) => stage.appendChild(new Node(n)),
+  );
   const zoom = left.appendChild(new Node("button"));
   const lobbyTab = right.appendChild(new Node("button"));
   const player = { currentViewport: { ...DETAIL, padLeft: 0, padRight: 0, padTop: 0, padBottom: 0 } };
@@ -66,13 +110,24 @@ function screen() {
 // the visual mode without its prefab (no background, no buttons): the touch area and Escape
 function openVisual(s, onBack = () => {}, alive, options = {}) {
   return Visual.open({
-    parts: null, skeleton: { data: { x: -580, y: -747, width: 1161, height: 2074 } }, detail: { ...DETAIL },
-    host: s.stage, bgHost: s.bgHost, uiHost: s.uiHost, players: () => [s.player], onBack, alive, ...options,
+    parts: null,
+    skeleton: { data: { x: -580, y: -747, width: 1161, height: 2074 } },
+    detail: { ...DETAIL },
+    host: s.stage,
+    bgHost: s.bgHost,
+    uiHost: s.uiHost,
+    players: () => [s.player],
+    onBack,
+    alive,
+    ...options,
   });
 }
 // the portrait's player draws frames until the glide ends
 function drawFrames(s, ms = 2000) {
-  for (let t = 0; t <= ms; t += 16) { now += 16; Visual.frame(s.player); }
+  for (let t = 0; t <= ms; t += 16) {
+    now += 16;
+    Visual.frame(s.player);
+  }
 }
 
 test("while a fullscreen view is open the slid-out UI is inert and the focus lets go of it; it comes back", () => {
@@ -88,8 +143,6 @@ test("while a fullscreen view is open the slid-out UI is inert and the focus let
   assert.equal(document.activeElement, s.zoom, "the focus is back on the control that had it");
   s.stage.remove();
 });
-
-
 
 test("a focus outside the slid-out UI stays; none comes back to a control that is gone or while the screen is left", () => {
   let s = screen();
@@ -126,13 +179,20 @@ test("visual mode without confirmation opens no fullscreen controls", async () =
     assert.equal(await openVisual(s), false);
     assert.equal(Visual.isOpen(), false);
     assert.equal(s.uiHost.children.length, 0);
-  } finally { setSpineConsent(true); s.stage.remove(); }
+  } finally {
+    setSpineConsent(true);
+    s.stage.remove();
+  }
 });
 
 test("leaving while visual mode awaits the runtime cannot open stale controls", async () => {
   const s = screen();
   let active = true;
-  const opening = openVisual(s, () => {}, () => active);
+  const opening = openVisual(
+    s,
+    () => {},
+    () => active,
+  );
   active = false;
   assert.equal(await opening, false);
   assert.equal(Visual.isOpen(), false);
@@ -145,7 +205,9 @@ test("leaving fullscreen closes the visual mode even after the tab changed under
   let backs = 0;
   s.zoom.focus();
   Visual.uiOut(s.out);
-  await openVisual(s, () => { backs += 1; });
+  await openVisual(s, () => {
+    backs += 1;
+  });
   assert.ok(Visual.isOpen());
   assert.equal(s.uiHost.hidden, false);
   assert.equal(s.uiHost.children[0].className, "visual-touch");
@@ -174,10 +236,17 @@ test("Escape on a message over the visual mode closes the message only; the next
   const s = screen();
   let backs = 0;
   Visual.uiOut(s.out);
-  await openVisual(s, () => { backs += 1; });
+  await openVisual(s, () => {
+    backs += 1;
+  });
   drawFrames(s);
-  const dialog = s.stage.appendChild(new Node("dialog")), closes = [];
-  Popup.opened(dialog, (how) => { closes.push(how); dialog.hidden = true; Popup.closed(dialog); });
+  const dialog = s.stage.appendChild(new Node("dialog")),
+    closes = [];
+  Popup.opened(dialog, (how) => {
+    closes.push(how);
+    dialog.hidden = true;
+    Popup.closed(dialog);
+  });
   press("Escape");
   assert.deepEqual(closes, ["escape"]);
   assert.equal(backs, 0, "the visual mode stays under the message");

@@ -44,8 +44,15 @@ export function orderBody(collection, ascending) {
 // terms of their own (an item's ``terms``: a model's dev ids)
 export function pickerItems(items, { query = "", sort = "default", ascending = true } = {}) {
   const terms = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
-  const list = items.filter((item) => terms.every((term) => [item.label, item.full, item.original, item.key, ...(item.terms || [])]
-    .some((value) => String(value || "").toLocaleLowerCase().includes(term))));
+  const list = items.filter((item) =>
+    terms.every((term) =>
+      [item.label, item.full, item.original, item.key, ...(item.terms || [])].some((value) =>
+        String(value || "")
+          .toLocaleLowerCase()
+          .includes(term),
+      ),
+    ),
+  );
   if (sort === "name") list.sort((a, b) => String(a.label).localeCompare(String(b.label)));
   return ascending ? list : list.reverse();
 }
@@ -56,9 +63,18 @@ const { find, node, label, fitText } = NGUI;
 
 // The student roster's toolbar: its Group Alts checkbox, the two segment filters, search, sort and order.
 export function toolbarLayout(view, { title = T("roster.title"), left = -1270, right = 1412 } = {}) {
-  return toolbarFit({ title, left, right,
-    filters: [["seg.all", "seg.mods", "seg.noMods"], ["seg.all", "seg.recruit", "seg.noRecruit"]].map((keys) => keys.map((k) => T(k))),
-    sorts: SORTS.map((k) => T(`sort.${k}`)), sortAt: SORTS.indexOf(view.sort), check: T("roster.merge") });
+  return toolbarFit({
+    title,
+    left,
+    right,
+    filters: [
+      ["seg.all", "seg.mods", "seg.noMods"],
+      ["seg.all", "seg.recruit", "seg.noRecruit"],
+    ].map((keys) => keys.map((k) => T(k))),
+    sorts: SORTS.map((k) => T(`sort.${k}`)),
+    sortAt: SORTS.indexOf(view.sort),
+    check: T("roster.merge"),
+  });
 }
 
 // A toolbar's fit, right to left from the order button, with the most generous sizes at which everything stands after
@@ -70,8 +86,17 @@ export function toolbarLayout(view, { title = T("roster.title"), left = -1270, r
 // spread: the checkbox and the filters from the left edge, the tools at the right (a list popup's)
 export function toolbarFit({ title = "", left, right, filters, sorts, sortAt = 0, check, icons = 0, spread = false }) {
   // the last three steps only a list popup's narrower list reaches (the L class)
-  const steps = [[230, 44, 56, 40, 62], [210, 40, 48, 38, 62], [200, 36, 44, 34, 58], [190, 34, 42, 32, 54], [180, 32, 40, 30, 50], [170, 30, 36, 28, 46],
-    [160, 28, 34, 26, 44], [150, 26, 32, 24, 42], [140, 24, 30, 22, 40]];
+  const steps = [
+    [230, 44, 56, 40, 62],
+    [210, 40, 48, 38, 62],
+    [200, 36, 44, 34, 58],
+    [190, 34, 42, 32, 54],
+    [180, 32, 40, 30, 50],
+    [170, 30, 36, 28, 46],
+    [160, 28, 34, 26, 44],
+    [150, 26, 32, 24, 42],
+    [140, 24, 30, 22, 40],
+  ];
   for (const [segW, segFs, sortFs, cbFs, titleFs] of steps) {
     // after the title and SPACE.l; from the left edge itself without one (a list popup's toolbar)
     const titleEnd = title ? left + advanceOf(title, titleFs) + SPACE.l : left;
@@ -87,31 +112,55 @@ export function toolbarFit({ title = "", left, right, filters, sorts, sortAt = 0
     // The segmented prefab keeps its three adjoining slots; composed groups use SPACE.l. Search and order share
     // UICharacterCollection/SeletControl/TopMenu/SearchBtn/Btn_Normal's own 150 x 116-unit body. Sort and order
     // also keep their prefab's 116-unit height; the segmented filters keep 104. Caption fitting tiers stay as before.
-    const h = CONTROL.toolbar.h, iconW = 150;
+    const h = CONTROL.toolbar.h,
+      iconW = 150;
     const nativeH = 116;
-    const tools = row([...Array.from({ length: icons }, () => ({ w: iconW, h: nativeH })), { w: iconW, h: nativeH }, { w: sortW, h: nativeH },
-      { w: iconW, h: nativeH }], { gap: SPACE.m });
+    const tools = row(
+      [
+        ...Array.from({ length: icons }, () => ({ w: iconW, h: nativeH })),
+        { w: iconW, h: nativeH },
+        { w: sortW, h: nativeH },
+        { w: iconW, h: nativeH },
+      ],
+      { gap: SPACE.m },
+    );
     const cb = cbText ? 1 : 0;
-    const groups = row([...(cb ? [{ w: cbW, h }] : []), ...filters.map(() => ({ w: 3 * segW, h })), tools], { gap: SPACE.l });
-    const cbLeft = right - groups.w, offset = (box) => ({ ...box, x: box.x + cbLeft });
-    const lead = cb + filters.length;  // the checkbox and the filters come before the tools
+    const groups = row([...(cb ? [{ w: cbW, h }] : []), ...filters.map(() => ({ w: 3 * segW, h })), tools], {
+      gap: SPACE.l,
+    });
+    const cbLeft = right - groups.w,
+      offset = (box) => ({ ...box, x: box.x + cbLeft });
+    const lead = cb + filters.length; // the checkbox and the filters come before the tools
     const boxes = groups.boxes.slice(0, lead).map(spread ? (box) => ({ ...box, x: box.x + titleEnd }) : offset);
     boxes.push(...tools.boxes.map((box) => offset({ ...box, x: groups.boxes[lead].x + box.x })));
     const centre = (box) => box.x + box.w / 2;
     const fits = cbLeft >= titleEnd;
     if (fits || segW === steps.at(-1)[0]) {
       const ends = filters.map((_, i) => boxes[cb + i].x + boxes[cb + i].w);
-      return { segW, segLabels, sortText, sortW, cbText, cbW,
-        order: centre(boxes.at(-1)), sort: centre(boxes.at(-2)), search: centre(boxes.at(-3)),
+      return {
+        segW,
+        segLabels,
+        sortText,
+        sortW,
+        cbText,
+        cbW,
+        order: centre(boxes.at(-1)),
+        sort: centre(boxes.at(-2)),
+        search: centre(boxes.at(-3)),
         icons: boxes.slice(boxes.length - 3 - icons, boxes.length - 3),
-        seg1: ends[0], seg2: ends[1], cbLeft: spread ? titleEnd : cbLeft, titleFs, boxes, fits,
+        seg1: ends[0],
+        seg2: ends[1],
+        cbLeft: spread ? titleEnd : cbLeft,
+        titleFs,
+        boxes,
+        fits,
         // per filter: where its right edge is and its three captions
-        filters: ends.map((end, i) => ({ right: end, labels: segLabels.slice(3 * i, 3 * i + 3) })) };
+        filters: ends.map((end, i) => ({ right: end, labels: segLabels.slice(3 * i, 3 * i + 3) })),
+      };
     }
   }
   return null;
 }
-
 
 // UICharacterCollection/SeletControl/LeftInfo_Empty, in its own units (y up) from its root: Arona's picture (Image_Inven_Empty,
 // a 943 box at y -318) over the faint disc, and the message under them (Label_Locale at y -589). Measured on the official
@@ -135,30 +184,54 @@ export function emptyListY(centre, label) {
 // Each has its box [x, y, width, height] (centre), its name (the caption it draws, "All" in both filters), whether its
 // setting is on (aria-pressed) and apply(view), which sets it.
 export function toggleHits(view, lay, segY = 720 - 219 - 50.2) {
-  const segments = (key, values, labels, centre) => values.map((value, i) => ({
-    box: [centre - (2.5 - i) * lay.segW, segY, lay.segW, 104], name: T(labels[i]), pressed: view[key] === value,
-    apply: (target) => { target[key] = value; } }));
+  const segments = (key, values, labels, centre) =>
+    values.map((value, i) => ({
+      box: [centre - (2.5 - i) * lay.segW, segY, lay.segW, 104],
+      name: T(labels[i]),
+      pressed: view[key] === value,
+      apply: (target) => {
+        target[key] = value;
+      },
+    }));
   return [
     ...segments("mods", ["all", "mods", "none"], ["seg.all", "seg.mods", "seg.noMods"], lay.seg1),
     ...segments("recruit", ["all", "yes", "no"], ["seg.all", "seg.recruit", "seg.noRecruit"], lay.seg2),
-    { box: [lay.cbLeft + lay.cbW / 2, segY, lay.cbW, CONTROL.toolbar.h], name: T("roster.merge"), pressed: view.merged === true,
-      apply: (target) => { target.merged = !target.merged; } },
+    {
+      box: [lay.cbLeft + lay.cbW / 2, segY, lay.cbW, CONTROL.toolbar.h],
+      name: T("roster.merge"),
+      pressed: view.merged === true,
+      apply: (target) => {
+        target.merged = !target.merged;
+      },
+    },
   ];
 }
 
 // Where the toolbar's controls stand in SeletControl's units (y up from TopMenu's origin): their visual centre line.
-export const TOOLBAR_CENTRE_Y = -219 - 50.2;  // UICharacterCollection/SeletControl/TopMenu/FilterBtn's authored centre line
+export const TOOLBAR_CENTRE_Y = -219 - 50.2; // UICharacterCollection/SeletControl/TopMenu/FilterBtn's authored centre line
 
 // What a toolbar shows of its state: one entry per filter of the layout (its node's name and the active segment), the
 // checkbox, the sort button's funnel (a display setting filters the list) and the order arrow. The roster's own, from its view.
 export const rosterToolbarState = (view) => ({
-  filters: [{ name: "ModFilter", active: { all: 0, mods: 1, none: 2 }[view.mods] },
-    { name: "RecruitFilter", active: { all: 0, yes: 1, no: 2 }[view.recruit] }],
-  checked: view.merged, filtered: filtering(view.filters), ascending: view.order !== "desc" });
+  filters: [
+    { name: "ModFilter", active: { all: 0, mods: 1, none: 2 }[view.mods] },
+    { name: "RecruitFilter", active: { all: 0, yes: 1, no: 2 }[view.recruit] },
+  ],
+  checked: view.merged,
+  filtered: filtering(view.filters),
+  ascending: view.order !== "desc",
+});
 
 // Shared complete UICharacterCollection toolbar; callers retain their own list and title. ``state``: what it shows
 // (``rosterToolbarState``), for a list popup's own.
-export function toolbarTree(collection, checkbox, view, searching, lay = toolbarLayout(view), state = rosterToolbarState(view)) {
+export function toolbarTree(
+  collection,
+  checkbox,
+  view,
+  searching,
+  lay = toolbarLayout(view),
+  state = rosterToolbarState(view),
+) {
   const menu = clone(find(collection, "SeletControl/TopMenu"));
   // segment filters: the game's All / STRIKER / SPECIAL control with our words in the same colours
   const segFilter = (name, labels, active, right) => {
@@ -168,12 +241,19 @@ export function toolbarTree(collection, checkbox, view, searching, lay = toolbar
     const sx = lay.segW / 328;
     f.scale = [sx, 1];
     f.pos = [right - (529.7 + 164) * sx, -219];
-    [["All", 0], ["Main", 1], ["Support", 2]].forEach(([k, i]) => {
+    [
+      ["All", 0],
+      ["Main", 1],
+      ["Support", 2],
+    ].forEach(([k, i]) => {
       const seg = find(f, k);
       for (const state of seg.children) {
         for (const c of state.children || []) {
           const tex = c.widgets.find((w) => "texture" in w);
-          if (tex) c.widgets = [label(labels[i].text, labels[i].fs, tex.color, (lay.segW - 16) / sx, 60 * labels[i].lines, { depth: 9 })];
+          if (tex)
+            c.widgets = [
+              label(labels[i].text, labels[i].fs, tex.color, (lay.segW - 16) / sx, 60 * labels[i].lines, { depth: 9 }),
+            ];
         }
         state.active = (state.name === "Btn_Pressed") === (i === active);
       }
@@ -183,26 +263,43 @@ export function toolbarTree(collection, checkbox, view, searching, lay = toolbar
   // (a stand-in prefab without a node leaves it out)
   const filterBtn = find(menu, "FilterBtn");
   if (filterBtn) filterBtn.active = false;
-  menu.children.push(...state.filters.map(({ name, active }, i) => segFilter(name, lay.filters[i].labels, active, lay.filters[i].right)));
+  menu.children.push(
+    ...state.filters.map(({ name, active }, i) => segFilter(name, lay.filters[i].labels, active, lay.filters[i].right)),
+  );
   // search: the game's toggle, pressed while the search box is open
   const search = find(menu, "SearchBtn");
-  for (const [name, on] of [["Btn_Normal", !searching], ["Btn_Pressed", searching]]) { const n = find(search, name); if (n) n.active = on; }
+  for (const [name, on] of [
+    ["Btn_Normal", !searching],
+    ["Btn_Pressed", searching],
+  ]) {
+    const n = find(search, name);
+    if (n) n.active = on;
+  }
   // sort: the current key, and the funnel in blue while a display setting filters the list
   const sort = find(menu, "SortBtn");
-  sort.children = sort.children.map((c) => c.name === "Btn_Normal" ? sortBody(collection, lay.sortText, lay.sortW, state.filtered) : c);
+  sort.children = sort.children.map((c) =>
+    c.name === "Btn_Normal" ? sortBody(collection, lay.sortText, lay.sortW, state.filtered) : c,
+  );
   // order: one arrow, down for descending (the prefab holds both, Icon_Up flipped)
   const orderBtn = find(menu, "OrderBtn");
-  orderBtn.children = orderBtn.children.map((c) => c.name === "Btn_Normal" ? orderBody(collection, state.ascending) : c);
+  orderBtn.children = orderBtn.children.map((c) =>
+    c.name === "Btn_Normal" ? orderBody(collection, state.ascending) : c,
+  );
   // The sprite's own pivot supplies its local centre; every state is centred on the same row, without hand offsets.
   const centreY = TOOLBAR_CENTRE_Y; // the prefab's authored centre line stays.
-  for (const [control, box] of [[search, lay.boxes.at(-3)], [sort, lay.boxes.at(-2)], [orderBtn, lay.boxes.at(-1)]]) {
+  for (const [control, box] of [
+    [search, lay.boxes.at(-3)],
+    [sort, lay.boxes.at(-2)],
+    [orderBtn, lay.boxes.at(-1)],
+  ]) {
     control.pos = [box.x + box.w / 2, centreY];
     for (const state of control.children) {
       const body = state.widgets.find((widget) => "sprite" in widget);
       if (!body) continue;
       const pivot = body.pivot ?? 4;
-      state.pos = [((pivot % 3) / 2 - .5) * box.w, (.5 - Math.floor(pivot / 3) / 2) * box.h];
-      body.w_ = box.w; body.h_ = box.h;
+      state.pos = [((pivot % 3) / 2 - 0.5) * box.w, (0.5 - Math.floor(pivot / 3) / 2) * box.h];
+      body.w_ = box.w;
+      body.h_ = box.h;
     }
   }
   // icon toggles before search (a list popup's Show Other Students): the search button's body and states with
@@ -219,7 +316,11 @@ export function toolbarTree(collection, checkbox, view, searching, lay = toolbar
         const w = icon.widgets?.find((x) => "sprite" in x);
         if (!w) continue;
         icon.name = "Icon";
-        Object.assign(w, { sprite: toggle.sprite, atlas: toggle.atlas ?? w.atlas, ...(toggle.size ? { w_: toggle.size[0], h_: toggle.size[1] } : {}) });
+        Object.assign(w, {
+          sprite: toggle.sprite,
+          atlas: toggle.atlas ?? w.atlas,
+          ...(toggle.size ? { w_: toggle.size[0], h_: toggle.size[1] } : {}),
+        });
       }
     }
     menu.children.push(t);
@@ -230,13 +331,27 @@ export function toolbarTree(collection, checkbox, view, searching, lay = toolbar
   cb.name = "Merge";
   const menubar = find(menu, "Menubar");
   cb.pos = [lay.cbLeft - menubar.pos[0], centreY - menubar.pos[1]];
-  Object.assign(cb.widgets.find((w) => "sprite" in w), { w_: lay.cbW, h_: CONTROL.toolbar.h, pivot: 3 });
+  Object.assign(
+    cb.widgets.find((w) => "sprite" in w),
+    { w_: lay.cbW, h_: CONTROL.toolbar.h, pivot: 3 },
+  );
   cb.children = cb.children.filter((c) => c.name !== "Locale_Text");
   for (const c of cb.children) {
     c.children = (c.children || []).filter((k) => k.name === "Check");
     c.active = (c.name === "Type_ON") === state.checked;
   }
-  cb.children.push(node("Label", [131, 0], [label(lay.cbText.text, lay.cbText.fs, "#484e52/1.00", lay.cbW - 131, 50 * lay.cbText.lines, { pivot: 3, depth: 31 })]));
+  cb.children.push(
+    node(
+      "Label",
+      [131, 0],
+      [
+        label(lay.cbText.text, lay.cbText.fs, "#484e52/1.00", lay.cbW - 131, 50 * lay.cbText.lines, {
+          pivot: 3,
+          depth: 31,
+        }),
+      ],
+    ),
+  );
   menubar.children.push(cb);
   return menu;
 }

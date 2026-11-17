@@ -46,8 +46,11 @@ def _r(value: float, digits: int = 5) -> float:
 
 def _trs(t: Mapping[str, Any]) -> dict:
     p, q, s = t["m_LocalPosition"], t["m_LocalRotation"], t["m_LocalScale"]
-    return {"p": [_r(p.get(k, 0.0)) for k in "xyz"], "q": [_r(q.get(k, 0.0 if k != "w" else 1.0), 7) for k in "xyzw"],
-            "s": [_r(s.get(k, 1.0)) for k in "xyz"]}
+    return {
+        "p": [_r(p.get(k, 0.0)) for k in "xyz"],
+        "q": [_r(q.get(k, 0.0 if k != "w" else 1.0), 7) for k in "xyzw"],
+        "s": [_r(s.get(k, 1.0)) for k in "xyz"],
+    }
 
 
 def binding_dims(binding: Mapping[str, Any]) -> int:
@@ -67,8 +70,13 @@ def material_property(attribute: int, names: list[str]) -> tuple[str, int, int] 
     return None
 
 
-def clip(decoded: Any, bindings: list[Mapping[str, Any]], loop: bool, paths: Mapping[int, int],
-         renderer_of: Mapping[int, tuple[int, list[str]]]) -> dict | None:
+def clip(
+    decoded: Any,
+    bindings: list[Mapping[str, Any]],
+    loop: bool,
+    paths: Mapping[int, int],
+    renderer_of: Mapping[int, tuple[int, list[str]]],
+) -> dict | None:
     """One Animator clip's tracks (see the module docstring). decoded: model.decode_clip's result; paths: crc32 of a
     path below the Animator's GameObject ("" for itself) -> node; renderer_of: node -> (renderer index, its material
     property names). Bindings to other components are left out. None when nothing is left."""
@@ -105,8 +113,12 @@ def clip(decoded: Any, bindings: list[Mapping[str, Any]], loop: bool, paths: Map
     return {"duration": _r(decoded.duration, 5), "rate": _r(rate, 4), "loop": 1 if loop else 0, "tracks": tracks}
 
 
-def build(nodes: list[dict], skeleton_of_go: Callable[[int], str | None], data_scale: Callable[[str], float],
-          resolve: Callable[[str, int, dict], Any] | None) -> dict:
+def build(
+    nodes: list[dict],
+    skeleton_of_go: Callable[[int], str | None],
+    data_scale: Callable[[str], float],
+    resolve: Callable[[str, int, dict], Any] | None,
+) -> dict:
     """The mesh renderers and their Animators' clips of a prefab walk (lobby.read_prefab nodes): {"renderers",
     "clips", "materials", "textures", "meshes"} (the last three as particles.build's). resolve(kind, owner, pointer)
     reads a "material", a "mesh" (("quad", None) for the built-in Quad) and an "animator" controller (its default
@@ -128,8 +140,12 @@ def build(nodes: list[dict], skeleton_of_go: Callable[[int], str | None], data_s
         materials = mr.get("m_Materials") or []
         mat = resolve("material", mr_pid, materials[0]) if materials and materials[0].get("m_PathID") else None
         if mesh is None or mat is None or not mat[1].get("program"):
-            logger.debug("Mesh renderer %s left out (mesh %s, material %s)", n["path"], mesh and mesh[0],
-                         mat and mat[1].get("shader"))
+            logger.debug(
+                "Mesh renderer %s left out (mesh %s, material %s)",
+                n["path"],
+                mesh and mesh[0],
+                mat and mat[1].get("shader"),
+            )
             continue
         mesh_id, mesh_data = mesh
         if mesh_data is not None:
@@ -146,14 +162,27 @@ def build(nodes: list[dict], skeleton_of_go: Callable[[int], str | None], data_s
                 chain.append(cur)
                 cur = by_go.get(cur["parent"])
             chain.reverse()
-        renderer_of[i] = (len(out["renderers"]), sorted(set(material.get("floats", {})) | set(material.get("colors", {}))))
-        out["renderers"].append({
-            "name": n["name"], "path": n["path"], "material": mat_id, "mesh": mesh_id, "queue": material.get("queue", 3000),
-            # the sorting layer's value (particles.build "sortingLayer"), which Unity sorts by first; its id
-            "sortingLayer": int(mr.get("m_SortingLayer", 0)), "order": int(mr.get("m_SortingOrder", 0)),
-            "layer": int(mr.get("m_SortingLayerID", 0)),
-            "z": _r(n["m3"][11]), "anchor": anchor, "static": particles.rounded(n["m3"]),
-            "chain": [{"node": index_of[c["go"]], **_trs(c["t"])} for c in chain]})
+        renderer_of[i] = (
+            len(out["renderers"]),
+            sorted(set(material.get("floats", {})) | set(material.get("colors", {}))),
+        )
+        out["renderers"].append(
+            {
+                "name": n["name"],
+                "path": n["path"],
+                "material": mat_id,
+                "mesh": mesh_id,
+                "queue": material.get("queue", 3000),
+                # the sorting layer's value (particles.build "sortingLayer"), which Unity sorts by first; its id
+                "sortingLayer": int(mr.get("m_SortingLayer", 0)),
+                "order": int(mr.get("m_SortingOrder", 0)),
+                "layer": int(mr.get("m_SortingLayerID", 0)),
+                "z": _r(n["m3"][11]),
+                "anchor": anchor,
+                "static": particles.rounded(n["m3"]),
+                "chain": [{"node": index_of[c["go"]], **_trs(c["t"])} for c in chain],
+            }
+        )
     if not out["renderers"]:
         return out
     # the Animators over them: paths below the Animator's GameObject, as crc32 of "child/grandchild" ("" itself)

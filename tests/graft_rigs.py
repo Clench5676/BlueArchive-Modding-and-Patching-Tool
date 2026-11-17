@@ -76,6 +76,7 @@ def remove_slot(data: bytes, name: str):
 
 # --- synthetic binary skeletons (the 4.2 layout bmpt.spine_binary walks)
 
+
 def _varint(value: int) -> bytes:
     return varint_bytes(value)
 
@@ -89,6 +90,7 @@ def _text(value: str | None) -> bytes:
 
 def _floats(*values: float) -> bytes:
     import struct
+
     return struct.pack(f">{len(values)}f", *values)
 
 
@@ -97,12 +99,26 @@ def region(x=0.0, y=0.0, w=4.0, h=4.0, rotation=None, path=None) -> dict:
 
 
 def mesh(vertices, uvs, triangles, hull=None, path=None) -> dict:
-    return {"kind": "mesh", "vertices": vertices, "uvs": uvs, "triangles": triangles,
-            "hull": len(vertices) // 2 if hull is None else hull, "path": path}
+    return {
+        "kind": "mesh",
+        "vertices": vertices,
+        "uvs": uvs,
+        "triangles": triangles,
+        "hull": len(vertices) // 2 if hull is None else hull,
+        "path": path,
+    }
 
 
-def skeleton(*, bones=(("root", None),), slots=(("face", "root", None),), skin=None, animations=(),
-             nonessential=False, bone_floats=None, events=()) -> bytes:
+def skeleton(
+    *,
+    bones=(("root", None),),
+    slots=(("face", "root", None),),
+    skin=None,
+    animations=(),
+    nonessential=False,
+    bone_floats=None,
+    events=(),
+) -> bytes:
     """A binary 4.2 skeleton: ``bones`` (name, parent), ``slots`` (name, bone, setup attachment), ``skin`` {slot:
     [(key, attachment)]} for the default skin, ``events`` (name, or (name, audio path)), ``animations`` [(name,
     {slot: [attachment, ...]}, [draw-order frames as slot orders], optionally [events it fires])]."""

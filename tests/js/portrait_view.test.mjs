@@ -3,17 +3,18 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import {
-  CHARACTER_POS, SKELETON_SCALE, portraitViewport, stagePoint,
-} from "../../src/bmpt/web/js/portrait-view.js";
+import { CHARACTER_POS, SKELETON_SCALE, portraitViewport, stagePoint } from "../../src/bmpt/web/js/portrait-view.js";
 
-const S = 1920 / 2960;          // stage px per prefab unit (util.js)
-const ORIGIN = [960, 515];      // the detail screen's prefab centre on the stage (detail.js)
+const S = 1920 / 2960; // stage px per prefab unit (util.js)
+const ORIGIN = [960, 515]; // the detail screen's prefab centre on the stage (detail.js)
 const STAGE = { left: 0, top: 0, width: 1920, height: 1080 };
 const NODE = { name: "CharacterPos", pos: [-738, -746], scale: [101, 101] };
 const K = 101 * SKELETON_SCALE * S; // stage px per skeleton unit
 const near = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b}`);
-const nearPt = (p, q, eps = 1e-6) => { near(p[0], q[0], eps); near(p[1], q[1], eps); };
+const nearPt = (p, q, eps = 1e-6) => {
+  near(p[0], q[0], eps);
+  near(p[1], q[1], eps);
+};
 
 test("the skeleton's origin lands on CharacterPos, a unit is the node's scale", () => {
   const view = portraitViewport(NODE, { origin: ORIGIN, s: S, box: STAGE });
@@ -35,7 +36,8 @@ test("one scale across and down, at any device pixel ratio and box", () => {
     for (const dpr of [1, 1.25, 2, 3]) {
       const o = stagePoint(view, box, 0, 0, dpr);
       nearPt(o, ref, 1e-3); // the same place whatever the box
-      const right = stagePoint(view, box, 1000, 0, dpr), up = stagePoint(view, box, 0, 1000, dpr);
+      const right = stagePoint(view, box, 1000, 0, dpr),
+        up = stagePoint(view, box, 0, 1000, dpr);
       near(right[0] - o[0], 1000 * K, 1e-3);
       near(o[1] - up[1], 1000 * K, 1e-3);
       near(right[1], o[1], 1e-6);

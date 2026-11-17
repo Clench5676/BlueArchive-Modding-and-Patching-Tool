@@ -8,7 +8,9 @@
 // cssUrls('url("a"), url(b)') -> ["a", "b"]: the URLs in a CSS image value (an element's style.backgroundImage)
 export function cssUrls(value) {
   const out = [];
-  for (const m of String(value || "").matchAll(/url\(\s*(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|([^)"'\s]*))\s*\)/g)) {
+  for (const m of String(value || "").matchAll(
+    /url\(\s*(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|([^)"'\s]*))\s*\)/g,
+  )) {
     const url = (m[1] ?? m[2] ?? m[3] ?? "").replace(/\\(.)/g, "$1");
     if (url) out.push(url);
   }
@@ -38,22 +40,34 @@ export function imageDecoder(create, { maxBytes = 32 * 1024 * 1024, maxEntries =
   };
   return (url) => {
     let entry = images.get(url);
-    if (entry) { images.delete(url); images.set(url, entry); }
-    else {
+    if (entry) {
+      images.delete(url);
+      images.set(url, entry);
+    } else {
       const image = create();
       image.src = url;
       entry = { image, pending: null, bytes: 0 };
       images.set(url, entry);
     }
     if (entry.pending) return entry.pending;
-    entry.pending = Promise.resolve().then(() => entry.image.decode()).then(() => {
-      bytes -= entry.bytes;
-      entry.bytes = Math.max(1, entry.image.naturalWidth || 0) * Math.max(1, entry.image.naturalHeight || 0) * 4;
-      bytes += entry.bytes;
-    }).catch((error) => {
-      if (images.get(url) === entry) { images.delete(url); bytes -= entry.bytes; }
-      throw error;
-    }).finally(() => { entry.pending = null; trim(); });
+    entry.pending = Promise.resolve()
+      .then(() => entry.image.decode())
+      .then(() => {
+        bytes -= entry.bytes;
+        entry.bytes = Math.max(1, entry.image.naturalWidth || 0) * Math.max(1, entry.image.naturalHeight || 0) * 4;
+        bytes += entry.bytes;
+      })
+      .catch((error) => {
+        if (images.get(url) === entry) {
+          images.delete(url);
+          bytes -= entry.bytes;
+        }
+        throw error;
+      })
+      .finally(() => {
+        entry.pending = null;
+        trim();
+      });
     return entry.pending;
   };
 }
@@ -61,16 +75,33 @@ export function imageDecoder(create, { maxBytes = 32 * 1024 * 1024, maxEntries =
 // Resolve true only when every picture decoded successfully. Failures settle
 // without hanging the screen, but must not publish an incomplete loading word.
 export function decodeAll(urls, decode, cap = Infinity, { signal } = {}) {
-  const all = Promise.all(urls.map((url) => Promise.resolve().then(() => decode(url)).then(() => true, () => false)))
-    .then((results) => results.every(Boolean));
+  const all = Promise.all(
+    urls.map((url) =>
+      Promise.resolve()
+        .then(() => decode(url))
+        .then(
+          () => true,
+          () => false,
+        ),
+    ),
+  ).then((results) => results.every(Boolean));
   if (!Number.isFinite(cap) && !signal) return all;
   let timer = 0;
   let cancel;
   const late = new Promise((resolve) => {
-    cancel = () => { clearTimeout(timer); resolve(false); };
-    if (signal?.aborted) { cancel(); return; }
+    cancel = () => {
+      clearTimeout(timer);
+      resolve(false);
+    };
+    if (signal?.aborted) {
+      cancel();
+      return;
+    }
     signal?.addEventListener("abort", cancel, { once: true });
     if (Number.isFinite(cap)) timer = setTimeout(resolve, Math.max(0, cap), false);
   });
-  return Promise.race([all, late]).finally(() => { clearTimeout(timer); signal?.removeEventListener("abort", cancel); });
+  return Promise.race([all, late]).finally(() => {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", cancel);
+  });
 }

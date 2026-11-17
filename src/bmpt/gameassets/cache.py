@@ -39,8 +39,14 @@ class AssetCache:
 
     KEEP_VERSIONS = 3
 
-    def __init__(self, resource_version: str = "", *, allowed: bool = False,
-                 max_bytes: int = 512 * 1024 * 1024, root: Path | None = None):
+    def __init__(
+        self,
+        resource_version: str = "",
+        *,
+        allowed: bool = False,
+        max_bytes: int = 512 * 1024 * 1024,
+        root: Path | None = None,
+    ):
         if max_bytes < 0:
             raise ValueError("max_bytes must be nonnegative")
         self.resource_version = resource_version
@@ -130,9 +136,15 @@ class AssetCache:
     def _retire_versions(self, current: Path) -> None:
         """Remove version folders beyond the most recently used ones, only inside the cache root."""
         try:
-            folders = [path for path in self.root.iterdir()
-                       if path != current and _VERSION_FOLDER.fullmatch(path.name)
-                       and not path.is_symlink() and not path.is_junction() and path.is_dir()]
+            folders = [
+                path
+                for path in self.root.iterdir()
+                if path != current
+                and _VERSION_FOLDER.fullmatch(path.name)
+                and not path.is_symlink()
+                and not path.is_junction()
+                and path.is_dir()
+            ]
         except OSError:
             logger.warning("Cannot list the asset cache folders", exc_info=True)
             return
@@ -144,7 +156,7 @@ class AssetCache:
                 return 0
 
         folders.sort(key=used, reverse=True)
-        for folder in folders[self.KEEP_VERSIONS - 1:]:
+        for folder in folders[self.KEEP_VERSIONS - 1 :]:
             try:
                 shutil.rmtree(folder)
             except OSError:
@@ -164,8 +176,16 @@ class AssetCache:
         self._items[token] = (value, size)
         self._bytes += size
 
-    def put(self, key: str, value: Any, *, version: str | None = None,
-            disk: bool = True, size: int | None = None, generation: int | None = None) -> None:
+    def put(
+        self,
+        key: str,
+        value: Any,
+        *,
+        version: str | None = None,
+        disk: bool = True,
+        size: int | None = None,
+        generation: int | None = None,
+    ) -> None:
         """Store an asset, atomically writing bytes to disk when permitted.
 
         Non-byte values need an explicit byte size, except Pillow images whose
@@ -238,7 +258,7 @@ class PreviewCache:
     Reads touch entries for LRU eviction, which also removes old resource versions.
     """
 
-    def __init__(self, root: Path, *, allowed: bool = False, max_bytes: int = 2 * 1024 ** 3):
+    def __init__(self, root: Path, *, allowed: bool = False, max_bytes: int = 2 * 1024**3):
         self.root = Path(root)
         devmode.check_read(self.root)
         if max_bytes < 0:
@@ -305,8 +325,8 @@ class PreviewCache:
                     raise ValueError("Oversized preview cache entry")
                 raw = path.read_bytes()
                 header = len(_PREVIEW_MAGIC)
-                value = raw[header + 32:]
-                if raw[:header] != _PREVIEW_MAGIC or raw[header:header + 32] != hashlib.sha256(value).digest():
+                value = raw[header + 32 :]
+                if raw[:header] != _PREVIEW_MAGIC or raw[header : header + 32] != hashlib.sha256(value).digest():
                     raise ValueError("Invalid preview cache checksum")
                 try:
                     os.utime(path, None)
@@ -477,10 +497,10 @@ def unpack_preview_files(data: bytes) -> dict[str, bytes]:
     """Read the private container without extracting any path to the filesystem."""
     if len(data) < 4:
         raise ValueError("Invalid preview container")
-    size, = struct.unpack_from("<I", data)
+    (size,) = struct.unpack_from("<I", data)
     if size > 1024 * 1024 or size > len(data) - 4:
         raise ValueError("Invalid preview directory")
-    directory = json.loads(data[4:4 + size])
+    directory = json.loads(data[4 : 4 + size])
     if not isinstance(directory, list) or len(directory) > 8192:
         raise ValueError("Invalid preview file count")
     base = 4 + size
@@ -489,8 +509,15 @@ def unpack_preview_files(data: bytes) -> dict[str, bytes]:
         if not isinstance(item, list) or len(item) != 3:
             raise ValueError("Invalid preview file")
         name, offset, length = item
-        if (not isinstance(name, str) or len(name) > 4096 or type(offset) is not int or type(length) is not int
-                or offset < 0 or length < 0 or offset + length > len(data) - base):
+        if (
+            not isinstance(name, str)
+            or len(name) > 4096
+            or type(offset) is not int
+            or type(length) is not int
+            or offset < 0
+            or length < 0
+            or offset + length > len(data) - base
+        ):
             raise ValueError("Invalid preview file bounds")
         if name in names:
             raise ValueError("Duplicate preview file")
@@ -504,5 +531,5 @@ def unpack_preview_files(data: bytes) -> dict[str, bytes]:
         if offset < end:
             raise ValueError("Overlapping preview files")
         end = offset + length
-    chunks = {part: data[base + part[0]:base + part[0] + part[1]] for part in parts}
+    chunks = {part: data[base + part[0] : base + part[0] + part[1]] for part in parts}
     return {name: chunks[part] for name, part in records}

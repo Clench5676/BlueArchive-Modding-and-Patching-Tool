@@ -28,9 +28,14 @@ logger = logging.getLogger(__name__)
 
 
 class Scanner:
-    def __init__(self, scan: Callable[[Callable[[], bool], bool], Any], *, allowed: Callable[[], bool],
-                 writer_busy: Callable[[], bool] = lambda: False,
-                 on_done: Callable[[Any, int], Any] | None = None):
+    def __init__(
+        self,
+        scan: Callable[[Callable[[], bool], bool], Any],
+        *,
+        allowed: Callable[[], bool],
+        writer_busy: Callable[[], bool] = lambda: False,
+        on_done: Callable[[Any, int], Any] | None = None,
+    ):
         self._scan = scan
         self._allowed = allowed
         self._writer_busy = writer_busy

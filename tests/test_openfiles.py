@@ -77,8 +77,9 @@ def test_remove_tree_gives_up_after_its_tries_and_ignores_a_missing_folder(tmp_p
     openfiles.remove_tree(tmp_path / "missing")
 
 
-def test_temporary_directory_logs_a_folder_it_cannot_remove_and_keeps_errors_from_its_block(tmp_path, monkeypatch,
-                                                                                            caplog):
+def test_temporary_directory_logs_a_folder_it_cannot_remove_and_keeps_errors_from_its_block(
+    tmp_path, monkeypatch, caplog
+):
     def refuse(path, **kwargs):
         raise PermissionError(32, "in use")
 
@@ -130,6 +131,7 @@ def _holders(path: Path) -> int:
     wanted, count = os.path.realpath(path), 0
     if sys.platform == "darwin":
         import fcntl
+
         for fd in map(int, os.listdir("/dev/fd")):
             try:
                 name = fcntl.fcntl(fd, fcntl.F_GETPATH, b"\0" * 1024).split(b"\0", 1)[0].decode()
@@ -145,8 +147,10 @@ def _holders(path: Path) -> int:
     return count
 
 
-@pytest.mark.skipif(not GAME_DIR.is_dir() or sys.platform not in ("darwin", "linux"),
-                    reason="needs an official game folder and a way to list open files")
+@pytest.mark.skipif(
+    not GAME_DIR.is_dir() or sys.platform not in ("darwin", "linux"),
+    reason="needs an official game folder and a way to list open files",
+)
 def test_a_loaded_bundle_is_closed_once_loaded_and_still_reads_and_saves(tmp_path, no_automatic_collection):
     """A bundle the engine loaded by path holds no file of it, even before a garbage collection: Windows can replace,
     move or delete it at once (a game file shown in a preview, then written over by an apply)."""
@@ -154,15 +158,19 @@ def test_a_loaded_bundle_is_closed_once_loaded_and_still_reads_and_saves(tmp_pat
     from ba_modding_toolkit.bundle import Bundle
     from ba_modding_toolkit.searching import get_search_dirs
 
-    bundles = sorted((path for folder in get_search_dirs(GAME_DIR) for path in folder.glob("*.bundle")),
-                     key=lambda path: path.stat().st_size)
+    bundles = sorted(
+        (path for folder in get_search_dirs(GAME_DIR) for path in folder.glob("*.bundle")),
+        key=lambda path: path.stat().st_size,
+    )
     source = next(path for path in bundles if path.stat().st_size > 4096)
     copy = tmp_path / source.name
     shutil.copyfile(source, copy)
     bundle = Bundle.load(copy)
     assert bundle is not None and _holders(copy) == 0
     expected = UnityPy.load(copy.read_bytes())
-    assert [(o.path_id, o.type.name) for o in bundle.env.objects] == [(o.path_id, o.type.name) for o in expected.objects]
+    assert [(o.path_id, o.type.name) for o in bundle.env.objects] == [
+        (o.path_id, o.type.name) for o in expected.objects
+    ]
     assert all(obj.read() is not None for obj in bundle.env.objects)  # objects read from memory, after the close
     assert bundle.env.file.save() == expected.file.save()
     assert _holders(copy) == 0

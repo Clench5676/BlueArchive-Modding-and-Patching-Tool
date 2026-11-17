@@ -38,12 +38,12 @@ def aspect_rect(rect, edge, frame, minimum=(960, 540), dpi=96):
     return Rect(left, top, left + width, top + height)
 
 
-
 def private_user32():
     """user32 with prototypes of its own. ``ctypes.windll.user32`` is shared with pywebview, whose ``move`` passes
     ``None`` sizes to an unprototyped SetWindowPos; prototypes set there turn every one of those calls into
     ``ctypes.ArgumentError``."""
     return ctypes.WinDLL("user32", use_last_error=True)
+
 
 class WindowsHost:
     def __init__(self, window, owner, *, api=None, subclass_factory=None):
@@ -54,6 +54,7 @@ class WindowsHost:
 
     def dispatch(self, fn):
         from System import Action
+
         if self.form.InvokeRequired:
             self.form.BeginInvoke(Action(fn))
         else:
@@ -64,14 +65,23 @@ class WindowsHost:
         # resize borders and WebView client bounds remain owned by WinForms/Windows.
         self.user = self.user or private_user32()
         for name, arguments, result in (
-            ("GetWindowLongPtrW" if hasattr(self.user, "GetWindowLongPtrW") else "GetWindowLongW",
-             [wintypes.HWND, ctypes.c_int], ctypes.c_ssize_t),
+            (
+                "GetWindowLongPtrW" if hasattr(self.user, "GetWindowLongPtrW") else "GetWindowLongW",
+                [wintypes.HWND, ctypes.c_int],
+                ctypes.c_ssize_t,
+            ),
             ("GetMenu", [wintypes.HWND], wintypes.HMENU),
             ("GetWindowRect", [wintypes.HWND, ctypes.POINTER(wintypes.RECT)], wintypes.BOOL),
-            ("AdjustWindowRectExForDpi", [ctypes.POINTER(wintypes.RECT), wintypes.DWORD,
-                                        wintypes.BOOL, wintypes.DWORD, wintypes.UINT], wintypes.BOOL),
-            ("SetWindowPos", [wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int,
-                              ctypes.c_int, ctypes.c_int, wintypes.UINT], wintypes.BOOL),
+            (
+                "AdjustWindowRectExForDpi",
+                [ctypes.POINTER(wintypes.RECT), wintypes.DWORD, wintypes.BOOL, wintypes.DWORD, wintypes.UINT],
+                wintypes.BOOL,
+            ),
+            (
+                "SetWindowPos",
+                [wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.UINT],
+                wintypes.BOOL,
+            ),
             ("GetDpiForWindow", [wintypes.HWND], wintypes.UINT),
         ):
             function = getattr(self.user, name)
@@ -101,6 +111,7 @@ class WindowsHost:
 
     def _message_failed(self, error):
         from System import Action
+
         self.form.BeginInvoke(Action(lambda: self.owner.fail(error)))
 
     def dpi(self):
@@ -109,18 +120,24 @@ class WindowsHost:
     def frame_size(self):
         get_style = getattr(self.user, "GetWindowLongPtrW", None) or self.user.GetWindowLongW
         rect = wintypes.RECT(0, 0, 0, 0)
-        if not self.user.AdjustWindowRectExForDpi(ctypes.byref(rect), get_style(self.handle, -16),
-                                                 bool(self.user.GetMenu(self.handle)),
-                                                 get_style(self.handle, -20), self.dpi()):
+        if not self.user.AdjustWindowRectExForDpi(
+            ctypes.byref(rect),
+            get_style(self.handle, -16),
+            bool(self.user.GetMenu(self.handle)),
+            get_style(self.handle, -20),
+            self.dpi(),
+        ):
             raise OSError("Cannot measure the standard Windows frame")
         return rect.right - rect.left, rect.bottom - rect.top
 
     def _set_minimum(self):
         from System.Drawing import Size
+
         fw, fh = self.frame_size()
         minimum = self.window.min_size
-        self.form.MinimumSize = Size(math.ceil(minimum[0] * self.dpi() / 96) + fw,
-                                     math.ceil(minimum[1] * self.dpi() / 96) + fh)
+        self.form.MinimumSize = Size(
+            math.ceil(minimum[0] * self.dpi() / 96) + fw, math.ceil(minimum[1] * self.dpi() / 96) + fh
+        )
 
     def _fit_client(self, *, initial=False):
         if any(self.state().values()):
@@ -132,20 +149,36 @@ class WindowsHost:
         if initial:
             rect.right = rect.left + round(self.window.initial_width * self.dpi() / 96) + frame[0]
             rect.bottom = rect.top + round(self.window.initial_height * self.dpi() / 96) + frame[1]
-        corrected = aspect_rect(Rect(rect.left, rect.top, rect.right, rect.bottom), 2,
-                                frame, self.window.min_size, self.dpi())
-        if not self.user.SetWindowPos(self.handle, None, corrected.left, corrected.top,
-                                      corrected.right - corrected.left, corrected.bottom - corrected.top,
-                                      0x14):  # SWP_NOZORDER | SWP_NOACTIVATE
+        corrected = aspect_rect(
+            Rect(rect.left, rect.top, rect.right, rect.bottom), 2, frame, self.window.min_size, self.dpi()
+        )
+        if not self.user.SetWindowPos(
+            self.handle,
+            None,
+            corrected.left,
+            corrected.top,
+            corrected.right - corrected.left,
+            corrected.bottom - corrected.top,
+            0x14,
+        ):  # SWP_NOZORDER | SWP_NOACTIVATE
             raise OSError("Cannot set the Windows client aspect ratio")
 
     def message(self, code, wparam, lparam, default):
         if code == WM_SIZING and not any(self.state().values()):
             rect = wintypes.RECT.from_address(lparam)
-            corrected = aspect_rect(Rect(rect.left, rect.top, rect.right, rect.bottom), wparam,
-                                    self.frame_size(), self.window.min_size, self.dpi())
-            rect.left, rect.top, rect.right, rect.bottom = (corrected.left, corrected.top,
-                                                          corrected.right, corrected.bottom)
+            corrected = aspect_rect(
+                Rect(rect.left, rect.top, rect.right, rect.bottom),
+                wparam,
+                self.frame_size(),
+                self.window.min_size,
+                self.dpi(),
+            )
+            rect.left, rect.top, rect.right, rect.bottom = (
+                corrected.left,
+                corrected.top,
+                corrected.right,
+                corrected.bottom,
+            )
             return 1
         result = default()
         if code == WM_DPICHANGED:
@@ -157,8 +190,11 @@ class WindowsHost:
 
     def state(self):
         name = str(self.form.WindowState)
-        return {"maximized": name == "Maximized", "minimized": name == "Minimized",
-                "fullscreen": bool(self.form.is_fullscreen)}
+        return {
+            "maximized": name == "Maximized",
+            "minimized": name == "Minimized",
+            "fullscreen": bool(self.form.is_fullscreen),
+        }
 
     def measure(self, layout):
         # The standard caption is outside the WebView's client area.
@@ -166,11 +202,17 @@ class WindowsHost:
 
     def command(self, action):
         from System.Windows.Forms import FormWindowState
+
         if action == "fullscreen":
             self.window.toggle_fullscreen()
         else:
-            self.form.WindowState = (FormWindowState.Minimized if action == "minimize" else
-                                     FormWindowState.Normal if self.state()["maximized"] else FormWindowState.Maximized)
+            self.form.WindowState = (
+                FormWindowState.Minimized
+                if action == "minimize"
+                else FormWindowState.Normal
+                if self.state()["maximized"]
+                else FormWindowState.Maximized
+            )
 
     def dispose(self):
         if hasattr(self, "on_resize"):
@@ -198,17 +240,26 @@ class WindowSubclass:
         self.api = api or ctypes.windll.comctl32
         callback_type = callback_type or ctypes.WINFUNCTYPE
         self.handle, self.identifier = handle, id(self)
-        prototype = callback_type(ctypes.c_ssize_t, wintypes.HWND, wintypes.UINT,
-                                  ctypes.c_size_t, ctypes.c_ssize_t, ctypes.c_size_t, ctypes.c_size_t)
+        prototype = callback_type(
+            ctypes.c_ssize_t,
+            wintypes.HWND,
+            wintypes.UINT,
+            ctypes.c_size_t,
+            ctypes.c_ssize_t,
+            ctypes.c_size_t,
+            ctypes.c_size_t,
+        )
 
         def callback(hwnd, code, wparam, lparam, identifier, data):
             forwarded, result = False, 0
+
             def default():
                 nonlocal forwarded, result
                 if not forwarded:
                     result = self.api.DefSubclassProc(hwnd, code, wparam, lparam)
                     forwarded = True
                 return result
+
             try:
                 return message(code, wparam, lparam, default)
             except Exception as error:

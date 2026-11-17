@@ -35,17 +35,36 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from bmpt.catalog._data import base_rank, csv_entry, read_character_map
 from bmpt.catalog._names import (
-    LANGUAGES, SOURCE_LANGUAGES, NAMES, NAMING, apply_thai_names, clean, cn_aliases, cn_base, cn_words, compose,
-    csv_bases, csv_names, csv_sources, given_name, name_head, short_name, usable,
+    LANGUAGES,
+    SOURCE_LANGUAGES,
+    NAMES,
+    NAMING,
+    apply_thai_names,
+    clean,
+    cn_aliases,
+    cn_base,
+    cn_words,
+    compose,
+    csv_bases,
+    csv_names,
+    csv_sources,
+    given_name,
+    name_head,
+    short_name,
+    usable,
 )
 
 logger = logging.getLogger(__name__)
 
 PATH_ALIASES = {"shiroko_ridingsuit": "shiroko_cycling", "reizyo": "reijo"}
 PORTRAIT_ALIASES = {
-    "shiroko_ridingsuit": "Shiroko_ridingsuit", "saya_casual": "Saya_casual",
-    "izumi_swimsuit": "Izumi_swimsuit", "erika": "erika", "ch0219": "Ch0219",
-    "ch0355": "CH0355", "np0288": "CH0355_01",
+    "shiroko_ridingsuit": "Shiroko_ridingsuit",
+    "saya_casual": "Saya_casual",
+    "izumi_swimsuit": "Izumi_swimsuit",
+    "erika": "erika",
+    "ch0219": "Ch0219",
+    "ch0355": "CH0355",
+    "np0288": "CH0355_01",
 }
 STORY_ALIASES = {"hoshino_firstyear": "ch0241", "hoshino_terror": "np0186"}
 CORE_ALIASES = {"airi": ["airi0"]}
@@ -74,10 +93,13 @@ def load_schaledb(directory: Path) -> dict[str, dict[str, dict]]:
 def match_student(row: dict, students: dict[str, dict]) -> list[dict]:
     """Match file ids, shared dev forms, then localized given-name and skin pairs."""
     key = row["file_id"].lower()
-    matches = [student for student in students.values()
-               if key in (student["PathName"].lower(), student["DevName"].lower(),
-                          re.sub(r"_\d+$", "", student["DevName"].lower()))
-               or PATH_ALIASES.get(key) == student["PathName"].lower()]
+    matches = [
+        student
+        for student in students.values()
+        if key
+        in (student["PathName"].lower(), student["DevName"].lower(), re.sub(r"_\d+$", "", student["DevName"].lower()))
+        or PATH_ALIASES.get(key) == student["PathName"].lower()
+    ]
     if not matches and not row.get("spine_remark"):
         base = given_name(row.get("name_en", ""))
         full = compose(base, [row.get("skin_en", "")], "en")["full"]
@@ -112,13 +134,21 @@ def portrait_name(entry: dict, student: dict) -> str:
     stem = PORTRAIT_ALIASES.get(key)
     if stem is None:
         file_id = student["DevName"] if key.startswith("np") else entry["file_id"]
-        stem = file_id.upper() if re.fullmatch(r"CH\d+", file_id, re.I) else "_".join(
-            part.capitalize() for part in file_id.split("_"))
+        stem = (
+            file_id.upper()
+            if re.fullmatch(r"CH\d+", file_id, re.I)
+            else "_".join(part.capitalize() for part in file_id.split("_"))
+        )
     return f"Student_Portrait_{stem}_Collection"
 
 
-def build_catalog(csv_path: Path, schaledb: Path, names_path: Path | None = None,
-                  wiki_path: Path | None = None, variants_path: Path | None = None) -> dict:
+def build_catalog(
+    csv_path: Path,
+    schaledb: Path,
+    names_path: Path | None = None,
+    wiki_path: Path | None = None,
+    variants_path: Path | None = None,
+) -> dict:
     """Merge local source tables and return deterministic, asset-free metadata."""
     rows = read_character_map(csv_path)
     localized = load_schaledb(schaledb)
@@ -138,15 +168,24 @@ def build_catalog(csv_path: Path, schaledb: Path, names_path: Path | None = None
         matches[key] = student
         if len(found) > 1:
             conflicts.append({"type": "shared_skeleton", "key": key, "schale_ids": [s["Id"] for s in found]})
-        entry.update(playable=True, kind="playable", bg=student.get("CollectionBG"),
-                     portrait=portrait_name(entry, student), school=student.get("School"),
-                     schale_id=student["Id"], order=student.get("DefaultOrder", student["Id"]))
+        entry.update(
+            playable=True,
+            kind="playable",
+            bg=student.get("CollectionBG"),
+            portrait=portrait_name(entry, student),
+            school=student.get("School"),
+            schale_id=student["Id"],
+            order=student.get("DefaultOrder", student["Id"]),
+        )
         # per-server release, used at runtime when the install has no collection portrait for the variant
         flags = student.get("IsReleased") or []
         if flags:
             entry["released"] = {server: bool(flags[i]) for server, i in RELEASE_INDEX.items() if i < len(flags)}
-        aliases = {student["PathName"].lower(), student["DevName"].lower(),
-                   re.sub(r"_\d+$", "", student["DevName"].lower())}
+        aliases = {
+            student["PathName"].lower(),
+            student["DevName"].lower(),
+            re.sub(r"_\d+$", "", student["DevName"].lower()),
+        }
         aliases.update(CORE_ALIASES.get(key, []))
         entry["core_aliases"] = sorted(aliases - {key})
         entry["fallbacks"] = {}
@@ -165,8 +204,7 @@ def build_catalog(csv_path: Path, schaledb: Path, names_path: Path | None = None
     # Research keys are descriptive; runtime keys always come from file ids.
     research = {key: key for key in entries}
     research.update({alias: key for key, entry in entries.items() for alias in entry.get("core_aliases", [])})
-    research.update({re.sub(r"_(tank|dealer)$", "", alias): key
-                     for alias, key in list(research.items())})
+    research.update({re.sub(r"_(tank|dealer)$", "", alias): key for alias, key in list(research.items())})
     research.update({key: value for key, value in STORY_ALIASES.items() if value in entries})
     for key in NAMING["story_parts"]:
         tail = key.rsplit("_", 1)[-1]
@@ -175,24 +213,35 @@ def build_catalog(csv_path: Path, schaledb: Path, names_path: Path | None = None
     family_overrides = {}
     for family in curated.get("families", []):
         variants = family["variants"]
-        base_variant = next((variant for variant in variants if variant["kind"] == "playable"
-                             and not variant.get("kivoSkin")), variants[0])
+        base_variant = next(
+            (variant for variant in variants if variant["kind"] == "playable" and not variant.get("kivoSkin")),
+            variants[0],
+        )
         base_key = base_variant["sprFile"].lower().removesuffix("_spr")
         if base_key not in entries:
             conflicts.append({"type": "missing_curated_base", "key": base_key})
             continue
         sid = str(entries[base_key]["student_id"])
-        family_overrides[sid] = {"base": base_key, "names": names.get("families", {}).get(family["base"]),
-                                 "school": family.get("schoolKey")}
+        family_overrides[sid] = {
+            "base": base_key,
+            "names": names.get("families", {}).get(family["base"]),
+            "school": family.get("schoolKey"),
+        }
         for index, variant in enumerate(variants):
             key = variant["sprFile"].lower().removesuffix("_spr")
             research[variant["key"]] = key
             if key not in entries:
                 entries[key] = csv_entry({"file_id": variant["sprFile"].removesuffix("_spr"), "student_id": sid})
             entry = entries[key]
-            entry.update(student_id=sid, kind=variant["kind"], playable=variant["kind"] == "playable",
-                         bg=variant.get("collectionBG"), school=family.get("schoolKey"),
-                         research_key=variant["key"], research_order=variant.get("releaseOrder", index))
+            entry.update(
+                student_id=sid,
+                kind=variant["kind"],
+                playable=variant["kind"] == "playable",
+                bg=variant.get("collectionBG"),
+                school=family.get("schoolKey"),
+                research_key=variant["key"],
+                research_order=variant.get("releaseOrder", index),
+            )
             if variant.get("rosterPortraitSource") == "collection":
                 entry["portrait"] = Path(variant["rosterPortrait"]).stem
             else:
@@ -205,8 +254,11 @@ def build_catalog(csv_path: Path, schaledb: Path, names_path: Path | None = None
     for key, entry in entries.items():
         grouped[str(entry["student_id"])].append(key)
     students = {}
-    school_ids = {row_map[key].get("school_id"): entry["school"] for key, entry in entries.items()
-                  if entry["playable"] and key in row_map and entry["school"]}
+    school_ids = {
+        row_map[key].get("school_id"): entry["school"]
+        for key, entry in entries.items()
+        if entry["playable"] and key in row_map and entry["school"]
+    }
     for sid, keys in sorted(grouped.items()):
         override = family_overrides.get(sid, {})
         base_key = override.get("base") or min(keys, key=lambda key: base_rank(entries[key]))
@@ -220,7 +272,9 @@ def build_catalog(csv_path: Path, schaledb: Path, names_path: Path | None = None
                 source = localized[lang].get(str(schale_base["Id"]), {})
                 bases[lang] = clean(source.get("PersonalName") or bases[lang], lang)
         bases.update({lang: name for lang, name in (override.get("names") or {}).items() if lang in own})
-        school = override.get("school") or school_ids.get(row_map.get(base_key, {}).get("school_id")) or base_entry["school"]
+        school = (
+            override.get("school") or school_ids.get(row_map.get(base_key, {}).get("school_id")) or base_entry["school"]
+        )
         students[sid] = {"base": base_key, "names": bases, "school": school}
         pages = {entries[key].get("page_id"): entries[key] for key in keys if entries[key]["playable"]}
         for key in keys:
@@ -236,10 +290,17 @@ def build_catalog(csv_path: Path, schaledb: Path, names_path: Path | None = None
                 entry["kind"] = "extra-spr" if page else "npc"
                 entry["bg"] = (page or base_entry).get("bg")
         curated_playables = all("research_order" in entries[key] for key in keys if entries[key]["playable"])
-        ordered = sorted(keys, key=lambda key: (key != base_key, not entries[key]["playable"],
-                                                entries[key]["order"] if entries[key]["playable"] and
-                                                not curated_playables else
-                                                entries[key].get("research_order", float("inf")), key))
+        ordered = sorted(
+            keys,
+            key=lambda key: (
+                key != base_key,
+                not entries[key]["playable"],
+                entries[key]["order"]
+                if entries[key]["playable"] and not curated_playables
+                else entries[key].get("research_order", float("inf")),
+                key,
+            ),
+        )
         for order, key in enumerate(ordered):
             entries[key]["order"] = order
 
@@ -281,8 +342,10 @@ def build_catalog(csv_path: Path, schaledb: Path, names_path: Path | None = None
         for lang, full in value.get("proposed", {}).items():
             if lang == "zh-CN" and kivo(row_map.get(key)):
                 continue
-            entries[key]["names"][lang] = {"full": clean(full, lang),
-                                           "short": clean(value["proposedShort"][lang], lang)}
+            entries[key]["names"][lang] = {
+                "full": clean(full, lang),
+                "short": clean(value["proposedShort"][lang], lang),
+            }
             entries[key]["name_sources"][lang] = "curated"
     # naming.json's story names (the languages the research files lack, and the game's words where they have a
     # community one) win over both
@@ -303,14 +366,25 @@ def build_catalog(csv_path: Path, schaledb: Path, names_path: Path | None = None
     sources = Counter(source for entry in entries.values() for source in entry["name_sources"].values())
     fallback_count = sum(len(entry["fallbacks"]) for entry in entries.values())
     aliased = sum(1 for entry in entries.values() if entry.get("aliases"))
-    summary = {"kinds": dict(kinds), "names": dict(sources), "fallbacks": fallback_count,
-               "conflicts": conflicts, "aliases": aliased}
-    return {"version": 1, "students": students, "variants": entries, "summary": summary,
-            "rules": names.get("rules", {})}
+    summary = {
+        "kinds": dict(kinds),
+        "names": dict(sources),
+        "fallbacks": fallback_count,
+        "conflicts": conflicts,
+        "aliases": aliased,
+    }
+    return {
+        "version": 1,
+        "students": students,
+        "variants": entries,
+        "summary": summary,
+        "rules": names.get("rules", {}),
+    }
 
 
-def add_aliases(students: dict, entries: dict, row_map: dict, matches: dict, schale_cn: dict,
-                words: dict[str, str]) -> None:
+def add_aliases(
+    students: dict, entries: dict, row_map: dict, matches: dict, schale_cn: dict, words: dict[str, str]
+) -> None:
     """Give students and variants the CN server's names as "aliases" where they differ from the shown zh-CN.
 
     A student's server names come from its variants named by the base alone (not a Terror
@@ -338,8 +412,14 @@ def add_aliases(students: dict, entries: dict, row_map: dict, matches: dict, sch
     for key, entry in entries.items():
         sid = str(entry["student_id"])
         own = schale_cn.get(str(matches[key]["Id"]), {}).get("Name") if key in matches else None
-        aliases = cn_aliases(entry["names"]["zh-CN"]["full"], students[sid]["names"]["zh-CN"], server[sid], words,
-                             [heads[key]], [clean(own, "zh-CN")] if own else [])
+        aliases = cn_aliases(
+            entry["names"]["zh-CN"]["full"],
+            students[sid]["names"]["zh-CN"],
+            server[sid],
+            words,
+            [heads[key]],
+            [clean(own, "zh-CN")] if own else [],
+        )
         if aliases:
             entry["aliases"] = aliases
 
@@ -350,16 +430,24 @@ def validate_game(data: dict, directory: Path) -> list[dict[str, str]]:
     from ba_modding_toolkit.searching import get_search_dirs
 
     textures = set()
-    bundles = sorted({path for root in get_search_dirs(directory)
-                      for path in root.glob("uis-01_common-14_charactercollect-*.bundle")})
+    bundles = sorted(
+        {
+            path
+            for root in get_search_dirs(directory)
+            for path in root.glob("uis-01_common-14_charactercollect-*.bundle")
+        }
+    )
     if not bundles:
         logger.warning("No collection bundles found in %s", directory)
     for path in bundles:
         environment = UnityPy.load(str(path))
         textures.update(obj.peek_name().lower() for obj in environment.objects if obj.type.name == "Texture2D")
-    mismatches = [{"key": key, "field": field, "name": entry[field]}
-                  for key, entry in sorted(data["variants"].items()) for field in ("bg", "portrait")
-                  if entry.get(field) and entry[field].lower() not in textures]
+    mismatches = [
+        {"key": key, "field": field, "name": entry[field]}
+        for key, entry in sorted(data["variants"].items())
+        for field in ("bg", "portrait")
+        if entry.get(field) and entry[field].lower() not in textures
+    ]
     for mismatch in mismatches:
         logger.warning("Collection mismatch: %s", json.dumps(mismatch, sort_keys=True))
     return mismatches
@@ -379,10 +467,15 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     data = build_catalog(args.csv, args.schaledb, args.names, args.wiki, args.variants)
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n",
-                        encoding="utf-8")
-    logger.info("Catalog: %d students, %d variants; %s", len(data["students"]), len(data["variants"]),
-                json.dumps(data["summary"], sort_keys=True))
+    args.out.write_text(
+        json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8"
+    )
+    logger.info(
+        "Catalog: %d students, %d variants; %s",
+        len(data["students"]),
+        len(data["variants"]),
+        json.dumps(data["summary"], sort_keys=True),
+    )
     if args.game:
         mismatches = validate_game(data, args.game)
         logger.info("Collection validation: %d mismatches", len(mismatches))

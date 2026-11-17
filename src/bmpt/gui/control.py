@@ -21,8 +21,16 @@ import urllib.error
 import urllib.request
 from typing import Any, Callable, MutableMapping
 
-from ..webui.classic import (CONTROL_PATH, CONTROL_POLL, ENV_TOKEN, ENV_URL, REPORT_PATH, SHOW_FALLBACK, TOKEN_HEADER,
-                             iter_lines)
+from ..webui.classic import (
+    CONTROL_PATH,
+    CONTROL_POLL,
+    ENV_TOKEN,
+    ENV_URL,
+    REPORT_PATH,
+    SHOW_FALLBACK,
+    TOKEN_HEADER,
+    iter_lines,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +77,7 @@ class BusyCounter:
 
     def start_thread(self, target: Callable[..., Any], *args: Any) -> threading.Thread:
         """Start ``target(*args)`` on a daemon thread, counted from before it starts until it ends."""
+
         def run() -> None:
             try:
                 target(*args)
@@ -92,8 +101,15 @@ class ControlClient:
     """The HTTP side: a long-poll thread for the control lines and a sender thread for the reports. Never through a
     proxy: the web UI listens on 127.0.0.1."""
 
-    def __init__(self, url: str, token: str, *, opener: Any = None, poll_timeout: float = CONTROL_POLL + 10,
-                 retry_wait: float = 1.0):
+    def __init__(
+        self,
+        url: str,
+        token: str,
+        *,
+        opener: Any = None,
+        poll_timeout: float = CONTROL_POLL + 10,
+        retry_wait: float = 1.0,
+    ):
         self.url = url.rstrip("/")
         self.token = token
         self._opener = opener or urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -133,8 +149,9 @@ class ControlClient:
         if body is not None:
             data = json.dumps(body).encode("utf-8")
             headers["Content-Type"] = "application/json"
-        req = urllib.request.Request(self.url + path, data=data, headers=headers,
-                                     method="POST" if body is not None else "GET")
+        req = urllib.request.Request(
+            self.url + path, data=data, headers=headers, method="POST" if body is not None else "GET"
+        )
         with self._opener.open(req, timeout=self._poll_timeout) as resp:
             return json.loads(resp.read() or b"{}")
 
@@ -179,8 +196,16 @@ class ControlBridge:
     the busy count. ``app`` is the classic ``App`` (``tabs``, ``show_tab``, ``open_settings_dialog``, ``place_window``,
     ``raise_window``)."""
 
-    def __init__(self, root: Any, app: Any, client: ControlClient, *, counter: BusyCounter = busy,
-                 pump_ms: int = PUMP_MS, show_after_ms: int = int(SHOW_FALLBACK * 1000)):
+    def __init__(
+        self,
+        root: Any,
+        app: Any,
+        client: ControlClient,
+        *,
+        counter: BusyCounter = busy,
+        pump_ms: int = PUMP_MS,
+        show_after_ms: int = int(SHOW_FALLBACK * 1000),
+    ):
         self.root = root
         self.app = app
         self.client = client

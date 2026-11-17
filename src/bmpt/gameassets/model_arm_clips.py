@@ -1,4 +1,5 @@
 """Lossless streamed arm-curve replacement and slot-local clip copies."""
+
 from __future__ import annotations
 
 import pickle
@@ -102,11 +103,13 @@ def encode_rotations(tree, rotations):
     for a, (_, _, values) in enumerate(added):
         for f, t in enumerate(times):
             slope = (values[f + 1] - values[f]) / (times[f + 1] - t) if f + 1 < len(times) else np.zeros(4)
-            frames.setdefault(float(t), []).extend((arm_start + 4 * a + k, 0., 0., float(slope[k]), float(values[f, k]))
-                                                    for k in range(4))
-        frames[float("-inf")].extend((arm_start + 4 * a + k, 0., 0., 0., float(values[0, k])) for k in range(4))
-    data["m_StreamedClip"]["data"] = encode_streamed((t, sorted(keys, key=lambda key: key[0]))
-                                                  for t, keys in sorted(frames.items()))
+            frames.setdefault(float(t), []).extend(
+                (arm_start + 4 * a + k, 0.0, 0.0, float(slope[k]), float(values[f, k])) for k in range(4)
+            )
+        frames[float("-inf")].extend((arm_start + 4 * a + k, 0.0, 0.0, 0.0, float(values[0, k])) for k in range(4))
+    data["m_StreamedClip"]["data"] = encode_streamed(
+        (t, sorted(keys, key=lambda key: key[0])) for t, keys in sorted(frames.items())
+    )
     data["m_StreamedClip"]["curveCount"] = new_ns
     dense = data["m_DenseClip"]
     old_dense = np.asarray(dense["m_SampleArray"]).reshape(dense["m_FrameCount"], nd)
@@ -130,11 +133,11 @@ def encode_rotations(tree, rotations):
     if reference:
         if len(reference) != total:
             raise ValueError("clip reference pose and curves differ")
-        moved_ref = [0.] * cursor
+        moved_ref = [0.0] * cursor
         for old, new in mapping.items():
             moved_ref[new] = reference[old]
         for a, (_, _, values) in enumerate(added):
-            moved_ref[arm_start + 4 * a:arm_start + 4 * a + 4] = values[0].tolist()
+            moved_ref[arm_start + 4 * a : arm_start + 4 * a + 4] = values[0].tolist()
         muscle["m_ValueArrayReferencePose"] = moved_ref
     tree["m_ClipBindingConstant"]["genericBindings"] = generic
     tree["m_MuscleClipSize"] = ms.muscle_size(tree)
@@ -163,12 +166,19 @@ def edit_error(before, after, rotations):
             same = old is new if old is None or new is None else np.array_equal(old, new, equal_nan=True)
             if not same:
                 return f"curve {index + k} changed"
-            delta0 = before['m_MuscleClip']['m_ValueArrayDelta'][index + k]
-            delta1 = after['m_MuscleClip']['m_ValueArrayDelta'][found[0] + k]
-            if not np.array_equal([delta0['m_Start'], delta0['m_Stop']], [delta1['m_Start'], delta1['m_Stop']], equal_nan=True):
+            delta0 = before["m_MuscleClip"]["m_ValueArrayDelta"][index + k]
+            delta1 = after["m_MuscleClip"]["m_ValueArrayDelta"][found[0] + k]
+            if not np.array_equal(
+                [delta0["m_Start"], delta0["m_Stop"]], [delta1["m_Start"], delta1["m_Stop"]], equal_nan=True
+            ):
                 return f"curve {index + k} value delta changed"
-    arm_indices = {matches[0][0] + k for path in rotations for matches in [by_binding.get((path, 4, 2, 0))]
-                   if matches for k in range(4)}
+    arm_indices = {
+        matches[0][0] + k
+        for path in rotations
+        for matches in [by_binding.get((path, 4, 2, 0))]
+        if matches
+        for k in range(4)
+    }
     _, sampled = sample_curves(after, arm_indices)
     for path, expected in rotations.items():
         matches = by_binding.get((path, 4, 2, 0))
@@ -199,6 +209,7 @@ def receivers(graph, skeleton, prefabs):
             found[_key(controller)] = controller
     # Field prefabs may have separate behaviours for the same slot.
     from .model_adapt import Skeleton
+
     for prefab in prefabs.values():
         sk = skeleton if prefab.deref() is skeleton.nodes[0].go else Skeleton.of(graph, prefab.deref())
         for behaviour in sk.behaviours:
@@ -214,6 +225,7 @@ def repoint(tree, owner, copies, writer):
         for pair in tree["m_Clips"]:
             effective = pair["m_OverrideClip"] if pair["m_OverrideClip"].get("m_PathID") else pair["m_OriginalClip"]
             from .model_adapt import _cab
+
             replacement = copies.get((_cab(owner.assets_file, effective["m_FileID"]), effective["m_PathID"]))
             if replacement is not None:
                 cab, pid = replacement
@@ -221,6 +233,7 @@ def repoint(tree, owner, copies, writer):
                 changed = True
     else:
         from .model_adapt import _cab
+
         for i, ptr in enumerate(tree.get("animationClips", [])):
             replacement = copies.get((_cab(owner.assets_file, ptr["m_FileID"]), ptr["m_PathID"]))
             if replacement is not None:
@@ -237,26 +250,33 @@ def write_copies(writer, changes, destinations, holders, skeleton, clip_skirts, 
     frames without adding locks or workers.
     """
     from . import model_adapt as ma
+
     if not changes:
         return {}
     referenced = set()
     for holder in holders:
         tree = holder.read_typetree()
-        pointers = ([p["m_OverrideClip"] if p["m_OverrideClip"].get("m_PathID") else p["m_OriginalClip"]
-                     for p in tree["m_Clips"]] if holder.type.name == "AnimatorOverrideController"
-                    else tree.get("animationClips", []))
+        pointers = (
+            [
+                p["m_OverrideClip"] if p["m_OverrideClip"].get("m_PathID") else p["m_OriginalClip"]
+                for p in tree["m_Clips"]
+            ]
+            if holder.type.name == "AnimatorOverrideController"
+            else tree.get("animationClips", [])
+        )
         referenced.update((ma._cab(holder.assets_file, p["m_FileID"]), p["m_PathID"]) for p in pointers)
     missing = set(changes) - referenced
     if missing:
-        raise ma.refuse("arm clip receiver not identified", clips=[changes[k].clip.peek_name() for k in sorted(missing)])
+        raise ma.refuse(
+            "arm clip receiver not identified", clips=[changes[k].clip.peek_name() for k in sorted(missing)]
+        )
     copies = {}
     for key, change in changes.items():
         step()
         tree = clone_tree(change.tree)
         before_arms = ma.clip_snapshot(tree)
         # the chains the clip's original would get (swinging roots, or hair carrying the slot's own lock keys)
-        skirts = [s for s in clip_skirts.get(key, [])
-                  if s.solver.roots or getattr(s.solver, "carry", None) is not None]
+        skirts = [s for s in clip_skirts.get(key, []) if s.solver.roots or getattr(s.solver, "carry", None) is not None]
         for skirt in skirts:
             # Cached hem probes sampled the uncorrected arms. Recompute added
             # chains on this corrected clip so their arm anchors follow it.
@@ -279,8 +299,9 @@ def write_copies(writer, changes, destinations, holders, skeleton, clip_skirts, 
         pid = writer.add_like(sf, change.clip, tree)
         obj = sf.objects[pid]
         read_back = ma.saved_tree(obj)
-        problem = edit_error(ma.saved_tree(change.clip) if change.clip.data else change.clip.read_typetree(),
-                             read_back, change.rotations)
+        problem = edit_error(
+            ma.saved_tree(change.clip) if change.clip.data else change.clip.read_typetree(), read_back, change.rotations
+        )
         if problem:
             raise ma.refuse("arm clip edit not verified", clip=change.clip.peek_name(), what=problem)
         copies[key] = (cab, pid)
@@ -302,7 +323,7 @@ def write_copies(writer, changes, destinations, holders, skeleton, clip_skirts, 
             for entry, (_, info) in enumerate(tree["m_Container"]):
                 begin, count = info["preloadIndex"], info["preloadSize"]
                 extra = []
-                for ptr in tree["m_PreloadTable"][begin:begin + count]:
+                for ptr in tree["m_PreloadTable"][begin : begin + count]:
                     replacement = copies.get((ma._cab(sf, ptr["m_FileID"]), ptr["m_PathID"]))
                     if replacement is not None:
                         cab, pid = replacement
@@ -318,7 +339,7 @@ def write_copies(writer, changes, destinations, holders, skeleton, clip_skirts, 
 def clip_times(tree):
     muscle = tree["m_MuscleClip"]
     start, stop = muscle["m_StartTime"], muscle["m_StopTime"]
-    rate = tree.get("m_SampleRate") or 30.
+    rate = tree.get("m_SampleRate") or 30.0
     return [start + f / rate for f in range(max(1, round((stop - start) * rate) + 1))]
 
 
@@ -339,8 +360,9 @@ def _streamed_keys(words):
         counts.append(count)
         pos += 2 + 5 * count
     starts, counts = np.array(starts, int), np.array(counts, int)
-    first = (np.repeat(starts + 2, counts)
-             + 5 * (np.arange(counts.sum()) - np.repeat(np.cumsum(counts) - counts, counts)))
+    first = np.repeat(starts + 2, counts) + 5 * (
+        np.arange(counts.sum()) - np.repeat(np.cumsum(counts) - counts, counts)
+    )
     times = np.repeat(w[starts].view("<f4").astype(float), counts)
     index = w[first].view("<i4")
     coefs = w[first[:, None] + np.arange(1, 5)].view("<f4")
@@ -418,13 +440,13 @@ def stored_curves(tree):
     times all frames. Added dense curves cannot mask a changed original key.
     """
     data, ns, nd = _layout(tree)
-    out = _streamed_records(data['m_StreamedClip']['data'])
-    dense = data['m_DenseClip']
+    out = _streamed_records(data["m_StreamedClip"]["data"])
+    dense = data["m_DenseClip"]
     if nd:
-        samples = np.array(dense['m_SampleArray']).reshape(dense['m_FrameCount'], nd)
-        grid = [dense['m_BeginTime'], dense['m_SampleRate'], dense['m_FrameCount']]
+        samples = np.array(dense["m_SampleArray"]).reshape(dense["m_FrameCount"], nd)
+        grid = [dense["m_BeginTime"], dense["m_SampleRate"], dense["m_FrameCount"]]
         for k in range(nd):
             out[ns + k] = np.r_[grid, samples[:, k]]
-    for k, value in enumerate(data['m_ConstantClip']['data']):
+    for k, value in enumerate(data["m_ConstantClip"]["data"]):
         out[ns + nd + k] = np.array([value])
     return out

@@ -29,7 +29,8 @@ import { COLOUR, SPACE, TYPE } from "./ui-tokens.js";
 
 // a held entry's line (the switch help's Details): Go To closes the message with "go:<mod id>", Update and Apply with
 // "fix:<mod id>"
-export const GO = "go:", FIX = "fix:";
+export const GO = "go:",
+  FIX = "fix:";
 export const ITEM = Object.freeze({ marker: "\u2022", markerGap: 44, indent: 52 });
 export const WIDTH = 2098;
 // what changed in a mod's official parts, under its line: the dense type, held close to the line it belongs to (a
@@ -44,14 +45,19 @@ export function changeText(mod, sep = T("mods.impact.sep")) {
   const c = mod?.changes || {};
   const parts = [];
   if (c.repacked) parts.push(T("mods.impact.change.repacked"));
-  if (c.animations > 0) parts.push(c.animations === 1 ? T("mods.impact.change.animation") : T("mods.impact.change.animations", { n: c.animations }));
+  if (c.animations > 0)
+    parts.push(
+      c.animations === 1 ? T("mods.impact.change.animation") : T("mods.impact.change.animations", { n: c.animations }),
+    );
   if (c.rig) parts.push(T("mods.impact.change.rig"));
   if (c.textures && !c.repacked) parts.push(T("mods.impact.change.textures"));
   if (c.removed) parts.push(T("mods.impact.change.removed"));
   if (c.added) parts.push(T("mods.impact.change.added"));
   if (!parts.length) return "";
   const changes = parts.join(sep);
-  return mod.kind === "other" ? T("mods.impact.officialFiles", { changes }) : T("mods.impact.official", { kind: T(kindKey(mod.kind)), changes });
+  return mod.kind === "other"
+    ? T("mods.impact.officialFiles", { changes })
+    : T("mods.impact.official", { kind: T(kindKey(mod.kind)), changes });
 }
 
 // modName(mod, nameOf): "student - kind - mod name" (the mod's own name left out where it only repeats the student's),
@@ -69,9 +75,17 @@ export function modName(mod, nameOf = (e) => e?.variant || e?.core || "") {
 export function modLines(mod, nameOf, { indent = ITEM.indent, marker = true, fix = false } = {}) {
   const page = mod?.id && mod.kind !== "other" && mod.target;
   const repair = fix && mod?.id ? [{ label: T("mods.impact.fix"), fn: ({ close }) => close(`${FIX}${mod.id}`) }] : [];
-  const go = page ? { button: { label: T("add.go"), inline: true, fn: ({ close }) => close(`${GO}${mod.id}`) }, more: repair }
-    : repair.length ? { button: { ...repair[0], inline: true } } : {};
-  const line = { text: modName(mod, nameOf), indent, ...(marker ? { marker: ITEM.marker, markerGap: ITEM.markerGap } : {}), ...go };
+  const go = page
+    ? { button: { label: T("add.go"), inline: true, fn: ({ close }) => close(`${GO}${mod.id}`) }, more: repair }
+    : repair.length
+      ? { button: { ...repair[0], inline: true } }
+      : {};
+  const line = {
+    text: modName(mod, nameOf),
+    indent,
+    ...(marker ? { marker: ITEM.marker, markerGap: ITEM.markerGap } : {}),
+    ...go,
+  };
   const change = changeText(mod);
   return change ? [line, { text: change, indent, ...DETAIL }] : [line];
 }
@@ -86,12 +100,18 @@ export function reappliable(entries, result) {
 }
 
 // the mods a drift prompt's entries are configured with ("mod:<id>"), for mods.impact {ids}
-export const configuredMods = (entries) => [...new Set((entries || []).map((e) => /^mod:(.+)$/.exec(e?.configured || "")?.[1]).filter(Boolean))];
+export const configuredMods = (entries) => [
+  ...new Set((entries || []).map((e) => /^mod:(.+)$/.exec(e?.configured || "")?.[1]).filter(Boolean)),
+];
 
 // the keys of the entries whose configured mod's rig an update changed (from mods.impact {ids})
 export function heldKeys(entries, impacts) {
   const changed = new Set((impacts || []).filter((m) => m.impact === "rig_changed").map((m) => m.id));
-  return new Set((entries || []).filter((e) => changed.has(/^mod:(.+)$/.exec(e?.configured || "")?.[1])).map((e) => `${e.install}|${e.core}`));
+  return new Set(
+    (entries || [])
+      .filter((e) => changed.has(/^mod:(.+)$/.exec(e?.configured || "")?.[1]))
+      .map((e) => `${e.install}|${e.core}`),
+  );
 }
 
 // --- the page ---
@@ -107,17 +127,26 @@ export function init(options = {}) {
   if (options.go) goTo = options.go;
   // a game update while the program runs: the game services were rebuilt for the new resource version
   on("config.changed", () => {
-    Popup.whenIdle().then(async () => { if (await gate()) await check(); }).catch((err) => console.error("impact", err));
+    Popup.whenIdle()
+      .then(async () => {
+        if (await gate()) await check();
+      })
+      .catch((err) => console.error("impact", err));
   });
 }
 
 // open(mod): Go To, the mod's student page with its switch open on the mod
-export const open = (mod) => Promise.resolve(goTo({ id: mod.id, variant: mod.target, kind: mod.kind })).catch((err) => console.error("impact", err));
+export const open = (mod) =>
+  Promise.resolve(goTo({ id: mod.id, variant: mod.target, kind: mod.kind })).catch((err) =>
+    console.error("impact", err),
+  );
 
 // the progress of a check (Loading.task's update): its step, or the mod at hand while the mods are classified and
 // applied again (job-progress.js modLine)
 function stepper(update) {
-  return (key) => (p = {}) => update({ ...p, label: T(key) });
+  return (key) =>
+    (p = {}) =>
+      update({ ...p, label: T(key) });
 }
 
 // the scan the check reads its overwritten entries from: a new one, with mods on and the file check allowed; [] else
@@ -127,8 +156,15 @@ async function scanned(step) {
   step("progress.check")();
   const done = new Promise((resolve) => {
     let off = null;
-    const timer = setTimeout(() => { off?.(); resolve(null); }, 60000);
-    off = on("library.scanned", (data) => { clearTimeout(timer); off(); resolve(data); });
+    const timer = setTimeout(() => {
+      off?.();
+      resolve(null);
+    }, 60000);
+    off = on("library.scanned", (data) => {
+      clearTimeout(timer);
+      off();
+      resolve(data);
+    });
   });
   await rpc("mods.scan", {});
   await done;
@@ -138,35 +174,46 @@ async function scanned(step) {
 // run({force}): the check under the loading screen with its progress: classify, scan, apply again what needs no repair.
 // force: whatever was seen (Check Update Impact). Resolves with {result, reapplied, failed}; throws what the jobs refuse.
 async function run({ force = false, scan = true } = {}) {
-  await names().catch(() => undefined);  // the roster in, for the names on the progress line
-  return Loading.task(async (update) => {
-    const step = stepper(update);
-    const result = await waitJob(await rpc("mods.impact", force ? { force: true } : {}), step("mods.impact.checking"));
-    const again = scan ? reappliable(await scanned(step), result) : [];
-    let reapplied = [], failed = [];
-    if (again.length) {
-      const plain = again.map((e) => ({ install: e.install, core: e.core, state: e.state }));
-      const done = await waitJob(await rpc("mods.restoreDrift", { entries: plain }), step("mods.impact.reapplying"));
-      const ok = new Set((done?.done || []).map((d) => `${d.install}|${d.core}`));
-      reapplied = again.filter((e) => ok.has(`${e.install}|${e.core}`));
-      failed = done?.failed || [];
-    }
-    return { result, reapplied, failed };
-  }, { label: T("mods.impact.checking") });
+  await names().catch(() => undefined); // the roster in, for the names on the progress line
+  return Loading.task(
+    async (update) => {
+      const step = stepper(update);
+      const result = await waitJob(
+        await rpc("mods.impact", force ? { force: true } : {}),
+        step("mods.impact.checking"),
+      );
+      const again = scan ? reappliable(await scanned(step), result) : [];
+      let reapplied = [],
+        failed = [];
+      if (again.length) {
+        const plain = again.map((e) => ({ install: e.install, core: e.core, state: e.state }));
+        const done = await waitJob(await rpc("mods.restoreDrift", { entries: plain }), step("mods.impact.reapplying"));
+        const ok = new Set((done?.done || []).map((d) => `${d.install}|${d.core}`));
+        reapplied = again.filter((e) => ok.has(`${e.install}|${e.core}`));
+        failed = done?.failed || [];
+      }
+      return { result, reapplied, failed };
+    },
+    { label: T("mods.impact.checking") },
+  );
 }
 
 // refresh(): the costume builds of an older costume rule built again under the loading screen, with the plain progress
 // of a writer task and nothing to answer: what cannot be built again is kept or left for the next start, never told
 async function refresh() {
-  await names().catch(() => undefined);  // the roster in, for the names on the progress line
-  await Loading.task(async (update) => waitJob(await rpc("mods.refreshCostumes"), update), { label: T("progress.modsProcess") });
+  await names().catch(() => undefined); // the roster in, for the names on the progress line
+  await Loading.task(async (update) => waitJob(await rpc("mods.refreshCostumes"), update), {
+    label: T("progress.modsProcess"),
+  });
 }
 
 // retry(): the entries whose last write failed written again under the loading screen, nothing to answer: one that
 // fails again keeps its fresh error on its row; a refusal of the moment leaves them for the next start
 async function retry() {
-  await names().catch(() => undefined);  // the roster in, for the names on the progress line
-  await Loading.task(async (update) => waitJob(await rpc("mods.retryFailed"), update), { label: T("progress.modsApply") });
+  await names().catch(() => undefined); // the roster in, for the names on the progress line
+  await Loading.task(async (update) => waitJob(await rpc("mods.retryFailed"), update), {
+    label: T("progress.modsApply"),
+  });
 }
 
 // gate(): at the start before the first screen (and after a game update while the program runs): the costume builds of
@@ -187,8 +234,15 @@ export async function gate() {
     // Later at the game update question writes nothing (the check applies mods again): a retry waits for the check
     if (due.retry && !due.due) await retry().catch((err) => console.warn("failed writes retry", err));
     if (!due.due) return false;
-    const answer = await Popup.message({ title: T("mods.impact.gateTitle"), lines: [T("mods.impact.gateAsk")], close: false,
-      buttons: [{ label: T("update.later"), value: "later" }, { label: T("mods.impact.gateCheck"), value: "check", primary: true }] });
+    const answer = await Popup.message({
+      title: T("mods.impact.gateTitle"),
+      lines: [T("mods.impact.gateAsk")],
+      close: false,
+      buttons: [
+        { label: T("update.later"), value: "later" },
+        { label: T("mods.impact.gateCheck"), value: "check", primary: true },
+      ],
+    });
     if (answer.button !== "check") return false;
     const outcome = await run();
     if (due.retry) await retry().catch((err) => console.warn("failed writes retry", err));
@@ -213,7 +267,8 @@ export async function gate() {
 
 // heldOf(result): the mods the list shows, those to update: a mod whose rig changed, unless a repaired copy took its
 // place (it has one and its student is not configured with it)
-export const heldOf = (result) => (result?.mods || []).filter((m) => m.impact === "rig_changed" && !(m.repaired_id && !m.configured));
+export const heldOf = (result) =>
+  (result?.mods || []).filter((m) => m.impact === "rig_changed" && !(m.repaired_id && !m.configured));
 
 // a card's key: its mod, else its core
 export const modKey = (mod) => mod?.id || `${mod?.core || ""}`;
@@ -225,14 +280,26 @@ export function card(mod, nameOf = (e) => e?.variant || e?.core || "") {
   const base = mod.kind === "model" || mod.kind === "other" || !mod.id ? null : spineBase("mod", mod.id);
   const lobby = mod.kind === "lobby";
   // an Official chip over the details' one line of the official changes
-  const chips = [T(kindKey(mod.kind)), ...(mod.configured ? [T("status.applied")] : []), ...(changeText(mod) ? [T("mods.impact.chipOfficial")] : [])];
+  const chips = [
+    T(kindKey(mod.kind)),
+    ...(mod.configured ? [T("status.applied")] : []),
+    ...(changeText(mod) ? [T("mods.impact.chipOfficial")] : []),
+  ];
   const badge = { text: T("mods.heldBadge"), color: COLOUR.warning, ink: "#ffffff" };
   // the details name the mod itself (the card names the student), its kind and Applied as chips
   // a generic mod (other) has no student: its own name, never its set's key
-  const name = mod.kind === "other" ? mod.label || T("settings.mods.other") : nameOf(entry) || mod.label || mod.core || "";
-  return { key: modKey(mod), label: name, full: mod.label || name, chips, badge, mod,
+  const name =
+    mod.kind === "other" ? mod.label || T("settings.mods.other") : nameOf(entry) || mod.label || mod.core || "";
+  return {
+    key: modKey(mod),
+    label: name,
+    full: mod.label || name,
+    chips,
+    badge,
+    mod,
     thumb: base ? thumb(base, "card", null, lobby) : null,
-    big: base ? () => thumb(base, mod.kind === "spr" ? "portrait" : "bust", null, lobby) : null };
+    big: base ? () => thumb(base, mod.kind === "spr" ? "portrait" : "bust", null, lobby) : null,
+  };
 }
 
 // details(mod): the details panel of a card (its name is the mod's, card.full; the Official chip over it): what the
@@ -241,23 +308,39 @@ export function details(mod) {
   const changes = changeText(mod).replace(/^[^:：]*[:：]\s*/, "");
   const fields = changes ? [[null, changes]] : [];
   const page = !!(mod.id && mod.kind !== "other" && mod.target);
-  const actions = [...(page ? [["go", T("add.go")]] : []), ["preview", T("mods.impact.preview")], ["fix", T("mods.impact.fix"), "apply"]];
-  return { title: T(mod.kind === "lobby" ? "info.title.lobby" : mod.kind === "model" ? "info.title.model" : "info.title.portrait"),
-    fields, actions };
+  const actions = [
+    ...(page ? [["go", T("add.go")]] : []),
+    ["preview", T("mods.impact.preview")],
+    ["fix", T("mods.impact.fix"), "apply"],
+  ];
+  return {
+    title: T(
+      mod.kind === "lobby" ? "info.title.lobby" : mod.kind === "model" ? "info.title.model" : "info.title.portrait",
+    ),
+    fields,
+    actions,
+  };
 }
 
 // footer(count, ticked): the list's footer: Close, Check Update Impact and, with mods to update, Update and Apply
 // for the ticked ones (greyed with none ticked); ids for the buttons' actions
-export const footer = (count, ticked) => [["close", T("display.close")], ["check", T("mods.impact.check")],
-  ...(count ? [["fix", T("mods.impact.fix"), !ticked]] : [])];
+export const footer = (count, ticked) => [
+  ["close", T("display.close")],
+  ["check", T("mods.impact.check")],
+  ...(count ? [["fix", T("mods.impact.fix"), !ticked]] : []),
+];
 
 // recheck(): Check Update Impact: the check again, after a question when the install's resource version is the
 // one last checked (no game update recorded: the check takes long). Resolves with its outcome, null when not asked for.
 async function recheck() {
   const last = await rpc("mods.impactLast").catch(() => null);
   if (last && !last.update) {
-    const answer = await Popup.message({ title: T("mods.impact.check"), lines: [T("mods.impact.checkAsk")],
-      cancel: T("popup.cancel"), ok: T("mods.impact.gateCheck") });
+    const answer = await Popup.message({
+      title: T("mods.impact.check"),
+      lines: [T("mods.impact.checkAsk")],
+      cancel: T("popup.cancel"),
+      ok: T("mods.impact.gateCheck"),
+    });
     if (answer.button !== "ok") return null;
   }
   return run({ force: true, scan: false });
@@ -269,8 +352,13 @@ async function recheck() {
 // (never closed under the user).
 function presentList(outcome, nameOf) {
   const host = document.getElementById("prompt");
-  let current = outcome, mods = heldOf(current.result), checked = null;
-  let selection = new Set(mods.map(modKey)), focus = null, scroll = 0, running = false;
+  let current = outcome,
+    mods = heldOf(current.result),
+    checked = null;
+  let selection = new Set(mods.map(modKey)),
+    focus = null,
+    scroll = 0,
+    running = false;
   return new Promise((resolve) => {
     const done = (answer) => {
       if (running) return;
@@ -289,7 +377,9 @@ function presentList(outcome, nameOf) {
     const busy = async (task) => {
       if (running) return;
       running = true;
-      try { await task(); } catch (err) {
+      try {
+        await task();
+      } catch (err) {
         notify(errorText(err.code, err.params), { kind: "error", error: err });
       } finally {
         running = false;
@@ -297,18 +387,30 @@ function presentList(outcome, nameOf) {
       }
     };
     // an update over the list, then the list as the mods stand: the last check without the mods updated since
-    const work = (picked, review) => picked.length && busy(async () => {
-      const { partial } = await fix(picked, nameOf, { review });
-      if (partial.length) await Popup.message({ title: T("mods.impact.title"), ok: T("picker.ok"), plain: true, width: WIDTH,
-        lines: [T("mods.impact.partial", { n: partial.length }), ...partial.map((m) => ({ text: modName(m, nameOf), ...ITEM }))] });
-      update(await rpc("mods.impactLast"));
-    });
-    const check = () => busy(async () => {
-      const again = await recheck();
-      if (!again) return;
-      checked = again.result;
-      update(again.result);
-    });
+    const work = (picked, review) =>
+      picked.length &&
+      busy(async () => {
+        const { partial } = await fix(picked, nameOf, { review });
+        if (partial.length)
+          await Popup.message({
+            title: T("mods.impact.title"),
+            ok: T("picker.ok"),
+            plain: true,
+            width: WIDTH,
+            lines: [
+              T("mods.impact.partial", { n: partial.length }),
+              ...partial.map((m) => ({ text: modName(m, nameOf), ...ITEM })),
+            ],
+          });
+        update(await rpc("mods.impactLast"));
+      });
+    const check = () =>
+      busy(async () => {
+        const again = await recheck();
+        if (!again) return;
+        checked = again.result;
+        update(again.result);
+      });
     const draw = (keep = 0) => {
       scroll = keep;
       const items = mods.map((mod) => card(mod, nameOf));
@@ -316,25 +418,60 @@ function presentList(outcome, nameOf) {
       const ticked = mods.filter((m) => selection.has(modKey(m)));
       const act = { close: () => done({}), check, fix: () => work(ticked, false) };
       Popup.listPopup({
-        host, title: T("mods.impact.title"), items, selected: focus, focus, keepScroll: keep,
-        detailKind: (it) => it.mod?.kind, alignStart: true, slimBand: true, empty: T("mods.impact.none"),
+        host,
+        title: T("mods.impact.title"),
+        items,
+        selected: focus,
+        focus,
+        keepScroll: keep,
+        detailKind: (it) => it.mod?.kind,
+        alignStart: true,
+        slimBand: true,
+        empty: T("mods.impact.none"),
         // portraits alone: the portrait switch's frame and tall cards, whose details keep their actions in view
         ...(items.length && items.every((it) => it.mod?.kind === "spr") ? { layoutKind: "spr" } : {}),
-        ...(items.length ? { tick: { keys: [...selection], onTick: (key, s) => {
-          selection = selection.has(key) ? new Set([...selection].filter((k) => k !== key)) : new Set([...selection, key]);
-          draw(s);
-        } } } : {}),
+        ...(items.length
+          ? {
+              tick: {
+                keys: [...selection],
+                onTick: (key, s) => {
+                  selection = selection.has(key)
+                    ? new Set([...selection].filter((k) => k !== key))
+                    : new Set([...selection, key]);
+                  draw(s);
+                },
+              },
+            }
+          : {}),
         // Update and Apply without a count, so the S footer's caption keeps to one line; the tick boxes show what it updates
-        buttons: footer(items.length, ticked.length).map(([id, label, greyed]) => ({ label, fn: act[id], action: id,
-          ...(id === "fix" ? { primary: true, greyed } : {}) })),
+        buttons: footer(items.length, ticked.length).map(([id, label, greyed]) => ({
+          label,
+          fn: act[id],
+          action: id,
+          ...(id === "fix" ? { primary: true, greyed } : {}),
+        })),
         onClose: () => done({}),
-        onSelect: (key, s) => { focus = key; draw(s); },
+        onSelect: (key, s) => {
+          focus = key;
+          draw(s);
+        },
         details: (it) => {
           const d = details(it.mod);
-          const go = { go: () => done({ go: it.mod }), preview: () => work([it.mod], true), fix: () => work([it.mod], false) };
-          return { title: d.title, fields: d.fields, actions: d.actions.map(([id, caption, semantic]) => [caption, go[id], false, semantic]) };
+          const go = {
+            go: () => done({ go: it.mod }),
+            preview: () => work([it.mod], true),
+            fix: () => work([it.mod], false),
+          };
+          return {
+            title: d.title,
+            fields: d.fields,
+            actions: d.actions.map(([id, caption, semantic]) => [caption, go[id], false, semantic]),
+          };
         },
-      }).catch((err) => { console.error("impact list", err); done({}); });
+      }).catch((err) => {
+        console.error("impact list", err);
+        done({});
+      });
     };
     draw();
   });
@@ -345,12 +482,19 @@ function presentList(outcome, nameOf) {
 async function applyRepaired(mod, id) {
   if (!mod.configured) return;
   // under the loading screen, with its line: the student, the kind, the mod and the write
-  const line = modJob({ variant: mod.target, kind: mod.kind, core: mod.core || "", name: mod.label || "" },
-    { nameOf: Loading.variantName, action: "progress.actionApply" });
-  await Loading.task(async (update) => {
-    update(line());
-    return waitJob(await rpc("actions.apply", { variant: mod.target, source: `mod:${id}`, kind: mod.kind }), (p) => update(line(p)));
-  }, { label: line().text });
+  const line = modJob(
+    { variant: mod.target, kind: mod.kind, core: mod.core || "", name: mod.label || "" },
+    { nameOf: Loading.variantName, action: "progress.actionApply" },
+  );
+  await Loading.task(
+    async (update) => {
+      update(line());
+      return waitJob(await rpc("actions.apply", { variant: mod.target, source: `mod:${id}`, kind: mod.kind }), (p) =>
+        update(line(p)),
+      );
+    },
+    { label: line().text },
+  );
 }
 
 // fix(mods, nameOf, {review}): the student page's Update for each held mod, here: a repaired copy made before takes
@@ -358,7 +502,8 @@ async function applyRepaired(mod, id) {
 // whose Accept is Update and Apply) and, unless partial, stored and put in its place; another gets the asset update.
 // Resolves with {fixed, partial}: the mods fixed, and those whose repair was partial (not stored, not applied).
 async function fix(mods, nameOf, { review = false } = {}) {
-  const fixed = [], partial = [];
+  const fixed = [],
+    partial = [];
   for (const mod of mods) {
     const subject = modName({ ...mod, configured: false }, nameOf);
     // who the mod is on the progress line of its check, repair or update (job-progress.js modJob)
@@ -380,15 +525,22 @@ async function fix(mods, nameOf, { review = false } = {}) {
         }
         // the asset update moves the mod's assets onto the new parts as they are: it looks the same after, said so
         if (review) {
-          const answer = await Popup.message({ title: T("mods.impact.preview"), lines: [T("mods.impact.noPreview")],
-            cancel: T("photo.back"), ok: T("mods.impact.fix") });
+          const answer = await Popup.message({
+            title: T("mods.impact.preview"),
+            lines: [T("mods.impact.noPreview")],
+            cancel: T("photo.back"),
+            ok: T("mods.impact.fix"),
+          });
           if (answer.button !== "ok") continue;
         }
         const line = modJob(who, { nameOf: Loading.variantName, action: "progress.actionRepair" });
-        await Loading.task(async (update) => {
-          update(line());
-          return waitJob(await rpc("actions.update", { mod: mod.id }), (p) => update(line(p)));
-        }, { label: line().text });
+        await Loading.task(
+          async (update) => {
+            update(line());
+            return waitJob(await rpc("actions.update", { mod: mod.id }), (p) => update(line(p)));
+          },
+          { label: line().text },
+        );
         fixed.push(mod);
         continue;
       }
@@ -396,7 +548,15 @@ async function fix(mods, nameOf, { review = false } = {}) {
       if (!result || result.unchanged) continue;
       try {
         if (review) {
-          if (!await Compatibility.review(mod.id, result, { label: subject, kind: mod.kind, accept: T("mods.impact.fix"), discard: T("photo.back") })) continue;
+          if (
+            !(await Compatibility.review(mod.id, result, {
+              label: subject,
+              kind: mod.kind,
+              accept: T("mods.impact.fix"),
+              discard: T("photo.back"),
+            }))
+          )
+            continue;
         } else if (result.report?.partial) {
           partial.push(mod);
           continue;
@@ -416,8 +576,15 @@ async function fix(mods, nameOf, { review = false } = {}) {
 
 // the mods.state entries a game update's rig change holds ({install, core, variant, kind, source, label}) as the
 // summary's mods (applied by definition)
-export const heldMods = (entries) => (entries || []).map((e) => ({ id: /^mod:(.+)$/.exec(e?.source || "")?.[1] || "",
-  target: e?.variant, core: e?.core, kind: e?.kind, label: e?.label || "", configured: true }));
+export const heldMods = (entries) =>
+  (entries || []).map((e) => ({
+    id: /^mod:(.+)$/.exec(e?.source || "")?.[1] || "",
+    target: e?.variant,
+    core: e?.core,
+    kind: e?.kind,
+    label: e?.label || "",
+    configured: true,
+  }));
 
 // heldLines(entries, nameOf): the held entries, each as the summary names a held mod (Go To and Update and Apply where its
 // mod is known); no hint under them
@@ -429,7 +596,13 @@ export function heldLines(entries, nameOf) {
 // caller closes the help first, then opens or repairs it), else {}
 export async function heldDetails(entries) {
   const nameOf = await names().catch(() => undefined);
-  const answer = await Popup.message({ title: T("mods.heldTitle"), ok: T("picker.ok"), plain: true, width: WIDTH, lines: heldLines(entries, nameOf) });
+  const answer = await Popup.message({
+    title: T("mods.heldTitle"),
+    ok: T("picker.ok"),
+    plain: true,
+    width: WIDTH,
+    lines: heldLines(entries, nameOf),
+  });
   const button = typeof answer.button === "string" ? answer.button : "";
   const find = (id) => heldMods(entries).find((m) => m.id === id) || null;
   if (button.startsWith(GO)) return { go: find(button.slice(GO.length)) };
@@ -441,12 +614,19 @@ export async function heldDetails(entries) {
 export async function repair(mods) {
   if (busy || !mods?.length) return [];
   busy = true;
-  try { return (await fix(mods, await names().catch(() => undefined))).fixed; } finally { busy = false; }
+  try {
+    return (await fix(mods, await names().catch(() => undefined))).fixed;
+  } finally {
+    busy = false;
+  }
 }
 
 // the version a check classified recorded as seen: its summary was shown or not needed
 async function seen(result) {
-  if (result?.version) await rpc("mods.impactSeen", { install: result.install, version: result.version }).catch((err) => console.error("impact", err));
+  if (result?.version)
+    await rpc("mods.impactSeen", { install: result.install, version: result.version }).catch((err) =>
+      console.error("impact", err),
+    );
 }
 
 // check(): once the first screen is in, the mods to update a check left (gate), as the list, until it is closed (its
@@ -466,7 +646,12 @@ export async function check() {
       if (answer.checked) await seen(answer.checked);
     }
     await seen(outcome.result);
-    if (outcome.failed?.length) await Popup.message({ title: T("mods.impact.title"), lines: outcome.failed.map((f) => `${ModSwitch.entryLabel(f.entry, nameOf)} - ${errorText(f.code, f.params)}`), ok: T("picker.ok") });
+    if (outcome.failed?.length)
+      await Popup.message({
+        title: T("mods.impact.title"),
+        lines: outcome.failed.map((f) => `${ModSwitch.entryLabel(f.entry, nameOf)} - ${errorText(f.code, f.params)}`),
+        ok: T("picker.ok"),
+      });
     return outcome.result;
   } catch (err) {
     console.error("impact", err);

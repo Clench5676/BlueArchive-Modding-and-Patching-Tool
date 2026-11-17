@@ -17,6 +17,7 @@ from test_library import game_bundle, header_bundle, make_mod, reload_library, s
 
 # --- the classification ---
 
+
 def document(*parts, complete=True):
     return fingerprint.document("import", [dict(part) for part in parts], complete=complete)
 
@@ -41,10 +42,16 @@ def test_a_part_rebuilt_with_the_same_rig():
 @pytest.mark.parametrize("change", ["layout", "animations", "texture", "gone_asset", "unread_skeleton"])
 def test_a_part_rebuilt_with_another_rig(change):
     built = document(named(part_of(), "a_1.bundle"))
-    now = {"layout": lambda: part_of(MOVED), "animations": lambda: part_of(animations=("Idle_01", "00")),
-           "texture": lambda: part_of(size=(32, 16)), "gone_asset": lambda: {**part_of(), "textures": {}},
-           "unread_skeleton": lambda: {**part_of(), "skeletons": {"test.skel": {
-               "sha1": "f" * 40, "version": "4.2.33", "rig": None, "animations": None}}}}[change]()
+    now = {
+        "layout": lambda: part_of(MOVED),
+        "animations": lambda: part_of(animations=("Idle_01", "00")),
+        "texture": lambda: part_of(size=(32, 16)),
+        "gone_asset": lambda: {**part_of(), "textures": {}},
+        "unread_skeleton": lambda: {
+            **part_of(),
+            "skeletons": {"test.skel": {"sha1": "f" * 40, "version": "4.2.33", "rig": None, "animations": None}},
+        },
+    }[change]()
     assert fingerprint.impact(built, document(named(now, "a_2.bundle"))) == fingerprint.RIG_CHANGED
 
 
@@ -59,8 +66,13 @@ def test_the_changes_name_what_an_update_did_to_the_official_parts():
     # an asset gone, a new one beside it
     swapped = named({**part_of(), "textures": {"page2": [8, 8]}}, "a_2.bundle")
     assert fingerprint.changes(built, document(swapped)) == {"removed": True, "added": True}
-    unread = named({**part_of(), "skeletons": {"test.skel": {
-        "sha1": "f" * 40, "version": "4.2.33", "rig": None, "animations": None}}}, "a_2.bundle")
+    unread = named(
+        {
+            **part_of(),
+            "skeletons": {"test.skel": {"sha1": "f" * 40, "version": "4.2.33", "rig": None, "animations": None}},
+        },
+        "a_2.bundle",
+    )
     assert fingerprint.changes(built, document(unread)) == {"rig": True}
     assert fingerprint.changes(built, None) == {"gone": True}
     assert fingerprint.changes(None, document(now)) == fingerprint.changes(built, {"parts": []}) == {}
@@ -68,8 +80,14 @@ def test_the_changes_name_what_an_update_did_to_the_official_parts():
 
 def test_new_official_parts_beside_the_ones_the_mod_knows():
     built = document(named(part_of(), "a_1.bundle"))
-    extra = {"name": "b_1.bundle", "sha1": None, "structure": "x", "atlases": {}, "skeletons": {},
-             "textures": {"page2": [8, 8]}}
+    extra = {
+        "name": "b_1.bundle",
+        "sha1": None,
+        "structure": "x",
+        "atlases": {},
+        "skeletons": {},
+        "textures": {"page2": [8, 8]},
+    }
     now = document(named(part_of(), "a_1.bundle"), extra)
     assert fingerprint.impact(built, now) == fingerprint.NEW_PARTS
     # a fingerprint that does not know every part then cannot tell a new one
@@ -85,6 +103,7 @@ def test_no_baseline_tells_nothing_and_no_part_left_is_gone():
 
 # --- the library ---
 
+
 def updated(env, assets, payload=b"updated official"):
     """A game update of the core: the official part replaced by a later release holding ``assets``."""
     env.original.unlink()
@@ -93,7 +112,7 @@ def updated(env, assets, payload=b"updated official"):
 
 
 def configured(env):
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input")])
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input")])
     env.library.apply("test", f"mod:{entry.id}")
     return entry
 
@@ -116,10 +135,19 @@ def test_the_summary_of_an_update_names_the_mods_whose_rig_changed(spine):
     library = reload_library(env)
     summary = library.update_impact()
     assert summary["due"] is True and summary["previous"] == first["version"] != summary["version"]
-    assert summary["mods"] == [{"id": entry.id, "label": summary["mods"][0]["label"], "target": "test",
-                                "kind": "spr", "core": "test_spr", "impact": "rig_changed",
-                                "changes": {"repacked": True, "animations": 1}, "configured": True,
-                                "repaired_id": ""}]
+    assert summary["mods"] == [
+        {
+            "id": entry.id,
+            "label": summary["mods"][0]["label"],
+            "target": "test",
+            "kind": "spr",
+            "core": "test_spr",
+            "impact": "rig_changed",
+            "changes": {"repacked": True, "animations": 1},
+            "configured": True,
+            "repaired_id": "",
+        }
+    ]
     assert summary["counts"]["rig_changed"] == 1
     assert library.update_impact()["due"] is True  # told until the page says it was shown
     library.impact_seen(summary["install"], summary["version"])
@@ -139,8 +167,16 @@ def test_a_retry_holds_an_entry_whose_rig_changed_and_apply_mod_configuration_wr
     assert not result.done and successor.read_bytes() == official
     assert unfinished(env) == [{"install": key(env), "core": "test_spr", "why": "held"}]
     assert library.intent()["unfinished"]["held"] == 1
-    assert library.intent()["held"] == [{"install": key(env), "core": "test_spr", "variant": "test", "kind": "spr",
-                                         "source": f"mod:{entry.id}", "label": entry.label}]
+    assert library.intent()["held"] == [
+        {
+            "install": key(env),
+            "core": "test_spr",
+            "variant": "test",
+            "kind": "spr",
+            "source": f"mod:{entry.id}",
+            "label": entry.label,
+        }
+    ]
 
     written = []
     monkeypatch.setattr(library, "_switch", lambda pin, core, source, log, **_: written.append((core, source)))
@@ -177,8 +213,9 @@ def test_a_mod_without_a_baseline_is_not_held(spine, monkeypatch):
 def test_a_held_entry_survives_a_reload_of_the_configuration(tmp_path):
     from bmpt.library.profiles import normalized
 
-    data = normalized({"unfinished": [{"install": "k", "core": "c", "why": "held"},
-                                      {"install": "k", "core": "d", "why": "other"}]})
+    data = normalized(
+        {"unfinished": [{"install": "k", "core": "c", "why": "held"}, {"install": "k", "core": "d", "why": "other"}]}
+    )
     assert data["unfinished"] == [{"install": "k", "core": "c", "why": "held"}]
 
 
@@ -205,8 +242,20 @@ def test_the_impact_check_names_each_mod_in_its_progress(spine):
     steps = []
     env.library.update_impact(force=True, progress=steps.append)
     # the item at hand, who it is and its step (mod_progress); its name left out where it only repeats the file's
-    assert steps == [{"current": 1, "total": 1, "action": "check", "step": "import.step.check", "variant": "test",
-                      "kind": "spr", "core": entry.core, "name": "", "source": "", "fraction": 0.0}]
+    assert steps == [
+        {
+            "current": 1,
+            "total": 1,
+            "action": "check",
+            "step": "import.step.check",
+            "variant": "test",
+            "kind": "spr",
+            "core": entry.core,
+            "name": "",
+            "source": "",
+            "fraction": 0.0,
+        }
+    ]
 
 
 def test_an_update_that_changes_nothing_ends_the_hold(spine, monkeypatch):
@@ -239,7 +288,9 @@ def test_the_summary_answers_from_its_last_check_while_nothing_changed(spine, mo
     monkeypatch.setattr(library, "_impact_of", lambda *args: calls.append(args) or ("unchanged", {}))
     assert library.update_impact(force=True)["mods"] == first["mods"] and not calls, "the same answer, nothing judged"
     # a new baseline (an update, a repair) is a change: judged again
-    import os, time
+    import os
+    import time
+
     baseline = env.root / "mods" / entry.id / fingerprint.FILE_NAME
     later = time.time() + 5
     os.utime(baseline, (later, later))
@@ -265,7 +316,9 @@ def test_the_last_check_is_kept_and_read_without_checking(spine, monkeypatch):
     assert last["update"] is False and last["checked"] == summary["version"]
     assert last["mods"] == summary["mods"]
     # a new baseline (an update, a repair) ends the kept impact of that mod
-    import os, time
+    import os
+    import time
+
     baseline = env.root / "mods" / entry.id / fingerprint.FILE_NAME
     later = time.time() + 5
     os.utime(baseline, (later, later))

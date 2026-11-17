@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 class Pointer:
     """One cross-bundle pointer: the CAB it points into (lower case), the object's path id there and the type the
     field declares (``PPtr<Material>`` declares ``Material``)."""
+
     cab: str
     path_id: int
     declared: str
@@ -90,7 +91,12 @@ def external_pointers(env) -> set[Pointer]:
                     continue
                 for declared, pointer in _walk(node, tree, seen):
                     file_id, path_id = pointer.get("m_FileID"), pointer.get("m_PathID")
-                    if isinstance(file_id, int) and isinstance(path_id, int) and path_id and 0 < file_id <= len(externals):
+                    if (
+                        isinstance(file_id, int)
+                        and isinstance(path_id, int)
+                        and path_id
+                        and 0 < file_id <= len(externals)
+                    ):
                         found.add(Pointer(externals[file_id - 1], path_id, declared))
             return
         for child in getattr(file, "files", {}).values():

@@ -2,6 +2,7 @@
 // sites that draw through it are checked in popup.test.mjs (the details panel, the file details, the messages, the update
 // dialog); the tokens against the prefab in tests/test_ui_tokens.py.
 import assert from "node:assert/strict";
+import { flat } from "./helpers/source-text.mjs";
 import { readFileSync, readdirSync } from "node:fs";
 import { test } from "node:test";
 import { STATS_BOX as B } from "../../src/bmpt/web/js/ui-tokens.js";
@@ -42,7 +43,15 @@ test("the box is the holder's width less 200 in a popup frame and 40 in a panel"
 });
 
 test("the fill, its line 5 larger across and down, and the colours are the tokens'", () => {
-  const { nodes } = Box.statsBox({ holder: "panel", width: 850, name: "Fields", rows: [{ caption: "File", value: "a.bundle" }, { caption: "Size", value: "12 MB" }] });
+  const { nodes } = Box.statsBox({
+    holder: "panel",
+    width: 850,
+    name: "Fields",
+    rows: [
+      { caption: "File", value: "a.bundle" },
+      { caption: "Size", value: "12 MB" },
+    ],
+  });
   const [fill, line] = [nodes[0], nodes[0].children[0]].map(widgetOf);
   assert.equal(nodes[0].name, "Fields");
   assert.deepEqual([fill.sprite, fill.color, fill.type, fill.depth], ["Common_Bg_Raius10px", "#ecf5f9/1.00", 1, 5]);
@@ -50,7 +59,10 @@ test("the fill, its line 5 larger across and down, and the colours are the token
   assert.deepEqual([line.w_ - fill.w_, line.h_ - fill.h_], [5, 5]);
   assert.deepEqual(nodes[0].children[0].pos, [0, 0], "the line is centred on the fill");
   const divider = widgetOf(named(nodes, "L_0"));
-  assert.deepEqual([divider.sprite, divider.color, divider.type, divider.h_], ["Common_Line_Dot", "#c0c9d4/1.00", 2, 4]);
+  assert.deepEqual(
+    [divider.sprite, divider.color, divider.type, divider.h_],
+    ["Common_Line_Dot", "#c0c9d4/1.00", 2, 4],
+  );
 });
 
 test("rows are 64 high at least, the box 12 above and below them, dividers between rows and none after the last", () => {
@@ -76,14 +88,18 @@ test("rows are 64 high at least, the box 12 above and below them, dividers betwe
 });
 
 test("captions are 38, the value starts after the widest caption and 30, 30 in from the box's edge", () => {
-  const rows = [{ caption: "Folder", value: "x" }, { caption: "Official Copy", value: "y" }];
+  const rows = [
+    { caption: "Folder", value: "x" },
+    { caption: "Official Copy", value: "y" },
+  ];
   const box = Box.statsBox({ holder: "panel", width: 850, at: [100, 0], rows });
   const left = 100 - (850 - 40) / 2;
   assert.equal(B.caption, 38);
   const capW = NGUI.textWidth("Official Copy", 38) + 30;
   assert.equal(box.capW, capW);
   for (const [i, row] of rows.entries()) {
-    const caption = named(box.nodes, `F_${i}`), value = named(box.nodes, `V_${i}`);
+    const caption = named(box.nodes, `F_${i}`),
+      value = named(box.nodes, `V_${i}`);
     assert.equal(widgetOf(caption).fontSize, 38);
     assert.deepEqual(caption.pos[0], left + 30);
     assert.equal(value.pos[0], left + 30 + capW);
@@ -95,8 +111,11 @@ test("captions are 38, the value starts after the widest caption and 30, 30 in f
 test("a value is 38 down to 26 on up to three lines, wrapped and never cut; a longer one keeps 26 and more lines", () => {
   const room = Box.valueRoom("panel", 850, { capW: 200 });
   assert.equal(room, 850 - 40 - 60 - 200 - 20);
-  const rows = [{ caption: "File", value: "ibuki.bundle" }, { caption: "File", value: "ibuki_dress_spr_with_a_rather_long_name_for_this_panel.bundle" },
-    { caption: "File", value: "folder/".repeat(60) }];
+  const rows = [
+    { caption: "File", value: "ibuki.bundle" },
+    { caption: "File", value: "ibuki_dress_spr_with_a_rather_long_name_for_this_panel.bundle" },
+    { caption: "File", value: "folder/".repeat(60) },
+  ];
   const { nodes, rows: placed } = Box.statsBox({ holder: "panel", width: 850, rows });
   const sizes = [0, 1, 2].map((i) => widgetOf(named(nodes, `V_${i}`)).fontSize);
   assert.equal(sizes[0], 38);
@@ -114,7 +133,9 @@ test("a value is 38 down to 26 on up to three lines, wrapped and never cut; a lo
 
 test("a row can cut its value after some lines with an ellipsis, keeping the whole as its accessible label", () => {
   const value = "A very long status text that needs three lines in this narrow panel, ".repeat(2).trim();
-  const [cut, whole] = [2, 0].map((keep) => Box.statsBox({ holder: "panel", width: 850, rows: [{ caption: "Status", value, ariaLabel: value, cut: keep }] }));
+  const [cut, whole] = [2, 0].map((keep) =>
+    Box.statsBox({ holder: "panel", width: 850, rows: [{ caption: "Status", value, ariaLabel: value, cut: keep }] }),
+  );
   const kept = widgetOf(named(cut.nodes, "V_0"));
   assert.ok(widgetOf(named(whole.nodes, "V_0")).text.split("\n").length > 2);
   assert.equal(kept.text.split("\n").length, 2);
@@ -125,30 +146,66 @@ test("a row can cut its value after some lines with an ellipsis, keeping the who
 
 test("a row's own colour, minimum height, reserve and slot; a value can arrive already fitted", () => {
   const seen = [];
-  const box = Box.statsBox({ holder: "frame", width: 1700, names: { value: "Row", divider: "Dot" }, rows: [
-    { value: { text: "Fitted\ntwo lines", fs: 30, lines: 2 }, colour: "#123456/1.00", minH: 156, reserve: 300, slot: (g) => { seen.push(g); return [NGUI.node("Btn_0", [g.right - 120, g.y])]; } },
-    { value: "Plain", colour: undefined },
-  ] });
+  const box = Box.statsBox({
+    holder: "frame",
+    width: 1700,
+    names: { value: "Row", divider: "Dot" },
+    rows: [
+      {
+        value: { text: "Fitted\ntwo lines", fs: 30, lines: 2 },
+        colour: "#123456/1.00",
+        minH: 156,
+        reserve: 300,
+        slot: (g) => {
+          seen.push(g);
+          return [NGUI.node("Btn_0", [g.right - 120, g.y])];
+        },
+      },
+      { value: "Plain", colour: undefined },
+    ],
+  });
   const first = widgetOf(named(box.nodes, "Row_0"));
-  assert.deepEqual([first.color, first.text, first.fontSize, first.w_], ["#123456/1.00", "Fitted\ntwo lines", 30, 1500 - 60 - 300]);
+  assert.deepEqual(
+    [first.color, first.text, first.fontSize, first.w_],
+    ["#123456/1.00", "Fitted\ntwo lines", 30, 1500 - 60 - 300],
+  );
   assert.equal(widgetOf(named(box.nodes, "Row_1")).color, "#000000/1.00");
-  assert.deepEqual(box.rows.map((row) => row.h), [156, 64]);
+  assert.deepEqual(
+    box.rows.map((row) => row.h),
+    [156, 64],
+  );
   assert.ok(named(box.nodes, "Dot_0") && !named(box.nodes, "L_0"), "the divider takes the caller's name");
   assert.equal(seen.length, 1);
-  assert.deepEqual([seen[0].i, seen[0].y, seen[0].right, seen[0].room, seen[0].h], [0, -12 - 78, 1500 / 2 - 30, 1500 - 80 - 300, 156]);
+  assert.deepEqual(
+    [seen[0].i, seen[0].y, seen[0].right, seen[0].room, seen[0].h],
+    [0, -12 - 78, 1500 / 2 - 30, 1500 - 80 - 300, 156],
+  );
   assert.equal(named(box.nodes, "Btn_0").pos[0], 750 - 30 - 120);
-  assert.equal(box.nodes.indexOf(named(box.nodes, "Btn_0")) + 1, box.nodes.indexOf(named(box.nodes, "Dot_0")), "slot nodes stand before the divider");
+  assert.equal(
+    box.nodes.indexOf(named(box.nodes, "Btn_0")) + 1,
+    box.nodes.indexOf(named(box.nodes, "Dot_0")),
+    "slot nodes stand before the divider",
+  );
 });
 
 test("a secondary line stands under the value, smaller and fainter, and adds its room to the row", () => {
   const plain = Box.statsBox({ holder: "panel", width: 2080, rows: [{ caption: "Current", value: "My paint" }] });
-  const both = Box.statsBox({ holder: "panel", width: 2080, rows: [{ caption: "Current", value: "My paint", secondary: "ibuki_spr.bundle", reserve: 70 }] });
-  const second = widgetOf(named(both.nodes, "Original_0")), value = widgetOf(named(both.nodes, "V_0"));
+  const both = Box.statsBox({
+    holder: "panel",
+    width: 2080,
+    rows: [{ caption: "Current", value: "My paint", secondary: "ibuki_spr.bundle", reserve: 70 }],
+  });
+  const second = widgetOf(named(both.nodes, "Original_0")),
+    value = widgetOf(named(both.nodes, "V_0"));
   assert.equal(both.height, Math.max(64, 38 * 1.25 + 16 + 42) + 24);
   assert.ok(both.height > plain.height);
-  assert.deepEqual([second.fontSize <= 28 && second.fontSize >= 24, second.color, second.ellipsis, second.ariaLabel], [true, "#2d4664/0.65", true, "ibuki_spr.bundle"]);
+  assert.deepEqual(
+    [second.fontSize <= 28 && second.fontSize >= 24, second.color, second.ellipsis, second.ariaLabel],
+    [true, "#2d4664/0.65", true, "ibuki_spr.bundle"],
+  );
   assert.ok(value.fontSize > second.fontSize);
-  const valueNode = named(both.nodes, "V_0"), secondNode = named(both.nodes, "Original_0");
+  const valueNode = named(both.nodes, "V_0"),
+    secondNode = named(both.nodes, "Original_0");
   assert.ok(valueNode.pos[1] - value.h_ / 2 > secondNode.pos[1] + second.h_ / 2, "the value clears the secondary line");
   assert.equal(second.w_, value.w_ - 20, "both keep 70 for an icon");
 });
@@ -164,13 +221,22 @@ test("the room a value gets is the box less 30 each side, the captions, what the
 
 test("the module touches no page: it uses the text measure, the path wrap and the tokens, nothing else", () => {
   const source = read("js/stats-box.js");
-  assert.doesNotMatch(source, /document\.|window\.|innerWidth|getElementById/);
-  assert.deepEqual([...source.matchAll(/^import .* from "(.+)";$/gm)].map((m) => m[1]), ["./ngui.js", "./ui-tokens.js", "./util.js"]);
+  assert.doesNotMatch(flat(source), /document\.|window\.|innerWidth|getElementById/);
+  assert.deepEqual(
+    [...source.matchAll(/^import [^;]* from "(.+)";$/gm)].map((m) => m[1]),
+    ["./ngui.js", "./ui-tokens.js", "./util.js"],
+  );
 });
 
 // --- no site paints the light box by hand: the fill's colour is written in the tokens and nowhere else but the tour image slot ---
-const sources = (dir, ext) => readdirSync(new URL(dir, WEB), { withFileTypes: true }).flatMap((entry) =>
-  entry.isDirectory() ? sources(`${dir}${entry.name}/`, ext) : entry.name.endsWith(ext) ? [`${dir}${entry.name}`] : []);
+const sources = (dir, ext) =>
+  readdirSync(new URL(dir, WEB), { withFileTypes: true }).flatMap((entry) =>
+    entry.isDirectory()
+      ? sources(`${dir}${entry.name}/`, ext)
+      : entry.name.endsWith(ext)
+        ? [`${dir}${entry.name}`]
+        : [],
+  );
 
 test("the stats box's fill and line colours are written in ui-tokens.js only (and the tour's image slot reuses the fill)", () => {
   const files = sources("js/", ".js");
@@ -178,16 +244,21 @@ test("the stats box's fill and line colours are written in ui-tokens.js only (an
   const holders = (literal) => files.filter((file) => read(file).toLowerCase().includes(literal)).sort();
   assert.deepEqual(holders("#ecf5f9"), ["js/tours.js", "js/ui-tokens.js"]);
   // the line's colour is also the progress bar's, the chips' outline and the dotted dividers of the file table
-  for (const file of holders("#c0c9d4")) assert.ok(["js/detail.js", "js/popup.js", "js/ui-tokens.js", "js/update.js"].includes(file), file);
+  for (const file of holders("#c0c9d4"))
+    assert.ok(["js/detail.js", "js/popup.js", "js/ui-tokens.js", "js/update.js"].includes(file), file);
 });
 
 test("the four sites build their box with statsBox()", () => {
-  for (const [file, calls] of [["js/popup.js", 2], ["js/detail.js", 1], ["js/update.js", 2]]) {
+  for (const [file, calls] of [
+    ["js/popup.js", 2],
+    ["js/detail.js", 1],
+    ["js/update.js", 2],
+  ]) {
     const source = read(file);
-    assert.match(source, /import \{[^}]*\bstatsBox\b[^}]*\} from "\.\/stats-box\.js";/, file);
+    assert.match(flat(source), /import \{[^}]*\bstatsBox\b[^}]*\} from "\.\/stats-box\.js";/, file);
     assert.equal(source.match(/\bstatsBox\(/g).length, calls, `${file}: its calls to statsBox()`);
   }
   assert.match(read("js/popup.js"), /name: "Fields"/);
-  assert.match(read("js/popup.js"), /name: "Box", names: \{ value: "Row", divider: "Dot" \}/);
+  assert.match(flat(read("js/popup.js")), /name: "Box", names: \{ value: "Row", divider: "Dot" \}/);
   assert.match(read("js/detail.js"), /name: "Summary"/);
 });

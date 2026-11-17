@@ -14,9 +14,11 @@ from test_atlas_remap import atlas_text, pattern, write_bundle
 
 
 def atlas(degrees=0, pma=False):
-    regions = [("body", -1, (4, 3), (6, 4), (9, 12), (1, 2), degrees),
-               ("alias", -1, (4, 3), (6, 4), (6, 4), (0, 0), degrees),
-               ("face", 0, (2, 12), (3, 2), (3, 2), (0, 0), 0)]
+    regions = [
+        ("body", -1, (4, 3), (6, 4), (9, 12), (1, 2), degrees),
+        ("alias", -1, (4, 3), (6, 4), (6, 4), (0, 0), degrees),
+        ("face", 0, (2, 12), (3, 2), (3, 2), (0, 0), 0),
+    ]
     return remap.parse_atlas(atlas_text([("page.png", (20, 18), regions)], pma=pma), "hero.atlas")
 
 
@@ -112,8 +114,14 @@ def test_rotated_crop_of_arbitrary_size_is_fitted_before_placement():
 
 def test_explicit_page_pma_override_uses_independent_metadata():
     official = Image.new("RGBA", (20, 18), (10, 20, 30, 128))
-    output = assemble_page(atlas(), "page.png", official, Image.new("RGBA", (6, 4), (200, 100, 50, 255)),
-                           region=("body", -1), page_pma=True)
+    output = assemble_page(
+        atlas(),
+        "page.png",
+        official,
+        Image.new("RGBA", (6, 4), (200, 100, 50, 255)),
+        region=("body", -1),
+        page_pma=True,
+    )
     assert output.image.getpixel((4, 3)) == (100, 50, 25, 128)
     assert output.report["pma"] is True
 
@@ -126,13 +134,23 @@ def test_misalignment_reports_known_internal_line_shift_without_warping():
     report = misalignment(left, right)
     assert report["edge_centroid_dx_px"] == pytest.approx(3)
     assert report["edge_centroid_dy_px"] == pytest.approx(2)
-    assert report["edge_centroid_distance_px"] == pytest.approx(13 ** 0.5)
+    assert report["edge_centroid_distance_px"] == pytest.approx(13**0.5)
     assert misalignment(Image.new("RGBA", (8, 8)), Image.new("RGBA", (8, 8)))["edge_centroid_dx_px"] is None
 
 
-@pytest.mark.parametrize("kwargs", [{"scale": 1.5}, {"scale": 0}, {"scale": True},
-    {"box": (-1, 0, 5, 5)}, {"box": (4, 3, 4, 5)}, {"box": (0, 0, 2, 2)},
-    {"region": ("absent", -1)}, {"region": ("body", -1), "box": (4, 3, 6, 5)}])
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"scale": 1.5},
+        {"scale": 0},
+        {"scale": True},
+        {"box": (-1, 0, 5, 5)},
+        {"box": (4, 3, 4, 5)},
+        {"box": (0, 0, 2, 2)},
+        {"region": ("absent", -1)},
+        {"region": ("body", -1), "box": (4, 3, 6, 5)},
+    ],
+)
 def test_invalid_or_unidentified_targets_are_refused(kwargs):
     with pytest.raises(ValueError):
         assemble_page(atlas(), "page.png", page(), page(), **kwargs)
@@ -152,16 +170,24 @@ NAME = "assets-_mx-spinecharacters-test_spr-_mxdependency-2026-01-01_003_assets_
 
 @pytest.mark.parametrize("texture_format", [4, 25])
 @pytest.mark.parametrize("identity,scale", [(True, 1), (False, 1), (False, 2)])
-def test_bundle_roundtrip_crc_lossless_pixels_unrelated_objects_and_official_metadata(tmp_path, texture_format, identity, scale):
+def test_bundle_roundtrip_crc_lossless_pixels_unrelated_objects_and_official_metadata(
+    tmp_path, texture_format, identity, scale
+):
     text = atlas_text([("page.png", (20, 18), [("body", -1, (4, 3), (6, 4), (6, 4), (0, 0), 0)])])
-    source = write_bundle(tmp_path / "official" / NAME, {"hero.atlas": text},
-                          {"page": page(), "other": pattern((8, 8), 31)}, texture_format=texture_format)
+    source = write_bundle(
+        tmp_path / "official" / NAME,
+        {"hero.atlas": text},
+        {"page": page(), "other": pattern((8, 8), 31)},
+        texture_format=texture_format,
+    )
     # The fixture's skeleton name is test.skel, matching the App's unique-pair fallback.
     before = source.read_bytes()
     inputs = remap.read_inputs([source])
     generated = inputs.textures["page"] if identity else Image.new("RGBA", (35, 37), (200, 20, 30, 0))
     expected = assemble_page(remap.parse_atlas(text), "page.png", inputs.textures["page"], generated, scale=scale)
-    report = assemble_mod([source], generated, tmp_path / "mod", atlas_name="hero.atlas", page_name="page.png", scale=scale)
+    report = assemble_mod(
+        [source], generated, tmp_path / "mod", atlas_name="hero.atlas", page_name="page.png", scale=scale
+    )
     built = tmp_path / "mod" / NAME
     actual = remap.read_inputs([built])
     assert built.name == source.name and Bundle.check_crc_match(built)
@@ -192,8 +218,11 @@ def cycling_official(tmp_path):
         pytest.skip("Set BAMT_TEST_GAME_DIR to an isolated verified official view")
     from ba_modding_toolkit.searching import get_search_dirs
 
-    paths = sorted(path for folder in get_search_dirs(Path(value))
-                   for path in folder.glob("assets-_mx-spinecharacters-shiroko_ridingsuit_spr-*.bundle"))
+    paths = sorted(
+        path
+        for folder in get_search_dirs(Path(value))
+        for path in folder.glob("assets-_mx-spinecharacters-shiroko_ridingsuit_spr-*.bundle")
+    )
     if not paths:
         pytest.skip("The official view has no Shiroko (Cycling) portrait")
     inputs = remap.read_inputs(paths)
@@ -205,8 +234,13 @@ def cycling_official(tmp_path):
 def test_official_cycling_identity_roundtrip(cycling_official, tmp_path):
     paths, inputs = cycling_official
     image = inputs.textures["shiroko_ridingsuit_spr"]
-    report = assemble_mod(paths, image, tmp_path / "identity", atlas_name="shiroko_ridingsuit_spr.atlas",
-                          page_name="shiroko_ridingsuit_spr.png")
+    report = assemble_mod(
+        paths,
+        image,
+        tmp_path / "identity",
+        atlas_name="shiroko_ridingsuit_spr.atlas",
+        page_name="shiroko_ridingsuit_spr.png",
+    )
     actual = remap.read_inputs([tmp_path / "identity" / report["bundle"]])
     assert report["changed_pixels"] == 0
     assert actual.textures["shiroko_ridingsuit_spr"].tobytes() == image.tobytes()
@@ -229,20 +263,32 @@ def test_official_cycling_mod_is_accepted_and_identified_by_app_import(cycling_o
     settings.set("game_resource_dir", str(folders[0]))
     library = ModLibrary(tmp_path / "library", catalog, game, settings)
     generated = Image.new("RGBA", (1378, 1142), (171, 51, 91, 128))
-    report = assemble_mod(paths, generated, tmp_path / "mod", atlas_name="shiroko_ridingsuit_spr.atlas",
-                          page_name="shiroko_ridingsuit_spr.png", region=("shiroko_ridingsuit", -1), scale=scale)
+    report = assemble_mod(
+        paths,
+        generated,
+        tmp_path / "mod",
+        atlas_name="shiroko_ridingsuit_spr.atlas",
+        page_name="shiroko_ridingsuit_spr.png",
+        region=("shiroko_ridingsuit", -1),
+        scale=scale,
+    )
     built = tmp_path / "mod" / report["bundle"]
     assert library.identify_import(built, built.name) == (built.name, "shiroko_ridingsuit", "spr")
     preflight = library.inspect_import({built.name: built}, conversion=True)
     assert not preflight.get("rebuild", False)
     assert preflight["direct"] == {next(path for path in paths if path.name == built.name): built}
-    entry, = library.add([built])
+    (entry,) = library.add([built])
     assert entry.target == "shiroko_ridingsuit" and entry.kind == "spr"
     assert entry.file.name == built.name
     actual = remap.read_inputs([built]).textures["shiroko_ridingsuit_spr"]
-    expected = assemble_page(remap.parse_atlas(inputs.atlases["shiroko_ridingsuit_spr.atlas"]),
-                             "shiroko_ridingsuit_spr.png", inputs.textures["shiroko_ridingsuit_spr"],
-                             generated, region=("shiroko_ridingsuit", -1), scale=scale)
+    expected = assemble_page(
+        remap.parse_atlas(inputs.atlases["shiroko_ridingsuit_spr.atlas"]),
+        "shiroko_ridingsuit_spr.png",
+        inputs.textures["shiroko_ridingsuit_spr"],
+        generated,
+        region=("shiroko_ridingsuit", -1),
+        scale=scale,
+    )
     assert actual.tobytes() == expected.image.tobytes()
     # The same extractor used by the App serves an intact atlas/skeleton with the new page.
     from io import BytesIO
@@ -257,56 +303,101 @@ def test_official_cycling_mod_is_accepted_and_identified_by_app_import(cycling_o
 
 def test_projected_page_uses_k4_packer_and_rejects_alpha_or_outside_changes(tmp_path):
     from bmpt.refine_assembly import Assembly
-    text=atlas_text([('page.png',(20,18),[('body',-1,(4,3),(6,4),(6,4),(0,0),0)])])
-    source=write_bundle(tmp_path/'official'/NAME,{'hero.atlas':text},{'page':page()})
-    original=remap.read_inputs([source]).textures['page']
-    candidate=original.resize((40,36),Image.Resampling.NEAREST);candidate.putpixel((10,8),(100,120,140,candidate.getpixel((10,8))[3]))
-    result=assemble_mod([source],candidate,tmp_path/'valid',atlas_name='hero.atlas',page_name='page.png',scale=2,projected=Assembly(candidate,{'composite':True}))
-    assert result['composite'] and result['texture_format']==4
-    assert remap.read_inputs([tmp_path/'valid'/result['bundle']]).textures['page'].tobytes()==candidate.tobytes()
-    for label,xy,colour,message in [('alpha',(10,8),(100,120,140,7),'alpha'),('outside',(0,0),(1,2,3,candidate.getpixel((0,0))[3]),'outside')]:
-        bad=candidate.copy();bad.putpixel(xy,colour)
-        with pytest.raises(ValueError,match=message):
-            assemble_mod([source],bad,tmp_path/label,atlas_name='hero.atlas',page_name='page.png',scale=2,projected=Assembly(bad,{}))
+
+    text = atlas_text([("page.png", (20, 18), [("body", -1, (4, 3), (6, 4), (6, 4), (0, 0), 0)])])
+    source = write_bundle(tmp_path / "official" / NAME, {"hero.atlas": text}, {"page": page()})
+    original = remap.read_inputs([source]).textures["page"]
+    candidate = original.resize((40, 36), Image.Resampling.NEAREST)
+    candidate.putpixel((10, 8), (100, 120, 140, candidate.getpixel((10, 8))[3]))
+    result = assemble_mod(
+        [source],
+        candidate,
+        tmp_path / "valid",
+        atlas_name="hero.atlas",
+        page_name="page.png",
+        scale=2,
+        projected=Assembly(candidate, {"composite": True}),
+    )
+    assert result["composite"] and result["texture_format"] == 4
+    assert remap.read_inputs([tmp_path / "valid" / result["bundle"]]).textures["page"].tobytes() == candidate.tobytes()
+    for label, xy, colour, message in [
+        ("alpha", (10, 8), (100, 120, 140, 7), "alpha"),
+        ("outside", (0, 0), (1, 2, 3, candidate.getpixel((0, 0))[3]), "outside"),
+    ]:
+        bad = candidate.copy()
+        bad.putpixel(xy, colour)
+        with pytest.raises(ValueError, match=message):
+            assemble_mod(
+                [source],
+                bad,
+                tmp_path / label,
+                atlas_name="hero.atlas",
+                page_name="page.png",
+                scale=2,
+                projected=Assembly(bad, {}),
+            )
 
 
 def test_generated_alpha_requires_mesh_mask_and_roundtrips(tmp_path):
     from bmpt.refine_assembly import Assembly
-    text = atlas_text([('page.png', (20, 18), [('body', -1, (4, 3), (6, 4), (6, 4), (0, 0), 0)])])
-    source = write_bundle(tmp_path / 'official' / NAME, {'hero.atlas': text}, {'page': page(), 'other': pattern((8, 8), 31)}, texture_format=25)
+
+    text = atlas_text([("page.png", (20, 18), [("body", -1, (4, 3), (6, 4), (6, 4), (0, 0), 0)])])
+    source = write_bundle(
+        tmp_path / "official" / NAME,
+        {"hero.atlas": text},
+        {"page": page(), "other": pattern((8, 8), 31)},
+        texture_format=25,
+    )
     before = source.read_bytes()
     original = remap.read_inputs([source])
-    candidate = original.textures['page'].resize((40, 36), Image.Resampling.NEAREST)
+    candidate = original.textures["page"].resize((40, 36), Image.Resampling.NEAREST)
     candidate.putpixel((10, 8), (100, 120, 140, 7))
-    mesh = Image.new('L', candidate.size); mesh.putpixel((10, 8), 255)
-    common = dict(atlas_name='hero.atlas', page_name='page.png', scale=2,
-                  projected=Assembly(candidate, {}), allow_generated_alpha=True)
-    with pytest.raises(ValueError, match='requires an L mask'):
-        assemble_mod([source], candidate, tmp_path / 'missing', **common)
-    with pytest.raises(ValueError, match='outside edited meshes'):
-        assemble_mod([source], candidate, tmp_path / 'outside', edited_mesh_mask=Image.new('L', candidate.size), **common)
-    bad = mesh.copy(); bad.putpixel((10, 8), 128)
-    with pytest.raises(ValueError, match='binary'):
-        assemble_mod([source], candidate, tmp_path / 'soft', edited_mesh_mask=bad, **common)
-    report = assemble_mod([source], candidate, tmp_path / 'valid', edited_mesh_mask=mesh, **common)
-    target = tmp_path / 'valid' / report['bundle']
+    mesh = Image.new("L", candidate.size)
+    mesh.putpixel((10, 8), 255)
+    common = dict(
+        atlas_name="hero.atlas",
+        page_name="page.png",
+        scale=2,
+        projected=Assembly(candidate, {}),
+        allow_generated_alpha=True,
+    )
+    with pytest.raises(ValueError, match="requires an L mask"):
+        assemble_mod([source], candidate, tmp_path / "missing", **common)
+    with pytest.raises(ValueError, match="outside edited meshes"):
+        assemble_mod(
+            [source], candidate, tmp_path / "outside", edited_mesh_mask=Image.new("L", candidate.size), **common
+        )
+    bad = mesh.copy()
+    bad.putpixel((10, 8), 128)
+    with pytest.raises(ValueError, match="binary"):
+        assemble_mod([source], candidate, tmp_path / "soft", edited_mesh_mask=bad, **common)
+    report = assemble_mod([source], candidate, tmp_path / "valid", edited_mesh_mask=mesh, **common)
+    target = tmp_path / "valid" / report["bundle"]
     decoded = remap.read_inputs([target])
-    assert decoded.textures['page'].tobytes() == candidate.tobytes()
-    assert decoded.textures['other'].tobytes() == original.textures['other'].tobytes()
+    assert decoded.textures["page"].tobytes() == candidate.tobytes()
+    assert decoded.textures["other"].tobytes() == original.textures["other"].tobytes()
     assert decoded.atlases == original.atlases and decoded.skeletons == original.skeletons
-    assert report['texture_format'] == 4 and Bundle.check_crc_match(target)
+    assert report["texture_format"] == 4 and Bundle.check_crc_match(target)
     assert source.read_bytes() == before
-    common['projected'] = Assembly(candidate, {'edited_mesh_mask': mesh})
-    assemble_mod([source], candidate, tmp_path / 'report-mask', **common)
+    common["projected"] = Assembly(candidate, {"edited_mesh_mask": mesh})
+    assemble_mod([source], candidate, tmp_path / "report-mask", **common)
 
 
 def test_generated_alpha_mask_does_not_bypass_official_region_check(tmp_path):
     from bmpt.refine_assembly import Assembly
-    text = atlas_text([('page.png', (20, 18), [('body', -1, (4, 3), (6, 4), (6, 4), (0, 0), 0)])])
-    source = write_bundle(tmp_path / 'official' / NAME, {'hero.atlas': text}, {'page': page()})
-    candidate = remap.read_inputs([source]).textures['page'].copy()
+
+    text = atlas_text([("page.png", (20, 18), [("body", -1, (4, 3), (6, 4), (6, 4), (0, 0), 0)])])
+    source = write_bundle(tmp_path / "official" / NAME, {"hero.atlas": text}, {"page": page()})
+    candidate = remap.read_inputs([source]).textures["page"].copy()
     candidate.putpixel((0, 0), (0, 0, 0, 255))
-    with pytest.raises(ValueError, match='outside official regions'):
-        assemble_mod([source], candidate, tmp_path / 'invalid', atlas_name='hero.atlas', page_name='page.png',
-                     projected=Assembly(candidate, {}), allow_generated_alpha=True,
-                     edited_mesh_mask=Image.new('L', candidate.size, 255))
+    with pytest.raises(ValueError, match="outside official regions"):
+        assemble_mod(
+            [source],
+            candidate,
+            tmp_path / "invalid",
+            atlas_name="hero.atlas",
+            page_name="page.png",
+            projected=Assembly(candidate, {}),
+            allow_generated_alpha=True,
+            edited_mesh_mask=Image.new("L", candidate.size, 255),
+        )

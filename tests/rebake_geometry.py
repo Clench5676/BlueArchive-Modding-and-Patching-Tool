@@ -27,10 +27,18 @@ def by_name(text: str | bytes) -> dict:
         wx0, wx1 = left + ox / ow * 100, left + (ox + rw) / ow * 100
         wy0, wy1 = oy / oh * 100, (oy + rh) / oh * 100
         slots.append(region.label)
-        drawn.append({"slot": region.label, "region": region.name, "page": region.page, "blend": 0, "alpha": 1.0,
-                      "vertices": [wx0, wy0, wx1, wy0, wx1, wy1, wx0, wy1],
-                      "uvs": [v / size for corner in corners for v, size in zip(corner, (width, height))],
-                      "triangles": [0, 1, 2, 2, 3, 0]})
+        drawn.append(
+            {
+                "slot": region.label,
+                "region": region.name,
+                "page": region.page,
+                "blend": 0,
+                "alpha": 1.0,
+                "vertices": [wx0, wy0, wx1, wy0, wx1, wy1, wx0, wy1],
+                "uvs": [v / size for corner in corners for v, size in zip(corner, (width, height))],
+                "triangles": [0, 1, 2, 2, 3, 0],
+            }
+        )
     return {"slots": slots, "poses": {"": drawn}}
 
 
@@ -42,5 +50,7 @@ def geometry(library, mod_id: str) -> dict:
     targets = library._spine_parts(core_of(paths[0].name), pin)
     originals = {target: library._official_for(target, pin) for target in targets}
     inputs = library._remap_view(record, paths, targets, originals, pin)
-    return {name: {"source": by_name(source), "target": by_name(inputs["official"].atlases[name])}
-            for name, source in library._rebake_plan(inputs).items()}
+    return {
+        name: {"source": by_name(source), "target": by_name(inputs["official"].atlases[name])}
+        for name, source in library._rebake_plan(inputs).items()
+    }

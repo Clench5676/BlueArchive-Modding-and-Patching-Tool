@@ -1,4 +1,5 @@
 """Streamed arm curves retain all other data and only slot consumers change."""
+
 import copy
 from types import SimpleNamespace
 
@@ -10,32 +11,64 @@ from bmpt.gameassets.model import decode_clip, read_streamed
 
 
 def _binding(path, attr=1, type_id=4):
-    return dict(path=path, attribute=attr, typeID=type_id, customType=0, isPPtrCurve=0,
-                script={"m_FileID": 0, "m_PathID": 0})
+    return dict(
+        path=path, attribute=attr, typeID=type_id, customType=0, isPPtrCurve=0, script={"m_FileID": 0, "m_PathID": 0}
+    )
 
 
 def _clip():
     # streamed position + arm quaternion; dense position + arm Euler;
     # constant hand quaternion + non-Transform scalar.
     keys = [(i, 0.2, -0.1, 0.3, float(i)) for i in range(7)]
-    data = {"m_StreamedClip": {"curveCount": 7, "data": ac.encode_streamed([
-                (-float("inf"), keys), (0., keys), (1., [(i, 0., 0., 0., float(i + 1)) for i in range(7)]),
-                (float("inf"), [])])},
-            "m_DenseClip": {"m_CurveCount": 6, "m_FrameCount": 4, "m_BeginTime": 0., "m_SampleRate": 3.,
-                            "m_SampleArray": [float(i) / 8 for i in range(24)]},
-            "m_ConstantClip": {"data": [0., 0., 0., 1., 0.25]}}
-    tree = {"m_Name": "Synthetic", "m_SampleRate": 3., "m_Legacy": False,
-            "m_ClipBindingConstant": {"genericBindings": [_binding(1), _binding(10, 2), _binding(2), _binding(20, 4),
-                                                          _binding(30, 2), _binding(50, 99, 114)]},
-            "m_MuscleClip": {"m_StartTime": 0., "m_StopTime": 1., "m_Clip": {"data": data},
-                             "m_ValueArrayDelta": [{"m_Start": float(i), "m_Stop": float(i + 1)} for i in range(18)],
-                             "m_ValueArrayReferencePose": [float(i) for i in range(18)]}}
+    data = {
+        "m_StreamedClip": {
+            "curveCount": 7,
+            "data": ac.encode_streamed(
+                [
+                    (-float("inf"), keys),
+                    (0.0, keys),
+                    (1.0, [(i, 0.0, 0.0, 0.0, float(i + 1)) for i in range(7)]),
+                    (float("inf"), []),
+                ]
+            ),
+        },
+        "m_DenseClip": {
+            "m_CurveCount": 6,
+            "m_FrameCount": 4,
+            "m_BeginTime": 0.0,
+            "m_SampleRate": 3.0,
+            "m_SampleArray": [float(i) / 8 for i in range(24)],
+        },
+        "m_ConstantClip": {"data": [0.0, 0.0, 0.0, 1.0, 0.25]},
+    }
+    tree = {
+        "m_Name": "Synthetic",
+        "m_SampleRate": 3.0,
+        "m_Legacy": False,
+        "m_ClipBindingConstant": {
+            "genericBindings": [
+                _binding(1),
+                _binding(10, 2),
+                _binding(2),
+                _binding(20, 4),
+                _binding(30, 2),
+                _binding(50, 99, 114),
+            ]
+        },
+        "m_MuscleClip": {
+            "m_StartTime": 0.0,
+            "m_StopTime": 1.0,
+            "m_Clip": {"data": data},
+            "m_ValueArrayDelta": [{"m_Start": float(i), "m_Stop": float(i + 1)} for i in range(18)],
+            "m_ValueArrayReferencePose": [float(i) for i in range(18)],
+        },
+    }
     tree["m_MuscleClipSize"] = ms.muscle_size(tree)
     return tree
 
 
 def _rotations():
-    values = np.array([[0., 0., np.sin(x), np.cos(x)] for x in (0., 0.1, 0.2, 0.3)])
+    values = np.array([[0.0, 0.0, np.sin(x), np.cos(x)] for x in (0.0, 0.1, 0.2, 0.3)])
     return {path: values.copy() for path in (10, 20, 30, 40, 60, 70)}
 
 
@@ -49,14 +82,22 @@ def test_streamed_encoder_round_trip_preserves_cubics_dense_constants_and_bindin
     assert (streamed, dense, len(data["m_ConstantClip"]["data"])) == (27, 3, 1)
     assert data["m_ConstantClip"]["data"] == [0.25]
     assert data["m_DenseClip"]["m_SampleArray"] == [float(i) / 8 for f in range(4) for i in range(f * 6, f * 6 + 3)]
-    old_keys = [(t, [k for k in keys if k[0] < 3]) for t, keys in read_streamed(before["m_MuscleClip"]["m_Clip"]["data"]["m_StreamedClip"]["data"])]
+    old_keys = [
+        (t, [k for k in keys if k[0] < 3])
+        for t, keys in read_streamed(before["m_MuscleClip"]["m_Clip"]["data"]["m_StreamedClip"]["data"])
+    ]
     new_keys = [(t, [k for k in keys if k[0] < 3]) for t, keys in read_streamed(data["m_StreamedClip"]["data"])]
     assert [(t, keys) for t, keys in new_keys if keys or not np.isfinite(t)] == old_keys
     assert len(tree["m_MuscleClip"]["m_ValueArrayReferencePose"]) == 31
     for path in rotations:
         index = next(i for i, _, b in ac._bindings(tree) if b["path"] == path)
-        keys = [k for t, frame in read_streamed(data["m_StreamedClip"]["data"]) if np.isfinite(t)
-                for k in frame if index <= k[0] < index + 4]
+        keys = [
+            k
+            for t, frame in read_streamed(data["m_StreamedClip"]["data"])
+            if np.isfinite(t)
+            for k in frame
+            if index <= k[0] < index + 4
+        ]
         assert len(keys) == 16
     broken = copy.deepcopy(tree)
     broken["m_MuscleClip"]["m_Clip"]["data"]["m_ConstantClip"]["data"][0] += 1
@@ -83,13 +124,20 @@ def test_repoint_changes_only_effective_overrides_and_field_lists():
         def external(sf, cab):
             assert cab == "cab-slot"
             return 0
-    owner = SimpleNamespace(type=SimpleNamespace(name="AnimatorOverrideController"),
-                            assets_file=SimpleNamespace(name="CAB-slot", externals=[]))
+
+    owner = SimpleNamespace(
+        type=SimpleNamespace(name="AnimatorOverrideController"),
+        assets_file=SimpleNamespace(name="CAB-slot", externals=[]),
+    )
     ptr = lambda n: {"m_FileID": 0, "m_PathID": n}
-    tree = {"m_Controller": ptr(100), "m_Clips": [
-        {"m_OriginalClip": ptr(1), "m_OverrideClip": ptr(2)},
-        {"m_OriginalClip": ptr(3), "m_OverrideClip": ptr(0)},
-        {"m_OriginalClip": ptr(4), "m_OverrideClip": ptr(5)}]}
+    tree = {
+        "m_Controller": ptr(100),
+        "m_Clips": [
+            {"m_OriginalClip": ptr(1), "m_OverrideClip": ptr(2)},
+            {"m_OriginalClip": ptr(3), "m_OverrideClip": ptr(0)},
+            {"m_OriginalClip": ptr(4), "m_OverrideClip": ptr(5)},
+        ],
+    }
     before = copy.deepcopy(tree)
     copies = {("cab-slot", 2): ("cab-slot", 20), ("cab-slot", 3): ("cab-slot", 30)}
     assert ac.repoint(tree, owner, copies, Writer())
@@ -107,7 +155,8 @@ from test_model_arms import official, view
 
 @official
 def test_official_copies_leave_originals_and_other_consumers_unchanged_and_export_uses_copies(
-        view, tmp_path, monkeypatch, record_property):
+    view, tmp_path, monkeypatch, record_property
+):
     import time
     from bmpt.engine import Bundle, SaveOptions
     from bmpt.gameassets import model_adapt as ma, model_arms as ar
@@ -118,16 +167,26 @@ def test_official_copies_leave_originals_and_other_consumers_unchanged_and_expor
     files, index = view
     captured = {}
     retarget = ar.retarget
+
     def capture(*args, **kwargs):
         changes = retarget(*args, **kwargs)
         captured.update({k: (c.clip.get_raw_data(), c.clip.peek_name()) for k, c in changes.items()})
         return changes
+
     monkeypatch.setattr(ar, "retarget", capture)
     slot = _slot(files, "hina_original")
     sources = [p for p in files if p.name.startswith("character-ch0288-_mxload")]
     started = time.perf_counter()
-    result = ma.adapt(index=index, resolver=None, target_files=slot, target_dev="hina_original", source_files=sources,
-                      source_dev="ch0288", open_writable=Bundle.load, physics=True)
+    result = ma.adapt(
+        index=index,
+        resolver=None,
+        target_files=slot,
+        target_dev="hina_original",
+        source_files=sources,
+        source_dev="ch0288",
+        open_writable=Bundle.load,
+        physics=True,
+    )
     arm_build_seconds = time.perf_counter() - started
     adapted = dict(index)
     paths = []
@@ -168,8 +227,15 @@ def test_official_copies_leave_originals_and_other_consumers_unchanged_and_expor
     assert data[:4] == b"glTF"
     monkeypatch.setattr(ar, "retarget", lambda *args, **kwargs: {})
     started = time.perf_counter()
-    baseline = ma.adapt(index=index, resolver=None, target_files=slot, target_dev="hina_original", source_files=sources,
-                        source_dev="ch0288", open_writable=Bundle.load)
+    baseline = ma.adapt(
+        index=index,
+        resolver=None,
+        target_files=slot,
+        target_dev="hina_original",
+        source_files=sources,
+        source_dev="ch0288",
+        open_writable=Bundle.load,
+    )
     baseline_seconds = time.perf_counter() - started
     assert baseline.parts == result.parts
     record_property("arm_build_added_seconds", arm_build_seconds - baseline_seconds)
@@ -180,19 +246,24 @@ def test_official_copies_leave_originals_and_other_consumers_unchanged_and_expor
 def test_synthetic_copy_and_repoint_keeps_original_clip_enemy_and_timeline_bytes(monkeypatch):
     import json
     from bmpt.gameassets import model_adapt as ma
+
     class Obj:
         def __init__(self, sf, pid, kind, tree):
             self.assets_file, self.path_id = sf, pid
             self.type, self.tree = SimpleNamespace(name=kind), copy.deepcopy(tree)
             self.data = b""
             sf.objects[pid] = self
+
         def read_typetree(self):
             return copy.deepcopy(self.tree)
+
         def save_typetree(self, tree):
             self.tree = copy.deepcopy(tree)
             self.data = json.dumps(tree, sort_keys=True).encode()
+
         def peek_name(self):
             return "Synthetic"
+
     sf = SimpleNamespace(name="CAB-slot", externals=[], objects={})
     original = Obj(sf, 1, "AnimationClip", _clip())
     ptr = lambda n: {"m_FileID": 0, "m_PathID": n}
@@ -200,20 +271,32 @@ def test_synthetic_copy_and_repoint_keeps_original_clip_enemy_and_timeline_bytes
     controller = Obj(sf, 2, "AnimatorOverrideController", tree)
     enemy = Obj(sf, 3, "AnimatorOverrideController", tree)
     timeline = Obj(sf, 4, "MonoBehaviour", {"m_Clip": ptr(1)})
-    preload = Obj(sf, 5, "AssetBundle", {"m_PreloadTable": [ptr(1)], "m_Container": [
-        ["slot.prefab", {"preloadIndex": 0, "preloadSize": 1, "asset": ptr(2)}]]})
+    preload = Obj(
+        sf,
+        5,
+        "AssetBundle",
+        {
+            "m_PreloadTable": [ptr(1)],
+            "m_Container": [["slot.prefab", {"preloadIndex": 0, "preloadSize": 1, "asset": ptr(2)}]],
+        },
+    )
     before = {o.path_id: json.dumps(o.tree, sort_keys=True) for o in (original, enemy, timeline)}
+
     class Writer:
         files = {"cab-slot": (None, sf)}
+
         def file(self, cab):
             return sf
+
         def add_like(self, dest, source, tree):
             obj = Obj(dest, 10, "AnimationClip", tree)
             obj.save_typetree(tree)
             return 10
+
         def external(self, dest, cab):
             assert cab == "cab-slot"
             return 0
+
     edited = copy.deepcopy(original.tree)
     rotations = _rotations()
     ac.encode_rotations(edited, rotations)
@@ -231,12 +314,12 @@ def test_duplicate_bindings_and_keys_keep_their_original_order():
     before = _clip()
     data = before["m_MuscleClip"]["m_Clip"]["data"]
     before["m_ClipBindingConstant"]["genericBindings"].append(_binding(50, 99, 114))
-    data["m_ConstantClip"]["data"].append(.75)
+    data["m_ConstantClip"]["data"].append(0.75)
     muscle = before["m_MuscleClip"]
-    muscle["m_ValueArrayDelta"].append({"m_Start": .75, "m_Stop": .75})
-    muscle["m_ValueArrayReferencePose"].append(.75)
+    muscle["m_ValueArrayDelta"].append({"m_Start": 0.75, "m_Stop": 0.75})
+    muscle["m_ValueArrayReferencePose"].append(0.75)
     frames = read_streamed(data["m_StreamedClip"]["data"])
-    frames.insert(2, (0., [(0, 0., 0., 0., -5.)]))
+    frames.insert(2, (0.0, [(0, 0.0, 0.0, 0.0, -5.0)]))
     data["m_StreamedClip"]["data"] = ac.encode_streamed(frames)
     before["m_MuscleClipSize"] = ms.muscle_size(before)
     after = copy.deepcopy(before)
@@ -250,6 +333,7 @@ def test_official_repeated_binding_readback_remains_value_exact(view):
     from bmpt.gameassets import model_adapt as ma
     from bmpt.gameassets.model import BundleGraph
     from test_model_adapt import _slot
+
     files, index = view
     with BundleGraph(index) as graph:
         prefabs = ma._model_prefabs(graph, [p for p in _slot(files, "ch0266") if p.name.startswith("character-")])
@@ -264,8 +348,9 @@ def test_official_repeated_binding_readback_remains_value_exact(view):
             for name in ("UpperArm", "Forearm", "Hand"):
                 bone = sk.first(f"Bip001 {side} {name}")
                 parent = sk.nodes[bone].parent
-                rotations[zlib.crc32(sk.nodes[bone].path.encode())] = ms.continuous(np.array([
-                    ms.quaternion(ma._rotation(np.linalg.inv(w[parent]) @ w[bone])) for w in poses]))
+                rotations[zlib.crc32(sk.nodes[bone].path.encode())] = ms.continuous(
+                    np.array([ms.quaternion(ma._rotation(np.linalg.inv(w[parent]) @ w[bone])) for w in poses])
+                )
         after = copy.deepcopy(before)
         ac.encode_rotations(after, rotations)
         assert ac.edit_error(before, after, rotations) is None
@@ -278,27 +363,34 @@ def test_official_ungated_pair_build_is_byte_identical_to_the_previous_path(view
     from bmpt.engine import Bundle
     from bmpt.gameassets import model_adapt as ma, model_arms as ar
     from test_model_adapt import _slot
+
     files, index = view
-    arguments = dict(index=index, resolver=None, target_files=_slot(files, 'ch0288'), target_dev='ch0288',
-                     source_files=[p for p in files if p.name.startswith('character-hina_original-_mxload')],
-                     source_dev='hina_original', open_writable=Bundle.load)
+    arguments = dict(
+        index=index,
+        resolver=None,
+        target_files=_slot(files, "ch0288"),
+        target_dev="ch0288",
+        source_files=[p for p in files if p.name.startswith("character-hina_original-_mxload")],
+        source_dev="hina_original",
+        open_writable=Bundle.load,
+    )
     started = time.perf_counter()
     enabled = ma.adapt(**arguments)
     enabled_seconds = time.perf_counter() - started
-    before = {p.name: hashlib.sha256(b.env.file.save(packer='none')).hexdigest() for p, b in enabled.changed.items()}
-    monkeypatch.setattr(ar, 'retarget', lambda *a, **k: {})
+    before = {p.name: hashlib.sha256(b.env.file.save(packer="none")).hexdigest() for p, b in enabled.changed.items()}
+    monkeypatch.setattr(ar, "retarget", lambda *a, **k: {})
     started = time.perf_counter()
     disabled = ma.adapt(**arguments)
     disabled_seconds = time.perf_counter() - started
-    after = {p.name: hashlib.sha256(b.env.file.save(packer='none')).hexdigest() for p, b in disabled.changed.items()}
+    after = {p.name: hashlib.sha256(b.env.file.save(packer="none")).hexdigest() for p, b in disabled.changed.items()}
     assert before == after
-    record_property('ungated_build_added_seconds', enabled_seconds - disabled_seconds)
+    record_property("ungated_build_added_seconds", enabled_seconds - disabled_seconds)
 
 
 def _stored_curves_reference(tree):
     data = tree["m_MuscleClip"]["m_Clip"]["data"]
     out = {}
-    for t, keys in read_streamed(data['m_StreamedClip']['data']):
+    for t, keys in read_streamed(data["m_StreamedClip"]["data"]):
         for index, *coefficients in keys:
             out.setdefault(index, []).append((t, *coefficients))
     return {k: np.array(v) for k, v in out.items()}
@@ -308,8 +400,8 @@ def test_array_read_stored_curves_equal_the_key_by_key_reader():
     tree = _clip()
     data = tree["m_MuscleClip"]["m_Clip"]["data"]
     frames = read_streamed(data["m_StreamedClip"]["data"])
-    frames.insert(2, (0., [(3, 0., float("nan"), -0., -5.), (0, 1e-30, 0., 0., 2.)]))  # repeated keys, NaN, -0
-    frames.insert(4, (.5, [(6, 3.5, 0., 0., 1.)]))
+    frames.insert(2, (0.0, [(3, 0.0, float("nan"), -0.0, -5.0), (0, 1e-30, 0.0, 0.0, 2.0)]))  # repeated keys, NaN, -0
+    frames.insert(4, (0.5, [(6, 3.5, 0.0, 0.0, 1.0)]))
     data["m_StreamedClip"]["data"] = ac.encode_streamed(frames)
     got = ac.stored_curves(tree)
     want = _stored_curves_reference(tree)
@@ -325,6 +417,7 @@ def test_array_read_stored_curves_equal_the_key_by_key_reader():
 def _sample_curves_reference(tree, wanted, *, hold_before=False):
     """The frame-by-frame streamed reader the array reader replaced; dense and constant curves as before."""
     import struct
+
     times = np.array(ac.clip_times(tree))
     data = tree["m_MuscleClip"]["m_Clip"]["data"]
     streamed = data["m_StreamedClip"]
@@ -370,10 +463,10 @@ def test_array_streamed_reader_samples_exactly_like_the_frame_by_frame_reader():
     tree = _clip()
     data = tree["m_MuscleClip"]["m_Clip"]["data"]
     frames = read_streamed(data["m_StreamedClip"]["data"])
-    frames.insert(2, (0., [(3, 0., float("nan"), -0., -5.), (0, 1e-30, 0., 0., 2.)]))
-    frames.insert(3, (.25, []))
-    frames.insert(4, (.5, [(6, 3.5, -1., 0., 1.)]))
-    frames.insert(5, (float("nan"), [(1, 1., 1., 1., 1.)]))
+    frames.insert(2, (0.0, [(3, 0.0, float("nan"), -0.0, -5.0), (0, 1e-30, 0.0, 0.0, 2.0)]))
+    frames.insert(3, (0.25, []))
+    frames.insert(4, (0.5, [(6, 3.5, -1.0, 0.0, 1.0)]))
+    frames.insert(5, (float("nan"), [(1, 1.0, 1.0, 1.0, 1.0)]))
     data["m_StreamedClip"]["data"] = ac.encode_streamed(frames)
     for wanted in (range(7), {0, 3}, {6, 40}, set(), range(30)):
         for hold in (False, True):

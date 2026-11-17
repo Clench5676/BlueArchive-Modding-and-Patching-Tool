@@ -39,22 +39,35 @@ def serialized(setup_library, monkeypatch):
         objects = []
         for name, text in {**spec.get("skeletons", {}), **spec.get("atlases", {})}.items():
             data = SimpleNamespace(m_Name=name, m_Script=text)
-            objects.append(SimpleNamespace(type=SimpleNamespace(name="TextAsset"),
-                peek_name=lambda name=name: name, read=lambda data=data: data))
+            objects.append(
+                SimpleNamespace(
+                    type=SimpleNamespace(name="TextAsset"),
+                    peek_name=lambda name=name: name,
+                    read=lambda data=data: data,
+                )
+            )
         for name, size in spec.get("textures", {}).items():
-            data = SimpleNamespace(m_Name=name, m_Width=size[0], m_Height=size[1],
-                                   m_StreamData=SimpleNamespace(path=spec.get("stream", "")))
+            data = SimpleNamespace(
+                m_Name=name,
+                m_Width=size[0],
+                m_Height=size[1],
+                m_StreamData=SimpleNamespace(path=spec.get("stream", "")),
+            )
             objects.append(SimpleNamespace(type=SimpleNamespace(name="Texture2D"), read=lambda data=data: data))
-        files = {f"{spec.get('cab', 'CAB-official')}-{i}" if i else spec.get("cab", "CAB-official"):
-                 SimpleNamespace(target_platform=SimpleNamespace(name=platform),
-                    externals=[SimpleNamespace(path=ref) for ref in spec.get("references", [])],
-                    files={42: SimpleNamespace()})
-                 for i, platform in enumerate(spec.get("platforms", ["StandaloneWindows64"]))}
+        files = {
+            f"{spec.get('cab', 'CAB-official')}-{i}" if i else spec.get("cab", "CAB-official"): SimpleNamespace(
+                target_platform=SimpleNamespace(name=platform),
+                externals=[SimpleNamespace(path=ref) for ref in spec.get("references", [])],
+                files={42: SimpleNamespace()},
+            )
+            for i, platform in enumerate(spec.get("platforms", ["StandaloneWindows64"]))
+        }
         files.update({name: SimpleNamespace() for name in spec.get("resources", [])})
         keys = set(spec.get("skeletons", {})) | set(spec.get("atlases", {})) | set(spec.get("textures", {}))
-        contents[path.read_bytes()] = SimpleNamespace(env=SimpleNamespace(
-            files={"bundle": SimpleNamespace(files=files)}, objects=objects),
-            get_asset_keys=lambda *args, **kwargs: keys)
+        contents[path.read_bytes()] = SimpleNamespace(
+            env=SimpleNamespace(files={"bundle": SimpleNamespace(files=files)}, objects=objects),
+            get_asset_keys=lambda *args, **kwargs: keys,
+        )
         return path
 
     monkeypatch.setattr(integrity, "inspect", inspect_bundle)
@@ -116,8 +129,10 @@ def test_platform_is_read_from_real_unitypy_serialized_metadata(tmp_path, platfo
 def test_missing_lobby_part_is_named_and_siblings_are_never_imported(serialized):
     env, register = serialized
     skeleton = register(game_bundle(env.tmp / "input", "test_home_gl", part="textassets"), fixture("missing_part"))
-    texture = register(game_bundle(skeleton.parent, "test_home_gl", part="textures", payload=b"texture"),
-                       {"cab": "CAB-textures", "textures": {"page": [64, 64]}})
+    texture = register(
+        game_bundle(skeleton.parent, "test_home_gl", part="textures", payload=b"texture"),
+        {"cab": "CAB-textures", "textures": {"page": [64, 64]}},
+    )
     with pytest.raises(ServiceError) as caught:
         env.library.add([skeleton])
     assert caught.value.code == "mod_parts_missing"
@@ -129,9 +144,14 @@ def test_missing_lobby_part_is_named_and_siblings_are_never_imported(serialized)
 
 def test_missing_texture_and_embedded_stream_are_named(serialized):
     env, register = serialized
-    source = register(make_mod(env.original, env.tmp / "input"), {
-        "atlases": {"test_spr.atlas": "absent.png\nsize: 32,32\n"},
-        "textures": {"other": [32, 32]}, "stream": "archive:/CAB-data/missing.resS"})
+    source = register(
+        make_mod(env.original, env.tmp / "input"),
+        {
+            "atlases": {"test_spr.atlas": "absent.png\nsize: 32,32\n"},
+            "textures": {"other": [32, 32]},
+            "stream": "archive:/CAB-data/missing.resS",
+        },
+    )
     with pytest.raises(ServiceError) as caught:
         env.library.add([source])
     assert caught.value.params["files"] == "absent.png, missing.resS"
@@ -139,40 +159,52 @@ def test_missing_texture_and_embedded_stream_are_named(serialized):
 
 def test_partial_mod_can_use_current_official_dependencies(serialized):
     env, register = serialized
-    texture = register(game_bundle(env.game_dir, part="textures", payload=b"official page"),
-                       {"cab": "CAB-page", "textures": {"page": [64, 64]}})
-    source = register(make_mod(env.original, env.tmp / "input"), {
-        "references": ["CAB-page"], "atlases": {"test_spr.atlas": "page.png\nsize: 64,64\n"}})
+    texture = register(
+        game_bundle(env.game_dir, part="textures", payload=b"official page"),
+        {"cab": "CAB-page", "textures": {"page": [64, 64]}},
+    )
+    source = register(
+        make_mod(env.original, env.tmp / "input"),
+        {"references": ["CAB-page"], "atlases": {"test_spr.atlas": "page.png\nsize: 64,64\n"}},
+    )
     result = env.library.add([source])
     assert result[0].size == source.stat().st_size
     assert texture.read_bytes() != source.read_bytes()
 
 
-@pytest.mark.parametrize('kind', ['spr', 'model'])
+@pytest.mark.parametrize("kind", ["spr", "model"])
 def test_outdated_import_defers_stale_cab_checks_until_rebuilt_output_is_added(serialized, kind):
     env, register = serialized
-    if kind == 'model':
-        env.original = game_bundle(env.game_dir, 'test_model', category='characters')
-        env.catalog.variants['test'].model = 'test_model'
-        env.catalog.variant_for_model_core = lambda core: env.catalog.variants['test'] if core == 'test_model' else None
+    if kind == "model":
+        env.original = game_bundle(env.game_dir, "test_model", category="characters")
+        env.catalog.variants["test"].model = "test_model"
+        env.catalog.variant_for_model_core = lambda core: env.catalog.variants["test"] if core == "test_model" else None
     register(env.original, {"references": ["CAB-current-shared"]})
-    source = register(game_bundle(env.tmp / "old", 'test_spr' if kind == 'spr' else 'test_model',
-                                 category='spinecharacters' if kind == 'spr' else 'characters',
-                                 date="2025-01-01", payload=b"old mod"),
-                      {"references": ["CAB-old-shared"]})
+    source = register(
+        game_bundle(
+            env.tmp / "old",
+            "test_spr" if kind == "spr" else "test_model",
+            category="spinecharacters" if kind == "spr" else "characters",
+            date="2025-01-01",
+            payload=b"old mod",
+        ),
+        {"references": ["CAB-old-shared"]},
+    )
     before = source.read_bytes(), env.original.read_bytes()
     report = env.library.inspect_import({source.name: source})
     assert report["compatibility"]["outdated"]
     assert not env.library.mods()
     assert (source.read_bytes(), env.original.read_bytes()) == before
     # Rebuilding renames the output for the current target; stale references must then be refused.
-    stale = register(make_mod(env.original, env.tmp / "stale", payload=b"bad rebuild"),
-                     {"references": ["CAB-old-shared"]})
+    stale = register(
+        make_mod(env.original, env.tmp / "stale", payload=b"bad rebuild"), {"references": ["CAB-old-shared"]}
+    )
     with pytest.raises(ServiceError, match="mod_parts_missing"):
         env.library.add([stale])
-    rebuilt = register(make_mod(env.original, env.tmp / "rebuilt", payload=b"rebuilt mod"),
-                       {"references": ["CAB-current-shared"]})
-    entry, = env.library.add([rebuilt])
+    rebuilt = register(
+        make_mod(env.original, env.tmp / "rebuilt", payload=b"rebuilt mod"), {"references": ["CAB-current-shared"]}
+    )
+    (entry,) = env.library.add([rebuilt])
     assert entry.file.read_bytes() == rebuilt.read_bytes()
 
 
@@ -184,13 +216,12 @@ def test_current_import_still_refuses_missing_cab_dependencies(serialized):
         env.library.inspect_import({source.name: source})
 
 
-@pytest.mark.parametrize('problem, code', [('platform', 'mod_platform_mismatch'),
-                                          ('unreadable', 'bundle_invalid')])
+@pytest.mark.parametrize("problem, code", [("platform", "mod_platform_mismatch"), ("unreadable", "bundle_invalid")])
 def test_outdated_import_still_checks_source_readability_and_platform(serialized, problem, code):
     env, register = serialized
-    source = game_bundle(env.tmp / 'old', date='2025-01-01', payload=b'old mod')
-    if problem == 'platform':
-        register(source, {'platforms': ['Android']})
+    source = game_bundle(env.tmp / "old", date="2025-01-01", payload=b"old mod")
+    if problem == "platform":
+        register(source, {"platforms": ["Android"]})
     with pytest.raises(ServiceError) as caught:
         env.library.inspect_import({source.name: source})
     assert caught.value.code == code
@@ -200,10 +231,14 @@ def test_outdated_import_still_checks_source_readability_and_platform(serialized
 def test_missing_pages_are_checked_in_omitted_official_atlases_too(serialized):
     env, register = serialized
     register(env.original, {"atlases": {"test_spr.atlas": "page.png\nsize: 64,64\n"}})
-    register(game_bundle(env.game_dir, part="textures", payload=b"official texture"),
-             {"cab": "CAB-texture", "textures": {"page": [64, 64]}})
-    source = register(game_bundle(env.tmp / "input", part="textures", payload=b"wrong texture"),
-                      {"cab": "CAB-texture", "textures": {"wrong": [64, 64]}})
+    register(
+        game_bundle(env.game_dir, part="textures", payload=b"official texture"),
+        {"cab": "CAB-texture", "textures": {"page": [64, 64]}},
+    )
+    source = register(
+        game_bundle(env.tmp / "input", part="textures", payload=b"wrong texture"),
+        {"cab": "CAB-texture", "textures": {"wrong": [64, 64]}},
+    )
     with pytest.raises(ServiceError) as caught:
         env.library.add([source])
     assert caught.value.code == "mod_parts_missing" and caught.value.params["files"] == "page.png"
@@ -214,8 +249,14 @@ def test_shared_install_references_are_allowed_but_missing_skeleton_atlases_are_
     register(env.original, {"references": ["archive:/CAB-shared/CAB-shared"]})
     source = register(make_mod(env.original, env.tmp / "input"), {"references": ["CAB-shared"]})
     assert env.library.add([source])
-    register(source, {"skeletons": {"first.skel": "4.2.33", "second.skel": "4.2.33"},
-                      "atlases": {"first.atlas": "page.png\nsize: 64,64\n"}, "textures": {"page": [64, 64]}})
+    register(
+        source,
+        {
+            "skeletons": {"first.skel": "4.2.33", "second.skel": "4.2.33"},
+            "atlases": {"first.atlas": "page.png\nsize: 64,64\n"},
+            "textures": {"page": [64, 64]},
+        },
+    )
     with pytest.raises(ServiceError) as caught:
         env.library.add([source])
     assert caught.value.params["files"] == "second.atlas"
@@ -223,9 +264,14 @@ def test_shared_install_references_are_allowed_but_missing_skeleton_atlases_are_
 
 def test_a_single_skeleton_atlas_pair_can_have_different_names(serialized):
     env, register = serialized
-    source = register(make_mod(env.original, env.tmp / "input"), {
-        "skeletons": {"test.skel": "4.2.33"}, "atlases": {"other.atlas": "page.png\nsize: 64,64\n"},
-        "textures": {"page": [64, 64]}})
+    source = register(
+        make_mod(env.original, env.tmp / "input"),
+        {
+            "skeletons": {"test.skel": "4.2.33"},
+            "atlases": {"other.atlas": "page.png\nsize: 64,64\n"},
+            "textures": {"page": [64, 64]},
+        },
+    )
     assert env.library.add([source])
 
 
@@ -244,14 +290,25 @@ def test_compatibility_reads_kept_official_skeleton_and_never_changes_sources(se
     env, register = serialized
     data = fixture("mismatched_skeleton")
     register(env.original, {"skeletons": {"test_spr.skel": json.dumps(data["official"])}})
-    source = register(make_mod(env.original, env.tmp / "input"), {
-        "skeletons": {"test_spr.skel": json.dumps(data["mod"])},
-        "atlases": {"test_spr.atlas": "page.png\nsize: 64,64\n"}, "textures": {"page": [64, 64]}})
+    source = register(
+        make_mod(env.original, env.tmp / "input"),
+        {
+            "skeletons": {"test_spr.skel": json.dumps(data["mod"])},
+            "atlases": {"test_spr.atlas": "page.png\nsize: 64,64\n"},
+            "textures": {"page": [64, 64]},
+        },
+    )
     # The official fixture must also supply the atlas for the effective bundle set.
-    register(env.original, {"skeletons": {"test_spr.skel": json.dumps(data["official"])},
-        "atlases": {"test_spr.atlas": "page.png\nsize: 64,64\n"}, "textures": {"page": [64, 64]}})
+    register(
+        env.original,
+        {
+            "skeletons": {"test_spr.skel": json.dumps(data["official"])},
+            "atlases": {"test_spr.atlas": "page.png\nsize: 64,64\n"},
+            "textures": {"page": [64, 64]},
+        },
+    )
     added = env.library.add([source])
-    entry, = added
+    (entry,) = added
     before = entry.file.read_bytes()
     env.library.apply("test", f"mod:{entry.id}")
     report = env.library.compatibility(entry.id)
@@ -264,15 +321,25 @@ def test_compatibility_reads_kept_official_skeleton_and_never_changes_sources(se
 def test_compatibility_uses_the_new_current_official_files_after_a_game_update(serialized):
     env, register = serialized
     data = fixture("mismatched_skeleton")
-    source = register(make_mod(env.original, env.tmp / "input"), {
-        "skeletons": {"test_spr.skel": json.dumps(data["mod"])},
-        "atlases": {"test_spr.atlas": "page.png\nsize: 64,64\n"}, "textures": {"page": [64, 64]}})
-    entry, = env.library.add([source])
+    source = register(
+        make_mod(env.original, env.tmp / "input"),
+        {
+            "skeletons": {"test_spr.skel": json.dumps(data["mod"])},
+            "atlases": {"test_spr.atlas": "page.png\nsize: 64,64\n"},
+            "textures": {"page": [64, 64]},
+        },
+    )
+    (entry,) = env.library.add([source])
     env.library.apply("test", f"mod:{entry.id}")
     env.original.unlink()
-    register(game_bundle(env.game_dir, date="2026-02-01", payload=b"updated official"), {
-        "skeletons": {"test_spr.skel": json.dumps(data["official"])},
-        "atlases": {"test_spr.atlas": "page.png\nsize: 64,64\n"}, "textures": {"page": [64, 64]}})
+    register(
+        game_bundle(env.game_dir, date="2026-02-01", payload=b"updated official"),
+        {
+            "skeletons": {"test_spr.skel": json.dumps(data["official"])},
+            "atlases": {"test_spr.atlas": "page.png\nsize: 64,64\n"},
+            "textures": {"page": [64, 64]},
+        },
+    )
     report = env.library.compatibility(entry.id)
     assert report["outdated"] and not report["unavailable"]
     assert json.loads(base64.b64decode(report["official"]["skeletons"]["test_spr.skel"]["data"])) == data["official"]
@@ -282,12 +349,16 @@ def test_compatibility_uses_the_new_current_official_files_after_a_game_update(s
 def test_compatibility_of_a_custom_alias_finds_current_official_files(serialized, official_source):
     env, register = serialized
     data = fixture("mismatched_skeleton")
-    official = {"skeletons": {"test_spr.skel": json.dumps(data["official"])},
-        "atlases": {"test_spr.atlas": "page.png\nsize: 64,64\n"}, "textures": {"page": [64, 64]}}
+    official = {
+        "skeletons": {"test_spr.skel": json.dumps(data["official"])},
+        "atlases": {"test_spr.atlas": "page.png\nsize: 64,64\n"},
+        "textures": {"page": [64, 64]},
+    }
     register(env.original, official)
-    source = register(make_mod(env.original, env.tmp / "input"), {
-        **official, "skeletons": {"test_spr.skel": json.dumps(data["mod"])}})
-    entry, = env.library.add([source])
+    source = register(
+        make_mod(env.original, env.tmp / "input"), {**official, "skeletons": {"test_spr.skel": json.dumps(data["mod"])}}
+    )
+    (entry,) = env.library.add([source])
     env.library.rename(entry.id, "\u8317\u732b")
     if official_source == "library":
         env.library.apply("test", f"mod:{entry.id}")
@@ -309,10 +380,15 @@ def test_compatibility_of_a_custom_alias_finds_current_official_files(serialized
 def test_compatibility_uses_the_variant_core_after_its_installed_core_changes(serialized, stored_core):
     env, register = serialized
     data = fixture("mismatched_skeleton")
-    source = register(make_mod(env.original, env.tmp / "input"), {
-        "skeletons": {"test_spr.skel": json.dumps(data["mod"])},
-        "atlases": {"test_spr.atlas": "page.png\nsize: 64,64\n"}, "textures": {"page": [64, 64]}})
-    entry, = env.library.add([source])
+    source = register(
+        make_mod(env.original, env.tmp / "input"),
+        {
+            "skeletons": {"test_spr.skel": json.dumps(data["mod"])},
+            "atlases": {"test_spr.atlas": "page.png\nsize: 64,64\n"},
+            "textures": {"page": [64, 64]},
+        },
+    )
+    (entry,) = env.library.add([source])
     if stored_core != "test_spr":
         renamed = entry.file.with_name(entry.file.name.replace("test_spr", stored_core))
         entry.file.rename(renamed)
@@ -321,9 +397,14 @@ def test_compatibility_uses_the_variant_core_after_its_installed_core_changes(se
     env.library.rename(entry.id, "\u8317\u732b")
     env.original.unlink()
     env.catalog.variants["test"].spr = "current_spr"
-    register(game_bundle(env.game_dir, "current_spr", payload=b"current official"), {
-        "skeletons": {"current_spr.skel": json.dumps(data["official"])},
-        "atlases": {"test_spr.atlas": "page.png\nsize: 64,64\n"}, "textures": {"page": [64, 64]}})
+    register(
+        game_bundle(env.game_dir, "current_spr", payload=b"current official"),
+        {
+            "skeletons": {"current_spr.skel": json.dumps(data["official"])},
+            "atlases": {"test_spr.atlas": "page.png\nsize: 64,64\n"},
+            "textures": {"page": [64, 64]},
+        },
+    )
     report = env.library.compatibility(entry.id)
     assert report["outdated"] and not report["unavailable"]
     assert json.loads(base64.b64decode(report["official"]["skeletons"]["current_spr.skel"]["data"])) == data["official"]
@@ -337,14 +418,19 @@ def test_compatibility_keeps_the_live_atlas_and_checks_page_proportions(serializ
     old_atlas = "page.png\nsize: 16,16\nIntro_A/Intro_A\n bounds: 2,2,4,4\n"
     current_atlas = old_atlas.replace("2,2,4,4", "8,8,4,4")
     register(env.original, {"atlases": {"test.atlas": current_atlas}, "textures": {"page": [16, 16]}})
-    kept = register(game_bundle(env.library.root / "originals", date="2025-01-01", payload=b"old official"),
-                    {"atlases": {"test.atlas": old_atlas}, "textures": {"page": [16, 16]}})
-    source = register(make_mod(kept, env.tmp / "input"),
-                      {"skeletons": {"test.skel": "4.2.33"}, "textures": {"page": size}})
-    register(game_bundle(env.game_dir, part="textassets", payload=b"official text"),
-             {"atlases": {"test.atlas": current_atlas}})
+    kept = register(
+        game_bundle(env.library.root / "originals", date="2025-01-01", payload=b"old official"),
+        {"atlases": {"test.atlas": old_atlas}, "textures": {"page": [16, 16]}},
+    )
+    source = register(
+        make_mod(kept, env.tmp / "input"), {"skeletons": {"test.skel": "4.2.33"}, "textures": {"page": size}}
+    )
+    register(
+        game_bundle(env.game_dir, part="textassets", payload=b"official text"),
+        {"atlases": {"test.atlas": current_atlas}},
+    )
     before = {path: path.read_bytes() for path in (source, kept, env.original)}
-    entry, = env.library.add([source])
+    (entry,) = env.library.add([source])
     report = env.library.compatibility(entry.id)
     assert report["mod"]["atlases"] == {"test.atlas": current_atlas}
     assert report["remappable"] is remappable
@@ -355,13 +441,20 @@ def test_add_and_compatibility_never_convert_or_rewrite_a_skeleton(serialized, m
     env, register = serialized
     data = fixture("mismatched_skeleton")
     data["mod"]["skeleton"]["spine"] = "3.8.99"
-    source = register(make_mod(env.original, env.tmp / "input"), {
-        "skeletons": {"test_spr.skel": json.dumps(data["mod"])},
-        "atlases": {"test_spr.atlas": "page.png\nsize: 64,64\n"}, "textures": {"page": [64, 64]}})
+    source = register(
+        make_mod(env.original, env.tmp / "input"),
+        {
+            "skeletons": {"test_spr.skel": json.dumps(data["mod"])},
+            "atlases": {"test_spr.atlas": "page.png\nsize: 64,64\n"},
+            "textures": {"page": [64, 64]},
+        },
+    )
     before = source.read_bytes()
-    monkeypatch.setattr("ba_modding_toolkit.spine.SkelConverter.ensure_version",
-                        lambda *a, **kw: pytest.fail("the check must not convert skeletons"))
-    entry, = env.library.add([source])
+    monkeypatch.setattr(
+        "ba_modding_toolkit.spine.SkelConverter.ensure_version",
+        lambda *a, **kw: pytest.fail("the check must not convert skeletons"),
+    )
+    (entry,) = env.library.add([source])
     report = env.library.compatibility(entry.id)
     assert report["mod"]["skeletons"]["test_spr.skel"]["version"] == "3.8.99"
     assert source.read_bytes() == entry.file.read_bytes() == before
@@ -375,7 +468,7 @@ def test_add_uses_the_normal_switch_or_configures_while_disabled(setup_library, 
     original = env.original.read_bytes()
     source = make_mod(env.original, env.tmp / "input")
     report = env.library.add_and_apply([source])
-    entry, = report
+    (entry,) = report
     assert env.library.configured("test")["spr"] == f"mod:{entry.id}"
     assert env.original.read_bytes() == (source.read_bytes() if enabled else original)
     assert (report.applied if enabled else report.configured) == [entry]
@@ -384,8 +477,10 @@ def test_add_uses_the_normal_switch_or_configures_while_disabled(setup_library, 
 
 def test_add_keeps_the_source_and_reports_a_refused_switch(setup_library, monkeypatch):
     env = setup_library
+
     def refuse(*args, **kwargs):
         raise ServiceError("game_running")
+
     monkeypatch.setattr(env.library, "apply", refuse)
     report = env.library.add_and_apply([make_mod(env.original, env.tmp / "input")])
     assert report.failed == [{"id": report[0].id, "code": "game_running", "ref": "E2009", "params": {}}]
@@ -400,7 +495,7 @@ def test_a_mod_recognized_in_another_install_still_switches_the_current_install(
     source = make_mod(env.original, env.tmp / "input", fixed=True)
     other.write_bytes(source.read_bytes())
     report = env.library.add_and_apply([source])
-    entry, = report
+    (entry,) = report
     assert report.installed == report.applied == [entry]
     assert env.original.read_bytes() == source.read_bytes()
     assert env.library.configured("test")["spr"] == f"mod:{entry.id}"
@@ -410,7 +505,7 @@ def test_comparison_without_an_official_copy_is_incomplete(serialized):
     env, register = serialized
     source = register(make_mod(env.original, env.tmp / "input"))
     env.original.write_bytes(source.read_bytes())
-    entry, = env.library.add([source])
+    (entry,) = env.library.add([source])
     assert env.library.compatibility(entry.id)["unavailable"]
 
 
@@ -430,14 +525,16 @@ def test_self_contained_atlas_positions_rotations_and_trims_are_not_official_dri
     old = "page.png\nsize: 64,64\npart\n  rotate: false\n  xy: 0,0\n  size: 4,8\n  orig: 6,10\n  offset: 1,1\n  index: -1\n"
     new = "page.png\nsize: 64,64\npart\n  rotate: 90\n  bounds: 20,20,4,8\n  offsets: 1,1,6,10\n  index: -1\n"
     register(env.original, {"atlases": {"test.atlas": new}, "textures": {"page": [64, 64]}})
-    source = register(make_mod(env.original, env.tmp / "input"),
-        {"atlases": {"test.atlas": old}, "textures": {"page": [64, 64]}})
-    entry, = env.library.add([source])
+    source = register(
+        make_mod(env.original, env.tmp / "input"), {"atlases": {"test.atlas": old}, "textures": {"page": [64, 64]}}
+    )
+    (entry,) = env.library.add([source])
     report = env.library.compatibility(entry.id)
     assert not report["remappable"]
     register(source, {"atlases": {"test.atlas": new}, "textures": {"page": [64, 64]}})
     # Inspecting an equal atlas is insensitive to line indentation and syntax spelling.
     from bmpt.atlas_remap import layout_changes
+
     equivalent = old.replace("rotate: false", "rotate: 0")
     assert layout_changes({"test.atlas": old.encode()}, {"test.atlas": equivalent.encode()}) == []
 
@@ -448,7 +545,9 @@ def test_import_validates_parts_without_running_compatibility(serialized, monkey
     env, register = serialized
     source = register(make_mod(env.original, env.tmp / "input"))
     monkeypatch.setattr(atlas_remap, "layout_changes", lambda *a, **kw: pytest.fail("import must not compare layouts"))
-    monkeypatch.setattr(integrity.Contents, "spine", lambda *a: pytest.fail("import must not build a compatibility report"))
+    monkeypatch.setattr(
+        integrity.Contents, "spine", lambda *a: pytest.fail("import must not build a compatibility report")
+    )
     report = env.library.add([source])
     assert len(report) == 1 and not report.compatibility
 
@@ -458,7 +557,7 @@ def test_compatibility_stamp_tracks_current_game_and_mod_bytes_without_writing(s
 
     env, register = serialized
     source = register(make_mod(env.original, env.tmp / "stamp-input"))
-    entry, = env.library.add([source])
+    (entry,) = env.library.add([source])
     before = entry.file.read_bytes(), env.original.read_bytes()
     first = env.library.compatibility_stamp(entry.id)
     assert env.library.compatibility_stamp(entry.id) == first
@@ -474,14 +573,15 @@ def test_compatibility_stamp_tracks_current_game_and_mod_bytes_without_writing(s
 
 # Replacement selection, dependency baselines and common Add/import identity.
 
+
 @pytest.fixture
 def checks(env, monkeypatch):
     specs, reads, indexes = {}, [], []
 
-    def register(path, *, cab='cab-a', references=(), **kwargs):
+    def register(path, *, cab="cab-a", references=(), **kwargs):
         specs[path.read_bytes()] = integrity.Contents(
-            platforms={'StandaloneWindows64'}, versions={'2021.3'}, files={cab},
-            references=set(references), **kwargs)
+            platforms={"StandaloneWindows64"}, versions={"2021.3"}, files={cab}, references=set(references), **kwargs
+        )
         return path
 
     def read(path, **kwargs):
@@ -496,252 +596,279 @@ def checks(env, monkeypatch):
         indexes.append(value)
         return value
 
-    monkeypatch.setattr(integrity, 'inspect', read)
-    monkeypatch.setattr(integrity, 'metadata', read)
-    monkeypatch.setattr(integrity, 'cab_names', cabs)
-    monkeypatch.setattr(service, 'CabIndex', index)
+    monkeypatch.setattr(integrity, "inspect", read)
+    monkeypatch.setattr(integrity, "metadata", read)
+    monkeypatch.setattr(integrity, "cab_names", cabs)
+    monkeypatch.setattr(service, "CabIndex", index)
     register(env.original)
     env.register, env.reads, env.indexes = register, reads, indexes
     return env
 
 
-@pytest.mark.parametrize('kind,core,category', [
-    ('spr', 'test_spr', 'spinecharacters'), ('lobby', 'test_home_gl', 'spinelobbies'),
-    ('model', 'test_model', 'characters')])
+@pytest.mark.parametrize(
+    "kind,core,category",
+    [
+        ("spr", "test_spr", "spinecharacters"),
+        ("lobby", "test_home_gl", "spinelobbies"),
+        ("model", "test_model", "characters"),
+    ],
+)
 def test_coexisting_dates_pass_each_part_and_complete_set_in_add_and_batch(checks, kind, core, category):
     e = checks
-    if kind == 'model':
-        e.catalog.variants['test'].model = core
-        e.catalog.variant_for_model_core = lambda name: e.catalog.variants['test'] if name == core else None
-    first = e.original if kind == 'spr' else game_bundle(e.game_dir, core, category=category, payload=b'first')
-    second = game_bundle(e.game_dir, core, category=category, date='2026-02-01', payload=b'second')
-    e.register(first, cab='cab-a', references={'cab-b'})
-    e.register(second, cab='cab-b', references={'cab-a'})
-    sources = [e.register(make_mod(path, e.tmp / 'upload', payload=f'mod {i}'.encode()),
-                          cab=cab, references={other})
-               for i, (path, cab, other) in enumerate([(first, 'cab-a', 'cab-b'), (second, 'cab-b', 'cab-a')])]
+    if kind == "model":
+        e.catalog.variants["test"].model = core
+        e.catalog.variant_for_model_core = lambda name: e.catalog.variants["test"] if name == core else None
+    first = e.original if kind == "spr" else game_bundle(e.game_dir, core, category=category, payload=b"first")
+    second = game_bundle(e.game_dir, core, category=category, date="2026-02-01", payload=b"second")
+    e.register(first, cab="cab-a", references={"cab-b"})
+    e.register(second, cab="cab-b", references={"cab-a"})
+    sources = [
+        e.register(make_mod(path, e.tmp / "upload", payload=f"mod {i}".encode()), cab=cab, references={other})
+        for i, (path, cab, other) in enumerate([(first, "cab-a", "cab-b"), (second, "cab-b", "cab-a")])
+    ]
     pin = e.library.current_pin()
-    assert mod_versions([('one', p.name) for p in sources], [p.name for p in (first, second)]) == ['', '']
+    assert mod_versions([("one", p.name) for p in sources], [p.name for p in (first, second)]) == ["", ""]
     for source, target in zip(sources, (first, second)):
         files = {source.name: source}
         assert e.library._replacements(files, [first, second], pin) == {target: source}
         e.library._check_group(files, pin, compatibility=False)
         report = e.library.inspect_import(files, pin, conversion=True)
-        assert not report['compatibility']['outdated']
-        assert report['direct'] == {target: source}
-        mod, = e.library.add([source])
-        assert not e.library.compatibility(mod.id)['outdated']
-    complete, = e.library.add(sources)
+        assert not report["compatibility"]["outdated"]
+        assert report["direct"] == {target: source}
+        (mod,) = e.library.add([source])
+        assert not e.library.compatibility(mod.id)["outdated"]
+    (complete,) = e.library.add(sources)
     assert len(e.library._paths(e.library._record(complete.id))) == 2
-    row, = analyze(e, [sources[0].parent])['entries']
-    assert row['reason'] is None and len(row['paths']) == 2
+    (row,) = analyze(e, [sources[0].parent])["entries"]
+    assert row["reason"] is None and len(row["paths"]) == 2
     assert len(e.library.add_files(kind, sources, direct=True).duplicates) == 1
     # Apply with a different CRC still addresses only the selected dated slot.
-    alternate = e.register(make_mod(first, e.tmp / 'alternate', payload=b'CRC changed mod'), cab='cab-a', references={'cab-b'})
-    alternate = alternate.rename(alternate.with_name(alternate.name.rsplit('_', 1)[0] + '_1.bundle'))
-    mod, = e.library.add([alternate])
-    group, = e.library._plan(e.library._record(mod.id), lambda text: None, pin)
+    alternate = e.register(
+        make_mod(first, e.tmp / "alternate", payload=b"CRC changed mod"), cab="cab-a", references={"cab-b"}
+    )
+    alternate = alternate.rename(alternate.with_name(alternate.name.rsplit("_", 1)[0] + "_1.bundle"))
+    (mod,) = e.library.add([alternate])
+    (group,) = e.library._plan(e.library._record(mod.id), lambda text: None, pin)
     assert group.files[0].existing_path == first and not group.target_paths
     before = second.read_bytes()
-    e.library.apply('test', f'mod:{mod.id}', kind=kind)
+    e.library.apply("test", f"mod:{mod.id}", kind=kind)
     assert first.read_bytes() == alternate.read_bytes() and second.read_bytes() == before
 
 
 def test_replacement_precedence_cab_match_old_release_and_ambiguity(checks, monkeypatch):
     e = checks
     first = e.original
-    second = e.register(game_bundle(e.game_dir, date='2026-02-01', payload=b'second'), cab='cab-b')
-    source = e.register(make_mod(first, e.tmp / 'upload'), cab='cab-b')
+    second = e.register(game_bundle(e.game_dir, date="2026-02-01", payload=b"second"), cab="cab-b")
+    source = e.register(make_mod(first, e.tmp / "upload"), cab="cab-b")
     pin = e.library.current_pin()
     targets = [first, second]
     assert e.library._replacements({source.name: source}, targets, pin) == {first: source}
-    different_crc = source.name.rsplit('_', 1)[0] + '_1.bundle'
+    different_crc = source.name.rsplit("_", 1)[0] + "_1.bundle"
     # The name without the CRC names the part; only a file of the part's structure is its current release.
     assert e.library._replacements({different_crc: source}, targets, pin) == {}
-    built_on_first = e.register(make_mod(first, e.tmp / 'same', payload=b'built on first'), cab='cab-a')
+    built_on_first = e.register(make_mod(first, e.tmp / "same", payload=b"built on first"), cab="cab-a")
     assert e.library._replacements({different_crc: built_on_first}, targets, pin) == {first: built_on_first}
-    renamed = different_crc.replace('2026-01-01', '2025-01-01')
+    renamed = different_crc.replace("2026-01-01", "2025-01-01")
     assert e.library._replacements({renamed: source}, targets, pin) == {second: source}
-    assert not e.library._check_group({renamed: source}, pin)['outdated']
-    assert e.library.direct_import({renamed: source}, pin)['direct'] == {second: source}
+    assert not e.library._check_group({renamed: source}, pin)["outdated"]
+    assert e.library.direct_import({renamed: source}, pin)["direct"] == {second: source}
     # Several CAB candidates prove a current release but cannot decide its target.
-    third = e.register(game_bundle(e.game_dir, part='002', payload=b'duplicate CAB'), cab='cab-b')
-    undecidable = renamed.replace('_003_', '_004_')
-    with pytest.raises(ServiceError, match='mod_target_ambiguous') as caught:
+    third = e.register(game_bundle(e.game_dir, part="002", payload=b"duplicate CAB"), cab="cab-b")
+    undecidable = renamed.replace("_003_", "_004_")
+    with pytest.raises(ServiceError, match="mod_target_ambiguous") as caught:
         e.library._check_group({undecidable: source}, pin, compatibility=False)
-    assert caught.value.params == {'file': undecidable}
+    assert caught.value.params == {"file": undecidable}
     # A unique part can decide a current release despite duplicate CAB evidence.
     assert e.library._replacements({renamed: source}, [second, third], pin) == {second: source}
     # With neither matching name nor CAB, it is older, however many parts are live.
-    e.register(source, cab='cab-new')
+    e.register(source, cab="cab-new")
     assert e.library._replacements({renamed: source}, targets, pin) == {}
-    monkeypatch.setattr('ba_modding_toolkit.searching.asset_match', lambda sources, candidates, log: (candidates, ''))
+    monkeypatch.setattr("ba_modding_toolkit.searching.asset_match", lambda sources, candidates, log: (candidates, ""))
     e.library._check_group({renamed: source}, pin, compatibility=False)
     assert e.library.direct_import({renamed: source}, pin) is None
-    assert e.library._check_group({renamed: source}, pin)['outdated']
+    assert e.library._check_group({renamed: source}, pin)["outdated"]
     assert not e.library.mods()
     second.unlink()
     third.unlink()
-    mod, = e.library.add([source.rename(source.with_name(renamed))])
-    group, = e.library._plan(e.library._record(mod.id), lambda text: None, pin)
+    (mod,) = e.library.add([source.rename(source.with_name(renamed))])
+    (group,) = e.library._plan(e.library._record(mod.id), lambda text: None, pin)
     assert group.target_paths == [first]
 
 
-@pytest.mark.parametrize('missing_official', ['none', 'replaced', 'all'])
-def test_unreplaced_install_bundle_supplies_new_reference_without_official_copies(checks, monkeypatch, missing_official):
+@pytest.mark.parametrize("missing_official", ["none", "replaced", "all"])
+def test_unreplaced_install_bundle_supplies_new_reference_without_official_copies(
+    checks, monkeypatch, missing_official
+):
     e = checks
-    shared = e.register(game_bundle(e.game_dir, 'other_spr', payload=b'shared'), cab='cab-shared')
-    source = e.register(make_mod(e.original, e.tmp / 'upload'), references={'cab-shared'})
+    shared = e.register(game_bundle(e.game_dir, "other_spr", payload=b"shared"), cab="cab-shared")
+    source = e.register(make_mod(e.original, e.tmp / "upload"), references={"cab-shared"})
     official_for = e.library._official_for
 
     def official(path, *args, **kwargs):
-        if missing_official == 'all' or missing_official == 'replaced' and path == e.original:
-            raise ServiceError('original_unavailable', file=path.name)
+        if missing_official == "all" or missing_official == "replaced" and path == e.original:
+            raise ServiceError("original_unavailable", file=path.name)
         return official_for(path, *args, **kwargs)
 
-    monkeypatch.setattr(e.library, '_official_for', official)
+    monkeypatch.setattr(e.library, "_official_for", official)
     files, pin = {source.name: source}, e.library.current_pin()
     e.library._check_group(files, pin, compatibility=False)
-    assert e.library.inspect_import(files, pin, conversion=True)['direct'] == {e.original: source}
+    assert e.library.inspect_import(files, pin, conversion=True)["direct"] == {e.original: source}
     e.library.add([source])
     assert len(e.indexes) == 1
     first_reads = len(e.reads)
     e.library._check_group(files, pin, compatibility=False)
-    assert len(e.reads) == first_reads, 'CAB metadata is reused for an unchanged install'
-    shared.write_bytes(game_bundle(e.tmp / 'changed', 'other_spr', payload=b'changed shared').read_bytes())
-    e.register(shared, cab='cab-no-longer-shared')
-    with pytest.raises(ServiceError, match='mod_parts_missing'):
+    assert len(e.reads) == first_reads, "CAB metadata is reused for an unchanged install"
+    shared.write_bytes(game_bundle(e.tmp / "changed", "other_spr", payload=b"changed shared").read_bytes())
+    e.register(shared, cab="cab-no-longer-shared")
+    with pytest.raises(ServiceError, match="mod_parts_missing"):
         e.library._check_group(files, pin, compatibility=False)
 
 
 def test_new_missing_references_name_replaced_files_then_folder_files_else_cab(checks):
     e = checks
-    sibling = e.register(game_bundle(e.game_dir, part='002', payload=b'sibling'), cab='cab-b', references={'cab-a'})
-    source = e.register(make_mod(e.original, e.tmp / 'upload'), cab='cab-new', references={'CAB-nowhere'})
-    with pytest.raises(ServiceError, match='mod_parts_missing') as caught:
+    sibling = e.register(game_bundle(e.game_dir, part="002", payload=b"sibling"), cab="cab-b", references={"cab-a"})
+    source = e.register(make_mod(e.original, e.tmp / "upload"), cab="cab-new", references={"CAB-nowhere"})
+    with pytest.raises(ServiceError, match="mod_parts_missing") as caught:
         e.library._check_group({source.name: source}, e.library.current_pin(), compatibility=False)
-    assert caught.value.params['files'] == ', '.join(sorted(['CAB-nowhere', e.original.name]))
-    folder_copy = e.register(make_mod(e.original, e.tmp / 'companion', payload=b'folder companion'), cab='cab-a')
-    folder_copy = folder_copy.rename(source.parent / folder_copy.name.replace('_003_', '_004_'))
-    source = e.register(source, cab='cab-new')
-    with pytest.raises(ServiceError, match='mod_parts_missing') as caught:
+    assert caught.value.params["files"] == ", ".join(sorted(["CAB-nowhere", e.original.name]))
+    folder_copy = e.register(make_mod(e.original, e.tmp / "companion", payload=b"folder companion"), cab="cab-a")
+    folder_copy = folder_copy.rename(source.parent / folder_copy.name.replace("_003_", "_004_"))
+    source = e.register(source, cab="cab-new")
+    with pytest.raises(ServiceError, match="mod_parts_missing") as caught:
         e.library._check_group({source.name: source}, e.library.current_pin(), compatibility=False)
-    assert caught.value.params['files'] == folder_copy.name
+    assert caught.value.params["files"] == folder_copy.name
     assert sibling.exists() and not e.library.mods()
 
 
-@pytest.mark.parametrize('unavailable', [False, True])
+@pytest.mark.parametrize("unavailable", [False, True])
 def test_baseline_quirks_pass_but_new_missing_atlas_does_not(checks, monkeypatch, unavailable):
     e = checks
-    e.register(e.original, skeletons={'already_missing.skel': b'4.2'}, references={'cab-official-quirk'})
+    e.register(e.original, skeletons={"already_missing.skel": b"4.2"}, references={"cab-official-quirk"})
     if unavailable:
+
         def absent(*args, **kwargs):
-            raise ServiceError('original_unavailable')
-        monkeypatch.setattr(e.library, '_official_for', absent)
-    source = e.register(make_mod(e.original, e.tmp / 'upload'), skeletons={'already_missing.skel': b'4.2'},
-                        references={'cab-official-quirk'})
+            raise ServiceError("original_unavailable")
+
+        monkeypatch.setattr(e.library, "_official_for", absent)
+    source = e.register(
+        make_mod(e.original, e.tmp / "upload"),
+        skeletons={"already_missing.skel": b"4.2"},
+        references={"cab-official-quirk"},
+    )
     e.library._check_group({source.name: source}, e.library.current_pin(), compatibility=False)
-    assert e.library.inspect_import({source.name: source}, conversion=True)['direct']
-    e.register(source, skeletons={'already_missing.skel': b'4.2', 'new_missing.skel': b'4.2'})
-    with pytest.raises(ServiceError, match='mod_parts_missing') as caught:
+    assert e.library.inspect_import({source.name: source}, conversion=True)["direct"]
+    e.register(source, skeletons={"already_missing.skel": b"4.2", "new_missing.skel": b"4.2"})
+    with pytest.raises(ServiceError, match="mod_parts_missing") as caught:
         e.library.add([source])
-    assert caught.value.params['files'] == 'new_missing.atlas'
+    assert caught.value.params["files"] == "new_missing.atlas"
 
 
 def test_cab_index_can_resolve_an_unreplaced_duplicate(checks):
     e = checks
-    other = e.register(game_bundle(e.game_dir, 'other_spr', payload=b'duplicate cab'), cab='cab-a')
+    other = e.register(game_bundle(e.game_dir, "other_spr", payload=b"duplicate cab"), cab="cab-a")
     index = e.library._cab_index(e.library.current_pin())
-    assert index.resolve({'cab-a'}, e.original) == {'cab-a': str(e.original)}
-    assert index.resolve({'cab-a'}, e.original, exclude={e.original}) == {'cab-a': str(other)}
+    assert index.resolve({"cab-a"}, e.original) == {"cab-a": str(e.original)}
+    assert index.resolve({"cab-a"}, e.original, exclude={e.original}) == {"cab-a": str(other)}
 
 
-@pytest.mark.parametrize('evidence', ['install', 'kept'])
+@pytest.mark.parametrize("evidence", ["install", "kept"])
 def test_add_and_batch_keep_known_names_despite_conflicting_content(checks, monkeypatch, evidence):
     e = checks
-    source = e.register(make_mod(e.original, e.tmp / 'upload'))
-    if evidence == 'kept':
-        kept = e.root / 'originals' / e.original.name
+    source = e.register(make_mod(e.original, e.tmp / "upload"))
+    if evidence == "kept":
+        kept = e.root / "originals" / e.original.name
         kept.parent.mkdir(parents=True)
         kept.write_bytes(e.original.read_bytes())
         e.original.unlink()
-    monkeypatch.setattr('bmpt.library.identity.content_cores',
-                        lambda path: pytest.fail('known filenames identify without content'))
-    expected = (source.name, 'test', 'spr')
+    monkeypatch.setattr(
+        "bmpt.library.identity.content_cores", lambda path: pytest.fail("known filenames identify without content")
+    )
+    expected = (source.name, "test", "spr")
     assert e.library.identify_import(source, source.name) == expected
-    row, = analyze(e, [source])['entries']
-    mod, = e.library.add([source])
+    (row,) = analyze(e, [source])["entries"]
+    (mod,) = e.library.add([source])
     assert (mod.file.name, mod.target, mod.kind) == expected
-    assert (Path(row['files'][0]['path']).name, row['variant'], row['kind']) == expected
+    assert (Path(row["files"][0]["path"]).name, row["variant"], row["kind"]) == expected
 
 
 def test_model_content_keeps_its_dependency_core_even_when_variant_model_differs(checks, monkeypatch):
     e = checks
-    dependency = e.register(game_bundle(e.game_dir, 'ch0258', category='characters', payload=b'dependency'))
-    source = e.register(make_mod(dependency, e.tmp / 'upload'))
-    variant = SimpleNamespace(key='ch0258', model='ch0258_02', spr=None, lobby=None, family='test')
-    e.catalog.variants['ch0258'] = variant
-    e.register(game_bundle(e.game_dir, 'ch0258_02', category='character', payload=b'prefab'), cab='cab-prefab')
-    e.catalog.variant_for_model_core = lambda core: variant if core in {'ch0258', 'ch0258_02'} else None
-    monkeypatch.setattr('bmpt.library.identity.content_cores', lambda path: {'model:ch0258'})
-    assert identify(source, source.name, e.catalog) == (source.name, 'ch0258', 'model')
-    assert e.library.identify_import(source, source.name) == (source.name, 'ch0258', 'model')
-    mod, = e.library.add([source])
-    assert (mod.core, mod.target, mod.kind) == ('ch0258', 'ch0258', 'model')
-    assert e.library.model_cores('ch0258') == ['ch0258_02', 'ch0258']
-    result = e.library.apply('ch0258', f'mod:{mod.id}', kind='model')
+    dependency = e.register(game_bundle(e.game_dir, "ch0258", category="characters", payload=b"dependency"))
+    source = e.register(make_mod(dependency, e.tmp / "upload"))
+    variant = SimpleNamespace(key="ch0258", model="ch0258_02", spr=None, lobby=None, family="test")
+    e.catalog.variants["ch0258"] = variant
+    e.register(game_bundle(e.game_dir, "ch0258_02", category="character", payload=b"prefab"), cab="cab-prefab")
+    e.catalog.variant_for_model_core = lambda core: variant if core in {"ch0258", "ch0258_02"} else None
+    monkeypatch.setattr("bmpt.library.identity.content_cores", lambda path: {"model:ch0258"})
+    assert identify(source, source.name, e.catalog) == (source.name, "ch0258", "model")
+    assert e.library.identify_import(source, source.name) == (source.name, "ch0258", "model")
+    (mod,) = e.library.add([source])
+    assert (mod.core, mod.target, mod.kind) == ("ch0258", "ch0258", "model")
+    assert e.library.model_cores("ch0258") == ["ch0258_02", "ch0258"]
+    result = e.library.apply("ch0258", f"mod:{mod.id}", kind="model")
     assert result.files == [dependency]
 
 
-@pytest.mark.parametrize('kind,core,category', [
-    ('spr', 'test_spr', 'spinecharacters'), ('lobby', 'test_home_gl', 'spinelobbies'),
-    ('model', 'test_model', 'characters')])
+@pytest.mark.parametrize(
+    "kind,core,category",
+    [
+        ("spr", "test_spr", "spinecharacters"),
+        ("lobby", "test_home_gl", "spinelobbies"),
+        ("model", "test_model", "characters"),
+    ],
+)
 def test_pre_split_older_bundle_keeps_all_update_targets_in_add_and_batch(checks, monkeypatch, kind, core, category):
     e = checks
-    if kind == 'model':
-        e.catalog.variants['test'].model = core
-        e.catalog.variant_for_model_core = lambda name: e.catalog.variants['test'] if name == core else None
-    if kind != 'spr':
-        e.original = game_bundle(e.game_dir, core, category=category, payload=b'part 003')
-    targets = [e.register(e.original, cab='cab-003')]
-    targets += [e.register(game_bundle(e.game_dir, core, category=category, part=f'{part:03}',
-                                       payload=f'part {part}'.encode()), cab=f'cab-{part:03}') for part in range(3)]
-    old = game_bundle(e.tmp / 'input', core, category=category, part='000', date='2025-01-01', payload=b'pre-split')
-    old = old.rename(old.with_name(old.name.replace('2025-01-01_000', '2025-01-01')))
+    if kind == "model":
+        e.catalog.variants["test"].model = core
+        e.catalog.variant_for_model_core = lambda name: e.catalog.variants["test"] if name == core else None
+    if kind != "spr":
+        e.original = game_bundle(e.game_dir, core, category=category, payload=b"part 003")
+    targets = [e.register(e.original, cab="cab-003")]
+    targets += [
+        e.register(
+            game_bundle(e.game_dir, core, category=category, part=f"{part:03}", payload=f"part {part}".encode()),
+            cab=f"cab-{part:03}",
+        )
+        for part in range(3)
+    ]
+    old = game_bundle(e.tmp / "input", core, category=category, part="000", date="2025-01-01", payload=b"pre-split")
+    old = old.rename(old.with_name(old.name.replace("2025-01-01_000", "2025-01-01")))
     assert parse_filename(old.name).res_type is None
-    e.register(old, cab='cab-old', names={'com.nexon.bluearchive'})
+    e.register(old, cab="cab-old", names={"com.nexon.bluearchive"})
     matches = []
 
     def held(sources, candidates, readers):
         # the pre-split bundle's assets are held by every current part, whatever its number
         matches.append((list(sources), list(candidates)))
-        return 'asset_key', list(candidates)
+        return "asset_key", list(candidates)
 
-    monkeypatch.setattr('bmpt.library.targets.by_assets', held)
-    monkeypatch.setattr('bmpt.library.targets.sharing_keys', lambda sources, candidates, keys: list(candidates))
+    monkeypatch.setattr("bmpt.library.targets.by_assets", held)
+    monkeypatch.setattr("bmpt.library.targets.sharing_keys", lambda sources, candidates, keys: list(candidates))
     pin = e.library.current_pin()
     assert not e.library._replacements({old.name: old}, targets, pin)
     assert e.library.direct_import({old.name: old}, pin) is None
     # Dependencies must exclude all update targets, even though the old file has no part number.
-    e.register(old, cab='cab-old', references={'cab-001'}, names={'com.nexon.bluearchive'})
-    with pytest.raises(ServiceError, match='mod_parts_missing') as caught:
+    e.register(old, cab="cab-old", references={"cab-001"}, names={"com.nexon.bluearchive"})
+    with pytest.raises(ServiceError, match="mod_parts_missing") as caught:
         e.library._check_group({old.name: old}, pin, compatibility=False)
-    assert next(path.name for path in targets if '_001_' in path.name) == caught.value.params['files']
-    e.register(old, cab='cab-old', names={'com.nexon.bluearchive'})
-    row, = analyze(e, [old])['entries']
-    assert (row['kind'], row['state'], row['reason']) == (kind, 'update', None)
+    assert next(path.name for path in targets if "_001_" in path.name) == caught.value.params["files"]
+    e.register(old, cab="cab-old", names={"com.nexon.bluearchive"})
+    (row,) = analyze(e, [old])["entries"]
+    assert (row["kind"], row["state"], row["reason"]) == (kind, "update", None)
     assert any(sources == [old] and set(candidates) == set(targets) for sources, candidates in matches)
-    assert set(e.services.batch_import._latest[row['id']].targets) == set(targets)
-    mod, = e.library.add_files(kind, [old])
-    assert e.library.compatibility(mod.id, pin)['outdated']
-    group, = e.library._plan(e.library._record(mod.id), lambda text: None, pin)
+    assert set(e.services.batch_import._latest[row["id"]].targets) == set(targets)
+    (mod,) = e.library.add_files(kind, [old])
+    assert e.library.compatibility(mod.id, pin)["outdated"]
+    (group,) = e.library._plan(e.library._record(mod.id), lambda text: None, pin)
     assert all(file.action == service.Action.UPDATE for file in group.files)
     assert set(group.target_paths) == set(targets)
 
 
-
-@pytest.mark.skipif(not Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent").is_dir(),
-                    reason="Set BAMT_TEST_GAME_DIR to a verified official view")
+@pytest.mark.skipif(
+    not Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent").is_dir(),
+    reason="Set BAMT_TEST_GAME_DIR to a verified official view",
+)
 def test_a_bundle_summary_gives_what_the_check_read_and_loads_nothing_new():
     from bmpt.library import integrity
 
@@ -786,8 +913,10 @@ def test_a_bundles_structure_ignores_content_and_tells_a_rebuild(tmp_path, monke
         assert inspection.structure(paths[rebuilt]) != structure, rebuilt
 
 
-@pytest.mark.skipif(not Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent").is_dir(),
-                    reason="Set BAMT_TEST_GAME_DIR to a verified official view")
+@pytest.mark.skipif(
+    not Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent").is_dir(),
+    reason="Set BAMT_TEST_GAME_DIR to a verified official view",
+)
 def test_an_official_parts_structure_survives_an_edit_and_not_a_dropped_object(tmp_path):
     import UnityPy
 
@@ -795,8 +924,10 @@ def test_an_official_parts_structure_survives_an_edit_and_not_a_dropped_object(t
 
     folder = Path(os.environ["BAMT_TEST_GAME_DIR"]) / "BlueArchive_Data/StreamingAssets/PUB/Resource/GameData/Windows"
     # the smallest part holding content a mod replaces
-    parts = sorted(folder.glob("assets-_mx-spinecharacters-ch0100_spr-_mxdependency-*_assets_all_*.bundle"),
-                   key=lambda item: item.stat().st_size)
+    parts = sorted(
+        folder.glob("assets-_mx-spinecharacters-ch0100_spr-_mxdependency-*_assets_all_*.bundle"),
+        key=lambda item: item.stat().st_size,
+    )
     for path in parts:
         kinds = {obj.type.name for obj in UnityPy.load(str(path)).objects}
         if kinds & {"TextAsset", "Texture2D"}:

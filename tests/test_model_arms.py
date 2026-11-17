@@ -1,4 +1,5 @@
 """Core clearance, contact constraints and official costume retarget regressions."""
+
 import copy
 import json
 import os
@@ -15,43 +16,70 @@ from test_model_adapt import GAME_DIR, official, _index, _slot, _skeleton
 
 
 def _rig():
-    bones = [("Bip001", 0, (0, 0, 0), (0, 0, 0, 1)),
-             ("Bip001 Pelvis", 1, (0, .5, 0), (0, 0, 0, 1)),
-             ("Bip001 Spine1", 2, (0, .3, 0), (0, 0, 0, 1)),
-             ("Bip001 Neck", 3, (0, .3, 0), (0, 0, 0, 1)),
-             ("Bip001 Head", 4, (0, .1, 0), (0, 0, 0, 1))]
+    bones = [
+        ("Bip001", 0, (0, 0, 0), (0, 0, 0, 1)),
+        ("Bip001 Pelvis", 1, (0, 0.5, 0), (0, 0, 0, 1)),
+        ("Bip001 Spine1", 2, (0, 0.3, 0), (0, 0, 0, 1)),
+        ("Bip001 Neck", 3, (0, 0.3, 0), (0, 0, 0, 1)),
+        ("Bip001 Head", 4, (0, 0.1, 0), (0, 0, 0, 1)),
+    ]
     for s, sign in (("L", 1), ("R", -1)):
         upper = len(bones) + 1
-        bones += [(f"Bip001 {s} UpperArm", 3, (sign * .1, .2, 0), (0, 0, 0, 1)),
-                  (f"Bip001 {s} Forearm", upper, (sign * .1, -.1, .02), (0, 0, 0, 1)),
-                  (f"Bip001 {s} Hand", upper + 1, (-sign * .1, -.1, .05), (0, 0, 0, 1)),
-                  (f"Bip001 {s} Finger0", upper + 2, (-sign * .02, 0, .02), (0, 0, 0, 1))]
+        bones += [
+            (f"Bip001 {s} UpperArm", 3, (sign * 0.1, 0.2, 0), (0, 0, 0, 1)),
+            (f"Bip001 {s} Forearm", upper, (sign * 0.1, -0.1, 0.02), (0, 0, 0, 1)),
+            (f"Bip001 {s} Hand", upper + 1, (-sign * 0.1, -0.1, 0.05), (0, 0, 0, 1)),
+            (f"Bip001 {s} Finger0", upper + 2, (-sign * 0.02, 0, 0.02), (0, 0, 0, 1)),
+        ]
     return ar.Rig(_skeleton(bones))
 
 
 def _torso(radius, loose=False):
     # A closed box and one triangle for each arm region. Bone-axis samples
     # inside the torso measure the outer radial wall, independent of winding.
-    vertices = np.array([(x, y, z) for x in (-radius, radius) for y in (.3, 1.3) for z in (-radius, radius)])
-    triangles = np.array([(0, 1, 3), (0, 3, 2), (4, 6, 7), (4, 7, 5), (0, 4, 5), (0, 5, 1),
-                          (2, 3, 7), (2, 7, 6), (0, 2, 6), (0, 6, 4), (1, 5, 7), (1, 7, 3)])
-    return ar.Drawn(vertices, np.zeros((8, 1), int), np.ones((8, 1)), triangles, np.zeros(8, int),
-                    lambda pose: np.eye(4)[None], np.full(8, loose))
+    vertices = np.array([(x, y, z) for x in (-radius, radius) for y in (0.3, 1.3) for z in (-radius, radius)])
+    triangles = np.array(
+        [
+            (0, 1, 3),
+            (0, 3, 2),
+            (4, 6, 7),
+            (4, 7, 5),
+            (0, 4, 5),
+            (0, 5, 1),
+            (2, 3, 7),
+            (2, 7, 6),
+            (0, 2, 6),
+            (0, 6, 4),
+            (1, 5, 7),
+            (1, 7, 3),
+        ]
+    )
+    return ar.Drawn(
+        vertices,
+        np.zeros((8, 1), int),
+        np.ones((8, 1)),
+        triangles,
+        np.zeros(8, int),
+        lambda pose: np.eye(4)[None],
+        np.full(8, loose),
+    )
 
 
 def test_measure_core_and_need_on_a_box_ignores_secondary_cloth():
     rig = _rig()
     w = rig.rest
     pts = rig.samples(w)
-    own, new = _torso(.11), _torso(.15)
+    own, new = _torso(0.11), _torso(0.15)
     a = ar.measure(own, rig, w, other=False, core=True)
     b = ar.measure(new, rig, w, other=False, core=True)
-    need = ar.push_of(a[0], b[0], np.full((2, 9), .04), .5)
-    assert need[:, 6].min() > .035
-    assert np.allclose(ar.push_of(b[0], a[0], b[1], .5), 0)
-    loose = ar.measure(_torso(.15, loose=True), rig, w, other=False, core=True)
+    need = ar.push_of(a[0], b[0], np.full((2, 9), 0.04), 0.5)
+    assert need[:, 6].min() > 0.035
+    assert np.allclose(ar.push_of(b[0], a[0], b[1], 0.5), 0)
+    loose = ar.measure(_torso(0.15, loose=True), rig, w, other=False, core=True)
     assert np.allclose(loose[0], -loose[2])
-    assert np.allclose(ar.push_of(np.array([-.08, .02]), np.array([.01, .03]), np.array([.04, .04]), .5), [.03, .01])
+    assert np.allclose(
+        ar.push_of(np.array([-0.08, 0.02]), np.array([0.01, 0.03]), np.array([0.04, 0.04]), 0.5), [0.03, 0.01]
+    )
     axis, directions, rho = ar.radial(rig.axis(w), pts.reshape(-1, 3))
     assert np.allclose(np.linalg.norm(directions, axis=1), 1)
     assert np.allclose(np.linalg.norm(pts.reshape(-1, 3) - axis, axis=1), rho)
@@ -59,26 +87,26 @@ def test_measure_core_and_need_on_a_box_ignores_secondary_cloth():
 
 def test_gate_has_a_named_fifth_of_frames_threshold_and_a_strict_depth_threshold():
     need = np.zeros((10, 2, 9))
-    need[0, 0, 4] = .03
+    need[0, 0, 4] = 0.03
     assert not ar.gated(need)
-    need[1, 0, 4] = .020
+    need[1, 0, 4] = 0.020
     assert not ar.gated(need)
-    need[1, 0, 4] = .020001
+    need[1, 0, 4] = 0.020001
     assert ar.gated(need)
-    assert ar.GATE_FRACTION == .2
+    assert ar.GATE_FRACTION == 0.2
     # Upper-arm-only differences cannot start a lower-arm solve.
     need[:] = 0
-    need[:, :, :2] = .08
+    need[:, :, :2] = 0.08
     assert not ar.gated(need)
 
 
 def test_weapon_contact_requires_shown_near_and_still_in_mount_space():
     relative = np.zeros((25, 2, 3))
-    dist = np.full((25, 2), .049)
+    dist = np.full((25, 2), 0.049)
     assert ar.weapon_holds(relative, dist).all()
-    dist[:, 1] = .051
+    dist[:, 1] = 0.051
     assert not ar.weapon_holds(relative, dist)[:, 1].any()
-    relative[12, 0, 0] = .02
+    relative[12, 0, 0] = 0.02
     holds = ar.weapon_holds(relative, dist)
     assert not holds[7:18, 0].any()
     assert holds[:7, 0].all()
@@ -89,15 +117,17 @@ def test_weapon_contact_requires_shown_near_and_still_in_mount_space():
 def test_head_contact_blends_only_the_head_bones_own_surface():
     rig = _rig()
     wrist = rig.samples(rig.rest)[0, 6]
+
     class Own:
         @staticmethod
         def posed(w, rows=None):
-            vertices = np.array([wrist + [.02, 0, 0], wrist + [0, 0, .5]])
+            vertices = np.array([wrist + [0.02, 0, 0], wrist + [0, 0, 0.5]])
             return vertices if rows is None else vertices[rows]
 
         @staticmethod
         def posed_batch(poses, rows):
             return np.array([Own.posed(w, rows) for w in poses])
+
     pins = ar.head_pins(rig, Own(), [rig.rest] * 20, np.array([0]), True)
     assert np.allclose(pins[:, 0], 1)
     assert np.allclose(ar.head_pins(rig, Own(), [rig.rest] * 20, np.array([1]), False), 0)
@@ -106,7 +136,7 @@ def test_head_contact_blends_only_the_head_bones_own_surface():
 def test_solver_keeps_lengths_hand_orientation_descendant_locals_and_weapon_holds():
     rig = _rig()
     poses = [rig.rest] * 12
-    need = np.full((12, 2, 9), .025)
+    need = np.full((12, 2, 9), 0.025)
     hold = np.zeros((12, 2), bool)
     hold[:, 1] = True
     delta = ar.solve_many(rig, poses, need, hold, np.zeros((12, 2)), (0, 0))
@@ -123,40 +153,48 @@ def test_solver_keeps_lengths_hand_orientation_descendant_locals_and_weapon_hold
         hand = rig.arm[0][3]
         finger = hand + 1
         assert np.allclose(np.linalg.inv(w[hand]) @ w[finger], np.linalg.inv(rig.rest[hand]) @ rig.rest[finger])
-    assert np.linalg.norm(delta[:, 0]).max() > .001
+    assert np.linalg.norm(delta[:, 0]).max() > 0.001
 
 
 def test_blend_wraps_and_rate_limit_respects_contacts_and_need_caps():
     values = np.zeros((30, 2, 9))
-    values[0] = .09
+    values[0] = 0.09
     assert ar.blend(values, True)[-1].min() > 0
     assert ar.blend(values, False)[-1].max() == 0
     hold = np.zeros((30, 2), bool)
     hold[15] = True
     before = ar.blend(values, True)
-    out = ar.rate_limit(before, np.array([.005, .01]), hold, True)
+    out = ar.rate_limit(before, np.array([0.005, 0.01]), hold, True)
     assert (out <= before).all() and (out >= 0).all()
     assert (out[hold] == 0).all()
     delta = np.abs(np.roll(out, 1, axis=0) - out)
-    assert (delta <= np.array([.0015, .003])[None, :, None] + 1e-9).all()
+    assert (delta <= np.array([0.0015, 0.003])[None, :, None] + 1e-9).all()
 
 
 def _open_pair(g, files, target_dev, source_dev):
     from bmpt.gameassets.model import model_root
+
     target_files = _slot(files, target_dev)
     prefabs = ma._model_prefabs(g, [f for f in target_files if f.name.startswith("character-")])
     sk = ma.Skeleton.of(g, prefabs[ma.choose_prefab(prefabs, target_dev)].deref())
     clips = ma.prefab_clips(g, sk, ma.own_prefabs(prefabs, target_dev))
+
     def costume(skeleton, cs):
         idle = next(iter(skeleton.poses(ma.pick(cs, ma.IDLE_CLIPS)[:1], frames=1)), None)
         parts = ma.roles(skeleton, idle)
         selected = [p for p in parts if p.role == "primary"] + [p for p in parts if p.role == "costume"]
         return ma.Costume(skeleton, selected, [ma.skin_of(p.mesh) for p in selected]), parts
+
     target, parts = costume(sk, clips)
-    source_files = [p for p in files if re.match(rf"(character-{re.escape(source_dev)}-_mxload|assets-_mx-npcs-{re.escape(source_dev)}-)", p.name)]
+    source_files = [
+        p
+        for p in files
+        if re.match(rf"(character-{re.escape(source_dev)}-_mxload|assets-_mx-npcs-{re.escape(source_dev)}-)", p.name)
+    ]
     if not source_files:
         source_files = [p for p in files if p.name.startswith("field-character-_mxload")]
     from bmpt.gameassets.model import AssetNotFound
+
     try:
         s_root, _, _ = model_root(g, source_files, source_dev)
     except AssetNotFound:
@@ -197,21 +235,24 @@ def _metrics(target, source, plan, change):
         penetration.append(growth)
         inward.append(np.where(growth > ar.GUARD_TOLERANCE + 1e-7, travel, 0).min(axis=1))
         assert growth.max() <= ar.GUARD_TOLERANCE + 1e-7
-        before.append(ar.push_of(d, b, radius, .5)[:, 2:])
-        after.append(ar.push_of(d, a, radius, .5)[:, 2:])
+        before.append(ar.push_of(d, b, radius, 0.5)[:, 2:])
+        after.append(ar.push_of(d, a, radius, 0.5)[:, 2:])
         moved.append([np.linalg.norm(rig.joints(w1, s)[2] - rig.joints(w0, s)[2]) for s in range(2)])
     original = [pose(f) for f in range(len(times))]
     corrected = [fixed(f) for f in range(len(times))]
     loop = bool(change.tree["m_MuscleClip"].get("m_LoopTime"))
     peak0, peak1 = ar.wrist_peak(rig, original, loop), ar.wrist_peak(rig, corrected, loop)
     assert (peak1 <= ar.WRIST_SPEED_RATIO * peak0 + 2e-6).all(), (change.clip.peek_name(), peak0, peak1)
-    return {"before_mm": (np.mean(before, axis=(0, 2)) * 1000).tolist(),
-            "after_mm": (np.mean(after, axis=(0, 2)) * 1000).tolist(),
-            "wrist_mm": (np.mean(moved, axis=0) * 1000).tolist(),
-            "gate": float(np.mean(np.max(before, axis=(1, 2)) > ar.GATE_DEPTH)),
-            "inward_mm": (np.min(inward, axis=0) * 1000).tolist(),
-            "penetration_growth_mm": (np.max(penetration, axis=(0, 2)) * 1000).tolist(),
-            "held": change.held.sum(axis=0).tolist(), "head_pins": (change.pins > .5).sum(axis=0).tolist()}
+    return {
+        "before_mm": (np.mean(before, axis=(0, 2)) * 1000).tolist(),
+        "after_mm": (np.mean(after, axis=(0, 2)) * 1000).tolist(),
+        "wrist_mm": (np.mean(moved, axis=0) * 1000).tolist(),
+        "gate": float(np.mean(np.max(before, axis=(1, 2)) > ar.GATE_DEPTH)),
+        "inward_mm": (np.min(inward, axis=0) * 1000).tolist(),
+        "penetration_growth_mm": (np.max(penetration, axis=(0, 2)) * 1000).tolist(),
+        "held": change.held.sum(axis=0).tolist(),
+        "head_pins": (change.pins > 0.5).sum(axis=0).tolist(),
+    }
 
 
 @official
@@ -227,15 +268,18 @@ def test_official_hina_aoba_clearance_and_unchanged_weapon_idle(view, record_pro
         record_property("arm_step_max_gap", max(np.diff([started, *steps, time.perf_counter()])))
         record_property("arm_corrected_clips", json.dumps([c.clip.peek_name() for c in changes.values()]))
         report = {}
-        reference = {"Formation_Idle": [.30345, 2.73653], "Cafe_Idle": [.39311, 1.31697],
-                     "Victory_End": [.11174, 2.10050]}
+        reference = {
+            "Formation_Idle": [0.30345, 2.73653],
+            "Cafe_Idle": [0.39311, 1.31697],
+            "Victory_End": [0.11174, 2.10050],
+        }
         for suffix in ("Formation_Idle", "Cafe_Idle", "Victory_End"):
             clip = ma.pick(clips, [suffix])[0]
             assert _key(clip) in changes, (suffix, [c.clip.peek_name() for c in changes.values()])
             change = changes[_key(clip)]
             report[suffix] = _metrics(target, source, plan, change)
             assert max(report[suffix]["after_mm"]) < 5, report[suffix]
-            assert np.max(np.abs(np.array(report[suffix]["after_mm"]) - reference[suffix])) < 1., report[suffix]
+            assert np.max(np.abs(np.array(report[suffix]["after_mm"]) - reference[suffix])) < 1.0, report[suffix]
         idle = ma.pick(clips, ["Normal_Idle"])[0]
         assert _key(idle) not in changes
         tree = g.tree(idle)
@@ -245,16 +289,19 @@ def test_official_hina_aoba_clearance_and_unchanged_weapon_idle(view, record_pro
         weapon_parts = [p for p in parts if p.role == "weapon" and p.mesh is not None]
         weapons = [ar.own_drawn(ma.Costume(rig.sk, [p], [ma.skin_of(p.mesh)])) for p in weapon_parts]
         shown = ar.weapon_visibility(rig, tree, weapon_parts, poses)
-        hold, pins = ar.contacts(rig, own, weapons, poses, ar.head_core(target), bool(tree["m_MuscleClip"]["m_LoopTime"]), shown)
+        hold, pins = ar.contacts(
+            rig, own, weapons, poses, ar.head_core(target), bool(tree["m_MuscleClip"]["m_LoopTime"]), shown
+        )
         assert hold.all()
-        report["Normal_Idle"] = _metrics(target, source, plan, ar.ArmClip(idle, tree, {}, 0., hold, pins))
+        report["Normal_Idle"] = _metrics(target, source, plan, ar.ArmClip(idle, tree, {}, 0.0, hold, pins))
         record_property("arm_metrics", json.dumps(report))
         print(json.dumps(report, indent=2), flush=True)
 
 
 @official
-@pytest.mark.parametrize("host,costume,only", [("ch0288", "hina_original", None),
-                                               ("ch0184", "yuuka_original", "Cafe_Idle")])
+@pytest.mark.parametrize(
+    "host,costume,only", [("ch0288", "hina_original", None), ("ch0184", "yuuka_original", "Cafe_Idle")]
+)
 def test_official_fine_direction_and_secondary_coat_unchanged(view, host, costume, only, record_property):
     files, index = view
     with BundleGraph(index) as g:
@@ -280,6 +327,7 @@ def _census_init(files, index):
 
 def _census_pair(pair):
     from bmpt.errors import ServiceError
+
     host, costume = pair
     row = {"pair": pair}
     started = time.perf_counter()
@@ -293,7 +341,7 @@ def _census_pair(pair):
                 row["error"] = "original clip bytes changed"
             rig = ar.Rig(target.skeleton)
             own, new = ar.own_drawn(target), ar.adapted_drawn(target, source, plan)
-            inward, worsening, residual = 0., 0., 0.
+            inward, worsening, residual = 0.0, 0.0, 0.0
             for key, change in changes.items():
                 times, orig, _ = rig.sk.clip_frames(g.tree(change.clip))
                 _, fixed, _ = rig.sk.clip_frames(change.tree)
@@ -314,10 +362,11 @@ def _census_pair(pair):
                     b, radius, _ = ar.measure(new, rig, w0[f], other=False, core=True)
                     a = ar.measure(new, rig, w1[f], other=False, core=True, radii=False)[0]
                     assert np.isfinite(a).all(), (change.clip.peek_name(), f)
-                    before = ar.push_of(d, b, radius, .5)[free, 2:]
-                    after = ar.push_of(d, a, radius, .5)[free, 2:]
+                    after = ar.push_of(d, a, radius, 0.5)[free, 2:]
                     growth = np.maximum(a, 0) - np.maximum(b, 0)
-                    inward = min(inward, ((p1 - p0) * radial).sum(axis=2)[growth > ar.GUARD_TOLERANCE + 1e-7].min(initial=0))
+                    inward = min(
+                        inward, ((p1 - p0) * radial).sum(axis=2)[growth > ar.GUARD_TOLERANCE + 1e-7].min(initial=0)
+                    )
                     worsening = max(worsening, growth.max(initial=0))
                     residual = max(residual, after.max(initial=0))
             row.update(inward_mm=inward * 1000, worsening_mm=worsening * 1000, residual_mm=residual * 1000)
@@ -325,6 +374,7 @@ def _census_pair(pair):
         row.update(refused=error.params.get("source"), detail=error.params)
     except Exception as error:
         import traceback
+
         row.update(error=f"{type(error).__name__}: {error}", trace=traceback.format_exc()[-1000:])
     return row
 
@@ -339,10 +389,14 @@ def test_official_same_family_arm_census(view, tmp_path, record_property):
     """
     from concurrent.futures import ProcessPoolExecutor
     from test_costume_census import _open, _jobs, _state
+
     _open(str(GAME_DIR), str(tmp_path))
     catalog = _state["catalog"]
-    pairs = [(catalog.variant(a).model, catalog.variant(b).model or catalog.variant(b).field_model)
-             for kind, a, b in _jobs() if kind == "pair"]
+    pairs = [
+        (catalog.variant(a).model, catalog.variant(b).model or catalog.variant(b).field_model)
+        for kind, a, b in _jobs()
+        if kind == "pair"
+    ]
     files, index = view
     with ProcessPoolExecutor(3, initializer=_census_init, initargs=(files, index)) as pool:
         rows = []
@@ -355,9 +409,16 @@ def test_official_same_family_arm_census(view, tmp_path, record_property):
     inward = [r for r in rows if r.get("inward_mm", 0) < -1.0001]
     worsening = [r for r in rows if r.get("worsening_mm", 0) > 1.0001]
     measured = [r for r in rows if "changed" in r]
-    summary = {"pairs": len(rows), "changed": sum(r["changed"] for r in measured),
-               "unchanged": sum(not r["changed"] for r in measured), "refused": len(rows) - len(measured),
-               "inward": inward, "worsening": worsening, "errors": errors, "tolerance_mm": 1.0}
+    summary = {
+        "pairs": len(rows),
+        "changed": sum(r["changed"] for r in measured),
+        "unchanged": sum(not r["changed"] for r in measured),
+        "refused": len(rows) - len(measured),
+        "inward": inward,
+        "worsening": worsening,
+        "errors": errors,
+        "tolerance_mm": 1.0,
+    }
     record_property("arm_census", json.dumps(summary))
     print(json.dumps({k: len(v) if isinstance(v, list) else v for k, v in summary.items()}), flush=True)
     assert not errors, errors
@@ -369,34 +430,40 @@ def test_head_core_excludes_hair_children_and_weapon_visibility_reads_switches()
     from types import SimpleNamespace
     from test_model_arm_clips import _clip, _binding
     import zlib
+
     rig = _rig()
     head = rig.head
     hair = len(rig.sk.nodes)
-    rig.sk.nodes.append(ma.Node("Hair01", rig.sk.nodes[head].path + "/Hair01", head,
-                                ((0, 0, 0), (0, 0, 0, 1), (1, 1, 1)), None, None, True))
-    costume = SimpleNamespace(skeleton=rig.sk, parts=[SimpleNamespace(bones=[head, hair])],
-                              skins=[SimpleNamespace(vertices=np.zeros((2, 3)), joints=np.array([[0], [1]]),
-                                                     weights=np.ones((2, 1)))])
+    rig.sk.nodes.append(
+        ma.Node(
+            "Hair01", rig.sk.nodes[head].path + "/Hair01", head, ((0, 0, 0), (0, 0, 0, 1), (1, 1, 1)), None, None, True
+        )
+    )
+    costume = SimpleNamespace(
+        skeleton=rig.sk,
+        parts=[SimpleNamespace(bones=[head, hair])],
+        skins=[SimpleNamespace(vertices=np.zeros((2, 3)), joints=np.array([[0], [1]]), weights=np.ones((2, 1)))],
+    )
     assert ar.head_core(costume).tolist() == [0]
     part = SimpleNamespace(node=rig.arm[0][3], renderer={"m_Enabled": True})
     tree = _clip()
     data = tree["m_MuscleClip"]["m_Clip"]["data"]
     b = _binding(zlib.crc32(rig.sk.nodes[part.node].path.encode()), zlib.crc32(b"m_Enabled"), 137)
     tree["m_ClipBindingConstant"]["genericBindings"].append(b)
-    data["m_ConstantClip"]["data"].append(0.)
+    data["m_ConstantClip"]["data"].append(0.0)
     assert not ar.weapon_visibility(rig, tree, [part], [rig.rest] * 4).any()
-    data["m_ConstantClip"]["data"][-1] = 1.
+    data["m_ConstantClip"]["data"][-1] = 1.0
     assert ar.weapon_visibility(rig, tree, [part], [rig.rest] * 4).all()
 
 
 def test_full_head_pin_is_a_fixed_wrist_during_temporal_projection():
     rig = _rig()
     poses = [rig.rest] * 12
-    need = np.full((12, 2, 9), .02)
+    need = np.full((12, 2, 9), 0.02)
     hold = np.zeros((12, 2), bool)
     pins = np.ones((12, 2))
     delta = ar.solve_many(rig, poses, need, hold, pins, (0, 0))
-    delta = ar.limit_motion(delta, np.array([.01, .01]), hold, True, pins)
+    delta = ar.limit_motion(delta, np.array([0.01, 0.01]), hold, True, pins)
     fixed = ar._repose(rig, poses, delta, hold)
     for w in fixed:
         for side in range(2):
@@ -406,20 +473,27 @@ def test_full_head_pin_is_a_fixed_wrist_during_temporal_projection():
 def test_own_depth_cache_reuses_frames_and_invalidates_clips_bindposes_and_rig(monkeypatch):
     from collections import OrderedDict
     from types import SimpleNamespace
+
     rig = _rig()
+
     class Bytes:
         data = b"first"
+
         def get_raw_data(self):
             return self.data
+
     mesh, clip = Bytes(), Bytes()
     target = SimpleNamespace(parts=[SimpleNamespace(mesh=mesh)])
     calls = []
+
     class Frame:
         def __init__(self, own, rig, pose, indices=None):
             pass
+
         def depth(self, pose, indices=None):
             calls.append(pose)
             return np.full((2, len(indices) if indices is not None else 9), float(pose))
+
     monkeypatch.setattr(ar, "BodyFrame", Frame)
     monkeypatch.setattr(ar, "_own_cache", OrderedDict())
     poses = list(range(10))
@@ -439,18 +513,16 @@ def test_own_depth_cache_reuses_frames_and_invalidates_clips_bindposes_and_rig(m
     assert len(calls) == 9
 
 
-
-
-
 def test_vectorized_clip_sampler_matches_existing_streamed_dense_constant_and_euler_reader():
     import zlib
     from test_model_arm_clips import _clip
+
     rig = _rig()
     tree = _clip()
-    bindings = tree['m_ClipBindingConstant']['genericBindings']
+    bindings = tree["m_ClipBindingConstant"]["genericBindings"]
     nodes = [rig.spine[1], rig.arm[0][1], rig.arm[0][2], rig.arm[1][1], rig.arm[1][3]]
     for binding, node in zip(bindings, nodes):
-        binding['path'] = zlib.crc32(rig.sk.nodes[node].path.encode())
+        binding["path"] = zlib.crc32(rig.sk.nodes[node].path.encode())
     times, pose, _ = rig.sk.clip_frames(tree)
     fast = ar.ClipFrames(rig.sk, tree)
     assert np.array_equal(fast.times, times)
@@ -465,22 +537,22 @@ def test_guard_rolls_back_penetration_but_allows_exterior_clearance_changes():
     poses = [rig.rest] * 12
     hold = np.zeros((12, 2), bool)
     deltas = np.zeros((12, 2, 2, 3))
-    deltas[:, :, 1, 2] = -.03
-    torso = _torso(.15)
+    deltas[:, :, 1, 2] = -0.03
+    torso = _torso(0.15)
     before = np.maximum(0, ar.measure(torso, rig, poses[0], other=False, core=True)[0])
     fixed = ar.guard_clip(rig, torso, poses, deltas, hold, True, np.zeros(2))
     for pose in fixed:
         after = np.maximum(0, ar.measure(torso, rig, pose, other=False, core=True)[0])
-        assert (after - before).max() <= .001
-    thin = _torso(.01)
+        assert (after - before).max() <= 0.001
+    thin = _torso(0.01)
     exterior = ar.guard_clip(rig, thin, poses, deltas, hold, True, np.zeros(2))
-    assert max(np.linalg.norm(rig.samples(w) - rig.samples(rig.rest), axis=2).max() for w in exterior) > .005
+    assert max(np.linalg.norm(rig.samples(w) - rig.samples(rig.rest), axis=2).max() for w in exterior) > 0.005
     assert all((ar.measure(thin, rig, w, other=False, core=True)[0] <= 0).all() for w in exterior)
 
 
 def test_cached_torso_depth_and_gradient_match_triangle_measure():
     rig = _rig()
-    torso = _torso(.15)
+    torso = _torso(0.15)
     frame = ar.BodyFrame(torso, rig, rig.rest)
     assert np.allclose(frame.depth(rig.rest), ar.measure(torso, rig, rig.rest, other=False, core=True)[0], atol=1e-6)
     depth, gradient = frame.depth_gradient(rig.rest)
@@ -488,7 +560,7 @@ def test_cached_torso_depth_and_gradient_match_triangle_measure():
     assert np.allclose(depth, frame.depth(rig.rest), atol=1e-6)
     # Rigid torso, translated arm bones: cached geometry still measures exactly.
     delta = np.zeros((1, 2, 2, 3))
-    delta[:, :, 1, 2] = .01
+    delta[:, :, 1, 2] = 0.01
     changed = ar._repose(rig, [rig.rest], delta, np.zeros((1, 2), bool))[0]
     assert np.allclose(frame.depth(changed), ar.measure(torso, rig, changed, other=False, core=True)[0], atol=1e-6)
     assert np.allclose(frame.penetration(changed), np.maximum(0, frame.depth(changed)), atol=1e-6)
@@ -496,14 +568,14 @@ def test_cached_torso_depth_and_gradient_match_triangle_measure():
 
 def test_spatial_leaves_and_sparse_ray_pairs_match_all_triangle_intersections():
     rng = np.random.default_rng(884)
-    triangles = rng.uniform(-.2, .2, (997, 3, 3)).astype(np.float32)
-    points = rng.uniform(-.25, .25, (18, 3))
+    triangles = rng.uniform(-0.2, 0.2, (997, 3, 3)).astype(np.float32)
+    points = rng.uniform(-0.25, 0.25, (18, 3))
     dirs = rng.normal(size=points.shape)
     dirs /= np.linalg.norm(dirs, axis=1)[:, None]
-    rho = rng.uniform(.01, .35, len(points))
+    rho = rng.uniform(0.01, 0.35, len(points))
     index = ar.TriangleIndex(triangles)
     # Keep the partition after a deformation; posed boxes must still be exact.
-    for turn in (triangles, triangles + rng.normal(0, .04, triangles.shape)):
+    for turn in (triangles, triangles + rng.normal(0, 0.04, triangles.shape)):
         prepared = ar.BodyFrame.prepare(turn)
         expected = ar.outer(ar.cast(points, dirs, turn), -rho, ar.CAP, -rho)
         prepared.append(index.bounds(prepared))
@@ -516,25 +588,29 @@ def test_spatial_leaves_and_sparse_ray_pairs_match_all_triangle_intersections():
 
 def test_gate_exits_on_far_poses_without_measure_or_host_cache(monkeypatch):
     from types import SimpleNamespace
+
     rig = _rig()
     sampler = SimpleNamespace(times=np.arange(30), world=lambda frames: [rig.rest for f in frames])
-    monkeypatch.setattr(ar, '_own_depths', lambda *a, **k: pytest.fail('far clip should not measure own depths'))
-    assert not ar.clip_gate(None, rig, None, _torso(.01), None, sampler)[0]
+    monkeypatch.setattr(ar, "_own_depths", lambda *a, **k: pytest.fail("far clip should not measure own depths"))
+    assert not ar.clip_gate(None, rig, None, _torso(0.01), None, sampler)[0]
 
 
 def test_gate_stops_measuring_when_the_required_fifth_is_already_proven(monkeypatch):
     from types import SimpleNamespace
+
     rig = _rig()
     sampler = SimpleNamespace(times=np.arange(90), world=lambda frames: [rig.rest for f in frames])
-    monkeypatch.setattr(ar, 'near_core', lambda *a: True)
-    monkeypatch.setattr(ar, '_depth_key', lambda *a: b'gate')
-    monkeypatch.setattr(ar, 'depth_batch', lambda d, r, p, i: np.full((len(p), 2, len(i)), .03))
-    monkeypatch.setattr(ar, '_own_depths', lambda t, r, o, c, p, f, *a: np.zeros((len(f), 2, 9)))
+    monkeypatch.setattr(ar, "near_core", lambda *a: True)
+    monkeypatch.setattr(ar, "_depth_key", lambda *a: b"gate")
+    monkeypatch.setattr(ar, "depth_batch", lambda d, r, p, i: np.full((len(p), 2, len(i)), 0.03))
+    monkeypatch.setattr(ar, "_own_depths", lambda t, r, o, c, p, f, *a: np.zeros((len(f), 2, 9)))
     calls = []
+
     def radius(*args):
         calls.append(1)
         return np.zeros((2, len(ar.GATE_SAMPLES)))
-    monkeypatch.setattr(ar, 'arm_radii', radius)
+
+    monkeypatch.setattr(ar, "arm_radii", radius)
     assert ar.clip_gate(None, rig, None, None, None, sampler)[0]
     assert len(calls) == 6  # six of thirty sampled frames prove the gate
 
@@ -596,7 +672,7 @@ def _turned_poses(rig, rng, count):
     poses = []
     for _ in range(count):
         w = np.array(rig.rest)
-        w[:, :3, 3] += rng.normal(0, .01, (len(w), 3))
+        w[:, :3, 3] += rng.normal(0, 0.01, (len(w), 3))
         poses.append(w)
     return poses
 
@@ -605,12 +681,12 @@ def test_batched_arm_turn_is_bit_identical_to_the_frame_by_frame_turn():
     rig = _rig()
     rng = np.random.default_rng(253)
     poses = _turned_poses(rig, rng, 40)
-    deltas = rng.normal(0, .02, (40, 2, 2, 3))
-    deltas[3] = 0                     # an unchanged frame
-    deltas[5, 1] = 1e-9               # below the threshold on one side
+    deltas = rng.normal(0, 0.02, (40, 2, 2, 3))
+    deltas[3] = 0  # an unchanged frame
+    deltas[5, 1] = 1e-9  # below the threshold on one side
     deltas[7, 0, 0] = rig.joints(poses[7], 0)[2] - rig.joints(poses[7], 0)[1]  # the elbow onto the wrist line
-    deltas[9, 1, 1] = np.nan          # a failed solve still turns, as before
-    hold = rng.random((40, 2)) < .2
+    deltas[9, 1, 1] = np.nan  # a failed solve still turns, as before
+    hold = rng.random((40, 2)) < 0.2
     got = ar._repose(rig, poses, deltas, hold)
     want = _repose_reference(rig, poses, deltas, hold)
     assert len(got) == len(want)
@@ -622,7 +698,7 @@ def test_batched_arm_turn_is_bit_identical_to_the_frame_by_frame_turn():
 def test_batched_minimum_rotations_match_the_single_rotation_and_the_half_turn():
     rng = np.random.default_rng(7)
     a, b = rng.normal(size=(500, 3)), rng.normal(size=(500, 3))
-    b[:3] = -a[:3]                    # opposite directions take the half turn
+    b[:3] = -a[:3]  # opposite directions take the half turn
     b[3] = a[3] * 2
     got = ar.min_rotations(a, b)
     for row in range(len(a)):
@@ -632,9 +708,16 @@ def test_batched_minimum_rotations_match_the_single_rotation_and_the_half_turn()
 
 def test_tree_clone_equals_a_deep_copy_and_shares_nothing_with_the_original():
     from bmpt.gameassets.model_arm_clips import clone_tree
-    shared = [1.5, -0.0, float('nan'), 2 ** 70]
-    tree = {"m_Name": "clip", "a": [{"x": 1, "y": [0.1, 0.2]}, shared, shared], "b": b"\x00\x01", "c": None,
-            "d": True, "e": np.arange(3, dtype=np.float32)}
+
+    shared = [1.5, -0.0, float("nan"), 2**70]
+    tree = {
+        "m_Name": "clip",
+        "a": [{"x": 1, "y": [0.1, 0.2]}, shared, shared],
+        "b": b"\x00\x01",
+        "c": None,
+        "d": True,
+        "e": np.arange(3, dtype=np.float32),
+    }
     clone = clone_tree(tree)
     reference = copy.deepcopy(tree)
     assert repr(clone) == repr(reference)
@@ -661,7 +744,7 @@ def _skinned_body(rig, rng):
             up = np.cross(axis, side)
             for k in range(segments):
                 angle = 2 * np.pi * k / segments
-                r = radius * (1 + rng.normal(0, .05))
+                r = radius * (1 + rng.normal(0, 0.05))
                 vertices.append(centre + r * (np.cos(angle) * side + np.sin(angle) * up))
                 joints.append([bone_of(ring), second(ring)[0]])
                 weights.append([1 - second(ring)[1], second(ring)[1]])
@@ -672,21 +755,38 @@ def _skinned_body(rig, rng):
                 triangles.append((a, b, b + segments))
                 triangles.append((a, b + segments, a + segments))
 
-    heights = np.linspace(.35, 1.3, 14)
-    tube([(np.array([0, h, 0.]), np.array([0, 1, 0.])) for h in heights], .15, 28,
-         lambda ring: 0 if heights[ring] < .8 else 1 if heights[ring] < 1.1 else 2,
-         lambda ring: (3 if ring % 2 else 6, .3) if heights[ring] > 1.15 else (0, 0.), 0)
+    heights = np.linspace(0.35, 1.3, 14)
+    tube(
+        [(np.array([0, h, 0.0]), np.array([0, 1, 0.0])) for h in heights],
+        0.15,
+        28,
+        lambda ring: 0 if heights[ring] < 0.8 else 1 if heights[ring] < 1.1 else 2,
+        lambda ring: (3 if ring % 2 else 6, 0.3) if heights[ring] > 1.15 else (0, 0.0),
+        0,
+    )
     for s in range(2):
         for seg in range(3):
             a, b = rest[rig.arm[s][1 + seg]][:3, 3], rest[rig.arm[s][min(2 + seg, 3)]][:3, 3]
             if seg == 2:
-                b = a + (a - rest[rig.arm[s][2]][:3, 3]) * .4
+                b = a + (a - rest[rig.arm[s][2]][:3, 3]) * 0.4
             bone = 3 + 3 * s + seg
-            tube([(a + t * (b - a), b - a) for t in np.linspace(0, 1, 4)], .035, 10,
-                 lambda ring, bone=bone: bone, lambda ring: (0, 0.), 2 + 3 * s + seg)
+            tube(
+                [(a + t * (b - a), b - a) for t in np.linspace(0, 1, 4)],
+                0.035,
+                10,
+                lambda ring, bone=bone: bone,
+                lambda ring: (0, 0.0),
+                2 + 3 * s + seg,
+            )
     bindings = np.linalg.inv(rest[bones])
-    drawn = ar.Drawn(np.array(vertices), np.array(joints), np.array(weights), np.array(triangles), np.array(regions),
-                     lambda pose: np.asarray(pose)[bones] @ bindings)
+    drawn = ar.Drawn(
+        np.array(vertices),
+        np.array(joints),
+        np.array(weights),
+        np.array(triangles),
+        np.array(regions),
+        lambda pose: np.asarray(pose)[bones] @ bindings,
+    )
     drawn.pose_bones, drawn.bindings = np.array(bones), bindings
     return drawn
 
@@ -696,7 +796,7 @@ def _body_case(seed=31, count=12):
     rng = np.random.default_rng(seed)
     poses = _turned_poses(rig, rng, count)
     drawn = _skinned_body(rig, rng)
-    deltas = rng.normal(0, .03, (count, 2, 2, 3))
+    deltas = rng.normal(0, 0.03, (count, 2, 2, 3))
     hold = np.zeros((count, 2), bool)
     hold[::5, 0] = True
     turned = ar._repose(rig, poses, deltas, hold)
@@ -730,8 +830,9 @@ def test_batched_torso_depths_penetrations_and_gradients_equal_the_frame_by_fram
     assert _same(depth, [single[f].depth(w) for f, w in zip(frames, mixed)])
     assert all(batched[f].baseline is not None for f in frames if f % 3 == 0)
     assert _same(ar.depths([batched[f] for f in frames], mixed), depth)  # cached baselines
-    assert _same(ar.penetrations([batched[f] for f in frames], mixed),
-                 [single[f].penetration(w) for f, w in zip(frames, mixed)])
+    assert _same(
+        ar.penetrations([batched[f] for f in frames], mixed), [single[f].penetration(w) for f, w in zip(frames, mixed)]
+    )
     got, gradient = ar.depth_gradients([batched[f] for f in frames], turned)
     want = [single[f].depth_gradient(w) for f, w in zip(frames, turned)]
     assert _same(got, [m[0] for m in want]) and _same(gradient, [m[1] for m in want])
@@ -760,8 +861,10 @@ def _depth_batch_reference(drawn, rig, poses, indices):
     for k in range(joints.shape[1]):
         used = weights[:, k] != 0
         if used.any():
-            vertices[:, used] += weights[None, used, k:k + 1] * np.einsum(
-                'fvij,vj->fvi', matrices[:, joints[used, k]], h[used])[..., :3]
+            vertices[:, used] += (
+                weights[None, used, k : k + 1]
+                * np.einsum("fvij,vj->fvi", matrices[:, joints[used, k]], h[used])[..., :3]
+            )
     tri = vertices[:, triangles]
     a, b, c = tri[:, :, 0], tri[:, :, 1], tri[:, :, 2]
     prepared = [a, b - a, c - a, np.minimum(np.minimum(a, b), c), np.maximum(np.maximum(a, b), c)]
@@ -786,17 +889,17 @@ def test_batched_gate_depths_equal_the_frame_by_frame_casts():
 
 def test_batched_query_equals_single_frame_queries_with_ties_and_misses():
     rng = np.random.default_rng(12)
-    base = rng.uniform(-.2, .2, (500, 3, 3)).astype(np.float32)
-    base[1] = base[0]                 # a duplicate triangle: the first index wins the normal
+    base = rng.uniform(-0.2, 0.2, (500, 3, 3)).astype(np.float32)
+    base[1] = base[0]  # a duplicate triangle: the first index wins the normal
     index = ar.TriangleIndex(base)
-    frames = [base + rng.normal(0, .02, base.shape).astype(np.float32) for _ in range(5)]
+    frames = [base + rng.normal(0, 0.02, base.shape).astype(np.float32) for _ in range(5)]
     frames[2] = base.copy()
-    points = rng.uniform(-.25, .25, (5, 18, 3))
-    points[:, 0] = frames[0][0].mean(axis=0) - [0, 0, .05]
+    points = rng.uniform(-0.25, 0.25, (5, 18, 3))
+    points[:, 0] = frames[0][0].mean(axis=0) - [0, 0, 0.05]
     dirs = rng.normal(size=points.shape)
-    dirs[:, 0] = [0, 0, 1.]
+    dirs[:, 0] = [0, 0, 1.0]
     dirs /= np.linalg.norm(dirs, axis=2)[..., None]
-    rho = rng.uniform(0, .35, (5, 18))
+    rho = rng.uniform(0, 0.35, (5, 18))
     rho[3] = 0
     prepared = ar.BodyFrame.prepare(np.stack(frames))
     prepared.append(ar.leaf_bounds(index, prepared[3], prepared[4]))
@@ -828,8 +931,11 @@ def _solve_many_reference(rig, poses, needs, hold, pins, sleeves, guard=None, in
     diff = p[:, 0, :, None] - p[:, 1, None, :]
     c = np.linalg.norm(diff, axis=3)
     reach, grown = sleeves
-    near = (np.clip((reach - c) / 0.02, 0, 1) * np.exp(-(c - c.min(axis=(1, 2))[:, None, None]) / 0.015)
-            if grown > 0 else np.zeros_like(c))
+    near = (
+        np.clip((reach - c) / 0.02, 0, 1) * np.exp(-(c - c.min(axis=(1, 2))[:, None, None]) / 0.015)
+        if grown > 0
+        else np.zeros_like(c)
+    )
     active = (a.max(axis=2) > 1e-5) & ~hold
     near *= active.any(axis=1)[:, None, None]
     normal = diff / np.maximum(c, 1e-9)[..., None]
@@ -840,10 +946,10 @@ def _solve_many_reference(rig, poses, needs, hold, pins, sleeves, guard=None, in
     l2 = np.linalg.norm(wr - e, axis=2)[..., None]
     de, dw = np.zeros_like(e), np.zeros_like(wr)
     if initial is not None:
-        de, dw = .25 * initial[:, :, 0], .25 * initial[:, :, 1]
-    guard_tw = np.array([0, 0, 0, .25, .5, .75, 1, 1, 1])[None, None, :, None]
-    guard_te = np.array([.5, .75, 1, .75, .5, .25, 0, 0, 0])[None, None, :, None]
-    step = ar.STEP if guard is None else .025
+        de, dw = 0.25 * initial[:, :, 0], 0.25 * initial[:, :, 1]
+    guard_tw = np.array([0, 0, 0, 0.25, 0.5, 0.75, 1, 1, 1])[None, None, :, None]
+    guard_te = np.array([0.5, 0.75, 1, 0.75, 0.5, 0.25, 0, 0, 0])[None, None, :, None]
+    step = ar.STEP if guard is None else 0.025
     steps = ar.STEPS if initial is None else 3 * ar.STEPS // 4
     for iteration in range(steps + (60 if guard is not None else 0)):
         dp = tw * dw[:, :, None] + te * de[:, :, None]
@@ -885,15 +991,15 @@ def test_trimmed_solver_steps_are_bit_identical_with_and_without_guard_and_start
     rig = _rig()
     rng = np.random.default_rng(41)
     poses = _turned_poses(rig, rng, 9)
-    needs = np.abs(rng.normal(0, .03, (9, 2, 9)))
+    needs = np.abs(rng.normal(0, 0.03, (9, 2, 9)))
     needs[2] = 0
-    hold = rng.random((9, 2)) < .15
-    pins = np.clip(rng.normal(.2, .3, (9, 2)), 0, 1)
-    initial = rng.normal(0, .01, (9, 2, 2, 3))
+    hold = rng.random((9, 2)) < 0.15
+    pins = np.clip(rng.normal(0.2, 0.3, (9, 2)), 0, 1)
+    initial = rng.normal(0, 0.01, (9, 2, 2, 3))
     direction = rng.normal(size=(9, 2, 9, 3))
     direction /= np.linalg.norm(direction, axis=3)[..., None]
-    target = np.where(rng.random((9, 2, 9)) < .5, rng.normal(0, .01, (9, 2, 9)), -1e6)
-    for sleeves in ((0, 0), (.3, .02)):
+    target = np.where(rng.random((9, 2, 9)) < 0.5, rng.normal(0, 0.01, (9, 2, 9)), -1e6)
+    for sleeves in ((0, 0), (0.3, 0.02)):
         for guard in (None, (direction, target)):
             for start in (None, initial):
                 got = ar.solve_many(rig, poses, needs, hold, pins, sleeves, guard, start)
@@ -911,8 +1017,11 @@ def _contacts_reference(rig, own, weapons, poses, rows, loop, shown=None):
             if abs(np.linalg.det(mount[:3, :3])) < 1e-9:
                 continue
             palms = rig.samples(w)[:, 7]
-            visible = [weapon.posed(w, np.arange(0, len(weapon.h), 5)) for k, weapon in enumerate(weapons)
-                       if shown is None or shown[f, k]]
+            visible = [
+                weapon.posed(w, np.arange(0, len(weapon.h), 5))
+                for k, weapon in enumerate(weapons)
+                if shown is None or shown[f, k]
+            ]
             if not visible:
                 continue
             vertices = np.concatenate(visible)
@@ -932,30 +1041,33 @@ def _contacts_reference(rig, own, weapons, poses, rows, loop, shown=None):
 
 def test_batched_contacts_equal_the_frame_by_frame_weapon_and_head_checks():
     base = _rig()
-    bones = [(n.name, (n.parent + 1) if n.parent is not None else 0, tuple(n.local[0]), tuple(n.local[1]))
-             for n in base.sk.nodes]
+    bones = [
+        (n.name, (n.parent + 1) if n.parent is not None else 0, tuple(n.local[0]), tuple(n.local[1]))
+        for n in base.sk.nodes
+    ]
     hand = base.arm[1][3]
-    bones.append(("Bip001_Weapon", hand + 1, (0, -.03, .04), (0, 0, 0, 1)))
+    bones.append(("Bip001_Weapon", hand + 1, (0, -0.03, 0.04), (0, 0, 0, 1)))
     rig = ar.Rig(_skeleton(bones))
     rng = np.random.default_rng(77)
     own = _skinned_body(rig, rng)
     rest = np.array(rig.rest)
     weapons = []
     palm = rig.samples(rest)[1, 7]
-    for bone, size in ((rig.weapon, .03), (hand, .01)):
+    for bone, size in ((rig.weapon, 0.03), (hand, 0.01)):
         vertices = palm + rng.normal(0, size, (40, 3))
-        drawn = ar.Drawn(vertices, np.zeros((40, 1), int), np.ones((40, 1)), np.zeros((0, 3), int),
-                         np.zeros(40, int), None)
+        drawn = ar.Drawn(
+            vertices, np.zeros((40, 1), int), np.ones((40, 1)), np.zeros((0, 3), int), np.zeros(40, int), None
+        )
         drawn.pose_bones, drawn.bindings = np.array([bone]), np.linalg.inv(rest[[bone]])
         weapons.append(drawn)
     poses = []
     for f in range(40):
         w = rest.copy()
-        w[:, :3, 3] += np.sin(f / 6) * .004 + rng.normal(0, .0005, (len(w), 3))
+        w[:, :3, 3] += np.sin(f / 6) * 0.004 + rng.normal(0, 0.0005, (len(w), 3))
         poses.append(w)
-    poses[5][rig.weapon, :3, :3] = 0          # a hidden mount
-    poses[9][rig.weapon] = np.nan             # an unreadable mount still counts as shown
-    shown = rng.random((40, 2)) < .8
+    poses[5][rig.weapon, :3, :3] = 0  # a hidden mount
+    poses[9][rig.weapon] = np.nan  # an unreadable mount still counts as shown
+    shown = rng.random((40, 2)) < 0.8
     shown[12] = False
     wrist = rig.samples(rest)[0, 6]
     head = np.argsort(np.linalg.norm(own.h[:, :3] - wrist, axis=1))[:60]  # a surface the left hand touches
@@ -971,6 +1083,7 @@ class _FakeClip(dict):
     def __init__(self, number, tree):
         super().__init__(tree)
         from types import SimpleNamespace
+
         self.assets_file, self.path_id, self.number = SimpleNamespace(name="cab-clips"), number, number
 
     def peek_name(self):
@@ -983,18 +1096,27 @@ def _threaded_retarget_case(monkeypatch, delays, step=None):
     import zlib
     from types import SimpleNamespace
     from bmpt.gameassets import model_arm_clips as ac
+
     rig = _rig()
     body = _skinned_body(rig, np.random.default_rng(3))
     path = zlib.crc32(rig.sk.nodes[rig.arm[0][1]].path.encode())
-    clips = [_FakeClip(k, {"m_ClipBindingConstant": {"genericBindings": [{"typeID": 4, "path": path}]},
-                           "m_MuscleClip": {"m_LoopTime": 1}}) for k in range(len(delays))]
+    clips = [
+        _FakeClip(
+            k,
+            {
+                "m_ClipBindingConstant": {"genericBindings": [{"typeID": 4, "path": path}]},
+                "m_MuscleClip": {"m_LoopTime": 1},
+            },
+        )
+        for k in range(len(delays))
+    ]
     count = 12
     poses = np.repeat(np.array(rig.rest)[None], count, axis=0)
     seen = {"stopped": 0, "threads": set()}
 
     class Frames:
         def __init__(self, sk, tree, nodes=None):
-            self.times = np.arange(count) / 30.
+            self.times = np.arange(count) / 30.0
 
         def world(self, frames):
             return poses[frames]
@@ -1011,17 +1133,18 @@ def _threaded_retarget_case(monkeypatch, delays, step=None):
             raise
         out = [w.copy() for w in poses_]
         for w in out:
-            w[rig_.arm[0][2], :3, 3] += .01 * (number + 1)
+            w[rig_.arm[0][2], :3, 3] += 0.01 * (number + 1)
         return out
 
     import time
+
     monkeypatch.setattr(ar, "Rig", lambda sk: rig)
     monkeypatch.setattr(ar, "own_drawn", lambda target: body)
     monkeypatch.setattr(ar, "adapted_drawn", lambda target, source, plan: body)
     monkeypatch.setattr(ar, "ClipFrames", Frames)
-    monkeypatch.setattr(ar, "clip_gate", lambda *a: (True, {}, {}, .5))
+    monkeypatch.setattr(ar, "clip_gate", lambda *a: (True, {}, {}, 0.5))
     monkeypatch.setattr(ar, "head_core", lambda target: np.zeros(0, int))
-    monkeypatch.setattr(ar, "girth", lambda drawn, rig_: {"fore": 30.})
+    monkeypatch.setattr(ar, "girth", lambda drawn, rig_: {"fore": 30.0})
     monkeypatch.setattr(ar, "contacts", lambda *a: (np.zeros((count, 2), bool), np.zeros((count, 2))))
     monkeypatch.setattr(ar, "_own_depths", lambda t, r, o, clip, *a: np.full((5, 2, 9), float(clip.number)))
     monkeypatch.setattr(ar, "solve_clip", solve)
@@ -1030,14 +1153,16 @@ def _threaded_retarget_case(monkeypatch, delays, step=None):
     monkeypatch.setattr(ar.ma, "_key", lambda clip: clip.number)
     reported = []
     target = SimpleNamespace(skeleton=rig.sk)
-    out = ar.retarget(target, None, None, clips, [], step=step,
-                      progress=lambda done, total: reported.append((done, total)))
+    out = ar.retarget(
+        target, None, None, clips, [], step=step, progress=lambda done, total: reported.append((done, total))
+    )
     return out, reported, seen
 
 
 def test_threaded_solves_keep_clip_order_progress_and_single_thread_results(monkeypatch):
     import threading
-    delays = [.08, .01, .05, .0, .03]
+
+    delays = [0.08, 0.01, 0.05, 0.0, 0.03]
     monkeypatch.setattr(ar, "ARM_WORKERS", 3)
     out, reported, seen = _threaded_retarget_case(monkeypatch, delays)
     assert list(out) == list(range(len(delays)))
@@ -1055,6 +1180,7 @@ def test_threaded_solves_keep_clip_order_progress_and_single_thread_results(monk
 
 def test_a_stopping_step_stops_the_running_solves_and_is_passed_on(monkeypatch):
     import threading
+
     calls = []
 
     class Cancelled(Exception):
@@ -1069,6 +1195,6 @@ def test_a_stopping_step_stops_the_running_solves_and_is_passed_on(monkeypatch):
     monkeypatch.setattr(ar._Progress, "__call__", lambda self: self.step())
     started = time.perf_counter()
     with pytest.raises(Cancelled):
-        _threaded_retarget_case(monkeypatch, [.4] * 6, step)
-    assert time.perf_counter() - started < .3  # the running solves stopped at their next round
+        _threaded_retarget_case(monkeypatch, [0.4] * 6, step)
+    assert time.perf_counter() - started < 0.3  # the running solves stopped at their next round
     assert not [t for t in threading.enumerate() if t.name.startswith("arm-solve")]

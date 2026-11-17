@@ -42,9 +42,11 @@ def bundle(root, name, cab, *, at_end=False, padding=4, engine="2022.3.55f1", fl
 
 def reader_calls():
     calls = []
+
     def read(path):
         calls.append(path)
         return cab_names(path)
+
     return read, calls
 
 
@@ -57,8 +59,10 @@ def test_shared_parser_ignores_crc_tail_and_accepts_large_bundles(tmp_path, at_e
     assert CabIndex([tmp_path]).resolve({"cab-large"}) == {"cab-large": str(path)}
 
 
-@pytest.mark.parametrize("engine,flags,readable", [("2019.4.40f1", 0x202, False),
-    ("2022.3.55f1", 0x202, True), ("2022.3.55f1", 0x402, False)])
+@pytest.mark.parametrize(
+    "engine,flags,readable",
+    [("2019.4.40f1", 0x202, False), ("2022.3.55f1", 0x202, True), ("2022.3.55f1", 0x402, False)],
+)
 def test_shared_parser_distinguishes_old_encryption_and_new_padding(tmp_path, engine, flags, readable):
     path = bundle(tmp_path, "flags.bundle", "CAB-FLAGS", engine=engine, flags=flags)
     if readable:
@@ -93,8 +97,10 @@ def test_metadata_reuses_across_instances_without_reading_headers(tmp_path):
     cache = PreviewCache(tmp_path / "cache", allowed=True)
     first = CabIndex([game], cache=cache, namespace="catalog")
     assert first.resolve({"cab-target"}) == {"cab-target": str(path)}
+
     def forbidden(path):
         pytest.fail("A valid persisted mapping must not parse bundle headers again")
+
     second = CabIndex([game], cache=PreviewCache(cache.root, allowed=True), namespace="catalog", reader=forbidden)
     assert second.resolve({"cab-target"}) == {"cab-target": str(path)}
 
@@ -128,8 +134,13 @@ def test_corrupt_cache_cannot_redirect_reads_outside_the_game(tmp_path):
     cache = PreviewCache(tmp_path / "cache", allowed=True)
     read, calls = reader_calls()
     index = CabIndex([game], cache=cache, reader=read)
-    cache.put(index.key, json.dumps({"schema": "cab-discovery-v1", "entries": [
-        [0, "../outside.bundle", [1, 2, 3, 4, 5], ["cab-target"]]]}).encode(), generation=cache.generation)
+    cache.put(
+        index.key,
+        json.dumps(
+            {"schema": "cab-discovery-v1", "entries": [[0, "../outside.bundle", [1, 2, 3, 4, 5], ["cab-target"]]]}
+        ).encode(),
+        generation=cache.generation,
+    )
     assert index.resolve({"cab-target"}) == {"cab-target": str(target)}
     assert calls == [target]
     assert CabIndex([tmp_path], cache=cache).key != index.key
@@ -148,10 +159,12 @@ def test_symlink_escape_is_not_read(tmp_path):
 
 def test_source_changed_during_header_read_is_not_published(tmp_path):
     path = bundle(tmp_path, "target.bundle", "CAB-FIRST")
+
     def racing(source):
         names = cab_names(source)
         bundle(tmp_path, source.name, "CAB-OTHER")
         return names
+
     cache = PreviewCache(tmp_path / "cache", allowed=True)
     index = CabIndex([tmp_path], cache=cache, reader=racing)
     assert index.resolve({"cab-first"}) == {}
@@ -164,10 +177,12 @@ def test_cache_clear_during_lookup_cannot_recreate_cleared_metadata(tmp_path):
     game.mkdir()
     path = bundle(game, "target.bundle", "CAB-TARGET")
     cache = PreviewCache(tmp_path / "cache", allowed=True)
+
     def clearing(source):
         names = cab_names(source)
         cache.clear()
         return names
+
     index = CabIndex([game], cache=cache, reader=clearing)
     assert index.resolve({"cab-target"}) == {"cab-target": str(path)}
     assert not list(cache.root.glob("*.preview"))
@@ -197,26 +212,33 @@ def test_graph_batch_coalesces_writes_and_simultaneous_lookups_share_headers(tmp
     original = cache.put
     monkeypatch.setattr(cache, "put", lambda *args, **kw: writes.append(1) or original(*args, **kw))
     with index.batch(), ThreadPoolExecutor(max_workers=4) as pool:
-        assert all(result == {"cab-target": str(path)} for result in
-                   pool.map(lambda _: index.resolve({"cab-target"}), range(8)))
+        assert all(
+            result == {"cab-target": str(path)}
+            for result in pool.map(lambda _: index.resolve({"cab-target"}), range(8))
+        )
         assert writes == []
     assert calls == [path] and writes == [1]
 
 
 def test_graph_passes_referring_bundle_hint_and_releases_resources(tmp_path):
     owner_path, target_path = tmp_path / "owner.bundle", tmp_path / "target.bundle"
-    owner = SimpleNamespace(assets_file=SimpleNamespace(name="CAB-OWNER", externals=[SimpleNamespace(path="CAB-TARGET")]), path_id=1)
+    owner = SimpleNamespace(
+        assets_file=SimpleNamespace(name="CAB-OWNER", externals=[SimpleNamespace(path="CAB-TARGET")]), path_id=1
+    )
     target = SimpleNamespace(assets_file=SimpleNamespace(name="CAB-TARGET", externals=[]), path_id=7)
     requests, closed = [], []
+
     @contextmanager
     def opener(path):
         try:
             yield SimpleNamespace(objects=[owner] if path == owner_path else [target])
         finally:
             closed.append(path)
+
     def resolve(names, hint):
         requests.append((names, hint))
         return {"cab-target": str(target_path)}
+
     with BundleGraph({}, resolver=resolve, opener=opener) as graph:
         graph.add(owner_path)
         assert graph.deref(owner, {"m_FileID": 1, "m_PathID": 7}) is target
@@ -227,7 +249,9 @@ def test_graph_passes_referring_bundle_hint_and_releases_resources(tmp_path):
 
 
 def test_prefab_hint_prioritizes_same_character_dependency_family(tmp_path):
-    target = bundle(tmp_path, "assets-_mx-characters-ch0242-_mxdependency-2026-10-25_002_assets_all_1.bundle", "CAB-TARGET")
+    target = bundle(
+        tmp_path, "assets-_mx-characters-ch0242-_mxdependency-2026-10-25_002_assets_all_1.bundle", "CAB-TARGET"
+    )
     bundle(tmp_path, "prologgroup-common.bundle", "CAB-COMMON")
     read, calls = reader_calls()
     hint = tmp_path / "character-ch0242-_mxload-2026-10-25_assets_all_2.bundle"
@@ -249,6 +273,7 @@ def test_mapping_hits_revalidate_in_place_changes_inside_one_graph_batch(tmp_pat
 
 def test_eviction_bounds_metadata_and_scan_orders_without_losing_resolution(tmp_path, monkeypatch):
     from bmpt.gameassets import cabs
+
     monkeypatch.setattr(cabs, "_MAX_ENTRIES", 2)
     monkeypatch.setattr(cabs, "_MAX_ORDERS", 2)
     monkeypatch.setattr(cabs, "_MAX_METADATA_BYTES", 4096)

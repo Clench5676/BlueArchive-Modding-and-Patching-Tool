@@ -84,7 +84,10 @@ def test_past_limit_costume_hint(code):
     if code == "en-US":
         assert model["beyondFit"] == "Beyond auto-fit, may clip or distort"
     if code == "zh-CN":
-        assert model["beyondFit"] == "\u8d85\u51fa\u81ea\u52a8\u9002\u914d\u8303\u56f4\uff0c\u53ef\u80fd\u7a7f\u6a21\u6216\u53d8\u5f62"
+        assert (
+            model["beyondFit"]
+            == "\u8d85\u51fa\u81ea\u52a8\u9002\u914d\u8303\u56f4\uff0c\u53ef\u80fd\u7a7f\u6a21\u6216\u53d8\u5f62"
+        )
 
 
 @pytest.mark.parametrize("code", TRANSLATIONS)
@@ -115,9 +118,13 @@ def test_every_string_is_text(code):
 @pytest.mark.parametrize("code", TRANSLATIONS)
 def test_same_placeholders_as_en_us(code):
     reference, translation = flatten(load(REFERENCE)), flatten(load(code))
-    wrong = {key: (placeholders(reference[key]), placeholders(text)) for key, text in translation.items()
-             if key in reference and placeholders(text) != placeholders(reference[key])
-             and (code, key) not in KNOWN_PLACEHOLDER_DIFFERENCES}
+    wrong = {
+        key: (placeholders(reference[key]), placeholders(text))
+        for key, text in translation.items()
+        if key in reference
+        and placeholders(text) != placeholders(reference[key])
+        and (code, key) not in KNOWN_PLACEHOLDER_DIFFERENCES
+    }
     assert wrong == {}
 
 
@@ -134,8 +141,11 @@ def test_strings_format_with_en_us_values(code):
 @pytest.mark.parametrize("code", [REFERENCE, *TRANSLATIONS])
 def test_no_middle_dot_separators(code):
     """UI text rules: never · or ・."""
-    assert [key for key, text in flatten(load(code)).items()
-            if ("·" in text or "・" in text) and key not in CLASSIC_ZH_CN_ONLY_KEYS] == []
+    assert [
+        key
+        for key, text in flatten(load(code)).items()
+        if ("·" in text or "・" in text) and key not in CLASSIC_ZH_CN_ONLY_KEYS
+    ] == []
 
 
 @pytest.mark.parametrize("code", [REFERENCE, *TRANSLATIONS])

@@ -15,8 +15,13 @@ import { specialFraming } from "./special-view.js";
 import * as NGUI from "./ngui.js";
 import * as Display from "./display.js";
 import * as Loading from "./loading.js";
-import { emptyListY, searchTree as rosterSearchTree, toggleHits, toolbarLayout, toolbarTree } from "./roster-widgets.js";
-import { current as modsState } from "./mod-switch.js";
+import {
+  emptyListY,
+  searchTree as rosterSearchTree,
+  toggleHits,
+  toolbarLayout,
+  toolbarTree,
+} from "./roster-widgets.js";
 import { countNodes, countText, iconsOf } from "./mod-counts.js";
 import { rpc, spineBase } from "./api.js";
 import { L, T, language } from "./i18n.js";
@@ -26,27 +31,41 @@ import { prioritise, thumbnailScope } from "./thumbs.js";
 import { spineAllowed } from "./spine-runtime.js";
 import { configuredKey, hasAsset, previewBase, primaryKind } from "./switch-sources.js";
 import { $, RECRUIT, S, advanceOf, clone, glyphsOf } from "./util.js";
-import { DEFAULT_VIEW, SORTS, arrange, filtering, normalizeView, order as orderOf } from "./roster-order.js";
+import { DEFAULT_VIEW, arrange, normalizeView, order as orderOf } from "./roster-order.js";
 
 const { node, sprite, label, find } = NGUI;
 const fitText = (...a) => NGUI.fitText(...a);
 
-const PANEL_TOP = (720 - 525) * S;          // the collection prefab's frame top, below its round back button
+const PANEL_TOP = (720 - 525) * S; // the collection prefab's frame top, below its round back button
 const ORIGIN = [960, PANEL_TOP + 525 * S]; // ListBG is centred at y -223 and 1496 tall: top edge at +525
-const SHORTEN = 198;                       // the list frame ends above the bottom navigation
-const PAPER_TOP = 334.5, PAPER_BOTTOM = -223 - 66 - (1247 - SHORTEN) / 2 + SHORTEN / 2;
+const SHORTEN = 198; // the list frame ends above the bottom navigation
+const PAPER_TOP = 334.5,
+  PAPER_BOTTOM = -223 - 66 - (1247 - SHORTEN) / 2 + SHORTEN / 2;
 // with the search box open (CharacterSearch/SearchName: top edge at 314, 112 tall) the cards start under it
 const SEARCH_LIST_TOP = 314 - 112 - 20;
 const CLIP_BOTTOM = ORIGIN[1] - PAPER_BOTTOM * S;
-const PITCH = 600, COLS = 6, LEFT = -1155, FIRST_Y = 281 - 18 - 245, BAR_EXTRA = 67 + 100;
+const PITCH = 600,
+  COLS = 6,
+  LEFT = -1155,
+  FIRST_Y = 281 - 18 - 245,
+  BAR_EXTRA = 67 + 100;
 const TOOL_Y = 446.5; // centre of the search, sort and order buttons in SeletControl's units
 
 let view = { ...normalizeView(DEFAULT_VIEW), scroll: 0 };
-let query = "", searching = false, searchTimer = 0; // searchTimer: the search box's debounce
+let query = "",
+  searching = false,
+  searchTimer = 0; // searchTimer: the search box's debounce
 // the search box's input: made and focused the moment the box opens, before the frame around it is drawn, and kept
 // in the page across rebuilds, so nothing typed meanwhile is lost
 let searchEl = null;
-let layouts = null, data = null, ctx = null, items = [], rows = new Map(), contentH = 0, rendered = new Map(), dirty = true;
+let layouts = null,
+  data = null,
+  ctx = null,
+  items = [],
+  rows = new Map(),
+  contentH = 0,
+  rendered = new Map(),
+  dirty = true;
 let countIcons = null;
 let dom = {}; // the list's live elements: clip, scroll host (the newest, maybe still built), scrollbar, empty list
 let wheelMotion = null;
@@ -56,10 +75,14 @@ let thumbnailWork = thumbnailScope();
 const listTop = () => (searching ? SEARCH_LIST_TOP : PAPER_TOP);
 const clipTop = () => ORIGIN[1] - listTop() * S;
 
-export function invalidate() { dirty = true; }
+export function invalidate() {
+  dirty = true;
+}
 
 // the saved view (settings.get's "roster"); called once at start, before the roster or a detail screen shows
-export function init(prefs) { view = { ...normalizeView(prefs), scroll: 0 }; }
+export function init(prefs) {
+  view = { ...normalizeView(prefs), scroll: 0 };
+}
 export const merged = () => view.merged;
 
 let saveTimer = 0;
@@ -67,38 +90,59 @@ function save() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     rpc("settings.set", { key: "roster", value: normalizeView(view) })
-      .then((prefs) => { if (ctx) ctx.prefs = prefs; })
+      .then((prefs) => {
+        if (ctx) ctx.prefs = prefs;
+      })
       .catch((err) => console.warn("roster view not saved", err));
   }, 250);
 }
 
-let collator = null, collatorLang = null;
+let collator = null,
+  collatorLang = null;
 function opts(extra = {}) {
   if (collatorLang !== language()) {
     collatorLang = language();
-    try { collator = new Intl.Collator(collatorLang, { numeric: true, sensitivity: "base" }); } catch { collator = null; }
+    try {
+      collator = new Intl.Collator(collatorLang, { numeric: true, sensitivity: "base" });
+    } catch {
+      collator = null;
+    }
   }
   return { query, label: L, collator, ...extra };
 }
 
 // the cards in the roster's order, as it shows them (the detail screen's arrows step through these); unfiltered: the
 // whole roster in the same order
-export function order(rosterData, { unfiltered = false } = {}) { return orderOf(rosterData, view, opts({ unfiltered })); }
+export function order(rosterData, { unfiltered = false } = {}) {
+  return orderOf(rosterData, view, opts({ unfiltered }));
+}
 
 // dragging the list: window listeners for the module's lifetime, in the capture phase so no control under the pointer
 // keeps the release from them; a cancelled pointer, or a move with no button held (released outside the window), ends
 // the drag, as Hall's drag does
 let drag = null;
 const stageScaleNow = () => document.getElementById("stage").getBoundingClientRect().width / 1920;
-const endDrag = () => { drag = null; setTimeout(() => { if (ctx) ctx.dragged = false; }, 0); };
-addEventListener("pointermove", (ev) => {
-  if (!drag) return;
-  if (ev.buttons === 0) { endDrag(); return; }
-  const dy = (ev.clientY - drag.y) / stageScaleNow();
-  if (Math.abs(dy) > 6) ctx.dragged = true;
-  view.scroll = drag.scroll - dy;
-  applyScroll();
-}, true);
+const endDrag = () => {
+  drag = null;
+  setTimeout(() => {
+    if (ctx) ctx.dragged = false;
+  }, 0);
+};
+addEventListener(
+  "pointermove",
+  (ev) => {
+    if (!drag) return;
+    if (ev.buttons === 0) {
+      endDrag();
+      return;
+    }
+    const dy = (ev.clientY - drag.y) / stageScaleNow();
+    if (Math.abs(dy) > 6) ctx.dragged = true;
+    view.scroll = drag.scroll - dy;
+    applyScroll();
+  },
+  true,
+);
 addEventListener("pointerup", endDrag, true);
 addEventListener("pointercancel", endDrag, true);
 
@@ -108,12 +152,17 @@ function frameTree(lay) {
   const t = clone(layouts.collection);
   const menu = toolbarTree(layouts.collection, layouts.checkbox, view, searching, lay);
   const control = find(t, "SeletControl");
-  control.children = control.children.map((child) => child.name === "TopMenu" ? menu : child);
-  Object.assign(find(menu, "Menubar/Label_Locale_Title").widgets[0], { text: T("roster.title"), fontSize: lay.titleFs, w_: 600 });
+  control.children = control.children.map((child) => (child.name === "TopMenu" ? menu : child));
+  Object.assign(find(menu, "Menubar/Label_Locale_Title").widgets[0], {
+    text: T("roster.title"),
+    fontSize: lay.titleFs,
+    w_: 600,
+  });
   // shorten the frame from the bottom (each piece keeps its top edge: centre up by half, height down by all)
   const listBG = find(t, "ListBG");
   listBG.pos[1] += SHORTEN / 2;
-  for (const n of [listBG, find(listBG, "BG"), find(listBG, "PaperBG"), find(listBG, "PaperBG/PaperBGLine")]) n.widgets.find((w) => "sprite" in w).h_ -= SHORTEN;
+  for (const n of [listBG, find(listBG, "BG"), find(listBG, "PaperBG"), find(listBG, "PaperBG/PaperBGLine")])
+    n.widgets.find((w) => "sprite" in w).h_ -= SHORTEN;
   // ruled lines: a quarter of the prefab's strength, none below the paper
   for (const line of find(menu, "DotLine").children) {
     line.widgets[0].color = "#adbfc0/0.12";
@@ -128,7 +177,8 @@ function layoutItems() {
   const { groups } = arrange(data, view, opts());
   const out = [];
   const shift = PAPER_TOP - listTop(); // the search box pushes the cards down
-  let y = FIRST_Y - shift, first = true;
+  let y = FIRST_Y - shift,
+    first = true;
   for (const g of groups) {
     if (!g.items.length) continue;
     const bar = g.id === "none" ? T("bar.noMods") : null;
@@ -150,7 +200,7 @@ function layoutItems() {
   rows = new Map();
   for (const it of out) {
     let r = rows.get(it.row);
-    if (!r) rows.set(it.row, r = { items: [], top: ORIGIN[1] - (it.bar ? it.y + 60 : it.y + 245) * S });
+    if (!r) rows.set(it.row, (r = { items: [], top: ORIGIN[1] - (it.bar ? it.y + 60 : it.y + 245) * S }));
     r.items.push(it);
   }
   return out;
@@ -160,9 +210,11 @@ function cardTree(e) {
   const t = clone(layouts.card);
   const name = find(t, "Label_CharName");
   // name: the recruit icon and the name centred as one group; long names shrink and wrap; the yellow marker under the glyphs
-  const iconH = 64, iconW = e.recruit ? iconH / RECRUIT.ratio + 8 : 0;
+  const iconH = 64,
+    iconW = e.recruit ? iconH / RECRUIT.ratio + 8 : 0;
   const f = fitText(e.name, 50, 30, 430 - iconW);
-  const tw = glyphsOf(f.text, f.fs), adv = Math.max(...f.text.split("\n").map((l) => advanceOf(l, f.fs)));
+  const tw = glyphsOf(f.text, f.fs),
+    adv = Math.max(...f.text.split("\n").map((l) => advanceOf(l, f.fs)));
   const left = -(iconW + tw) / 2;
   Object.assign(name.widgets[0], { text: f.text, fontSize: f.fs, w_: adv + 4, h_: 60 * f.lines });
   name.pos[0] = left + iconW + adv / 2;
@@ -170,7 +222,14 @@ function cardTree(e) {
   const marker = find(name, "Sprite");
   marker.widgets[0].w_ = tw + 8;
   marker.pos = [tw / 2 - adv / 2, f.lines > 1 ? -17 - 30 : -17];
-  if (e.recruit) t.children.push(node("Recruit", [left + (iconW - 8) / 2, name.pos[1] + 2], [sprite(RECRUIT.sprite, iconH / RECRUIT.ratio, iconH, { atlas: RECRUIT.atlas, type: 0, depth: 12 })]));
+  if (e.recruit)
+    t.children.push(
+      node(
+        "Recruit",
+        [left + (iconW - 8) / 2, name.pos[1] + 2],
+        [sprite(RECRUIT.sprite, iconH / RECRUIT.ratio, iconH, { atlas: RECRUIT.atlas, type: 0, depth: 12 })],
+      ),
+    );
   find(t, "NewIcon").active = !!e.fresh; // a newly added mod (the game's new-item dot)
   find(t, "CharacterWeapon").active = false;
   const pin = find(t, "Btn_Pin");
@@ -193,17 +252,20 @@ function cardTree(e) {
 }
 
 const portraitOf = (e) => {
-  if(e.thumbnail)return e.thumbnail;
+  if (e.thumbnail) return e.thumbnail;
   if (!spineAllowed()) return e.portrait || null;
   const thumb = thumbnailWork.thumb;
-  const kind = primaryKind(e), variants = data.families.find((f) => f.key === e.family)?.variants || [];
+  const kind = primaryKind(e),
+    variants = data.families.find((f) => f.key === e.family)?.variants || [];
   // Model-only entries stay navigable without requesting a Spine skeleton for a GLB.
   if (kind === "model") return e.portrait || null;
   if (e.previewSources?.[kind] || configuredKey(e, kind)) {
     return thumb(previewBase(e, kind, false, variants), "roster", null, kind === "lobby", specialFraming(e), e.bg);
   }
   const core = kind === "spr" ? e.spr : e.lobby;
-  return core ? thumb(spineBase(kind, core), "roster", null, kind === "lobby", specialFraming(e), e.bg) : e.portrait || null;
+  return core
+    ? thumb(spineBase(kind, core), "roster", null, kind === "lobby", specialFraming(e), e.bg)
+    : e.portrait || null;
 };
 
 // --- rows near the view ---
@@ -232,15 +294,33 @@ async function renderRow(host, rowKey) {
     const hit = document.createElement("button");
     hit.className = "card-hit";
     const [sx, sy] = [ORIGIN[0] + it.x * S, ORIGIN[1] - it.y * S];
-    Object.assign(hit.style, { left: `${sx - 218 * S}px`, top: `${sy - 245 * S}px`, width: `${436 * S}px`, height: `${490 * S}px` });
+    Object.assign(hit.style, {
+      left: `${sx - 218 * S}px`,
+      top: `${sy - 245 * S}px`,
+      width: `${436 * S}px`,
+      height: `${490 * S}px`,
+    });
     const name = it.e.mods > 0 ? `${it.e.name} - ${countText(it.e.modCounts, T)}` : it.e.name;
     hit.setAttribute("aria-label", name);
-    if (hasAsset(it.e)) hit.addEventListener("click", () => { if (!ctx.dragged) location.hash = `#/student/${encodeURIComponent(it.e.family)}/${encodeURIComponent(it.e.key)}`; });
+    if (hasAsset(it.e))
+      hit.addEventListener("click", () => {
+        if (!ctx.dragged)
+          location.hash = `#/student/${encodeURIComponent(it.e.family)}/${encodeURIComponent(it.e.key)}`;
+      });
     else hit.disabled = true;
     row.appendChild(hit);
-    jobs.push(NGUI.render(t, row, { scale: S, origin: ORIGIN, z: 100, deferImages: true, textures: tex ? { Char_Portrait: tex } : {} }).then(async (view) => {
-      await clipRosterBand(view, t.name, { load: NGUI.load }); return view;
-    }));
+    jobs.push(
+      NGUI.render(t, row, {
+        scale: S,
+        origin: ORIGIN,
+        z: 100,
+        deferImages: true,
+        textures: tex ? { Char_Portrait: tex } : {},
+      }).then(async (view) => {
+        await clipRosterBand(view, t.name, { load: NGUI.load });
+        return view;
+      }),
+    );
   }
   row.ready = Promise.all(jobs).then(async (views) => {
     // A visible row is committed with its actual portraits. Each thumbnail
@@ -255,24 +335,34 @@ function syncRows() {
   const { signal } = thumbnailWork;
   const host = dom.scrollHost;
   const viewH = CLIP_BOTTOM - clipTop();
-  const lo = clipTop() + view.scroll - viewH, hi = clipTop() + view.scroll + viewH * 2;
+  const lo = clipTop() + view.scroll - viewH,
+    hi = clipTop() + view.scroll + viewH * 2;
   const wanted = new Set();
   for (const [key, r] of rows) if (r.top + PITCH * S >= lo && r.top <= hi) wanted.add(key);
-  for (const [key, el] of rendered) if (!wanted.has(key)) { el.remove(); rendered.delete(key); }
+  for (const [key, el] of rendered)
+    if (!wanted.has(key)) {
+      el.remove();
+      rendered.delete(key);
+    }
   // the thumbnails render in the order they are asked for: the rows in view first, then below, then above
-  const shown = clipTop() + view.scroll, rank = (r) => (r.top + PITCH * S >= shown && r.top <= shown + viewH ? 0 : r.top > shown ? 1 : 2);
+  const shown = clipTop() + view.scroll,
+    rank = (r) => (r.top + PITCH * S >= shown && r.top <= shown + viewH ? 0 : r.top > shown ? 1 : 2);
   const order = [...wanted].sort((a, b) => rank(rows.get(a)) - rank(rows.get(b)) || rows.get(a).top - rows.get(b).top);
   const visible = order.filter((key) => rank(rows.get(key)) === 0);
   const ready = Promise.all(visible.map((key) => rendered.get(key)?.ready || renderRow(host, key)));
   // Queue overscan only after the visible portraits; it never extends the reveal barrier.
-  ready.then(() => {
-    if (signal.aborted || host !== dom.scrollHost) return;
-    for (const key of order) if (!rendered.has(key)) renderRow(host, key).catch(console.error);
-  }).catch(console.error);
+  ready
+    .then(() => {
+      if (signal.aborted || host !== dom.scrollHost) return;
+      for (const key of order) if (!rendered.has(key)) renderRow(host, key).catch(console.error);
+    })
+    .catch(console.error);
   return ready;
 }
 
-function maxScroll() { return Math.max(0, contentH - (CLIP_BOTTOM - clipTop())); }
+function maxScroll() {
+  return Math.max(0, contentH - (CLIP_BOTTOM - clipTop()));
+}
 
 function applyScroll() {
   const { scrollHost, bar } = dom;
@@ -326,7 +416,9 @@ async function relist() {
   if (my !== listToken || dom.scrollHost !== scrollHost) return;
   dom.clip.replaceChildren(scrollHost);
   // the empty list's picture changes with the cards (in the same frame when it is built by now), never before them
-  empty.then((next) => { if (my === listToken) dom.empty.replaceChildren(...next.childNodes); });
+  empty.then((next) => {
+    if (my === listToken) dom.empty.replaceChildren(...next.childNodes);
+  });
 }
 
 // --- search: the game's search box over the top of the list, filtering as one types ---
@@ -343,16 +435,24 @@ function searchInput() {
   el.setAttribute("aria-label", T("roster.search"));
   el.value = query;
   Object.assign(el.style, {
-    left: `${ORIGIN[0] + (2 - 389) * S}px`, top: `${ORIGIN[1] - (258 + 46) * S}px`, width: `${778 * S}px`, height: `${92 * S}px`,
+    left: `${ORIGIN[0] + (2 - 389) * S}px`,
+    top: `${ORIGIN[1] - (258 + 46) * S}px`,
+    width: `${778 * S}px`,
+    height: `${92 * S}px`,
     fontSize: `${60 * S}px`,
   });
   // typing with an input method (Chinese, Japanese) filters once the word is committed
-  el.addEventListener("input", (ev) => { if (!ev.isComposing) searchLater(90); });
+  el.addEventListener("input", (ev) => {
+    if (!ev.isComposing) searchLater(90);
+  });
   el.addEventListener("compositionend", () => searchLater(0));
   el.addEventListener("keydown", (ev) => {
     // the key that ends a conversion is the input method's (WebKit sends it after compositionend, as keyCode 229)
     if (ev.isComposing || ev.keyCode === 229) return;
-    if (ev.key === "Escape") { ev.preventDefault(); closeSearch(); } else if (ev.key === "Enter") el.blur();
+    if (ev.key === "Escape") {
+      ev.preventDefault();
+      closeSearch();
+    } else if (ev.key === "Enter") el.blur();
   });
   return el;
 }
@@ -365,7 +465,10 @@ function searchApply() {
   view.scroll = 0;
   relist();
 }
-function searchLater(ms) { clearTimeout(searchTimer); searchTimer = setTimeout(searchApply, ms); }
+function searchLater(ms) {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(searchApply, ms);
+}
 
 async function renderSearch(host) {
   await NGUI.render(searchTree(), host, { scale: S, origin: ORIGIN, z: 300 });
@@ -375,7 +478,13 @@ async function renderSearch(host) {
   // the close button at (512, 258)
   const close = document.createElement("button");
   close.className = "card-hit";
-  Object.assign(close.style, { left: `${ORIGIN[0] + (512 - 55) * S}px`, top: `${ORIGIN[1] - (258 + 55) * S}px`, width: `${110 * S}px`, height: `${110 * S}px`, zIndex: 330 });
+  Object.assign(close.style, {
+    left: `${ORIGIN[0] + (512 - 55) * S}px`,
+    top: `${ORIGIN[1] - (258 + 55) * S}px`,
+    width: `${110 * S}px`,
+    height: `${110 * S}px`,
+    zIndex: 330,
+  });
   close.setAttribute("aria-label", T("display.close"));
   close.addEventListener("click", closeSearch);
   host.appendChild(close);
@@ -402,16 +511,18 @@ function closeSearch() {
 
 // --- display settings (the sort button) and the order button ---
 function openDisplay() {
-  Loading.wait(Display.open({
-    view,
-    count: (draft) => orderOf(data, { ...view, ...draft }, opts()).length,
-    onDone: (draft) => {
-      if (!draft) return;
-      Object.assign(view, draft, { scroll: 0 });
-      save();
-      renderAll();
-    },
-  }));
+  Loading.wait(
+    Display.open({
+      view,
+      count: (draft) => orderOf(data, { ...view, ...draft }, opts()).length,
+      onDone: (draft) => {
+        if (!draft) return;
+        Object.assign(view, draft, { scroll: 0 });
+        save();
+        renderAll();
+      },
+    }),
+  );
 }
 function flipOrder() {
   view.order = view.order === "desc" ? "asc" : "desc";
@@ -447,7 +558,9 @@ async function buildFrame(my) {
   await Promise.all([
     NGUI.render(find(t, "BG"), next, { scale: S, origin: [960, 540], rootPath: "BG" }),
     NGUI.render({ ...t, children: t.children.filter((c) => ["ListBG", "SeletControl"].includes(c.name)) }, next, {
-      scale: S, origin: ORIGIN, off: ["Top", "LeftInfo_Empty", "CharacterSearch", "Btn_Information"],
+      scale: S,
+      origin: ORIGIN,
+      off: ["Top", "LeftInfo_Empty", "CharacterSearch", "Btn_Information"],
     }),
   ]);
   if (my !== frameToken) return;
@@ -459,32 +572,51 @@ async function buildFrame(my) {
   scrollHost.className = "card-scroll";
   clip.appendChild(scrollHost);
   next.appendChild(clip);
-  const bar = await scrollbar(next, [960 + (1391 - 63) * S, clipTop() + 10, 126 * S, CLIP_BOTTOM - clipTop() - 20], { collection: layouts.collection });
+  const bar = await scrollbar(next, [960 + (1391 - 63) * S, clipTop() + 10, 126 * S, CLIP_BOTTOM - clipTop() - 20], {
+    collection: layouts.collection,
+  });
   const empty = document.createElement("div");
   empty.className = "roster-empty";
   next.appendChild(empty);
-  const motion = wheelScroller({ read: () => view.scroll,
-    write: (top) => { view.scroll = top; applyScroll().catch(console.error); }, max: maxScroll,
-    page: () => CLIP_BOTTOM - clipTop(), scale: stageScaleNow,
-    alive: () => clip.isConnected && !$("screen-roster").hidden });
+  const motion = wheelScroller({
+    read: () => view.scroll,
+    write: (top) => {
+      view.scroll = top;
+      applyScroll().catch(console.error);
+    },
+    max: maxScroll,
+    page: () => CLIP_BOTTOM - clipTop(),
+    scale: stageScaleNow,
+    alive: () => clip.isConnected && !$("screen-roster").hidden,
+  });
   wheelMotion = motion;
-  clip.addEventListener("wheel", (ev) => {
-    if (motion.wheel(ev)) return;
-    if (ev.ctrlKey) return;
-    if (Math.abs(ev.deltaY) < Math.abs(ev.deltaX)) return; // horizontal trackpad swipes
-    ev.preventDefault();
-    const unit = ev.deltaMode === 1 ? 40 : ev.deltaMode === 2 ? CLIP_BOTTOM - clipTop() : 1 / stageScaleNow();
-    view.scroll += ev.deltaY * unit;
-    applyScroll();
-  }, { passive: false });
-  clip.addEventListener("pointerdown", (ev) => { motion.stop(); drag = { y: ev.clientY, scroll: view.scroll }; ctx.dragged = false; });
+  clip.addEventListener(
+    "wheel",
+    (ev) => {
+      if (motion.wheel(ev)) return;
+      if (ev.ctrlKey) return;
+      if (Math.abs(ev.deltaY) < Math.abs(ev.deltaX)) return; // horizontal trackpad swipes
+      ev.preventDefault();
+      const unit = ev.deltaMode === 1 ? 40 : ev.deltaMode === 2 ? CLIP_BOTTOM - clipTop() : 1 / stageScaleNow();
+      view.scroll += ev.deltaY * unit;
+      applyScroll();
+    },
+    { passive: false },
+  );
+  clip.addEventListener("pointerdown", (ev) => {
+    motion.stop();
+    drag = { y: ev.clientY, scroll: view.scroll };
+    ctx.dragged = false;
+  });
   // a card focused from the keyboard is brought into view through the list's own position, so the rows, the
   // scrollbar and the virtual list stay in step; whatever still scrolls the clip itself (the browser showing a
   // focused card) goes the same way
   clip.addEventListener("focusin", (ev) => {
     motion.stop();
     if (!ev.target.classList?.contains("card-hit")) return;
-    const r = ev.target.getBoundingClientRect(), c = clip.getBoundingClientRect(), k = stageScaleNow();
+    const r = ev.target.getBoundingClientRect(),
+      c = clip.getBoundingClientRect(),
+      k = stageScaleNow();
     if (r.top < c.top) view.scroll -= (c.top - r.top) / k;
     else if (r.bottom > c.bottom) view.scroll += (r.bottom - c.bottom) / k;
     else return;
@@ -503,19 +635,37 @@ async function buildFrame(my) {
   const hit = ([ux, uy, w, h], fn, name, pressed = null) => {
     const b = document.createElement("button");
     b.className = "card-hit";
-    Object.assign(b.style, { left: `${ORIGIN[0] + (ux - w / 2) * S}px`, top: `${ORIGIN[1] - (uy + h / 2) * S}px`, width: `${w * S}px`, height: `${h * S}px` });
+    Object.assign(b.style, {
+      left: `${ORIGIN[0] + (ux - w / 2) * S}px`,
+      top: `${ORIGIN[1] - (uy + h / 2) * S}px`,
+      width: `${w * S}px`,
+      height: `${h * S}px`,
+    });
     if (name) b.setAttribute("aria-label", name);
     if (pressed != null) b.setAttribute("aria-pressed", String(pressed));
     b.addEventListener("click", fn);
     next.appendChild(b);
     return b;
   };
-  const reset = (fn) => () => { fn(); view.scroll = 0; save(); renderAll(); };
+  const reset = (fn) => () => {
+    fn();
+    view.scroll = 0;
+    save();
+    renderAll();
+  };
   // the segments and Group Alts toggle a view setting: named by their captions, pressed while that setting is on
-  for (const toggle of toggleHits(view, lay)) hit(toggle.box, reset(() => toggle.apply(view)), toggle.name, toggle.pressed);
+  for (const toggle of toggleHits(view, lay))
+    hit(
+      toggle.box,
+      reset(() => toggle.apply(view)),
+      toggle.name,
+      toggle.pressed,
+    );
   hit([lay.search, TOOL_Y, 150, 116], () => (searching ? closeSearch() : openSearch()), T("roster.search"));
   // the display settings' first drawing takes a while: it starts as the pointer comes to the button
-  hit([lay.sort, TOOL_Y, lay.sortW, 116], openDisplay, T("display.title")).addEventListener("pointerenter", () => Display.warm());
+  hit([lay.sort, TOOL_Y, lay.sortW, 116], openDisplay, T("display.title")).addEventListener("pointerenter", () =>
+    Display.warm(),
+  );
   hit([lay.order, TOOL_Y, 243, 116], flipOrder, T(view.order === "desc" ? "roster.desc" : "roster.asc"));
 
   // The visible card frames and portraits finish before their shared reveal.
@@ -558,7 +708,9 @@ function warm() {
 const PREFABS = ["UICharacterCollection", "UICharacterCollectionPopulatorUnit", "UIPopup_GachaCharList.Btn_Checkbox"];
 const prefabs = () => Promise.all(PREFABS.map((name) => NGUI.layout(name)));
 // Never awaited: a failure surfaces when show() asks again.
-export function preload() { prefabs().catch(() => {}); }
+export function preload() {
+  prefabs().catch(() => {});
+}
 
 // Show the roster from its saved data. Required UI and available pictures decode
 // before reveal. Offscreen rows do not extend that barrier.
@@ -602,4 +754,8 @@ export async function relabel() {
 }
 
 // Prefabs and derived UI values belong to the selected installation.
-NGUI.onResourceChange?.(() => { layouts = countIcons = null; data = null; dirty = true; });
+NGUI.onResourceChange?.(() => {
+  layouts = countIcons = null;
+  data = null;
+  dirty = true;
+});

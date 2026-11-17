@@ -22,6 +22,7 @@ def test_progress_keeps_action_labels_and_names_an_empty_callback(monkeypatch, l
     jobs = JobRunner(events)
     named = translate("webui.progress.apply", name="portrait.bundle")
     try:
+
         def run(log, progress):
             progress(1, 1)
             progress(2, 2, named)
@@ -34,7 +35,9 @@ def test_progress_keeps_action_labels_and_names_an_empty_callback(monkeypatch, l
             if event == "job.progress":
                 reports.append(data)
         assert [report["label"] for report in reports] == [
-            translate("webui.progress.process", name=translate("webui.progress.mods")), named]
+            translate("webui.progress.process", name=translate("webui.progress.mods")),
+            named,
+        ]
         assert jobs.get(jid).to_json()["progress"] == reports[-1]
         assert reports[-1] == {"id": jid, "current": 2, "total": 2, "label": named, "sequence": 2}
     finally:
@@ -48,6 +51,7 @@ def wait_for(cond, timeout=5.0):
             return True
         time.sleep(0.01)
     return cond()
+
 
 def test_only_writer_jobs_make_the_runner_busy():
     jobs = JobRunner(EventBus())
@@ -116,6 +120,7 @@ def test_failures_in_run_result_or_listeners_always_finish_and_release_the_worke
             log("building")
             progress(1, 1)
             raise error
+
         return run
 
     def listener(job):
@@ -123,10 +128,12 @@ def test_failures_in_run_result_or_listeners_always_finish_and_release_the_worke
 
     jobs.listen(listener)
     try:
-        for fn, code in ((crash(ServiceError("mod_apply_failed")), "mod_apply_failed"),
-                         (crash(RuntimeError("build failed")), "internal"),
-                         (crash(SystemExit("builder exited")), "internal"),
-                         (lambda log, progress: BadResult(), "internal")):
+        for fn, code in (
+            (crash(ServiceError("mod_apply_failed")), "mod_apply_failed"),
+            (crash(RuntimeError("build failed")), "internal"),
+            (crash(SystemExit("builder exited")), "internal"),
+            (lambda log, progress: BadResult(), "internal"),
+        ):
             jid = jobs.submit("apply", fn, writes="game")
             assert jobs.wait(jid, 5)
             job = jobs.get(jid)
@@ -150,6 +157,7 @@ def test_event_delivery_failure_cannot_kill_the_job_worker():
 
     jobs = JobRunner(BrokenEvents())
     try:
+
         def apply(log, progress):
             log("applied")
             progress(1, 2, "portrait.bundle")
@@ -159,7 +167,12 @@ def test_event_delivery_failure_cannot_kill_the_job_worker():
         assert jobs.wait(jid, 5)
         assert jobs.get(jid).state == "done" and not jobs.busy()
         assert jobs.get(jid).to_json()["progress"] == {
-            "id": jid, "current": 2, "total": 2, "label": "lobby.bundle", "sequence": 2}
+            "id": jid,
+            "current": 2,
+            "total": 2,
+            "label": "lobby.bundle",
+            "sequence": 2,
+        }
         next_id = jobs.submit("restore", lambda log, progress: "ok", writes="game")
         assert jobs.wait(next_id, 5)
         assert jobs.get(next_id).result == "ok"
@@ -180,6 +193,7 @@ def test_parallel_progress_has_one_sequence_shared_with_polling():
             start.wait(timeout=5)
             for step in range(5):
                 progress({"worker": worker, "done": step, "total": 5, "sequence": -1})
+
         with ThreadPoolExecutor(max_workers=4) as pool:
             list(pool.map(report, range(4)))
 
@@ -202,13 +216,25 @@ def test_user_jobs_go_before_queued_maintenance_and_a_running_job_is_not_interru
     jobs = JobRunner(EventBus())
     gate, ran = threading.Event(), []
     try:
-        first = jobs.submit("library.prune", lambda log, progress: (gate.wait(5), ran.append("prune running")),
-                            writes="library", rank=jobs_module.MAINTENANCE)
+        first = jobs.submit(
+            "library.prune",
+            lambda log, progress: (gate.wait(5), ran.append("prune running")),
+            writes="library",
+            rank=jobs_module.MAINTENANCE,
+        )
         assert wait_for(lambda: jobs.get(first).state == "running")
-        jobs.submit("mods.crcRepair", lambda log, progress: ran.append("crc repair"), writes="game",
-                    rank=jobs_module.MAINTENANCE)
-        jobs.submit("mods.refreshCostumes", lambda log, progress: ran.append("start rebuild"), writes="game",
-                    rank=jobs_module.START)
+        jobs.submit(
+            "mods.crcRepair",
+            lambda log, progress: ran.append("crc repair"),
+            writes="game",
+            rank=jobs_module.MAINTENANCE,
+        )
+        jobs.submit(
+            "mods.refreshCostumes",
+            lambda log, progress: ran.append("start rebuild"),
+            writes="game",
+            rank=jobs_module.START,
+        )
         jobs.submit("mods.toggle", lambda log, progress: ran.append("toggle"), writes="game")
         last = jobs.submit("apply", lambda log, progress: ran.append("apply"), writes="game")
         gate.set()
@@ -224,8 +250,9 @@ def test_queued_writers_still_run_at_shutdown_whatever_their_class():
     gate, ran = threading.Event(), []
     blocker = jobs.submit("extract", lambda log, progress: gate.wait(5))
     assert wait_for(lambda: jobs.get(blocker).state == "running")
-    jobs.submit("library.prune", lambda log, progress: ran.append("prune"), writes="library",
-                rank=jobs_module.MAINTENANCE)
+    jobs.submit(
+        "library.prune", lambda log, progress: ran.append("prune"), writes="library", rank=jobs_module.MAINTENANCE
+    )
     jobs.shutdown()
     gate.set()
     assert wait_for(lambda: ran == ["prune"])
@@ -244,6 +271,7 @@ def test_a_cancelled_job_never_runs_when_queued_and_stops_at_its_next_step_when_
     jobs = JobRunner(events)
     gate, steps, ran = threading.Event(), [], []
     try:
+
         def check(log, progress, cancelled):
             steps.append("started")
             gate.wait(5)

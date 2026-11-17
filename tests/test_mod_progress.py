@@ -10,8 +10,20 @@ def test_each_item_is_reported_as_it_starts_counted_from_one_with_who_it_is():
     seen = []
     line = ItemProgress(seen.append, 13, "process")
     line.item(1, variant="ch0063", kind="model", name="My Swim Edit", step=STEP_CHECK)
-    assert seen == [{"current": 1, "total": 13, "action": "process", "variant": "ch0063", "kind": "model",
-                     "name": "My Swim Edit", "source": "", "core": "", "step": STEP_CHECK, "fraction": 0.0}]
+    assert seen == [
+        {
+            "current": 1,
+            "total": 13,
+            "action": "process",
+            "variant": "ch0063",
+            "kind": "model",
+            "name": "My Swim Edit",
+            "source": "",
+            "core": "",
+            "step": STEP_CHECK,
+            "fraction": 0.0,
+        }
+    ]
     line.step(STEP_CHECK)  # already shown: nothing
     line.fraction(0.0)
     assert len(seen) == 1
@@ -42,8 +54,12 @@ def test_a_build_fills_its_share_of_the_item_and_the_write_starts_where_it_ended
     part(1.0)
     part.phase("write")
     assert [(p["step"], p["fraction"]) for p in seen[1:]] == [
-        (COSTUME_STEPS["read"], 0.0), (COSTUME_STEPS["read"], 0.45), (COSTUME_STEPS["save"], 0.45),
-        (COSTUME_STEPS["save"], 0.9), (STEP_WRITE, 0.9)]
+        (COSTUME_STEPS["read"], 0.0),
+        (COSTUME_STEPS["read"], 0.45),
+        (COSTUME_STEPS["save"], 0.45),
+        (COSTUME_STEPS["save"], 0.9),
+        (STEP_WRITE, 0.9),
+    ]
     # nothing built: the write starts halfway through the share; the official files put back are their own step
     line.item(1, variant="a", kind="spr")
     plain = line.part(0.0, 1.0, build=0.9)
@@ -74,9 +90,11 @@ def test_a_single_items_build_reports_its_steps_and_share_only():
     part.phase("plan")
     part(0.5)
     mod_progress.entered(part, "write")
-    assert seen == [{"current": 1, "total": 1, "step": COSTUME_STEPS["plan"], "fraction": 0.0},
-                    {"current": 1, "total": 1, "step": COSTUME_STEPS["plan"], "fraction": 0.45},
-                    {"current": 1, "total": 1, "step": STEP_WRITE, "fraction": 0.9}]
+    assert seen == [
+        {"current": 1, "total": 1, "step": COSTUME_STEPS["plan"], "fraction": 0.0},
+        {"current": 1, "total": 1, "step": COSTUME_STEPS["plan"], "fraction": 0.45},
+        {"current": 1, "total": 1, "step": STEP_WRITE, "fraction": 0.9},
+    ]
 
 
 def test_every_costume_phase_has_a_step_and_the_meter_tells_each_phase_it_enters(monkeypatch):

@@ -225,8 +225,10 @@ def csv_bases(row: dict[str, str]) -> dict[str, str]:
 
 def thai_fallback(english: dict[str, str]) -> dict[str, str]:
     """Keep English names until official Thai wording is available; localize the base-variant label."""
-    return {"full": english["full"], "short": BASE_SHORT["th"] if english["short"] == BASE_SHORT["en"]
-            else english["short"]}
+    return {
+        "full": english["full"],
+        "short": BASE_SHORT["th"] if english["short"] == BASE_SHORT["en"] else english["short"],
+    }
 
 
 def apply_thai_names(students: dict, variants: dict, rows: dict | None = None) -> None:
@@ -237,12 +239,18 @@ def apply_thai_names(students: dict, variants: dict, rows: dict | None = None) -
     NPC names stay English until an official Thai name for their own sprite is known.
     """
     rows = NAMING["thai"]["students"] if rows is None else rows
-    rows = {str(key): row for key, row in rows.items() if re.search(r"[\u0e00-\u0e7f]", row.get("Name", ""))
-            and ("IsReleased" not in row or len(row["IsReleased"]) > 1 and row["IsReleased"][1])}
+    rows = {
+        str(key): row
+        for key, row in rows.items()
+        if re.search(r"[\u0e00-\u0e7f]", row.get("Name", ""))
+        and ("IsReleased" not in row or len(row["IsReleased"]) > 1 and row["IsReleased"][1])
+    }
     for student in students.values():
         source = rows.get(str(variants[student["base"]].get("schale_id")), {})
         personal = source.get("PersonalName", "")
-        student["names"]["th"] = clean(personal, "th") if re.search(r"[\u0e00-\u0e7f]", personal) else student["names"]["en"]
+        student["names"]["th"] = (
+            clean(personal, "th") if re.search(r"[\u0e00-\u0e7f]", personal) else student["names"]["en"]
+        )
     for entry in variants.values():
         source = rows.get(str(entry.get("schale_id")), {}) if entry["playable"] else {}
         if source:
@@ -257,6 +265,7 @@ def apply_thai_names(students: dict, variants: dict, rows: dict | None = None) -
 
 
 # --- aliases: the CN server's wording, which the roster search matches although zh-CN shows Kivo's ---
+
 
 def cn_words(rows: Iterable[dict[str, str]]) -> dict[str, str]:
     """Map each Kivo costume word to the CN server's word where they differ.
@@ -301,13 +310,19 @@ def cn_name(full: str, base: str, server_base: str, words: dict[str, str]) -> st
     match = re.fullmatch(r"(.*?)\uff08(.*)\uff09", full)
     head, inner = match.groups() if match else (full, "")
     if head.startswith(base):
-        head = server_base + head[len(base):]
+        head = server_base + head[len(base) :]
     parts = [words.get(part, part) for part in inner.split(SEPARATORS["zh-CN"])] if inner else []
     return compose(head, parts, "zh-CN")["full"]
 
 
-def cn_aliases(full: str, base: str, server_bases: Iterable[str], words: dict[str, str],
-               heads: Iterable[str] = (), extra: Iterable[str] = ()) -> list[str]:
+def cn_aliases(
+    full: str,
+    base: str,
+    server_bases: Iterable[str],
+    words: dict[str, str],
+    heads: Iterable[str] = (),
+    extra: Iterable[str] = (),
+) -> list[str]:
     """Return a variant's aliases, its zh-CN name in the CN server's wording, without the shown name.
 
     ``server_bases`` are the server's names of the student (the base when it has none), each

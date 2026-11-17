@@ -8,78 +8,168 @@ import { atStep } from "../../src/bmpt/web/js/preview-error.js";
 import { validRect } from "../../src/bmpt/web/js/lobby-health.js";
 
 const source = readFileSync(new URL("../../src/bmpt/web/js/lobby.js", import.meta.url), "utf8");
-const loading = source.slice(source.indexOf("const lobbyLoads ="), source.indexOf("// the input trace"))
-  .replaceAll("export function", "function").replaceAll("export async function", "async function");
+const loading = source
+  .slice(source.indexOf("const lobbyLoads ="), source.indexOf("// the input trace"))
+  .replaceAll("export function", "function")
+  .replaceAll("export async function", "async function");
 const tick = () => new Promise(setImmediate);
 const noop = () => {};
-const meta = { main: "main", sparse: false, left: { x: 0, y: 0, w: 1920, h: 1080 }, full: { x: 0, y: 0, w: 1920, h: 1080 } };
+const meta = {
+  main: "main",
+  sparse: false,
+  left: { x: 0, y: 0, w: 1920, h: 1080 },
+  full: { x: 0, y: 0, w: 1920, h: 1080 },
+};
 const layers = async (core, mod) => ({ info: null, layers: [{ name: "main", spine: `${core}:${mod || "live"}` }] });
 
 function harness(layersOf = layers, resolveSources = null, { allowed = true } = {}) {
-  const created = [], calls = [], touchSetups = [];
+  const created = [],
+    calls = [],
+    touchSetups = [];
   const revisions = new Map();
   const failures = [];
-  const host = { innerHTML: "", classList: { remove: noop }, querySelector: () => ({}), appendChild(el) { this.message = el; } };
+  const host = {
+    innerHTML: "",
+    classList: { remove: noop },
+    querySelector: () => ({}),
+    appendChild(el) {
+      this.message = el;
+    },
+  };
   const prompts = [];
   const env = {
     dialogueModule: async () => ({ createLobbyDialogue: () => ({ show: noop, reposition: noop, dispose: noop }) }),
-    latestLoad, layersOf, withTimeout, atStep, validRect, ensureSpine: async () => allowed,
+    latestLoad,
+    layersOf,
+    withTimeout,
+    atStep,
+    validRect,
+    ensureSpine: async () => allowed,
     rectOf: (v) => ({ x0: v.x, y0: v.y, x1: v.x + v.w, y1: v.y + v.h }),
     spineBase: (kind, core) => `/asset/spine/${kind}/${core}/skeleton`,
-    previewError: (...args) => failures.push(args), T: () => "Preview unavailable",
-    document: { getElementById: (id) => id, createElement: () => ({ setAttribute: noop,
-      children: [], appendChild(el) { this.children.push(el); },
-      addEventListener(type, fn) { this[type] = fn; } }) },
-    STAGE: { w: 1920, h: 1080 }, EXT_W: 480, EXT_H: 270,
-    sourcesOf: resolveSources || (async (core, mod) => ({ artBase: `${core}:${mod || "live"}:${revisions.get(mod || core) || "a"}`,
-      base: `${core}:layout` })),
-    makePlayer(_host, layer, _fx, _share, signal) {
-      return loadPlayer((config) => {
-        const p = { config, name: layer.spine, disposed: false, parent: { remove: noop },
-          dispose() { assert.equal(this.disposed, false); this.disposed = true; calls.push(`dispose ${this.name}`); } };
-        created.push(p);
-        calls.push(`create ${p.name}`);
-        return p;
-      }, {}, { signal });
+    previewError: (...args) => failures.push(args),
+    T: () => "Preview unavailable",
+    document: {
+      getElementById: (id) => id,
+      createElement: () => ({
+        setAttribute: noop,
+        children: [],
+        appendChild(el) {
+          this.children.push(el);
+        },
+        addEventListener(type, fn) {
+          this[type] = fn;
+        },
+      }),
     },
-    setView: noop, game: () => ({}), viewOf: () => ({}), feather: noop, lightUp: noop, openEdge: noop,
-    releaseTouch: noop, restoreTouch: () => touchSetups.push("setup"), clearTimers: noop,
+    STAGE: { w: 1920, h: 1080 },
+    EXT_W: 480,
+    EXT_H: 270,
+    sourcesOf:
+      resolveSources ||
+      (async (core, mod) => ({
+        artBase: `${core}:${mod || "live"}:${revisions.get(mod || core) || "a"}`,
+        base: `${core}:layout`,
+      })),
+    makePlayer(_host, layer, _fx, _share, signal) {
+      return loadPlayer(
+        (config) => {
+          const p = {
+            config,
+            name: layer.spine,
+            disposed: false,
+            parent: { remove: noop },
+            dispose() {
+              assert.equal(this.disposed, false);
+              this.disposed = true;
+              calls.push(`dispose ${this.name}`);
+            },
+          };
+          created.push(p);
+          calls.push(`create ${p.name}`);
+          return p;
+        },
+        {},
+        { signal },
+      );
+    },
+    setView: noop,
+    game: () => ({}),
+    viewOf: () => ({}),
+    feather: noop,
+    lightUp: noop,
+    openEdge: noop,
+    releaseTouch: noop,
+    restoreTouch: () => touchSetups.push("setup"),
+    clearTimers: noop,
     previewLifecycle: () => ({ active: () => true, dispose: noop }),
-    freezeWhileLoading: () => ({ held: () => false, dispose: noop }), onScreen: () => true,
-    measure: () => structuredClone(meta), measuresClips: () => false,
-    Stage: { install: noop, hostOf: () => null }, Linear: { setClear: noop, detach: noop },
-    Materials: { detach: noop }, Touch: { setup: noop, detach: noop }, Idle: { start: noop, stop: noop },
-    toWorld: noop, zoomAt: noop, panBy: noop, playClip: noop, clearClip: noop, next: noop,
-    viewTarget: noop, setViewTarget: noop, endTalk: noop, Sfx: { clear: noop }, stop: noop,
-    setTimeout: noop, reveal: () => calls.push("reveal"),
+    freezeWhileLoading: () => ({ held: () => false, dispose: noop }),
+    onScreen: () => true,
+    measure: () => structuredClone(meta),
+    measuresClips: () => false,
+    Stage: { install: noop, hostOf: () => null },
+    Linear: { setClear: noop, detach: noop },
+    Materials: { detach: noop },
+    Touch: { setup: noop, detach: noop },
+    Idle: { start: noop, stop: noop },
+    toWorld: noop,
+    zoomAt: noop,
+    panBy: noop,
+    playClip: noop,
+    clearClip: noop,
+    next: noop,
+    viewTarget: noop,
+    setViewTarget: noop,
+    endTalk: noop,
+    Sfx: { clear: noop },
+    stop: noop,
+    setTimeout: noop,
+    reveal: () => calls.push("reveal"),
   };
-  const h = new Function("env", `let { ${Object.keys(env).join(", ")} } = env;
+  const h = new Function(
+    "env",
+    `let { ${Object.keys(env).join(", ")} } = env;
     let current = null, players = [], token = 0, talkIndex = -1, mode = "left", wantTouch = false;
     let extendTimer, chain, subtitleTimer;
     ${loading}
-    return { show, hide, recoverView, current: () => current };`)(env);
+    return { show, hide, recoverView, current: () => current };`,
+  )(env);
   return { ...h, host, created, calls, revisions, failures, prompts, touchSetups };
 }
 
 test("deferred Hall loads retain input suspension and do not claim the shared Touch setup", async () => {
   const h = harness();
   const pending = h.show("hero_home", h.host, "hero", { deferPlayback: true });
-  await tick(); h.created[0].config.success(h.created[0]); await pending;
-  assert.equal(h.current().deferPlayback, true); assert.equal(h.current().suspended, true);
-  assert.equal(h.host.inert, true); assert.deepEqual(h.touchSetups, []);
-  h.hide(h.host); assert.equal(h.host.inert, false);
+  await tick();
+  h.created[0].config.success(h.created[0]);
+  await pending;
+  assert.equal(h.current().deferPlayback, true);
+  assert.equal(h.current().suspended, true);
+  assert.equal(h.host.inert, true);
+  assert.deepEqual(h.touchSetups, []);
+  h.hide(h.host);
+  assert.equal(h.host.inert, false);
 });
 
 test("a lobby before acknowledgement fetches no source and leaves no notice or button", async () => {
   let sources = 0;
-  const h = harness(layers, async () => { sources++; return { artBase: "art/", base: "layout/" }; }, { allowed: false });
+  const h = harness(
+    layers,
+    async () => {
+      sources++;
+      return { artBase: "art/", base: "layout/" };
+    },
+    { allowed: false },
+  );
   try {
     assert.equal(await h.show("hero_home", h.host, "hero"), null);
     assert.equal(sources, 0);
     assert.equal(h.created.length, 0);
     assert.equal(h.host.message, undefined);
     assert.deepEqual(h.prompts, []);
-  } finally { h.hide(h.host); }
+  } finally {
+    h.hide(h.host);
+  }
 });
 
 test("configured lobby source changes cancel old players, including a switch back before the next load starts", async () => {
@@ -108,13 +198,20 @@ test("configured lobby source changes cancel old players, including a switch bac
       p.config.success(p);
       assert.ok(await shown);
     }
-  } finally { h.hide(h.host); }
+  } finally {
+    h.hide(h.host);
+  }
   assert.ok(h.created.every((p) => p.disposed));
 });
 
 test("late configured lobby metadata cannot resurrect a hidden view", async () => {
   let finish;
-  const h = harness(() => new Promise((resolve) => { finish = resolve; }));
+  const h = harness(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
   const shown = h.show("hero_home", h.host, "hero", { mod: "a" });
   await tick();
   h.hide(h.host);
@@ -141,7 +238,9 @@ test("a changed manifest revision reloads the same lobby source and frees its ol
       assert.ok(h.current().artBase.endsWith(":b"));
       h.created[1].config.success(h.created[1]);
       assert.ok(await next);
-    } finally { h.hide(h.host); }
+    } finally {
+      h.hide(h.host);
+    }
   }
 });
 
@@ -181,11 +280,13 @@ test("late manifests cannot revive a hidden lobby or overtake a newer source", a
     pending.get("waiting")(bases("waiting"));
     await tick();
     assert.equal(h.current(), null);
-  } finally { h.hide(h.host); }
+  } finally {
+    h.hide(h.host);
+  }
 });
 
 test("a configured lobby with no skeletons or a failed player rejects and allows a later source", async () => {
-  const h = harness((core, mod) => mod === "empty" ? { info: null, layers: [] } : layers(core, mod));
+  const h = harness((core, mod) => (mod === "empty" ? { info: null, layers: [] } : layers(core, mod)));
   try {
     await assert.rejects(h.show("hero_home", h.host, "hero", { mod: "empty" }), /No lobby skeletons found/);
     const failed = h.show("hero_home", h.host, "hero", { mod: "broken" });
@@ -198,78 +299,115 @@ test("a configured lobby with no skeletons or a failed player rejects and allows
     await tick();
     h.created[1].config.success(h.created[1]);
     assert.ok(await recovered);
-  } finally { h.hide(h.host); }
+  } finally {
+    h.hide(h.host);
+  }
 });
 
 test("a repeated show while the same source loads replaces the aborted work instead of caching its null result", async () => {
   const h = harness();
   try {
-    const first = h.show("shun_home", h.host, "shun"); await tick();
-    const next = h.show("shun_home", h.host, "shun"); await tick();
+    const first = h.show("shun_home", h.host, "shun");
+    await tick();
+    const next = h.show("shun_home", h.host, "shun");
+    await tick();
     assert.equal(await first, null);
     assert.equal(h.created[0].disposed, true);
     h.created[1].config.success(h.created[1]);
     assert.deepEqual(await next, meta);
     assert.equal(h.failures.length, 0, "a superseded owner does not flash an error over its replacement");
-  } finally { h.hide(h.host); }
+  } finally {
+    h.hide(h.host);
+  }
 });
 
 test("a stale revision during a player load retries the whole composition once", async () => {
   const h = harness();
   try {
-    const shown = h.show("shun_home", h.host, "shun"); await tick();
+    const shown = h.show("shun_home", h.host, "shun");
+    await tick();
     h.revisions.set("shun_home", "b");
-    h.created[0].config.error(h.created[0], "404 stale atlas page"); await tick();
+    h.created[0].config.error(h.created[0], "404 stale atlas page");
+    await tick();
     assert.equal(h.created[0].disposed, true);
     assert.ok(h.current().artBase.endsWith(":b"));
     h.created[1].config.success(h.created[1]);
     assert.deepEqual(await shown, meta);
     assert.equal(h.failures.length, 0);
-  } finally { h.hide(h.host); }
+  } finally {
+    h.hide(h.host);
+  }
 });
 
 test("one failed layer cannot be silently omitted from an otherwise ready lobby", async () => {
-  const h = harness(async () => ({ info: null, layers: [{ name: "bg", spine: "/rev/bg" }, { name: "home", spine: "/rev/home" }] }));
+  const h = harness(async () => ({
+    info: null,
+    layers: [
+      { name: "bg", spine: "/rev/bg" },
+      { name: "home", spine: "/rev/home" },
+    ],
+  }));
   try {
-    const failed = assert.rejects(h.show("shun_home", h.host, "shun"), /missing page/); await tick();
+    const failed = assert.rejects(h.show("shun_home", h.host, "shun"), /missing page/);
+    await tick();
     h.created[0].config.success(h.created[0]);
     h.created[1].config.error(h.created[1], "missing page");
     await failed;
     assert.equal(h.host.message.textContent, "Preview unavailable");
     assert.equal(h.failures[0][0].url, "/rev/home.skel");
     assert.ok(h.created.every((p) => p.disposed));
-  } finally { h.hide(h.host); }
+  } finally {
+    h.hide(h.host);
+  }
 });
 
 test("the complete lobby deadline reports failure, disposes players, and permits a later retry", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const h = harness();
   try {
-    const failed = assert.rejects(h.show("shun_home", h.host, "shun"), /timed out/); await tick();
+    const failed = assert.rejects(h.show("shun_home", h.host, "shun"), /timed out/);
+    await tick();
     const old = h.created[0];
-    t.mock.timers.tick(15000); await failed;
+    t.mock.timers.tick(15000);
+    await failed;
     assert.equal(h.host.message.textContent, "Preview unavailable");
     assert.equal(old.disposed, true);
     old.config.success(old);
     assert.equal(h.current(), null);
-    const next = h.show("shun_home", h.host, "shun"); await tick();
+    const next = h.show("shun_home", h.host, "shun");
+    await tick();
     h.created.at(-1).config.success(h.created.at(-1));
     assert.deepEqual(await next, meta);
-  } finally { h.hide(h.host); t.mock.timers.reset(); }
+  } finally {
+    h.hide(h.host);
+    t.mock.timers.reset();
+  }
 });
 
 test("a manifest that answers after the total deadline cannot start a discarded lobby", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   let finish;
-  const h = harness(layers, () => new Promise((resolve) => { finish = resolve; }));
+  const h = harness(
+    layers,
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
   try {
-    const failed = assert.rejects(h.show("shun_home", h.host, "shun"), /timed out/); await tick();
-    t.mock.timers.tick(15000); await failed;
-    finish({ artBase: "/late/", base: "/late/" }); await tick();
+    const failed = assert.rejects(h.show("shun_home", h.host, "shun"), /timed out/);
+    await tick();
+    t.mock.timers.tick(15000);
+    await failed;
+    finish({ artBase: "/late/", base: "/late/" });
+    await tick();
     assert.equal(h.created.length, 0);
     assert.equal(h.current(), null);
     assert.equal(h.host.message.textContent, "Preview unavailable");
-  } finally { h.hide(h.host); t.mock.timers.reset(); }
+  } finally {
+    h.hide(h.host);
+    t.mock.timers.reset();
+  }
 });
 
 test("zoom limits are cached by both the configured art revision and the live layout revision", () => {
@@ -277,11 +415,23 @@ test("zoom limits are cached by both the configured art revision and the live la
   const code = source.slice(start, source.indexOf("// the layers' setup-pose bounds", start));
   const measured = [];
   const env = {
-    game: () => ({}), outerOf: (rect) => rect, union: () => ({}), rectOf: () => ({}), reclamp: noop,
-    performance, SLICE_MS: 8, setTimeout: (fn) => fn(),
-    measureSafe: function* (loaded) { measured.push(loaded[0]); return { whole: {} }; },
+    game: () => ({}),
+    outerOf: (rect) => rect,
+    union: () => ({}),
+    rectOf: () => ({}),
+    reclamp: noop,
+    performance,
+    SLICE_MS: 8,
+    setTimeout: (fn) => fn(),
+    // biome-ignore lint/correctness/useYield: the stand-in finishes in one step
+    measureSafe: function* (loaded) {
+      measured.push(loaded[0]);
+      return { whole: {} };
+    },
   };
-  const measure = new Function("env", `const { ${Object.keys(env).join(", ")} } = env;
+  const measure = new Function(
+    "env",
+    `const { ${Object.keys(env).join(", ")} } = env;
     let current;
     ${source.slice(source.indexOf("function rectCache("), source.indexOf("// the grid: three game views"))}
     const safeRects = rectCache();
@@ -290,8 +440,10 @@ test("zoom limits are cached by both the configured art revision and the live la
       current = { artBase, base, loaded: [{ name: "hero", x: 0, y: 0, scale: 1, player: {} }], meta: { full: {} }, ...extra };
       measureClips();
       return current.meta;
-    };`)(env);
-  const first = `${"a".repeat(64)}/`, second = `${"b".repeat(64)}/`;
+    };`,
+  )(env);
+  const first = `${"a".repeat(64)}/`,
+    second = `${"b".repeat(64)}/`;
   assert.ok(measure(`mod-a/${first}`, `layout/${first}`).safe);
   assert.ok(measure(`mod-b/${first}`, `layout/${first}`).safe);
   assert.ok(measure(`mod-b/${second}`, `layout/${first}`).safe);
@@ -303,23 +455,44 @@ test("zoom limits are cached by both the configured art revision and the live la
   assert.equal(measured.length, 5, "changed pin configuration never reuses earlier clip limits");
 });
 
-for (const framing of [null, "character", "scene"]) test(`context recovery rebuilds the complete lobby with framing ${framing}`, async () => {
-  const h = harness(async () => ({ info: null, layers: [
-    { name: "bg", spine: "/art/revision/bg" }, { name: "hero", spine: "/art/revision/hero" },
-  ] }));
-  try {
-    const showing = h.show("np0032_npc", h.host, "special:np0032_npc", { mod: "configured", framing });
-    await tick(); h.created.forEach((p) => p.config.success(p)); await showing;
-    const old = h.current(); old.revealed = true;
-    h.recoverView(old); h.recoverView(old); await tick();
-    assert.equal(h.created.length, 4, "root and guests rebuild only once");
-    assert.ok(h.created.slice(0, 2).every((p) => p.disposed));
-    assert.equal(h.current().framing, framing); assert.equal(h.current().mod, "configured");
-    assert.equal(h.current().artBase, old.artBase); assert.equal(h.current().base, old.base);
-    assert.ok(h.calls.indexOf("dispose /art/revision/hero") < h.calls.indexOf("dispose /art/revision/bg"));
-    h.created.slice(2).forEach((p) => p.config.success(p)); await tick();
-    assert.deepEqual(h.calls.filter((c) => c === "reveal"), ["reveal"]);
-    assert.equal(h.failures.length, 0);
-    h.hide(h.host); h.recoverView(old); await tick(); assert.equal(h.created.length, 4);
-  } finally { h.hide(h.host); }
-});
+for (const framing of [null, "character", "scene"])
+  test(`context recovery rebuilds the complete lobby with framing ${framing}`, async () => {
+    const h = harness(async () => ({
+      info: null,
+      layers: [
+        { name: "bg", spine: "/art/revision/bg" },
+        { name: "hero", spine: "/art/revision/hero" },
+      ],
+    }));
+    try {
+      const showing = h.show("np0032_npc", h.host, "special:np0032_npc", { mod: "configured", framing });
+      await tick();
+      h.created.forEach((p) => p.config.success(p));
+      await showing;
+      const old = h.current();
+      old.revealed = true;
+      h.recoverView(old);
+      h.recoverView(old);
+      await tick();
+      assert.equal(h.created.length, 4, "root and guests rebuild only once");
+      assert.ok(h.created.slice(0, 2).every((p) => p.disposed));
+      assert.equal(h.current().framing, framing);
+      assert.equal(h.current().mod, "configured");
+      assert.equal(h.current().artBase, old.artBase);
+      assert.equal(h.current().base, old.base);
+      assert.ok(h.calls.indexOf("dispose /art/revision/hero") < h.calls.indexOf("dispose /art/revision/bg"));
+      h.created.slice(2).forEach((p) => p.config.success(p));
+      await tick();
+      assert.deepEqual(
+        h.calls.filter((c) => c === "reveal"),
+        ["reveal"],
+      );
+      assert.equal(h.failures.length, 0);
+      h.hide(h.host);
+      h.recoverView(old);
+      await tick();
+      assert.equal(h.created.length, 4);
+    } finally {
+      h.hide(h.host);
+    }
+  });

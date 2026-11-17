@@ -18,11 +18,20 @@ def stable_tag(tag: object) -> str:
 
 
 def published_tag(event: object) -> str:
-    if os.environ.get("GITHUB_EVENT_NAME") != "release" or not isinstance(event, dict) or event.get("action") != "published":
+    if (
+        os.environ.get("GITHUB_EVENT_NAME") != "release"
+        or not isinstance(event, dict)
+        or event.get("action") != "published"
+    ):
         raise SystemExit("Windows release assets require a published release event.")
     release = event.get("release")
-    if (not isinstance(release, dict) or release.get("draft") is not False or release.get("prerelease") is not False
-            or not isinstance(release.get("published_at"), str) or not release["published_at"]):
+    if (
+        not isinstance(release, dict)
+        or release.get("draft") is not False
+        or release.get("prerelease") is not False
+        or not isinstance(release.get("published_at"), str)
+        or not release["published_at"]
+    ):
         raise SystemExit("Draft, unpublished and prerelease releases cannot build Windows release assets.")
     tag = stable_tag(release.get("tag_name"))
     if os.environ.get("RELEASE_TAG", tag) != tag:
@@ -32,8 +41,9 @@ def published_tag(event: object) -> str:
 
 def check_tag(tag: str) -> None:
     tag = stable_tag(tag)
-    result = subprocess.run(["git", "rev-parse", "--verify", "--quiet", f"refs/tags/{tag}^{{commit}}"],
-                            capture_output=True, text=True)
+    result = subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", f"refs/tags/{tag}^{{commit}}"], capture_output=True, text=True
+    )
     if result.returncode:
         raise SystemExit(f"Release tag {tag!r} does not exist or does not point to a commit.")
     head = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()

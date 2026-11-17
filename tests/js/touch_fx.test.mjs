@@ -4,14 +4,29 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
-  FX, arcState, curve, drag, flashState, gradient, overBlend, press, release, sparkState, step, toLinear, toSrgb,
+  FX,
+  arcState,
+  curve,
+  drag,
+  flashState,
+  gradient,
+  overBlend,
+  press,
+  release,
+  sparkState,
+  step,
+  toLinear,
+  toSrgb,
   trailState,
 } from "../../src/bmpt/web/js/touch-fx.js";
 import { cursorValue, opaqueBox, paint, pointerBoxes, withRetries } from "../../src/bmpt/web/js/cursor.js";
 
 const near = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) <= eps, `${a} != ${b}`);
 // a fixed sequence instead of Math.random
-const seq = (...values) => { let i = 0; return () => values[i++ % values.length]; };
+const seq = (...values) => {
+  let i = 0;
+  return () => values[i++ % values.length];
+};
 
 test("curves are Unity's: the keys, clamped outside, Hermite between", () => {
   const keys = FX.arc.sizeCurve;
@@ -19,10 +34,37 @@ test("curves are Unity's: the keys, clamped outside, Hermite between", () => {
   near(curve(keys, keys[1][0]), keys[1][1]);
   near(curve(keys, 2), 1);
   // zero tangents: a smoothstep between the two values
-  near(curve([[0, 0, 0, 0], [1, 1, 0, 0]], 0.5), 0.5);
-  near(curve([[0, 0, 0, 0], [1, 1, 0, 0]], 0.25), 0.15625);
+  near(
+    curve(
+      [
+        [0, 0, 0, 0],
+        [1, 1, 0, 0],
+      ],
+      0.5,
+    ),
+    0.5,
+  );
+  near(
+    curve(
+      [
+        [0, 0, 0, 0],
+        [1, 1, 0, 0],
+      ],
+      0.25,
+    ),
+    0.15625,
+  );
   // a straight line keeps its slope
-  near(curve([[0, 0, 2, 2], [1, 2, 2, 2]], 0.3), 0.6);
+  near(
+    curve(
+      [
+        [0, 0, 2, 2],
+        [1, 2, 2, 2],
+      ],
+      0.3,
+    ),
+    0.6,
+  );
   // the dissolve threshold: hidden at the start, the whole ring at 0.2, gone at the end
   near(curve(FX.arc.dissolve, 0), 1);
   near(curve(FX.arc.dissolve, 0.2), 0);
@@ -59,7 +101,8 @@ test("a press makes the bursts of FX_Touch at the pointer", () => {
   near(arc.size, 0.13);
   near(arc.life, 0.6);
   // the burst triangles leave the edge of a circle 0.3 x the system's scale wide, outwards
-  const spark = fx.items.find((p) => p.kind === "spark"), st = sparkState(spark, 10);
+  const spark = fx.items.find((p) => p.kind === "spark"),
+    st = sparkState(spark, 10);
   near(Math.hypot(st.x - 1, st.y - 0.5), 0.3 * FX.burst.scale);
   const later = sparkState(spark, 10.2);
   near(Math.hypot(later.x - 1, later.y - 0.5), 0.3 * FX.burst.scale + spark.speed * 0.2);
@@ -87,7 +130,10 @@ test("a drag emits 5 triangles per unit and records the trail past its minimum d
   assert.equal(fx.items.length - before, 5);
   drag(fx, 1.2, 0, 0.14, seq(0.5));
   assert.equal(fx.items.length - before, 6);
-  assert.deepEqual(fx.trail.map((p) => p.x), [0, 1, 1.1, 1.2]);
+  assert.deepEqual(
+    fx.trail.map((p) => p.x),
+    [0, 1, 1.1, 1.2],
+  );
   // closer than 0.01 units: no new trail point, the head still moves
   drag(fx, 1.205, 0, 0.15, seq(0.5));
   assert.equal(fx.trail.length, 4);
@@ -137,7 +183,8 @@ test("the trail is cleared when the system stops, a second after the release", (
 
 test("arcs spin with their angular velocity curves", () => {
   const fx = press(0, 0, 0, seq(0, 0.5, 0, 0));
-  const arc = fx.items[0], start = arc.rot;
+  const arc = fx.items[0],
+    start = arc.rot;
   for (let t = 1; t <= 6; t++) step(fx, t / 100);
   // at the start both curves are at their first keys: about 11.17 rad/s, between 0.8 and 1 of it
   const turned = arc.rot - start;
@@ -149,7 +196,8 @@ test("arcs spin with their angular velocity curves", () => {
 
 test("the flash fades its alpha but keeps adding its colour", () => {
   const p = press(0, 0, 0, seq(0.5)).items.find((x) => x.kind === "flash");
-  const early = flashState(p, 0.01), late = flashState(p, 0.19);
+  const early = flashState(p, 0.01),
+    late = flashState(p, 0.19);
   near(early.alpha, 1);
   assert.ok(late.alpha < 0.1);
   near(late.size, FX.flash.size * curve(FX.flash.sizeCurve, 0.95));
@@ -157,7 +205,8 @@ test("the flash fades its alpha but keeps adding its colour", () => {
 });
 
 test("overBlend matches the game's blend over black and over white", () => {
-  const color = [0.22, 0.58, 1.6], alpha = 0.56;
+  const color = [0.22, 0.58, 1.6],
+    alpha = 0.56;
   const { add, keep } = overBlend(color, alpha);
   const screen = (base, k, a) => base * k + a - base * k * a;
   for (let i = 0; i < 3; i++) {
@@ -171,7 +220,10 @@ test("the trail runs from the head back to its oldest point, coloured along its 
   drag(fx, 0.5, 0, 0.05, seq(0.5));
   drag(fx, 1, 0, 0.1, seq(0.5));
   const st = trailState(fx);
-  assert.deepEqual(st.points.map((p) => p.x), [1, 1, 0.5, 0]);
+  assert.deepEqual(
+    st.points.map((p) => p.x),
+    [1, 1, 0.5, 0],
+  );
   near(st.length, 1);
   assert.equal(st.segments.length, 2); // the head on its newest point adds no segment
   near(st.segments[0].u, 0.25);
@@ -181,14 +233,36 @@ test("the trail runs from the head back to its oldest point, coloured along its 
 });
 
 test("the pointer takes the first cursor syntax the engine supports", () => {
-  const one = [["a", "b"]], two = [["a", "b"], ["c", "d"]];
-  assert.equal(cursorValue(one, () => true), 'image-set(url("a") 1x, url("b") 2x) 0 0, auto');
-  assert.equal(cursorValue(one, (v) => v.startsWith("-webkit")), '-webkit-image-set(url("a") 1x, url("b") 2x) 0 0, auto');
-  assert.equal(cursorValue(one, (v) => v.startsWith("url")), 'url("a") 0 0, auto');
-  assert.equal(cursorValue(one, () => false), null);
+  const one = [["a", "b"]],
+    two = [
+      ["a", "b"],
+      ["c", "d"],
+    ];
+  assert.equal(
+    cursorValue(one, () => true),
+    'image-set(url("a") 1x, url("b") 2x) 0 0, auto',
+  );
+  assert.equal(
+    cursorValue(one, (v) => v.startsWith("-webkit")),
+    '-webkit-image-set(url("a") 1x, url("b") 2x) 0 0, auto',
+  );
+  assert.equal(
+    cursorValue(one, (v) => v.startsWith("url")),
+    'url("a") 0 0, auto',
+  );
+  assert.equal(
+    cursorValue(one, () => false),
+    null,
+  );
   // every box in order, the system cursor last
-  assert.equal(cursorValue(two, () => true), 'image-set(url("a") 1x, url("b") 2x) 0 0, image-set(url("c") 1x, url("d") 2x) 0 0, auto');
-  assert.equal(cursorValue(two, (v) => v.startsWith("url")), 'url("a") 0 0, url("c") 0 0, auto');
+  assert.equal(
+    cursorValue(two, () => true),
+    'image-set(url("a") 1x, url("b") 2x) 0 0, image-set(url("c") 1x, url("d") 2x) 0 0, auto',
+  );
+  assert.equal(
+    cursorValue(two, (v) => v.startsWith("url")),
+    'url("a") 0 0, url("c") 0 0, auto',
+  );
 });
 
 // an ImageData of w x h with the given pixels opaque
@@ -200,7 +274,16 @@ function alpha(w, h, opaque) {
 
 test("the pointer's box is its texture's opaque part from the hotspot, in CSS px", () => {
   // PCIcon_MousePoint: opaque up to (45, 61) of 64 x 64, shown at 32 CSS px
-  assert.deepEqual(opaqueBox(alpha(64, 64, [[0, 0], [45, 30], [10, 61]])), [23, 31]);
+  assert.deepEqual(
+    opaqueBox(
+      alpha(64, 64, [
+        [0, 0],
+        [45, 30],
+        [10, 61],
+      ]),
+    ),
+    [23, 31],
+  );
   assert.deepEqual(opaqueBox(alpha(64, 64, [[63, 63]])), [32, 32]);
   assert.deepEqual(opaqueBox(alpha(64, 64, [[1, 2]])), [1, 2]); // rounded up, never cut
   assert.deepEqual(opaqueBox(alpha(64, 64, [])), [32, 32]);
@@ -210,9 +293,32 @@ test("near the right and bottom edges WebKit gets smaller and smaller cuts of th
   const boxes = pointerBoxes([23, 31]);
   assert.deepEqual(boxes[0], [23, 31]); // the whole pointer first: what every other engine shows
   assert.deepEqual(boxes.slice(1), [
-    [20, 31], [16, 31], [12, 31], [8, 31], [4, 31], [3, 31], [2, 31], [1, 31], // right edge: narrower, whole height
-    [23, 28], [23, 24], [23, 20], [23, 16], [23, 12], [23, 8], [23, 4], [23, 3], [23, 2], [23, 1], // bottom edge: shorter, whole width
-    [20, 20], [16, 16], [12, 12], [8, 8], [4, 4], [3, 3], [2, 2], [1, 1], // the corner
+    [20, 31],
+    [16, 31],
+    [12, 31],
+    [8, 31],
+    [4, 31],
+    [3, 31],
+    [2, 31],
+    [1, 31], // right edge: narrower, whole height
+    [23, 28],
+    [23, 24],
+    [23, 20],
+    [23, 16],
+    [23, 12],
+    [23, 8],
+    [23, 4],
+    [23, 3],
+    [23, 2],
+    [23, 1], // bottom edge: shorter, whole width
+    [20, 20],
+    [16, 16],
+    [12, 12],
+    [8, 8],
+    [4, 4],
+    [3, 3],
+    [2, 2],
+    [1, 1], // the corner
   ]);
   // WebKit shows the first box that fits between the hotspot and the window's edges
   const shown = (right, bottom) => boxes.find(([w, h]) => w <= right && h <= bottom);
@@ -226,15 +332,34 @@ test("near the right and bottom edges WebKit gets smaller and smaller cuts of th
   assert.deepEqual(shown(2, 2), [2, 2]);
   assert.deepEqual(shown(1, 1), [1, 1]);
   assert.deepEqual(shown(0, 500), undefined); // outside the window
-  assert.deepEqual(pointerBoxes([4, 4]), [[4, 4], [3, 4], [2, 4], [1, 4], [4, 3], [4, 2], [4, 1], [3, 3], [2, 2], [1, 1]]);
+  assert.deepEqual(pointerBoxes([4, 4]), [
+    [4, 4],
+    [3, 4],
+    [2, 4],
+    [1, 4],
+    [4, 3],
+    [4, 2],
+    [4, 1],
+    [3, 3],
+    [2, 2],
+    [1, 1],
+  ]);
 });
 
 test("every strip at the window's right and bottom edges, whatever its width, shows some cut of the pointer", () => {
-  for (const box of [[23, 31], [32, 32], [1, 2], [5, 9]]) {
+  for (const box of [
+    [23, 31],
+    [32, 32],
+    [1, 2],
+    [5, 9],
+  ]) {
     const boxes = pointerBoxes(box);
     for (let right = 1; right <= box[0] + 8; right++) {
       for (let bottom = 1; bottom <= box[1] + 8; bottom++) {
-        assert.ok(boxes.find(([w, h]) => w <= right && h <= bottom), `${box} with ${right} x ${bottom} CSS px left`);
+        assert.ok(
+          boxes.find(([w, h]) => w <= right && h <= bottom),
+          `${box} with ${right} x ${bottom} CSS px left`,
+        );
       }
     }
   }
@@ -252,16 +377,23 @@ function recorder() {
 test("every effect's rings are stroked at full alpha, whatever the effect before them drew", () => {
   const tintContext = recorder();
   const tex = {
-    ringAlpha: new Float32Array(32).fill(1), trailU: new Float32Array(32).fill(1),
-    disc: [{}, {}, {}, { width: 8, height: 8 }], frames: [[{}, {}, {}, {}], [{}, {}, {}, {}]],
+    ringAlpha: new Float32Array(32).fill(1),
+    trailU: new Float32Array(32).fill(1),
+    disc: [{}, {}, {}, { width: 8, height: 8 }],
+    frames: [
+      [{}, {}, {}, {}],
+      [{}, {}, {}, {}],
+    ],
     tint: { width: 8, height: 8, getContext: () => tintContext },
   };
   // two presses 80 ms apart (a double click): the first one's sparks, fading in and out, are drawn before the second
   // one's rings, every frame of the second one's ring life
-  const first = press(1, 1, 0, seq(0.3, 0.7, 0.5)), second = press(1.2, 1, 0.08, seq(0.6, 0.2, 0.4));
+  const first = press(1, 1, 0, seq(0.3, 0.7, 0.5)),
+    second = press(1.2, 1, 0.08, seq(0.6, 0.2, 0.4));
   let faded = 0;
   for (let now = 0.08; now < 0.08 + FX.arc.life; now += 0.005) {
-    const front = recorder(), back = recorder();
+    const front = recorder(),
+      back = recorder();
     paint(front, back, [first, second], now, 100, tex);
     const rings = front.strokes.filter((s) => s.cap === "butt");
     assert.ok(rings.length >= 2 * FX.arc.count, `${rings.length} ring strokes at ${now}`);
@@ -272,11 +404,35 @@ test("every effect's rings are stroked at full alpha, whatever the effect before
 });
 
 test("the pointer retries a failed step, reports each failure and gives up after the last delay", async () => {
-  const waits = [], reports = [], options = { wait: async (ms) => { waits.push(ms); }, report: (e) => reports.push(e.message) };
+  const waits = [],
+    reports = [],
+    options = {
+      wait: async (ms) => {
+        waits.push(ms);
+      },
+      report: (e) => reports.push(e.message),
+    };
   let tries = 0;
-  const value = await withRetries(async () => { if (++tries < 3) throw new Error(`try ${tries}`); return "cursor"; }, [2000, 8000], options);
+  const value = await withRetries(
+    async () => {
+      if (++tries < 3) throw new Error(`try ${tries}`);
+      return "cursor";
+    },
+    [2000, 8000],
+    options,
+  );
   assert.equal(value, "cursor");
-  assert.deepEqual(waits, [2000, 8000]); assert.deepEqual(reports, ["try 1", "try 2"]);
-  await assert.rejects(withRetries(async () => { throw new Error("always"); }, [1], options), /always/);
+  assert.deepEqual(waits, [2000, 8000]);
+  assert.deepEqual(reports, ["try 1", "try 2"]);
+  await assert.rejects(
+    withRetries(
+      async () => {
+        throw new Error("always");
+      },
+      [1],
+      options,
+    ),
+    /always/,
+  );
   assert.deepEqual(reports.slice(2), ["always", "always"]);
 });

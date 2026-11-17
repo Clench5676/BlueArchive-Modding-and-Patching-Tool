@@ -28,8 +28,14 @@ logger = logging.getLogger(__name__)
 CONFIG_POLL_SECONDS = 2.0
 
 
-def build(port: int = 0, services: Services | None = None, token: str | None = None, *,
-          safe_mode: bool = False, reports: Reports | None = None) -> tuple[Services, Server]:
+def build(
+    port: int = 0,
+    services: Services | None = None,
+    token: str | None = None,
+    *,
+    safe_mode: bool = False,
+    reports: Reports | None = None,
+) -> tuple[Services, Server]:
     s = services or Services(safe_mode=safe_mode)
     if reports is not None:
         reports.services = s
@@ -41,9 +47,18 @@ def build(port: int = 0, services: Services | None = None, token: str | None = N
         lang = s.settings.get("language")
         if lang and lang != i18n_manager.lang:
             i18n_manager.set_language(lang)  # the language chosen in either GUI
-        app = WebApp(build_api(s), s.events, assets=s.asset, consent=lambda: s.state.consent, token=token,
-                     ui_cached=lambda: False, recovery=lambda: recovery_config(s),
-                     classic=s.classic.wsgi, raise_window=s.raise_window, on_exception=s.reports.backend_exception)
+        app = WebApp(
+            build_api(s),
+            s.events,
+            assets=s.asset,
+            consent=lambda: s.state.consent,
+            token=token,
+            ui_cached=lambda: False,
+            recovery=lambda: recovery_config(s),
+            classic=s.classic.wsgi,
+            raise_window=s.raise_window,
+            on_exception=s.reports.backend_exception,
+        )
         s.log_secrets.update((app.token, app.raise_token))
         server = Server(app, port)
         s.origin = f"http://127.0.0.1:{server.port}"  # the classic window's channel
@@ -85,8 +100,9 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--debug", action="store_true")
     parser.add_argument("--safe-mode", action="store_true", help="start without game assets, Spine or restored pages")
     args = parser.parse_args(argv)
-    logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO,
-                        format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    logging.basicConfig(
+        level=logging.DEBUG if args.debug else logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+    )
 
     devmode.check_read(EXE_DIR)
     instance = InstanceLock(EXE_DIR)
@@ -100,6 +116,7 @@ def main(argv: list[str] | None = None) -> None:
     if restart:
         import subprocess
         from .system import safe_restart_command
+
         command = safe_restart_command() + ["--safe-mode"]
         command += [flag for flag in ("--browser", "--debug", "--mute") if getattr(args, flag[2:])]
         subprocess.Popen(command)
@@ -121,11 +138,21 @@ def second_start(data_dir: Path, *, serve: bool) -> int:
 def recovery_config(s: Services) -> dict:
     from .strings import ui_strings
     from .system import can_restart_safe
+
     strings = ui_strings(i18n_manager.lang)
-    return {"safeMode": s.safe_mode, "canRestartSafe": can_restart_safe() and not getattr(s, "serve_only", False) and
-            (getattr(s, "window", None) is not None or getattr(s, "quit_handle", None) is not None), "language": i18n_manager.lang,
-            "strings": {k.removeprefix("webui."): v for k, v in strings.items() if k.startswith("webui.recovery.") or
-                        k in ("webui.settings.button", "webui.settings.log.open", "webui.picker.ok")}}
+    return {
+        "safeMode": s.safe_mode,
+        "canRestartSafe": can_restart_safe()
+        and not getattr(s, "serve_only", False)
+        and (getattr(s, "window", None) is not None or getattr(s, "quit_handle", None) is not None),
+        "language": i18n_manager.lang,
+        "strings": {
+            k.removeprefix("webui."): v
+            for k, v in strings.items()
+            if k.startswith("webui.recovery.")
+            or k in ("webui.settings.button", "webui.settings.log.open", "webui.picker.ok")
+        },
+    }
 
 
 def _run(args: argparse.Namespace, instance: InstanceLock) -> bool:
@@ -145,6 +172,7 @@ def _run(args: argparse.Namespace, instance: InstanceLock) -> bool:
         reports.backend_exception(type(error), error, error.__traceback__)
         if not args.serve:
             from .native import startup_failure
+
             startup_failure(reports, error)
         return False
     finally:
@@ -197,6 +225,7 @@ def _serve(args: argparse.Namespace, instance: InstanceLock, reports: Reports, h
 
 def _run_window(s: Services, server: Server, debug: bool) -> None:
     from . import native
+
     if sys.platform == "win32":
         version = native.webview2_version()
         if not native.webview2_supported(version):
@@ -215,11 +244,21 @@ def _run_window(s: Services, server: Server, debug: bool) -> None:
     webview.settings["DRAG_REGION_SELECTOR"] = ".topbar:not(.native-toolbar)"
     webview.settings["DRAG_REGION_DIRECT_TARGET_ONLY"] = True
     with s.timings.measure("native.create-window"):
-        window = webview.create_window(t("ui.app_title"), server.url, width=1600, height=900, min_size=(960, 540),
-                                       background_color="#000000", text_select=True, frameless=sys.platform != "win32", easy_drag=False)
+        window = webview.create_window(
+            t("ui.app_title"),
+            server.url,
+            width=1600,
+            height=900,
+            min_size=(960, 540),
+            background_color="#000000",
+            text_select=True,
+            frameless=sys.platform != "win32",
+            easy_drag=False,
+        )
     s.window = window
     from .window_chrome import WindowChrome
     from .window_close import CloseCoordinator
+
     s.chrome = WindowChrome(window, s.events, platform=sys.platform)
     s.close_coordinator = CloseCoordinator(s, s.chrome.close, page_loaded=False)
     commands = None
@@ -237,17 +276,23 @@ def _run_window(s: Services, server: Server, debug: bool) -> None:
         logger.info("Native lifecycle: before-show complete")
 
     window.events.before_show += before_show
+
     def on_shown():
         lifecycle["shown"] = True
         logger.info("Native lifecycle: shown")
         if s.chrome.active:
             s.chrome.host.dispatch(s.chrome.refresh)
+
     window.events.shown += on_shown
-    for name, key, value in (("maximized", "maximized", True), ("restored", "maximized", False),
-                              ("minimized", "minimized", True)):
+    for name, key, value in (
+        ("maximized", "maximized", True),
+        ("restored", "maximized", False),
+        ("minimized", "minimized", True),
+    ):
         # Event handlers with default parameters are called with event arguments by pywebview.
         def bind_state(key, value):
             return lambda: s.chrome.fallback_state(key, value)
+
         event = getattr(window.events, name)
         event += bind_state(key, value)
     # the tray or menu bar icon, shown while the preference "tray" is on; it goes with the window
@@ -276,14 +321,16 @@ def _run_window(s: Services, server: Server, debug: bool) -> None:
         if sys.platform == "darwin" and getattr(window, "native", None) is not None:
             # Cocoa replaces its placeholder contentView when navigation finishes.
             from PyObjCTools import AppHelper
+
             if s.chrome.host is None:
                 AppHelper.callAfter(install_chrome)
             if commands is not None:
                 AppHelper.callAfter(commands.refresh)
         try:
             lifecycle["drops"] = "running"
-            complete = watch_drops(window, lambda paths: s.events.publish("drop", {"paths": paths}),
-                                   stopped=window_stopped.is_set)
+            complete = watch_drops(
+                window, lambda paths: s.events.publish("drop", {"paths": paths}), stopped=window_stopped.is_set
+            )
             lifecycle["drops"] = "complete" if complete else "abandoned"
         except Exception:
             lifecycle["drops"] = "failed"
@@ -324,9 +371,14 @@ def _run_window(s: Services, server: Server, debug: bool) -> None:
         # the tray starts on a thread of its own once the GUI loop runs
         native_started = time.perf_counter()
         logger.info("Native lifecycle: loop starting")
-        webview.start(func=tray.start if tray is not None else None, args=(window,) if tray is not None else None,
-                      debug=debug, private_mode=True, storage_path=str(storage),
-                      gui="edgechromium" if sys.platform == "win32" else None)
+        webview.start(
+            func=tray.start if tray is not None else None,
+            args=(window,) if tray is not None else None,
+            debug=debug,
+            private_mode=True,
+            storage_path=str(storage),
+            gui="edgechromium" if sys.platform == "win32" else None,
+        )
     except BaseException as error:
         logger.info("Native lifecycle: loop raised type=%s", type(error).__name__)
         raise
@@ -334,8 +386,14 @@ def _run_window(s: Services, server: Server, debug: bool) -> None:
         logger.info("Native lifecycle: loop returned")
     finally:
         window_stopped.set()
-        logger.info("Native lifecycle: cleanup begin shown=%s loaded=%s closing=%s closed=%s drops=%s",
-                    lifecycle["shown"], lifecycle["loaded"], lifecycle["closing"], lifecycle["closed"], lifecycle["drops"])
+        logger.info(
+            "Native lifecycle: cleanup begin shown=%s loaded=%s closing=%s closed=%s drops=%s",
+            lifecycle["shown"],
+            lifecycle["loaded"],
+            lifecycle["closing"],
+            lifecycle["closed"],
+            lifecycle["drops"],
+        )
         if commands is not None:
             commands()
         s.chrome.dispose()

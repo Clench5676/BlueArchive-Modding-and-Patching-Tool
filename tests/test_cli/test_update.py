@@ -8,6 +8,7 @@ from ba_modding_toolkit.cli.handlers import handle_update, setup_cli_logger
 if TYPE_CHECKING:
     from conftest import UpdateCase
 
+
 # 案例数据缺失时 conftest 参数化为空参数集，测试自动跳过
 class TestUpdateCommand:
     def test_update_basic(
@@ -24,10 +25,14 @@ class TestUpdateCommand:
         target_args = ["--target"] + [str(p) for p in update_case.new_paths]
 
         args = UpdateTap().parse_args(
-            old_args + target_args + [
-                "--output-dir", str(output_dir),
+            old_args
+            + target_args
+            + [
+                "--output-dir",
+                str(output_dir),
                 "--no-crc",
-                "--compression", "none",
+                "--compression",
+                "none",
                 "--save-all",
             ]
         )
@@ -56,11 +61,17 @@ class TestUpdateCommand:
         target_args = ["--target"] + [str(p) for p in update_case.new_paths]
 
         args = UpdateTap().parse_args(
-            old_args + target_args + [
-                "--output-dir", str(output_dir),
-                "--asset-types", "Texture2D", "TextAsset",
+            old_args
+            + target_args
+            + [
+                "--output-dir",
+                str(output_dir),
+                "--asset-types",
+                "Texture2D",
+                "TextAsset",
                 "--no-crc",
-                "--compression", "none",
+                "--compression",
+                "none",
                 "--save-all",
             ]
         )
@@ -85,10 +96,14 @@ class TestUpdateCommand:
         target_args = ["--target"] + [str(p) for p in update_case.new_paths]
 
         args = UpdateTap().parse_args(
-            old_args + target_args + [
-                "--output-dir", str(output_dir),
+            old_args
+            + target_args
+            + [
+                "--output-dir",
+                str(output_dir),
                 "--no-crc",
-                "--compression", "none",
+                "--compression",
+                "none",
                 "--save-all",
             ]
         )
@@ -121,10 +136,14 @@ class TestUpdateCommand:
         target_args = ["--target"] + [str(p) for p in update_case.new_paths]
 
         args = UpdateTap().parse_args(
-            old_args + target_args + [
-                "--output-dir", str(output_dir),
+            old_args
+            + target_args
+            + [
+                "--output-dir",
+                str(output_dir),
                 "--no-crc",
-                "--compression", "none",
+                "--compression",
+                "none",
                 "--save-all",
             ]
         )
@@ -156,11 +175,15 @@ class TestUpdateCommand:
         resource_dir = update_case.new_paths[0].parent
 
         args = UpdateTap().parse_args(
-            old_args + [
-                "--resource-dir", str(resource_dir),
-                "--output-dir", str(output_dir),
+            old_args
+            + [
+                "--resource-dir",
+                str(resource_dir),
+                "--output-dir",
+                str(output_dir),
                 "--no-crc",
-                "--compression", "none",
+                "--compression",
+                "none",
                 "--save-all",
             ]
         )

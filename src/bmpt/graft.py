@@ -35,8 +35,20 @@ import numpy as np
 from PIL import Image
 
 from . import atlas_remap, rebake
-from .spine_binary import (MESH, REGION, Skeleton, attachment_record, draw_order, draw_order_bytes, events_patch,
-                           mesh_record, slot_record, string_bytes, strings_patch, varint_bytes)
+from .spine_binary import (
+    MESH,
+    REGION,
+    Skeleton,
+    attachment_record,
+    draw_order,
+    draw_order_bytes,
+    events_patch,
+    mesh_record,
+    slot_record,
+    string_bytes,
+    strings_patch,
+    varint_bytes,
+)
 
 #: share of the visible pixels of a part that may differ from the official part
 BOUND = 0.02
@@ -71,6 +83,7 @@ def bad() -> GraftError:
 
 # ---------------------------------------------------------------- the skeleton
 
+
 class Strings:
     """A skeleton's shared strings with the ones a graft appends."""
 
@@ -91,12 +104,16 @@ class Strings:
 
     @property
     def added(self) -> list[str]:
-        return self.all[self.base:]
+        return self.all[self.base :]
 
 
 def _names(skeleton: Skeleton) -> dict[str, list]:
-    return {"bone": [b["name"] for b in skeleton.bones], "event": list(skeleton.events),
-            "skin": [s["name"] for s in skeleton.skins], **{k: list(v) for k, v in skeleton.constraints.items()}}
+    return {
+        "bone": [b["name"] for b in skeleton.bones],
+        "event": list(skeleton.events),
+        "skin": [s["name"] for s in skeleton.skins],
+        **{k: list(v) for k, v in skeleton.constraints.items()},
+    }
 
 
 def insert_slot(mod_data: bytes, official: Skeleton, name: str) -> bytes:
@@ -139,6 +156,7 @@ def insert_slot(mod_data: bytes, official: Skeleton, name: str) -> bytes:
 @dataclass
 class Carried:
     """An attachment the graft carries: where it goes (skin, slot, key) and its official record."""
+
     skin: str
     slot: str
     key: str
@@ -174,10 +192,21 @@ class SkeletonGraft:
                 elif kind == "physics1":
                     if value and new_names["physics"][value - 1] not in mod_names["physics"]:
                         why.append(("constraint", new_names["physics"][value - 1]))
-                elif kind in ("bone", "skin", "ik", "transform", "path", "physics") \
-                        and new_names[kind][value] not in mod_names[kind]:
-                    why.append(({"ik": "constraint", "transform": "constraint", "path": "constraint",
-                                 "physics": "constraint"}.get(kind, kind), new_names[kind][value]))
+                elif (
+                    kind in ("bone", "skin", "ik", "transform", "path", "physics")
+                    and new_names[kind][value] not in mod_names[kind]
+                ):
+                    why.append(
+                        (
+                            {
+                                "ik": "constraint",
+                                "transform": "constraint",
+                                "path": "constraint",
+                                "physics": "constraint",
+                            }.get(kind, kind),
+                            new_names[kind][value],
+                        )
+                    )
             for value in slots:
                 bone = official.bones[official.slots[value]["bone"]]["name"]
                 if bone not in mod_names["bone"]:
@@ -202,8 +231,10 @@ class SkeletonGraft:
         for animation in accepted:
             why, need = [], {}
             slot = None
-            deforms = {(official.skins[skin]["name"], official.slots[s]["name"], official.s(att))
-                       for skin, s, att in animation["deforms"]}
+            deforms = {
+                (official.skins[skin]["name"], official.slots[s]["name"], official.s(att))
+                for skin, s, att in animation["deforms"]
+            }
             shown = []
             for _a, _b, kind, value in official.refs_in(animation["body"], animation["end"]):
                 if kind == "slot":
@@ -219,8 +250,12 @@ class SkeletonGraft:
             for key in deforms:
                 if key in mod_atts and key not in need and key not in carry:
                     a, b = mod_atts[key], new_atts.get(key)
-                    if b is None or a["kind"] != b["kind"] or a.get("vertex_floats") != b.get("vertex_floats") \
-                            or a.get("weighted") != b.get("weighted"):
+                    if (
+                        b is None
+                        or a["kind"] != b["kind"]
+                        or a.get("vertex_floats") != b.get("vertex_floats")
+                        or a.get("weighted") != b.get("weighted")
+                    ):
                         why.append(f"deform:{key[1]}/{key[2]}")
             for key, attachment in need.items():
                 if attachment["kind"] == 3:
@@ -290,8 +325,12 @@ class SkeletonGraft:
             patches[(animation["start"], animation["body"])] = string_bytes(name)
         return official.emit(animation["start"], animation["end"], remap, patches)
 
-    def build(self, records: dict[tuple[str, str, str], bytes | None] | None = None,
-              extra_records: list[tuple[str, str, str, bytes]] = (), extra_animations: list[bytes] = ()) -> bytes:
+    def build(
+        self,
+        records: dict[tuple[str, str, str], bytes | None] | None = None,
+        extra_records: list[tuple[str, str, str, bytes]] = (),
+        extra_animations: list[bytes] = (),
+    ) -> bytes:
         """The mod's skeleton with the carried animations and attachments. ``records``: a carried attachment's record
         in place of ``record``; ``extra_records`` (skin, slot, key, record) and ``extra_animations`` go in too."""
         mod = self.mod
@@ -341,8 +380,11 @@ MAX_SKIN = 4000
 
 
 def _matrix(value) -> Matrix:
-    if not isinstance(value, list) or len(value) != 6 or not all(
-            type(v) in (int, float) and math.isfinite(v) and abs(v) < rebake.MAX_COORDINATE for v in value):
+    if (
+        not isinstance(value, list)
+        or len(value) != 6
+        or not all(type(v) in (int, float) and math.isfinite(v) and abs(v) < rebake.MAX_COORDINATE for v in value)
+    ):
         raise bad()
     a, b, c, d, x, y = value
     return np.array([[a, b, x], [c, d, y], [0.0, 0.0, 1.0]])
@@ -352,6 +394,7 @@ def _matrix(value) -> Matrix:
 class Setup:
     """A rig's setup pose as the runtime gives it: per bone its world matrix, per slot its bone, and per skin
     attachment (slot, name) its page, world vertices, page UVs and triangles."""
+
     bones: dict[str, Matrix] = field(default_factory=dict)
     slot_bones: dict[str, str] = field(default_factory=dict)
     skin: dict[tuple[str, str], tuple[str, np.ndarray, np.ndarray, np.ndarray]] = field(default_factory=dict)
@@ -363,8 +406,14 @@ def setup(value, atlas: atlas_remap.Atlas | None = None) -> Setup:
     if not isinstance(value, dict):
         raise bad()
     bones, slot_bones, skin = value.get("bones"), value.get("slotBones"), value.get("skin", [])
-    if not isinstance(bones, dict) or not isinstance(slot_bones, dict) or not isinstance(skin, list) \
-            or len(bones) > MAX_BONES or len(slot_bones) > rebake.MAX_SLOTS or len(skin) > MAX_SKIN:
+    if (
+        not isinstance(bones, dict)
+        or not isinstance(slot_bones, dict)
+        or not isinstance(skin, list)
+        or len(bones) > MAX_BONES
+        or len(slot_bones) > rebake.MAX_SLOTS
+        or len(skin) > MAX_SKIN
+    ):
         raise bad()
     result = Setup()
     for name, matrix in bones.items():
@@ -398,14 +447,19 @@ def setup(value, atlas: atlas_remap.Atlas | None = None) -> Setup:
         w = np.asarray(world, dtype=np.float64).reshape(-1, 2)
         uv = np.asarray(uvs, dtype=np.float64).reshape(-1, 2)
         t = np.asarray(tris, dtype=np.int64).reshape(-1, 3)
-        if np.abs(w).max() > rebake.MAX_COORDINATE or uv.min() < -rebake.UV_SLACK or uv.max() > 1 + rebake.UV_SLACK \
-                or (t.size and (t.min() < 0 or t.max() >= count)):
+        if (
+            np.abs(w).max() > rebake.MAX_COORDINATE
+            or uv.min() < -rebake.UV_SLACK
+            or uv.max() > 1 + rebake.UV_SLACK
+            or (t.size and (t.min() < 0 or t.max() >= count))
+        ):
             raise bad()
         result.skin[(slot, name)] = (page, w, uv, t)
     return result
 
 
 # ---------------------------------------------------------------- placement
+
 
 def fit_anchor(mod: Setup, base: Setup, slot: str) -> tuple[Matrix, bool]:
     """(T, fitted): the affine that takes the base rig's picture of ``slot`` to the mod's, fitted over the skin
@@ -459,8 +513,14 @@ def region_corners(floats: tuple[float, ...], flags: int, region: atlas_remap.Re
     return np.array([(px * c - py * s + x, py * c + px * s + y) for px, py in corners])
 
 
-def placed_record(graft: SkeletonGraft, carried: Carried, m: Matrix, turn: int, region: atlas_remap.Region | None,
-                  path: int | None = None) -> tuple[bytes | None, str]:
+def placed_record(
+    graft: SkeletonGraft,
+    carried: Carried,
+    m: Matrix,
+    turn: int,
+    region: atlas_remap.Region | None,
+    path: int | None = None,
+) -> tuple[bytes | None, str]:
     """(record, note) of a carried attachment re-expressed by the affine ``m`` (official bone space to the mod's)
     and turned by ``turn`` degrees about its own centre. None (the official record) when nothing changes; a region
     under a sheared or mirrored ``m`` goes as a four-vertex mesh (note ``mesh``); a record that cannot take it stays
@@ -473,8 +533,12 @@ def placed_record(graft: SkeletonGraft, carried: Carried, m: Matrix, turn: int, 
         linear = m[:2, :2]
         scale = math.hypot(linear[0, 0], linear[1, 0])
         theta = math.degrees(math.atan2(linear[1, 0], linear[0, 0]))
-        similar = scale * np.array([[math.cos(math.radians(theta)), -math.sin(math.radians(theta))],
-                                    [math.sin(math.radians(theta)), math.cos(math.radians(theta))]])
+        similar = scale * np.array(
+            [
+                [math.cos(math.radians(theta)), -math.sin(math.radians(theta))],
+                [math.sin(math.radians(theta)), math.cos(math.radians(theta))],
+            ]
+        )
         if np.allclose(linear, similar, atol=1e-4 * max(1.0, scale)):
             f = a["floats"]
             rotation, (x, y, sx, sy, w, h) = (f[0], f[1:]) if a["flags"] & 128 else (0.0, f)
@@ -491,8 +555,18 @@ def placed_record(graft: SkeletonGraft, carried: Carried, m: Matrix, turn: int, 
         v0, v1 = (oh - oy - rh) / oh, (oh - oy) / oh
         f = a["floats"]
         size = (f[-2], f[-1])
-        record = mesh_record(graft.official, a, graft.remap, graft.mod.nonessential, corners.reshape(-1).tolist(),
-                             [u0, v1, u0, v0, u1, v0, u1, v1], [0, 1, 2, 2, 3, 0], 4, size, path=path)
+        record = mesh_record(
+            graft.official,
+            a,
+            graft.remap,
+            graft.mod.nonessential,
+            corners.reshape(-1).tolist(),
+            [u0, v1, u0, v0, u1, v0, u1, v1],
+            [0, 1, 2, 2, 3, 0],
+            4,
+            size,
+            path=path,
+        )
         return record, "mesh"
     if a["kind"] == MESH and not a["weighted"]:
         official = graft.official
@@ -506,17 +580,32 @@ def placed_record(graft: SkeletonGraft, carried: Carried, m: Matrix, turn: int, 
 
 # ---------------------------------------------------------------- atlas and pages
 
+
 def _legacy(text: str) -> bool:
     return re.search(r"^\s*xy\s*:", text, re.M) is not None
 
 
-def region_lines(name: str, xy: tuple[int, int], size: tuple[int, int], degrees: int,
-                 offset: tuple[int, int], original: tuple[int, int], legacy: bool) -> list[str]:
+def region_lines(
+    name: str,
+    xy: tuple[int, int],
+    size: tuple[int, int],
+    degrees: int,
+    offset: tuple[int, int],
+    original: tuple[int, int],
+    legacy: bool,
+) -> list[str]:
     (x, y), (w, h) = xy, size
     if legacy:
         rotate = {0: "false", 90: "true"}.get(degrees, str(degrees))
-        return [name, f"  rotate: {rotate}", f"  xy: {x}, {y}", f"  size: {w}, {h}",
-                f"  orig: {original[0]}, {original[1]}", f"  offset: {offset[0]}, {offset[1]}", "  index: -1"]
+        return [
+            name,
+            f"  rotate: {rotate}",
+            f"  xy: {x}, {y}",
+            f"  size: {w}, {h}",
+            f"  orig: {original[0]}, {original[1]}",
+            f"  offset: {offset[0]}, {offset[1]}",
+            "  index: -1",
+        ]
     lines = [name, f"bounds:{x},{y},{w},{h}"]
     if (offset, original) != ((0, 0), (w, h)):
         lines.append(f"offsets:{offset[0]},{offset[1]},{original[0]},{original[1]}")
@@ -550,6 +639,7 @@ def free_spot(occupied: np.ndarray, width: int, height: int) -> tuple[int, int] 
 def sampled(skin: Setup, page: str, size: tuple[int, int]) -> np.ndarray:
     """Where the rig's skin attachments sample a page (texel centres in their triangles), widened by ``PAD``."""
     from PIL import ImageDraw, ImageFilter
+
     image = Image.new("L", size, 0)
     draw = ImageDraw.Draw(image)
     for (_slot, _name), (key, _world, uv, tris) in skin.skin.items():
@@ -573,6 +663,7 @@ class Placed:
 @dataclass
 class Pages:
     """The mod's atlas text and page images with the carried regions placed (``pack``)."""
+
     placed: dict[str, Placed]
     images: dict[str, Image.Image]  # texture key -> image, the pages that changed
     sizes: dict[str, tuple[int, int]]  # page name -> declared size after growing
@@ -587,12 +678,18 @@ def packed_regions(atlas: atlas_remap.Atlas, page: str, size: tuple[int, int]) -
         if region.page != page:
             continue
         (x, y), (w, h) = region.xy, packed(region)
-        occupied[max(0, y - PAD):max(0, y + h + PAD), max(0, x - PAD):max(0, x + w + PAD)] = True
+        occupied[max(0, y - PAD) : max(0, y + h + PAD), max(0, x - PAD) : max(0, x + w + PAD)] = True
     return occupied
 
 
-def pack(mod_text: str, official_text: str, regions: list[str], mod_pages: dict[str, Image.Image],
-         official_pages: dict[str, Image.Image], mod_setup: Setup | None) -> Pages:
+def pack(
+    mod_text: str,
+    official_text: str,
+    regions: list[str],
+    mod_pages: dict[str, Image.Image],
+    official_pages: dict[str, Image.Image],
+    mod_setup: Setup | None,
+) -> Pages:
     """Place the official regions ``regions`` on the mod's pages: into space the mod's rig does not sample (without
     ``mod_setup``, space none of the mod's atlas regions takes), page by page, else the first page grows downward
     (whole ``ROWS``); pixels copied as packed."""
@@ -617,8 +714,11 @@ def pack(mod_text: str, official_text: str, regions: list[str], mod_pages: dict[
         if page.size[0] * page.size[1] > MAX_PAGE_PIXELS:
             raise GraftError("graft_region_too_large", region=page.name)
         scales[page.name] = (image.size[0] / page.size[0], image.size[1] / page.size[1])
-        occupancy[page.name] = (sampled(mod_setup, key, page.size) if mod_setup is not None
-                                else packed_regions(mod_atlas, page.name, page.size))
+        occupancy[page.name] = (
+            sampled(mod_setup, key, page.size)
+            if mod_setup is not None
+            else packed_regions(mod_atlas, page.name, page.size)
+        )
     if not occupancy:
         raise GraftError("graft_page_missing", page=", ".join(p.name for p in pages) or "—")
     placed: dict[str, Placed] = {}
@@ -637,13 +737,13 @@ def pack(mod_text: str, official_text: str, regions: list[str], mod_pages: dict[
             if (occupied.shape[0] + h + 2 * PAD + ROWS) * occupied.shape[1] > MAX_PAGE_PIXELS:
                 raise GraftError("graft_region_too_large", region=name)
             taller = np.zeros((occupied.shape[0] + h + 2 * PAD + ROWS, occupied.shape[1]), dtype=bool)
-            taller[:occupied.shape[0]] = occupied
+            taller[: occupied.shape[0]] = occupied
             occupancy[page_name] = occupied = taller
             spot = free_spot(occupied, w, h)
             if spot is None:
                 raise GraftError("graft_region_too_large", region=name)
         x, y = spot
-        occupancy[page_name][y - PAD:y + h + PAD, x - PAD:x + w + PAD] = True
+        occupancy[page_name][y - PAD : y + h + PAD, x - PAD : x + w + PAD] = True
         placed[name] = Placed(page_name, (x, y), by_name[name])
     sizes = {page.name: page.size for page in pages}
     images: dict[str, Image.Image] = {}
@@ -686,8 +786,9 @@ def pack(mod_text: str, official_text: str, regions: list[str], mod_pages: dict[
     return Pages(placed, images, sizes, grown, missing)
 
 
-def atlas_text(mod_text: str, pages: Pages, extra: list[tuple[str, Placed, int]] = (),
-               rotate: dict[str, int] | None = None) -> str:
+def atlas_text(
+    mod_text: str, pages: Pages, extra: list[tuple[str, Placed, int]] = (), rotate: dict[str, int] | None = None
+) -> str:
     """The mod's atlas with the placed regions (and ``extra`` (name, placement, degrees) ones, the test rig's)
     appended to their pages, in its own syntax, and the page sizes that grew. ``rotate``: a region written with
     another rotate than the official one (a candidate correction): its size and offsets as packed."""
@@ -702,8 +803,10 @@ def atlas_text(mod_text: str, pages: Pages, extra: list[tuple[str, Placed, int]]
                 blocks.append([])
             continue
         blocks[-1].append(line)
-    rows = {**{name: (p, (rotate or {}).get(name)) for name, p in pages.placed.items()},
-            **{name: (p, degrees) for name, p, degrees in extra}}
+    rows = {
+        **{name: (p, (rotate or {}).get(name)) for name, p in pages.placed.items()},
+        **{name: (p, degrees) for name, p, degrees in extra},
+    }
     out = []
     for block in blocks:
         if not block:
@@ -749,12 +852,14 @@ def resize_block(block: list[str], size: tuple[int, int], legacy: bool) -> list[
 
 # ---------------------------------------------------------------- the check
 
+
 def _premultiplied(image: Image.Image) -> np.ndarray:
     return rebake._premultiplied(image)
 
 
-def render(items: list[rebake.Drawn], pages: dict[str, np.ndarray], frame: tuple[float, float, int, int],
-           scale: float) -> np.ndarray:
+def render(
+    items: list[rebake.Drawn], pages: dict[str, np.ndarray], frame: tuple[float, float, int, int], scale: float
+) -> np.ndarray:
     """A part as the pixels its posed triangles map (premultiplied RGBA, normal and additive blending)."""
     left, top, width, height = frame
     out = np.zeros((height, width, 4), dtype=np.float32)
@@ -778,8 +883,12 @@ def render(items: list[rebake.Drawn], pages: dict[str, np.ndarray], frame: tuple
                 continue
             l0, l1, l2 = (w[inside] for w in weights)
             q = item.uvs[triangle]
-            colour = rebake._sample(page, l0 * q[0, 0] + l1 * q[1, 0] + l2 * q[2, 0],
-                                    l0 * q[0, 1] + l1 * q[1, 1] + l2 * q[2, 1]) * item.alpha
+            colour = (
+                rebake._sample(
+                    page, l0 * q[0, 0] + l1 * q[1, 0] + l2 * q[2, 0], l0 * q[0, 1] + l1 * q[1, 1] + l2 * q[2, 1]
+                )
+                * item.alpha
+            )
             yy, xx = gy[inside], gx[inside]
             if item.blend == 1:
                 out[yy, xx, :3] += colour[:, :3]
@@ -792,8 +901,12 @@ def _shown(image: np.ndarray) -> np.ndarray:
     return image[..., :3] + (1 - image[..., 3:4]) * 0.5  # on mid grey, as a viewer sees it
 
 
-def off(grafted: list[rebake.Drawn], grafted_pages: dict[str, np.ndarray], official: list[rebake.Drawn],
-        official_pages: dict[str, np.ndarray]) -> float:
+def off(
+    grafted: list[rebake.Drawn],
+    grafted_pages: dict[str, np.ndarray],
+    official: list[rebake.Drawn],
+    official_pages: dict[str, np.ndarray],
+) -> float:
     """The share of the visible pixels where two parts differ by more than 40/255 on mid grey; 1 when only one side
     draws anything."""
     if not grafted or not official:
@@ -821,16 +934,17 @@ def moved(items: tuple[rebake.Drawn, ...], anchors: dict[str, Matrix]) -> list[r
             out.append(item)
             continue
         v = item.vertices @ t[:2, :2].T + t[:2, 2]
-        out.append(rebake.Drawn(item.slot, item.region, item.page, item.blend, item.alpha, v, item.uvs,
-                                item.triangles))
+        out.append(rebake.Drawn(item.slot, item.region, item.page, item.blend, item.alpha, v, item.uvs, item.triangles))
     return out
 
 
 # ---------------------------------------------------------------- one atlas, end to end
 
+
 @dataclass
 class Prepared:
     """A graft of one atlas's rig, ready to be posed (``test``) and checked (``choose``)."""
+
     graft: SkeletonGraft
     mod_skeleton: bytes
     official_skeleton: bytes
@@ -854,9 +968,17 @@ def _primary(region: atlas_remap.Region | None) -> tuple:
     return ("world", region.degrees if region else 0, 0)
 
 
-def prepare(mod_skeleton: bytes, mod_atlas: str, mod_pages: dict[str, Image.Image], official_skeleton: bytes,
-            official_atlas: str, official_pages: dict[str, Image.Image], mod_setup: Setup, official_setup: Setup,
-            base_setup: Setup | None = None) -> Prepared:
+def prepare(
+    mod_skeleton: bytes,
+    mod_atlas: str,
+    mod_pages: dict[str, Image.Image],
+    official_skeleton: bytes,
+    official_atlas: str,
+    official_pages: dict[str, Image.Image],
+    mod_setup: Setup,
+    official_setup: Setup,
+    base_setup: Setup | None = None,
+) -> Prepared:
     """Plan, splice and pack one rig, and build the test rig: per carried animation one copy per candidate."""
     graft = SkeletonGraft(mod_skeleton, official_skeleton)
     if not graft.animations:
@@ -888,8 +1010,14 @@ def prepare(mod_skeleton: bytes, mod_atlas: str, mod_pages: dict[str, Image.Imag
 
     def record(carried: Carried, candidate: tuple, path: int | None = None) -> bytes | None:
         place, _degrees, turn = candidate
-        body, note = placed_record(graft, carried, matrix(carried, place), turn,
-                                   official_regions.get(carried.region) if carried.region else None, path)
+        body, note = placed_record(
+            graft,
+            carried,
+            matrix(carried, place),
+            turn,
+            official_regions.get(carried.region) if carried.region else None,
+            path,
+        )
         if note and candidate == _primary(official_regions.get(carried.region)):
             notes[f"{carried.slot}/{carried.key}"] = note
         return body
@@ -925,21 +1053,44 @@ def prepare(mod_skeleton: bytes, mod_atlas: str, mod_pages: dict[str, Image.Imag
             candidates[name] = (an["name"], candidate)
     test_skeleton = graft.build(primary, extra_records, extra_animations)
     test_atlas = atlas_text(mod_atlas, pages, [(name, p, d) for name, (p, d) in extra_regions.items()])
-    return Prepared(graft, mod_skeleton, official_skeleton, mod_atlas, official_atlas, pages, mod_setup, official_setup, anchors, unanchored, notes,
-                    skeleton, atlas, test_skeleton, test_atlas, candidates, slots)
+    return Prepared(
+        graft,
+        mod_skeleton,
+        official_skeleton,
+        mod_atlas,
+        official_atlas,
+        pages,
+        mod_setup,
+        official_setup,
+        anchors,
+        unanchored,
+        notes,
+        skeleton,
+        atlas,
+        test_skeleton,
+        test_atlas,
+        candidates,
+        slots,
+    )
 
 
 @dataclass
 class Checked:
     """The delivered rig of one atlas and how each grafted expression came out."""
+
     skeleton: bytes
     atlas: str
     pages: dict[str, Image.Image]
     results: dict[str, dict]  # animation -> {"off", "candidate", "fixed"}
 
 
-def choose(prepared: Prepared, official: rebake.Rig, test: rebake.Rig, official_pages: dict[str, Image.Image],
-           grafted_pages: dict[str, Image.Image]) -> Checked:
+def choose(
+    prepared: Prepared,
+    official: rebake.Rig,
+    test: rebake.Rig,
+    official_pages: dict[str, Image.Image],
+    grafted_pages: dict[str, Image.Image],
+) -> Checked:
     """Check every grafted expression's part against the official part (through the anchors); for one over
     ``BOUND`` keep the candidate with the smallest difference under it. ``official``/``test``: the posed official
     and test rigs (``rebake.rig``)."""
@@ -999,8 +1150,11 @@ def choose(prepared: Prepared, official: rebake.Rig, test: rebake.Rig, official_
             if place == "verbatim":
                 m = np.eye(3)
             else:
-                m = (np.linalg.inv(mod_setup.bones[mod_setup.slot_bones[carried.slot]])
-                     @ prepared.anchors[carried.slot] @ official_setup.bones[official_setup.slot_bones[carried.slot]])
+                m = (
+                    np.linalg.inv(mod_setup.bones[mod_setup.slot_bones[carried.slot]])
+                    @ prepared.anchors[carried.slot]
+                    @ official_setup.bones[official_setup.slot_bones[carried.slot]]
+                )
             region = official_regions.get(carried.region) if carried.region else None
             records[key], _note = placed_record(graft, carried, m, turn, region)
             if carried.region and carried.region in prepared.pages.placed:
@@ -1008,24 +1162,37 @@ def choose(prepared: Prepared, official: rebake.Rig, test: rebake.Rig, official_
     for key, carried in graft.carried.items():
         if key not in records:
             region = official_regions.get(carried.region) if carried.region else None
-            m = (np.linalg.inv(mod_setup.bones[mod_setup.slot_bones[carried.slot]])
-                 @ prepared.anchors[carried.slot] @ official_setup.bones[official_setup.slot_bones[carried.slot]])
+            m = (
+                np.linalg.inv(mod_setup.bones[mod_setup.slot_bones[carried.slot]])
+                @ prepared.anchors[carried.slot]
+                @ official_setup.bones[official_setup.slot_bones[carried.slot]]
+            )
             records[key], _note = placed_record(graft, carried, m, 0, region)
-    return Checked(graft.build(records), atlas_text(prepared.mod_text, prepared.pages, rotate=rotate),
-                   grafted_pages, results)
+    return Checked(
+        graft.build(records), atlas_text(prepared.mod_text, prepared.pages, rotate=rotate), grafted_pages, results
+    )
 
 
 # ---------------------------------------------------------------- a rig without a picture to compare
 
+
 @dataclass
 class Plain(Checked):
     """A ``plain`` graft: the delivered rig of one atlas, its plan and the rows each page grew by."""
+
     graft: SkeletonGraft | None = None
     grown: dict[str, int] = field(default_factory=dict)
 
 
-def plain(mod_skeleton: bytes, mod_atlas: str, mod_pages: dict[str, Image.Image], official_skeleton: bytes,
-          official_atlas: str, official_pages: dict[str, Image.Image], only: set[str] | None = None) -> Plain:
+def plain(
+    mod_skeleton: bytes,
+    mod_atlas: str,
+    mod_pages: dict[str, Image.Image],
+    official_skeleton: bytes,
+    official_atlas: str,
+    official_pages: dict[str, Image.Image],
+    only: set[str] | None = None,
+) -> Plain:
     """The graft of a rig whose new animations have no part to compare with the official one (a memorial lobby, a
     Spine background: they mostly move bones and constraints): every carried attachment as the official record on
     the mod's bone of the same name, its regions packed where none of the mod's atlas regions lie. ``only``: the

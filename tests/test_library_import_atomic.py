@@ -16,8 +16,10 @@ from test_library import game_bundle, make_mod, reload_library, setup_library
 
 def upload(env, folder="incoming"):
     directory = env.tmp / folder
-    return [game_bundle(directory, part=part, payload=f"uploaded {folder} {part}".encode())
-            for part in ("textures", "textassets")]
+    return [
+        game_bundle(directory, part=part, payload=f"uploaded {folder} {part}".encode())
+        for part in ("textures", "textassets")
+    ]
 
 
 def bundles(directory):
@@ -31,16 +33,18 @@ def journals(env):
 
 def baseline(env):
     path = make_mod(env.original, env.tmp / "previous", payload=b"previous independent mod")
-    old, = env.library.add_files("spr", [path])
-    return old, (env.root / "state.json").read_bytes(), {
-        item.relative_to(env.root): item.read_bytes() for item in (env.root / "mods").rglob("*.bundle")}
+    (old,) = env.library.add_files("spr", [path])
+    return (
+        old,
+        (env.root / "state.json").read_bytes(),
+        {item.relative_to(env.root): item.read_bytes() for item in (env.root / "mods").rglob("*.bundle")},
+    )
 
 
 def assert_previous(env, old, metadata, files):
     assert [mod.id for mod in env.library.mods()] == [old.id]
     assert (env.root / "state.json").read_bytes() == metadata
-    assert {item.relative_to(env.root): item.read_bytes()
-            for item in (env.root / "mods").rglob("*.bundle")} == files
+    assert {item.relative_to(env.root): item.read_bytes() for item in (env.root / "mods").rglob("*.bundle")} == files
     assert not journals(env)
 
 
@@ -51,12 +55,14 @@ def test_file_copy_failure_preserves_previously_completed_mod(setup_library, mon
     paths = upload(env)
     copy = service.atomic_copy
     attempts = []
+
     def fail_second(source, target):
         if "import-transactions" in target.parts:
             attempts.append(target)
             if len(attempts) == fail_at:
                 raise OSError(errno.ENOSPC, "Synthetic disk full", str(target))
         return copy(source, target)
+
     with monkeypatch.context() as patch:
         patch.setattr(service, "atomic_copy", fail_second)
         with pytest.raises(ServiceError, match="library_io_error"):
@@ -72,6 +78,7 @@ def test_each_staged_file_is_verified_before_group_publication(setup_library, mo
     paths = upload(env)
     copy = service.atomic_copy
     count = 0
+
     def corrupt_copy(source, target):
         nonlocal count
         result = copy(source, target)
@@ -80,6 +87,7 @@ def test_each_staged_file_is_verified_before_group_publication(setup_library, mo
             if count == corrupt_at:
                 target.write_bytes(b"Synthetic silently corrupted transfer")
         return result
+
     with monkeypatch.context() as patch:
         patch.setattr(service, "atomic_copy", corrupt_copy)
         with pytest.raises((OSError, ServiceError)):
@@ -89,12 +97,15 @@ def test_each_staged_file_is_verified_before_group_publication(setup_library, mo
 
 
 @pytest.mark.parametrize("published", [False, True])
-def test_metadata_failure_before_or_after_publication_rolls_back_exact_prior_state(setup_library, monkeypatch, published):
+def test_metadata_failure_before_or_after_publication_rolls_back_exact_prior_state(
+    setup_library, monkeypatch, published
+):
     env = setup_library
     old, metadata, files = baseline(env)
     paths = upload(env)
     write = service.atomic_json
     failed = False
+
     def fail_metadata(path, data):
         nonlocal failed
         if path == env.root / "state.json" and not failed:
@@ -103,6 +114,7 @@ def test_metadata_failure_before_or_after_publication_rolls_back_exact_prior_sta
                 write(path, data)
             raise OSError(errno.EIO, "Synthetic metadata failure", str(path))
         return write(path, data)
+
     with monkeypatch.context() as patch:
         patch.setattr(service, "atomic_json", fail_metadata)
         with pytest.raises(ServiceError, match="library_io_error"):
@@ -118,6 +130,7 @@ def test_restart_recovers_interrupted_multi_file_import_at_commit_boundaries(set
     paths = upload(env)
     copy, replace, write = service.atomic_copy, service.os.replace, service.atomic_json
     count = 0
+
     def copying(source, target):
         nonlocal count
         if "import-transactions" in target.parts:
@@ -125,31 +138,33 @@ def test_restart_recovers_interrupted_multi_file_import_at_commit_boundaries(set
             if boundary == "copy" and count == 2:
                 raise SystemExit("Synthetic termination during copy")
         return copy(source, target)
+
     def replacing(source, target):
         result = replace(source, target)
         if boundary == "directory" and Path(source).name == "files" and Path(target).parent == env.root / "mods":
             raise SystemExit("Synthetic termination after directory publication")
         return result
+
     def writing(path, data):
         result = write(path, data)
         if boundary == "metadata" and path == env.root / "state.json":
             raise SystemExit("Synthetic termination after metadata publication")
         return result
+
     with monkeypatch.context() as patch:
         patch.setattr(service, "atomic_copy", copying)
         patch.setattr(service.os, "replace", replacing)
         patch.setattr(service, "atomic_json", writing)
         with pytest.raises(SystemExit):
             env.library.add_files("spr", paths)
-    journal, = journals(env)
+    (journal,) = journals(env)
     transaction = json.loads(journal.read_text())
     new_id = transaction["id"]
     assert journal.exists()
     env.library = reload_library(env)
     if boundary == "metadata":
         assert {mod.id for mod in env.library.mods()} == {old.id, new_id}
-        assert bundles(env.root / "mods" / new_id) == {
-            path.name: path.read_bytes() for path in paths}
+        assert bundles(env.root / "mods" / new_id) == {path.name: path.read_bytes() for path in paths}
         assert not journals(env)
     else:
         assert_previous(env, old, metadata, files)
@@ -162,22 +177,25 @@ def test_rollback_failure_retains_journal_and_retries_after_lock_is_released(set
     paths = upload(env)
     write, remove = service.atomic_json, service.shutil.rmtree
     failed = False
+
     def fail_metadata(path, data):
         nonlocal failed
         if path == env.root / "state.json" and not failed:
             failed = True
             raise OSError(errno.ENOSPC, "Synthetic disk full", str(path))
         return write(path, data)
+
     def locked_directory(path, *args, **kwargs):
         if Path(path).parent == env.root / "mods" and Path(path).name != old.id:
             raise PermissionError(errno.EACCES, "Synthetic locked directory", str(path))
         return remove(path, *args, **kwargs)
+
     with monkeypatch.context() as patch:
         patch.setattr(service, "atomic_json", fail_metadata)
         patch.setattr(service.shutil, "rmtree", locked_directory)
         with pytest.raises(ServiceError, match="library_recovery_pending"):
             env.library.add_files("spr", paths)
-        journal, = journals(env)
+        (journal,) = journals(env)
         assert json.loads(journal.read_text())["phase"] == "rollback"
         env.library.mods()  # reads go on while the journal is pending (tests/test_library_state_safety.py)
         with pytest.raises(ServiceError, match="library_recovery_pending"):
@@ -191,15 +209,17 @@ def test_recovery_does_not_finalize_committed_group_with_changed_bytes(setup_lib
     baseline(env)
     paths = upload(env)
     write = service.atomic_json
+
     def committed_crash(path, data):
         write(path, data)
         if path == env.root / "state.json":
             raise SystemExit("Synthetic termination after metadata publication")
+
     with monkeypatch.context() as patch:
         patch.setattr(service, "atomic_json", committed_crash)
         with pytest.raises(SystemExit):
             env.library.add_files("spr", paths)
-    journal, = journals(env)
+    (journal,) = journals(env)
     data = json.loads(journal.read_text())
     target = env.root / "mods" / data["id"] / paths[0].name
     target.write_bytes(b"Synthetic post-commit corruption")
@@ -221,6 +241,7 @@ def test_failed_repair_restores_existing_repaired_id(setup_library, monkeypatch)
     paths = upload(env)
     write = service.atomic_json
     failed = False
+
     def fail_metadata(path, data):
         nonlocal failed
         result = write(path, data)
@@ -228,6 +249,7 @@ def test_failed_repair_restores_existing_repaired_id(setup_library, monkeypatch)
             failed = True
             raise OSError(errno.EIO, "Synthetic failure after repair publication", str(path))
         return result
+
     with monkeypatch.context() as patch:
         patch.setattr(service, "atomic_json", fail_metadata)
         with env.library._transaction_lock():
@@ -255,8 +277,15 @@ def test_invalid_import_journal_never_deletes_outside_owned_uuid(setup_library, 
         transaction.mkdir()
     filename = "../outside/keep.bundle" if damage == "file" else "keep.bundle"
     identifier = "../../outside" if damage == "id" else mod_id
-    data = {"version": 1, "id": identifier, "phase": "preparing", "record": {"id": identifier, "files": [filename]},
-            "hashes": {filename: "b" * 40}, "repaired_from": "", "old_repaired_id": None}
+    data = {
+        "version": 1,
+        "id": identifier,
+        "phase": "preparing",
+        "record": {"id": identifier, "files": [filename]},
+        "hashes": {filename: "b" * 40},
+        "repaired_from": "",
+        "old_repaired_id": None,
+    }
     journal = transaction / "journal.json"
     journal.write_text(json.dumps(data))
     with pytest.raises(ServiceError, match="library_recovery_pending"):
@@ -278,9 +307,19 @@ def test_import_recovery_rejects_symlinked_mods_parent_before_outside_io(setup_l
     transaction = env.root / "import-transactions" / mod_id
     transaction.mkdir(parents=True)
     journal = transaction / "journal.json"
-    journal.write_text(json.dumps({"version": 1, "id": mod_id, "phase": "rollback",
-        "record": {"id": mod_id, "files": [sentinel.name]}, "hashes": {sentinel.name: "b" * 40},
-        "repaired_from": "", "old_repaired_id": None}))
+    journal.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "id": mod_id,
+                "phase": "rollback",
+                "record": {"id": mod_id, "files": [sentinel.name]},
+                "hashes": {sentinel.name: "b" * 40},
+                "repaired_from": "",
+                "old_repaired_id": None,
+            }
+        )
+    )
     verify, remove = service.verify_file, service.shutil.rmtree
     outside_attempts = []
 
@@ -331,7 +370,7 @@ def test_rollback_retry_syncs_already_removed_metadata_before_deleting_files(set
         patch.setattr(service, "sync_directory", failed_state_sync)
         with pytest.raises(ServiceError, match="library_recovery_pending"):
             env.library.add_files("spr", paths)
-        journal, = journals(env)
+        (journal,) = journals(env)
         data = json.loads(journal.read_text())
         directory = env.root / "mods" / data["id"]
         assert data["phase"] == "rollback"
@@ -343,8 +382,7 @@ def test_rollback_retry_syncs_already_removed_metadata_before_deleting_files(set
             env.library._recover_pending()
         assert len(root_syncs) > before
         assert journal.exists() and directory.is_dir()
-        assert bundles(directory) == {
-            path.name: path.read_bytes() for path in paths}
+        assert bundles(directory) == {path.name: path.read_bytes() for path in paths}
     env.library = reload_library(env)
     assert_previous(env, old, metadata, files)
 
@@ -375,7 +413,7 @@ def test_committed_recovery_retains_journal_until_metadata_sync_succeeds(setup_l
         patch.setattr(service, "sync_directory", failed_state_sync)
         with pytest.raises(ServiceError, match="library_recovery_pending"):
             env.library.add_files("spr", paths)
-    journal, = journals(env)
+    (journal,) = journals(env)
     data = json.loads(journal.read_text())
     new_id = data["id"]
     assert data["phase"] == "publishing"
@@ -388,8 +426,7 @@ def test_committed_recovery_retains_journal_until_metadata_sync_succeeds(setup_l
         with pytest.raises(ServiceError, match="library_recovery_pending"):
             recovered.set_favorite("test", True)  # a write is refused
         assert journal.exists()
-        assert bundles(env.root / "mods" / new_id) == {
-            path.name: path.read_bytes() for path in paths}
+        assert bundles(env.root / "mods" / new_id) == {path.name: path.read_bytes() for path in paths}
     recovered = reload_library(env)
     assert {mod.id for mod in recovered.mods()} == {old.id, new_id}
     assert not journals(env)

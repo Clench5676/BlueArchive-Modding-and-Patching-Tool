@@ -16,6 +16,7 @@ class PointerProbe:
     """What AppKit shows as the pointer while it moves over the window, for the session log: the system arrow,
     a hand, the text beam, or an image (the page's game pointer). Logs a burst of changes (the two flickering) and a system
     pointer that stays over the page; quiet otherwise."""
+
     WINDOW, BURST, STUCK, QUIET = 10.0, 8, 5.0, 60.0
     PAGE = ("image", "I-beam")
 
@@ -29,8 +30,13 @@ class PointerProbe:
         if cursor is None:
             return "none"
         known = self.api.NSCursor
-        for name, factory in (("arrow", "arrowCursor"), ("open hand", "openHandCursor"), ("closed hand", "closedHandCursor"),
-                              ("I-beam", "IBeamCursor"), ("pointing hand", "pointingHandCursor")):
+        for name, factory in (
+            ("arrow", "arrowCursor"),
+            ("open hand", "openHandCursor"),
+            ("closed hand", "closedHandCursor"),
+            ("I-beam", "IBeamCursor"),
+            ("pointing hand", "pointingHandCursor"),
+        ):
             if cursor == getattr(known, factory)():
                 return name
         return "image"
@@ -46,8 +52,13 @@ class PointerProbe:
         if len(self.changes) >= self.BURST and now - self.burst_at >= self.WINDOW:
             self.burst_at = now
             logger.info("Native pointer changed %d times in %.0f s, now %s", len(self.changes), self.WINDOW, kind)
-        if (over_page and kind not in self.PAGE and not self.stuck_logged and now - self.since >= self.STUCK
-                and now - self.stuck_at >= self.QUIET):
+        if (
+            over_page
+            and kind not in self.PAGE
+            and not self.stuck_logged
+            and now - self.since >= self.STUCK
+            and now - self.stuck_at >= self.QUIET
+        ):
             self.stuck_logged, self.stuck_at = True, now
             logger.info("Native pointer: %s for %.0f s over the page (y %.0f)", kind, now - self.since, y)
 
@@ -70,6 +81,7 @@ class CocoaHost:
             import AppKit as api
         if dispatch is None or later is None:
             from PyObjCTools import AppHelper
+
             dispatch = dispatch or AppHelper.callAfter
             later = later or AppHelper.callLater
         self.api, self.dispatch, self.later = api, dispatch, later
@@ -93,8 +105,15 @@ class CocoaHost:
         x = point.x - bounds.origin.x
         y = point.y - bounds.origin.y if content.isFlipped() else bounds.origin.y + bounds.size.height - point.y
         regions = self.owner.layout["drag"]
-        reason = ("invalid" if not self.owner.valid else "transition" if self.transition else
-                  "no drag regions" if not regions else "")
+        reason = (
+            "invalid"
+            if not self.owner.valid
+            else "transition"
+            if self.transition
+            else "no drag regions"
+            if not regions
+            else ""
+        )
         if reason and 0 <= y < self.owner.layout["height"]:
             # A press on the top bar that cannot drag: logged once per reason, so a report shows why.
             if reason != self.ignored:
@@ -132,22 +151,37 @@ class CocoaHost:
             button.setHidden_(True)
         self.held = True
         self.later(self.HOLD_LIMIT, self.release)
-        self.monitor = api.NSEvent.addLocalMonitorForEventsMatchingMask_handler_(api.NSEventMaskLeftMouseDown, self.mouse_down)
+        self.monitor = api.NSEvent.addLocalMonitorForEventsMatchingMask_handler_(
+            api.NSEventMaskLeftMouseDown, self.mouse_down
+        )
         self.probe = PointerProbe(api)
-        self.pointer_monitor = api.NSEvent.addLocalMonitorForEventsMatchingMask_handler_(api.NSEventMaskMouseMoved,
-                                                                                         self.pointer_moved)
+        self.pointer_monitor = api.NSEvent.addLocalMonitorForEventsMatchingMask_handler_(
+            api.NSEventMaskMouseMoved, self.pointer_moved
+        )
         centre = api.NSNotificationCenter.defaultCenter()
-        for name in ("NSWindowDidResizeNotification", "NSWindowDidMoveNotification", "NSWindowDidBecomeKeyNotification",
-                     "NSWindowDidResignKeyNotification", "NSWindowDidMiniaturizeNotification", "NSWindowDidDeminiaturizeNotification",
-                     "NSWindowWillEnterFullScreenNotification", "NSWindowWillExitFullScreenNotification",
-                     "NSWindowDidEnterFullScreenNotification", "NSWindowDidExitFullScreenNotification"):
+        for name in (
+            "NSWindowDidResizeNotification",
+            "NSWindowDidMoveNotification",
+            "NSWindowDidBecomeKeyNotification",
+            "NSWindowDidResignKeyNotification",
+            "NSWindowDidMiniaturizeNotification",
+            "NSWindowDidDeminiaturizeNotification",
+            "NSWindowWillEnterFullScreenNotification",
+            "NSWindowWillExitFullScreenNotification",
+            "NSWindowDidEnterFullScreenNotification",
+            "NSWindowDidExitFullScreenNotification",
+        ):
+
             def changed(note, name=name):
                 if "Will" in name:
                     self.transition = True
                 elif "FullScreen" in name:
                     self.transition = False
                 self.owner.refresh()
-            self.observers.append(centre.addObserverForName_object_queue_usingBlock_(getattr(api, name), window, None, changed))
+
+            self.observers.append(
+                centre.addObserverForName_object_queue_usingBlock_(getattr(api, name), window, None, changed)
+            )
 
     def pointer_moved(self, event):
         # Only reads AppKit's pointer for the log; the event goes on unchanged whatever happens here.
@@ -169,7 +203,7 @@ class CocoaHost:
         for button, (x, y) in zip(self.buttons, self.base):
             up = -1 if button.superview().isFlipped() else 1
             origin = button.frame().origin
-            if abs(origin.x - x) > .01 or abs(origin.y - (y + up * self.applied)) > .01:
+            if abs(origin.x - x) > 0.01 or abs(origin.y - (y + up * self.applied)) > 0.01:
                 return False
         return True
 
@@ -199,6 +233,7 @@ class CocoaHost:
             self._place()
             if index + 1 < len(frames):
                 self.later(period, lambda: step(index + 1))
+
         step(0)
 
     def _place(self):
@@ -214,8 +249,9 @@ class CocoaHost:
             origin = button.frame().origin
             # in fullscreen AppKit may have laid the buttons out again: move only those still where this put them. A move
             # to where a button already is would still make AppKit reset the pointer: skip it.
-            if ((not fullscreen or abs(origin.y - (y + up * self.applied)) < .5)
-                    and (abs(origin.x - x) > .01 or abs(origin.y - (y + up * offset)) > .01)):
+            if (not fullscreen or abs(origin.y - (y + up * self.applied)) < 0.5) and (
+                abs(origin.x - x) > 0.01 or abs(origin.y - (y + up * offset)) > 0.01
+            ):
                 button.setFrameOrigin_((x, y + up * offset))
             if (hide or self.hid) and button.isHidden() != hide:
                 button.setHidden_(hide)
@@ -239,8 +275,11 @@ class CocoaHost:
         return min(max(dy, low), high)
 
     def state(self):
-        return {"maximized": bool(self.window.isZoomed()), "minimized": bool(self.window.isMiniaturized()),
-                "fullscreen": bool(self.window.styleMask() & self.api.NSWindowStyleMaskFullScreen)}
+        return {
+            "maximized": bool(self.window.isZoomed()),
+            "minimized": bool(self.window.isMiniaturized()),
+            "fullscreen": bool(self.window.styleMask() & self.api.NSWindowStyleMaskFullScreen),
+        }
 
     def measure(self, layout):
         content = self.window.contentView()
@@ -277,7 +316,7 @@ class CocoaHost:
                     raise RuntimeError("M1 button would be clipped by its AppKit container")
             after = [self._rect(button, content) for button in self.buttons]
             for source, target, actual in zip(before, targets, after):
-                if abs(source.left - actual.left) > .5 or abs(target.top - actual.top) > .5:
+                if abs(source.left - actual.left) > 0.5 or abs(target.top - actual.top) > 0.5:
                     raise RuntimeError("M1 AppKit relayout rejected vertical button alignment")
             self.base = [(button.frame().origin.x, button.frame().origin.y) for button in self.buttons]
             self.applied, self.centre = 0.0, layout["centre"]
@@ -300,8 +339,11 @@ class CocoaHost:
         return self.resting
 
     def command(self, action):
-        selectors = {"minimize": self.window.performMiniaturize_, "maximize": self.window.performZoom_,
-                     "fullscreen": self.window.toggleFullScreen_}
+        selectors = {
+            "minimize": self.window.performMiniaturize_,
+            "maximize": self.window.performZoom_,
+            "fullscreen": self.window.toggleFullScreen_,
+        }
         selectors[action](None)
 
     def dispose(self):

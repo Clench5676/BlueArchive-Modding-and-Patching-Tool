@@ -7,55 +7,126 @@ import { overwrittenLines } from "../../src/bmpt/web/js/repairs.js";
 const web = new URL("../../src/bmpt/web/js/", import.meta.url);
 const source = readFileSync(new URL("settings-other.js", web), "utf8");
 const settings = readFileSync(new URL("settings.js", web), "utf8");
-const strip = (s) => s.replace(/^import .*;\n/gm, "").replace(/^export /gm, "");
+const strip = (s) => s.replace(/^import [^;]*;\n/gm, "").replace(/^export /gm, "");
 function harness({ locale = "en-US", answer = "ok", used = true, error = null, result = {} } = {}) {
-  const strings = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
-  const T = (key, values = {}) => key.split(".").reduce((v, k) => v[k], strings).replace(/\{(\w+)\}/g, (_, k) => values[k]);
-  const calls = [], messages = [], refused = [];
+  const strings = JSON.parse(
+    readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8"),
+  ).webui;
+  const T = (key, values = {}) =>
+    key
+      .split(".")
+      .reduce((v, k) => v[k], strings)
+      .replace(/\{(\w+)\}/g, (_, k) => values[k]);
+  const calls = [],
+    messages = [],
+    refused = [];
   let changed = 0;
-  const deps = { T, overwrittenLines, Loading: { task: (fn) => fn(() => {}), variantName: (e) => e?.variant || "" },
+  const deps = {
+    T,
+    overwrittenLines,
+    Loading: { task: (fn) => fn(() => {}), variantName: (e) => e?.variant || "" },
     modJob: () => () => ({ text: "" }),
-    ModSwitch: { refresh: async () => {}, refused: (...args) => refused.push(args),
-      listSep: () => (/^(zh|ja)/i.test(locale) ? "、" : ", ") }, // the rule mod-switch.js tests pin
-    Popup: { message: async (opts) => { messages.push(opts); return { button: answer }; } },
+    ModSwitch: {
+      refresh: async () => {},
+      refused: (...args) => refused.push(args),
+      listSep: () => (/^(zh|ja)/i.test(locale) ? "、" : ", "),
+    }, // the rule mod-switch.js tests pin
+    Popup: {
+      message: async (opts) => {
+        messages.push(opts);
+        return { button: answer };
+      },
+    },
     rpc: async (method, params) => {
       calls.push([method, params]);
       if (error) throw error;
       return method === "mods.removalInfo" ? { name: "UI Pack", used } : "job1";
-    }, waitJob: async (id) => { assert.equal(id, "job1"); return result; }, notify: (s) => calls.push(["notify", s]),
+    },
+    waitJob: async (id) => {
+      assert.equal(id, "job1");
+      return result;
+    },
+    notify: (s) => calls.push(["notify", s]),
   };
-  const api = new Function("deps", `const {${Object.keys(deps)}} = deps; ${strip(source)}; return { rows, select, remove, valueText };`)(deps);
-  return { ...api, T, calls, messages, refused, changed: () => { changed++; }, changes: () => changed };
+  const api = new Function(
+    "deps",
+    `const {${Object.keys(deps)}} = deps; ${strip(source)}; return { rows, select, remove, valueText };`,
+  )(deps);
+  return {
+    ...api,
+    T,
+    calls,
+    messages,
+    refused,
+    changed: () => {
+      changed++;
+    },
+    changes: () => changed,
+  };
 }
-const mod = { id: "m1", label: "UI Pack", target: "other-set:ui", files: ["ui-textures.bundle", "music-audio.bundle"], state: "official", selected: false };
+const mod = {
+  id: "m1",
+  label: "UI Pack",
+  target: "other-set:ui",
+  files: ["ui-textures.bundle", "music-audio.bundle"],
+  state: "official",
+  selected: false,
+};
 
 test("a source's file names join with the language's list separator, after the state", () => {
-  for (const [locale, sep] of [["en-US", ", "], ["zh-CN", "、"], ["zh-TW", "、"], ["ja-JP", "、"], ["ko-KR", ", "], ["th-TH", ", "]]) {
+  for (const [locale, sep] of [
+    ["en-US", ", "],
+    ["zh-CN", "、"],
+    ["zh-TW", "、"],
+    ["ja-JP", "、"],
+    ["ko-KR", ", "],
+    ["th-TH", ", "],
+  ]) {
     const h = harness({ locale });
     const state = h.T("settings.mods.otherState.official");
     assert.equal(h.valueText(mod), `${state} - ui-textures.bundle${sep}music-audio.bundle`, locale);
-    assert.equal(h.valueText({ ...mod, state: "active" }), `${h.T("status.applied")} - ui-textures.bundle${sep}music-audio.bundle`, locale);
+    assert.equal(
+      h.valueText({ ...mod, state: "active" }),
+      `${h.T("status.applied")} - ui-textures.bundle${sep}music-audio.bundle`,
+      locale,
+    );
     assert.equal(h.valueText({ ...mod, files: ["one.bundle"] }), `${state} - one.bundle`, locale);
     assert.equal(h.valueText({ ...mod, files: [] }), state, `${locale}: no files, no dangling separator`);
   }
 });
 
 test("opening Settings on Mods selects the tab before loading generic sources", async () => {
-  const openSource = settings.slice(settings.indexOf("export async function open("), settings.indexOf("export const current"));
-  const calls = [], host = { hidden: true }, prefs = { language: "en-US" };
-  const deps = { $: () => host, follow: () => {}, call: (fn) => fn(), close() {},
+  const openSource = settings.slice(
+    settings.indexOf("export async function open("),
+    settings.indexOf("export const current"),
+  );
+  const calls = [],
+    host = { hidden: true },
+    prefs = { language: "en-US" };
+  const deps = {
+    $: () => host,
+    follow: () => {},
+    call: (fn) => fn(),
+    close() {},
     // Settings registers with the popup stack as it opens (tested in popup.test.mjs)
     Popup: { opened: (stacked, close) => calls.push(["opened", stacked === host, typeof close]) },
     ModSwitch: { current: () => ({}), refresh: () => assert.fail("already loaded") },
-    rpc: async (method) => { calls.push(method); return method === "settings.get" ? prefs : [mod]; },
+    rpc: async (method) => {
+      calls.push(method);
+      return method === "settings.get" ? prefs : [mod];
+    },
     // Troubleshoot Mods' state: none outside pre-release builds
     troubleState: async () => null,
-    render: async () => calls.push("render") };
-  const h = new Function("deps", `const {${Object.keys(deps)}} = deps;
+    render: async () => calls.push("render"),
+  };
+  const h = new Function(
+    "deps",
+    `const {${Object.keys(deps)}} = deps;
     const TABS = ["general", "mods", "sound", "l2d", "folders"];
     let onChange, layout = {}, tab = "folders", scroll = 250, prefs, otherRequest = 0, otherMods, trouble;
     ${strip(openSource)}
-    return { open, state: () => ({ tab, scroll, prefs, otherMods, onChange }) };`)(deps);
+    return { open, state: () => ({ tab, scroll, prefs, otherMods, onChange }) };`,
+  )(deps);
   const changed = () => {};
   await h.open(changed, "mods");
   assert.deepEqual(calls, ["settings.get", "mods.other", ["opened", true, "function"], "render"]);
@@ -82,7 +153,10 @@ test("Settings deletion reuses the named confirmation in all six locales", async
     const h = harness({ locale });
     await h.remove(mod, h.changed);
     assert.deepEqual(h.messages[0].lines, [h.T("mods.deleteConfirm", { name: "UI Pack" }), h.T("mods.deleteRestore")]);
-    assert.deepEqual(h.calls, [["mods.removalInfo", { id: "m1" }], ["mods.remove", { id: "m1", confirm: true }]]);
+    assert.deepEqual(h.calls, [
+      ["mods.removalInfo", { id: "m1" }],
+      ["mods.remove", { id: "m1", confirm: true }],
+    ]);
     assert.equal(h.changes(), 1);
   }
 });
@@ -94,35 +168,52 @@ test("cancel, close and failed lookups cannot delete; unused sources omit the re
     assert.deepEqual(h.messages[0].lines, [h.T("mods.deleteConfirm", { name: "UI Pack" })]);
     assert.equal(h.calls.length, 1);
   }
-  const error = { code: "library_io_error" }, h = harness({ error });
+  const error = { code: "library_io_error" },
+    h = harness({ error });
   await h.remove(mod, h.changed);
   assert.equal(h.messages.length, 0);
   assert.deepEqual(h.refused, [[error]]);
 });
 
 test("refused writes keep the list and expose the shared refusal flow", async () => {
-  const error = { code: "classic_open" }, h = harness({ error });
+  const error = { code: "classic_open" },
+    h = harness({ error });
   await h.select(mod, h.changed);
   assert.equal(h.changes(), 1);
-  assert.deepEqual(h.refused.map((args) => args.slice(0, 3)), [[error, "actions.apply", { variant: mod.target, kind: "other", source: "mod:m1" }]]);
+  assert.deepEqual(
+    h.refused.map((args) => args.slice(0, 3)),
+    [[error, "actions.apply", { variant: mod.target, kind: "other", source: "mod:m1" }]],
+  );
   // an untested game build's confirmation makes the same write again
   assert.equal(typeof h.refused[0][3], "function");
 });
 
 class El {
-  children = []; attrs = {}; style = {}; dataset = {};
-  appendChild(el) { this.children.push(el); return el; }
-  setAttribute(k, v) { this.attrs[k] = v; }
+  children = [];
+  attrs = {};
+  style = {};
+  dataset = {};
+  appendChild(el) {
+    this.children.push(el);
+    return el;
+  }
+  setAttribute(k, v) {
+    this.attrs[k] = v;
+  }
   addEventListener() {}
   remove() {}
-  getContext() { return { measureText: (s) => ({ width: s.length * 20 }) }; }
+  getContext() {
+    return { measureText: (s) => ({ width: s.length * 20 }) };
+  }
 }
 
 test("generic Settings rows render names, every target file, status and actions in a stand-in DOM", async (t) => {
   const original = globalThis.document;
   globalThis.document = { documentElement: new El(), createElement: () => new El() };
-  t.mock.method(globalThis, "fetch", async (url) => ({ ok: true, json: async () => url.endsWith("atlases.json")
-    ? { Common: { Test: { width: 1, height: 1 } } } : {} }));
+  t.mock.method(globalThis, "fetch", async (url) => ({
+    ok: true,
+    json: async () => (url.endsWith("atlases.json") ? { Common: { Test: { width: 1, height: 1 } } } : {}),
+  }));
   try {
     const NGUI = await import(new URL("ngui.js", web));
     const { wrapPath } = await import(new URL("util.js", web));
@@ -133,22 +224,46 @@ test("generic Settings rows render names, every target file, status and actions 
     const Buttons = { smallButton: (...args) => ButtonsModule.optionButton(option, filter, ...args) };
     const { BACKDROP, XS_BUTTON, TYPE } = await import(new URL("ui-tokens.js", web));
     const deps = { NGUI, T: h.T, wrapPath, ...Rows, Buttons, BACKDROP, XS_BUTTON, TYPE };
-    const valueRow = new Function("deps", `const {${Object.keys(deps)}} = deps; ${strip(settings)}; return valueRow;`)(deps);
+    const valueRow = new Function("deps", `const {${Object.keys(deps)}} = deps; ${strip(settings)}; return valueRow;`)(
+      deps,
+    );
     const rows = h.rows([mod, { ...mod, id: "m2", label: "Missing Pack", state: "missing" }], valueRow, h.changed);
     const host = new El();
-    const tree = NGUI.node("Rows", [0, 0], [], rows.map((r) => r.tree));
-    const labelsOnly = (n) => ({ ...n, widgets: n.widgets.filter((w) => "text" in w), children: n.children.map(labelsOnly) });
+    const tree = NGUI.node(
+      "Rows",
+      [0, 0],
+      [],
+      rows.map((r) => r.tree),
+    );
+    const labelsOnly = (n) => ({
+      ...n,
+      widgets: n.widgets.filter((w) => "text" in w),
+      children: n.children.map(labelsOnly),
+    });
     await NGUI.render(labelsOnly(tree), host);
-    const texts = host.children.flatMap((el) => [el.textContent || "", ...el.children.map((span) => span.textContent || "")]);
+    const texts = host.children.flatMap((el) => [
+      el.textContent || "",
+      ...el.children.map((span) => span.textContent || ""),
+    ]);
     const text = texts.join(" ").replace(/\n/g, "");
-    for (const caption of [mod.label, ...mod.files, h.T("settings.mods.otherState.official"), h.T("settings.mods.useMod"), h.T("settings.mods.official"), h.T("btn.delete")]) assert.ok(text.includes(caption), caption);
+    for (const caption of [
+      mod.label,
+      ...mod.files,
+      h.T("settings.mods.otherState.official"),
+      h.T("settings.mods.useMod"),
+      h.T("settings.mods.official"),
+      h.T("btn.delete"),
+    ])
+      assert.ok(text.includes(caption), caption);
     assert.equal(rows[0].hits.length, 3);
     assert.equal(rows[1].hits.length, 1);
     assert.ok(rows[0].h > 240);
     await rows[0].hits[0].fn();
     assert.equal(h.calls[0][0], "actions.apply");
     assert.doesNotMatch(source, /tooltip|setAttribute\(["']title/);
-  } finally { globalThis.document = original; }
+  } finally {
+    globalThis.document = original;
+  }
 });
 
 test("generic applies report kept files and disable Original without an official copy", async () => {
@@ -159,11 +274,18 @@ test("generic applies report kept files and disable Original without an official
     const overwritten = { ...mod, state: "active", selected: true, overwritten: true };
     assert.ok(h.valueText(overwritten).includes(h.T("mods.overwrittenNone")));
     let actions;
-    h.rows([overwritten], (...args) => { actions = args[4]; }, h.changed);
+    h.rows(
+      [overwritten],
+      (...args) => {
+        actions = args[4];
+      },
+      h.changed,
+    );
     assert.equal(actions.find(([caption]) => caption === h.T("settings.mods.official"))[2], false);
     const failed = harness({ locale, error: { code: "original_unavailable" } });
     await failed.select(mod, failed.changed, false);
     assert.equal(failed.messages[0].title, failed.T("mods.overwrittenTitle"));
-    for (const key of ["overwrittenNone", "repairGame", "repairThen"]) assert.ok(failed.messages[0].lines.includes(failed.T(`mods.${key}`)));
+    for (const key of ["overwrittenNone", "repairGame", "repairThen"])
+      assert.ok(failed.messages[0].lines.includes(failed.T(`mods.${key}`)));
   }
 });

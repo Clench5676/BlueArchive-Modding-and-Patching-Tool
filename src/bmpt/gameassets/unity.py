@@ -53,7 +53,11 @@ def load_bundle(path: Path) -> Iterator[Environment]:
 def reference(obj: ObjectReader, pointer: dict) -> tuple[str, int]:
     """Resolve a typetree pointer to its CAB name and path ID."""
     fid = pointer.get("m_FileID", 0)
-    cab = obj.assets_file.name if fid == 0 else obj.assets_file.externals[fid - 1].path.replace("\\", "/").rsplit("/", 1)[-1]
+    cab = (
+        obj.assets_file.name
+        if fid == 0
+        else obj.assets_file.externals[fid - 1].path.replace("\\", "/").rsplit("/", 1)[-1]
+    )
     return cab, pointer.get("m_PathID", 0)
 
 

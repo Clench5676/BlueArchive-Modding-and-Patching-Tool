@@ -57,8 +57,13 @@ class OriginalChecks:
                 data = None
             entries = data.get("originals") if isinstance(data, dict) and data.get("version") == VERSION else None
             for name, record in (entries or {}).items():
-                if (isinstance(name, str) and isinstance(record, dict) and record.get("by") in VERDICTS
-                        and isinstance(record.get("sha1"), str) and isinstance(record.get("size"), int)):
+                if (
+                    isinstance(name, str)
+                    and isinstance(record, dict)
+                    and record.get("by") in VERDICTS
+                    and isinstance(record.get("sha1"), str)
+                    and isinstance(record.get("size"), int)
+                ):
                     records[name] = record
         self._cache = (signature, records)
         return records

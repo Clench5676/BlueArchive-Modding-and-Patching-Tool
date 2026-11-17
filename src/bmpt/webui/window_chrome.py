@@ -25,7 +25,9 @@ class Rect:
 
     @property
     def valid(self):
-        return all(math.isfinite(v) for v in asdict(self).values()) and self.right > self.left and self.bottom > self.top
+        return (
+            all(math.isfinite(v) for v in asdict(self).values()) and self.right > self.left and self.bottom > self.top
+        )
 
     def contains(self, x, y):
         return self.left <= x < self.right and self.top <= y < self.bottom
@@ -34,8 +36,9 @@ class Rect:
 def union(rects):
     if not rects or not all(rect.valid for rect in rects):
         raise ValueError("Native control bounds unavailable")
-    return Rect(min(r.left for r in rects), min(r.top for r in rects),
-                max(r.right for r in rects), max(r.bottom for r in rects))
+    return Rect(
+        min(r.left for r in rects), min(r.top for r in rects), max(r.right for r in rects), max(r.bottom for r in rects)
+    )
 
 
 def vertical_offsets(rects, centre):
@@ -64,9 +67,11 @@ class WindowChrome:
             if self.host is None:
                 if self.platform == "darwin":
                     from .window_macos import CocoaHost
+
                     self.host = CocoaHost(self.window, self)
                 elif self.platform == "win32":
                     from .window_windows import WindowsHost
+
                     self.host = WindowsHost(self.window, self)
                 else:
                     self.reason = "unsupported-host"
@@ -89,10 +94,16 @@ class WindowChrome:
         self.publish()
 
     def snapshot(self):
-        return {"active": self.active, "platform": self.platform, "reason": self.reason,
-                "mode": "standard" if self.platform == "win32" else "integrated",
-                "bounds": asdict(self.bounds) if self.bounds else None, "valid": self.valid,
-                "state": dict(self.state), "sequence": self.sequence}
+        return {
+            "active": self.active,
+            "platform": self.platform,
+            "reason": self.reason,
+            "mode": "standard" if self.platform == "win32" else "integrated",
+            "bounds": asdict(self.bounds) if self.bounds else None,
+            "valid": self.valid,
+            "state": dict(self.state),
+            "sequence": self.sequence,
+        }
 
     def publish(self):
         self.sequence += 1
@@ -119,8 +130,13 @@ class WindowChrome:
         try:
             if state not in LAYOUT_STATES:
                 raise ValueError("Invalid toolbar state")
-            if not all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
-                       for v in (centre, height)) or not 0 < centre < height <= 512:
+            if (
+                not all(
+                    isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+                    for v in (centre, height)
+                )
+                or not 0 < centre < height <= 512
+            ):
                 raise ValueError("Invalid toolbar geometry")
             if not isinstance(drag, list) or len(drag) > 64:
                 raise ValueError("Invalid toolbar drag regions")
@@ -131,8 +147,11 @@ class WindowChrome:
             # A rejected layout leaves the previous drag regions in place: say so once per distinct reason.
             if str(error) != self.rejected:
                 self.rejected = str(error)
-                logger.warning("Native window chrome rejected the toolbar layout: %s (%s drag regions)", error,
-                               len(drag) if isinstance(drag, list) else "no")
+                logger.warning(
+                    "Native window chrome rejected the toolbar layout: %s (%s drag regions)",
+                    error,
+                    len(drag) if isinstance(drag, list) else "no",
+                )
             raise
         self.rejected = ""
         # A page laying the toolbar out again and again makes the native side measure again and again: say so.
@@ -155,8 +174,11 @@ class WindowChrome:
         """The top bar's offsets (points up from where the buttons rest), one per period: the window buttons follow it.
         Only hosts whose buttons sit in the page's toolbar play it."""
         number = lambda v: isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
-        if (not isinstance(frames, list) or not 1 <= len(frames) <= MOTION_FRAMES
-                or not all(number(v) and 0 <= v <= MOTION_REACH for v in frames)):
+        if (
+            not isinstance(frames, list)
+            or not 1 <= len(frames) <= MOTION_FRAMES
+            or not all(number(v) and 0 <= v <= MOTION_REACH for v in frames)
+        ):
             raise ValueError("Invalid window button motion")
         if not number(period) or not 0 < period <= 0.1:
             raise ValueError("Invalid window button motion period")
@@ -180,9 +202,11 @@ class WindowChrome:
         if self.active:
             self.host.dispatch(self.refresh)
         elif self.host is not None:
+
             def read_state():
                 self.state = self.host.state()
                 self.publish()
+
             self.host.dispatch(read_state)
         else:
             self.state[key] = value
@@ -194,6 +218,7 @@ class WindowChrome:
         # Cocoa destroy() skips its delegate. performClose: preserves that delegate.
         if self.platform == "darwin" and getattr(self.window, "native", None) is not None:
             from PyObjCTools import AppHelper
+
             AppHelper.callAfter(self.window.native.performClose_, None)
         else:
             self.window.destroy()

@@ -25,8 +25,17 @@ from ..texture_guard import texture_image
 from .cache import AssetCache, PreviewCache, pack_preview_files, unpack_preview_files
 from . import lobby
 from .discovery import (
-    bundle_paths, cab_names, group_bundles, is_atlas, is_layout_texture,
-    is_lobby_prefab, is_model_dependency, is_pointer_texture, is_prefab, is_texture, may_hold_model_root,
+    bundle_paths,
+    cab_names,
+    group_bundles,
+    is_atlas,
+    is_layout_texture,
+    is_lobby_prefab,
+    is_model_dependency,
+    is_pointer_texture,
+    is_prefab,
+    is_texture,
+    may_hold_model_root,
     resource_version,
 )
 from .errors import AssetNotFound
@@ -92,8 +101,22 @@ _MODEL_LOCK = _ModelLock()
 def model_lock(what: str) -> Any:
     """The model lock (``_ModelLock``), its waits and holds logged as ``model-lock.<what>``."""
     return spans.held(f"model-lock.{what}", _MODEL_LOCK, hold=True)
-_SPRITE_FIELDS = ("x", "y", "width", "height", "borderLeft", "borderRight", "borderTop",
-                  "borderBottom", "paddingLeft", "paddingRight", "paddingTop", "paddingBottom")
+
+
+_SPRITE_FIELDS = (
+    "x",
+    "y",
+    "width",
+    "height",
+    "borderLeft",
+    "borderRight",
+    "borderTop",
+    "borderBottom",
+    "paddingLeft",
+    "paddingRight",
+    "paddingTop",
+    "paddingBottom",
+)
 
 
 # Where the prefabs the UI uses are in the Global client (bundle file names, as of the 2026-11 resource version).
@@ -156,7 +179,6 @@ def less_crc(name: str) -> str:
     return _CRC.sub("", name)
 
 
-
 def is_collection_art(name: str) -> bool:
     """Whether a texture of the character collection bundles (the game's UIs/01_Common/14_CharacterCollect folder, the
     one CostumeExcel's CollectionBGTexturePath and CollectionTexturePath point into) is one the art routes serve.
@@ -178,20 +200,21 @@ def _stamp(path: str | Path) -> tuple[int, int, int] | None:
     return stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns
 
 
-
 def prefab_overrides(bundles: list[Path], overrides: list[Path]) -> list[Path | None]:
     """The override standing in for each prefab bundle, or None, by the replacement rule of library.targets: the
     override of the same name, else of the same slot (prefix and resource type) and date; an override of another
     release stands in for its slot's newest prefab bundle that has none. A model whose prefabs span dated bundles of
     one slot (2024-11-18 and 2025-07-25) keeps each of them: one override never stands in for two bundles."""
+
     def slot(path: Path) -> tuple:
         parsed = parse_filename(path.name)
         return parsed.prefix, parsed.res_type
 
     by_name = {path.name: path for path in overrides}
     by_date = {(*slot(path), parse_filename(path.name).date): path for path in overrides}
-    out: list[Path | None] = [by_name.get(path.name) or by_date.get((*slot(path), parse_filename(path.name).date))
-                              for path in bundles]
+    out: list[Path | None] = [
+        by_name.get(path.name) or by_date.get((*slot(path), parse_filename(path.name).date)) for path in bundles
+    ]
     used = {path for path in out if path is not None}
     by_slot: dict[tuple, list[Path]] = {}
     for path in overrides:
@@ -317,16 +340,23 @@ class GameAssets:
         with self._lock(key):
             generation = self.cache.generation
             if key not in self._indexes:
+
                 def encode() -> bytes:
                     return json.dumps(build(), ensure_ascii=True, separators=(",", ":")).encode()
+
                 data = self._cached(key, encode, disk=disk)
                 try:
                     value = json.loads(data)
                 except (ValueError, UnicodeError):
                     logger.warning("Rebuilding invalid asset index %s", key)
                     value = build()
-                    self.cache.put(_SCHEMA + key, json.dumps(value).encode(),
-                                   version=self.cache_version, disk=disk, generation=generation)
+                    self.cache.put(
+                        _SCHEMA + key,
+                        json.dumps(value).encode(),
+                        version=self.cache_version,
+                        disk=disk,
+                        generation=generation,
+                    )
                 self._indexes[key] = value
             return self._indexes[key]
 
@@ -337,9 +367,12 @@ class GameAssets:
         every game resource for each sprite. Each known atlas is still stamped separately by ``_atlas_index`` so
         edits in place, including replacements that preserve mtime, never depend on the directory changing.
         """
+
         def directories() -> tuple:
-            return tuple((stat.st_dev, stat.st_ino, stat.st_mtime_ns, stat.st_ctime_ns)
-                         for stat in (directory.stat() for directory in self.resource_dirs))
+            return tuple(
+                (stat.st_dev, stat.st_ino, stat.st_mtime_ns, stat.st_ctime_ns)
+                for stat in (directory.stat() for directory in self.resource_dirs)
+            )
 
         for _ in range(2):
             before = directories()
@@ -379,7 +412,9 @@ class GameAssets:
                     self._validate_atlases(value)
                     if spine_stamps(self._atlas_paths()) != stamps:
                         raise AssetNotFound("UI atlas bundles changed during indexing")
-                    self.cache.put(_SCHEMA + key, json.dumps(value).encode(), version=self.cache_version, generation=generation)
+                    self.cache.put(
+                        _SCHEMA + key, json.dumps(value).encode(), version=self.cache_version, generation=generation
+                    )
                 self._indexes["atlases"], self._indexes["atlas-source"] = value, key
                 return value
             except Exception as error:
@@ -388,8 +423,9 @@ class GameAssets:
 
     @staticmethod
     def _validate_atlases(index: dict) -> None:
-        if not isinstance(index, dict) or not all(isinstance(index.get(key), dict)
-                                                  for key in ("sprites", "images", "names")):
+        if not isinstance(index, dict) or not all(
+            isinstance(index.get(key), dict) for key in ("sprites", "images", "names")
+        ):
             raise ValueError("Invalid UI atlas index structure")
         if not index["names"] or not any(index["sprites"].values()):
             raise ValueError("UI atlas index has no sprites")
@@ -399,12 +435,15 @@ class GameAssets:
             if not isinstance(sprites, dict) or not all(isinstance(sprite, dict) for sprite in sprites.values()):
                 raise ValueError(f"Invalid UI atlas metadata: {name}")
             for sprite, rect in sprites.items():
-                if not all(isinstance(rect.get(field), (int, float)) and math.isfinite(rect[field])
-                           for field in ("x", "y", "width", "height")):
+                if not all(
+                    isinstance(rect.get(field), (int, float)) and math.isfinite(rect[field])
+                    for field in ("x", "y", "width", "height")
+                ):
                     raise ValueError(f"Invalid UI sprite rectangle: {name}/{sprite}")
             record = index["images"].get(name)
-            if sprites and (not isinstance(record, dict) or not all(key in record
-                                                                   for key in ("bundle", "cab", "pid", "name"))):
+            if sprites and (
+                not isinstance(record, dict) or not all(key in record for key in ("bundle", "cab", "pid", "name"))
+            ):
                 raise ValueError(f"UI atlas {name} has sprites but no texture")
 
     def _scan_atlases(self, paths: list[Path]) -> dict:
@@ -417,8 +456,12 @@ class GameAssets:
                         tree = obj.read_typetree()
                         if "mSprites" in tree:
                             name = tree["m_Name"]
-                            atlases[name] = (key, tree, obj.assets_file.name,
-                                             [ext.path for ext in obj.assets_file.externals])
+                            atlases[name] = (
+                                key,
+                                tree,
+                                obj.assets_file.name,
+                                [ext.path for ext in obj.assets_file.externals],
+                            )
                             by_key[key] = atlases[name]
                             names[key] = name
                     elif obj.type.name == "Texture2D":
@@ -448,8 +491,9 @@ class GameAssets:
                     entry = by_key[ref_key(target, replacement["m_PathID"])]
                 except KeyError:
                     raise AssetNotFound(f"Missing UI atlas replacement: {name}") from None
-            sprites[name] = {sprite["name"]: {field: sprite.get(field, 0) for field in _SPRITE_FIELDS}
-                             for sprite in tree["mSprites"]}
+            sprites[name] = {
+                sprite["name"]: {field: sprite.get(field, 0) for field in _SPRITE_FIELDS} for sprite in tree["mSprites"]
+            }
             pointer = tree.get("material", {})
             fid = pointer.get("m_FileID", 0)
             target = cab if not fid else externals[fid - 1].replace("\\", "/").rsplit("/", 1)[-1]
@@ -480,6 +524,7 @@ class GameAssets:
         with self._lock("atlases"):
             index = self._atlas_index()
             source = self._indexes["atlas-source"]
+
         def build() -> bytes:
             try:
                 rect = index["sprites"][atlas][sprite]
@@ -494,6 +539,7 @@ class GameAssets:
             if self._atlas_index() is not index:
                 raise AssetNotFound("UI atlas bundles changed while reading a sprite")
             return data
+
         return self._cached("sprite/" + source + json.dumps([atlas, sprite]), build)
 
     def _texture_index(self) -> dict:
@@ -518,16 +564,19 @@ class GameAssets:
     def _pointer_index(self) -> dict:
         """The PC client's cursor and the touch effect's textures (a small scan, about 0.1 s). An index of its own,
         so a UI texture index cached before these families were read stays valid."""
-        return self._index("pointer-textures", lambda: self._scan_textures(
-            filter(is_pointer_texture, self._paths()))["textures"])
+        return self._index(
+            "pointer-textures", lambda: self._scan_textures(filter(is_pointer_texture, self._paths()))["textures"]
+        )
 
     def texture_png(self, name: str) -> bytes:
         """Decode a shared UI texture (or a cursor or touch effect texture) and return PNG bytes."""
+
         def build() -> bytes:
             record = self._texture_index()["textures"].get(name) or self._pointer_index().get(name)
             if record is None:
                 raise AssetNotFound(name)
             return png_bytes(self._image(record))
+
         return self._cached("texture/" + name, build)
 
     def _prefabs(self) -> dict:
@@ -594,41 +643,53 @@ class GameAssets:
     def layout(self, root: str, subpath: str = "") -> dict:
         """Return a prefab tree, optionally selecting an exact child subpath."""
         generation = self.cache.generation
+
         def build() -> dict:
             path = self._prefab_bundle(root)
-            extra = self._index("layout-textures", lambda: self._scan_textures(
-                filter(is_layout_texture, self._paths()))["names"])
+            extra = self._index(
+                "layout-textures", lambda: self._scan_textures(filter(is_layout_texture, self._paths()))["names"]
+            )
             names = self._atlas_index()["names"] | self._texture_index()["names"] | extra
             from . import selection_frames
+
             if root == selection_frames.ROOT:
                 from .model import BundleGraph
-                with spans.held("model-lock.layout", _MODEL_LOCK, hold=True), self._cab_discovery().batch(), \
-                        BundleGraph({}, resolver=self._resolve_cabs) as graph:
+
+                with (
+                    spans.held("model-lock.layout", _MODEL_LOCK, hold=True),
+                    self._cab_discovery().batch(),
+                    BundleGraph({}, resolver=self._resolve_cabs) as graph,
+                ):
                     env = graph.add(path)
                     resolver = _FxResolver(graph, {obj.path_id: obj for obj in env.objects}, self._shader_forms)
                     effects = selection_frames.export_effects(env, resolver.resolve)
                     return export_layout(env, root, names, effects=effects)
             with open_bundle(path) as env:
                 return export_layout(env, root, names)
+
         # Layouts can be large. Keep their serialized bytes in the bounded LRU,
         # rather than pinning every visited prefab tree alongside the indexes.
         def encode() -> bytes:
             return json.dumps(build(), ensure_ascii=True, separators=(",", ":")).encode()
+
         data = self._cached(_LAYOUT + root, encode)
         try:
             tree = json.loads(data)
         except (ValueError, UnicodeError):
             logger.warning("Rebuilding invalid prefab layout %s", root)
             tree = build()
-            self.cache.put(_SCHEMA + _LAYOUT + root, json.dumps(tree).encode(),
-                           version=self.cache_version, generation=generation)
+            self.cache.put(
+                _SCHEMA + _LAYOUT + root, json.dumps(tree).encode(), version=self.cache_version, generation=generation
+            )
         return subtree(tree, subpath)
 
     def selection_frame_texture(self, tex_id: str) -> bytes:
         """Serve only textures referenced by the starting-skill selection frames, in memory."""
         from .selection_frames import ROOT, SLOT
+
         slot = self.layout(ROOT, SLOT)
         textures = {}
+
         def collect(node):
             effect = node.get("frameEffect") or {}
             for tex in effect.get("material", {}).get("tex", {}).values():
@@ -636,6 +697,7 @@ class GameAssets:
                     textures[tex["id"]] = tex
             for child in node.get("children", []):
                 collect(child)
+
         collect(slot)
         if tex_id not in textures:
             raise AssetNotFound(("selection-frame", tex_id))
@@ -643,48 +705,67 @@ class GameAssets:
         bundle = self._resolve_cabs({cab}).get(cab.lower())
         if bundle is None or not pid.lstrip("-").isdigit():
             raise AssetNotFound(("selection-frame", tex_id))
+
         def build():
             with open_bundle(Path(bundle)) as env:
-                obj = next((obj for obj in env.objects if obj.path_id == int(pid)
-                            and obj.assets_file.name.lower() == cab and obj.type.name == "Texture2D"), None)
+                obj = next(
+                    (
+                        obj
+                        for obj in env.objects
+                        if obj.path_id == int(pid)
+                        and obj.assets_file.name.lower() == cab
+                        and obj.type.name == "Texture2D"
+                    ),
+                    None,
+                )
                 if obj is None:
                     raise AssetNotFound(("selection-frame", tex_id))
                 return png_bytes(texture_image(obj.read(), Path(bundle).name))
+
         return self._cached("selection-frame/" + json.dumps([tex_id, spine_stamps([Path(bundle)])]), build, disk=False)
 
     def _collection(self) -> dict:
         """Collection backgrounds and portraits by texture name (names and bundle locations only, memory only)."""
+
         def build() -> dict:
             paths = [p for p in self._paths() if p.name.startswith("uis-01_common-14_charactercollect-")]
             textures = self._scan_textures(paths)["textures"]
             return {name: record for name, record in textures.items() if is_collection_art(name)}
+
         return self._index("collection", build, disk=False)
 
     def collection_names(self) -> dict[str, list[str]]:
         """List collection backgrounds and portraits by their full texture names."""
         names = self._collection()
-        return {"bg": sorted(n for n in names if n.startswith("BG_")),
-                "portrait": sorted(n for n in names if n.startswith("Student_Portrait_"))}
+        return {
+            "bg": sorted(n for n in names if n.startswith("BG_")),
+            "portrait": sorted(n for n in names if n.startswith("Student_Portrait_")),
+        }
 
     def office_backgrounds(self) -> list[dict]:
         from . import office
+
         return office.choices(self)
 
     def office_layout(self, key: str) -> dict:
         from . import office
+
         return office.layout(self, key)
 
     def office_texture(self, key: str, name: str) -> bytes:
         """Decode only a texture used by this installed office prefab, at its original resolution."""
         from . import office
+
         record = office.texture_record(self, key, name)
         path = self._bundle_path(record["bundle"])
         stamps = spine_stamps([path])
+
         def build() -> bytes:
             data = png_bytes(self._image(record))
             if spine_stamps([path]) != stamps:
                 raise AssetNotFound("Office background changed during extraction")
             return data
+
         value = self._preview_bytes("office/texture/" + key + "/" + name + json.dumps(stamps), build)
         if spine_stamps([path]) != stamps:
             raise AssetNotFound("Office background changed during extraction")
@@ -696,11 +777,13 @@ class GameAssets:
         record = self._collection()[name]
         path = self._bundle_path(record["bundle"])
         stamps = spine_stamps([path])
+
         def build() -> bytes:
             value = png_bytes(self._image(record))
             if spine_stamps([path]) != stamps:
                 raise AssetNotFound("Collection art changed during extraction")
             return value
+
         value = self._preview_bytes("art/" + prefix + name + json.dumps(stamps), build)
         if spine_stamps([path]) != stamps:
             raise AssetNotFound("Collection art changed during extraction")
@@ -724,6 +807,7 @@ class GameAssets:
         """Read the requested Collection image from explicitly verified original bundles."""
         self.collection_target(name)
         stamps = spine_stamps(paths)
+
         def build() -> bytes:
             found = []
             for path in paths:
@@ -734,6 +818,7 @@ class GameAssets:
             if len(found) != 1 or spine_stamps(paths) != stamps:
                 raise ServiceError("photo_target_unavailable")
             return found[0]
+
         return self._preview_bytes("photography/default/" + name + json.dumps(stamps), build)
 
     def spine_cores(self, kind: str) -> dict[str, list[Path]]:
@@ -742,12 +827,16 @@ class GameAssets:
         if kind not in categories:
             raise AssetNotFound(kind)
         # shared bundles of the category (e.g. "_mxcommon-.asset") are not skeletons
-        groups = self._index("spine-cores/" + kind, lambda: {
-            core: [str(path) for path in paths]
-            for category in categories[kind]
-            for core, paths in group_bundles(self._paths(), category).items()
-            if spine_kind(core, category) == kind
-        }, disk=False)
+        groups = self._index(
+            "spine-cores/" + kind,
+            lambda: {
+                core: [str(path) for path in paths]
+                for category in categories[kind]
+                for core, paths in group_bundles(self._paths(), category).items()
+                if spine_kind(core, category) == kind
+            },
+            disk=False,
+        )
         return {core: [Path(path) for path in paths] for core, paths in groups.items()}
 
     def spine_files(self, kind: str, core: str) -> dict[str, bytes]:
@@ -789,18 +878,28 @@ class GameAssets:
                         self._preview_put(key, pack_preview_files(value), disk_generation)
                 if spine_stamps(paths) != stamps:
                     raise AssetNotFound("spine changed during extraction")
-                self.cache.put(_SCHEMA + key, value, version=self.cache_version,
-                               disk=False, size=sum(len(data) for data in value.values()), generation=generation)
+                self.cache.put(
+                    _SCHEMA + key,
+                    value,
+                    version=self.cache_version,
+                    disk=False,
+                    size=sum(len(data) for data in value.values()),
+                    generation=generation,
+                )
             return dict(value)
 
     # --- 3D chibi models ---
 
     def _model_index(self) -> dict[str, list[str]]:
-        return self._index("model-cores", lambda: {
-            core: [str(path) for path in paths]
-            for core, paths in group_bundles(self._paths(), "character").items()
-            if re.fullmatch(r"[a-z0-9_]+", core)
-        }, disk=False)
+        return self._index(
+            "model-cores",
+            lambda: {
+                core: [str(path) for path in paths]
+                for core, paths in group_bundles(self._paths(), "character").items()
+                if re.fullmatch(r"[a-z0-9_]+", core)
+            },
+            disk=False,
+        )
 
     def model_cores(self) -> set[str]:
         """Lower-case dev names with a 3D chibi prefab bundle (character-<dev>-_mxload-*)."""
@@ -825,13 +924,15 @@ class GameAssets:
                     continue
                 for name in names:
                     stem = name.rsplit("/", 1)[-1]
-                    match = (re.fullmatch(r"Field_Player_([A-Za-z0-9_]+?)(_NonWeapon)?\.prefab", stem)
-                             or (NPC_PREFAB.fullmatch(stem[:-7]) if stem.lower().endswith(".prefab") else None))
+                    match = re.fullmatch(r"Field_Player_([A-Za-z0-9_]+?)(_NonWeapon)?\.prefab", stem) or (
+                        NPC_PREFAB.fullmatch(stem[:-7]) if stem.lower().endswith(".prefab") else None
+                    )
                     if match and "/character/" in name.lower():
                         paths = out.setdefault(match.group(1).lower(), [])
                         if str(path) not in paths:
                             paths.append(str(path))
             return out
+
         return self._index("field-models", build, disk=False)
 
     def field_model_cores(self) -> set[str]:
@@ -841,12 +942,14 @@ class GameAssets:
     def _asset_families(self) -> dict[str, list[str]]:
         """The characters' and NPCs' own dependency bundles (``assets-_mx-npcs|characters-<dev>-_mxdependency-*``)
         by lower-case dev name, from the file names alone."""
+
         def build() -> dict[str, list[str]]:
             out: dict[str, list[str]] = {}
             for category in ("npcs", "characters"):
                 for core, paths in group_bundles(self._paths(), category).items():
                     out.setdefault(core, []).extend(str(path) for path in paths)
             return out
+
         return self._index("asset-families", build, disk=False)
 
     def _asset_model(self, core: str, paths: list[str]) -> list[str] | None:
@@ -887,6 +990,7 @@ class GameAssets:
         """The story cutscenes' clips by the character id they are named after (NP0206_Cutin_A_01): {id: [bundle]},
         among the cutscenes' dependency bundles (assets-_mx-prodresources-sccutscene_*). A story model moves only there
         (Ayame's story forms)."""
+
         def build() -> dict[str, list[str]]:
             found: dict[str, set[str]] = {}
             for path in self._paths():
@@ -897,6 +1001,7 @@ class GameAssets:
                         if obj.type.name == "AnimationClip" and (m := STORY_CLIP.match(obj.peek_name() or "")):
                             found.setdefault(m.group(1).lower(), set()).add(str(path))
             return {core: sorted(paths) for core, paths in sorted(found.items())}
+
         return self._index("story-clips", build)
 
     def _asset_bundles(self, core: str) -> list[str] | None:
@@ -909,8 +1014,9 @@ class GameAssets:
 
         with self._lock("cab-discovery"):
             if "cab-discovery" not in self._indexes:
-                self._indexes["cab-discovery"] = CabIndex(self.resource_dirs, cache=self.preview_cache,
-                                                        namespace=self.preview_namespace, reader=cab_names)
+                self._indexes["cab-discovery"] = CabIndex(
+                    self.resource_dirs, cache=self.preview_cache, namespace=self.preview_namespace, reader=cab_names
+                )
             return self._indexes["cab-discovery"]
 
     def _resolve_cabs(self, wanted: set[str], hint_path: Path | None = None) -> dict[str, str]:
@@ -920,8 +1026,9 @@ class GameAssets:
         """Explicit full-index compatibility path; preview requests resolve on demand."""
         return self._cab_discovery().all((lambda path: True) if everything else is_model_dependency)
 
-    def model_glb(self, core: str, overrides: Iterable[Path] = (), *, reads: PreviewReads | None = None,
-                  clip: str | None = None) -> bytes:
+    def model_glb(
+        self, core: str, overrides: Iterable[Path] = (), *, reads: PreviewReads | None = None, clip: str | None = None
+    ) -> bytes:
         """Export a chibi to lossless GLB bytes. ``overrides`` are bundles that replace the official bundles
         holding the same CABs (mod previews). ``reads`` (a preview of a chosen source) names the bytes to read for
         every other game file the export loads, so the preview never depends on what the game folder holds now.
@@ -941,17 +1048,29 @@ class GameAssets:
             raise AssetNotFound(("model", core))
         bundles = [Path(path) for path in listed]
         # a story model (no prefab of its own) moves with its own clips of the story cutscenes
-        story = [] if slot else [Path(reads.resolve(Path(path))) if reads is not None else Path(path)
-                                 for path in self._story_clips().get(core, [])]
+        story = (
+            []
+            if slot
+            else [
+                Path(reads.resolve(Path(path))) if reads is not None else Path(path)
+                for path in self._story_clips().get(core, [])
+            ]
+        )
         overrides = list(dict.fromkeys(Path(path).resolve() for path in overrides))
         # Prefabs are opened directly by the exporter; CAB overrides alone only replace their dependencies.
         own = prefab_overrides(bundles, overrides)
-        bundles = [mine if mine is not None else Path(reads.resolve(path)) if reads is not None else path
-                   for path, mine in zip(bundles, own)]
+        bundles = [
+            mine if mine is not None else Path(reads.resolve(path)) if reads is not None else path
+            for path, mine in zip(bundles, own)
+        ]
         resolve_cabs = self._resolve_cabs
         if reads is not None:
+
             def resolve_cabs(wanted: set[str], hint_path: Path | None = None) -> dict[str, str]:
-                return {cab: str(reads.resolve(Path(path))) for cab, path in self._resolve_cabs(wanted, hint_path).items()}
+                return {
+                    cab: str(reads.resolve(Path(path))) for cab, path in self._resolve_cabs(wanted, hint_path).items()
+                }
+
         stamps = []
         for path in [*bundles, *overrides, *story]:
             try:
@@ -964,19 +1083,26 @@ class GameAssets:
         # the clips' other names (CLIP_ALIASES); "names1" the names of every clip the model plays (extras.clips). A
         # clip is keyed by its name beside the model's files.
         if clip is None:
-            key = _SCHEMA + ("model/v2/fx1/vital2/names1/" + json.dumps([core, stamps]) if reads is None
-                             else "model/v3/fx1/vital2/names1/" + json.dumps([core, stamps, reads.key]))
+            key = _SCHEMA + (
+                "model/v2/fx1/vital2/names1/" + json.dumps([core, stamps])
+                if reads is None
+                else "model/v3/fx1/vital2/names1/" + json.dumps([core, stamps, reads.key])
+            )
         else:
-            key = _SCHEMA + ("model-clip/v1/" + json.dumps([core, clip, stamps]) if reads is None
-                             else "model-clip/v1/reads/" + json.dumps([core, clip, stamps, reads.key]))
+            key = _SCHEMA + (
+                "model-clip/v1/" + json.dumps([core, clip, stamps])
+                if reads is None
+                else "model-clip/v1/reads/" + json.dumps([core, clip, stamps, reads.key])
+            )
         generation, disk_generation = self.cache.generation, self._preview_generation()
 
         def valid_cached() -> bytes | None:
             cached = self.cache.get(key, version=self.cache_version, disk=False)
             # the meshes, textures and clips sit in other bundles than the prefab: the entry also keeps the stamps of
             # every bundle the export read, so one changed in place (a mod install) exports again
-            if cached is not None and all(stamp is not None and _stamp(path) == stamp
-                                          for path, stamp in cached[1].items()):
+            if cached is not None and all(
+                stamp is not None and _stamp(path) == stamp for path, stamp in cached[1].items()
+            ):
                 return cached[0]
             stored = self._preview_get(key)
             if stored is not None:
@@ -986,15 +1112,29 @@ class GameAssets:
                     if not isinstance(read, dict) or not read or len(read) > 8192:
                         raise ValueError("Invalid model source manifest")
                     permitted = {str(path) for path in overrides}
-                    if any(not isinstance(path, str) or (Path(path).parent not in self.resource_dirs and path not in permitted
-                                                         and not (reads is not None and reads.trusted(Path(path))))
-                           for path in read):
+                    if any(
+                        not isinstance(path, str)
+                        or (
+                            Path(path).parent not in self.resource_dirs
+                            and path not in permitted
+                            and not (reads is not None and reads.trusted(Path(path)))
+                        )
+                        for path in read
+                    ):
                         raise ValueError("Invalid model source location")
-                    if all(isinstance(stamp, list) and len(stamp) == 3 and _stamp(path) == tuple(stamp)
-                           for path, stamp in read.items()):
+                    if all(
+                        isinstance(stamp, list) and len(stamp) == 3 and _stamp(path) == tuple(stamp)
+                        for path, stamp in read.items()
+                    ):
                         data = files["model.glb"]
-                        self.cache.put(key, (data, {path: tuple(stamp) for path, stamp in read.items()}),
-                                       version=self.cache_version, disk=False, size=len(data), generation=generation)
+                        self.cache.put(
+                            key,
+                            (data, {path: tuple(stamp) for path, stamp in read.items()}),
+                            version=self.cache_version,
+                            disk=False,
+                            size=len(data),
+                            generation=generation,
+                        )
                         return data
                 except (ValueError, UnicodeError, TypeError, KeyError):
                     pass
@@ -1050,12 +1190,16 @@ class GameAssets:
                         if _stamp(path) != before:
                             raise AssetNotFound("Model dependency changed during extraction")
 
-                with self._cab_discovery().batch(), BundleGraph({}, overrides, resolver=resolve_timed, opener=tracked_bundle) as graph:
+                with (
+                    self._cab_discovery().batch(),
+                    BundleGraph({}, overrides, resolver=resolve_timed, opener=tracked_bundle) as graph,
+                ):
                     try:
                         with spans.span("export.model.convert"):
                             # the halo's particles: their materials and meshes, read as a lobby's (_FxResolver)
                             def fx(objects: Mapping[int, Any]) -> Callable[[str, int, dict], Any]:
                                 return _FxResolver(graph, dict(objects), self._shader_forms).resolve
+
                             if clip is not None:
                                 data = export_clip(graph, bundles, core, clip)
                             else:
@@ -1069,11 +1213,21 @@ class GameAssets:
                         raise AssetNotFound("Model dependency changed during extraction")
                 if spine_stamps([*bundles, *overrides, *story]) != list(dict.fromkeys(stamps)):
                     raise AssetNotFound("Model changed during extraction")
-                self.cache.put(key, (data, read), version=self.cache_version, disk=False, size=len(data), generation=generation)
-                if complete and read and all(stamp is not None for stamp in read.values()) and self.preview_cache is not None and self.preview_cache.allowed:
+                self.cache.put(
+                    key, (data, read), version=self.cache_version, disk=False, size=len(data), generation=generation
+                )
+                if (
+                    complete
+                    and read
+                    and all(stamp is not None for stamp in read.values())
+                    and self.preview_cache is not None
+                    and self.preview_cache.allowed
+                ):
                     with spans.span("export.model.cache-write"):
                         manifest = json.dumps({str(path): stamp for path, stamp in read.items()}).encode()
-                        self._preview_put(key, pack_preview_files({"sources.json": manifest, "model.glb": data}), disk_generation)
+                        self._preview_put(
+                            key, pack_preview_files({"sources.json": manifest, "model.glb": data}), disk_generation
+                        )
                 return data
 
         try:
@@ -1091,6 +1245,7 @@ class GameAssets:
     def _lobby_prefabs(self) -> dict[str, str]:
         """Memorial lobby prefab names (lower case) -> bundle names, from the bundle containers alone (about 5 s
         cold). It holds names only, so it is cached like the other indexes."""
+
         def build() -> dict[str, str]:
             names: dict[str, str] = {}
             for path in filter(is_lobby_prefab, self._paths()):
@@ -1099,6 +1254,7 @@ class GameAssets:
                         if name.lower().endswith(".prefab"):
                             names.setdefault(name.rsplit("/", 1)[-1][:-7].lower(), path.name)
             return names
+
         return self._index("lobby-prefabs", build)
 
     def lobby_info(self, core: str, prefab: Path | None = None) -> dict:
@@ -1137,8 +1293,11 @@ class GameAssets:
                                     cab, pid = reference(obj, event)
                                     keys[(obj.path_id, event.get("m_FileID", 0), pid)] = f"{cab.lower()}_{pid}"
             skeletons = list(dict.fromkeys(skeletons))
-            clips = lobby.Clips(behaviours, skeletons, sound=lambda owner, pointer: keys.get(
-                (owner, pointer.get("m_FileID", 0), pointer.get("m_PathID", 0))))
+            clips = lobby.Clips(
+                behaviours,
+                skeletons,
+                sound=lambda owner, pointer: keys.get((owner, pointer.get("m_FileID", 0), pointer.get("m_PathID", 0))),
+            )
             prefabs, found = self._lobby_prefabs(), None
             for name in lobby.prefab_candidates(core, skeletons):
                 if name in prefabs:
@@ -1146,8 +1305,10 @@ class GameAssets:
                     if found:
                         break
             sounds = self._lobby_sound_events(clips.sound_events())
-            return json.dumps(lobby.lobby_info(skeletons, clips, found, sounds), ensure_ascii=True,
-                              separators=(",", ":")).encode()
+            return json.dumps(
+                lobby.lobby_info(skeletons, clips, found, sounds), ensure_ascii=True, separators=(",", ":")
+            ).encode()
+
         return json.loads(self._cached("lobby/" + json.dumps([core.lower(), stamps]), build, disk=False))
 
     def lobby_prefab(self, core: str) -> tuple[str, str] | None:
@@ -1157,8 +1318,15 @@ class GameAssets:
         bundle = self._lobby_prefabs().get(str(root or "").lower())
         return (bundle, root) if root and bundle else None
 
-    def _lobby_prefab(self, bundle: str, root: str, skeletons: list[str], clips: lobby.Clips,
-                      behaviours: dict[tuple[str, int], dict] | None = None, path: Path | None = None) -> dict | None:
+    def _lobby_prefab(
+        self,
+        bundle: str,
+        root: str,
+        skeletons: list[str],
+        clips: lobby.Clips,
+        behaviours: dict[tuple[str, int], dict] | None = None,
+        path: Path | None = None,
+    ) -> dict | None:
         """read_prefab on a prefab bundle (``path``: that file in its place); behaviours are the lobby core's
         MonoBehaviours by (CAB name, path id), where the prefab's volume profiles usually are."""
         from .model import BundleGraph
@@ -1172,8 +1340,11 @@ class GameAssets:
         # the particle renderers' materials, textures and meshes sit in other bundles (the lobbies' shared effect
         # bundles, the shader bundles, a character's own): one graph holds them open, so it runs alone like a model
         # export (see BundleGraph)
-        with spans.held("model-lock.particles", _MODEL_LOCK, hold=True), self._cab_discovery().batch(), \
-                BundleGraph({}, resolver=self._resolve_cabs) as graph:
+        with (
+            spans.held("model-lock.particles", _MODEL_LOCK, hold=True),
+            self._cab_discovery().batch(),
+            BundleGraph({}, resolver=self._resolve_cabs) as graph,
+        ):
             env = graph.add(path)
             objects = {obj.path_id: obj for obj in env.objects}
             kinds = {pid: obj.type.name for pid, obj in objects.items()}
@@ -1194,6 +1365,7 @@ class GameAssets:
                 # the components are sub-assets of the profile, in its own file
                 parts = [(key[0], c.get("m_PathID")) for c in found.get("components", []) if not c.get("m_FileID")]
                 return [known[part] for part in parts if part in known]
+
             scripts = {pid: tree(pid).get("m_ClassName") for pid, kind in kinds.items() if kind == "MonoScript"}
             fx = _FxResolver(graph, objects, self._shader_forms)
             return lobby.read_prefab(kinds, tree, scripts, root, skeletons, clips, profile=profile, resolve=fx.resolve)
@@ -1234,8 +1406,11 @@ class GameAssets:
             try:
                 with open_bundle(Path(bundle)) as env:
                     for obj in env.objects:
-                        if obj.path_id not in pids or obj.assets_file.name.lower() != cab \
-                                or obj.type.name != "MonoBehaviour":
+                        if (
+                            obj.path_id not in pids
+                            or obj.assets_file.name.lower() != cab
+                            or obj.type.name != "MonoBehaviour"
+                        ):
                             continue
 
                         def clip_id(pointer: dict, obj: Any = obj) -> str | None:
@@ -1243,6 +1418,7 @@ class GameAssets:
                                 return None
                             c, p = reference(obj, pointer)
                             return f"{c.lower()}_{p}"
+
                         event = lobby.sound_event(obj.read_typetree(), clip_id)
                         if event:
                             out[f"{cab}_{obj.path_id}"] = event
@@ -1262,8 +1438,14 @@ class GameAssets:
 
         def build() -> bytes:
             with open_bundle(Path(bundle)) as env:
-                obj = next((o for o in env.objects if o.path_id == int(pid) and o.assets_file.name.lower() == cab
-                            and o.type.name == "AudioClip"), None)
+                obj = next(
+                    (
+                        o
+                        for o in env.objects
+                        if o.path_id == int(pid) and o.assets_file.name.lower() == cab and o.type.name == "AudioClip"
+                    ),
+                    None,
+                )
                 if obj is None:
                     raise AssetNotFound(("lobby-sound", core, clip_id))
                 try:
@@ -1275,6 +1457,7 @@ class GameAssets:
                 if not data:
                     raise AssetNotFound(("lobby-sound", core, clip_id))
                 return data
+
         return self._cached("lobby-sound/" + json.dumps([clip_id, spine_stamps([Path(bundle)])]), build, disk=False)
 
     def lobby_fx_texture(self, core: str, tex_id: str) -> bytes:
@@ -1288,11 +1471,18 @@ class GameAssets:
 
         def build() -> bytes:
             with open_bundle(Path(bundle)) as env:
-                obj = next((o for o in env.objects if o.path_id == int(pid) and o.assets_file.name.lower() == cab
-                            and o.type.name == "Texture2D"), None)
+                obj = next(
+                    (
+                        o
+                        for o in env.objects
+                        if o.path_id == int(pid) and o.assets_file.name.lower() == cab and o.type.name == "Texture2D"
+                    ),
+                    None,
+                )
                 if obj is None:
                     raise AssetNotFound(("lobby-fx", core, tex_id))
                 return png_bytes(texture_image(obj.read(), Path(bundle).name))
+
         return self._cached("lobby-fx/" + json.dumps([tex_id, spine_stamps([Path(bundle)])]), build, disk=False)
 
 
@@ -1351,6 +1541,7 @@ class _FxResolver:
                 out = self._animator(obj, oid)
             elif kind == "timeline" and obj.type.name == "MonoBehaviour":
                 from . import intro
+
                 out = (oid, intro.read_timeline(g, obj, sound=self._sound))
             elif kind == "sprite" and obj.type.name == "Sprite":
                 out = (oid, self._sprite(obj))
@@ -1362,11 +1553,13 @@ class _FxResolver:
 
     def _sound(self, asset: Any, data: dict) -> dict | None:
         """A TimeLineAudioController's AudioData as a sound event (lobby.sound_event), with its id: the asset's."""
+
         def clip_id(pointer: dict) -> str | None:
             if not pointer.get("m_PathID"):
                 return None
             cab, pid = reference(asset, pointer)
             return f"{cab.lower()}_{pid}"
+
         event = lobby.sound_event({"m_Name": "Intro", "AudioData": data}, clip_id)
         return {**event, "id": f"{asset.assets_file.name.lower()}_{asset.path_id}"} if event else None
 
@@ -1387,9 +1580,12 @@ class _FxResolver:
         r, tr = st.get("m_Rect") or {}, rd.get("textureRect") or {}
         ppu = float(st.get("m_PixelsToUnits") or 100.0) or 100.0
         pivot = st.get("m_Pivot") or {}
-        return {"tex": info, "rect": [float(tr.get(k, 0.0)) for k in ("x", "y", "width", "height")],
-                "size": [float(r.get("width", 0.0)) / ppu, float(r.get("height", 0.0)) / ppu],
-                "pivot": [float(pivot.get("x", 0.5)), float(pivot.get("y", 0.5))]}
+        return {
+            "tex": info,
+            "rect": [float(tr.get(k, 0.0)) for k in ("x", "y", "width", "height")],
+            "size": [float(r.get("width", 0.0)) / ppu, float(r.get("height", 0.0)) / ppu],
+            "pivot": [float(pivot.get("x", 0.5)), float(pivot.get("y", 0.5))],
+        }
 
     def _pages(self, obj: Any, kind: str = "pages") -> dict[str, Any]:
         """{texture name: render queue} of a SkeletonDataAsset's atlas pages, as spine-unity draws them: each page with
@@ -1432,10 +1628,17 @@ class _FxResolver:
             if key not in self.forms:
                 # a shader's typetree carries its compiled programs: read once, keep the parts used here
                 full = g.tree(shader).get("m_ParsedForm") or {}
-                self.forms[key] = {"m_Name": full.get("m_Name"), "m_PropInfo": full.get("m_PropInfo", {"m_Props": []}),
-                                   "m_SubShaders": [{"m_Tags": s.get("m_Tags"), "m_Passes": [
-                                       {"m_State": p.get("m_State")} for p in s.get("m_Passes", [])]}
-                                       for s in full.get("m_SubShaders", [])]}
+                self.forms[key] = {
+                    "m_Name": full.get("m_Name"),
+                    "m_PropInfo": full.get("m_PropInfo", {"m_Props": []}),
+                    "m_SubShaders": [
+                        {
+                            "m_Tags": s.get("m_Tags"),
+                            "m_Passes": [{"m_State": p.get("m_State")} for p in s.get("m_Passes", [])],
+                        }
+                        for s in full.get("m_SubShaders", [])
+                    ],
+                }
                 g.trees.pop((key[0], key[1]), None)
             form = self.forms[key]
             name = form.get("m_Name")
@@ -1485,7 +1688,10 @@ class _FxResolver:
         def replacement(pointer: dict) -> tuple[str | None, dict] | None:
             mat = g.deref(obj, pointer)
             return self._spine_material(mat) if mat is not None and mat.type.name == "Material" else None
-        return spine_materials.skeleton(mats, tree.get("blendModeMaterials") or {}, replacement, tree.get("scale") or 0.01)
+
+        return spine_materials.skeleton(
+            mats, tree.get("blendModeMaterials") or {}, replacement, tree.get("scale") or 0.01
+        )
 
     def _spine_material(self, mat: Any) -> tuple[str | None, dict]:
         from . import particles, spine_materials
@@ -1519,7 +1725,7 @@ class _FxResolver:
             state = states[min(int(machine.get("m_DefaultState", 0)), len(states) - 1)]
             state = state.get("data", state)
             for blend in state.get("m_BlendTreeConstantArray") or []:
-                for node in (blend.get("data", blend).get("m_NodeArray") or []):
+                for node in blend.get("data", blend).get("m_NodeArray") or []:
                     node = node.get("data", node)
                     index = node.get("m_ClipID", -1)
                     if 0 <= index < len(clips) and clips[index] is not None:

@@ -38,8 +38,9 @@ class CloseCoordinator:
                 future.set_exception(ServiceError("busy"))
                 return future
             future = self._pending = Future()
-        threading.Thread(target=self._run, args=(future, final or self.close, reserve, cancelled),
-                         name="window-close", daemon=True).start()
+        threading.Thread(
+            target=self._run, args=(future, final or self.close, reserve, cancelled), name="window-close", daemon=True
+        ).start()
         return future
 
     def _page_call(self, expression):
@@ -66,7 +67,9 @@ class CloseCoordinator:
         token, owned, success, failure = uuid.uuid4().hex, False, False, None
         try:
             needs_page = self.page_loaded
-            if needs_page and not self._page_call(f"globalThis.bamtPrepareClose ? globalThis.bamtPrepareClose('{token}') : true"):
+            if needs_page and not self._page_call(
+                f"globalThis.bamtPrepareClose ? globalThis.bamtPrepareClose('{token}') : true"
+            ):
                 return
             if reserve:
                 with self.services.classic.starting():
@@ -74,7 +77,9 @@ class CloseCoordinator:
                     owned = True
             elif self.services.jobs.busy():
                 raise ServiceError("busy")
-            if needs_page and not self._page_call(f"globalThis.bamtValidateClose ? globalThis.bamtValidateClose('{token}') : true"):
+            if needs_page and not self._page_call(
+                f"globalThis.bamtValidateClose ? globalThis.bamtValidateClose('{token}') : true"
+            ):
                 return
             with self._lock:
                 self.permitted = True
@@ -91,12 +96,14 @@ class CloseCoordinator:
                 if owned:
                     self.services.jobs.cancel_quit()
                 cancelled()
+
                 # A blocked renderer cannot block releasing writer admission or a new request.
                 def thaw():
                     try:
                         self.services.window.evaluate_js(f"globalThis.bamtCancelClose?.('{token}')")
                     except Exception:
                         logger.debug("Window close cancellation unavailable", exc_info=True)
+
                 threading.Thread(target=thaw, name="window-close-cancel", daemon=True).start()
             with self._lock:
                 self._pending = None

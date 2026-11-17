@@ -36,7 +36,9 @@ const BY_SHADER = Object.freeze({
 export const curveOf = (shader) => BY_SHADER[shader] || exact;
 
 export let byShader = true; // for checks: false decodes every slot, whatever its page's shader
-export const setByShader = (on) => { byShader = !!on; };
+export const setByShader = (on) => {
+  byShader = !!on;
+};
 
 // a layer's curve for an attachment, by the page it lies on (linear.js setCurves); null when the layer has no page
 // shaders, which keeps every slot decoded

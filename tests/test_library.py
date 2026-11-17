@@ -96,8 +96,9 @@ def make_mod(source, directory, payload=b"modded!!", fixed=False):
 def setup_library(tmp_path, monkeypatch, header_only_bundles):
     game_dir = tmp_path / "game"
     original = game_bundle(game_dir)
-    catalog = FakeCatalog(FakeVariant("test", "test_spr", "test_home_gl"),
-                          FakeVariant("other", "other_spr", family="other"))
+    catalog = FakeCatalog(
+        FakeVariant("test", "test_spr", "test_home_gl"), FakeVariant("other", "other_spr", family="other")
+    )
     settings = Settings(tmp_path / "config.toml")
     settings.set("game_resource_dir", str(game_dir))
     settings.set("enable_crc_correction", "false")
@@ -105,8 +106,15 @@ def setup_library(tmp_path, monkeypatch, header_only_bundles):
     monkeypatch.setattr(safety, "check_game_not_running", lambda: None)
     monkeypatch.setattr(Bundle, "check_need_crc", lambda *args, **kwargs: False)
     library = ModLibrary(tmp_path / "library", catalog, object(), settings)
-    return SimpleNamespace(library=library, original=original, catalog=catalog, settings=settings,
-                           root=library.root, tmp=tmp_path, game_dir=game_dir)
+    return SimpleNamespace(
+        library=library,
+        original=original,
+        catalog=catalog,
+        settings=settings,
+        root=library.root,
+        tmp=tmp_path,
+        game_dir=game_dir,
+    )
 
 
 def reload_library(env):
@@ -143,7 +151,7 @@ def test_direct_install_build_progress_names_processing(setup_library, monkeypat
     translate = I18n("en-US").t
     monkeypatch.setattr(service, "t", translate)
     source = make_mod(env.original, env.tmp / "upload")
-    entry, = env.library.add([source])
+    (entry,) = env.library.add([source])
     execute = service.install_staged
 
     def report(*args, **kwargs):
@@ -226,7 +234,7 @@ def test_add_bundle_backup_strips_only_backup_suffix(setup_library):
 def test_add_groups_parts_and_deduplicates_whole_mods(setup_library, parts):
     env = setup_library
     sources = [game_bundle(env.tmp / "input", part=part, payload=part.encode()) for part in parts]
-    entry, = env.library.add([*sources, sources[0]])
+    (entry,) = env.library.add([*sources, sources[0]])
     assert entry.size == sum(path.stat().st_size for path in sources)
     library = reload_library(env)
     assert library.mods() == [entry]
@@ -234,9 +242,9 @@ def test_add_groups_parts_and_deduplicates_whole_mods(setup_library, parts):
     assert library.add(list(reversed(sources))) == []
     # A separate partial mod remains selectable, and sharing a file with it must
     # not strip that part from a later complete pack.
-    partial, = library.add([sources[0]])
+    (partial,) = library.add([sources[0]])
     library.remove(entry.id, confirm=True)
-    complete, = library.add(sources)
+    (complete,) = library.add(sources)
     assert partial.id != complete.id
     assert complete.size == entry.size
     assert len(list(complete.file.parent.glob("*.bundle"))) == 2
@@ -244,26 +252,34 @@ def test_add_groups_parts_and_deduplicates_whole_mods(setup_library, parts):
 
 def test_add_separates_cores_dates_and_kinds(setup_library):
     env = setup_library
-    sources = [env.original,
-               game_bundle(env.tmp / "input", date="2026-02-01", payload=b"newer"),
-               game_bundle(env.tmp / "input", "other_spr"),
-               game_bundle(env.tmp / "input", "test_home_gl")]
+    sources = [
+        env.original,
+        game_bundle(env.tmp / "input", date="2026-02-01", payload=b"newer"),
+        game_bundle(env.tmp / "input", "other_spr"),
+        game_bundle(env.tmp / "input", "test_home_gl"),
+    ]
     entries = env.library.add(sources)
     assert len(entries) == 4
     assert {(entry.target, entry.kind, entry.date) for entry in entries} == {
-        ("test", "spr", "2026-01-01"), ("test", "spr", "2026-02-01"),
-        ("other", "spr", "2026-01-01"), ("test", "lobby", "2026-01-01")}
+        ("test", "spr", "2026-01-01"),
+        ("test", "spr", "2026-02-01"),
+        ("other", "spr", "2026-01-01"),
+        ("test", "lobby", "2026-01-01"),
+    }
 
 
 def test_add_rolls_back_incomplete_pack(setup_library, monkeypatch):
     env = setup_library
     sources = [game_bundle(env.tmp / "input", part=part) for part in ("002", "003")]
     from bmpt.library import service
+
     original_copy = service.atomic_copy
+
     def copy(source, target):
         if source == sources[1]:
             raise PermissionError(13, "Read failure", str(source))
         original_copy(source, target)
+
     monkeypatch.setattr(service, "atomic_copy", copy)
     expect_error("library_io_error", lambda: env.library.add(sources))
     assert env.library.mods() == reload_library(env).mods() == []
@@ -276,10 +292,11 @@ def test_applying_partial_mod_resets_other_parts_and_tracks_logical_source(setup
     env.original.unlink()
     targets = [game_bundle(env.game_dir, part=part, payload=part.encode()) for part in parts]
     official = {path: path.read_bytes() for path in targets}
-    pack_files = [make_mod(path, env.tmp / "pack", payload=b"pack " + part.encode())
-                  for path, part in zip(targets, parts)]
-    pack, = env.library.add(pack_files)
-    partial, = env.library.add([make_mod(targets[1], env.tmp / "partial", payload=b"texture only")])
+    pack_files = [
+        make_mod(path, env.tmp / "pack", payload=b"pack " + part.encode()) for path, part in zip(targets, parts)
+    ]
+    (pack,) = env.library.add(pack_files)
+    (partial,) = env.library.add([make_mod(targets[1], env.tmp / "partial", payload=b"texture only")])
     assert set(env.library.apply("test", f"mod:{pack.id}").files) == set(targets)
     assert [path.read_bytes() for path in targets] == [path.read_bytes() for path in pack_files]
     assert env.library.state("test").applied == f"mod:{pack.id}"
@@ -301,7 +318,7 @@ def test_partial_mod_tracks_source_for_untouched_official_parts(setup_library):
     env = setup_library
     untouched = game_bundle(env.game_dir, part="002", payload=b"skeleton")
     before = untouched.stat().st_mtime_ns
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input")])
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input")])
     env.library.apply("test", f"mod:{entry.id}")
     assert untouched.stat().st_mtime_ns == before
     library = reload_library(env)
@@ -312,8 +329,7 @@ def test_partial_mod_tracks_source_for_untouched_official_parts(setup_library):
     assert data["applied"][str(untouched)]["mtime"] == before
 
 
-@pytest.mark.parametrize("parts", [("000", "001", "002", "003"),
-                                     ("materials", "textassets", "textures")])
+@pytest.mark.parametrize("parts", [("000", "001", "002", "003"), ("materials", "textassets", "textures")])
 @pytest.mark.parametrize("complete", [False, True])
 def test_preview_matches_individual_parts_and_keeps_official_fallbacks(setup_library, parts, complete):
     env = setup_library
@@ -322,16 +338,21 @@ def test_preview_matches_individual_parts_and_keeps_official_fallbacks(setup_lib
     lobby = game_bundle(env.game_dir, "test_home_gl", payload=b"lobby")
     # Install another mod so the preview must use a retained original rather
     # than the currently installed skeleton/atlas.
-    old, = env.library.add([make_mod(targets[-2], env.tmp / "old", payload=b"old atlas")])
+    (old,) = env.library.add([make_mod(targets[-2], env.tmp / "old", payload=b"old atlas")])
     env.library.apply("test", f"mod:{old.id}")
     selected = parts if complete else parts[-1:]
-    sources = [game_bundle(env.tmp / "input", part=part, date="2025-01-01", payload=b"mod " + part.encode())
-               for part in selected]
-    entry, = env.library.add(sources)
+    sources = [
+        game_bundle(env.tmp / "input", part=part, date="2025-01-01", payload=b"mod " + part.encode())
+        for part in selected
+    ]
+    (entry,) = env.library.add(sources)
     result = env.library.preview_bundles(entry.id)
     mod_paths = sorted(entry.file.parent.glob("*.bundle"))
-    expected = [env.root / "originals" / path.name if path == targets[-2] else path
-                for path in sorted(targets) if parse_filename(path.name).res_type not in selected]
+    expected = [
+        env.root / "originals" / path.name if path == targets[-2] else path
+        for path in sorted(targets)
+        if parse_filename(path.name).res_type not in selected
+    ]
     assert result == expected + mod_paths
     assert all(env.library._is_official(path) for path in expected)
     assert lobby not in result
@@ -341,7 +362,7 @@ def test_preview_keeps_preload_parts_before_mod_overrides(setup_library):
     env = setup_library
     preload = env.game_dir / ("prologdepengroup-" + env.original.name)
     preload.write_bytes(env.original.read_bytes())
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input")])
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input")])
     assert env.library.preview_bundles(entry.id) == [preload, entry.file]
 
 
@@ -352,8 +373,7 @@ def test_official_preview_uses_kept_parts_and_is_unavailable_without_them(setup_
 
     env = setup_library
     env.original.unlink()
-    targets = [game_bundle(env.game_dir, core, part=part, payload=b"official")
-               for part in ("textassets", "textures")]
+    targets = [game_bundle(env.game_dir, core, part=part, payload=b"official") for part in ("textassets", "textures")]
     expected = targets[0].read_bytes()
     game = GameAssets([env.game_dir], AssetCache(root=env.tmp / "cache", allowed=False))
     reads = []
@@ -374,7 +394,7 @@ def test_official_preview_uses_kept_parts_and_is_unavailable_without_them(setup_
     try:
         before = json.loads(services.asset(f"{prefix}/manifest.json", {}).body)["revision"]
         assert services.asset(f"{prefix}/{before}/skeleton.skel", {}).body == expected
-        entry, = env.library.add([make_mod(targets[0], env.tmp / "input", payload=b"modified")])
+        (entry,) = env.library.add([make_mod(targets[0], env.tmp / "input", payload=b"modified")])
         variant = "other" if core == "other_spr" else "test"
         env.library.apply(variant, f"mod:{entry.id}", kind=kind)
         kept = env.root / "originals" / targets[0].name
@@ -400,14 +420,15 @@ def test_live_bundles_put_the_parts_that_carry_a_mod_last(setup_library):
     env = setup_library
     # file names list the text assets before the textures: a mod over the first would be merged under the official
     # texture, which wins a name both carry (the mod's atlas drawn over the official page)
-    targets = [game_bundle(env.game_dir, "test_home_gl", part=part, payload=b"official")
-               for part in ("textassets", "textures")]
+    targets = [
+        game_bundle(env.game_dir, "test_home_gl", part=part, payload=b"official") for part in ("textassets", "textures")
+    ]
     other = game_bundle(env.game_dir, "test_home_gl", part="textures", payload=b"other", date="2026-02-02")
     stray = env.game_dir / other.name.replace("-spinelobbies-", "-characters-")
     other.rename(stray)  # same core, another category: no Spine files
     assert sorted(targets) == targets  # the order the game folder lists them
     assert env.library.live_bundles("test_home_gl") == targets
-    entry, = env.library.add([make_mod(targets[0], env.tmp / "input", payload=b"modified")])
+    (entry,) = env.library.add([make_mod(targets[0], env.tmp / "input", payload=b"modified")])
     env.library.apply("test", f"mod:{entry.id}", kind="lobby")
     assert env.library.live_bundles("TEST_HOME_GL") == [targets[1], targets[0]]
     assert env.library.live_bundles("test_home_gl") == env.library.live_bundles("test_home_gl")
@@ -432,8 +453,7 @@ def test_live_spine_files_merge_in_the_previews_order(setup_library, monkeypatch
 
     def extract(paths):
         reads.append(paths)
-        return {f"{core_name}.skel": b"skeleton", f"{core_name}.atlas": b"atlas",
-                "page.png": paths[-1].read_bytes()}
+        return {f"{core_name}.skel": b"skeleton", f"{core_name}.atlas": b"atlas", "page.png": paths[-1].read_bytes()}
 
     monkeypatch.setattr("bmpt.gameassets.service.extract_spine", extract)
     services = Services(env.settings, env.tmp / "ui", cache=cache, game=game, catalog=env.catalog, library=env.library)
@@ -441,7 +461,7 @@ def test_live_spine_files_merge_in_the_previews_order(setup_library, monkeypatch
     try:
         for name in ("manifest.json", "skeleton.skel"):
             services.asset(f"{prefix}/{name}", {})
-        entry, = env.library.add([make_mod(targets[0], env.tmp / "input", payload=b"modified")])
+        (entry,) = env.library.add([make_mod(targets[0], env.tmp / "input", payload=b"modified")])
         env.library.apply("test", f"mod:{entry.id}", kind=kind)
         revision = json.loads(services.asset(f"{prefix}/manifest.json", {}).body)["revision"]
         for clear in (False, True):
@@ -460,7 +480,7 @@ def test_live_spine_files_merge_in_the_previews_order(setup_library, monkeypatch
 def test_partial_mod_preview_uses_same_size_live_mod_without_claiming_it_official(setup_library):
     env = setup_library
     texture = game_bundle(env.game_dir, part="textures")
-    entry, = env.library.add([make_mod(texture, env.tmp / "input")])
+    (entry,) = env.library.add([make_mod(texture, env.tmp / "input")])
     # An external overwrite has a valid header and official size, but no original exists.
     env.original.write_bytes(header_bundle(b"modified"))
     assert env.library.preview_bundles(entry.id) == [env.original, entry.file]
@@ -476,13 +496,28 @@ def test_legacy_single_file_record_can_apply_and_reset_other_parts(setup_library
     env = setup_library
     mod_id = "a" * 32
     mod = make_mod(env.original, env.root / "mods" / mod_id)
-    (env.root / "state.json").write_text(json.dumps({"version": 1, "mods": [{
-        "id": mod_id, "files": [mod.name], "label": "Legacy", "target": "test", "kind": "spr",
-        "added": "2026-01-01T00:00:00+00:00", "seen": False}]}))
+    (env.root / "state.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "mods": [
+                    {
+                        "id": mod_id,
+                        "files": [mod.name],
+                        "label": "Legacy",
+                        "target": "test",
+                        "kind": "spr",
+                        "added": "2026-01-01T00:00:00+00:00",
+                        "seen": False,
+                    }
+                ],
+            }
+        )
+    )
     other_part = game_bundle(env.game_dir, part="002", payload=b"skeleton")
     official = other_part.read_bytes()
     library = reload_library(env)
-    old, = library.add([make_mod(other_part, env.tmp / "old", payload=b"stale atlas")])
+    (old,) = library.add([make_mod(other_part, env.tmp / "old", payload=b"stale atlas")])
     library.apply("test", f"mod:{old.id}")
     library.apply("test", f"mod:{mod_id}")
     assert other_part.read_bytes() == official
@@ -490,15 +525,24 @@ def test_legacy_single_file_record_can_apply_and_reset_other_parts(setup_library
     assert library.state("test").applied == f"mod:{mod_id}"
 
 
-@pytest.mark.parametrize("name", ["image.png", "unknown.bundle", "test_spr.bundle",
-                                      "assets-_mx-characters-test-2026-01-01_123.bundle",
-                                      "assets-_mx-spinecharacters-absent_spr-2026-01-01_123.bundle"])
+@pytest.mark.parametrize(
+    "name",
+    [
+        "image.png",
+        "unknown.bundle",
+        "test_spr.bundle",
+        "assets-_mx-characters-test-2026-01-01_123.bundle",
+        "assets-_mx-spinecharacters-absent_spr-2026-01-01_123.bundle",
+    ],
+)
 def test_add_rejects_unsupported_targets(setup_library, name):
     env = setup_library
     path = env.tmp / name
     path.write_bytes(header_bundle())
-    expect_error("mod_target_unknown" if "absent_spr" in name or "-characters-" in name else "mod_unsupported",
-                 lambda: env.library.add([path]))
+    expect_error(
+        "mod_target_unknown" if "absent_spr" in name or "-characters-" in name else "mod_unsupported",
+        lambda: env.library.add([path]),
+    )
     assert env.library.mods() == []
 
 
@@ -506,7 +550,7 @@ def test_add_accepts_every_memorial_lobby_core(setup_library):
     env = setup_library
     env.catalog.variants["other"].lobby = "other_home_teen"
     lobby = game_bundle(env.game_dir, "other_home_teen", payload=b"teen lobby")
-    entry, = env.library.add([make_mod(lobby, env.tmp / "input")])
+    (entry,) = env.library.add([make_mod(lobby, env.tmp / "input")])
     assert (entry.kind, entry.target) == ("lobby", "other")
 
 
@@ -536,7 +580,7 @@ def test_mod_alias_is_metadata_only_and_empty_restores_default(setup_library, ki
     env = setup_library
     target = env.original if kind == "spr" else game_bundle(env.game_dir, "test_home_gl")
     source = make_mod(target, env.tmp / "input")
-    entry, = env.library.add([source])
+    (entry,) = env.library.add([source])
     env.library.apply("test", f"mod:{entry.id}", kind=kind)
     before = {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in (target, source, entry.file)}
     files = set(env.root.rglob("*.bundle"))
@@ -544,7 +588,7 @@ def test_mod_alias_is_metadata_only_and_empty_restores_default(setup_library, ki
     saved = env.library.rename(entry.id, "  ../Cafe\u0301\n <paint>\u200b  ")
     assert (env.root / "profiles.json").read_bytes() == profiles
     assert saved.alias == saved.label == "../Caf\u00e9 <paint>"
-    record, = json.loads((env.root / "state.json").read_text())["mods"]
+    (record,) = json.loads((env.root / "state.json").read_text())["mods"]
     assert record["label"] == entry.label
     assert record["alias"] == saved.alias
     library = reload_library(env)
@@ -564,7 +608,7 @@ def test_mod_alias_is_metadata_only_and_empty_restores_default(setup_library, ki
 @pytest.mark.parametrize("label", [None, 42, [], "x" * 121])
 def test_mod_alias_rejects_invalid_input_without_saving(setup_library, label):
     env = setup_library
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input")])
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input")])
     before = (env.root / "state.json").read_bytes()
     expect_error("bad_params", lambda: env.library.rename(entry.id, label))
     assert (env.root / "state.json").read_bytes() == before
@@ -578,11 +622,12 @@ def test_repaired_default_name_tracks_original_alias_and_has_its_own_override(se
     env = setup_library
     translate = I18n(language).t
     monkeypatch.setattr("bmpt.library.service.t", translate)
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input")])
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input")])
     env.library.rename(entry.id, "Original alias")
     source = make_mod(env.original, env.tmp / "repaired", payload=b"repaired")
-    stored = env.library._store({source.name: source}, "Original alias", entry.target, entry.kind,
-                                repaired_from=entry.id)
+    stored = env.library._store(
+        {source.name: source}, "Original alias", entry.target, entry.kind, repaired_from=entry.id
+    )
     repaired_id = stored["id"]
     repaired = next(m for m in reload_library(env).mods() if m.id == repaired_id)
     assert repaired.label_base == "Original alias"
@@ -601,8 +646,9 @@ def test_repaired_default_name_tracks_original_alias_and_has_its_own_override(se
     assert next(m for m in reload_library(env).mods() if m.id == repaired_id).label_base == "Original alias"
 
 
-@pytest.mark.parametrize("contents", ["{broken", "[]", "null", '{"version":1,"mods":null}',
-                                       '{"version":1,"mods":[{}]}'])
+@pytest.mark.parametrize(
+    "contents", ["{broken", "[]", "null", '{"version":1,"mods":null}', '{"version":1,"mods":[{}]}']
+)
 def test_corrupt_state_is_tolerated(setup_library, contents):
     env = setup_library
     env.root.mkdir(exist_ok=True)
@@ -677,7 +723,7 @@ def test_crc_fixed_state_and_external_change_invalidates_applied_record(setup_li
     env.library.apply("test", "official")
     assert env.library.state("test").applied == "official"
     # the write judges in full: the outside change was kept as a mod before it was overwritten
-    kept, = [m for m in env.library.mods() if m.id != entry.id]
+    (kept,) = [m for m in env.library.mods() if m.id != entry.id]
     assert kept.file.read_bytes() == header_bundle(b"external")
 
 
@@ -703,13 +749,16 @@ def test_crc_setting_overrides_installer_platform_detection(setup_library, monke
     monkeypatch.setattr(Bundle, "check_need_crc", lambda *args, **kwargs: not enabled)
     entry = env.library.add([make_mod(env.original, env.tmp / "input")])[0]
     saved = []
+
     def load(path, *args, **kwargs):
         def save(output, options):
             saved.append(options.perform_crc)
             data = CRCUtils.apply_crc_fix(path.read_bytes(), int(parse_filename(output.name).crc))
             output.write_bytes(data)
             return True, "saved"
+
         return SimpleNamespace(save=save)
+
     monkeypatch.setattr(Bundle, "load", load)
     env.library.apply("test", f"mod:{entry.id}")
     assert saved == ([True] if enabled else [])
@@ -721,10 +770,12 @@ def test_atomic_state_failure_keeps_previous_state_and_memory(setup_library, mon
     entry = env.library.add([make_mod(env.original, env.tmp / "input")])[0]
     previous = (env.root / "state.json").read_bytes()
     original_replace = storage.os.replace
+
     def fail_state(source, target):
         if Path(target).name == "state.json":
             raise PermissionError(13, "Read-only state", str(target))
         return original_replace(source, target)
+
     monkeypatch.setattr(storage.os, "replace", fail_state)
     expect_error("library_io_error", lambda: env.library.rename(entry.id, "New label"))
     expect_error("library_io_error", lambda: env.library.mark_seen(entry.id))
@@ -740,10 +791,12 @@ def test_install_rolls_back_when_state_cannot_be_saved(setup_library, monkeypatc
     entry = env.library.add([make_mod(env.original, env.tmp / "input")])[0]
     original_bytes = env.original.read_bytes()
     original_replace = storage.os.replace
+
     def fail_state(source, target):
         if Path(target).name == "state.json":
             raise PermissionError(13, "Read-only state", str(target))
         return original_replace(source, target)
+
     monkeypatch.setattr(storage.os, "replace", fail_state)
     expect_error("library_io_error", lambda: env.library.apply("test", f"mod:{entry.id}"))
     assert env.original.read_bytes() == original_bytes
@@ -759,13 +812,18 @@ def test_multi_part_install_rolls_back_every_part_on_write_failure(setup_library
     atlas = game_bundle(env.game_dir, part="002", payload=b"atlas")
     targets = [atlas, env.original]
     before = {path: path.read_bytes() for path in targets}
-    entry, = env.library.add([make_mod(path, env.tmp / "input", payload=b"mod " + path.name.encode())
-                              for path in targets])
+    (entry,) = env.library.add(
+        [make_mod(path, env.tmp / "input", payload=b"mod " + path.name.encode()) for path in targets]
+    )
     from bmpt.library import service
-    monkeypatch.setattr(storage, "_clone", lambda source, target: bool(shutil.copyfile(source, target)) if cloning else False)
+
+    monkeypatch.setattr(
+        storage, "_clone", lambda source, target: bool(shutil.copyfile(source, target)) if cloning else False
+    )
     original_copy = service.atomic_copy
     original_clone, original_move = service.atomic_clone, service.verified_move
     written = []
+
     def copy(source, target):
         if target == env.original:
             assert written == [atlas]
@@ -813,7 +871,7 @@ def test_never_keeps_a_modded_game_file_as_original(setup_library, fixed):
     result = env.library.apply("test", f"mod:{entry.id}")
     assert result.kept_current and not result.incomplete
     assert env.original.read_bytes() == entry.file.read_bytes()
-    kept, = [mod for mod in env.library.mods() if mod.id != entry.id]
+    (kept,) = [mod for mod in env.library.mods() if mod.id != entry.id]
     assert kept.file.read_bytes() == before
     assert not env.library.apply("test", f"mod:{entry.id}").kept_current
     assert not (env.root / "originals" / env.original.name).exists()
@@ -831,7 +889,9 @@ def test_invalid_kept_original_is_never_overwritten(setup_library):
 
 @pytest.mark.parametrize("kind", ["spr", "lobby"])
 @pytest.mark.parametrize("correct_crc", [False, True])
-def test_missing_official_apply_keeps_all_outside_parts_and_repair_clears_state(setup_library, monkeypatch, kind, correct_crc):
+def test_missing_official_apply_keeps_all_outside_parts_and_repair_clears_state(
+    setup_library, monkeypatch, kind, correct_crc
+):
     env = setup_library
     core_name = "test_spr" if kind == "spr" else "test_home_gl"
     first = env.original if kind == "spr" else game_bundle(env.game_dir, core_name)
@@ -840,11 +900,11 @@ def test_missing_official_apply_keeps_all_outside_parts_and_repair_clears_state(
     for path in official:
         path.write_bytes(header_bundle(b"outside " + path.name[-20:].encode()))
     outside = {path: path.read_bytes() for path in official}
-    mod, = env.library.add([make_mod(first, env.tmp / "input", fixed=correct_crc)])
+    (mod,) = env.library.add([make_mod(first, env.tmp / "input", fixed=correct_crc)])
     monkeypatch.setattr(env.settings, "crc_needed", lambda path: correct_crc)
     result = env.library.apply("test", f"mod:{mod.id}", kind=kind)
     assert result.kept_current and result.incomplete
-    kept, = [entry for entry in env.library.mods() if entry.id != mod.id]
+    (kept,) = [entry for entry in env.library.mods() if entry.id != mod.id]
     kept_files = {path.name: path.read_bytes() for path in kept.file.parent.glob("*.bundle")}
     assert kept_files == {path.name: data for path, data in outside.items()}
     assert first.read_bytes() == mod.file.read_bytes() and second.read_bytes() == outside[second]
@@ -870,7 +930,7 @@ def test_failed_apply_without_official_rolls_back_the_outside_bytes(setup_librar
     for path in targets:
         path.write_bytes(header_bundle(b"outside " + path.name[-20:].encode()))
     before = {path: path.read_bytes() for path in targets}
-    mod, = env.library.add([make_mod(path, env.tmp / "input") for path in targets])
+    (mod,) = env.library.add([make_mod(path, env.tmp / "input") for path in targets])
     copy = service.atomic_copy
     failed = False
 
@@ -878,10 +938,11 @@ def test_failed_apply_without_official_rolls_back_the_outside_bytes(setup_librar
         nonlocal failed
         if target in targets and source.parent == mod.file.parent:
             # The whole outside core is durable before the first game write.
-            kept, = [entry for entry in env.library.mods() if entry.id != mod.id]
+            (kept,) = [entry for entry in env.library.mods() if entry.id != mod.id]
             assert {p.name: p.read_bytes() for p in kept.file.parent.glob("*.bundle")} == {
-                p.name: data for p, data in before.items()}
-            journal, = (env.root / "transactions").glob("*/journal.json")
+                p.name: data for p, data in before.items()
+            }
+            (journal,) = (env.root / "transactions").glob("*/journal.json")
             data = json.loads(journal.read_text())
             assert data["phase"] == "writing" and all(not item["official"] for item in data["files"])
             if target == env.original and not failed:
@@ -900,7 +961,7 @@ def test_failed_apply_without_official_rolls_back_the_outside_bytes(setup_librar
 def test_partial_mod_with_official_omitted_parts_is_complete(setup_library):
     env = setup_library
     texture = game_bundle(env.game_dir, part="textures")
-    mod, = env.library.add([make_mod(texture, env.tmp / "input")])
+    (mod,) = env.library.add([make_mod(texture, env.tmp / "input")])
     assert env.library.preview_bundles(mod.id) == [env.original, mod.file]
     assert not env.library.preview_incomplete(mod.id)
     result = env.library.apply("test", f"mod:{mod.id}")
@@ -910,8 +971,8 @@ def test_partial_mod_with_official_omitted_parts_is_complete(setup_library):
 def test_switch_between_library_mods_without_official_does_not_adopt_again(setup_library):
     env = setup_library
     env.original.write_bytes(header_bundle(b"outside"))
-    first, = env.library.add([make_mod(env.original, env.tmp / "first", b"first")])
-    second, = env.library.add([make_mod(env.original, env.tmp / "second", b"second")])
+    (first,) = env.library.add([make_mod(env.original, env.tmp / "first", b"first")])
+    (second,) = env.library.add([make_mod(env.original, env.tmp / "second", b"second")])
     assert env.library.apply("test", f"mod:{first.id}").kept_current
     assert not env.library.apply("test", f"mod:{second.id}").kept_current
     assert env.original.read_bytes() == second.file.read_bytes()
@@ -925,11 +986,13 @@ def test_refuses_install_plan_outside_resource_dirs(setup_library, monkeypatch, 
     source = make_mod(env.original, env.tmp / "input")
     if release == "older":
         source = source.rename(source.with_name(source.name.replace("2026-01-01", "2025-01-01")))
-        monkeypatch.setattr("ba_modding_toolkit.searching.asset_match", lambda sources, candidates, log: (candidates, ""))
+        monkeypatch.setattr(
+            "ba_modding_toolkit.searching.asset_match", lambda sources, candidates, log: (candidates, "")
+        )
     entry = env.library.add([source])[0]
     groups = mod_install.plan_mod_install([entry.file], [outside.parent])
     monkeypatch.setattr(env.library, "_plan", lambda *args, **kwargs: groups)
-    monkeypatch.setattr(env.library, '_needs_crc_fix', lambda *args: True)
+    monkeypatch.setattr(env.library, "_needs_crc_fix", lambda *args: True)
     before = outside.read_bytes()
     expect_error("game_file_outside_resources", lambda: env.library.apply("test", f"mod:{entry.id}"))
     assert outside.read_bytes() == before
@@ -943,7 +1006,9 @@ def test_symlink_destination_cannot_escape_resources(setup_library, monkeypatch,
     source = make_mod(env.original, env.tmp / "input")
     if release == "older":
         source = source.rename(source.with_name(source.name.replace("2026-01-01", "2025-01-01")))
-        monkeypatch.setattr("ba_modding_toolkit.searching.asset_match", lambda sources, candidates, log: (candidates, ""))
+        monkeypatch.setattr(
+            "ba_modding_toolkit.searching.asset_match", lambda sources, candidates, log: (candidates, "")
+        )
     entry = env.library.add([source])[0]
     groups = mod_install.plan_mod_install([entry.file], [env.game_dir])
     env.original.unlink()
@@ -1002,35 +1067,41 @@ def _os_error(cls=OSError, number=None, *, winerror=None, filename="game/a.bundl
     return error
 
 
-@pytest.mark.parametrize("error,code", [
-    (_os_error(PermissionError, errno.EACCES, winerror=32), "game_file_locked"),
-    (_os_error(PermissionError, errno.EACCES, winerror=33), "game_file_locked"),
-    (_os_error(PermissionError, errno.EACCES, winerror=5, filename2="game/b.bundle"), "game_file_locked"),
-    (_os_error(PermissionError, errno.EACCES, winerror=5), "game_file_denied"),
-    (_os_error(PermissionError, errno.EACCES, winerror=19), "game_file_denied"),
-    (_os_error(OSError, errno.ENOSPC, winerror=112), "game_disk_full"),
-    (_os_error(OSError, errno.ENOSPC, winerror=39), "game_disk_full"),
-    (_os_error(FileNotFoundError, errno.ENOENT, winerror=3), "game_file_not_found"),
-    (_os_error(BlockingIOError, errno.EAGAIN), "game_file_locked"),
-    (_os_error(OSError, errno.EBUSY), "game_file_locked"),
-    (_os_error(OSError, errno.ENOSPC), "game_disk_full"),
-    (_os_error(OSError, errno.EDQUOT), "game_disk_full"),
-    (_os_error(FileNotFoundError, errno.ENOENT), "game_file_not_found"),
-    (_os_error(PermissionError, errno.EACCES), "game_file_denied"),
-    (_os_error(OSError, errno.EROFS), "game_file_denied"),
-    (_os_error(PermissionError), "game_file_denied"),
-    (_os_error(OSError, errno.EIO), "game_file_write_failed"),
-    (_os_error(OSError), "game_file_write_failed"),
-])
+@pytest.mark.parametrize(
+    "error,code",
+    [
+        (_os_error(PermissionError, errno.EACCES, winerror=32), "game_file_locked"),
+        (_os_error(PermissionError, errno.EACCES, winerror=33), "game_file_locked"),
+        (_os_error(PermissionError, errno.EACCES, winerror=5, filename2="game/b.bundle"), "game_file_locked"),
+        (_os_error(PermissionError, errno.EACCES, winerror=5), "game_file_denied"),
+        (_os_error(PermissionError, errno.EACCES, winerror=19), "game_file_denied"),
+        (_os_error(OSError, errno.ENOSPC, winerror=112), "game_disk_full"),
+        (_os_error(OSError, errno.ENOSPC, winerror=39), "game_disk_full"),
+        (_os_error(FileNotFoundError, errno.ENOENT, winerror=3), "game_file_not_found"),
+        (_os_error(BlockingIOError, errno.EAGAIN), "game_file_locked"),
+        (_os_error(OSError, errno.EBUSY), "game_file_locked"),
+        (_os_error(OSError, errno.ENOSPC), "game_disk_full"),
+        (_os_error(OSError, errno.EDQUOT), "game_disk_full"),
+        (_os_error(FileNotFoundError, errno.ENOENT), "game_file_not_found"),
+        (_os_error(PermissionError, errno.EACCES), "game_file_denied"),
+        (_os_error(OSError, errno.EROFS), "game_file_denied"),
+        (_os_error(PermissionError), "game_file_denied"),
+        (_os_error(OSError, errno.EIO), "game_file_write_failed"),
+        (_os_error(OSError), "game_file_write_failed"),
+    ],
+)
 def test_write_refusal_names_the_cause(error, code):
     assert safety.write_refusal(error) == code
 
 
-@pytest.mark.parametrize("platform,path,code", [
-    ("darwin", "/Applications/Blue Archive.app/Contents/Resources/a.bundle", "game_app_denied"),
-    ("darwin", "/Users/x/Games/BlueArchive/a.bundle", "game_file_denied"),
-    ("linux", "/opt/Blue Archive.app/a.bundle", "game_file_denied"),
-])
+@pytest.mark.parametrize(
+    "platform,path,code",
+    [
+        ("darwin", "/Applications/Blue Archive.app/Contents/Resources/a.bundle", "game_app_denied"),
+        ("darwin", "/Users/x/Games/BlueArchive/a.bundle", "game_file_denied"),
+        ("linux", "/opt/Blue Archive.app/a.bundle", "game_file_denied"),
+    ],
+)
 def test_app_management_refusal_only_for_app_bundles_on_macos(monkeypatch, platform, path, code):
     monkeypatch.setattr(safety.sys, "platform", platform)
     assert safety.write_refusal(_os_error(PermissionError, errno.EPERM, filename=None), path) == code
@@ -1076,12 +1147,18 @@ def test_failed_backup_into_the_library_is_a_library_error(setup_library, monkey
             if Path(target).resolve().is_relative_to(env.root) and Path(source) == env.original:
                 raise PermissionError(errno.EACCES, "Permission denied", str(target))
             return real(source, target)
+
         return write
 
     monkeypatch.setattr(service, "atomic_clone", refuse(clone))
     monkeypatch.setattr(service, "atomic_copy", refuse(copy))
-    monkeypatch.setattr(service, "verified_move", lambda source, target, sha1: (_ for _ in ()).throw(
-        PermissionError(errno.EACCES, "Permission denied", str(target))))
+    monkeypatch.setattr(
+        service,
+        "verified_move",
+        lambda source, target, sha1: (_ for _ in ()).throw(
+            PermissionError(errno.EACCES, "Permission denied", str(target))
+        ),
+    )
     expect_error("library_io_error", lambda: env.library.apply("test", f"mod:{entry.id}"))
     assert env.original.read_bytes() == before
 
@@ -1092,8 +1169,10 @@ def test_running_game_blocks_replacement(setup_library, monkeypatch):
     monkeypatch.delenv("BAMT_DEV_WRITABLE", raising=False)
     env = setup_library
     entry = env.library.add([make_mod(env.original, env.tmp / "input")])[0]
+
     def running():
         raise ServiceError("game_running")
+
     monkeypatch.setattr(safety, "check_game_not_running", running)
     expect_error("game_running", lambda: env.library.apply("test", f"mod:{entry.id}"))
     assert env.library.state("test").applied == "official"
@@ -1109,6 +1188,7 @@ def test_posix_advisory_lock_is_reported(setup_library, caplog):
     if os.name == "nt":
         pytest.skip("POSIX advisory lock test")
     import fcntl
+
     env = setup_library
     entry = env.library.add([make_mod(env.original, env.tmp / "input")])[0]
     with env.original.open("rb") as stream:
@@ -1133,15 +1213,18 @@ def test_mod_apply_and_restore_are_isolated_by_kind(setup_library, kind):
     env = setup_library
     lobby = game_bundle(env.game_dir, "test_home_gl", payload=b"lobby")
     originals = {path: path.read_bytes() for path in (env.original, lobby)}
-    entries = env.library.add([make_mod(env.original, env.tmp / "input", payload=b"portrait mod"),
-                               make_mod(lobby, env.tmp / "input", payload=b"lobby mod")])
+    entries = env.library.add(
+        [
+            make_mod(env.original, env.tmp / "input", payload=b"portrait mod"),
+            make_mod(lobby, env.tmp / "input", payload=b"lobby mod"),
+        ]
+    )
     mods = {entry.kind: entry for entry in entries}
     selected, other = (env.original, lobby) if kind == "spr" else (lobby, env.original)
     other_kind = "lobby" if kind == "spr" else "spr"
     env.library.apply("test", f"mod:{mods[other_kind].id}", kind=other_kind)
     before = other.read_bytes()
-    expect_error("mod_target_mismatch", lambda:
-                 env.library.apply("test", f"mod:{mods[other_kind].id}", kind=kind))
+    expect_error("mod_target_mismatch", lambda: env.library.apply("test", f"mod:{mods[other_kind].id}", kind=kind))
     env.library.apply("test", f"mod:{mods[kind].id}", kind=kind)
     assert selected.read_bytes() == mods[kind].file.read_bytes()
     assert other.read_bytes() == before
@@ -1163,12 +1246,12 @@ def test_variant_apply_and_restore_select_kinds(setup_library, monkeypatch, kind
     env.catalog.variants["other"].lobby = "other_home"
     originals = {path: path.read_bytes() for path in (env.original, lobby)}
     for path, current in ((env.original, "spr"), (lobby, "lobby")):
-        entry, = env.library.add([make_mod(path, env.tmp / "input", payload=current.encode())])
+        (entry,) = env.library.add([make_mod(path, env.tmp / "input", payload=current.encode())])
         env.library.apply("test", f"mod:{entry.id}", kind=current)
     before = {path: path.read_bytes() for path in originals}
-    monkeypatch.setattr("bmpt.library.service.adapt_variant_sources",
-                        lambda sources, *args: sources)
+    monkeypatch.setattr("bmpt.library.service.adapt_variant_sources", lambda sources, *args: sources)
     calls = []
+
     def update(sources, targets, output, *args, **kwargs):
         calls.extend(target.name for target in targets)
         pairs = []
@@ -1178,6 +1261,7 @@ def test_variant_apply_and_restore_select_kinds(setup_library, monkeypatch, kind
             result.write_bytes(sources[0].read_bytes())
             pairs.append(FilePair(result, target))
         return RebuildResult(True, "updated", pairs)
+
     monkeypatch.setattr(service, "rebuild", update)
     selected = {path for path in originals if kind is None or (path == env.original) == (kind == "spr")}
     result = env.library.apply("test", "variant:other", kind=kind)
@@ -1201,19 +1285,20 @@ def test_default_portrait_choices_ignore_unavailable_lobby_originals(setup_libra
         path.write_bytes(header_bundle(b"external lobby mod"))
     untouched = {path: path.read_bytes() for path in (lobby, other_lobby)}
     original = env.original.read_bytes()
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input")])
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input")])
     env.library.apply("test", f"mod:{entry.id}")
     env.library.restore("test")
     assert env.original.read_bytes() == original
     env.library.apply("test", f"mod:{entry.id}")
     env.library.apply("test", "official")
     assert env.original.read_bytes() == original
-    monkeypatch.setattr("bmpt.library.service.adapt_variant_sources",
-                        lambda sources, *args: sources)
+    monkeypatch.setattr("bmpt.library.service.adapt_variant_sources", lambda sources, *args: sources)
+
     def update(sources, targets, output, *args, **kwargs):
         result = output / targets[0].name
         result.write_bytes(header_bundle(b"adapted portrait"))
         return RebuildResult(True, "updated", [FilePair(result, targets[0])])
+
     monkeypatch.setattr(service, "rebuild", update)
     env.library.apply("test", "variant:other")
     assert {path: path.read_bytes() for path in untouched} == untouched
@@ -1227,26 +1312,30 @@ def test_cross_variant_mod_uses_mod_parts_official_baselines_and_tracks_source(s
     source_atlas = game_bundle(env.game_dir, "other_spr", part="002", payload=b"source atlas")
     source_texture = game_bundle(env.game_dir, "other_spr", payload=b"source texture")
     official = {path: path.read_bytes() for path in (target_atlas, env.original, source_atlas, source_texture)}
-    source_mod, = env.library.add([make_mod(source_texture, env.tmp / "source", payload=b"selected mod")])
+    (source_mod,) = env.library.add([make_mod(source_texture, env.tmp / "source", payload=b"selected mod")])
     # Both variants already wear different mods. Neither current game payload
     # may become the baseline for this transplant.
     for key, path in (("test", target_atlas), ("other", source_atlas)):
-        entry, = env.library.add([make_mod(path, env.tmp / "old", payload=b"stale atlas")])
+        (entry,) = env.library.add([make_mod(path, env.tmp / "old", payload=b"stale atlas")])
         env.library.apply(key, f"mod:{entry.id}")
     source_before = {path: path.read_bytes() for path in (source_atlas, source_texture)}
     calls = []
+
     def adapt(sources, targets, *args):
         assert sources == [env.root / "originals" / source_atlas.name, source_mod.file]
         assert [path.read_bytes() for path in sources] == [official[source_atlas], source_mod.file.read_bytes()]
         assert {path.name: path.read_bytes() for path in targets} == {
-            path.name: official[path] for path in (target_atlas, env.original)}
+            path.name: official[path] for path in (target_atlas, env.original)
+        }
         return sources
+
     def update(sources, targets, output, *args, **kwargs):
         calls.append(kwargs)
         target = next(path for path in targets if path.name == env.original.name)
         result = output / target.name
         result.write_bytes(header_bundle(b"adapted selected mod"))
         return RebuildResult(True, "updated", [FilePair(result, target)])
+
     monkeypatch.setattr("bmpt.library.service.adapt_variant_sources", adapt)
     monkeypatch.setattr(service, "rebuild", update)
     result = env.library.apply("test", f"mod:{source_mod.id}")
@@ -1264,7 +1353,7 @@ def test_cross_variant_mod_rejects_other_kind_and_missing_targets(setup_library)
     env = setup_library
     env.catalog.variants["other"].family = "test"
     lobby = game_bundle(env.game_dir, "test_home_gl", payload=b"lobby")
-    entry, = env.library.add([make_mod(lobby, env.tmp / "input")])
+    (entry,) = env.library.add([make_mod(lobby, env.tmp / "input")])
     expect_error("mod_target_mismatch", lambda: env.library.apply("other", f"mod:{entry.id}"))
     expect_error("game_file_not_found", lambda: env.library.apply("other", f"mod:{entry.id}", kind="lobby"))
 
@@ -1275,13 +1364,14 @@ def test_variant_swap_uses_official_source_and_keeps_target_original(setup_libra
     entry = env.library.add([make_mod(other, env.tmp / "input")])[0]
     env.library.apply("other", f"mod:{entry.id}")
     calls = []
-    monkeypatch.setattr("bmpt.library.service.adapt_variant_sources",
-                        lambda sources, *args: sources)
+    monkeypatch.setattr("bmpt.library.service.adapt_variant_sources", lambda sources, *args: sources)
+
     def update(sources, targets, output, *args, **kwargs):
         calls.append((sources, targets, kwargs))
         result = output / targets[0].name
         result.write_bytes(header_bundle(b"variant!"))
         return RebuildResult(True, "updated", [FilePair(result, targets[0])])
+
     monkeypatch.setattr(service, "rebuild", update)
     original_bytes = env.original.read_bytes()
     result = env.library.apply("test", "variant:other")
@@ -1298,7 +1388,7 @@ def test_official_preview_uses_kept_parts_while_a_mod_remains_in_game(setup_libr
     env = setup_library
     source = game_bundle(env.game_dir, core_name, payload=b"official source")
     official = source.read_bytes()
-    entry, = env.library.add([make_mod(source, env.tmp / "input")])
+    (entry,) = env.library.add([make_mod(source, env.tmp / "input")])
     kind = "spr" if core_name.endswith("_spr") else "lobby"
     env.library.apply(entry.target, f"mod:{entry.id}", kind=kind)
     live = source.read_bytes()
@@ -1314,12 +1404,14 @@ def test_variant_swap_rejects_incompatible_texture_page_counts(setup_library, mo
     env = setup_library
     env.catalog.variants["other"].family = "test"
     other = game_bundle(env.game_dir, "other_spr", payload=b"variant!")
-    entry, = env.library.add([make_mod(other, env.tmp / "input")])
+    (entry,) = env.library.add([make_mod(other, env.tmp / "input")])
+
     def load(path, *args, **kwargs):
         objects = [fake_asset("page", "Texture2D", b"data")]
         if path.name != other.name:
             objects.append(fake_asset("page2", "Texture2D", b"data"))
         return SimpleNamespace(env=SimpleNamespace(objects=objects))
+
     monkeypatch.setattr(Bundle, "load", load)
     before = {path: path.read_bytes() for path in (env.original, other)}
     source = "variant:other" if source_type == "variant" else f"mod:{entry.id}"
@@ -1336,11 +1428,12 @@ def test_update_uses_official_baseline_preserves_previous_and_reports_unchanged(
         env.library._records[entry.id].pop("user_added")
         env.library._save()
         env.library = reload_library(env)
-        entry, = env.library.mods()
+        (entry,) = env.library.mods()
         assert not entry.user_added, "legacy records must not acquire a new-mod dot during repair"
     old_bytes = entry.file.read_bytes()
     env.library.apply("test", f"mod:{entry.id}")
     calls = []
+
     def update(sources, targets, output, *args, **kwargs):
         calls.append(targets)
         if kwargs.get("on_step"):
@@ -1349,11 +1442,14 @@ def test_update_uses_official_baseline_preserves_previous_and_reports_unchanged(
         result = output / targets[0].name
         result.write_bytes(header_bundle(b"updated!"))
         return RebuildResult(True, "updated", [FilePair(result, targets[0])])
+
     monkeypatch.setattr(service, "rebuild", update)
     progress = []
     result = env.library.update(entry.id, progress=lambda *args: progress.append(args))
-    assert progress == [({"current": 1, "total": 1, "step": f"import.step.{step}"},)
-                        for step in ("check", "extract", "replace", "save", "crc")]
+    assert progress == [
+        ({"current": 1, "total": 1, "step": f"import.step.{step}"},)
+        for step in ("check", "extract", "replace", "save", "crc")
+    ]
     assert result.unchanged is False
     assert result.previous[0].read_bytes() == old_bytes
     assert result.previous[0].is_relative_to(entry.file.parent / "previous")
@@ -1362,8 +1458,7 @@ def test_update_uses_official_baseline_preserves_previous_and_reports_unchanged(
     assert calls == [[env.root / "originals" / env.original.name]]
     assert reload_library(env).mods()[0] == result.mod
     assert env.library.update(entry.id).unchanged
-    monkeypatch.setattr(service, "rebuild", lambda *args, **kwargs:
-                        RebuildResult(True, "", [], all_unchanged=True))
+    monkeypatch.setattr(service, "rebuild", lambda *args, **kwargs: RebuildResult(True, "", [], all_unchanged=True))
     assert env.library.update(entry.id).unchanged
     json.dumps(result.to_json())
 
@@ -1373,15 +1468,20 @@ def test_update_can_split_an_old_mod_into_current_bundle_parts(setup_library, mo
     entry = env.library.add([make_mod(env.original, env.tmp / "input")])[0]
     old_bytes = entry.file.read_bytes()
     env.original.unlink()
-    targets = [game_bundle(env.game_dir, part=part, date="2026-10-01", payload=part.encode())
-               for part in ("002", "003")]
+    targets = [
+        game_bundle(env.game_dir, part=part, date="2026-10-01", payload=part.encode()) for part in ("002", "003")
+    ]
     original_bytes = {target: target.read_bytes() for target in targets}
     # the old bundle's assets are held by both current parts
-    monkeypatch.setattr("bmpt.library.targets.by_assets", lambda sources, targets, readers: ("asset_key", list(targets)))
+    monkeypatch.setattr(
+        "bmpt.library.targets.by_assets", lambda sources, targets, readers: ("asset_key", list(targets))
+    )
+
     def update(sources, current, output, *args, **kwargs):
         result = output / current[0].name
         result.write_bytes(header_bundle(b"split mod " + parse_filename(current[0].name).res_type.encode()))
         return RebuildResult(True, "updated", [FilePair(result, current[0])])
+
     monkeypatch.setattr(service, "rebuild", update)
     result = env.library.update(entry.id)
     assert len(result.files) == 2 and len(result.previous) == 1
@@ -1399,8 +1499,7 @@ def test_failed_rebuild_keeps_mod_and_game_bytes(setup_library, monkeypatch):
     env = setup_library
     entry = env.library.add([make_mod(env.original, env.tmp / "input")])[0]
     mod_bytes, game_bytes = entry.file.read_bytes(), env.original.read_bytes()
-    monkeypatch.setattr(service, "rebuild", lambda *args, **kwargs:
-                        RebuildResult(False, "failed", []))
+    monkeypatch.setattr(service, "rebuild", lambda *args, **kwargs: RebuildResult(False, "failed", []))
     expect_error("mod_update_failed", lambda: env.library.update(entry.id))
     assert entry.file.read_bytes() == mod_bytes
     assert env.original.read_bytes() == game_bytes
@@ -1411,9 +1510,12 @@ def _split_old_mod(env, monkeypatch):
     """A mod of an old release whose part the current release holds in two parts (002, 003)."""
     entry = env.library.add([make_mod(env.original, env.tmp / "input")])[0]
     env.original.unlink()
-    targets = [game_bundle(env.game_dir, part=part, date="2026-10-01", payload=part.encode())
-               for part in ("002", "003")]
-    monkeypatch.setattr("bmpt.library.targets.by_assets", lambda sources, targets, readers: ("asset_key", list(targets)))
+    targets = [
+        game_bundle(env.game_dir, part=part, date="2026-10-01", payload=part.encode()) for part in ("002", "003")
+    ]
+    monkeypatch.setattr(
+        "bmpt.library.targets.by_assets", lambda sources, targets, readers: ("asset_key", list(targets))
+    )
     return entry, targets
 
 
@@ -1436,7 +1538,9 @@ def test_update_keeps_the_official_part_that_takes_nothing_from_the_mod(setup_li
     result = env.library.update(entry.id, log=lines.append)
     assert not result.unchanged
     assert {path.name: path.read_bytes() for path in result.files} == {
-        materials.name: official, textures.name: header_bundle(b"textures of the mod")}
+        materials.name: official,
+        textures.name: header_bundle(b"textures of the mod"),
+    }
     assert any(materials.name in line for line in lines)
 
 
@@ -1465,13 +1569,17 @@ def test_failed_rebuild_names_its_reason(setup_library, monkeypatch):
 def test_apply_keeps_the_official_part_that_takes_nothing_from_an_old_release(setup_library, monkeypatch, no_match):
     # The older release of a part rebuilt by a game update, holding nothing the update moves
     env = setup_library
-    entry, = env.library.add([_old_release(env, env.tmp / "old")])
-    monkeypatch.setattr(service.integrity.Inspection, "structure", lambda self, path: frozenset(
-        {"rebuilt" if env.game_dir in path.parents else "old"}))
+    (entry,) = env.library.add([_old_release(env, env.tmp / "old")])
+    monkeypatch.setattr(
+        service.integrity.Inspection,
+        "structure",
+        lambda self, path: frozenset({"rebuilt" if env.game_dir in path.parents else "old"}),
+    )
     official = env.original.read_bytes()
     message = "No assets were extracted from source files"
-    monkeypatch.setattr("bmpt.library.install.rebuild", lambda *args, **kwargs:
-                        RebuildResult(False, message, no_match=no_match))
+    monkeypatch.setattr(
+        "bmpt.library.install.rebuild", lambda *args, **kwargs: RebuildResult(False, message, no_match=no_match)
+    )
     lines = []
     if no_match:
         env.library.apply("test", f"mod:{entry.id}", log=lines.append)
@@ -1487,9 +1595,8 @@ def test_failed_install_preparation_keeps_game_and_originals(setup_library, monk
     env = setup_library
     entry = env.library.add([make_mod(env.original, env.tmp / "input")])[0]
     game_bytes = env.original.read_bytes()
-    monkeypatch.setattr(env.library, '_needs_crc_fix', lambda *args: True)
-    monkeypatch.setattr(service, "install_staged", lambda *args, **kwargs:
-                        [("test_spr", "failed")])
+    monkeypatch.setattr(env.library, "_needs_crc_fix", lambda *args: True)
+    monkeypatch.setattr(service, "install_staged", lambda *args, **kwargs: [("test_spr", "failed")])
     expect_error("mod_apply_failed", lambda: env.library.apply("test", f"mod:{entry.id}"))
     assert env.original.read_bytes() == game_bytes
     assert not (env.root / "originals").exists()
@@ -1497,61 +1604,62 @@ def test_failed_install_preparation_keeps_game_and_originals(setup_library, monk
 
 def test_current_ready_parts_skip_planning_and_staging_but_restore_retained_parts(setup_library, monkeypatch):
     env = setup_library
-    second = game_bundle(env.game_dir, part='textassets', payload=b'official text')
+    second = game_bundle(env.game_dir, part="textassets", payload=b"official text")
     official = {target: target.read_bytes() for target in (env.original, second)}
-    first = env.library.add([make_mod(target, env.tmp / 'first', payload=b'first mod')
-                             for target in (env.original, second)])[0]
-    env.library.apply('test', f'mod:{first.id}')
-    source = make_mod(env.original, env.tmp / 'second', payload=b'second mod')
-    mod, = env.library.add([source])
+    first = env.library.add(
+        [make_mod(target, env.tmp / "first", payload=b"first mod") for target in (env.original, second)]
+    )[0]
+    env.library.apply("test", f"mod:{first.id}")
+    source = make_mod(env.original, env.tmp / "second", payload=b"second mod")
+    (mod,) = env.library.add([source])
     before = {target: target.read_bytes() for target in (env.original, second)}
     stored = mod.file.read_bytes()
 
     def forbidden(*args, **kwargs):
-        pytest.fail('Current ready bytes must not scan the install or make redundant staged copies')
+        pytest.fail("Current ready bytes must not scan the install or make redundant staged copies")
 
-    monkeypatch.setattr(env.library, '_plan', forbidden)
-    monkeypatch.setattr(env.library, '_stage_official', forbidden)
-    applied = env.library.apply('test', f'mod:{mod.id}', create_backup=True)
+    monkeypatch.setattr(env.library, "_plan", forbidden)
+    monkeypatch.setattr(env.library, "_stage_official", forbidden)
+    applied = env.library.apply("test", f"mod:{mod.id}", create_backup=True)
     assert set(applied.files) == {env.original, second}
     assert env.original.read_bytes() == stored and second.read_bytes() == official[second]
     assert source.read_bytes() == stored and mod.file.read_bytes() == stored
     # the kept originals are the baseline: the library writes no adjacent .backup
-    assert not any(target.with_name(target.name + '.backup').exists() for target in before)
-    env.library.restore('test')
+    assert not any(target.with_name(target.name + ".backup").exists() for target in before)
+    env.library.restore("test")
     assert {target: target.read_bytes() for target in official} == official
 
 
 def test_library_apply_keeps_the_original_first_and_leaves_an_existing_backup_alone(setup_library):
     env = setup_library
     official = env.original.read_bytes()
-    backup = env.original.with_name(env.original.name + '.backup')
-    backup.write_bytes(b'a classic backup the library never writes')
-    first, = env.library.add([make_mod(env.original, env.tmp / 'first', payload=b'first mod')])
-    env.library.apply('test', f'mod:{first.id}', create_backup=True)
-    second, = env.library.add([make_mod(env.original, env.tmp / 'second', payload=b'second mod')])
-    env.library.apply('test', f'mod:{second.id}', create_backup=True)
+    backup = env.original.with_name(env.original.name + ".backup")
+    backup.write_bytes(b"a classic backup the library never writes")
+    (first,) = env.library.add([make_mod(env.original, env.tmp / "first", payload=b"first mod")])
+    env.library.apply("test", f"mod:{first.id}", create_backup=True)
+    (second,) = env.library.add([make_mod(env.original, env.tmp / "second", payload=b"second mod")])
+    env.library.apply("test", f"mod:{second.id}", create_backup=True)
     assert env.original.read_bytes() == second.file.read_bytes()
-    assert env.library.official_bundles('test_spr')[0].read_bytes() == official
-    assert backup.read_bytes() == b'a classic backup the library never writes'
+    assert env.library.official_bundles("test_spr")[0].read_bytes() == official
+    assert backup.read_bytes() == b"a classic backup the library never writes"
     assert not env.library.toggle(False, True).failed
     assert env.original.read_bytes() == official
-    env.library.restore('test')
+    env.library.restore("test")
     assert env.original.read_bytes() == official
-    assert backup.read_bytes() == b'a classic backup the library never writes'
+    assert backup.read_bytes() == b"a classic backup the library never writes"
 
 
 def test_batch_housekeeping_runs_once_on_exception_and_releases_its_scope(setup_library, monkeypatch):
     library = setup_library.library
     calls = []
-    monkeypatch.setattr(library, '_prune', lambda: calls.append(1) or [])
-    with pytest.raises(RuntimeError, match='failed batch'):
+    monkeypatch.setattr(library, "_prune", lambda: calls.append(1) or [])
+    with pytest.raises(RuntimeError, match="failed batch"):
         with library.import_batch():
             library._prune_quietly()
             with library.import_batch():
                 library._prune_quietly()
             assert not calls
-            raise RuntimeError('failed batch')
+            raise RuntimeError("failed batch")
     assert calls == [1]
     library._prune_quietly()
     assert calls == [1, 1]
@@ -1561,12 +1669,14 @@ def test_extract_uses_core_and_returns_core_folder(setup_library, monkeypatch):
     env = setup_library
     entry = env.library.add([make_mod(env.original, env.tmp / "input")])[0]
     calls = []
+
     def extract(paths, output, **kwargs):
         calls.append(paths)
         if kwargs.get("progress_callback"):
             kwargs["progress_callback"](1, len(paths), paths[0].name)
         (output / "test.atlas").write_bytes(b"atlas")
         return True, "done"
+
     monkeypatch.setattr(core, "process_asset_extraction", extract)
     progress = []
     folder = env.library.extract(f"mod:{entry.id}", env.tmp / "extracted", progress=progress.append)
@@ -1577,7 +1687,6 @@ def test_extract_uses_core_and_returns_core_folder(setup_library, monkeypatch):
     assert calls == [[entry.file], [env.original]]
 
 
-
 @pytest.mark.parametrize("core_name", ["", "..", " . "])
 def test_extract_refuses_core_outside_output_folder(setup_library, monkeypatch, core_name):
     env = setup_library
@@ -1585,35 +1694,52 @@ def test_extract_refuses_core_outside_output_folder(setup_library, monkeypatch, 
     out_dir = env.tmp / "extracted"
     out_dir.mkdir()
     (out_dir / "keep.txt").write_bytes(b"keep")
-    monkeypatch.setattr(service, "parse_filename",
-                        lambda name: SimpleNamespace(core=core_name))
-    monkeypatch.setattr(core, "process_asset_extraction",
-                        lambda *args, **kwargs: pytest.fail("extraction must not run"))
+    monkeypatch.setattr(service, "parse_filename", lambda name: SimpleNamespace(core=core_name))
+    monkeypatch.setattr(
+        core, "process_asset_extraction", lambda *args, **kwargs: pytest.fail("extraction must not run")
+    )
     with pytest.raises(ServiceError):
         env.library.extract(f"mod:{entry.id}", out_dir)
     assert (out_dir / "keep.txt").read_bytes() == b"keep"
 
+
 def fake_asset(name, type_name, raw):
-    return SimpleNamespace(type=getattr(AssetType, type_name), peek_name=lambda: name,
-                           get_raw_data=lambda: raw, read=lambda: SimpleNamespace(m_StreamData=None))
+    return SimpleNamespace(
+        type=getattr(AssetType, type_name),
+        peek_name=lambda: name,
+        get_raw_data=lambda: raw,
+        read=lambda: SimpleNamespace(m_StreamData=None),
+    )
 
 
 def test_compare_raw_asset_statuses_and_official_baseline(setup_library, monkeypatch):
     env = setup_library
     entry = env.library.add([make_mod(env.original, env.tmp / "input")])[0]
     env.library.apply("test", f"mod:{entry.id}")
-    official = [fake_asset("changed", "Texture2D", b"old"), fake_asset("same", "TextAsset", b"same"),
-                fake_asset("removed", "Mesh", b"removed")]
-    modified = [fake_asset("changed", "Texture2D", b"new texture"), fake_asset("same", "TextAsset", b"same"),
-                fake_asset("added", "AnimationClip", b"added")]
+    official = [
+        fake_asset("changed", "Texture2D", b"old"),
+        fake_asset("same", "TextAsset", b"same"),
+        fake_asset("removed", "Mesh", b"removed"),
+    ]
+    modified = [
+        fake_asset("changed", "Texture2D", b"new texture"),
+        fake_asset("same", "TextAsset", b"same"),
+        fake_asset("added", "AnimationClip", b"added"),
+    ]
     loaded = []
+
     def load(path, *args, **kwargs):
         loaded.append(path)
         return SimpleNamespace(env=SimpleNamespace(objects=modified if path == entry.file else official))
+
     monkeypatch.setattr(Bundle, "load", load)
     result = env.library.compare(entry.id)
     assert {asset.name: asset.status for asset in result.assets} == {
-        "changed": "changed", "same": "same", "removed": "removed", "added": "added"}
+        "changed": "changed",
+        "same": "same",
+        "removed": "removed",
+        "added": "added",
+    }
     changed = next(asset for asset in result.assets if asset.name == "changed")
     assert (changed.official_size, changed.mod_size) == (3, 11)
     assert loaded == [entry.file, env.root / "originals" / env.original.name]
@@ -1623,14 +1749,17 @@ def test_compare_raw_asset_statuses_and_official_baseline(setup_library, monkeyp
 def test_compare_detects_changes_in_streamed_payloads(setup_library, monkeypatch):
     env = setup_library
     entry = env.library.add([make_mod(env.original, env.tmp / "input")])[0]
+
     def load(path, *args, **kwargs):
         obj = fake_asset("streamed", "Texture2D", b"same serialized metadata")
         obj.assets_file = path
         obj.read = lambda: SimpleNamespace(m_StreamData=SimpleNamespace(path="image.resS", offset=0, size=3))
         return SimpleNamespace(env=SimpleNamespace(objects=[obj]))
+
     monkeypatch.setattr(Bundle, "load", load)
-    monkeypatch.setattr("bmpt.library.service.get_resource_data",
-                        lambda _, path, *args: b"new" if path == entry.file else b"old")
+    monkeypatch.setattr(
+        "bmpt.library.service.get_resource_data", lambda _, path, *args: b"new" if path == entry.file else b"old"
+    )
     result = env.library.compare(entry.id)
     assert len(result.assets) == 1 and result.assets[0].status == "changed"
     assert result.assets[0].mod_size == len(b"same serialized metadata") + 3
@@ -1647,6 +1776,7 @@ def test_add_is_thread_safe_and_deduplicates_concurrent_calls(setup_library):
 
 # --- switching keeps what it replaces: official files in originals/ until verified official again, mods in mods/ ---
 
+
 def kept_copy(env, path):
     return env.root / "originals" / path.name
 
@@ -1654,10 +1784,12 @@ def kept_copy(env, path):
 def swap_by_copying(monkeypatch, payload=b"adapted"):
     """Variant swaps and cross-variant mods without UnityPy: the adapted result is a fixed payload."""
     monkeypatch.setattr("bmpt.library.service.adapt_variant_sources", lambda sources, *args: sources)
+
     def update(sources, targets, output, *args, **kwargs):
         result = output / targets[0].name
         result.write_bytes(header_bundle(payload))
         return RebuildResult(True, "updated", [FilePair(result, targets[0])])
+
     monkeypatch.setattr(service, "rebuild", update)
 
 
@@ -1667,8 +1799,8 @@ def test_switching_keeps_the_official_file_until_it_is_restored(setup_library, k
     lobby = game_bundle(env.game_dir, "test_home_gl", payload=b"lobby")
     target, other = (env.original, lobby) if kind == "spr" else (lobby, env.original)
     official = target.read_bytes()
-    first, = env.library.add([make_mod(target, env.tmp / "first", payload=b"first mod")])
-    second, = env.library.add([make_mod(target, env.tmp / "second", payload=b"second mod")])
+    (first,) = env.library.add([make_mod(target, env.tmp / "first", payload=b"first mod")])
+    (second,) = env.library.add([make_mod(target, env.tmp / "second", payload=b"second mod")])
     backup = kept_copy(env, target)
     env.library.apply("test", f"mod:{first.id}", kind=kind)
     assert target.read_bytes() == first.file.read_bytes() and backup.read_bytes() == official
@@ -1691,9 +1823,10 @@ def test_switching_keeps_the_official_file_until_it_is_restored(setup_library, k
 def test_parts_reset_to_official_release_their_kept_copies(setup_library):
     env = setup_library
     atlas = game_bundle(env.game_dir, part="002", payload=b"atlas")
-    pack, = env.library.add([make_mod(path, env.tmp / "pack", payload=b"pack " + path.name.encode())
-                             for path in (atlas, env.original)])
-    partial, = env.library.add([make_mod(env.original, env.tmp / "partial", payload=b"texture only")])
+    (pack,) = env.library.add(
+        [make_mod(path, env.tmp / "pack", payload=b"pack " + path.name.encode()) for path in (atlas, env.original)]
+    )
+    (partial,) = env.library.add([make_mod(env.original, env.tmp / "partial", payload=b"texture only")])
     env.library.apply("test", f"mod:{pack.id}")
     assert kept_copy(env, atlas).exists() and kept_copy(env, env.original).exists()
     env.library.apply("test", f"mod:{partial.id}")
@@ -1704,7 +1837,7 @@ def test_parts_reset_to_official_release_their_kept_copies(setup_library):
 def test_variant_swap_keeps_and_releases_only_the_target_copy(setup_library, monkeypatch):
     env = setup_library
     other = game_bundle(env.game_dir, "other_spr", payload=b"variant!")
-    entry, = env.library.add([make_mod(other, env.tmp / "input")])
+    (entry,) = env.library.add([make_mod(other, env.tmp / "input")])
     env.library.apply("other", f"mod:{entry.id}")
     swap_by_copying(monkeypatch)
     official = env.original.read_bytes()
@@ -1720,7 +1853,7 @@ def test_cross_variant_mod_keeps_and_releases_the_target_copy(setup_library, mon
     env = setup_library
     env.catalog.variants["other"].family = "test"
     other = game_bundle(env.game_dir, "other_spr", payload=b"other portrait")
-    entry, = env.library.add([make_mod(other, env.tmp / "input")])
+    (entry,) = env.library.add([make_mod(other, env.tmp / "input")])
     swap_by_copying(monkeypatch)
     official = env.original.read_bytes()
     env.library.apply("test", f"mod:{entry.id}")
@@ -1733,7 +1866,7 @@ def test_cross_variant_mod_keeps_and_releases_the_target_copy(setup_library, mon
 def test_prune_releases_copies_of_files_verified_official_outside_the_library(setup_library):
     env = setup_library
     official = env.original.read_bytes()
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input")])
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input")])
     env.library.apply("test", f"mod:{entry.id}")
     backup = kept_copy(env, env.original)
     assert env.library.prune() == [] and backup.exists()  # the game shows the mod
@@ -1751,7 +1884,7 @@ def test_prune_releases_copies_of_files_verified_official_outside_the_library(se
 
 def test_prune_deletes_copies_of_files_a_game_update_replaced(setup_library):
     env = setup_library
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input")])
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input")])
     env.library.apply("test", f"mod:{entry.id}")
     backup = kept_copy(env, env.original)
     # a game update: the part comes back official under a new date and CRC, the old file is gone
@@ -1763,7 +1896,7 @@ def test_prune_deletes_copies_of_files_a_game_update_replaced(setup_library):
     assert library.state("test").applied == "official"
     assert [m.id for m in library.mods()] == [entry.id]
     # a mod for the new file is switched and the new official file is kept under its own name
-    current, = library.add([make_mod(updated, env.tmp / "current", payload=b"current mod")])
+    (current,) = library.add([make_mod(updated, env.tmp / "current", payload=b"current mod")])
     library.apply("test", f"mod:{current.id}")
     assert kept_copy(env, updated).exists()
 
@@ -1773,7 +1906,7 @@ def test_prune_keeps_a_copy_an_older_official_file_does_not_replace(setup_librar
     older = env.original.read_bytes()
     env.original.unlink()
     newer = game_bundle(env.game_dir, date="2026-02-01", payload=b"newer official")
-    entry, = env.library.add([make_mod(newer, env.tmp / "input")])
+    (entry,) = env.library.add([make_mod(newer, env.tmp / "input")])
     env.library.apply("test", f"mod:{entry.id}")
     backup = kept_copy(env, newer)
     # the newer file is gone and an older official file of the same part is back (an old copy of the folder put back)
@@ -1786,7 +1919,7 @@ def test_prune_keeps_a_copy_an_older_official_file_does_not_replace(setup_librar
 @pytest.mark.parametrize("case", ["modded", "missing", "unrecorded", "other_install"])
 def test_prune_keeps_copies_it_cannot_verify(setup_library, case):
     env = setup_library
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input")])
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input")])
     env.library.apply("test", f"mod:{entry.id}")
     backup = kept_copy(env, env.original)
     env.original.unlink()
@@ -1812,8 +1945,7 @@ def test_prune_keeps_copies_it_cannot_verify(setup_library, case):
 
 
 @pytest.mark.parametrize("clone_unavailable", [False, True])
-def test_a_copy_shared_by_two_installs_is_kept_until_both_are_official(setup_library, monkeypatch,
-                                                                   clone_unavailable):
+def test_a_copy_shared_by_two_installs_is_kept_until_both_are_official(setup_library, monkeypatch, clone_unavailable):
     if clone_unavailable:
         monkeypatch.setattr(storage, "_clone", lambda *args: False)
     env = setup_library
@@ -1821,7 +1953,7 @@ def test_a_copy_shared_by_two_installs_is_kept_until_both_are_official(setup_lib
     second = env.tmp / "second_game" / env.original.name
     second.parent.mkdir()
     second.write_bytes(official)
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input")])
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input")])
     env.library.apply("test", f"mod:{entry.id}")
     env.settings.set("game_resource_dir", str(second.parent))
     env.library.apply("test", f"mod:{entry.id}")
@@ -1851,7 +1983,7 @@ def use_install(env, game_file):
 def test_a_moved_install_releases_its_copy_once_restored(setup_library):
     env = setup_library
     official = env.original.read_bytes()
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input")])
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input")])
     env.library.apply("test", f"mod:{entry.id}")
     backup = kept_copy(env, env.original)
     # the install's files move to another folder; the old folder stays behind without them
@@ -1869,7 +2001,7 @@ def test_a_copy_is_released_when_another_folder_was_verified_in_its_launcher(set
     env = setup_library
     official = env.original.read_bytes()
     second = second_install(env)
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input")])
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input")])
     env.library.apply("test", f"mod:{entry.id}")
     env.original.write_bytes(official)  # the first install's launcher verified its files
     use_install(env, second)
@@ -1891,7 +2023,7 @@ def test_a_copy_is_kept_while_another_folder_cannot_be_seen(setup_library, monke
     env = setup_library
     official = env.original.read_bytes()
     second = second_install(env)
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input")])
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input")])
     env.library.apply("test", f"mod:{entry.id}")
     use_install(env, second)
     env.library.apply("test", f"mod:{entry.id}")
@@ -1912,7 +2044,7 @@ def test_a_copy_is_kept_while_another_folder_is_modded_outside_the_library(setup
     env = setup_library
     official = env.original.read_bytes()
     second = second_install(env)
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input")])
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input")])
     env.library.apply("test", f"mod:{entry.id}")
     external = header_bundle(b"from another tool")
     env.original.write_bytes(external)  # the first install changed outside the library since
@@ -1925,7 +2057,7 @@ def test_a_copy_is_kept_while_another_folder_is_modded_outside_the_library(setup
     use_install(env, env.original)
     env.library.restore("test")
     assert env.original.read_bytes() == official and not backup.exists()
-    kept, = [m for m in env.library.mods() if m.id != entry.id]
+    (kept,) = [m for m in env.library.mods() if m.id != entry.id]
     assert kept.file.read_bytes() == external
 
 
@@ -1933,7 +2065,7 @@ def test_prune_deletes_an_outdated_copy_another_folder_no_longer_needs(setup_lib
     env = setup_library
     official = env.original.read_bytes()
     second = second_install(env)
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input")])
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input")])
     env.library.apply("test", f"mod:{entry.id}")
     use_install(env, second)
     env.library.apply("test", f"mod:{entry.id}")
@@ -1958,7 +2090,7 @@ def test_prune_deletes_an_outdated_copy_another_folder_no_longer_needs(setup_lib
 def test_deleting_an_applied_mod_restores_official(setup_library):
     env = setup_library
     official = env.original.read_bytes()
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input")])
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input")])
     env.library.apply("test", f"mod:{entry.id}")
     assert env.library.removal_info(entry.id) == {"name": entry.label, "used": True}
     result = env.library.remove(entry.id, confirm=True)
@@ -1972,7 +2104,7 @@ def test_deleting_a_mod_restores_every_game_folder(setup_library):
     env = setup_library
     official = env.original.read_bytes()
     second = second_install(env, "GameData/Windows")
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input")])
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input")])
     env.settings.set("game_resource_dir", str(env.tmp / "second_game"))
     env.library.apply("test", f"mod:{entry.id}")
     use_install(env, env.original)
@@ -1987,7 +2119,7 @@ def test_a_mod_whose_changed_part_is_official_again_can_be_removed(setup_library
     env = setup_library
     game_bundle(env.game_dir, part="002", payload=b"skeleton")
     official = env.original.read_bytes()
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input")])
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input")])
     env.library.apply("test", f"mod:{entry.id}")
     # a launcher check writes the official bytes back to the part the mod changed
     env.original.write_bytes(official)
@@ -1995,7 +2127,7 @@ def test_a_mod_whose_changed_part_is_official_again_can_be_removed(setup_library
     library.remove(entry.id, confirm=True)
     assert library.mods() == []
     # the untouched official part, still recorded under the removed mod, is not kept as a mod by the next switch
-    other, = library.add([make_mod(env.original, env.tmp / "next", payload=b"next mod")])
+    (other,) = library.add([make_mod(env.original, env.tmp / "next", payload=b"next mod")])
     library.apply("test", f"mod:{other.id}")
     assert [m.id for m in library.mods()] == [other.id]
 
@@ -2012,7 +2144,7 @@ def test_deleting_a_mod_restores_an_adapted_variant(setup_library, monkeypatch):
     env = setup_library
     env.catalog.variants["other"].family = "test"
     other = game_bundle(env.game_dir, "other_spr", payload=b"other portrait")
-    entry, = env.library.add([make_mod(other, env.tmp / "input")])
+    (entry,) = env.library.add([make_mod(other, env.tmp / "input")])
     swap_by_copying(monkeypatch)
     env.library.apply("test", f"mod:{entry.id}")
     assert env.library.remove(entry.id, confirm=True).failed == []
@@ -2023,14 +2155,14 @@ def test_deleting_a_mod_restores_an_adapted_variant(setup_library, monkeypatch):
 def test_switching_keeps_a_file_changed_outside_the_library_as_a_mod(setup_library):
     env = setup_library
     official = env.original.read_bytes()
-    first, = env.library.add([make_mod(env.original, env.tmp / "first")])
+    (first,) = env.library.add([make_mod(env.original, env.tmp / "first")])
     env.library.apply("test", f"mod:{first.id}")
     external = header_bundle(b"from another tool")
     env.original.write_bytes(external)
     assert env.library.state("test").applied == "unknown"
     env.library.apply("test", "official")
     assert env.original.read_bytes() == official and not kept_copy(env, env.original).exists()
-    kept, = [entry for entry in env.library.mods() if entry.id != first.id]
+    (kept,) = [entry for entry in env.library.mods() if entry.id != first.id]
     assert kept.file.name == env.original.name and kept.file.read_bytes() == external
     assert (kept.kind, kept.target, kept.fresh) == ("spr", "test", True)
     assert not kept.user_added
@@ -2043,7 +2175,7 @@ def test_switching_keeps_a_file_changed_outside_the_library_as_a_mod(setup_libra
 
 def test_switching_keeps_an_applied_mod_missing_from_the_library(setup_library):
     env = setup_library
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input")])
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input")])
     env.library.apply("test", f"mod:{entry.id}")
     installed = env.original.read_bytes()
     # removed from the library before removing an applied mod was refused
@@ -2055,13 +2187,13 @@ def test_switching_keeps_an_applied_mod_missing_from_the_library(setup_library):
     # the bytes of a mod the library no longer has are offered for adoption
     assert library.state("test").applied == "unknown"
     library.restore("test")
-    kept, = library.mods()
+    (kept,) = library.mods()
     assert kept.file.read_bytes() == installed and kept.id != entry.id
 
 
 def test_a_replaced_file_already_in_the_library_is_not_stored_twice(setup_library):
     env = setup_library
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input")])
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input")])
     env.library.apply("test", f"mod:{entry.id}")
     data = json.loads((env.root / "state.json").read_text())
     data["applied"] = {}
@@ -2074,18 +2206,21 @@ def test_a_replaced_file_already_in_the_library_is_not_stored_twice(setup_librar
 
 def test_kept_mods_are_dropped_when_the_switch_is_rolled_back(setup_library, monkeypatch):
     env = setup_library
-    first, = env.library.add([make_mod(env.original, env.tmp / "first")])
-    second, = env.library.add([make_mod(env.original, env.tmp / "second", payload=b"second!!")])
+    (first,) = env.library.add([make_mod(env.original, env.tmp / "first")])
+    (second,) = env.library.add([make_mod(env.original, env.tmp / "second", payload=b"second!!")])
     env.library.apply("test", f"mod:{first.id}")
     external = header_bundle(b"from another tool")
     env.original.write_bytes(external)
     from bmpt.library import service
+
     original_copy = service.atomic_copy
+
     def copy(source, target):
         if target == env.original:
             assert len(env.library.mods()) == 3  # kept before the game file is written
             raise PermissionError(13, "Write failure", str(target))
         original_copy(source, target)
+
     monkeypatch.setattr(service, "atomic_copy", copy)
     expect_error("game_file_denied", lambda: env.library.apply("test", f"mod:{second.id}"))
     assert env.original.read_bytes() == external
@@ -2105,9 +2240,12 @@ def test_integration_real_bundle_add_apply_compare_restore(tmp_path, monkeypatch
     # blocked by some test sandboxes; process detection has separate unit coverage.
     monkeypatch.setattr(safety, "check_game_not_running", lambda: None)
     resources = get_search_dirs(GAME_DIR)
-    candidates = [path for directory in resources for path in directory.glob("assets-_mx-spinecharacters-*.bundle")
-                  if parse_filename(path.name).core.endswith("_spr")
-                  and parse_filename(path.name).res_type in ("003", "textures")]
+    candidates = [
+        path
+        for directory in resources
+        for path in directory.glob("assets-_mx-spinecharacters-*.bundle")
+        if parse_filename(path.name).core.endswith("_spr") and parse_filename(path.name).res_type in ("003", "textures")
+    ]
     selected = None
     for path in sorted(candidates, key=lambda p: p.stat().st_size)[:12]:
         bundle = Bundle.load(path)
@@ -2121,8 +2259,9 @@ def test_integration_real_bundle_add_apply_compare_restore(tmp_path, monkeypatch
     parsed = parse_filename(selected.name)
     game_dir = tmp_path / "game"
     game_dir.mkdir()
-    siblings = [p for directory in resources for p in directory.glob("*.bundle")
-                if parse_filename(p.name).core == parsed.core]
+    siblings = [
+        p for directory in resources for p in directory.glob("*.bundle") if parse_filename(p.name).core == parsed.core
+    ]
     for path in siblings:
         shutil.copyfile(path, game_dir / path.name)
     original = game_dir / selected.name
@@ -2139,7 +2278,8 @@ def test_integration_real_bundle_add_apply_compare_restore(tmp_path, monkeypatch
     mod_dir = tmp_path / "mod"
     mod_dir.mkdir()
     success, message, pairs = core.process_asset_packing(
-        [original], [tmp_path / f"{texture.peek_name()}.png"], mod_dir, settings.save_options(False))
+        [original], [tmp_path / f"{texture.peek_name()}.png"], mod_dir, settings.save_options(False)
+    )
     assert success, message
     entry = library.add([pairs[0].output])[0]
     assert library.state("test").applied == "official"
@@ -2175,8 +2315,15 @@ def test_integration_variant_swap_adapts_names_and_atlas_pages(tmp_path, monkeyp
     monkeypatch.setattr(safety, "check_game_not_running", lambda: None)
     resources = get_search_dirs(GAME_DIR)
     all_files = [path for directory in resources for path in directory.glob("assets-_mx-spinecharacters-*.bundle")]
-    textures = sorted((path for path in all_files if parse_filename(path.name).core.endswith("_spr")
-                       and parse_filename(path.name).res_type in ("003", "textures")), key=lambda p: p.stat().st_size)
+    textures = sorted(
+        (
+            path
+            for path in all_files
+            if parse_filename(path.name).core.endswith("_spr")
+            and parse_filename(path.name).res_type in ("003", "textures")
+        ),
+        key=lambda p: p.stat().st_size,
+    )
     # the two smallest portraits made of the same parts: a variant with another set of parts is rightly refused
     parts, cores = defaultdict(list), []
     for path in all_files:
@@ -2203,11 +2350,17 @@ def test_integration_variant_swap_adapts_names_and_atlas_pages(tmp_path, monkeyp
     library = ModLibrary(tmp_path / "library", catalog, object(), settings)
     result = library.apply("test", "variant:other")
     assert result.files
+
     def assets(core_name):
-        return {obj.type.name: obj.read() for path in game_dir.iterdir()
-                if parse_filename(path.name).core == core_name
-                for obj in Bundle.load(path).env.objects if obj.type in (AssetType.Texture2D, AssetType.TextAsset)
-                and (obj.type == AssetType.Texture2D or obj.peek_name().endswith(".skel"))}
+        return {
+            obj.type.name: obj.read()
+            for path in game_dir.iterdir()
+            if parse_filename(path.name).core == core_name
+            for obj in Bundle.load(path).env.objects
+            if obj.type in (AssetType.Texture2D, AssetType.TextAsset)
+            and (obj.type == AssetType.Texture2D or obj.peek_name().endswith(".skel"))
+        }
+
     source_assets, target_assets = assets(cores[1]), assets(cores[0])
     source_image = source_assets["Texture2D"].image.convert("RGBA")
     target_image = target_assets["Texture2D"].image.convert("RGBA")
@@ -2223,27 +2376,36 @@ def test_integration_variant_swap_adapts_names_and_atlas_pages(tmp_path, monkeyp
         for obj in Bundle.load(path).env.objects:
             if obj.type == AssetType.TextAsset and obj.peek_name().endswith(".atlas"):
                 assert target_texture_name + ".png" in obj.read().m_Script.splitlines()
-    assert all(file.crc == "fixed" and file.applied == "variant:other"
-               for file in library.state("test").files if file.file in result.files)
+    assert all(
+        file.crc == "fixed" and file.applied == "variant:other"
+        for file in library.state("test").files
+        if file.file in result.files
+    )
     library.restore("test")
     assert {path: path.read_bytes() for path in game_dir.iterdir()} == originals
 
     # A partial library mod for the other variant uses the same adaptation,
     # taking its missing skeleton/atlas from the other variant's official parts.
-    source_texture = next(path for path in game_dir.iterdir()
-                          if parse_filename(path.name).core == cores[1]
-                          and parse_filename(path.name).res_type in ("003", "textures"))
+    source_texture = next(
+        path
+        for path in game_dir.iterdir()
+        if parse_filename(path.name).core == cores[1] and parse_filename(path.name).res_type in ("003", "textures")
+    )
     texture = next(obj for obj in Bundle.load(source_texture).env.objects if obj.type == AssetType.Texture2D)
     image_path = tmp_path / f"{texture.peek_name()}.png"
     Image.new("RGBA", texture.read().image.size, (255, 0, 255, 255)).save(image_path)
     mod_dir = tmp_path / "mod"
     mod_dir.mkdir()
     success, message, pairs = core.process_asset_packing(
-        [source_texture], [image_path], mod_dir, settings.save_options(False))
+        [source_texture], [image_path], mod_dir, settings.save_options(False)
+    )
     assert success, message
-    entry, = library.add([pair.output for pair in pairs])
-    mod_image = next(obj.read().image.convert("RGBA") for obj in Bundle.load(entry.file).env.objects
-                     if obj.type == AssetType.Texture2D)
+    (entry,) = library.add([pair.output for pair in pairs])
+    mod_image = next(
+        obj.read().image.convert("RGBA")
+        for obj in Bundle.load(entry.file).env.objects
+        if obj.type == AssetType.Texture2D
+    )
     result = library.apply("test", f"mod:{entry.id}")
     assert result.files
     target_assets = assets(cores[0])
@@ -2253,8 +2415,9 @@ def test_integration_variant_swap_adapts_names_and_atlas_pages(tmp_path, monkeyp
     assert sum(value * value for value in rms) / len(rms) < 20
     assert target_assets["TextAsset"].m_Script == source_assets["TextAsset"].m_Script
     assert library.state("test").applied == f"mod:{entry.id}"
-    assert all(path.read_bytes() == data for path, data in originals.items()
-               if parse_filename(path.name).core == cores[1])
+    assert all(
+        path.read_bytes() == data for path, data in originals.items() if parse_filename(path.name).core == cores[1]
+    )
     library.restore("test")
     assert {path: path.read_bytes() for path in game_dir.iterdir()} == originals
 
@@ -2262,7 +2425,7 @@ def test_integration_variant_swap_adapts_names_and_atlas_pages(tmp_path, monkeyp
 def test_duplicate_add_reports_the_existing_mod_even_with_another_filename(setup_library):
     env = setup_library
     source = make_mod(env.original, env.tmp / "input")
-    entry, = env.library.add([source])
+    (entry,) = env.library.add([source])
     env.library.rename(entry.id, "My mod")
     renamed = env.tmp / source.name.replace("2026-01-01", "2026-02-01")
     renamed.write_bytes(source.read_bytes())
@@ -2296,7 +2459,7 @@ def test_duplicate_adds_from_two_instances_are_serialized(setup_library):
 
 def test_existing_duplicate_records_are_logged_and_preserved(setup_library, caplog):
     env = setup_library
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input")])
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input")])
     data = json.loads((env.root / "state.json").read_text())
     duplicate = dict(data["mods"][0], id="d" * 32, label="Old duplicate")
     shutil.copytree(entry.file.parent, env.root / "mods" / duplicate["id"])
@@ -2316,7 +2479,7 @@ def test_add_recognizes_an_untracked_installed_mod_without_writing_game_files(se
     before = env.original.stat()
     monkeypatch.setattr(env.library, "_commit", lambda *a, **kw: pytest.fail("adoption must not write game files"))
     result = env.library.add([source])
-    entry, = result
+    (entry,) = result
     assert result.installed == [entry]
     assert env.original.stat().st_mtime_ns == before.st_mtime_ns
     assert env.original.read_bytes() == source.read_bytes()
@@ -2335,7 +2498,7 @@ def test_add_recognizes_installed_multipart_mods_with_official_parts(setup_libra
     env.original.write_bytes(source.read_bytes())
     before = {p: p.stat().st_mtime_ns for p in (skeleton, env.original)}
     result = env.library.add([skeleton, source])
-    entry, = result
+    (entry,) = result
     assert result.installed == [entry] and len(env.library.mods()) == 1
     assert before == {p: p.stat().st_mtime_ns for p in before}
     assert env.library.configured("test")["spr"] == f"mod:{entry.id}"
@@ -2348,7 +2511,7 @@ def test_an_adopted_overwritten_mod_applies_as_unchanged_without_a_build(setup_l
     source = make_mod(env.original, env.tmp / "input", fixed=True)
     env.original.write_bytes(source.read_bytes())
     result = env.library.add([source])
-    entry, = result.installed
+    (entry,) = result.installed
     monkeypatch.setattr(env.library, "_cached_build", lambda *a, **kw: pytest.fail("already installed"))
     before = env.original.stat().st_mtime_ns
     assert env.library.apply("test", f"mod:{entry.id}").unchanged
@@ -2358,7 +2521,7 @@ def test_an_adopted_overwritten_mod_applies_as_unchanged_without_a_build(setup_l
 
 def test_unchanged_apply_restamps_identical_bytes_and_confirmation_finds_their_use(setup_library):
     env = setup_library
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input")])
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input")])
     source = f"mod:{entry.id}"
     env.library.apply("test", source)
     env.library.profiles.update(lambda data: data["folders"][env.library.current_pin().key]["configured"].clear())
@@ -2372,6 +2535,7 @@ def test_unchanged_apply_restamps_identical_bytes_and_confirmation_finds_their_u
 
 # --- originals share blocks or move, with a durable record before either game path changes ---
 
+
 class InterruptedWrite(BaseException):
     """A process exit, bypassing the ordinary exception rollback."""
 
@@ -2379,10 +2543,11 @@ class InterruptedWrite(BaseException):
 @pytest.mark.parametrize("cloning", [False, True])
 def test_original_moves_or_clones_and_restores_without_a_byte_copy(setup_library, monkeypatch, cloning):
     from bmpt.library import service
+
     env = setup_library
     official = env.original.read_bytes()
     inode = env.original.stat().st_ino
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input", fixed=True)])
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input", fixed=True)])
     clones = []
 
     def clone(source, target):
@@ -2420,10 +2585,11 @@ def test_original_moves_or_clones_and_restores_without_a_byte_copy(setup_library
 @pytest.mark.parametrize("point", ["journal", "copied", "kept", "prepared", "first_part", "saved"])
 def test_crash_recovers_every_part_and_the_previous_records(setup_library, monkeypatch, point):
     from bmpt.library import service
+
     env = setup_library
     atlas = game_bundle(env.game_dir, part="002", payload=b"atlas")
     before = {path: path.read_bytes() for path in (atlas, env.original)}
-    entry, = env.library.add([make_mod(path, env.tmp / "input", fixed=True) for path in before])
+    (entry,) = env.library.add([make_mod(path, env.tmp / "input", fixed=True) for path in before])
     monkeypatch.setattr(storage, "_clone", lambda *args: False)
     move, copy, save = service.verified_move, service.atomic_copy, service.atomic_json
     replace, verify = storage.os.replace, storage.verify_file
@@ -2449,13 +2615,16 @@ def test_crash_recovers_every_part_and_the_previous_records(setup_library, monke
         if point == "saved" and path.name == "journal.json" and data["phase"] == "committed":
             crash()
         save(path, data)
-        if path.name == "journal.json" and ((point == "journal" and data["phase"] == "preparing")
-                                            or (point == "prepared" and data["phase"] == "writing")):
+        if path.name == "journal.json" and (
+            (point == "journal" and data["phase"] == "preparing")
+            or (point == "prepared" and data["phase"] == "writing")
+        ):
             crash()
 
     def replacing(source, target):
         if point == "copied" and source in before and target.parent == env.root / "originals":
             import errno
+
             raise OSError(errno.EXDEV, "Different volumes")
         return replace(source, target)
 
@@ -2487,9 +2656,10 @@ def test_crash_recovers_every_part_and_the_previous_records(setup_library, monke
 @pytest.mark.parametrize("published", [False, True])
 def test_commit_marker_failure_keeps_recoverable_files_and_state(setup_library, monkeypatch, published):
     from bmpt.library import service
+
     env = setup_library
     official = env.original.read_bytes()
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input", fixed=True)])
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input", fixed=True)])
     monkeypatch.setattr(storage, "_clone", lambda *args: False)
     save = service.atomic_json
 
@@ -2513,9 +2683,10 @@ def test_commit_marker_failure_keeps_recoverable_files_and_state(setup_library, 
 
 def test_a_state_flush_failure_after_publication_rolls_back_its_records(setup_library, monkeypatch):
     from bmpt.library import service
+
     env = setup_library
     official = env.original.read_bytes()
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input", fixed=True)])
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input", fixed=True)])
     save = service.atomic_json
     failed = False
 
@@ -2535,9 +2706,10 @@ def test_a_state_flush_failure_after_publication_rolls_back_its_records(setup_li
 
 def test_recovery_follows_a_relocated_library(setup_library, monkeypatch):
     from bmpt.library import service
+
     env = setup_library
     official = env.original.read_bytes()
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input", fixed=True)])
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input", fixed=True)])
     monkeypatch.setattr(storage, "_clone", lambda *args: False)
     move = service.verified_move
 
@@ -2558,12 +2730,14 @@ def test_recovery_follows_a_relocated_library(setup_library, monkeypatch):
 
 
 @pytest.mark.parametrize("crash_again", [False, True])
-def test_crash_during_restore_returns_original_to_library_before_rolling_back_mod(setup_library, monkeypatch,
-                                                                                crash_again):
+def test_crash_during_restore_returns_original_to_library_before_rolling_back_mod(
+    setup_library, monkeypatch, crash_again
+):
     from bmpt.library import service
+
     env = setup_library
     official = env.original.read_bytes()
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input", fixed=True)])
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input", fixed=True)])
     monkeypatch.setattr(storage, "_clone", lambda *args: False)
     env.library.apply("test", f"mod:{entry.id}")
     modded = env.original.read_bytes()
@@ -2598,9 +2772,9 @@ def test_crash_during_restore_returns_original_to_library_before_rolling_back_mo
 
 
 @pytest.mark.parametrize("dev_sandbox", [False, True], ids=["normal", "dev-sandbox"])
-def test_recovery_repeats_game_and_caller_checks_before_restoring_missing_file(setup_library, monkeypatch,
-                                                                            dev_sandbox):
+def test_recovery_repeats_game_and_caller_checks_before_restoring_missing_file(setup_library, monkeypatch, dev_sandbox):
     from bmpt.library import service
+
     env = setup_library
     # Writable dev sandboxes deliberately skip the running-game check.
     if dev_sandbox:
@@ -2610,7 +2784,7 @@ def test_recovery_repeats_game_and_caller_checks_before_restoring_missing_file(s
         monkeypatch.delenv("BAMT_DEV_ROOTS", raising=False)
         monkeypatch.delenv("BAMT_DEV_WRITABLE", raising=False)
     official = env.original.read_bytes()
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input", fixed=True)])
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input", fixed=True)])
     monkeypatch.setattr(storage, "_clone", lambda *args: False)
     move = service.verified_move
 
@@ -2672,8 +2846,9 @@ def test_recovery_repeats_game_and_caller_checks_before_restoring_missing_file(s
 def test_prune_waits_for_the_shared_transaction_lock(setup_library, monkeypatch):
     from contextlib import contextmanager
     from bmpt.library import service
+
     env = setup_library
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input", fixed=True)])
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input", fixed=True)])
     env.library.apply("test", f"mod:{entry.id}")
     env.library.restore("test")
     original = env.library._original_path(env.original)
@@ -2701,7 +2876,7 @@ def test_prune_waits_for_the_shared_transaction_lock(setup_library, monkeypatch)
 def test_recovery_keeps_an_external_change_and_the_only_official_original(setup_library, monkeypatch):
     env = setup_library
     official = env.original.read_bytes()
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input", fixed=True)])
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input", fixed=True)])
     monkeypatch.setattr(storage, "_clone", lambda *args: False)
 
     def log(message):
@@ -2721,9 +2896,10 @@ def test_recovery_keeps_an_external_change_and_the_only_official_original(setup_
 
 def test_recovery_does_not_recreate_a_file_a_game_update_superseded(setup_library, monkeypatch):
     from bmpt.library import service
+
     env = setup_library
     official = env.original.read_bytes()
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input", fixed=True)])
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input", fixed=True)])
     monkeypatch.setattr(storage, "_clone", lambda *args: False)
     move = service.verified_move
     original = env.library._original_path(env.original)
@@ -2751,11 +2927,12 @@ def test_recovery_does_not_recreate_a_file_a_game_update_superseded(setup_librar
 
 def test_recovery_of_a_superseded_file_drops_only_its_own_record(setup_library, monkeypatch):
     from bmpt.library import service
+
     env = setup_library
     atlas = game_bundle(env.game_dir, part="002", payload=b"atlas")
     mods = [make_mod(path, env.tmp / "input", fixed=True) for path in (atlas, env.original)]
     modded_atlas = mods[0].read_bytes()
-    entry, = env.library.add(mods)
+    (entry,) = env.library.add(mods)
     monkeypatch.setattr(storage, "_clone", lambda *args: False)
     env.library.apply("test", f"mod:{entry.id}")
     assert str(env.original.resolve()) in env.library._applied
@@ -2784,9 +2961,10 @@ def test_recovery_of_a_superseded_file_drops_only_its_own_record(setup_library, 
 
 def test_recovery_restores_a_missing_file_that_has_no_successor(setup_library, monkeypatch):
     from bmpt.library import service
+
     env = setup_library
     official = env.original.read_bytes()
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input", fixed=True)])
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input", fixed=True)])
     monkeypatch.setattr(storage, "_clone", lambda *args: False)
     move = service.verified_move
 
@@ -2810,7 +2988,7 @@ def test_recovery_restores_a_missing_file_that_has_no_successor(setup_library, m
 def test_off_and_on_with_no_clone_rekeep_the_moved_original(setup_library, monkeypatch):
     env = setup_library
     official = env.original.read_bytes()
-    entry, = env.library.add([make_mod(env.original, env.tmp / "input", fixed=True)])
+    (entry,) = env.library.add([make_mod(env.original, env.tmp / "input", fixed=True)])
     monkeypatch.setattr(storage, "_clone", lambda *args: False)
     source = f"mod:{entry.id}"
     env.library.apply("test", source)
@@ -2829,7 +3007,7 @@ def test_missing_official_journal_recovers_outside_bytes_after_interrupted_rollb
     for path in targets:
         path.write_bytes(header_bundle(b"outside " + path.name[-20:].encode()))
     before = {path: path.read_bytes() for path in targets}
-    mod, = env.library.add([make_mod(path, env.tmp / "incoming") for path in targets])
+    (mod,) = env.library.add([make_mod(path, env.tmp / "incoming") for path in targets])
     copy = service.atomic_copy
 
     def fail_second(source, target):
@@ -2862,7 +3040,7 @@ def test_adapted_apply_without_official_target_keeps_the_outside_mod(setup_libra
     outside = env.original.read_bytes()
     source = "variant:other"
     if source_type == "mod":
-        mod, = env.library.add([make_mod(other, env.tmp / "incoming")])
+        (mod,) = env.library.add([make_mod(other, env.tmp / "incoming")])
         source = f"mod:{mod.id}"
     swap_by_copying(monkeypatch)
     result = env.library.apply("test", source)
@@ -2882,17 +3060,22 @@ def _old_release(env, directory):
 
 def _plan_actions(env, entry):
     library = env.library
-    return [(file.action, file.existing_path, group.target_paths)
-            for group in library._plan(library._record(entry.id), lambda message: None, library.current_pin())
-            for file in group.files]
+    return [
+        (file.action, file.existing_path, group.target_paths)
+        for group in library._plan(library._record(entry.id), lambda message: None, library.current_pin())
+        for file in group.files
+    ]
 
 
 def test_a_rebuilt_parts_older_release_is_planned_as_an_asset_update(setup_library, monkeypatch):
     env = setup_library
-    entry, = env.library.add([_old_release(env, env.tmp / "old")])
+    (entry,) = env.library.add([_old_release(env, env.tmp / "old")])
     # the game update rebuilt the part: the game's file has another structure than the mod's
-    monkeypatch.setattr(service.integrity.Inspection, "structure", lambda self, path: frozenset(
-        {"rebuilt" if env.game_dir in path.parents else "old"}))
+    monkeypatch.setattr(
+        service.integrity.Inspection,
+        "structure",
+        lambda self, path: frozenset({"rebuilt" if env.game_dir in path.parents else "old"}),
+    )
     assert _plan_actions(env, entry) == [(Action.UPDATE, None, [env.original])]
     files = {path.name: path for path in env.library._paths(env.library._record(entry.id))}
     assert env.library._replacements(files, [env.original], env.library.current_pin()) == {}
@@ -2900,18 +3083,23 @@ def test_a_rebuilt_parts_older_release_is_planned_as_an_asset_update(setup_libra
 
 def test_a_file_built_on_the_part_as_it_is_replaces_it_whole_after_a_format_check(setup_library, monkeypatch):
     env = setup_library
-    entry, = env.library.add([_old_release(env, env.tmp / "old")])
+    (entry,) = env.library.add([_old_release(env, env.tmp / "old")])
     monkeypatch.setattr(service.integrity.Inspection, "structure", lambda self, path: frozenset({"same"}))
     assert _plan_actions(env, entry) == [(Action.DIRECT_REPLACE, env.original, [])]
     # another Unity version than the part's: never written whole
-    monkeypatch.setattr(service.integrity, "metadata", lambda path, **kwargs: service.integrity.Contents(
-        platforms={"StandaloneWindows64"}, versions={"2021.3" if env.game_dir in path.parents else "2022.3"}))
+    monkeypatch.setattr(
+        service.integrity,
+        "metadata",
+        lambda path, **kwargs: service.integrity.Contents(
+            platforms={"StandaloneWindows64"}, versions={"2021.3" if env.game_dir in path.parents else "2022.3"}
+        ),
+    )
     expect_error("mod_unity_version_mismatch", lambda: _plan_actions(env, entry))
 
 
 def test_a_file_whose_structure_cannot_be_read_keeps_the_name_rule(setup_library, monkeypatch):
     env = setup_library
-    entry, = env.library.add([_old_release(env, env.tmp / "old")])
+    (entry,) = env.library.add([_old_release(env, env.tmp / "old")])
 
     def unreadable(self, path):
         raise ServiceError("bundle_invalid", file=path.name)

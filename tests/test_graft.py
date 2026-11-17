@@ -37,11 +37,15 @@ def orders(data: bytes, animation: str) -> list[list[str]]:
 
 # --- the walk
 
+
 @pytest.mark.parametrize("nonessential", [False, True])
 def test_a_skeleton_is_walked_to_its_last_byte_and_written_back_as_it_was(nonessential):
-    data = skeleton(slots=[("body", "root", "b"), ("face", "root", "a")], nonessential=nonessential,
-                    skin={"face": [("a", region()), ("c", region(rotation=90, path="c_region"))], "body": [("b", QUAD)]},
-                    animations=[("00", {"face": ["a"]}, []), ("01", {"face": ["c"]}, [["face", "body"]])])
+    data = skeleton(
+        slots=[("body", "root", "b"), ("face", "root", "a")],
+        nonessential=nonessential,
+        skin={"face": [("a", region()), ("c", region(rotation=90, path="c_region"))], "body": [("b", QUAD)]},
+        animations=[("00", {"face": ["a"]}, []), ("01", {"face": ["c"]}, [["face", "body"]])],
+    )
     sk = Skeleton(data)
     assert sk.emit(0, sk.size) == data
     assert sk.nonessential is nonessential
@@ -79,23 +83,28 @@ def test_a_draw_order_frame_decodes_to_the_order_it_was_written_for(order):
     slots = [(name, "root", None) for name in "abcd"]
     data = skeleton(slots=slots, animations=[("00", {}, [["abcd"[i] for i in order]])])
     assert orders(data, "00") == [["abcd"[i] for i in order]]
-    assert draw_order_bytes(order)[:1] == bytes([sum(1 for i, slot in enumerate(order) if slot != i)]) \
-        or draw_order_bytes(order)[:1] == bytes([4])
+    assert draw_order_bytes(order)[:1] == bytes(
+        [sum(1 for i, slot in enumerate(order) if slot != i)]
+    ) or draw_order_bytes(order)[:1] == bytes([4])
 
 
 # --- the skeleton graft
 
+
 def official(**kwargs) -> bytes:
     slots = kwargs.pop("slots", [("body", "root", "b"), ("face", "root", "a"), ("glow", "root", "g")])
-    skin = kwargs.pop("skin", {"body": [("b", region())], "face": [("a", region()), ("new", region(x=1))],
-                               "glow": [("g", region())]})
+    skin = kwargs.pop(
+        "skin", {"body": [("b", region())], "face": [("a", region()), ("new", region(x=1))], "glow": [("g", region())]}
+    )
     animations = kwargs.pop("animations", [("00", {"face": ["a"]}, []), ("17", {"face": ["new"]}, [])])
     return skeleton(slots=slots, skin=skin, animations=animations, **kwargs)
 
 
 def test_an_animation_the_mod_lacks_comes_with_the_attachment_it_shows_and_nothing_else_changes():
-    mod = official(skin={"body": [("b", region(w=9))], "face": [("a", region(w=7))], "glow": [("g", region())]},
-                   animations=[("00", {"face": ["a"]}, [])])
+    mod = official(
+        skin={"body": [("b", region(w=9))], "face": [("a", region(w=7))], "glow": [("g", region())]},
+        animations=[("00", {"face": ["a"]}, [])],
+    )
     g = graft.SkeletonGraft(mod, official())
     out = g.build()
     assert names(out) == ["00", "17"] and not g.refused and not g.inserted
@@ -104,12 +113,15 @@ def test_an_animation_the_mod_lacks_comes_with_the_attachment_it_shows_and_nothi
     # the mod's own attachment keeps its record
     assert sk.attachments()[("default", "face", "a")]["floats"][-2] == 7
     # everything of the mod's file up to its animations is as it was but for the strings and the entry count
-    assert out[:len(mod)].count(b"new") <= 1 and len(out) > len(mod)
+    assert out[: len(mod)].count(b"new") <= 1 and len(out) > len(mod)
 
 
 def test_a_slot_the_new_animation_needs_is_inserted_in_the_official_order_and_the_mods_draw_order_follows():
-    mod = skeleton(slots=[("body", "root", "b"), ("glow", "root", "g")], skin={"body": [("b", region())],
-                   "glow": [("g", region())]}, animations=[("00", {}, [["glow", "body"]])])
+    mod = skeleton(
+        slots=[("body", "root", "b"), ("glow", "root", "g")],
+        skin={"body": [("b", region())], "glow": [("g", region())]},
+        animations=[("00", {}, [["glow", "body"]])],
+    )
     new = official(animations=[("00", {}, [["glow", "body", "face"]]), ("17", {"face": ["new"]}, [])])
     g = graft.SkeletonGraft(mod, new)
     out = g.build()
@@ -121,8 +133,11 @@ def test_a_slot_the_new_animation_needs_is_inserted_in_the_official_order_and_th
 
 
 def test_draw_order_of_a_carried_animation_is_recomputed_for_the_mods_slot_list():
-    mod = skeleton(slots=[("body", "root", "b"), ("extra", "root", None), ("face", "root", "a"), ("glow", "root", "g")],
-                   skin={"face": [("a", region())]}, animations=[("00", {}, [])])
+    mod = skeleton(
+        slots=[("body", "root", "b"), ("extra", "root", None), ("face", "root", "a"), ("glow", "root", "g")],
+        skin={"face": [("a", region())]},
+        animations=[("00", {}, [])],
+    )
     new = official(animations=[("00", {}, []), ("17", {"face": ["new"]}, [["glow", "face", "body"]])])
     out = graft.SkeletonGraft(mod, new).build()
     assert orders(out, "17") == [["glow", "face", "body", "extra"]]
@@ -131,9 +146,14 @@ def test_draw_order_of_a_carried_animation_is_recomputed_for_the_mods_slot_list(
 @pytest.mark.parametrize("mod_ness, new_ness", [(False, True), (True, False)])
 def test_carried_records_follow_whether_the_mods_file_holds_nonessential_data(mod_ness, new_ness):
     skin = {"body": [("b", region())], "face": [("a", region()), ("new", QUAD)], "glow": [("g", region())]}
-    new = official(skin=skin, nonessential=new_ness, animations=[("00", {"face": ["a"]}, []), ("17", {"face": ["new"]}, [])])
-    mod = official(skin={"body": [("b", region())], "face": [("a", region())], "glow": [("g", region())]},
-                   nonessential=mod_ness, animations=[("00", {"face": ["a"]}, [])])
+    new = official(
+        skin=skin, nonessential=new_ness, animations=[("00", {"face": ["a"]}, []), ("17", {"face": ["new"]}, [])]
+    )
+    mod = official(
+        skin={"body": [("b", region())], "face": [("a", region())], "glow": [("g", region())]},
+        nonessential=mod_ness,
+        animations=[("00", {"face": ["a"]}, [])],
+    )
     out = graft.SkeletonGraft(mod, new).build()
     sk = Skeleton(out)  # walks to the last byte
     assert sk.nonessential is mod_ness
@@ -141,11 +161,17 @@ def test_carried_records_follow_whether_the_mods_file_holds_nonessential_data(mo
 
 
 def test_an_animation_that_needs_a_bone_the_mod_lacks_is_refused_with_the_reason():
-    new = official(bones=(("root", None), ("hat", "root")),
-                   slots=[("body", "root", "b"), ("face", "root", "a"), ("glow", "root", "g"), ("cap", "hat", None)],
-                   skin={"body": [("b", region())], "face": [("a", region()), ("new", region())], "glow": [("g", region())],
-                         "cap": [("c", region())]},
-                   animations=[("00", {"face": ["a"]}, []), ("17", {"face": ["new"]}, []), ("18", {"cap": ["c"]}, [])])
+    new = official(
+        bones=(("root", None), ("hat", "root")),
+        slots=[("body", "root", "b"), ("face", "root", "a"), ("glow", "root", "g"), ("cap", "hat", None)],
+        skin={
+            "body": [("b", region())],
+            "face": [("a", region()), ("new", region())],
+            "glow": [("g", region())],
+            "cap": [("c", region())],
+        },
+        animations=[("00", {"face": ["a"]}, []), ("17", {"face": ["new"]}, []), ("18", {"cap": ["c"]}, [])],
+    )
     mod = official(animations=[("00", {"face": ["a"]}, [])])
     g = graft.SkeletonGraft(mod, new)
     assert [a["name"] for a in g.animations] == ["17"]
@@ -154,10 +180,13 @@ def test_an_animation_that_needs_a_bone_the_mod_lacks_is_refused_with_the_reason
 
 # --- placement
 
+
 def test_a_carried_region_follows_the_mods_bone_and_a_sheared_one_goes_as_a_mesh():
     new = official()
-    mod = official(skin={"body": [("b", region())], "face": [("a", region())], "glow": [("g", region())]},
-                   animations=[("00", {"face": ["a"]}, [])])
+    mod = official(
+        skin={"body": [("b", region())], "face": [("a", region())], "glow": [("g", region())]},
+        animations=[("00", {"face": ["a"]}, [])],
+    )
     g = graft.SkeletonGraft(mod, new)
     carried = next(iter(g.carried.values()))
     turn = np.array([[0.0, -2.0, 5.0], [2.0, 0.0, -3.0], [0, 0, 1]])  # 90 degrees, twice the size, moved
@@ -225,8 +254,10 @@ def test_a_carried_region_goes_where_the_mods_rig_samples_nothing_with_its_pixel
 
 def test_a_full_page_grows_downward_in_whole_rows_and_the_atlas_follows_in_either_syntax():
     mod, new = pages()
-    legacy = "page.png\nsize: 32,32\nformat: RGBA8888\nfilter: Linear,Linear\nrepeat: none\nface\n  rotate: false\n" \
-             "  xy: 0, 0\n  size: 32, 32\n  orig: 32, 32\n  offset: 0, 0\n  index: -1\n"
+    legacy = (
+        "page.png\nsize: 32,32\nformat: RGBA8888\nfilter: Linear,Linear\nrepeat: none\nface\n  rotate: false\n"
+        "  xy: 0, 0\n  size: 32, 32\n  orig: 32, 32\n  offset: 0, 0\n  index: -1\n"
+    )
     for text in (ATLAS.replace("bounds:0,0,8,8", "bounds:0,0,32,32"), legacy):
         packed = graft.pack(text, OFFICIAL, ["new"], {"page": mod}, {"official": new}, setup_drawing((0, 0, 32, 32)))
         assert packed.grown["page.png"] % graft.ROWS == 0
@@ -250,6 +281,7 @@ def test_a_page_larger_than_its_atlas_declares_takes_the_region_scaled():
 
 # --- the check
 
+
 def drawn(x, page="p", colour=None):
     v = np.array([[x, 0], [x + 10, 0], [x + 10, 10], [x, 10]], dtype=float)
     uv = np.array([[0, 1], [1, 1], [1, 0], [0, 0]], dtype=float)
@@ -267,17 +299,34 @@ def test_a_part_is_compared_with_the_official_part_on_the_rendered_picture():
 
 
 def test_posted_setup_geometry_is_checked():
-    good = {"bones": {"root": [1, 0, 0, 1, 0, 0]}, "slotBones": {"face": "root"},
-            "skin": [{"slot": "face", "name": "a", "page": "page.png", "world": [0, 0, 1, 0, 1, 1],
-                      "uvs": [0, 0, 1, 0, 1, 1], "tris": [0, 1, 2]}]}
+    good = {
+        "bones": {"root": [1, 0, 0, 1, 0, 0]},
+        "slotBones": {"face": "root"},
+        "skin": [
+            {
+                "slot": "face",
+                "name": "a",
+                "page": "page.png",
+                "world": [0, 0, 1, 0, 1, 1],
+                "uvs": [0, 0, 1, 0, 1, 1],
+                "tris": [0, 1, 2],
+            }
+        ],
+    }
     assert graft.setup(good).slot_bones == {"face": "root"}
-    for bad in ({**good, "bones": {"root": [1, 0, 0, 1, 0, float("nan")]}}, {**good, "slotBones": {"face": "arm"}},
-                {**good, "skin": [{**good["skin"][0], "tris": [0, 1, 3]}]}, [], {**good, "bones": None}):
+    for bad in (
+        {**good, "bones": {"root": [1, 0, 0, 1, 0, float("nan")]}},
+        {**good, "slotBones": {"face": "arm"}},
+        {**good, "skin": [{**good["skin"][0], "tris": [0, 1, 3]}]},
+        [],
+        {**good, "bones": None},
+    ):
         with pytest.raises(graft.GraftError):
             graft.setup(bad)
 
 
 # --- official skeletons: remove and graft back
+
 
 def official_skeletons() -> list[bytes]:
     folder = os.environ.get("BAMT_TEST_GAME_DIR")
@@ -296,14 +345,14 @@ def official_skeletons() -> list[bytes]:
 
 def animations_by_name(data: bytes) -> dict[str, bytes]:
     sk = Skeleton(data)
-    return {a["name"]: sk.data[a["start"]:a["end"]] for a in sk.animations}
+    return {a["name"]: sk.data[a["start"] : a["end"]] for a in sk.animations}
 
 
 def test_official_animations_taken_out_and_grafted_back_are_what_they_were():
     for data in official_skeletons():
         assert Skeleton(data).emit(0, len(data)) == data
         numbered = [a["name"] for a in Skeleton(data).animations if re.fullmatch(r"\d+", a["name"])]
-        take = numbered[-max(1, len(numbered) // 3):]
+        take = numbered[-max(1, len(numbered) // 3) :]
         for mod in (remove_animations(data, take), strip_nonessential(remove_animations(data, take))):
             g = graft.SkeletonGraft(mod, data)
             out = g.build()
@@ -343,10 +392,16 @@ def test_a_page_beyond_the_largest_one_a_graft_packs_is_refused():
 
 # --- events, and rigs without a picture to compare (memorial lobbies, Spine backgrounds)
 
+
 def test_an_event_a_new_animation_fires_is_appended_to_the_mods_event_list_and_nothing_of_the_mods_moves():
-    new = official(events=["mine", ("voice", "talk.wav"), "step"],
-                   animations=[("00", {"face": ["a"]}, [], ["mine"]), ("17", {"face": ["new"]}, [], ["voice", "step"]),
-                               ("18", {}, [], ["step"])])
+    new = official(
+        events=["mine", ("voice", "talk.wav"), "step"],
+        animations=[
+            ("00", {"face": ["a"]}, [], ["mine"]),
+            ("17", {"face": ["new"]}, [], ["voice", "step"]),
+            ("18", {}, [], ["step"]),
+        ],
+    )
     mod = official(events=["mine"], animations=[("00", {"face": ["a"]}, [], ["mine"])])
     g = graft.SkeletonGraft(mod, new)
     out = g.build()
@@ -354,17 +409,26 @@ def test_an_event_a_new_animation_fires_is_appended_to_the_mods_event_list_and_n
     assert g.events_added == ["voice", "step"]
     sk = Skeleton(out)  # walks to the last byte
     assert sk.events == ["mine", "voice", "step"] and sk.audio == [False, True, False]
-    fired = {a["name"]: [sk.events[v] for _x, _y, kind, v in sk.refs_in(a["body"], a["end"]) if kind == "event"]
-             for a in sk.animations}
+    fired = {
+        a["name"]: [sk.events[v] for _x, _y, kind, v in sk.refs_in(a["body"], a["end"]) if kind == "event"]
+        for a in sk.animations
+    }
     assert fired == {"00": ["mine"], "17": ["voice", "step"], "18": ["step"]}
 
 
 def test_an_event_is_carried_only_for_an_animation_that_is_carried():
-    new = official(bones=(("root", None), ("hat", "root")), events=["voice"],
-                   slots=[("body", "root", "b"), ("face", "root", "a"), ("glow", "root", "g"), ("cap", "hat", None)],
-                   skin={"body": [("b", region())], "face": [("a", region())], "glow": [("g", region())],
-                         "cap": [("c", region())]},
-                   animations=[("00", {"face": ["a"]}, []), ("18", {"cap": ["c"]}, [], ["voice"])])
+    new = official(
+        bones=(("root", None), ("hat", "root")),
+        events=["voice"],
+        slots=[("body", "root", "b"), ("face", "root", "a"), ("glow", "root", "g"), ("cap", "hat", None)],
+        skin={
+            "body": [("b", region())],
+            "face": [("a", region())],
+            "glow": [("g", region())],
+            "cap": [("c", region())],
+        },
+        animations=[("00", {"face": ["a"]}, []), ("18", {"cap": ["c"]}, [], ["voice"])],
+    )
     g = graft.SkeletonGraft(official(animations=[("00", {"face": ["a"]}, [])]), new)
     assert g.refused == {"18": ["bone:hat"]} and not g.events_added and not g.animations
 
@@ -385,17 +449,23 @@ def test_a_pack_with_no_region_to_place_changes_no_page():
 def test_a_plain_graft_carries_the_animations_and_attachments_with_the_official_records():
     skin = {"body": [("b", region())], "face": [("a", region()), ("new", region(x=3))], "glow": [("g", region())]}
     new = official(skin=skin)
-    mod = official(skin={"body": [("b", region(w=9))], "face": [("a", region(w=7))], "glow": [("g", region())]},
-                   animations=[("00", {"face": ["a"]}, [])])
+    mod = official(
+        skin={"body": [("b", region(w=9))], "face": [("a", region(w=7))], "glow": [("g", region())]},
+        animations=[("00", {"face": ["a"]}, [])],
+    )
     mod_atlas = "page.png\nsize:32,32\nfilter:Linear,Linear\na\nbounds:0,0,8,8\nb\nbounds:8,0,8,8\ng\nbounds:16,0,4,4\n"
-    official_atlas = ("official.png\nsize:16,16\nfilter:Linear,Linear\na\nbounds:0,0,4,4\nb\nbounds:4,0,4,4\n"
-                      "g\nbounds:8,8,2,2\nnew\nbounds:8,0,4,6\n")
+    official_atlas = (
+        "official.png\nsize:16,16\nfilter:Linear,Linear\na\nbounds:0,0,4,4\nb\nbounds:4,0,4,4\n"
+        "g\nbounds:8,8,2,2\nnew\nbounds:8,0,4,6\n"
+    )
     page, source = pages()
     out = graft.plain(mod, mod_atlas, {"page": page}, new, official_atlas, {"official": source})
     assert names(out.skeleton) == ["00", "17"] and list(out.results) == ["17"]
     sk = Skeleton(out.skeleton)
-    assert sk.attachments()[("default", "face", "new")]["floats"] == Skeleton(new).attachments()[
-        ("default", "face", "new")]["floats"]
+    assert (
+        sk.attachments()[("default", "face", "new")]["floats"]
+        == Skeleton(new).attachments()[("default", "face", "new")]["floats"]
+    )
     assert "\nnew\n" in out.atlas and "page" in out.pages
 
 
@@ -429,8 +499,11 @@ def remove_events(data: bytes, count: int) -> tuple[bytes, list[str]]:
     sk = Skeleton(data)
     n = len(sk.events)
     gone_events = set(range(n - count, n))
-    gone = [a for a in sk.animations
-            if any(kind == "event" and v in gone_events for _a, _b, kind, v in sk.refs_in(a["body"], a["end"]))]
+    gone = [
+        a
+        for a in sk.animations
+        if any(kind == "event" and v in gone_events for _a, _b, kind, v in sk.refs_in(a["body"], a["end"]))
+    ]
     patches = {(a["start"], a["end"]): b"" for a in gone}
     patches[(sk.anim_count_at, sk.anim_at)] = varint_bytes(len(sk.animations) - len(gone))
     patches[(sk.events_count_at, sk.events_at)] = varint_bytes(n - count)
@@ -445,8 +518,10 @@ def canonical(data: bytes) -> dict[str, bytes]:
     first: dict = {}
     for i, text in enumerate(sk.strings, 1):
         first.setdefault(text, i)
-    return {a["name"]: sk.emit(a["start"], a["end"], lambda kind, v: first[sk.s(v)] if kind == "str" and v else v)
-            for a in sk.animations}
+    return {
+        a["name"]: sk.emit(a["start"], a["end"], lambda kind, v: first[sk.s(v)] if kind == "str" and v else v)
+        for a in sk.animations
+    }
 
 
 def test_official_lobby_animations_and_events_taken_out_and_grafted_back_are_what_they_were():
@@ -457,7 +532,7 @@ def test_official_lobby_animations_and_events_taken_out_and_grafted_back_are_wha
         if len(sk.events) >= 2:
             mod, gone = remove_events(data, max(1, len(sk.events) // 3))
         else:
-            take = [a["name"] for a in sk.animations][-max(1, len(sk.animations) // 3):]
+            take = [a["name"] for a in sk.animations][-max(1, len(sk.animations) // 3) :]
             mod, gone = remove_animations(data, take), take
         if not gone:
             continue

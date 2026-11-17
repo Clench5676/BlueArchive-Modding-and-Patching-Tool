@@ -45,9 +45,21 @@ UPDATE_QUIT_WAIT = 3.0  # seconds for the native window to close for an update
 # /asset/ kinds the shown page draws as previews (portraits, lobbies, backgrounds, 3D models): class 1 of the ordering
 PREVIEW_ASSETS = frozenset({"spine", "art", "office", "model"})
 # the library's files and folders a library move takes along; the lock files are made again where needed
-LIBRARY_ITEMS = ("mods", "originals", "built", "transactions", "import-transactions", "asset-deletions", "photographs",
-                 "state.json", "state.json.prev", "state.json.bad", "profiles.json", "profiles.json.prev",
-                 "profiles.json.bad")
+LIBRARY_ITEMS = (
+    "mods",
+    "originals",
+    "built",
+    "transactions",
+    "import-transactions",
+    "asset-deletions",
+    "photographs",
+    "state.json",
+    "state.json.prev",
+    "state.json.bad",
+    "profiles.json",
+    "profiles.json.prev",
+    "profiles.json.bad",
+)
 
 
 # errno values of a write refused by permissions or a read-only volume
@@ -181,24 +193,42 @@ def _now() -> str:
 
 def _changed_of(result: Any) -> dict[str, list[str]]:
     """``library.changed``'s data for a job's result: the cores and kinds it switched or added."""
-    if hasattr(result, "duplicates") or (isinstance(result, list)
-                                        and any(isinstance(m, dict) and "target" in m for m in result)):
-        switched = [*getattr(result, "applied", []), *getattr(result, "configured", []),
-                    *getattr(result, "installed", [])]
+    if hasattr(result, "duplicates") or (
+        isinstance(result, list) and any(isinstance(m, dict) and "target" in m for m in result)
+    ):
+        switched = [
+            *getattr(result, "applied", []),
+            *getattr(result, "configured", []),
+            *getattr(result, "installed", []),
+        ]
         return {"cores": sorted({m.core for m in switched}), "kinds": sorted({m.kind for m in switched}), "mods": True}
     cores, kinds = getattr(result, "cores", None), getattr(result, "kinds", None)
     if cores is not None and kinds is not None:
-        return {"cores": sorted(cores), "kinds": sorted(kinds),
-                **({"mods": True} if getattr(result, "mods_changed", False)
-                   or any(item.get("kept_current") for item in getattr(result, "done", [])) else {})}
+        return {
+            "cores": sorted(cores),
+            "kinds": sorted(kinds),
+            **(
+                {"mods": True}
+                if getattr(result, "mods_changed", False)
+                or any(item.get("kept_current") for item in getattr(result, "done", []))
+                else {}
+            ),
+        }
     files = getattr(result, "files", None)
     if isinstance(files, list):
         from ..library.judge import core_of
+
         names = [core_of(Path(f).name) for f in files if isinstance(f, (str, Path))]
         cores = sorted({c for c in names if c})
         from ..library.judge import kind_of_file
-        kinds = sorted({kind_of_file(Path(f).name) or ("spr" if parse_filename(Path(f).name).core.endswith("_spr")
-                                                     else "lobby") for f in files if isinstance(f, (str, Path))})
+
+        kinds = sorted(
+            {
+                kind_of_file(Path(f).name) or ("spr" if parse_filename(Path(f).name).core.endswith("_spr") else "lobby")
+                for f in files
+                if isinstance(f, (str, Path))
+            }
+        )
         return {"cores": cores, "kinds": kinds, **({"mods": True} if getattr(result, "kept_current", False) else {})}
     mod = getattr(result, "mod", None)
     if mod is not None and getattr(mod, "core", None):
@@ -237,10 +267,21 @@ class Services:
     and the queue of the writes waiting for it to close.
     """
 
-    def __init__(self, settings: Settings | None = None, data_dir: Path = EXE_DIR, *,
-                 events: EventBus | None = None, jobs: JobRunner | None = None, state: UiState | None = None,
-                 cache: Any = None, game: Any = None, catalog: Any = None, library: Any = None,
-                 classic_options: dict[str, Any] | None = None, safe_mode: bool = False):
+    def __init__(
+        self,
+        settings: Settings | None = None,
+        data_dir: Path = EXE_DIR,
+        *,
+        events: EventBus | None = None,
+        jobs: JobRunner | None = None,
+        state: UiState | None = None,
+        cache: Any = None,
+        game: Any = None,
+        catalog: Any = None,
+        library: Any = None,
+        classic_options: dict[str, Any] | None = None,
+        safe_mode: bool = False,
+    ):
         devmode.check_read(data_dir)
         self.timings = Timings()
         spans.install(self.timings)  # game assets and the library record their waits here
@@ -258,11 +299,16 @@ class Services:
         # Steam's file list of each install, parsed once for the library's judgements and the error report
         self.steam_files = steam_records.OfficialFiles()
         from .diagnostics import Reports
+
         self.reports = Reports(self.data_dir, services=self, safe_mode=safe_mode)
         self.reports.secrets = self.log_secrets
         game_dir = self.settings.game_dir()
-        self.reports.game = {"found": bool(game_dir and game_dir.is_dir()), "server": self.settings.server_region(),
-                             "platform": "Android" if self.settings.is_adb_mode() else "Windows", "resourceVersion": None}
+        self.reports.game = {
+            "found": bool(game_dir and game_dir.is_dir()),
+            "server": self.settings.server_region(),
+            "platform": "Android" if self.settings.is_adb_mode() else "Windows",
+            "resourceVersion": None,
+        }
         self.events = events or EventBus()
         # the page pauses its preview deadlines while a preview waits for a job (the model lock, a costume build)
         events_bus = self.events
@@ -274,7 +320,9 @@ class Services:
         self.close_coordinator = None
         self.window: Any = None  # the pywebview window, when there is one (see native.py)
         self.update_info: Any = None  # the last update check's result
-        self.update_file: tuple[Path, str, str] | None = None  # verified path, MD5 and release version, for this session
+        self.update_file: tuple[Path, str, str] | None = (
+            None  # verified path, MD5 and release version, for this session
+        )
         self.update_installing = False
         self._pending_update: tuple[Callable[[], None], Future] | None = None
         self.kivo = Kivo()
@@ -295,7 +343,9 @@ class Services:
         self._preview_cache = None
         self._injected = {k for k, v in (("game", game), ("catalog", catalog), ("library", library)) if v is not None}
         self._other_games: dict[str, Any] = {}  # other installs' GameAssets by install key, for <core>@<id> URLs
-        self._install_stamps: tuple | None = None  # game_found: the listing stamps of the folders last found to hold a game
+        self._install_stamps: tuple | None = (
+            None  # game_found: the listing stamps of the folders last found to hold a game
+        )
         self._prune_job: str | None = None
         self._startup_ready = True  # start() defers maintenance until the page reports its first reveal
         self._profiles_signature: Any = None
@@ -305,11 +355,18 @@ class Services:
         self._strings_cache: tuple[str, dict[str, str]] | None = None
         self.snapshot = ModsSnapshot()
         self.queue = ClassicQueue()
-        self.classic = ClassicWindow(self.data_dir, origin=lambda: self.origin, publish=self.events.publish,
-                                     **{"native": _WindowOps(self), **(classic_options or {}),
-                                        "on_change": self._classic_changed, "on_closed": self._classic_closed})
-        self.scanner = Scanner(self._scan, allowed=self.scan_allowed, writer_busy=self.jobs.busy,
-                               on_done=self._scanned)
+        self.classic = ClassicWindow(
+            self.data_dir,
+            origin=lambda: self.origin,
+            publish=self.events.publish,
+            **{
+                "native": _WindowOps(self),
+                **(classic_options or {}),
+                "on_change": self._classic_changed,
+                "on_closed": self._classic_closed,
+            },
+        )
+        self.scanner = Scanner(self._scan, allowed=self.scan_allowed, writer_busy=self.jobs.busy, on_done=self._scanned)
         self.jobs.translate = self.translate_error
         self.jobs.listen(self._job_finished)
         self.jobs.listen(lambda job: self.reports.job_finished(job))
@@ -383,8 +440,9 @@ class Services:
         if by_version:
             namespace = getattr(game, "preview_namespace", None)
             if namespace is None:
-                namespace = json.dumps([self.settings.get("file_source"), str(self.settings.game_dir()),
-                                        game.resource_version])
+                namespace = json.dumps(
+                    [self.settings.get("file_source"), str(self.settings.game_dir()), game.resource_version]
+                )
         elif dirs is not None:
             namespace = json.dumps(["install", [str(path) for path in dirs]])
         else:
@@ -433,8 +491,11 @@ class Services:
         if private:
             # Light indexes contain bundle paths, so give each other installation its own memory cache.
             # The separately consented preview store includes the install identity in every key.
-            return GameAssets(dirs, AssetCache(allowed=False, max_bytes=128 * 1024 * 1024, root=self.cache_dir()),
-                              preview_cache=self.preview_cache)
+            return GameAssets(
+                dirs,
+                AssetCache(allowed=False, max_bytes=128 * 1024 * 1024, root=self.cache_dir()),
+                preview_cache=self.preview_cache,
+            )
         return GameAssets(dirs, self.cache, preview_cache=self.preview_cache)
 
     def game_found(self) -> bool:
@@ -457,8 +518,10 @@ class Services:
         if base is None:
             return False
         try:
-            stamps = tuple((str(path), stat.st_mtime_ns, stat.st_ino)
-                           for path, stat in ((path, path.stat()) for path in get_search_dirs(base)))
+            stamps = tuple(
+                (str(path), stat.st_mtime_ns, stat.st_ino)
+                for path, stat in ((path, path.stat()) for path in get_search_dirs(base))
+            )
         except OSError:
             return False
         if self._install_stamps == stamps:
@@ -477,8 +540,11 @@ class Services:
                 csv = Path(self.settings.get("bacii_map_path"))
                 # recruitable follows the server of the selected game folder
                 with self.timings.measure("catalog.open"):
-                    self._catalog = Catalog(self.game if self.game_found() else None, csv if csv.exists() else None,
-                                            server=self.settings.server_region())
+                    self._catalog = Catalog(
+                        self.game if self.game_found() else None,
+                        csv if csv.exists() else None,
+                        server=self.settings.server_region(),
+                    )
             return self._catalog
 
     @property
@@ -495,9 +561,15 @@ class Services:
                 game = self.game if self.game_found() else None
                 with self.timings.measure("library.open"):
                     built = self._library = ModLibrary(
-                        self.library_dir(), self.catalog, game, self.settings, scan_allowed=self.scan_allowed,
-                        data_id=self.state.data_id(self.data_dir), write_check=self._write_check,
-                        steam_files=self.steam_files)
+                        self.library_dir(),
+                        self.catalog,
+                        game,
+                        self.settings,
+                        scan_allowed=self.scan_allowed,
+                        data_id=self.state.data_id(self.data_dir),
+                        write_check=self._write_check,
+                        steam_files=self.steam_files,
+                    )
                 lock = getattr(built, "_lock", None)
                 if lock is not None and hasattr(lock, "on_wait"):
                     # the page pauses its preview deadlines while a read waits for the library
@@ -506,8 +578,9 @@ class Services:
             # Establish the baseline before any caller (including an add or adoption job) gets the library. A library
             # that could not read its state answers empty: that is no baseline (every mod would count as new later).
             unreadable = getattr(library, "state_unreadable", None)
-            self.state.seen_mods(None if unreadable is not None and unreadable() else
-                                 lambda: [m.id for m in library.mods()])
+            self.state.seen_mods(
+                None if unreadable is not None and unreadable() else lambda: [m.id for m in library.mods()]
+            )
             if built is not None:
                 # kept originals the game no longer needs (verified in the launcher, replaced by a game update) are
                 # deleted once per library, on the job worker so no apply runs meanwhile; the judging of the
@@ -574,6 +647,7 @@ class Services:
                         self._cache.root = new
                     elif old.is_dir() and old.name == "cache" and old.parent.name in (APP_DIR_NAME, OLD_APP_DIR_NAME):
                         shutil.rmtree(old, ignore_errors=True)
+
                 preview_cache.relocate(new / "previews", clear_old)
         return new
 
@@ -601,8 +675,11 @@ class Services:
             raise ServiceError("busy")  # a running job still writes through the current library
 
         def has_library(folder: Path) -> bool:
-            return ((folder / "state.json").exists() or (folder / "profiles.json").exists()
-                    or (folder / "photographs" / "index.json").exists())
+            return (
+                (folder / "state.json").exists()
+                or (folder / "profiles.json").exists()
+                or (folder / "photographs" / "index.json").exists()
+            )
 
         self.scanner.cancel()  # a running scan reads the current library
         self.scanner.wait_idle(5.0)
@@ -630,8 +707,10 @@ class Services:
             if relocation is not None:
                 left = relocation.finish()
                 if left:
-                    logger.warning("the old library folder still holds %s; the library is complete in the new folder",
-                                   ", ".join(left))
+                    logger.warning(
+                        "the old library folder still holds %s; the library is complete in the new folder",
+                        ", ".join(left),
+                    )
         self.snapshot.clear_entries()
         self.events.publish("library.changed")
         self.refresh_status()
@@ -769,8 +848,16 @@ class Services:
 
     # --- jobs ---
 
-    def submit(self, kind: str, fn: Callable[..., Any], *, writes: str | None = None, library: Any = None,
-               rank: int = USER, **params: Any) -> str:
+    def submit(
+        self,
+        kind: str,
+        fn: Callable[..., Any],
+        *,
+        writes: str | None = None,
+        library: Any = None,
+        rank: int = USER,
+        **params: Any,
+    ) -> str:
         """Submit a job. A writer job (``writes``: "game" or "library") ends on the worker with the library's
         judging of the unfinished list, a new ``mods.state`` snapshot, ``library.changed {cores, kinds}`` and a scan
         (with scan consent); ``library`` is the library it works through, captured at submit. ``rank``: the job's
@@ -809,7 +896,8 @@ class Services:
         replace_scan = self.scanner.running or self.scanner.invalidated
         pruned = library.take_pruned_cores() if library is not None else set()
         if kind not in ("library.prune", "library.judge") and (
-                kind != "mods.add" or result or getattr(result, "installed", None) or replace_scan or pruned):
+            kind != "mods.add" or result or getattr(result, "installed", None) or replace_scan or pruned
+        ):
             changed = _changed_of(result)
             cores = set(changed["cores"]) if not failed and kind in ("apply", "restore") else None
             variant = getattr(result, "variant", None)
@@ -836,6 +924,7 @@ class Services:
     def _progress(self, progress: Callable[..., Any]) -> Callable[..., Any]:
         """A toggle's progress callback that also feeds ``mods.state.progress`` ("Working 12/40"). The job reports
         its item at hand as a dict (``mod_progress``): the items before it are done, and it is once its share is whole."""
+
         def report(current: int | dict[str, Any], total: int | None = None, label: str = "") -> None:
             progress(current, total, label)
             if isinstance(current, dict):
@@ -1005,8 +1094,13 @@ class Services:
         library = self._library
         if library is None or self.jobs.active("library.judge"):
             return None
-        return self.submit("library.judge", lambda log, progress: {"dropped": library.judge_unfinished()},
-                           writes="library", library=library, rank=MAINTENANCE)
+        return self.submit(
+            "library.judge",
+            lambda log, progress: {"dropped": library.judge_unfinished()},
+            writes="library",
+            library=library,
+            rank=MAINTENANCE,
+        )
 
     # --- the classic window ---
 
@@ -1067,8 +1161,9 @@ class Services:
             enabled, expect = params.get("enabled"), params.get("expect")
             if not isinstance(enabled, bool) or not isinstance(expect, bool):
                 raise ServiceError("bad_params", key="enabled")
-            call = QueuedCall(method, {"enabled": enabled, "expect": expect},
-                              pins={pin.key: pin for pin in library.installs()})
+            call = QueuedCall(
+                method, {"enabled": enabled, "expect": expect}, pins={pin.key: pin for pin in library.installs()}
+            )
             count = self.queue.add(call, intent=library.intent()["enabled"])
         elif method in ("actions.apply", "actions.restore"):
             variant, kind = params.get("variant"), params.get("kind", "spr")
@@ -1082,12 +1177,15 @@ class Services:
             pin = self._current_pin(library)
             if kind == "other":
                 from ..library.judge import core_of
+
                 states = library.state(variant, pin=pin).files
                 entries = tuple(sorted({(pin.key, core_of(f.file.name)) for f in states}))
                 if not entries:
                     raise ServiceError("game_file_not_found", variant=variant)
-                files = {entry: stat_files([str(f.file) for f in states if core_of(f.file.name) == entry[1]])
-                         for entry in entries}
+                files = {
+                    entry: stat_files([str(f.file) for f in states if core_of(f.file.name) == entry[1]])
+                    for entry in entries
+                }
                 call = QueuedCall(method, clean, entries=entries, pins={pin.key: pin}, files=files, current=True)
                 count = self.queue.add(call)
                 self.publish_state()
@@ -1099,8 +1197,9 @@ class Services:
             core = getattr(found, kind, None) or ""
             files = [str(f.file) for f in library.state(variant, pin=pin).files if f.kind == kind]
             entry = (pin.key, core.lower())
-            call = QueuedCall(method, clean, entries=(entry,), pins={pin.key: pin}, files={entry: stat_files(files)},
-                              current=True)
+            call = QueuedCall(
+                method, clean, entries=(entry,), pins={pin.key: pin}, files={entry: stat_files(files)}, current=True
+            )
             count = self.queue.add(call)
         else:  # mods.restoreDrift
             listed = params.get("entries")
@@ -1121,8 +1220,13 @@ class Services:
                 files[key] = stat_files([str(f.file) for f in entry.files] if entry is not None else [])
             if not keys:
                 raise ServiceError("bad_params", key="entries")
-            call = QueuedCall(method, {"entries": items}, entries=tuple(keys),
-                              pins={key[0]: pins[key[0]] for key in keys}, files=files)
+            call = QueuedCall(
+                method,
+                {"entries": items},
+                entries=tuple(keys),
+                pins={key[0]: pins[key[0]] for key in keys},
+                files=files,
+            )
             count = self.queue.add(call)
         self.publish_state()
         return count
@@ -1175,8 +1279,9 @@ class Services:
         except ServiceError as error:
             intent = {"reason": error.code}
         status = dict(self.snapshot.status() or {})
-        status.update({key: value for key, value in intent.items()
-                       if key in ("enabled", "toggled", "unfinished", "reason")})
+        status.update(
+            {key: value for key, value in intent.items() if key in ("enabled", "toggled", "unfinished", "reason")}
+        )
         if _intent_key(status) == self._intent_seen:
             return False
         self.refresh_status(library)
@@ -1204,9 +1309,14 @@ class Services:
             pending, stuck, left = unfinished["pending"], unfinished["stuck"], unfinished["left"]
         reason, params = self._reason(status)
         strings = self._strings()
-        installs = [{**{k: v for k, v in item.items() if k != "distinct"},
-                     "label": install_label(strings, item.get("server", "global"), item.get("distinct")),
-                     "distinct": item.get("distinct")} for item in status.get("installs") or []]
+        installs = [
+            {
+                **{k: v for k, v in item.items() if k != "distinct"},
+                "label": install_label(strings, item.get("server", "global"), item.get("distinct")),
+                "distinct": item.get("distinct"),
+            }
+            for item in status.get("installs") or []
+        ]
         return {
             "installs": installs,
             "current": status.get("current"),
@@ -1222,8 +1332,12 @@ class Services:
             "left": left,
             "held": unfinished["held"],
             "heldEntries": held,
-            "unfinished": {"pending": unfinished["pending"], "left": unfinished["left"],
-                           "stuck": unfinished["stuck"], "held": unfinished["held"]},
+            "unfinished": {
+                "pending": unfinished["pending"],
+                "left": unfinished["left"],
+                "stuck": unfinished["stuck"],
+                "held": unfinished["held"],
+            },
             "drift": count(lambda e: e.state in ("reset", "updated") and not e.dismissed),
             "untracked": count(lambda e: e.state in ("untracked", "changed") and not e.dismissed),
             "damaged": count(lambda e: e.state == "damaged"),
@@ -1280,6 +1394,7 @@ class Services:
                 return
             self._startup_ready = True
         from ..updater import finalize_windows_update
+
         finalize_windows_update()
         threading.Thread(target=self._warm, name="bamt-library", daemon=True).start()
 
@@ -1335,11 +1450,17 @@ class Services:
             return
         self.watch = GameWatch(
             installs=lambda: [item["folder"] for item in (self.snapshot.status() or {}).get("installs") or []],
-            find_classic=self.classic.orphan, profiles_seen=self.profiles_seen,
-            on_change=lambda state: self.publish_state(), publish=self.events.publish,
-            request_scan=self.request_scan, active=lambda: self.events.listeners() > 0 or self.tray_shown,
-            own_classic=self._own_classic, on_classic_closed=self._orphan_closed, on_steam_idle=self._steam_idle,
-            steam_allowed=self.scan_allowed)
+            find_classic=self.classic.orphan,
+            profiles_seen=self.profiles_seen,
+            on_change=lambda state: self.publish_state(),
+            publish=self.events.publish,
+            request_scan=self.request_scan,
+            active=lambda: self.events.listeners() > 0 or self.tray_shown,
+            own_classic=self._own_classic,
+            on_classic_closed=self._orphan_closed,
+            on_steam_idle=self._steam_idle,
+            steam_allowed=self.scan_allowed,
+        )
         if run:
             self.watch.start()
 
@@ -1381,9 +1502,11 @@ class Services:
         if self.jobs.busy():
             raise ServiceError("busy")
         if self.close_coordinator is not None:
+
             def close():
                 self.restart_requested = restart
                 self.chrome.close()
+
             self.close_coordinator.request(close, cancelled=lambda: setattr(self, "restart_requested", False))
             return
         if self.window is not None:
@@ -1537,8 +1660,11 @@ class Services:
             clip = query.get("clip") or None
             extra = {"clip": clip} if clip else {}
             # How long each preview source takes end to end: lock waits, CRC checks and the export.
-            with spans.span("asset.model." + ("clip." if clip else "")
-                            + (kind if kind in ("live", "official", "mod", "import", "variant") else "other")):
+            with spans.span(
+                "asset.model."
+                + ("clip." if clip else "")
+                + (kind if kind in ("live", "official", "mod", "import", "variant") else "other")
+            ):
                 if field_only:  # no slot: its own files only, never a mod or another costume
                     if source not in ("live", "official"):
                         raise KeyError(path)
@@ -1561,6 +1687,7 @@ class Services:
         before the export and before any verdict is saved); once set, ``jobs.Cancelled`` ends the check with no
         verdict saved, so the pair is checked again next time; the build stops at its next step
         (``costume_preview``)."""
+
         def stop() -> None:
             if cancelled is not None and cancelled():
                 raise Cancelled()
@@ -1604,9 +1731,14 @@ class Services:
         if source == "live":
             return self.game.model_glb(core, **extra)
         if source == "official":
-            return self.game.model_glb(core, overrides=self.library.official_bundles(core, current_fallback=True),
-                                       reads=self.library.preview_reads("official"), **extra)
+            return self.game.model_glb(
+                core,
+                overrides=self.library.official_bundles(core, current_fallback=True),
+                reads=self.library.preview_reads("official"),
+                **extra,
+            )
         from ..library.judge import core_of, kind_of_file
+
         try:
             cores = set(getattr(self.library, "model_cores", lambda key: [core])(target))
         except ServiceError as error:
@@ -1615,8 +1747,9 @@ class Services:
             cores = {core}  # An indexed NPC prefab can have no catalog variant.
 
         def fits(bundles: list[Path]) -> bool:
-            return bool(bundles) and all(kind_of_file(bundle.name) == "model" and core_of(bundle.name) in cores
-                                         for bundle in bundles)
+            return bool(bundles) and all(
+                kind_of_file(bundle.name) == "model" and core_of(bundle.name) in cores for bundle in bundles
+            )
 
         if source.startswith("mod:"):
             mod_id = source[4:]
@@ -1722,8 +1855,9 @@ class Services:
         response = self._spine_file(kind, key, name, bundles)
         # A switch between the skeleton and page requests must fail the load, never mix revisions. Also reject
         # changes during extraction, before any bytes from the changed composition reach the player.
-        if bundles is not None and (self._revision(kind, key, bundles) != current
-                                    or self._spine_bundles(kind, key) != bundles):
+        if bundles is not None and (
+            self._revision(kind, key, bundles) != current or self._spine_bundles(kind, key) != bundles
+        ):
             raise KeyError(f"Spine source changed during extraction: {kind}/{key}")
         return response
 
@@ -1750,7 +1884,10 @@ class Services:
                 info = self._camera_layout(game, key) if camera else game.lobby_info(core)
                 layer = next((layer for layer in info["layers"] if layer["name"] == info.get("main")), None)
                 layer = layer or next(iter(info["layers"]), lobby.STANDARD)
-                return _json({"view": info["view"], "layer": {k: layer[k] for k in ("name", "x", "y", "scale") if k in layer}}, light=False)
+                return _json(
+                    {"view": info["view"], "layer": {k: layer[k] for k in ("name", "x", "y", "scale") if k in layer}},
+                    light=False,
+                )
             except AssetNotFound:
                 return _json({"view": lobby.GAME_VIEW, "layer": lobby.STANDARD}, light=False)
         if kind == "lobby" and name == "lobby.json":
@@ -1762,8 +1899,9 @@ class Services:
         if kind == "mod" and name == "lobby.json":
             # a lobby camera's layout: its own prefab; any other mod has none of its own
             return _json(self._camera_layout(game, key), light=False)
-        if kind == "mod" and (name.startswith("fx_") and name.endswith(".png")
-                              or name.startswith("sfx_") and name.endswith(".wav")):
+        if kind == "mod" and (
+            name.startswith("fx_") and name.endswith(".png") or name.startswith("sfx_") and name.endswith(".wav")
+        ):
             # A lobby camera's layout route is its own, so the lobby asks it for the effect textures and sounds its
             # lobby.json names: those of the lobby it frames, read from the game files like the lobby's own
             found = getattr(self.library, "camera_prefab", lambda _id: None)(key)
@@ -1834,8 +1972,10 @@ class Services:
         kept = getattr(self.library, "rig_stamp", lambda _id: "")(key) if kind == "mod" else ""
         if not recorded and not kept:
             return revision
-        rigs = sorted([name, entry.get("layout"), hashlib.sha1(entry["skeleton"].encode("ascii")).hexdigest()]
-                      for name, entry in recorded.items())
+        rigs = sorted(
+            [name, entry.get("layout"), hashlib.sha1(entry["skeleton"].encode("ascii")).hexdigest()]
+            for name, entry in recorded.items()
+        )
         return hashlib.sha256(json.dumps([revision, rigs, kept]).encode()).hexdigest()
 
     def _drawn_as_made(self, mod_id: str, files: dict[str, bytes]) -> dict[str, bytes]:
@@ -1846,8 +1986,9 @@ class Services:
         from ..gameassets.spine import atlas_pages
         from ..library.fingerprint import drawn_on
 
-        recorded = self._recorded_rig(mod_id, {name: data for name, data in files.items()
-                                               if name.lower().endswith(".atlas")})
+        recorded = self._recorded_rig(
+            mod_id, {name: data for name, data in files.items() if name.lower().endswith(".atlas")}
+        )
         rig = drawn_on(recorded, files) if recorded else {}
         if not rig:
             return files
@@ -1877,8 +2018,9 @@ class Services:
         # stored parameters
         with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
             output = Path(temporary) / official.name
-            patch_prefab(official, output, meta["root"], meta["scale"], tuple(meta["offset"]), timeline=timeline,
-                         crc=False)
+            patch_prefab(
+                official, output, meta["root"], meta["scale"], tuple(meta["offset"]), timeline=timeline, crc=False
+            )
             return game.lobby_info(meta["core"], prefab=output)
 
     def close(self, wait: float | None = 600.0) -> None:
@@ -1894,7 +2036,9 @@ def skeleton_file(files: Mapping[str, Any], core: str, suffix: str) -> str | Non
     """The file "skeleton.skel" / "skeleton.atlas" stands for: the skeleton named after the core, else the only one,
     else, for a set of several (ui_set holds 22 raid and world boss banners), the first by name; its atlas is the one
     of the same stem."""
-    stems = sorted({Path(k).stem for k in files if k.endswith(".skel")} | {Path(k).stem for k in files if k.endswith(".atlas")})
+    stems = sorted(
+        {Path(k).stem for k in files if k.endswith(".skel")} | {Path(k).stem for k in files if k.endswith(".atlas")}
+    )
     named = [stem for stem in stems if stem.lower() == core.lower()]
     stem = (named or sorted(Path(k).stem for k in files if k.endswith(".skel")) or stems or [None])[0]
     if stem is not None and f"{stem}{suffix}" in files:
@@ -1911,6 +2055,6 @@ def _stem(name: str) -> str:
 
 
 def _json(data: Any, light: bool) -> AssetResponse:
-    return AssetResponse(json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
-                         "application/json", light)
-
+    return AssetResponse(
+        json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8"), "application/json", light
+    )

@@ -25,8 +25,19 @@ def outside_dev_mode(monkeypatch):
 
 
 def test_semver_precedence():
-    order = ["0.1.0-alpha", "0.1.0-alpha.1", "0.1.0-alpha.beta", "0.1.0-beta", "0.1.0-beta.2", "0.1.0-beta.11",
-             "0.1.0-rc.1", "0.1.0", "0.1.1", "0.2.0", "1.0.0"]
+    order = [
+        "0.1.0-alpha",
+        "0.1.0-alpha.1",
+        "0.1.0-alpha.beta",
+        "0.1.0-beta",
+        "0.1.0-beta.2",
+        "0.1.0-beta.11",
+        "0.1.0-rc.1",
+        "0.1.0",
+        "0.1.1",
+        "0.2.0",
+        "1.0.0",
+    ]
     keys = [updater.parse_version(v) for v in order]
     assert keys == sorted(keys)
     assert updater.parse_version("v0.1.0") == updater.parse_version("0.1.0")
@@ -34,8 +45,13 @@ def test_semver_precedence():
 
 
 def release(tag, *names, draft=False, prerelease=True):
-    return {"tag_name": tag, "draft": draft, "prerelease": prerelease, "html_url": f"https://github.com/{updater.REPO}/releases/tag/{tag}",
-            "assets": [{"name": n, "browser_download_url": f"https://example.invalid/{n}", "size": 10} for n in names]}
+    return {
+        "tag_name": tag,
+        "draft": draft,
+        "prerelease": prerelease,
+        "html_url": f"https://github.com/{updater.REPO}/releases/tag/{tag}",
+        "assets": [{"name": n, "browser_download_url": f"https://example.invalid/{n}", "size": 10} for n in names],
+    }
 
 
 def test_latest_picks_the_newest_newer_release():
@@ -94,7 +110,11 @@ def test_latest_never_offers_a_downgrade_to_reach_a_build():
 
 
 def test_latest_falls_back_to_the_newest_release_when_none_has_a_build():
-    releases = [built("0.5.5", "-macos-arm64.dmg"), built("0.6.1-alpha", "-macos-arm64.dmg"), built("0.6.0", "-macos-arm64.dmg")]
+    releases = [
+        built("0.5.5", "-macos-arm64.dmg"),
+        built("0.6.1-alpha", "-macos-arm64.dmg"),
+        built("0.6.0", "-macos-arm64.dmg"),
+    ]
     info = updater.latest(releases, "0.5.0", WIN)
     assert info.version == "0.6.1-alpha" and info.prerelease and info.asset is None and not info.installable
     assert info.page.endswith("/releases/tag/0.6.1-alpha")
@@ -133,16 +153,24 @@ def test_download_checks_the_md5(tmp_path, monkeypatch):
     class Response:
         def __init__(self, data):
             self.data, self.headers = data, {"Content-Length": str(len(data))}
+
         def read(self, n=-1):
             data, self.data = self.data, b""
             return data
+
         def __enter__(self):
             return self
+
         def __exit__(self, *a):
             return False
 
-    info = updater.UpdateInfo("0.1.1", "0.1.0", "", updater.Asset("app.dmg", "https://x/app.dmg", len(payload)),
-                              updater.Asset("app.dmg.md5", "https://x/app.dmg.md5", 40))
+    info = updater.UpdateInfo(
+        "0.1.1",
+        "0.1.0",
+        "",
+        updater.Asset("app.dmg", "https://x/app.dmg", len(payload)),
+        updater.Asset("app.dmg.md5", "https://x/app.dmg.md5", 40),
+    )
     monkeypatch.setattr(updater.urllib.request, "urlopen", lambda req, timeout=0: Response(payload))
     monkeypatch.setattr(updater, "_get", lambda url, timeout: f"{good}  app.dmg".encode())
     seen = []
@@ -160,8 +188,8 @@ def test_scripts_wait_replace_and_restart():
     mac = updater.macos_script(Path("/tmp/u/new app.dmg"), Path("/Applications/Tool.app"), 42)
     assert "kill -0 42" in mac and "'/tmp/u/new app.dmg'" in mac and "open /Applications/Tool.app" in mac
     win = updater.windows_script([42, 7])
-    assert 'PID eq 42' in win and 'PID eq 7' in win and "goto move" in win
-    assert '[System.IO.File]::Replace' in win and 'Get-FileHash' in win and ':rollback' in win
+    assert "PID eq 42" in win and "PID eq 7" in win and "goto move" in win
+    assert "[System.IO.File]::Replace" in win and "Get-FileHash" in win and ":rollback" in win
     assert 'start "" /D "%BAMT_UPDATE_DIR%" "%BAMT_UPDATE_EXE%"' in win
     assert "setlocal DisableDelayedExpansion" in win
     win.encode("ascii")
@@ -173,8 +201,8 @@ def test_macos_helper_restarts_the_installed_app_when_the_image_cannot_mount(tmp
     stubs.mkdir()
     temporary.mkdir()
     opened = tmp_path / "opened.txt"
-    (stubs / "hdiutil").write_text("#!/bin/sh\necho \"$@\" >> \"$STUB_LOG\"\nexit 3\n")
-    (stubs / "open").write_text("#!/bin/sh\nprintf '%s\\n' \"$@\" >> \"$OPENED\"\n")
+    (stubs / "hdiutil").write_text('#!/bin/sh\necho "$@" >> "$STUB_LOG"\nexit 3\n')
+    (stubs / "open").write_text('#!/bin/sh\nprintf \'%s\\n\' "$@" >> "$OPENED"\n')
     for stub in stubs.iterdir():
         stub.chmod(0o755)
     app = tmp_path / "Apps" / "Tool's App.app"
@@ -185,8 +213,12 @@ def test_macos_helper_restarts_the_installed_app_when_the_image_cannot_mount(tmp
     gone.wait()
     script = tmp_path / "helper.sh"
     script.write_text(updater.macos_script(dmg, app, gone.pid))
-    env = {"PATH": f"{stubs}:/usr/bin:/bin", "TMPDIR": str(temporary), "OPENED": str(opened),
-           "STUB_LOG": str(tmp_path / "hdiutil.txt")}
+    env = {
+        "PATH": f"{stubs}:/usr/bin:/bin",
+        "TMPDIR": str(temporary),
+        "OPENED": str(opened),
+        "STUB_LOG": str(tmp_path / "hdiutil.txt"),
+    }
     result = subprocess.run(["/bin/sh", str(script)], env=env, timeout=30)
     assert result.returncode == 3
     assert opened.read_text().splitlines() == [str(app)]
@@ -216,7 +248,9 @@ def test_latest_assets_match_the_release_version(tag: str, suffix: str) -> None:
 
 @pytest.mark.parametrize("build, expected", [("win-amd64", "-windows-x64.exe"), ("win-arm64", None), ("win32", None)])
 def test_windows_suffix_uses_the_running_build_on_arm_hosts(
-    monkeypatch: pytest.MonkeyPatch, build: str, expected: str | None,
+    monkeypatch: pytest.MonkeyPatch,
+    build: str,
+    expected: str | None,
 ) -> None:
     monkeypatch.setattr(sys, "platform", "win32")
     monkeypatch.setattr(updater.platform, "machine", lambda: "ARM64")
@@ -227,7 +261,10 @@ def test_windows_suffix_uses_the_running_build_on_arm_hosts(
 @pytest.mark.parametrize("system", ["darwin", "win32"])
 @pytest.mark.parametrize("denied", ["target", "parent", None])
 def test_install_target_requires_writable_target_and_parent(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, system: str, denied: str | None,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    system: str,
+    denied: str | None,
 ) -> None:
     if system == "darwin":
         target = tmp_path / "Tool.app"
@@ -249,12 +286,16 @@ def test_install_target_requires_writable_target_and_parent(
     assert info.installable == (denied is None)
 
 
-@pytest.mark.parametrize("executable", [
-    "/Volumes/Tool/Tool.app/Contents/MacOS/Tool",
-    "/private/var/folders/test/AppTranslocation/random/d/Tool.app/Contents/MacOS/Tool",
-])
+@pytest.mark.parametrize(
+    "executable",
+    [
+        "/Volumes/Tool/Tool.app/Contents/MacOS/Tool",
+        "/private/var/folders/test/AppTranslocation/random/d/Tool.app/Contents/MacOS/Tool",
+    ],
+)
 def test_install_target_rejects_mounted_or_translocated_apps(
-    monkeypatch: pytest.MonkeyPatch, executable: str,
+    monkeypatch: pytest.MonkeyPatch,
+    executable: str,
 ) -> None:
     monkeypatch.setattr(sys, "platform", "darwin")
     monkeypatch.setattr(sys, "executable", executable)
@@ -263,7 +304,8 @@ def test_install_target_rejects_mounted_or_translocated_apps(
 
 
 def test_install_target_probes_directory_permissions_even_when_os_access_succeeds(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     exe = tmp_path / "Tool.exe"
     exe.touch()
@@ -281,7 +323,10 @@ def test_install_target_probes_directory_permissions_even_when_os_access_succeed
 @pytest.mark.parametrize("system", ["darwin", "win32"])
 @pytest.mark.parametrize("change", ["tampered", "missing", "invalid_digest"])
 def test_install_rejects_changed_or_unverified_downloads_before_spawning(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, system: str, change: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    system: str,
+    change: str,
 ) -> None:
     downloaded = tmp_path / "new build"
     downloaded.write_bytes(b"verified build")
@@ -305,7 +350,10 @@ def test_install_rejects_changed_or_unverified_downloads_before_spawning(
 @pytest.mark.parametrize("system", ["darwin", "win32"])
 @pytest.mark.parametrize("deferred", [False, True])
 def test_install_handoff_preserves_paths_and_hides_windows_console(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, system: str, deferred: bool,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    system: str,
+    deferred: bool,
 ) -> None:
     folder = tmp_path / "Möds 100% %PATH% !keep!"
     folder.mkdir()
@@ -357,9 +405,16 @@ def test_windows_helper_moves_with_literal_unicode_and_percent_paths(tmp_path: P
     target.write_text("old build", encoding="ascii")
     script = folder / "update.cmd"
     script.write_text(updater.windows_script([]), encoding="ascii")
-    env = dict(os.environ, BAMT_UPDATE_SCRIPT=str(script), BAMT_UPDATE_NEW_EXE=str(new),
-               BAMT_UPDATE_EXE=str(target), BAMT_UPDATE_MD5=expected, BAMT_UPDATE_DIR=str(folder),
-               BAMT_UPDATE_STAGE=str(folder / "stage.exe"), BAMT_UPDATE_BACKUP=str(folder / "backup.exe"))
+    env = dict(
+        os.environ,
+        BAMT_UPDATE_SCRIPT=str(script),
+        BAMT_UPDATE_NEW_EXE=str(new),
+        BAMT_UPDATE_EXE=str(target),
+        BAMT_UPDATE_MD5=expected,
+        BAMT_UPDATE_DIR=str(folder),
+        BAMT_UPDATE_STAGE=str(folder / "stage.exe"),
+        BAMT_UPDATE_BACKUP=str(folder / "backup.exe"),
+    )
     command = f'"{env.get("COMSPEC", "cmd.exe")}" /d /v:off /s /c ""%BAMT_UPDATE_SCRIPT%""'
     subprocess.run(command, env=env, creationflags=0x08000200, check=True, timeout=10)
     assert updater.md5_of(target) == expected
@@ -368,7 +423,9 @@ def test_windows_helper_moves_with_literal_unicode_and_percent_paths(tmp_path: P
 
 @pytest.mark.parametrize("macos", [False, True])
 def test_compiled_addons_are_copied_once_and_existing_maps_are_preserved(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, macos: bool,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    macos: bool,
 ) -> None:
     portable = tmp_path / "portable"
     extracted = tmp_path / "extracted"
@@ -379,12 +436,18 @@ def test_compiled_addons_are_copied_once_and_existing_maps_are_preserved(
     license_name = "BA-Characters-Internal-ID-LICENSE.txt"
     (bundled / csv).write_text("bundled map")
     (bundled / license_name).write_text("CC BY-SA 4.0")
-    monkeypatch.setattr(utils_paths, "__compiled__", SimpleNamespace(containing_dir=str(portable), macos_bundle_mode=macos),
-                        raising=False)
+    monkeypatch.setattr(
+        utils_paths,
+        "__compiled__",
+        SimpleNamespace(containing_dir=str(portable), macos_bundle_mode=macos),
+        raising=False,
+    )
     monkeypatch.setattr(utils_paths, "__file__", str(extracted / "ba_modding_toolkit" / "utils" / "paths.py"))
     monkeypatch.setattr(sys, "executable", str(extracted / "Tool" if macos else portable / "Tool.exe"))
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    expected_dir = tmp_path / "Library" / "Application Support" / "bluearchive-modding-patching-tool" if macos else portable
+    expected_dir = (
+        tmp_path / "Library" / "Application Support" / "bluearchive-modding-patching-tool" if macos else portable
+    )
     assert utils._get_exe_dir() == expected_dir
     assert (expected_dir / "Addons" / csv).read_text() == "bundled map"
     assert (expected_dir / "Addons" / license_name).read_text() == "CC BY-SA 4.0"
@@ -394,21 +457,27 @@ def test_compiled_addons_are_copied_once_and_existing_maps_are_preserved(
 
 
 def test_compiled_build_without_addons_still_returns_portable_directory(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(utils_paths, "__compiled__", SimpleNamespace(containing_dir=str(tmp_path)), raising=False)
-    monkeypatch.setattr(utils_paths, "__file__", str(tmp_path / "extracted" / "ba_modding_toolkit" / "utils" / "paths.py"))
+    monkeypatch.setattr(
+        utils_paths, "__file__", str(tmp_path / "extracted" / "ba_modding_toolkit" / "utils" / "paths.py")
+    )
     assert utils._get_exe_dir() == tmp_path
     assert not (tmp_path / "Addons").exists()
 
 
 def test_bundled_addons_do_not_prevent_launch_from_an_unwritable_install(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     bundled = tmp_path / "extracted" / "Addons"
     bundled.mkdir(parents=True)
     monkeypatch.setattr(utils_paths, "__compiled__", SimpleNamespace(containing_dir=str(tmp_path)), raising=False)
-    monkeypatch.setattr(utils_paths, "__file__", str(tmp_path / "extracted" / "ba_modding_toolkit" / "utils" / "paths.py"))
+    monkeypatch.setattr(
+        utils_paths, "__file__", str(tmp_path / "extracted" / "ba_modding_toolkit" / "utils" / "paths.py")
+    )
 
     def deny_copy(*args) -> None:
         raise PermissionError("install directory is read-only")
@@ -428,9 +497,14 @@ def release_workspace(tmp_path: Path) -> tuple[Path, dict[str, str]]:
     shutil.copyfile(Path(__file__).resolve().parents[1] / "scripts" / "release.sh", scripts / "release.sh")
     (repo / "pyproject.toml").write_text('[project]\nversion = "0.1.0"\n')
     env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
-    env.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull, GIT_AUTHOR_NAME="Release test",
-               GIT_AUTHOR_EMAIL="test@example.invalid", GIT_COMMITTER_NAME="Release test",
-               GIT_COMMITTER_EMAIL="test@example.invalid")
+    env.update(
+        GIT_CONFIG_NOSYSTEM="1",
+        GIT_CONFIG_GLOBAL=os.devnull,
+        GIT_AUTHOR_NAME="Release test",
+        GIT_AUTHOR_EMAIL="test@example.invalid",
+        GIT_COMMITTER_NAME="Release test",
+        GIT_COMMITTER_EMAIL="test@example.invalid",
+    )
     git = shutil.which("git")
     assert git is not None
     for args in (["init", "-q"], ["add", "."], ["-c", "commit.gpgsign=false", "commit", "-qm", "fixture"]):
@@ -440,19 +514,25 @@ def release_workspace(tmp_path: Path) -> tuple[Path, dict[str, str]]:
     (stubs / "python3").symlink_to(sys.executable)
     env.update(BAMT_REAL_GIT=git, BAMT_RELEASE_LOG=str(tmp_path / "publish.jsonl"), BAMT_RELEASE_EXISTS="0")
     git_stub = stubs / "git"
-    git_stub.write_text(f'#!{sys.executable}\n' + '''import json, os, sys
+    git_stub.write_text(
+        f"#!{sys.executable}\n"
+        + """import json, os, sys
 if sys.argv[1] != "push":
     os.execv(os.environ["BAMT_REAL_GIT"], [os.environ["BAMT_REAL_GIT"], *sys.argv[1:]])
 with open(os.environ["BAMT_RELEASE_LOG"], "a") as log:
     log.write(json.dumps(["git", *sys.argv[1:]]) + "\\n")
-''')
+"""
+    )
     gh_stub = stubs / "gh"
-    gh_stub.write_text(f'#!{sys.executable}\n' + '''import json, os, sys
+    gh_stub.write_text(
+        f"#!{sys.executable}\n"
+        + """import json, os, sys
 with open(os.environ["BAMT_RELEASE_LOG"], "a") as log:
     log.write(json.dumps(["gh", *sys.argv[1:]]) + "\\n")
 if sys.argv[1:3] == ["release", "view"]:
     sys.exit(0 if os.environ["BAMT_RELEASE_EXISTS"] == "1" else 1)
-''')
+"""
+    )
     git_stub.chmod(0o755)
     gh_stub.chmod(0o755)
     env["PATH"] = str(stubs) + os.pathsep + env["PATH"]
@@ -463,16 +543,20 @@ def run_release(repo: Path, env: dict[str, str], *names: str) -> subprocess.Comp
     """Run the real release script against local fixture builds."""
     for name in names:
         (repo / name).write_bytes(b"fixture build")
-    return subprocess.run(["bash", "scripts/release.sh", *names], cwd=repo, env=env, capture_output=True,
-                          text=True, timeout=15)
+    return subprocess.run(
+        ["bash", "scripts/release.sh", *names], cwd=repo, env=env, capture_output=True, text=True, timeout=15
+    )
 
 
-@pytest.mark.parametrize("name", [
-    "Blue-Archive-Modding-and-Patching-Tool-0.1.0-alpha-macos-arm64.dmg",
-    "Blue-Archive-Modding-and-Patching-Tool-0.1.0.1-macos-arm64.dmg",
-    "Blue-Archive-Modding-and-Patching-Tool-0.1.1-windows-x64.exe",
-    "Blue-Archive-Modding-and-Patching-Tool-0.1.0-windows-arm64.exe",
-])
+@pytest.mark.parametrize(
+    "name",
+    [
+        "Blue-Archive-Modding-and-Patching-Tool-0.1.0-alpha-macos-arm64.dmg",
+        "Blue-Archive-Modding-and-Patching-Tool-0.1.0.1-macos-arm64.dmg",
+        "Blue-Archive-Modding-and-Patching-Tool-0.1.1-windows-x64.exe",
+        "Blue-Archive-Modding-and-Patching-Tool-0.1.0-windows-arm64.exe",
+    ],
+)
 def test_release_rejects_wrong_version_and_unsupported_builds(release_workspace, name: str) -> None:
     repo, env = release_workspace
     result = run_release(repo, env, name)
@@ -492,8 +576,20 @@ def test_release_creates_exact_version_tag_and_checksum(release_workspace, suffi
     assert head == tagged
     commands = [json.loads(line) for line in Path(env["BAMT_RELEASE_LOG"]).read_text().splitlines()]
     assert commands[0] == ["git", "push", "origin", "refs/tags/0.1.0"]
-    assert commands[-1] == ["gh", "release", "create", "0.1.0", "--draft", "--verify-tag", "--title", "0.1.0", "--notes", "",
-                            name, name + ".md5"]
+    assert commands[-1] == [
+        "gh",
+        "release",
+        "create",
+        "0.1.0",
+        "--draft",
+        "--verify-tag",
+        "--title",
+        "0.1.0",
+        "--notes",
+        "",
+        name,
+        name + ".md5",
+    ]
 
 
 def test_release_rejects_cli_builds(release_workspace) -> None:
@@ -506,13 +602,20 @@ def test_release_rejects_cli_builds(release_workspace) -> None:
 
 @pytest.mark.parametrize("annotated", [False, True])
 @pytest.mark.parametrize("stale", [False, True])
-def test_release_reuses_only_tags_at_head_and_uploads_existing_releases(release_workspace, annotated: bool, stale: bool) -> None:
+def test_release_reuses_only_tags_at_head_and_uploads_existing_releases(
+    release_workspace, annotated: bool, stale: bool
+) -> None:
     repo, env = release_workspace
     tag_args = ["tag", "-a", "0.1.0", "-m", "release"] if annotated else ["tag", "0.1.0"]
     subprocess.run([env["BAMT_REAL_GIT"], *tag_args], cwd=repo, env=env, check=True, capture_output=True)
     if stale:
-        subprocess.run([env["BAMT_REAL_GIT"], "-c", "commit.gpgsign=false", "commit", "--allow-empty", "-qm", "fix"],
-                       cwd=repo, env=env, check=True, capture_output=True)
+        subprocess.run(
+            [env["BAMT_REAL_GIT"], "-c", "commit.gpgsign=false", "commit", "--allow-empty", "-qm", "fix"],
+            cwd=repo,
+            env=env,
+            check=True,
+            capture_output=True,
+        )
     env["BAMT_RELEASE_EXISTS"] = "1"
     name = "Blue-Archive-Modding-and-Patching-Tool-0.1.0-windows-x64.exe"
     result = run_release(repo, env, name)
@@ -543,26 +646,44 @@ def test_release_requires_exact_prerelease_version(release_workspace, build_vers
 
 
 def test_release_notes_belong_to_the_exact_detected_tag():
-    old = {**release('0.5.0'), 'body': 'Old notes'}
-    selected = {**release('v0.6.0'), 'body': '<script>literal</script>\n![image](https://example.invalid/x)'}
-    info = updater.latest([old, selected, {**release('0.7.0', draft=True), 'body': 'Draft'}], '0.4.0', None)
-    assert info.to_json()['notes'] == selected['body']
-    assert info.page == f'https://github.com/{updater.REPO}/releases/tag/v0.6.0'
-    for body in ('', None, {}, 42):
-        assert updater.latest([{**selected, 'body': body}], '0.4.0', None).notes == ''
+    old = {**release("0.5.0"), "body": "Old notes"}
+    selected = {**release("v0.6.0"), "body": "<script>literal</script>\n![image](https://example.invalid/x)"}
+    info = updater.latest([old, selected, {**release("0.7.0", draft=True), "body": "Draft"}], "0.4.0", None)
+    assert info.to_json()["notes"] == selected["body"]
+    assert info.page == f"https://github.com/{updater.REPO}/releases/tag/v0.6.0"
+    for body in ("", None, {}, 42):
+        assert updater.latest([{**selected, "body": body}], "0.4.0", None).notes == ""
 
 
-@pytest.mark.parametrize('version, expected', [
-    ('0.6.0-alpha.9', True), ('0.6.0-alpha.9-dev', True), ('0.6.0-dev', True),
-    ('0.6.0+alpha.9', False), ('0.6.0', False), ('invalid', False), (None, False),
-])
+@pytest.mark.parametrize(
+    "version, expected",
+    [
+        ("0.6.0-alpha.9", True),
+        ("0.6.0-alpha.9-dev", True),
+        ("0.6.0-dev", True),
+        ("0.6.0+alpha.9", False),
+        ("0.6.0", False),
+        ("invalid", False),
+        (None, False),
+    ],
+)
 def test_prerelease_preview_gate_uses_running_version(version, expected):
     assert updater.prerelease_previews(version) is expected
 
 
-@pytest.mark.parametrize('version, expected', [
-    ('0.7.0-alpha.9', True), ('0.7.0-beta.3', True), ('0.7.0-rc.2-dev', True), ('0.7.0-dev', True),
-    ('0.7.0-rc.2', False), ('0.7.0-rc', False), ('0.7.0', False), ('invalid', False), (None, False),
-])
+@pytest.mark.parametrize(
+    "version, expected",
+    [
+        ("0.7.0-alpha.9", True),
+        ("0.7.0-beta.3", True),
+        ("0.7.0-rc.2-dev", True),
+        ("0.7.0-dev", True),
+        ("0.7.0-rc.2", False),
+        ("0.7.0-rc", False),
+        ("0.7.0", False),
+        ("invalid", False),
+        (None, False),
+    ],
+)
 def test_button_size_tags_skip_packaged_release_candidates(version, expected):
     assert updater.button_size_tags(version) is expected

@@ -23,11 +23,16 @@ def make_group(tmp_path, core, action=install.Action.DIRECT_REPLACE, need_crc_fi
     source.write_bytes(payload)
     target.write_bytes(b"original")
     parsed = parse_filename(name)
-    file = install.PlannedFile(source, parsed, action,
-                               existing_path=target if action == install.Action.DIRECT_REPLACE else None,
-                               need_crc_fix=need_crc_fix)
-    return install.PlannedGroup(parsed.prefix, parsed.category, core, [file],
-                                target_paths=[target] if action == install.Action.UPDATE else [])
+    file = install.PlannedFile(
+        source,
+        parsed,
+        action,
+        existing_path=target if action == install.Action.DIRECT_REPLACE else None,
+        need_crc_fix=need_crc_fix,
+    )
+    return install.PlannedGroup(
+        parsed.prefix, parsed.category, core, [file], target_paths=[target] if action == install.Action.UPDATE else []
+    )
 
 
 @pytest.mark.parametrize("crc", [None, "mismatch", "missing"])
@@ -95,8 +100,9 @@ def test_groups_build_in_order_and_report_each_failure(tmp_path, monkeypatch):
         return RebuildResult(True, "updated", [FilePair(output, target_paths[0])])
 
     monkeypatch.setattr(install, "rebuild", update)
-    failures = install.install_staged(groups, tmp_path / "output", {"Texture2D"}, SaveOptions(),
-                                      progress=lambda *args: progress.append(args))
+    failures = install.install_staged(
+        groups, tmp_path / "output", {"Texture2D"}, SaveOptions(), progress=lambda *args: progress.append(args)
+    )
 
     assert set(failures) == {("failed", "incompatible skeleton"), ("raised", "unreadable bundle")}
     assert progress == [(i, len(groups), group.core) for i, group in enumerate(groups, 1)]

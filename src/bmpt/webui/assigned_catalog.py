@@ -21,8 +21,15 @@ def families_with_assignments(catalog: Any, assignments: Iterable[str]) -> list:
             families[family.key] = family
         families[available.key].variants.extend(selected)
     for family in families.values():
-        family.variants.sort(key=lambda variant: (variant.key != family.key, not variant.recruitable,
-                                                  not variant.playable, variant.order, variant.key))
+        family.variants.sort(
+            key=lambda variant: (
+                variant.key != family.key,
+                not variant.recruitable,
+                not variant.playable,
+                variant.order,
+                variant.key,
+            )
+        )
     return [families[key] for key in sorted(families)]
 
 
@@ -36,5 +43,7 @@ def family_with_assignments(catalog: Any, assignments: Iterable[str], key: str) 
 def stored_asset_fields(variant: Any, mods: Iterable[Any]) -> dict:
     """Preview availability is independent of local installation availability."""
     own = [mod for mod in mods if mod.target == variant.key]
-    return {"storedKinds": sorted({mod.kind for mod in own if mod.kind in ("spr", "lobby", "model")}),
-            "localKinds": [kind for kind in ("spr", "lobby", "model") if getattr(variant, kind, None)]}
+    return {
+        "storedKinds": sorted({mod.kind for mod in own if mod.kind in ("spr", "lobby", "model")}),
+        "localKinds": [kind for kind in ("spr", "lobby", "model") if getattr(variant, kind, None)],
+    }

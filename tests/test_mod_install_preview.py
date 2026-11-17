@@ -110,8 +110,7 @@ def test_preview_pairs_match_names_and_survive_extraction_cleanup(tmp_path, monk
     cache.mkdir()
     monkeypatch.setattr(preview, "_cache_dir", cache)
     monkeypatch.setattr(preview.Bundle, "list_asset_names", lambda *args: set())
-    specs = {current: ("alpha.skel", "sprite.png"),
-             source: ("alpha.skel", "beta.skel", "sprite.png", "added.png")}
+    specs = {current: ("alpha.skel", "sprite.png"), source: ("alpha.skel", "beta.skel", "sprite.png", "added.png")}
 
     def extract(bundle, directory, log):
         directory.mkdir(parents=True)
@@ -123,8 +122,15 @@ def test_preview_pairs_match_names_and_survive_extraction_cleanup(tmp_path, monk
                 Image.new("RGBA", (8, 12), "red" if bundle == current else "blue").save(path)
             else:
                 path.write_bytes(b"synthetic skeleton")
-            assets.append(preview._SideAsset(name, "Texture2D" if texture else "TextAsset",
-                                             "8x12" if texture else "spine", preview._sha(path), path))
+            assets.append(
+                preview._SideAsset(
+                    name,
+                    "Texture2D" if texture else "TextAsset",
+                    "8x12" if texture else "spine",
+                    preview._sha(path),
+                    path,
+                )
+            )
         return assets
 
     rendered = []
@@ -146,8 +152,9 @@ def test_preview_pairs_match_names_and_survive_extraction_cleanup(tmp_path, monk
     monkeypatch.setattr(preview, "render_spine_preview_from_bundle", render)
     viewer = tmp_path / "synthetic-viewer"
     viewer.touch()
-    result = preview._process_group(group, SpineViewer(viewer) if render_state != "absent" else None,
-                                     AnimCheckOptions(), lambda message: None)
+    result = preview._process_group(
+        group, SpineViewer(viewer) if render_state != "absent" else None, AnimCheckOptions(), lambda message: None
+    )
 
     assert result.error is None
     assert [pair.label for pair in result.previews] == [
@@ -187,14 +194,20 @@ class Variable:
 
 @pytest.mark.parametrize("current_index", [0, 3])
 def test_bulk_decisions_leave_uninstallable_groups_skipped(current_index):
-    groups = [SimpleNamespace(group_action=action) for action in (
-        InstallAction.DIRECT_REPLACE, InstallAction.UPDATE, InstallAction.NOT_FOUND, InstallAction.ERROR)]
+    groups = [
+        SimpleNamespace(group_action=action)
+        for action in (InstallAction.DIRECT_REPLACE, InstallAction.UPDATE, InstallAction.NOT_FOUND, InstallAction.ERROR)
+    ]
     refreshed = []
     dialog = SimpleNamespace(
-        groups=groups, current_index=current_index, decision_vars=[Variable(False) for _ in groups],
-        decision_var=Variable(False), _installable=preview.ModInstallDialog._installable,
+        groups=groups,
+        current_index=current_index,
+        decision_vars=[Variable(False) for _ in groups],
+        decision_var=Variable(False),
+        _installable=preview.ModInstallDialog._installable,
         _refresh_jump_list=lambda: refreshed.append("list"),
-        _update_confirm_text=lambda: refreshed.append("confirm"))
+        _update_confirm_text=lambda: refreshed.append("confirm"),
+    )
     preview.ModInstallDialog._set_all_decisions(dialog, True)
     assert [var.get() for var in dialog.decision_vars] == [True, True, False, False]
     assert dialog.decision_var.get() is (current_index == 0)
@@ -220,13 +233,19 @@ def test_parallel_preview_pipeline_finishes_classic_busy_tracking(tmp_path, monk
     monkeypatch.setattr(preview, "_process_group", process)
     monkeypatch.setattr(preview, "_render_cache", {})
     dialog = SimpleNamespace(
-        groups=groups, _pipeline_running=True, should_stop=lambda: False,
+        groups=groups,
+        _pipeline_running=True,
+        should_stop=lambda: False,
         after=lambda delay, callback, *args: callback(*args),
         _apply_result=lambda index, result: results.append((index, result)),
         set_task_running=running.append,
-        app=SimpleNamespace(get_render_backend=lambda: None, max_workers_var=Variable(2),
-                            build_anim_check_options=AnimCheckOptions,
-                            logger=SimpleNamespace(log=lambda message: None)))
+        app=SimpleNamespace(
+            get_render_backend=lambda: None,
+            max_workers_var=Variable(2),
+            build_anim_check_options=AnimCheckOptions,
+            logger=SimpleNamespace(log=lambda message: None),
+        ),
+    )
     preview.ModInstallDialog._pipeline_worker(dialog)
     assert {index for index, _ in results} == {0, 1}
     assert all(result.error is None for _, result in results)

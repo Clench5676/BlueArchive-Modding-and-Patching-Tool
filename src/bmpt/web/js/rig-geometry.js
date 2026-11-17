@@ -4,8 +4,14 @@
 
 const round = (value, scale) => Math.round(value * scale) / scale;
 // as atlas_remap.pair_atlases pairs them: the file name without directory, case and extension
-const stem = (name) => name.replaceAll("\\", "/").split("/").at(-1).toLowerCase().replace(/\.png$/, "")
-  .replace(/\.[^.]*$/, "");
+const stem = (name) =>
+  name
+    .replaceAll("\\", "/")
+    .split("/")
+    .at(-1)
+    .toLowerCase()
+    .replace(/\.png$/, "")
+    .replace(/\.[^.]*$/, "");
 
 function bytesOf(input) {
   if (ArrayBuffer.isView(input) || typeof input === "string") return input;
@@ -16,9 +22,13 @@ function load(S, atlasText, skeletonData) {
   const atlas = new S.TextureAtlas(atlasText);
   atlas.setTextures({ get: () => ({ getImage: () => ({ width: 1, height: 1 }), setFilters() {}, setWraps() {} }) });
   // A region the atlas lacks draws nothing: such an attachment is kept out of the poses.
-  const inner = new S.AtlasAttachmentLoader(atlas), fallback = atlas.regions[0], missing = new Set();
+  const inner = new S.AtlasAttachmentLoader(atlas),
+    fallback = atlas.regions[0],
+    missing = new Set();
   const lenient = (make, Type) => (skin, name, path, sequence) => {
-    try { return make(skin, name, path, sequence); } catch {
+    try {
+      return make(skin, name, path, sequence);
+    } catch {
       const attachment = new Type(name, path || name);
       if (fallback) attachment.region = fallback;
       missing.add(attachment);
@@ -38,8 +48,10 @@ function load(S, atlasText, skeletonData) {
     const text = new TextDecoder().decode(data).trim();
     if (text.startsWith("{")) data = text;
   }
-  data = typeof data === "string" ? new S.SkeletonJson(loader).readSkeletonData(data)
-    : new S.SkeletonBinary(loader).readSkeletonData(data);
+  data =
+    typeof data === "string"
+      ? new S.SkeletonJson(loader).readSkeletonData(data)
+      : new S.SkeletonBinary(loader).readSkeletonData(data);
   return { data, missing };
 }
 
@@ -48,7 +60,8 @@ function idleOf(data) {
 }
 
 function pose(S, data, missing, idle, overlay) {
-  const skeleton = new S.Skeleton(data), state = new S.AnimationState(new S.AnimationStateData(data));
+  const skeleton = new S.Skeleton(data),
+    state = new S.AnimationState(new S.AnimationStateData(data));
   skeleton.setToSetupPose();
   if (idle) state.setAnimation(0, idle.name, true);
   if (overlay) state.setAnimation(1, overlay, true);
@@ -60,7 +73,9 @@ function pose(S, data, missing, idle, overlay) {
     if (!a || !slot.bone.active || missing.has(a)) continue;
     let vertices, triangles;
     if (a instanceof S.RegionAttachment) {
-      vertices = new Float32Array(8); a.computeWorldVertices(slot, vertices, 0, 2); triangles = [0, 1, 2, 2, 3, 0];
+      vertices = new Float32Array(8);
+      a.computeWorldVertices(slot, vertices, 0, 2);
+      triangles = [0, 1, 2, 2, 3, 0];
     } else if (a instanceof S.MeshAttachment) {
       vertices = new Float32Array(a.worldVerticesLength);
       a.computeWorldVertices(slot, 0, a.worldVerticesLength, vertices, 0, 2);
@@ -69,9 +84,16 @@ function pose(S, data, missing, idle, overlay) {
     const alpha = slot.color.a * (a.color ? a.color.a : 1);
     const numbers = [...vertices, ...a.uvs, alpha];
     if (!numbers.every(Number.isFinite)) throw new Error("Non-finite posed geometry");
-    drawn.push({ slot: slot.data.name, region: a.region.name, page: a.region.page.name, blend: slot.data.blendMode,
-      alpha: round(alpha, 1000), vertices: Array.from(vertices, (v) => round(v, 1000)),
-      uvs: Array.from(a.uvs, (v) => round(v, 1e6)), triangles });
+    drawn.push({
+      slot: slot.data.name,
+      region: a.region.name,
+      page: a.region.page.name,
+      blend: slot.data.blendMode,
+      alpha: round(alpha, 1000),
+      vertices: Array.from(vertices, (v) => round(v, 1000)),
+      uvs: Array.from(a.uvs, (v) => round(v, 1e6)),
+      triangles,
+    });
   }
   return drawn;
 }
@@ -80,7 +102,8 @@ function pose(S, data, missing, idle, overlay) {
 // per other animation by its name (the idle on track 0, the animation on track 1).
 export function poses(S, atlasText, skeletonData) {
   const { data, missing } = load(S, atlasText, skeletonData);
-  const idle = idleOf(data), rest = data.findAnimation("00") ? "00" : null;
+  const idle = idleOf(data),
+    rest = data.findAnimation("00") ? "00" : null;
   const result = { "": pose(S, data, missing, idle, rest) };
   for (const animation of data.animations) {
     if (animation === idle || animation.name === rest) continue;
@@ -97,7 +120,9 @@ const byStem = (items, name) => Object.entries(items || {}).find(([other]) => st
 // (report.source), else the official ones. ModLibrary.remap makes the same choice from the files.
 export function forRemap(report, S = globalThis.spine) {
   if (report?.kind !== "spr") return {};
-  const official = report.official, mod = report.mod || {}, recorded = report.source || {};
+  const official = report.official,
+    mod = report.mod || {},
+    recorded = report.source || {};
   const result = {};
   for (const [name, atlas] of Object.entries(official.atlases)) {
     const skeleton = byStem(official.skeletons, name);
@@ -106,10 +131,13 @@ export function forRemap(report, S = globalThis.spine) {
       const found = byStem(items, name);
       return found && (typeof value === "string" ? found[1] !== value : found[1].data !== value.data) ? found[1] : null;
     };
-    const ownAtlas = own(mod.atlases, atlas), ownSkeleton = own(mod.skeletons, skeleton[1]);
-    const savedAtlas = byStem(recorded.atlases, name)?.[1], savedSkeleton = byStem(recorded.skeletons, name)?.[1];
+    const ownAtlas = own(mod.atlases, atlas),
+      ownSkeleton = own(mod.skeletons, skeleton[1]);
+    const savedAtlas = byStem(recorded.atlases, name)?.[1],
+      savedSkeleton = byStem(recorded.skeletons, name)?.[1];
     const sourceAtlas = ownAtlas ?? savedAtlas ?? atlas;
-    const sourceSkeleton = ownSkeleton ?? (ownAtlas == null && savedAtlas != null ? savedSkeleton : null) ?? skeleton[1];
+    const sourceSkeleton =
+      ownSkeleton ?? (ownAtlas == null && savedAtlas != null ? savedSkeleton : null) ?? skeleton[1];
     result[name] = { source: poses(S, sourceAtlas, sourceSkeleton), target: poses(S, atlas, skeleton[1]) };
   }
   return result;
@@ -117,9 +145,15 @@ export function forRemap(report, S = globalThis.spine) {
 
 // Rest poses only: what the redrawn check needs.
 export function restOnly(geometry) {
-  return Object.fromEntries(Object.entries(geometry).map(([name, { source, target }]) => [name, {
-    source: { slots: source.slots, poses: { "": source.poses[""] } },
-    target: { slots: target.slots, poses: { "": target.poses[""] } } }]));
+  return Object.fromEntries(
+    Object.entries(geometry).map(([name, { source, target }]) => [
+      name,
+      {
+        source: { slots: source.slots, poses: { "": source.poses[""] } },
+        target: { slots: target.slots, poses: { "": target.poses[""] } },
+      },
+    ]),
+  );
 }
 
 // The setup pose of a rig for the graft (graft.py setup): per bone its world matrix [a, b, c, d, x, y], per slot its
@@ -129,30 +163,46 @@ export function setupOf(S, atlasText, skeletonData) {
   const skeleton = new S.Skeleton(data);
   skeleton.setToSetupPose();
   skeleton.updateWorldTransform(S.Physics.update);
-  const finite = (values) => { if (!values.every(Number.isFinite)) throw new Error("Non-finite setup geometry"); return values; };
-  const bones = Object.fromEntries(skeleton.bones.map((b) => [b.data.name,
-    finite([b.a, b.b, b.c, b.d, b.worldX, b.worldY]).map((v) => round(v, 1e6) || 0)]));
+  const finite = (values) => {
+    if (!values.every(Number.isFinite)) throw new Error("Non-finite setup geometry");
+    return values;
+  };
+  const bones = Object.fromEntries(
+    skeleton.bones.map((b) => [
+      b.data.name,
+      finite([b.a, b.b, b.c, b.d, b.worldX, b.worldY]).map((v) => round(v, 1e6) || 0),
+    ]),
+  );
   const slotBones = Object.fromEntries(Array.from(data.slots, (slot) => [slot.name, slot.boneData.name]));
   const skin = [];
-  for (const sk of data.skins) for (const entry of sk.getAttachments()) {
-    const a = entry.attachment, slot = skeleton.slots[entry.slotIndex];
-    if (missing.has(a) || !a.region || !a.uvs) continue;
-    let world, triangles;
-    if (a instanceof S.RegionAttachment) {
-      world = new Float32Array(8); a.computeWorldVertices(slot, world, 0, 2); triangles = [0, 1, 2, 2, 3, 0];
-    } else if (a instanceof S.MeshAttachment) {
-      // the attachment as set up: no deform of the slot's current one
-      world = new Float32Array(a.worldVerticesLength);
-      const deform = slot.deform;
-      slot.deform = [];
-      a.computeWorldVertices(slot, 0, a.worldVerticesLength, world, 0, 2);
-      slot.deform = deform;
-      triangles = Array.from(a.triangles);
-    } else continue;
-    skin.push({ slot: slot.data.name, name: entry.name, page: a.region.page.name,
-      world: finite(Array.from(world)).map((v) => round(v, 1000)), uvs: finite(Array.from(a.uvs)).map((v) => round(v, 1e6)),
-      tris: triangles });
-  }
+  for (const sk of data.skins)
+    for (const entry of sk.getAttachments()) {
+      const a = entry.attachment,
+        slot = skeleton.slots[entry.slotIndex];
+      if (missing.has(a) || !a.region || !a.uvs) continue;
+      let world, triangles;
+      if (a instanceof S.RegionAttachment) {
+        world = new Float32Array(8);
+        a.computeWorldVertices(slot, world, 0, 2);
+        triangles = [0, 1, 2, 2, 3, 0];
+      } else if (a instanceof S.MeshAttachment) {
+        // the attachment as set up: no deform of the slot's current one
+        world = new Float32Array(a.worldVerticesLength);
+        const deform = slot.deform;
+        slot.deform = [];
+        a.computeWorldVertices(slot, 0, a.worldVerticesLength, world, 0, 2);
+        slot.deform = deform;
+        triangles = Array.from(a.triangles);
+      } else continue;
+      skin.push({
+        slot: slot.data.name,
+        name: entry.name,
+        page: a.region.page.name,
+        world: finite(Array.from(world)).map((v) => round(v, 1000)),
+        uvs: finite(Array.from(a.uvs)).map((v) => round(v, 1e6)),
+        tris: triangles,
+      });
+    }
   return { bones, slotBones, skin };
 }
 
@@ -175,7 +225,11 @@ export function partPoses(S, atlasText, skeletonData, check) {
 // posing it throws or gives a bone or a drawn vertex that is not finite; one the skeleton lacks fails too.
 export function failedPoses(S, atlasText, skeletonData, names, times = [0, 0.37, 0.81]) {
   let rig;
-  try { rig = load(S, atlasText, skeletonData); } catch { return [...names]; }  // the rig itself does not read
+  try {
+    rig = load(S, atlasText, skeletonData);
+  } catch {
+    return [...names];
+  } // the rig itself does not read
   const { data, missing } = rig;
   const failed = [];
   for (const name of names) {
@@ -183,7 +237,8 @@ export function failedPoses(S, atlasText, skeletonData, names, times = [0, 0.37,
     try {
       if (!animation) throw new Error("Animation missing");
       for (const share of times) {
-        const skeleton = new S.Skeleton(data), state = new S.AnimationState(new S.AnimationStateData(data));
+        const skeleton = new S.Skeleton(data),
+          state = new S.AnimationState(new S.AnimationStateData(data));
         skeleton.setToSetupPose();
         state.setAnimation(0, name, false);
         state.update(animation.duration * share);
@@ -196,15 +251,19 @@ export function failedPoses(S, atlasText, skeletonData, names, times = [0, 0.37,
           const a = slot.getAttachment();
           if (!a || !slot.bone.active || missing.has(a)) continue;
           let vertices;
-          if (a instanceof S.RegionAttachment) { vertices = new Float32Array(8); a.computeWorldVertices(slot, vertices, 0, 2); }
-          else if (a instanceof S.MeshAttachment) {
+          if (a instanceof S.RegionAttachment) {
+            vertices = new Float32Array(8);
+            a.computeWorldVertices(slot, vertices, 0, 2);
+          } else if (a instanceof S.MeshAttachment) {
             vertices = new Float32Array(a.worldVerticesLength);
             a.computeWorldVertices(slot, 0, a.worldVerticesLength, vertices, 0, 2);
           } else continue;
           if (!vertices.every(Number.isFinite)) throw new Error("Non-finite posed geometry");
         }
       }
-    } catch { failed.push(name); }
+    } catch {
+      failed.push(name);
+    }
   }
   return failed;
 }

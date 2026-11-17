@@ -12,7 +12,8 @@ export const ICON = { w: 56, h: 50 };
 // edge and the caption down under it.
 const FOLDER_Y = { 1: 26, 2: 38, 3: 54 };
 const CAPTION_Y = { 1: -46, 2: -36, 3: -32 };
-const GAP = 6, MARGIN = 10; // clear between the icon and the caption, and between the caption and the body's bottom edge
+const GAP = 6,
+  MARGIN = 10; // clear between the icon and the caption, and between the caption and the body's bottom edge
 // the tallest caption: what the three-line layout leaves between the icon's bottom edge and the body's
 const BAND = FOLDER_Y[3] - ICON.h / 2 - GAP - (BODY.bottom + MARGIN);
 
@@ -20,8 +21,15 @@ const BAND = FOLDER_Y[3] - ICON.h / 2 - GAP - (BODY.bottom + MARGIN);
 // label: [x, y, h], folder: [x, y] }. h: the label box's height.
 export function explorerLayout(caption) {
   const [fit] = fitGroup([caption], CAPTION.fsMax, CAPTION.fsMin, CAPTION.room, CAPTION.maxLines, { maxH: BAND });
-  const lines = Math.min(3, Math.max(1, fit.lines)), slant = (y) => BODY.x + y * TAN10;
+  const lines = Math.min(3, Math.max(1, fit.lines)),
+    slant = (y) => BODY.x + y * TAN10;
   const height = Math.max(40 * lines, lines * fontSizeFor(fit.text, fit.fs) * LINE_PITCH);
-  return { text: fit.text, fs: fit.fs, lines, overflow: !!fit.overflow, label: [slant(CAPTION_Y[lines]), CAPTION_Y[lines], height],
-    folder: [slant(FOLDER_Y[lines]), FOLDER_Y[lines]] };
+  return {
+    text: fit.text,
+    fs: fit.fs,
+    lines,
+    overflow: !!fit.overflow,
+    label: [slant(CAPTION_Y[lines]), CAPTION_Y[lines], height],
+    folder: [slant(FOLDER_Y[lines]), FOLDER_Y[lines]],
+  };
 }

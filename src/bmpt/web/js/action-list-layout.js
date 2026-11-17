@@ -37,8 +37,13 @@ export const KEY_TYPE = POPUP_TYPE.card.option; // 42 down to 30, as the roster'
 // centred 26 under the body's top and 30 in from its right side, along the lean) shows the playing action's name alone
 // instead, at the names' size, never larger: smaller (down to 20, three lines) only when it does not fit there. It is
 // centred too; only when its first line's ink would reach under the check does it move down, as far as clears it.
-export const CARD_TEXT = { w: 182, room: 196 - 2 * 12, name: { fs: KEY_TYPE.fs, min: 28 },
-  playing: { lines: 3, min: 20 }, check: { left: 242 / 2 - 30 + (98 - 26) * TAN10 - 56 / 2, bottom: 98 - 26 - 54 / 2, clear: 0 } };
+export const CARD_TEXT = {
+  w: 182,
+  room: 196 - 2 * 12,
+  name: { fs: KEY_TYPE.fs, min: 28 },
+  playing: { lines: 3, min: 20 },
+  check: { left: 242 / 2 - 30 + (98 - 26) * TAN10 - 56 / 2, bottom: 98 - 26 - 54 / 2, clear: 0 },
+};
 
 // the list's rows from the top of its content (y down is negative): [{ kind: "head"|"key", y, section | action }]
 // and the content's height. A group of one section has no title bar: its card names it.
@@ -47,7 +52,11 @@ export function stackList(sections, titled = sections.length > 1) {
   let y = 0;
   sections.forEach((s, i) => {
     if (i) y -= HEAD.gap;
-    if (!titled) return void s.actions.forEach((a) => { rows.push({ kind: "key", y: y - ROW.pitch / 2, action: a }); y -= ROW.pitch; });
+    if (!titled)
+      return void s.actions.forEach((a) => {
+        rows.push({ kind: "key", y: y - ROW.pitch / 2, action: a });
+        y -= ROW.pitch;
+      });
     rows.push({ kind: "head", y: y - HEAD.h / 2, section: s });
     y -= HEAD.h;
     for (const a of s.actions) {
@@ -70,21 +79,32 @@ export function contentWidth(keyWidths, headWidths) {
 // stands GAP over the card, centred on it, shifted only as far as the stage (less EDGE) needs; as tall as the content,
 // at most up to the stage's top bar.
 export function placeList(button, contentW, contentH) {
-  const w = contentW + 2 * BOX.padX, visW = w - BOX_INSET.left - BOX_INSET.right;
+  const w = contentW + 2 * BOX.padX,
+    visW = w - BOX_INSET.left - BOX_INSET.right;
   const centre = (button.left + button.right) / 2;
   const visLeft = Math.max(STAGE.left + EDGE, Math.min(STAGE.right - EDGE - visW, centre - visW / 2));
-  const visBottom = button.top + GAP, room = STAGE.top - EDGE - visBottom;
+  const visBottom = button.top + GAP,
+    room = STAGE.top - EDGE - visBottom;
   const chrome = BOX.padTop + BOX.padBottom - BOX_INSET.top - BOX_INSET.bottom; // the visible box around its content
   const view = Math.max(ROW.pitch, Math.min(contentH, room - chrome));
   const h = view + BOX.padTop + BOX.padBottom;
-  return { left: visLeft - BOX_INSET.left, top: visBottom - BOX_INSET.bottom + h, w, h, view, scrolls: view < contentH,
-    visible: { left: visLeft, right: visLeft + visW, top: visBottom + view + chrome, bottom: visBottom } };
+  return {
+    left: visLeft - BOX_INSET.left,
+    top: visBottom - BOX_INSET.bottom + h,
+    w,
+    h,
+    view,
+    scrolls: view < contentH,
+    visible: { left: visLeft, right: visLeft + visW, top: visBottom + view + chrome, bottom: visBottom },
+  };
 }
 
 // the list's texts: the titles one line each, the keys one size (two lines at most, within a line's height)
 export function fitList(heads, keys, lang = null) {
   return {
-    heads: heads.map((h) => NGUI.fitText(h, HEAD.fs, HEAD.min, BOX.maxW - 2 * BOX.padX - 2 * HEAD.inset - HEAD.slant, 1, lang)),
+    heads: heads.map((h) =>
+      NGUI.fitText(h, HEAD.fs, HEAD.min, BOX.maxW - 2 * BOX.padX - 2 * HEAD.inset - HEAD.slant, 1, lang),
+    ),
     keys: NGUI.fitGroup(keys, KEY_TYPE.fs, KEY_TYPE.min, ROW.maxLabelW, 2, { lang, maxH: ROW.pitch - 24 }),
   };
 }
@@ -106,7 +126,9 @@ export function cardText(fit, playing = null, lang = null) {
   // centred, or moved down just under the check when its first line reaches that far right; null when even that
   // leaves the body
   const place = (name) => {
-    const h = textHeight(name), ink = inkHeight(name), first = NGUI.glyphWidth(String(name.text).split("\n")[0], name.fs);
+    const h = textHeight(name),
+      ink = inkHeight(name),
+      first = NGUI.glyphWidth(String(name.text).split("\n")[0], name.fs);
     if (h > room + 1e-6) return null;
     if (ink / 2 <= check.bottom - check.clear || first / 2 <= check.left - check.clear) return 0;
     const y = check.bottom - check.clear - ink / 2;

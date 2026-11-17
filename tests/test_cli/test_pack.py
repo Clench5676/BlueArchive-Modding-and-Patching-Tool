@@ -9,6 +9,7 @@ from ba_modding_toolkit.cli.handlers import handle_asset_packing, setup_cli_logg
 if TYPE_CHECKING:
     from conftest import SampleCase
 
+
 # 案例数据缺失时 conftest 参数化为空参数集，测试自动跳过
 class TestPackCommand:
     def test_pack_basic(
@@ -28,11 +29,15 @@ class TestPackCommand:
         bundle_args = ["--bundle"] + [str(p) for p in sample_case.bundle_paths]
 
         args = PackTap().parse_args(
-            bundle_args + [
-                "--folder", str(asset_folder),
-                "--output-dir", str(output_dir),
+            bundle_args
+            + [
+                "--folder",
+                str(asset_folder),
+                "--output-dir",
+                str(output_dir),
                 "--no-crc",
-                "--compression", "none",
+                "--compression",
+                "none",
                 "--save-all",
             ]
         )
@@ -64,11 +69,15 @@ class TestPackCommand:
         bundle_args = ["--bundle"] + [str(p) for p in sample_case.bundle_paths]
 
         args = PackTap().parse_args(
-            bundle_args + [
-                "--folder", str(asset_folder),
-                "--output-dir", str(output_dir),
+            bundle_args
+            + [
+                "--folder",
+                str(asset_folder),
+                "--output-dir",
+                str(output_dir),
                 "--no-crc",
-                "--compression", "none",
+                "--compression",
+                "none",
                 "--save-all",
             ]
         )

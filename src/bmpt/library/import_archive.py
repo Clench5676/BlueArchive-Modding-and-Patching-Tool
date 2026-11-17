@@ -44,10 +44,15 @@ def _members(archive: zipfile.ZipFile, file: Path) -> tuple[list[tuple[zipfile.Z
             continue
         name = info.filename.replace("\\", "/")
         parts = PurePosixPath(name).parts
-        if (not parts or not is_safe_relative_name(name) or name.startswith("/")
-                or not (parts[-1].endswith(BUNDLE_SUFFIXES) or parts[-1] == MANIFEST)
-                # the resource forks a macOS archiver adds beside each file
-                or parts[0] == "__MACOSX" or parts[-1].startswith("._")):
+        if (
+            not parts
+            or not is_safe_relative_name(name)
+            or name.startswith("/")
+            or not (parts[-1].endswith(BUNDLE_SUFFIXES) or parts[-1] == MANIFEST)
+            # the resource forks a macOS archiver adds beside each file
+            or parts[0] == "__MACOSX"
+            or parts[-1].startswith("._")
+        ):
             skipped += 1
             continue
         if info.flag_bits & 0x1:
@@ -111,8 +116,15 @@ def unpack(file: Path, root: Path) -> tuple[list[Path], int]:
                         os.rename(temporary, folder)
             finally:
                 remove_tree(temporary)  # nothing left there once renamed
-    except (zipfile.BadZipFile, zipfile.LargeZipFile, NotImplementedError, RuntimeError, EOFError, ValueError,
-            zlib.error) as error:
+    except (
+        zipfile.BadZipFile,
+        zipfile.LargeZipFile,
+        NotImplementedError,
+        RuntimeError,
+        EOFError,
+        ValueError,
+        zlib.error,
+    ) as error:
         logger.info("Import: archive not readable (%s)", type(error).__name__)
         raise ServiceError("archive_invalid", file=str(file)) from None
     except TimeoutError:
@@ -120,4 +132,3 @@ def unpack(file: Path, root: Path) -> tuple[list[Path], int]:
     except OSError as error:
         raise ServiceError("library_io_error", file=error.filename or str(file)) from None
     return bundles, skipped
-

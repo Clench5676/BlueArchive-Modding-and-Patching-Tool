@@ -8,8 +8,12 @@ from .judge import core_of, kind_of_file, seconds
 
 LEGACY_REMAP = "legacy_remapped_v020"
 # Frozen suffixes from 0.2.0's webui.remap.name, independent of the current UI language.
-_REMAP_SUFFIXES = (" (remapped)", "\uff08\u5df2\u91cd\u6392\uff09",
-                   "\uff08\u518d\u914d\u7f6e\u6e08\u307f\uff09", " (\uc7ac\ubc30\uce58 \uc644\ub8cc)")
+_REMAP_SUFFIXES = (
+    " (remapped)",
+    "\uff08\u5df2\u91cd\u6392\uff09",
+    "\uff08\u518d\u914d\u7f6e\u6e08\u307f\uff09",
+    " (\uc7ac\ubc30\uce58 \uc644\ub8cc)",
+)
 
 
 def legacy_remapped(records: dict[str, dict]) -> dict[str, dict]:
@@ -35,14 +39,20 @@ def legacy_remapped(records: dict[str, dict]) -> dict[str, dict]:
     for mod_id, record in records.items():
         if mod_id not in keys or "user_added" in record or record.get("repaired_from"):
             continue
-        name = next((record["label"][:-len(suffix)] for suffix in _REMAP_SUFFIXES
-                     if record["label"].endswith(suffix)), "")
+        name = next(
+            (record["label"][: -len(suffix)] for suffix in _REMAP_SUFFIXES if record["label"].endswith(suffix)), ""
+        )
         if not name:
             continue
         added = seconds(record["added"])
-        sources = [source for source in groups.get((name, *keys[mod_id]), [])
-                   if source["id"] != mod_id and added is not None
-                   and (at := seconds(source["added"])) is not None and at <= added]
+        sources = [
+            source
+            for source in groups.get((name, *keys[mod_id]), [])
+            if source["id"] != mod_id
+            and added is not None
+            and (at := seconds(source["added"])) is not None
+            and at <= added
+        ]
         repairs[mod_id] = (name, sources[0]["id"] if len(sources) == 1 else f"legacy-remap:{mod_id}")
 
     for mod_id, (name, source_id) in repairs.items():

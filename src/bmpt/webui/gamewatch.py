@@ -63,21 +63,25 @@ class WatchState:
 
 
 class GameWatch:
-    def __init__(self, *,
-                 installs: Callable[[], Iterable[Path | str]],
-                 find_classic: Callable[[], ClassicProcess | None],
-                 profiles_seen: Callable[[], bool],
-                 on_change: Callable[[WatchState], Any],
-                 publish: Callable[[str, Any], Any],
-                 request_scan: Callable[[], Any],
-                 active: Callable[[], bool] = lambda: False,
-                 own_classic: Callable[[], int | None] = lambda: None,
-                 on_classic_closed: Callable[[], Any] | None = None,
-                 on_steam_idle: Callable[[], Any] | None = None,
-                 check_game: Callable[[], None] | None = None,
-                 check_steam: Callable[[Path | str], None] | None = None,
-                 steam_allowed: Callable[[], bool] = lambda: True,
-                 fast: float = FAST_SECONDS, slow: float = SLOW_SECONDS):
+    def __init__(
+        self,
+        *,
+        installs: Callable[[], Iterable[Path | str]],
+        find_classic: Callable[[], ClassicProcess | None],
+        profiles_seen: Callable[[], bool],
+        on_change: Callable[[WatchState], Any],
+        publish: Callable[[str, Any], Any],
+        request_scan: Callable[[], Any],
+        active: Callable[[], bool] = lambda: False,
+        own_classic: Callable[[], int | None] = lambda: None,
+        on_classic_closed: Callable[[], Any] | None = None,
+        on_steam_idle: Callable[[], Any] | None = None,
+        check_game: Callable[[], None] | None = None,
+        check_steam: Callable[[Path | str], None] | None = None,
+        steam_allowed: Callable[[], bool] = lambda: True,
+        fast: float = FAST_SECONDS,
+        slow: float = SLOW_SECONDS,
+    ):
         """``active()`` says whether to poll fast (a page connected, the tray icon shown); ``own_classic()`` gives the
         pid of the classic window this instance started, which its own watcher thread reports, so it is never
         watched here; ``on_classic_closed()`` runs after ``classic.closed`` is published, as for that thread's
@@ -144,8 +148,9 @@ class GameWatch:
         try:
             (self._check_game or safety.check_game_not_running)()
         except ServiceError as error:
-            return error.code if error.code in ("game_running", "game_status_unavailable") \
-                else "game_status_unavailable"
+            return (
+                error.code if error.code in ("game_running", "game_status_unavailable") else "game_status_unavailable"
+            )
         except Exception:
             logger.exception("game process check failed")
             return "game_status_unavailable"

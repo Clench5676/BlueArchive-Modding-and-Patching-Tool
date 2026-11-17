@@ -33,13 +33,16 @@ console.log(JSON.stringify(idleAnimation(data)));
 
 
 @pytest.mark.skipif(NODE is None, reason="needs Node.js")
-@pytest.mark.parametrize(("names", "idle"), [
-    (["00", "01", "Eye_Close_01", "Idle_01"], "Idle_01"),  # a student: the game's idle, wherever it is listed
-    (["00", "Idle_02", "Idle_01"], "Idle_01"),             # Idle_01 before any other idle
-    (["00", "01", "idle_loop", "Talk_01_A"], "idle_loop"),  # no Idle_01: the first idle-like animation
-    (["00"], None),                                        # only the default face: the setup pose, nothing looped
-    (["00", "Dummy", "Start_Idle_01"], None),              # never a face, a dummy or an intro
-    ([], None),
-])
+@pytest.mark.parametrize(
+    ("names", "idle"),
+    [
+        (["00", "01", "Eye_Close_01", "Idle_01"], "Idle_01"),  # a student: the game's idle, wherever it is listed
+        (["00", "Idle_02", "Idle_01"], "Idle_01"),  # Idle_01 before any other idle
+        (["00", "01", "idle_loop", "Talk_01_A"], "idle_loop"),  # no Idle_01: the first idle-like animation
+        (["00"], None),  # only the default face: the setup pose, nothing looped
+        (["00", "Dummy", "Start_Idle_01"], None),  # never a face, a dummy or an intro
+        ([], None),
+    ],
+)
 def test_idle_animation_falls_back_to_the_skeletons_own_idle(names, idle):
     assert idle_of(names) == idle

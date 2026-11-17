@@ -7,7 +7,9 @@ const cache = new WeakMap(); // skeleton -> [pin, bone] of its pins
 
 // for checks: pin the bones (true) or let the animation move them (false)
 export let shown = true;
-export const show = (on) => { shown = !!on; };
+export const show = (on) => {
+  shown = !!on;
+};
 
 // Unity's Mathf.LerpAngle: the shorter way round
 export function lerpAngle(a, b, t) {
@@ -22,14 +24,23 @@ export function pin(skeleton, name, pins) {
   if (!skeleton || !pins?.length || !shown) return;
   let list = cache.get(skeleton);
   if (!list) {
-    list = pins.filter((p) => p.skeleton === name).map((p) => [p, skeleton.findBone(p.bone)]).filter(([, b]) => b);
+    list = pins
+      .filter((p) => p.skeleton === name)
+      .map((p) => [p, skeleton.findBone(p.bone)])
+      .filter(([, b]) => b);
     cache.set(skeleton, list);
   }
   for (const [p, b] of list) {
     const k = p.alpha ?? 1;
-    if (p.x != null) { b.x += (p.x - b.x) * k; b.y += (p.y - b.y) * k; }
+    if (p.x != null) {
+      b.x += (p.x - b.x) * k;
+      b.y += (p.y - b.y) * k;
+    }
     if (p.rotation != null) b.rotation = lerpAngle(b.rotation, p.rotation, k);
-    if (p.scaleX != null) { b.scaleX += (p.scaleX - b.scaleX) * k; b.scaleY += (p.scaleY - b.scaleY) * k; }
+    if (p.scaleX != null) {
+      b.scaleX += (p.scaleX - b.scaleX) * k;
+      b.scaleY += (p.scaleY - b.scaleY) * k;
+    }
   }
 }
 

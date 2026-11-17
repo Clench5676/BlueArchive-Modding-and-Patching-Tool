@@ -17,8 +17,13 @@ from ba_modding_toolkit.utils import paths as utils_paths
 from bmpt import config, devmode
 from ba_modding_toolkit import utils
 
-DEV_VARIABLES = ("BAMT_DATA_DIR", "BAMT_GAME_DIRS_GLOBAL", "BAMT_GAME_DIRS_JAPAN", "BAMT_DEV_ROOTS",
-                 "BAMT_DEV_WRITABLE")
+DEV_VARIABLES = (
+    "BAMT_DATA_DIR",
+    "BAMT_GAME_DIRS_GLOBAL",
+    "BAMT_GAME_DIRS_JAPAN",
+    "BAMT_DEV_ROOTS",
+    "BAMT_DEV_WRITABLE",
+)
 SRC = Path(ba_modding_toolkit.__file__).resolve().parents[1]
 
 
@@ -30,6 +35,7 @@ def no_dev_variables(monkeypatch):
 
 
 # --- BAMT_DATA_DIR ---
+
 
 def test_data_dir_unset_or_empty_is_none(monkeypatch):
     assert devmode.data_dir() is None
@@ -59,8 +65,12 @@ def test_compiled_build_copies_its_addons_into_the_override(tmp_path, monkeypatc
     portable.mkdir()
     (extracted / "Addons").mkdir(parents=True)
     (extracted / "Addons" / "BA-Characters-Internal-ID.csv").write_text("bundled map")
-    monkeypatch.setattr(utils_paths, "__compiled__", SimpleNamespace(containing_dir=str(portable), macos_bundle_mode=macos),
-                        raising=False)
+    monkeypatch.setattr(
+        utils_paths,
+        "__compiled__",
+        SimpleNamespace(containing_dir=str(portable), macos_bundle_mode=macos),
+        raising=False,
+    )
     monkeypatch.setattr(utils_paths, "__file__", str(extracted / "ba_modding_toolkit" / "utils" / "paths.py"))
     monkeypatch.setattr(sys, "executable", str(extracted / "Tool" if macos else portable / "Tool.exe"))
     monkeypatch.setattr(Path, "home", lambda: tmp_path / "home")
@@ -92,20 +102,24 @@ def _python(code: str, **env: str) -> str:
     """Run code in a fresh interpreter (the variables take effect on import) and return its output."""
     environ = {k: v for k, v in os.environ.items() if k not in DEV_VARIABLES}
     environ.update(PYTHONPATH=str(SRC), BAMT_GAME_DIRS_GLOBAL="", BAMT_GAME_DIRS_JAPAN="", **env)
-    return subprocess.run([sys.executable, "-c", code], env=environ, capture_output=True, text=True, check=True,
-                          timeout=60).stdout
+    return subprocess.run(
+        [sys.executable, "-c", code], env=environ, capture_output=True, text=True, check=True, timeout=60
+    ).stdout
 
 
 def test_data_dir_is_read_on_import(tmp_path):
-    out = _python("from bmpt import config\nfrom ba_modding_toolkit import utils\n"
-                  "print(utils.EXE_DIR); print(config.CONFIG_FILE); print(config.user_cache_dir())",
-                  BAMT_DATA_DIR=str(tmp_path / "profile"))
+    out = _python(
+        "from bmpt import config\nfrom ba_modding_toolkit import utils\n"
+        "print(utils.EXE_DIR); print(config.CONFIG_FILE); print(config.user_cache_dir())",
+        BAMT_DATA_DIR=str(tmp_path / "profile"),
+    )
     profile = (tmp_path / "profile").resolve()
     assert out.splitlines() == [str(profile), str(profile / "config.toml"), str(profile / "cache")]
     assert profile.is_dir()
 
 
 # --- BAMT_GAME_DIRS_GLOBAL / BAMT_GAME_DIRS_JAPAN ---
+
 
 @pytest.fixture
 def no_search(monkeypatch):
@@ -130,8 +144,9 @@ def test_named_game_dirs_replace_the_search(tmp_path, monkeypatch, no_search):
     first, second = tmp_path / "first", tmp_path / "second"
     first.mkdir()
     second.mkdir()
-    monkeypatch.setenv("BAMT_GAME_DIRS_GLOBAL", os.pathsep.join([str(second), str(tmp_path / "missing"), str(first),
-                                                                 str(second)]))
+    monkeypatch.setenv(
+        "BAMT_GAME_DIRS_GLOBAL", os.pathsep.join([str(second), str(tmp_path / "missing"), str(first), str(second)])
+    )
     monkeypatch.setenv("BAMT_GAME_DIRS_JAPAN", "")
     assert find_game_dirs("global") == [second.resolve(), first.resolve()]
     assert find_game_dirs("japan") == []
@@ -152,6 +167,7 @@ def test_named_game_dirs_are_the_settings_defaults(tmp_path, monkeypatch, no_sea
 
 
 # --- BAMT_DEV_ROOTS ---
+
 
 @pytest.fixture
 def dev(tmp_path, monkeypatch):
@@ -285,8 +301,14 @@ def dev_services(dev):
     # This fixture narrows the session roots; its lazily constructed preview
     # cache must use that same root rather than the outer test session's default.
     state.set("cache_parent", str(dev.root))
-    s = Services(config.Settings(dev.root / "config.toml"), dev.root, state=state,
-                 game=object(), catalog=object(), library=_Library())
+    s = Services(
+        config.Settings(dev.root / "config.toml"),
+        dev.root,
+        state=state,
+        game=object(),
+        catalog=object(),
+        library=_Library(),
+    )
     yield s
     s.close()
 
@@ -306,9 +328,13 @@ def test_web_ui_refuses_paths_outside_the_roots(dev, dev_services):
     resource = game / "BlueArchive_Data" / "StreamingAssets" / "PUB" / "Resource" / "GameData" / "Windows"
     resource.mkdir(parents=True)
     (resource / "uis-atlas-test.bundle").touch()  # a game folder holds UI atlas bundles
-    for key, value in (("gameDir.global", dev.outside), ("gameDir.japan", dev.outside),
-                       ("outputDir", dev.outside / "output"), ("libraryDir", dev.outside / "library"),
-                       ("cacheDir", dev.outside)):
+    for key, value in (
+        ("gameDir.global", dev.outside),
+        ("gameDir.japan", dev.outside),
+        ("outputDir", dev.outside / "output"),
+        ("libraryDir", dev.outside / "library"),
+        ("cacheDir", dev.outside),
+    ):
         reply = api.call("settings.set", {"key": key, "value": str(value)})
         assert reply["error"]["code"] == "dev_path_outside", key
     assert list(dev.outside.iterdir()) == []
@@ -392,6 +418,7 @@ def test_cli_without_dev_mode_runs_as_before(tmp_path):
 
 
 # --- BAMT_DEV_WRITABLE ---
+
 
 @pytest.fixture
 def sandboxed(dev, monkeypatch):
@@ -481,15 +508,18 @@ def _switch_env(game_dir: Path, data: Path, monkeypatch):
 
     monkeypatch.setattr("bmpt.library.identity.content_cores", lambda path: set())
     official = _header_bundle(b"official")
-    name = ("assets-_mx-spinecharacters-test_spr-_mxdependency-2026-01-01_003_assets_all_"
-            f"{utils.CRCUtils.compute_crc32(official)}.bundle")
+    name = (
+        "assets-_mx-spinecharacters-test_spr-_mxdependency-2026-01-01_003_assets_all_"
+        f"{utils.CRCUtils.compute_crc32(official)}.bundle"
+    )
     game_dir.mkdir(parents=True, exist_ok=True)
     (game_dir / name).write_bytes(official)
     (data / "import").mkdir(parents=True)
     (data / "import" / name).write_bytes(_header_bundle(b"modded!!"))
     variant = SimpleNamespace(key="test", spr="test_spr", lobby=None, family="test")
-    catalog = SimpleNamespace(variant=lambda key: variant,
-                              variant_for_core=lambda core: variant if core == "test_spr" else None)
+    catalog = SimpleNamespace(
+        variant=lambda key: variant, variant_for_core=lambda core: variant if core == "test_spr" else None
+    )
     settings = config.Settings(data / "config.toml")
     settings.set("game_resource_dir", str(game_dir))
     settings.set("enable_crc_correction", "false")
@@ -585,6 +615,7 @@ def test_classic_file_replace_writes_writable_folders_only(sandboxed):
 
 # --- ADB and self-update, refused in dev mode ---
 
+
 def test_adb_is_never_run_in_dev_mode(dev, monkeypatch, tmp_path):
     from ba_modding_toolkit.adb import manager
 
@@ -647,6 +678,7 @@ def test_a_build_never_replaces_itself_in_dev_mode(installable_build, monkeypatc
 
 
 # --- builds ---
+
 
 def test_builds_carry_the_hooks_version():
     marker = Path(devmode.__file__).parent / "assets" / "dev-hooks.json"

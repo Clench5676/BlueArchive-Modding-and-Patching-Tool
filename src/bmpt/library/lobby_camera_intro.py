@@ -41,8 +41,9 @@ class Timeline:
     def __init__(self, objects: dict[int, Any]):
         self.objects = objects
         self._trees: dict[int, dict] = {}
-        self.scripts = {pid: self.tree(pid).get("m_ClassName") for pid, obj in objects.items()
-                        if obj.type.name == "MonoScript"}
+        self.scripts = {
+            pid: self.tree(pid).get("m_ClassName") for pid, obj in objects.items() if obj.type.name == "MonoScript"
+        }
 
     def tree(self, pid: int) -> dict:
         if pid not in self._trees:
@@ -76,8 +77,9 @@ class Timeline:
         return found
 
 
-def camera_clip(template: dict, path: str, start: tuple[float, ...], end: tuple[float, ...], at: float,
-                blend: float) -> dict:
+def camera_clip(
+    template: dict, path: str, start: tuple[float, ...], end: tuple[float, ...], at: float, blend: float
+) -> dict:
     """A recorded clip of the camera node (``path`` below the Animator): position and scale, ``start`` until ``at``,
     then ``end``, reached linearly over ``blend`` seconds; held after. ``template``: a recorded clip of the same file."""
     frames = [(-FLT_MAX, [(i, 0.0, 0.0, 0.0, v) for i, v in enumerate(start)])]
@@ -85,26 +87,39 @@ def camera_clip(template: dict, path: str, start: tuple[float, ...], end: tuple[
         frames.append((at, [(i, 0.0, 0.0, (b - a) / blend, a) for i, (a, b) in enumerate(zip(start, end))]))
     frames.append((at + blend, [(i, 0.0, 0.0, 0.0, v) for i, v in enumerate(end)]))
     frames.append((FLT_MAX, []))
-    data = b"".join(struct.pack("<fi", t, len(keys)) + b"".join(struct.pack("<i4f", *key) for key in keys)
-                    for t, keys in frames)
+    data = b"".join(
+        struct.pack("<fi", t, len(keys)) + b"".join(struct.pack("<i4f", *key) for key in keys) for t, keys in frames
+    )
     words = list(struct.unpack(f"<{len(data) // 4}I", data))
     clip = copy.deepcopy(template)
     muscle = clip["m_MuscleClip"]
     muscle["m_Clip"]["data"] = {
         "m_StreamedClip": {"data": words, "curveCount": len(start)},
-        "m_DenseClip": {"m_FrameCount": 0, "m_CurveCount": 0, "m_SampleRate": float(template.get("m_SampleRate", 30.0)),
-                        "m_BeginTime": 0.0, "m_SampleArray": []},
-        "m_ConstantClip": {"data": []}}
+        "m_DenseClip": {
+            "m_FrameCount": 0,
+            "m_CurveCount": 0,
+            "m_SampleRate": float(template.get("m_SampleRate", 30.0)),
+            "m_BeginTime": 0.0,
+            "m_SampleArray": [],
+        },
+        "m_ConstantClip": {"data": []},
+    }
     muscle["m_StartTime"], muscle["m_StopTime"] = 0.0, at + blend
     muscle["m_ValueArrayDelta"] = [{"m_Start": a, "m_Stop": b} for a, b in zip(start, end)]
     muscle["m_ValueArrayReferencePose"] = []
     muscle["m_IndexArray"] = [-1] * len(muscle.get("m_IndexArray") or [])
     binding = {"path": crc(path), "script": ptr(0), "typeID": 4, "customType": 0, "isPPtrCurve": 0}
-    clip["m_ClipBindingConstant"] = {"genericBindings": [{**binding, "attribute": _POSITION},
-                                                         {**binding, "attribute": _SCALE}],
-                                     "pptrCurveMapping": []}
-    clip.update(m_Name="Lobby Camera", m_Events=[], m_HasGenericRootTransform=False, m_HasMotionFloatCurves=False,
-                m_MuscleClipSize=_CLIP_BASE + _CLIP_WORD * len(words) + _CLIP_CURVE * len(start))
+    clip["m_ClipBindingConstant"] = {
+        "genericBindings": [{**binding, "attribute": _POSITION}, {**binding, "attribute": _SCALE}],
+        "pptrCurveMapping": [],
+    }
+    clip.update(
+        m_Name="Lobby Camera",
+        m_Events=[],
+        m_HasGenericRootTransform=False,
+        m_HasMotionFloatCurves=False,
+        m_MuscleClipSize=_CLIP_BASE + _CLIP_WORD * len(words) + _CLIP_CURVE * len(start),
+    )
     if "m_Bounds" in clip:
         clip["m_Bounds"] = {"m_Center": {"x": 0.0, "y": 0.0, "z": 0.0}, "m_Extent": {"x": 0.0, "y": 0.0, "z": 0.0}}
     return clip
@@ -117,8 +132,12 @@ class Writer:
     def __init__(self, sf: Any, source: Any, timeline_index: int, fresh: Callable[[], int]):
         self.sf, self.source, self.index, self.fresh = sf, source, timeline_index, fresh
         self.trees: dict[int, dict] = {}  # the new objects' typetrees by path id
-        if (sf.header.version != source.header.version or sf.unity_version != source.unity_version
-                or sf._enable_type_tree != source._enable_type_tree or sf.header.version < 16):
+        if (
+            sf.header.version != source.header.version
+            or sf.unity_version != source.unity_version
+            or sf._enable_type_tree != source._enable_type_tree
+            or sf.header.version < 16
+        ):
             raise ValueError("timeline of another build")
 
     def file_id(self, file_id: int) -> int:
@@ -171,8 +190,12 @@ class Writer:
         template = next(iter(self.sf.objects.values()))
         new = object.__new__(type(template))
         new.__dict__.update(template.__dict__)
-        new.type_id, new.serialized_type, new.class_id, new.type = (index, self.sf.types[index], source_obj.class_id,
-                                                                     source_obj.type)
+        new.type_id, new.serialized_type, new.class_id, new.type = (
+            index,
+            self.sf.types[index],
+            source_obj.class_id,
+            source_obj.type,
+        )
         new.path_id = self.fresh()
         new.data = b""
         new.save_typetree(tree)
@@ -184,15 +207,26 @@ class Writer:
         return new.path_id
 
 
-def add_intro_track(writer: Writer, timeline: Timeline, timeline_id: int, node_path: str,
-                    camera: tuple[tuple[float, ...], tuple[float, ...]]) -> tuple[int, int, list[int]] | None:
+def add_intro_track(
+    writer: Writer,
+    timeline: Timeline,
+    timeline_id: int,
+    node_path: str,
+    camera: tuple[tuple[float, ...], tuple[float, ...]],
+) -> tuple[int, int, list[int]] | None:
     """The prefab's own copy of the intro's TimelineAsset with the camera track: (timeline, track, added path ids), or
     None when the intro has no rest pose to switch at or no recorded track to copy from (the intro is then framed by
     the camera too)."""
     rest = timeline.rest(timeline_id)
-    track_template = next((pid for pid in timeline.objects if timeline.cls(pid) == "AnimationTrack"
-                           and (timeline.tree(pid).get("m_InfiniteClip") or {}).get("m_PathID") in timeline.objects),
-                          None)
+    track_template = next(
+        (
+            pid
+            for pid in timeline.objects
+            if timeline.cls(pid) == "AnimationTrack"
+            and (timeline.tree(pid).get("m_InfiniteClip") or {}).get("m_PathID") in timeline.objects
+        ),
+        None,
+    )
     if rest is None or track_template is None:
         return None
     clip_obj = timeline.objects[timeline.tree(track_template)["m_InfiniteClip"]["m_PathID"]]
@@ -200,8 +234,7 @@ def add_intro_track(writer: Writer, timeline: Timeline, timeline_id: int, node_p
     clip = camera_clip(clip_obj.read_typetree(), node_path, start, end, rest[0], rest[1])
     clip_id = writer.add(clip_obj, writer.remap(clip))
     track = writer.remap(copy.deepcopy(timeline.tree(track_template)))
-    track.update(m_Name="Lobby Camera", m_InfiniteClip=ptr(clip_id), m_Clips=[], m_Children=[], m_Muted=0,
-                 m_Locked=0)
+    track.update(m_Name="Lobby Camera", m_InfiniteClip=ptr(clip_id), m_Clips=[], m_Children=[], m_Muted=0, m_Locked=0)
     if "m_Markers" in track:
         track["m_Markers"] = {"m_Objects": []}
     # the new timeline's path id is not known yet: the track's parent is set below

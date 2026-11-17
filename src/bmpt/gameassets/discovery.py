@@ -57,27 +57,34 @@ def is_atlas(path: Path) -> bool:
 def is_texture(path: Path) -> bool:
     """Whether a bundle belongs to the shared UI texture families."""
     name = path.name
-    return ("addressableasset-uis-_mxprolog-" in name
-            or "uis-00_images-_mxload-" in name
-            or "uis-00_images-formation-" in name
-            or "uis-00_images-imagefont-" in name
-            or name.startswith(("uis-01_common-09_popupimage-", "uis-01_common-13_campaignimage-")))
+    return (
+        "addressableasset-uis-_mxprolog-" in name
+        or "uis-00_images-_mxload-" in name
+        or "uis-00_images-formation-" in name
+        or "uis-00_images-imagefont-" in name
+        or name.startswith(("uis-01_common-09_popupimage-", "uis-01_common-13_campaignimage-"))
+    )
 
 
 def is_pointer_texture(path: Path) -> bool:
     """Whether a bundle can hold the PC client's mouse cursor (UIs/GLPC_Cursor, also in the shared UI textures) or
     the textures of the touch effect (Resources/UI/FX_Touch: the EffectsFreezed texture families)."""
     name = path.name
-    return ("-uis-glpc_cursor-" in name or "-uis-_mxcommon-_mxdependency-textures-" in name
-            or "-effectsfreezed-texture-" in name)
+    return (
+        "-uis-glpc_cursor-" in name
+        or "-uis-_mxcommon-_mxdependency-textures-" in name
+        or "-effectsfreezed-texture-" in name
+    )
 
 
 def is_prefab(path: Path) -> bool:
     """Whether a bundle can contain a UI prefab root (Resources/UI holds the loading screen, UILoading; the tooltip
     bundles the description tooltip, UIDescriptionTooltip)."""
-    return (path.name.startswith(("ui-_mxload-prefabs-", "ui-uiassetobject-", "ui-tooltip-_mxload-prefabs-"))
-            or (path.name.startswith("prologdepengroup-") and "-addressableasset-ui-" in path.name)
-            or (path.name.startswith("prologgroup-") and "-resources-ui-" in path.name))
+    return (
+        path.name.startswith(("ui-_mxload-prefabs-", "ui-uiassetobject-", "ui-tooltip-_mxload-prefabs-"))
+        or (path.name.startswith("prologdepengroup-") and "-addressableasset-ui-" in path.name)
+        or (path.name.startswith("prologgroup-") and "-resources-ui-" in path.name)
+    )
 
 
 def cab_names(path: Path) -> list[str]:
@@ -90,8 +97,13 @@ def cab_names(path: Path) -> list[str]:
 def is_model_dependency(path: Path) -> bool:
     """Families that hold 3D chibi prefabs, meshes, materials, textures, shaders and shared animators."""
     name = path.name
-    return ("characters" in name or "-_mx-npcs-" in name or name.startswith("character-")
-            or "-_mx-shaders-" in name or "-_mx-program-animators-" in name)
+    return (
+        "characters" in name
+        or "-_mx-npcs-" in name
+        or name.startswith("character-")
+        or "-_mx-shaders-" in name
+        or "-_mx-program-animators-" in name
+    )
 
 
 # parts of a character's or NPC's own dependency bundles named for an asset type that is never a model's root
@@ -122,5 +134,7 @@ def is_layout_texture(path: Path) -> bool:
     These supply names for embedded campaign widgets and UI effects, rather
     than expanding the shared UITexture index to character or gameplay art.
     """
-    return (path.name.startswith(("uis-01_common-25_campaign-", "uis-02_tactics-02_skillicon-"))
-            or "-effectsfreezed-texture-" in path.name)
+    return (
+        path.name.startswith(("uis-01_common-25_campaign-", "uis-02_tactics-02_skillicon-"))
+        or "-effectsfreezed-texture-" in path.name
+    )

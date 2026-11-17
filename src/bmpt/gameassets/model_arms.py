@@ -4,6 +4,7 @@ The measure and projected arm solver follow the numeric costume-retarget prototy
 All distances are metres. Only the torso core counts as cover; contacts and the
 clip gate keep intentional poses, secondary cloth and small differences intact.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -25,8 +26,8 @@ from . import model_skirts as ms
 logger = logging.getLogger(__name__)
 
 ARM = re.compile(r"^Bip001 ([LR]) (UpperArm|Forearm|Hand|Finger\d+)$")
-CAP = 0.15       # a body surface farther out than this from the bone does not count (wings, a slung bag)
-ARM_CAP = 0.08   # the arm's own surface is looked for this far out
+CAP = 0.15  # a body surface farther out than this from the bone does not count (wings, a slung bag)
+ARM_CAP = 0.08  # the arm's own surface is looked for this far out
 SAMPLES = ("U50", "U75", "E", "F25", "F50", "F75", "W", "P", "T")
 SEGMENTS = ((0,), (0,), (0, 1), (1,), (1,), (1,), (1, 2), (2,), (2,))  # arm segments whose surface is the sample's own
 LOWER = slice(2, 9)  # elbow to fingertips
@@ -54,7 +55,13 @@ class Drawn:
     def __init__(self, vertices, joints, weights, triangles, regions, matrices, loose=None):
         self.h = np.c_[vertices, np.ones(len(vertices))]
         self.loose = np.zeros(len(vertices), bool) if loose is None else loose
-        self.joints, self.weights, self.triangles, self.regions, self.matrices = joints, weights, triangles, regions, matrices
+        self.joints, self.weights, self.triangles, self.regions, self.matrices = (
+            joints,
+            weights,
+            triangles,
+            regions,
+            matrices,
+        )
         tri_regions = regions[triangles]
         same = (tri_regions[:, 0] == tri_regions[:, 1]) & (tri_regions[:, 1] == tri_regions[:, 2])
         self.tri_region = np.where(same, tri_regions[:, 0], -1)
@@ -68,7 +75,11 @@ class Drawn:
         self._bound = None
 
     def posed(self, pose, rows=None):
-        m = pose[self.pose_bones] @ self.bindings if hasattr(self, 'bindings') and isinstance(pose, np.ndarray) else self.matrices(pose)
+        m = (
+            pose[self.pose_bones] @ self.bindings
+            if hasattr(self, "bindings") and isinstance(pose, np.ndarray)
+            else self.matrices(pose)
+        )
         h, joints, weights = self.h, self.joints, self.weights
         if rows is not None:
             h, joints, weights = h[rows], joints[rows], weights[rows]
@@ -76,14 +87,14 @@ class Drawn:
         for k in range(self.joints.shape[1]):
             used = weights[:, k] != 0
             if used.all():
-                out += weights[:, k:k + 1] * np.einsum("nij,nj->ni", m[joints[:, k]], h)[:, :3]
+                out += weights[:, k : k + 1] * np.einsum("nij,nj->ni", m[joints[:, k]], h)[:, :3]
             elif used.any():
-                out[used] += weights[used, k:k + 1] * np.einsum("nij,nj->ni", m[joints[used, k]], h[used])[:, :3]
+                out[used] += weights[used, k : k + 1] * np.einsum("nij,nj->ni", m[joints[used, k]], h[used])[:, :3]
         return out
 
     def posed_batch(self, poses, rows):
         """Bounded frame batches share sparse influence gathers and skinning."""
-        if not hasattr(self, 'bindings'):
+        if not hasattr(self, "bindings"):
             return np.array([self.posed(w, rows) for w in poses])
         matrices = np.asarray(poses)[:, self.pose_bones] @ self.bindings
         joints, weights, h = self.joints[rows], self.weights[rows], self.h[rows]
@@ -91,8 +102,10 @@ class Drawn:
         for k in range(joints.shape[1]):
             used = weights[:, k] != 0
             if used.any():
-                vertices[:, used] += weights[None, used, k:k + 1] * np.einsum(
-                    'fvij,vj->fvi', matrices[:, joints[used, k]], h[used])[..., :3]
+                vertices[:, used] += (
+                    weights[None, used, k : k + 1]
+                    * np.einsum("fvij,vj->fvi", matrices[:, joints[used, k]], h[used])[..., :3]
+                )
         return vertices
 
     def measure_mesh(self, core, arms):
@@ -120,14 +133,14 @@ class Drawn:
             for joint in np.unique(self.joints[rows][self.weights[rows] > 0]):
                 hit = ((self.joints[rows] == joint) & (self.weights[rows] > 0)).any(axis=1)
                 lo, hi = self.h[rows[hit], :3].min(axis=0), self.h[rows[hit], :3].max(axis=0)
-                corners.append([[hi[k] if bits & (1 << k) else lo[k] for k in range(3)] + [1.] for bits in range(8)])
+                corners.append([[hi[k] if bits & (1 << k) else lo[k] for k in range(3)] + [1.0] for bits in range(8)])
                 joints.append(joint)
             sums = self.weights[rows].sum(axis=1)
             self._bound = np.array(joints), np.array(corners), np.array([sums.min(initial=1), sums.max(initial=1)])
         joints, corners, sums = self._bound
         if not len(joints):
             return np.zeros(3), np.zeros(3)
-        world = np.einsum('nij,nkj->nki', self.matrices(pose)[joints], corners)[..., :3]
+        world = np.einsum("nij,nkj->nki", self.matrices(pose)[joints], corners)[..., :3]
         extremes = np.array([world.min(axis=(0, 1)), world.max(axis=(0, 1))])
         scaled = extremes[:, None] * sums[None, :, None]
         return scaled.min(axis=(0, 1)) - 1e-6, scaled.max(axis=(0, 1)) + 1e-6
@@ -150,13 +163,24 @@ def own_drawn(costume):
                 cache[n] = region(sk, n)
         regs.append(np.array([cache[n] for n in dom]))
         loose.append(np.array([not sk.nodes[n].name.startswith("Bip001") for n in dom]))
-        verts.append(skin.vertices); joints.append(j + off_m); weights.append(skin.weights)
+        verts.append(skin.vertices)
+        joints.append(j + off_m)
+        weights.append(skin.weights)
         tris.append((skin.triangles if skin.triangles is not None else np.zeros((0, 3), int)) + off_v)
-        bones_all += bones; bps.append(bp[:len(bones)])
-        off_v += len(skin.vertices); off_m += len(bones)
+        bones_all += bones
+        bps.append(bp[: len(bones)])
+        off_v += len(skin.vertices)
+        off_m += len(bones)
     bp_all = np.concatenate(bps)
-    out = Drawn(np.vstack(verts), np.vstack(joints), np.vstack(weights), np.vstack(tris), np.concatenate(regs),
-                lambda pose: np.array([pose[b] for b in bones_all]) @ bp_all, np.concatenate(loose))
+    out = Drawn(
+        np.vstack(verts),
+        np.vstack(joints),
+        np.vstack(weights),
+        np.vstack(tris),
+        np.concatenate(regs),
+        lambda pose: np.array([pose[b] for b in bones_all]) @ bp_all,
+        np.concatenate(loose),
+    )
     out.pose_bones = np.array(bones_all)
     out.bindings = bp_all
     return out
@@ -178,8 +202,15 @@ def adapted_drawn(target, source, plan):
     cache = {n: region(ss, n) for n in np.unique(dom)}
     regions = np.array([cache[n] for n in dom])
     loose = np.array([not ss.nodes[n].name.startswith("Bip001") for n in dom])
-    out = Drawn(plan.fit.vertices, joints, sw, flat.triangles, regions,
-                lambda pose: np.array([pose[t] for t in mapped]) @ inverse, loose)
+    out = Drawn(
+        plan.fit.vertices,
+        joints,
+        sw,
+        flat.triangles,
+        regions,
+        lambda pose: np.array([pose[t] for t in mapped]) @ inverse,
+        loose,
+    )
     out.pose_bones = np.array(mapped)
     out.bindings = inverse
     return out
@@ -193,8 +224,11 @@ class Rig:
         self.sk = sk
         self.arm = [[f(f"Bip001 {s} {b}") for b in ("Clavicle", "UpperArm", "Forearm", "Hand")] for s in "LR"]
         self.ok = all(n is not None for a in self.arm for n in a[1:])
-        spine = [f("Bip001 Pelvis")] + [f(f"Bip001 Spine{k}") for k in ("", "1", "2", "3")] + [f("Bip001 Neck"),
-                                                                                             f("Bip001 Head")]
+        spine = (
+            [f("Bip001 Pelvis")]
+            + [f(f"Bip001 Spine{k}") for k in ("", "1", "2", "3")]
+            + [f("Bip001 Neck"), f("Bip001 Head")]
+        )
         self.spine = [n for n in spine if n is not None]
         self.feet = [n for n in (f("Bip001 L Foot"), f("Bip001 R Foot")) if n is not None]
         self.weapon = f("Bip001_Weapon")
@@ -207,9 +241,16 @@ class Rig:
         for a in self.arm:
             hand = a[3]
             inv = np.linalg.inv(rest[hand])
-            kids = [i for i, n in enumerate(sk.nodes) if n.parent == hand and n.name.startswith("Bip001 ")
-                    and "Finger" in n.name]
-            below = [i for i in sk.descendants(hand) if sk.nodes[i].name.startswith("Bip001 ") and "Finger" in sk.nodes[i].name]
+            kids = [
+                i
+                for i, n in enumerate(sk.nodes)
+                if n.parent == hand and n.name.startswith("Bip001 ") and "Finger" in n.name
+            ]
+            below = [
+                i
+                for i in sk.descendants(hand)
+                if sk.nodes[i].name.startswith("Bip001 ") and "Finger" in sk.nodes[i].name
+            ]
             leaves = [i for i in below if not any(sk.nodes[j].parent == i for j in below)]
             fore = rest[hand][:3, 3] - rest[a[2]][:3, 3]
             fallback = rest[hand][:3, 3] + 0.3 * fore
@@ -227,8 +268,17 @@ class Rig:
         for s in range(2):
             u, e, w = self.joints(pose, s)
             hand = pose[self.arm[s][3]]
-            out[s] = [u + 0.5 * (e - u), u + 0.75 * (e - u), e, e + 0.25 * (w - e), e + 0.5 * (w - e),
-                      e + 0.75 * (w - e), w, (hand @ self.palm[s])[:3], (hand @ self.tip[s])[:3]]
+            out[s] = [
+                u + 0.5 * (e - u),
+                u + 0.75 * (e - u),
+                e,
+                e + 0.25 * (w - e),
+                e + 0.5 * (w - e),
+                e + 0.75 * (w - e),
+                w,
+                (hand @ self.palm[s])[:3],
+                (hand @ self.tip[s])[:3],
+            ]
         return out
 
     def samples_many(self, poses):
@@ -238,8 +288,19 @@ class Rig:
         for s in range(2):
             u, e, w = (poses[:, n, :3, 3] for n in self.arm[s][1:])
             hand = poses[:, self.arm[s][3]]
-            for k, value in enumerate((u + 0.5 * (e - u), u + 0.75 * (e - u), e, e + 0.25 * (w - e), e + 0.5 * (w - e),
-                                       e + 0.75 * (w - e), w, (hand @ self.palm[s])[:, :3], (hand @ self.tip[s])[:, :3])):
+            for k, value in enumerate(
+                (
+                    u + 0.5 * (e - u),
+                    u + 0.75 * (e - u),
+                    e,
+                    e + 0.25 * (w - e),
+                    e + 0.5 * (w - e),
+                    e + 0.75 * (w - e),
+                    w,
+                    (hand @ self.palm[s])[:, :3],
+                    (hand @ self.tip[s])[:, :3],
+                )
+            ):
                 out[:, s, k] = value
         return out
 
@@ -332,7 +393,7 @@ def measure(drawn, rig, pose, verts=None, points=None, other=True, core=False, r
                         continue
                     rows = s * n + at
                     hits = cast(flat[rows], d[rows], v[arm[(s, seg)]])
-                    s_arm[s, at] = np.maximum(s_arm[s, at], outer(hits, 0., ARM_CAP, 0.))
+                    s_arm[s, at] = np.maximum(s_arm[s, at], outer(hits, 0.0, ARM_CAP, 0.0))
         return s_body, s_arm, rho.reshape(2, n)
     hits = {(s, seg): cast(flat, d, v[arm[(s, seg)]]) for s in range(2) for seg in range(3)}
     s_body, s_arm = np.zeros((2, n)), np.zeros((2, n))
@@ -341,7 +402,9 @@ def measure(drawn, rig, pose, verts=None, points=None, other=True, core=False, r
         occluders = [body[rows]] + ([hits[(1 - s, seg)][rows] for seg in range(3)] if other else [])
         s_body[s] = outer(np.concatenate(occluders, axis=1), -rho[rows], CAP, -rho[rows])
         for k, segs in enumerate(SEGMENTS):
-            s_arm[s, k] = max(float(outer(hits[(s, seg)][s * n + k:s * n + k + 1], 0.0, ARM_CAP, 0.0)[0]) for seg in segs)
+            s_arm[s, k] = max(
+                float(outer(hits[(s, seg)][s * n + k : s * n + k + 1], 0.0, ARM_CAP, 0.0)[0]) for seg in segs
+            )
     return s_body, s_arm, rho.reshape(2, -1)
 
 
@@ -376,28 +439,30 @@ def girth(drawn, rig):
         band = (np.abs(body[:, 0] - ch[0]) < 0.04) & (body[:, 1] > ch[1]) & (body[:, 1] < ch[1] + 0.08)
         out["chest"] = float((body[band, 2].max() - ch[2]) * 1000) if band.any() else float("nan")
         ring = (body[:, 1] > ch[1]) & (body[:, 1] < ch[1] + 0.08)
-        out["chest_radius"] = float(np.median(np.linalg.norm(body[ring][:, [0, 2]] - ch[[0, 2]], axis=1)) * 1000) \
-            if ring.any() else float("nan")
+        out["chest_radius"] = (
+            float(np.median(np.linalg.norm(body[ring][:, [0, 2]] - ch[[0, 2]], axis=1)) * 1000)
+            if ring.any()
+            else float("nan")
+        )
     return out
-
 
 
 # the samples that are held at their own depth, as (index, share of the wrist's move, share of the elbow's):
 # E F25 F50 F75 W P (the palm moves with the wrist: the hand keeps its orientation)
 DRIVEN = ((2, 0.0, 1.0), (3, 0.25, 0.75), (4, 0.5, 0.5), (5, 0.75, 0.25), (6, 1.0, 0.0), (7, 1.0, 0.0))
-ITERATIONS = 4    # measure, solve, measure again
-STEPS = 120       # gradient steps per solve
-STEP = 0.08       # their size
+ITERATIONS = 4  # measure, solve, measure again
+STEPS = 120  # gradient steps per solve
+STEP = 0.08  # their size
 MOVE_COST = 0.03  # the cost of moving the elbow and the wrist, against 1 for an unmet need
-PAIR_WEIGHT = 0.3 # the weight of keeping the sleeves apart
-PIN_COST = 10.0   # the cost of moving the wrist of a hand that touches the head
+PAIR_WEIGHT = 0.3  # the weight of keeping the sleeves apart
+PIN_COST = 10.0  # the cost of moving the wrist of a hand that touches the head
 PIN_NEAR, PIN_FAR = 0.03, 0.06  # a hand this near the head's own surface is pinned fully, ... not at all (metres)
-NEED_CAP = 0.09   # a sample is never asked to move out more than this (metres)
-CLEAR = 0.5       # a bone that stood clear of its own costume comes out to this share of the new sleeve's radius
-DEAD = 0.005      # a need below this changes nothing (the measure's noise between two meshes)
-CORE = True       # depths are taken against the body's core (no cloth on secondary bones: a cape may cover an arm)
-DILATE = 2        # frames each side a need is held before blending (at 30 fps)
-SIGMA = 2.5       # frames, the blend
+NEED_CAP = 0.09  # a sample is never asked to move out more than this (metres)
+CLEAR = 0.5  # a bone that stood clear of its own costume comes out to this share of the new sleeve's radius
+DEAD = 0.005  # a need below this changes nothing (the measure's noise between two meshes)
+CORE = True  # depths are taken against the body's core (no cloth on secondary bones: a cape may cover an arm)
+DILATE = 2  # frames each side a need is held before blending (at 30 fps)
+SIGMA = 2.5  # frames, the blend
 GUARD_TOLERANCE = 0.001  # all nine samples, penetration max(core depth, 0)
 
 
@@ -431,7 +496,7 @@ def min_rotations(a, b):
     k[:, 0, 1], k[:, 0, 2] = -v[:, 2], v[:, 1]
     k[:, 1, 0], k[:, 1, 2] = v[:, 2], -v[:, 0]
     k[:, 2, 0], k[:, 2, 1] = -v[:, 1], v[:, 0]
-    with np.errstate(divide='ignore', invalid='ignore'):  # opposite rows take the half turn below
+    with np.errstate(divide="ignore", invalid="ignore"):  # opposite rows take the half turn below
         out = np.eye(3) + k + k @ k / (1 + c)[:, None, None]
     for row in np.flatnonzero(c < -1 + 1e-9):
         out[row] = _half_turn(a[row])
@@ -445,7 +510,7 @@ def _pad(values, k, loop):
 def maximum_filter1d(values, size, loop):
     k = size // 2
     p = _pad(values, k, loop)
-    return np.max([p[i:i + len(values)] for i in range(size)], axis=0)
+    return np.max([p[i : i + len(values)] for i in range(size)], axis=0)
 
 
 def gaussian_filter1d(values, sigma, loop):
@@ -455,7 +520,7 @@ def gaussian_filter1d(values, sigma, loop):
     g = np.exp(-0.5 * (x / sigma) ** 2)
     g /= g.sum()
     p = _pad(values, k, loop)
-    return sum(g[i] * p[i:i + len(values)] for i in range(2 * k + 1))
+    return sum(g[i] * p[i : i + len(values)] for i in range(2 * k + 1))
 
 
 def blend(values, loop):
@@ -478,8 +543,13 @@ class Arms:
             all_fore = {fore, *rig.sk.descendants(fore)}
             all_hand = {hand, *rig.sk.descendants(hand)}
             self.sub.append(sorted(all_upper))
-            self.groups.append([np.array(sorted(all_upper - all_fore)), np.array(sorted(all_fore - all_hand)),
-                                np.array(sorted(all_hand))])
+            self.groups.append(
+                [
+                    np.array(sorted(all_upper - all_fore)),
+                    np.array(sorted(all_fore - all_hand)),
+                    np.array(sorted(all_hand)),
+                ]
+            )
 
     def repose(self, poses, source, side, rows, elbow, wrist):
         """Least bone turns of one arm on the frames ``rows``: ``poses`` (frames x bones x 4 x 4) is changed in place
@@ -532,13 +602,12 @@ def head_pins(rig, own, poses, rows, loop):
         return out
     rows = rows[::2]
     for begin in range(0, len(poses), 16):
-        chunk = poses[begin:begin + 16]
+        chunk = poses[begin : begin + 16]
         hv = own.posed_batch(chunk, rows)
         pts = rig.samples_many(chunk)[:, :, 6:9].reshape(len(chunk), -1, 3)
         dist = np.linalg.norm(pts[:, :, None] - hv[:, None], axis=3).min(axis=2).reshape(-1, 2, 3).min(axis=2)
-        out[begin:begin + len(chunk)] = np.clip((PIN_FAR - dist) / (PIN_FAR - PIN_NEAR), 0.0, 1.0)
+        out[begin : begin + len(chunk)] = np.clip((PIN_FAR - dist) / (PIN_FAR - PIN_NEAR), 0.0, 1.0)
     return np.clip(blend(out, loop), 0.0, 1.0)
-
 
 
 GATE_DEPTH = 0.020
@@ -556,7 +625,7 @@ class _Progress:
         self.step, self.last = step, time.perf_counter()
 
     def __call__(self):
-        if self.step is not None and time.perf_counter() - self.last >= .5:
+        if self.step is not None and time.perf_counter() - self.last >= 0.5:
             self.step()
             self.last = time.perf_counter()
 
@@ -596,7 +665,7 @@ def contacts(rig, own, weapons, poses, rows, loop, shown=None):
             seen[frames] = True
             sampled = np.arange(0, len(weapon.h), 5)
             for begin in range(0, len(frames), 16):
-                at = frames[begin:begin + 16]
+                at = frames[begin : begin + 16]
                 vertices = weapon.posed_batch(stack[at], sampled)
                 near = np.linalg.norm(palms[at, :, None] - vertices[:, None], axis=3).min(axis=2)
                 distance[at] = np.minimum(distance[at], near)
@@ -609,30 +678,32 @@ def weapon_visibility(rig, tree, parts, poses):
     """Weapon renderers enabled on active GameObjects, including clip switches."""
     from .model import bind_toggles, TOGGLE_TYPES
     from .model_arm_clips import sample_curves
+
     by_hash = {zlib.crc32(n.path.encode()): i for i, n in enumerate(rig.sk.nodes)}
     bindings = tree["m_ClipBindingConstant"]["genericBindings"]
     wanted, index = set(), 0
     for binding in bindings:
-        if binding['typeID'] in TOGGLE_TYPES:
+        if binding["typeID"] in TOGGLE_TYPES:
             wanted.add(index)
         index += ms.binding_dims(binding)
     _, curves = sample_curves(tree, wanted)
-    switches = {(node, kind): values for node, kind, values in bind_toggles(
-        bindings, curves, by_hash)}
+    switches = {(node, kind): values for node, kind, values in bind_toggles(bindings, curves, by_hash)}
     shown = np.zeros((len(poses), len(parts)), bool)
     for k, part in enumerate(parts):
         renderer = bool(rig.sk.graph.tree(part.renderer).get("m_Enabled", 1))
         for f in range(len(poses)):
             values = switches.get((part.node, "renderer"))
-            enabled = values[min(f, len(values) - 1)] >= .5 if values is not None else renderer
+            enabled = values[min(f, len(values) - 1)] >= 0.5 if values is not None else renderer
             node = part.node
             while enabled and node is not None:
                 values = switches.get((node, "active"))
                 # Node.active includes ancestors; local active state is read
                 # from the GameObject so an animated parent can show a child.
                 go = rig.sk.nodes[node].go
-                active = bool(rig.sk.graph.tree(go).get("m_IsActive", 1)) if go is not None else rig.sk.nodes[node].active
-                enabled &= values[min(f, len(values) - 1)] >= .5 if values is not None else active
+                active = (
+                    bool(rig.sk.graph.tree(go).get("m_IsActive", 1)) if go is not None else rig.sk.nodes[node].active
+                )
+                enabled &= values[min(f, len(values) - 1)] >= 0.5 if values is not None else active
                 node = rig.sk.nodes[node].parent
             shown[f, k] = enabled
     return shown
@@ -665,8 +736,11 @@ def solve_many(rig, poses, needs, hold, pins, sleeves, guard=None, initial=None)
     diff = p[:, 0, :, None] - p[:, 1, None, :]
     c = np.linalg.norm(diff, axis=3)
     reach, grown = sleeves
-    near = (np.clip((reach - c) / 0.02, 0, 1) * np.exp(-(c - c.min(axis=(1, 2))[:, None, None]) / 0.015)
-            if grown > 0 else np.zeros_like(c))
+    near = (
+        np.clip((reach - c) / 0.02, 0, 1) * np.exp(-(c - c.min(axis=(1, 2))[:, None, None]) / 0.015)
+        if grown > 0
+        else np.zeros_like(c)
+    )
     # A sleeve term alone never starts a correction on an otherwise clear arm.
     active = (a.max(axis=2) > 1e-5) & ~hold
     near *= active.any(axis=1)[:, None, None]
@@ -678,10 +752,10 @@ def solve_many(rig, poses, needs, hold, pins, sleeves, guard=None, initial=None)
     l2 = np.linalg.norm(wr - e, axis=2)[..., None]
     de, dw = np.zeros_like(e), np.zeros_like(wr)
     if initial is not None:
-        de, dw = .25 * initial[:, :, 0], .25 * initial[:, :, 1]
-    guard_tw = np.array([0, 0, 0, .25, .5, .75, 1, 1, 1])[None, None, :, None]
-    guard_te = np.array([.5, .75, 1, .75, .5, .25, 0, 0, 0])[None, None, :, None]
-    step = STEP if guard is None else .025
+        de, dw = 0.25 * initial[:, :, 0], 0.25 * initial[:, :, 1]
+    guard_tw = np.array([0, 0, 0, 0.25, 0.5, 0.75, 1, 1, 1])[None, None, :, None]
+    guard_te = np.array([0.5, 0.75, 1, 0.75, 0.5, 0.25, 0, 0, 0])[None, None, :, None]
+    step = STEP if guard is None else 0.025
     steps = STEPS if initial is None else 3 * STEPS // 4
     pair = PAIR_WEIGHT * near
     wrist_cost = MOVE_COST + PIN_COST * pins[..., None]
@@ -750,7 +824,8 @@ def rate_limit(values, peak, hold, loop):
 def _interpolate(frames, values, count):
     flat = values.reshape(len(frames), -1)
     return np.stack([np.interp(np.arange(count), frames, flat[:, k]) for k in range(flat.shape[1])], axis=1).reshape(
-        (count,) + values.shape[1:])
+        (count,) + values.shape[1:]
+    )
 
 
 def _repose(rig, poses, deltas, hold):
@@ -784,7 +859,7 @@ def _repose(rig, poses, deltas, hold):
         normal[flat] = fallback[flat]
         normal /= np.maximum(np.linalg.norm(normal, axis=1), 1e-9)[:, None]
         height = l1 * l1 - along * along
-        e2 = centre + np.sqrt(np.where(height > 0, height, 0.))[:, None] * normal
+        e2 = centre + np.sqrt(np.where(height > 0, height, 0.0))[:, None] * normal
         arms.repose(out, source, s, rows, e2, w2)
     return list(out)
 
@@ -816,7 +891,7 @@ def limit_motion(deltas, peak, hold, loop, pins=None):
                     continue
                 j %= len(out)
                 diff = out[f] - out[j]
-                radius = .3 * peak[:, None]
+                radius = 0.3 * peak[:, None]
                 length = np.linalg.norm(diff, axis=2)
                 scale = np.minimum(1, radius / np.maximum(length, 1e-12))
                 out[f] = out[j] + diff * scale[..., None]
@@ -849,17 +924,17 @@ def solve_clip(rig, own, new, poses, loop, own_depth, before, frames, hold, pins
         tick()
         current_depth, gradient = depth_gradients([bodies[f] for f in frames], current)
         rest = first if not it else push_of(own_depth, current_depth, radius, CLEAR)
-        need = np.minimum(np.minimum(need + np.where(rest > 0.002, rest, 0),
-                                     1.25 * first + 0.005 * (first > 0)), NEED_CAP)
+        need = np.minimum(
+            np.minimum(need + np.where(rest > 0.002, rest, 0), 1.25 * first + 0.005 * (first > 0)), NEED_CAP
+        )
         full = blend(_interpolate(frames, need, n), loop)
         full = rate_limit(full, peak, hold, loop)
         pts = rig.samples_many(current)
         magnitude = np.maximum(np.linalg.norm(gradient, axis=3), 1e-6)
         directions = -gradient / magnitude[..., None]
         displacement = pts - measured_points
-        target = ((directions * displacement).sum(axis=3)
-                  + (current_depth - np.maximum(d_before, 0) + .001) / magnitude)
-        regressed = np.maximum(current_depth, 0) - np.maximum(d_before, 0) > .0002
+        target = (directions * displacement).sum(axis=3) + (current_depth - np.maximum(d_before, 0) + 0.001) / magnitude
+        regressed = np.maximum(current_depth, 0) - np.maximum(d_before, 0) > 0.0002
         target = np.where(regressed, target, -1e6)
         guard = (directions, target) if regressed.any() else None
         sparse = solve_many(rig, measured, full[frames], hold[frames], pins[frames], sleeves, guard, sparse)
@@ -869,8 +944,9 @@ def solve_clip(rig, own, new, poses, loop, own_depth, before, frames, hold, pins
     # Enforce the actual wrist-speed bound after the nonlinear length projection.
     # A single gain per arm preserves smooth motion, contacts and bone lengths.
     deltas = limit_motion(deltas, peak, hold, loop, pins)
-    repair = repair_clearance(rig, measured, deltas[frames], hold[frames], pins[frames],
-                              [bodies[f] for f in frames], tick)
+    repair = repair_clearance(
+        rig, measured, deltas[frames], hold[frames], pins[frames], [bodies[f] for f in frames], tick
+    )
     deltas += _interpolate(frames, repair - deltas[frames], n)
     fixed = _repose(rig, poses, deltas, hold)
     for _ in range(12):
@@ -906,8 +982,9 @@ def guard_clip(rig, drawn, poses, deltas, hold, loop, peak, bodies=None, tick=la
         changed = active[gains[active] != checked[active]]
         if isinstance(bodies, BodyFrames):
             bodies.ensure([f for f in changed if gains[f]])
-        updated = _repose(rig, [poses[f] for f in changed],
-                          deltas[changed] * gains[changed, None, None, None], hold[changed])
+        updated = _repose(
+            rig, [poses[f] for f in changed], deltas[changed] * gains[changed, None, None, None], hold[changed]
+        )
         bad = np.zeros(len(poses), bool)
         growth = np.zeros(len(poses))
         for f, w in zip(changed, updated):
@@ -924,7 +1001,7 @@ def guard_clip(rig, drawn, poses, deltas, hold, loop, peak, bodies=None, tick=la
                 growth[f] = np.max(value - baseline[f])
                 bad[f] = growth[f] > GUARD_TOLERANCE - 2e-5
         if bad.any():
-            gains[bad] *= np.minimum(.5, .0007 / np.maximum(growth[bad], 1e-9))
+            gains[bad] *= np.minimum(0.5, 0.0007 / np.maximum(growth[bad], 1e-9))
             gains[gains < 1 / 256] = 0
             if len(active) < len(poses):
                 gains = np.minimum(gains, np.interp(np.arange(len(poses)), active, gains[active]))
@@ -944,8 +1021,8 @@ def guard_clip(rig, drawn, poses, deltas, hold, loop, peak, bodies=None, tick=la
             if loop:
                 steps = np.concatenate((steps, correction[:1] - correction[-1:]))
             added = np.linalg.norm(steps, axis=2).max(axis=0, initial=0)
-            scale = np.where(added > 1e-9, .3 * peak / np.maximum(added, 1e-9), 1.)
-            gains *= min(1., float(scale.min()))
+            scale = np.where(added > 1e-9, 0.3 * peak / np.maximum(added, 1e-9), 1.0)
+            gains *= min(1.0, float(scale.min()))
             continue
         return fixed
     return list(poses)
@@ -1067,7 +1144,7 @@ def retarget(target, source, plan, clips, parts, *, step=None, progress=None):
         while pending and (block or pending[0].future.done()):
             job = pending.pop(0)
             while not job.future.done():
-                futures.wait([job.future], timeout=.1)
+                futures.wait([job.future], timeout=0.1)
                 tick()
             fixed = job.future.result()
             done += 1
@@ -1095,8 +1172,9 @@ def retarget(target, source, plan, clips, parts, *, step=None, progress=None):
             report()
             done += 1  # counted now; a submitted solve takes the count back until it is encoded
             tree = rig.sk.graph.tree(clip)
-            if not any(b["typeID"] == 4 and b["path"] in hashes
-                       for b in tree["m_ClipBindingConstant"]["genericBindings"]):
+            if not any(
+                b["typeID"] == 4 and b["path"] in hashes for b in tree["m_ClipBindingConstant"]["genericBindings"]
+            ):
                 continue
             sampler = ClipFrames(rig.sk, tree, gate_nodes)
             times = sampler.times
@@ -1128,8 +1206,9 @@ def retarget(target, source, plan, clips, parts, *, step=None, progress=None):
                 arm_radii_many(new, rig, [poses[frames[0]]])
                 pool = futures.ThreadPoolExecutor(ARM_WORKERS, thread_name_prefix="arm-solve")
             done -= 1
-            future = pool.submit(solve_clip, rig, own, new, poses, loop, depth, None, frames, hold, pins, sleeves,
-                                 stopped)
+            future = pool.submit(
+                solve_clip, rig, own, new, poses, loop, depth, None, frames, hold, pins, sleeves, stopped
+            )
             pending.append(_Solve(clip, tree, poses, hold, pins, share, future))
             while len(pending) > ARM_WORKERS:
                 finish(True)
@@ -1140,7 +1219,9 @@ def retarget(target, source, plan, clips, parts, *, step=None, progress=None):
     finally:
         if pool is not None:
             pool.shutdown(wait=True, cancel_futures=True)
-    logger.info("Arm clearance: %d/%d clips corrected in %.3fs", len(changed), len(clips), time.perf_counter() - started)
+    logger.info(
+        "Arm clearance: %d/%d clips corrected in %.3fs", len(changed), len(clips), time.perf_counter() - started
+    )
     return changed
 
 
@@ -1177,6 +1258,7 @@ class ClipFrames:
                 wanted.update(range(index, index + dims))
             index += dims
         from .model_arm_clips import sample_curves
+
         self.times, curves = sample_curves(tree, wanted)
         self.tracks = ma.bind_tracks(bindings, curves, by_hash)
         self.orders = ma.euler_orders(bindings, by_hash)
@@ -1200,9 +1282,9 @@ class ClipFrames:
             r /= np.maximum(np.linalg.norm(r, axis=1), 1e-30)[:, None]
             x, y, z, w = r.T
             m = local[:, node]
-            m[:, 0, :3] = np.array([1 - 2 * (y*y + z*z), 2 * (x*y - z*w), 2 * (x*z + y*w)]).T
-            m[:, 1, :3] = np.array([2 * (x*y + z*w), 1 - 2 * (x*x + z*z), 2 * (y*z - x*w)]).T
-            m[:, 2, :3] = np.array([2 * (x*z - y*w), 2 * (y*z + x*w), 1 - 2 * (x*x + y*y)]).T
+            m[:, 0, :3] = np.array([1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)]).T
+            m[:, 1, :3] = np.array([2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)]).T
+            m[:, 2, :3] = np.array([2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]).T
             m[:, :3, :3] *= s[:, None]
             m[:, :3, 3] = p
         for i, node in enumerate(self.sk.nodes):
@@ -1220,9 +1302,9 @@ def near_core(drawn, rig, pose):
     _, dirs, rho = radial(rig.axis(pose), points)
     lo, hi = drawn.core_bounds(pose)
     # D_new <= -20 mm implies need <= 20 mm because r_new <= ARM_CAP.
-    ends = np.stack((points - (.5 * ARM_CAP - GATE_DEPTH) * dirs, points + CAP * dirs))
+    ends = np.stack((points - (0.5 * ARM_CAP - GATE_DEPTH) * dirs, points + CAP * dirs))
     ray_lo, ray_hi = ends.min(axis=0), ends.max(axis=0)
-    return bool(((ray_hi >= lo).all(axis=1) & (ray_lo <= hi).all(axis=1) | (rho < .02)).any())
+    return bool(((ray_hi >= lo).all(axis=1) & (ray_lo <= hi).all(axis=1) | (rho < 0.02)).any())
 
 
 def clip_gate(target, rig, own, new, clip, sampler, tick=lambda: None):
@@ -1237,16 +1319,16 @@ def clip_gate(target, rig, own, new, clip, sampler, tick=lambda: None):
     poses_batch = sampler.world(frames)
     possible = [f for f, w in zip(frames, poses_batch) if near_core(new, rig, w)]
     if len(possible) < required:
-        return False, {}, {}, 0.
+        return False, {}, {}, 0.0
     poses = {int(f): w for f, w in zip(frames, poses_batch)}
     own_values = {}
     key = _depth_key(target, rig, clip)
     hits = 0
     for begin in range(0, len(possible), 8):
         tick()
-        batch = possible[begin:begin + 8]
+        batch = possible[begin : begin + 8]
         bodies = depth_batch(new, rig, np.array([poses[int(f)] for f in batch]), GATE_SAMPLES)
-        candidates = [int(f) for f, body in zip(batch, bodies) if (body + .5 * ARM_CAP).max() > GATE_DEPTH]
+        candidates = [int(f) for f, body in zip(batch, bodies) if (body + 0.5 * ARM_CAP).max() > GATE_DEPTH]
         if candidates:
             values = _own_depths(target, rig, own, clip, poses, candidates, key, GATE_SAMPLES)
             own_values.update(zip(candidates, values))
@@ -1265,7 +1347,7 @@ def clip_gate(target, rig, own, new, clip, sampler, tick=lambda: None):
                 # returned share is a lower bound, not a full-clip census.
                 return True, poses, own_values, hits / len(frames)
             if hits + len(possible) - count - 1 < required:
-                return False, {}, {}, 0.
+                return False, {}, {}, 0.0
     return hits >= required, poses, own_values, hits / len(frames)
 
 
@@ -1284,7 +1366,7 @@ class BodyFrames:
         missing = [f for f in frames if f not in self.frames]
         for begin in range(0, len(missing), 8):
             self.tick()
-            batch = missing[begin:begin + 8]
+            batch = missing[begin : begin + 8]
             vertices = self.drawn.posed_batch([self.poses[f] for f in batch], self.rows)
             first = BodyFrame(self.drawn, self.rig, self.poses[batch[0]], vertices[0])
             self.frames[batch[0]] = first
@@ -1293,8 +1375,13 @@ class BodyFrames:
             prepared = BodyFrame.prepare(vertices[1:, first.tris])
             index, leaf_lo, leaf_hi = leaf_bounds(self.drawn._body_index, prepared[3], prepared[4])
             for k, f in enumerate(batch[1:]):
-                self.frames[f] = BodyFrame(self.drawn, self.rig, self.poses[f], vertices[k + 1],
-                                           [a[k] for a in prepared] + [(index, leaf_lo[k], leaf_hi[k])])
+                self.frames[f] = BodyFrame(
+                    self.drawn,
+                    self.rig,
+                    self.poses[f],
+                    vertices[k + 1],
+                    [a[k] for a in prepared] + [(index, leaf_lo[k], leaf_hi[k])],
+                )
 
     def __getitem__(self, frame):
         self.ensure([frame])
@@ -1319,14 +1406,14 @@ class TriangleIndex:
                 leaves.append(rows)
                 return
             axis = np.ptp(centers[rows], axis=0).argmax()
-            rows = rows[np.argsort(centers[rows, axis], kind='stable')]
+            rows = rows[np.argsort(centers[rows, axis], kind="stable")]
             middle = len(rows) // 2
             split(rows[:middle])
             split(rows[middle:])
 
         if len(centers):
             split(np.arange(len(centers)))
-        self.rows = np.array([np.pad(rows, (0, 16 - len(rows)), mode='edge') for rows in leaves], int).reshape(-1, 16)
+        self.rows = np.array([np.pad(rows, (0, 16 - len(rows)), mode="edge") for rows in leaves], int).reshape(-1, 16)
         self.leaf_of = np.empty(len(centers), int)
         self.leaf_of[self.rows.ravel()] = np.repeat(np.arange(len(self.rows)), 16)
 
@@ -1354,16 +1441,18 @@ class BodyFrame:
         self.rows, self.tris, _ = drawn.measure_mesh(True, False)
         self.vertices = drawn.posed(pose, self.rows) if vertices is None else vertices
         self.axis = rig.axis(pose)
-        if not hasattr(drawn, '_body_layout'):
-            if hasattr(drawn, 'pose_bones'):
+        if not hasattr(drawn, "_body_layout"):
+            if hasattr(drawn, "pose_bones"):
                 affected = {n for a in rig.arm for n in [a[1], *rig.sk.descendants(a[1])]}
                 joint_affected = np.array([n in affected for n in drawn.pose_bones])
-                changed = np.flatnonzero((joint_affected[drawn.joints[self.rows]] & (drawn.weights[self.rows] > 0)).any(axis=1))
+                changed = np.flatnonzero(
+                    (joint_affected[drawn.joints[self.rows]] & (drawn.weights[self.rows] > 0)).any(axis=1)
+                )
             else:
                 changed = np.arange(len(self.rows))
             drawn._body_layout = changed, np.flatnonzero(np.isin(self.tris, changed).any(axis=1))
         self.changed, self.tri_changed = drawn._body_layout
-        if not hasattr(drawn, '_body_index'):
+        if not hasattr(drawn, "_body_index"):
             drawn._body_index = TriangleIndex(self.vertices[self.tris])
         if prepared is None:
             prepared = self.prepare(self.vertices[self.tris])
@@ -1415,10 +1504,10 @@ class BodyFrame:
         along = ab[nearest] / np.sqrt(length2[nearest])[:, None]
         interior = (t[np.arange(len(points)), nearest] > 0) & (t[np.arange(len(points)), nearest] < 1)
         project = along[:, :, None] * along[:, None, :] * interior[:, None, None]
-        pn = np.einsum('nij,nj->ni', project, normals)
+        pn = np.einsum("nij,nj->ni", project, normals)
         nd = (normals * dirs).sum(axis=1)
         tangent = normals - nd[:, None] * dirs
-        jt = (tangent - np.einsum('nij,nj->ni', project, tangent)) / np.maximum(rho, 1e-9)[:, None]
+        jt = (tangent - np.einsum("nij,nj->ni", project, tangent)) / np.maximum(rho, 1e-9)[:, None]
         hit = np.linalg.norm(normals, axis=1) > 0
         grad = -dirs.copy()
         grad[hit] -= (pn[hit] + (depth[hit] + rho[hit])[:, None] * jt[hit]) / nd[hit, None]
@@ -1445,15 +1534,15 @@ class BodyFrame:
         # narrow-phase work even though their rays visit different torso slabs.
         if len(prepared) > 5:
             index, leaf_lo, leaf_hi = prepared[5]
-            ray, leaf = np.nonzero((leaf_hi[None] >= ray_lo[:, None]).all(axis=2)
-                                   & (leaf_lo[None] <= ray_hi[:, None]).all(axis=2))
+            ray, leaf = np.nonzero(
+                (leaf_hi[None] >= ray_lo[:, None]).all(axis=2) & (leaf_lo[None] <= ray_hi[:, None]).all(axis=2)
+            )
             ray = np.repeat(ray, index.rows.shape[1])
             at = index.rows[leaf].ravel()
             near = (hi[at] >= ray_lo[ray]).all(axis=1) & (lo[at] <= ray_hi[ray]).all(axis=1)
             ray, at = ray[near], at[near]
         else:
-            ray, at = np.nonzero((hi[None] >= ray_lo[:, None]).all(axis=2)
-                                  & (lo[None] <= ray_hi[:, None]).all(axis=2))
+            ray, at = np.nonzero((hi[None] >= ray_lo[:, None]).all(axis=2) & (lo[None] <= ray_hi[:, None]).all(axis=2))
         return _narrow(points, dirs, rho, v0, e1, e2, ray, at, normals, high)
 
 
@@ -1467,8 +1556,8 @@ def _narrow(points, dirs, rho, v0, e1, e2, ray, at, normals, high):
     bx, by, bz = e2.T
     hx, hy, hz = dy * bz - dz * by, dz * bx - dx * bz, dx * by - dy * bx
     determinant = ax * hx + ay * hy + az * hz
-    with np.errstate(divide='ignore', invalid='ignore'):
-        f = 1. / determinant
+    with np.errstate(divide="ignore", invalid="ignore"):
+        f = 1.0 / determinant
         sx, sy, sz = (p - v0).T
         u = f * (sx * hx + sy * hy + sz * hz)
         qx, qy, qz = sy * az - sz * ay, sz * ax - sx * az, sx * ay - sy * ax
@@ -1522,8 +1611,9 @@ def query_many(points, dirs, rho, prepared, normals=False, high=CAP):
         if k:
             near &= box_hi[:, k] >= ray_lo[:, k]
         near &= box_lo[:, k] <= ray_hi[:, k]
-    out = _narrow(points.reshape(-1, 3), dirs.reshape(-1, 3), rho.ravel(), v0, e1, e2, ray[near], at[near],
-                  normals, high)
+    out = _narrow(
+        points.reshape(-1, 3), dirs.reshape(-1, 3), rho.ravel(), v0, e1, e2, ray[near], at[near], normals, high
+    )
     if not normals:
         return out.reshape(count, rays)
     return out[0].reshape(count, rays), out[1].reshape(count, rays, 3)
@@ -1538,8 +1628,9 @@ def radial_many(axes, points):
     """``radial`` for frames: axes (frames, joints, 3), points (frames, n, 3)."""
     a, b = axes[:, :-1], axes[:, 1:]
     ab = b - a
-    t = np.clip(((points[:, :, None] - a[:, None]) * ab[:, None]).sum(-1)
-                / np.maximum((ab * ab).sum(-1), 1e-12)[:, None], 0, 1)
+    t = np.clip(
+        ((points[:, :, None] - a[:, None]) * ab[:, None]).sum(-1) / np.maximum((ab * ab).sum(-1), 1e-12)[:, None], 0, 1
+    )
     near = a[:, None] + t[..., None] * ab[:, None]
     dist = np.linalg.norm(points[:, :, None] - near, axis=-1)
     k = dist.argmin(-1)
@@ -1608,8 +1699,9 @@ def penetrations(bodies, poses):
         bodies_, poses_ = [bodies[k] for k in todo], [poses[k] for k in todo]
         points = _samples(bodies_[0].rig, poses_).reshape(len(todo), -1, 3)
         _, dirs, _ = radial_many(np.array([b.axis for b in bodies_]), points)
-        out[todo] = query_many(points, dirs, np.zeros(points.shape[:2]),
-                               _geometry_many(bodies_, poses_)).reshape(len(todo), 2, -1)
+        out[todo] = query_many(points, dirs, np.zeros(points.shape[:2]), _geometry_many(bodies_, poses_)).reshape(
+            len(todo), 2, -1
+        )
     return out
 
 
@@ -1627,17 +1719,19 @@ def depth_gradients(bodies, poses):
     t = np.clip(((points[:, :, None] - a[:, None]) * ab[:, None]).sum(axis=3) / length2[:, None], 0, 1)
     distances = np.linalg.norm(points[:, :, None] - a[:, None] - t[..., None] * ab[:, None], axis=3)
     nearest = distances.argmin(axis=2)
-    along = (np.take_along_axis(ab, nearest[..., None], axis=1)
-             / np.sqrt(np.take_along_axis(length2, nearest, axis=1))[..., None]).reshape(-1, 3)
+    along = (
+        np.take_along_axis(ab, nearest[..., None], axis=1)
+        / np.sqrt(np.take_along_axis(length2, nearest, axis=1))[..., None]
+    ).reshape(-1, 3)
     at = np.take_along_axis(t, nearest[..., None], axis=2).ravel()
     interior = (at > 0) & (at < 1)
     points, dirs, rho = points.reshape(-1, 3), dirs.reshape(-1, 3), rho.ravel()
     depth, normals = depth.ravel(), normals.reshape(-1, 3)
     project = along[:, :, None] * along[:, None, :] * interior[:, None, None]
-    pn = np.einsum('nij,nj->ni', project, normals)
+    pn = np.einsum("nij,nj->ni", project, normals)
     nd = (normals * dirs).sum(axis=1)
     tangent = normals - nd[:, None] * dirs
-    jt = (tangent - np.einsum('nij,nj->ni', project, tangent)) / np.maximum(rho, 1e-9)[:, None]
+    jt = (tangent - np.einsum("nij,nj->ni", project, tangent)) / np.maximum(rho, 1e-9)[:, None]
     hit = np.linalg.norm(normals, axis=1) > 0
     grad = -dirs.copy()
     grad[hit] -= (pn[hit] + (depth[hit] + rho[hit])[:, None] * jt[hit]) / nd[hit, None]
@@ -1650,7 +1744,7 @@ def arm_radii(drawn, rig, pose, indices=None):
     points = rig.samples(pose)[:, indices]
     _, directions, _ = radial(rig.axis(pose), points.reshape(-1, 3))
     directions = directions.reshape(points.shape)
-    if not hasattr(drawn, '_arm_views'):
+    if not hasattr(drawn, "_arm_views"):
         drawn._arm_views = {}
     radii = np.zeros(points.shape[:2])
     for side in range(2):
@@ -1682,7 +1776,7 @@ def arm_radii_many(drawn, rig, poses, indices=None):
     points = _samples(rig, poses)[:, :, indices]
     _, directions, _ = radial_many(np.array([rig.axis(w) for w in poses]), points.reshape(len(poses), -1, 3))
     directions = directions.reshape(points.shape)
-    if not hasattr(drawn, '_arm_views'):
+    if not hasattr(drawn, "_arm_views"):
         drawn._arm_views = {}
     for side in range(2):
         for segment in range(3):
@@ -1699,8 +1793,9 @@ def arm_radii_many(drawn, rig, poses, indices=None):
             rows, local, index = drawn._arm_views[key]
             prepared = BodyFrame.prepare(drawn.posed_batch(poses, rows)[:, local])
             prepared.append(leaf_bounds(index, prepared[3], prepared[4]))
-            values = query_many(points[:, side, at], directions[:, side, at], np.zeros((len(poses), len(at))),
-                                prepared, high=ARM_CAP)
+            values = query_many(
+                points[:, side, at], directions[:, side, at], np.zeros((len(poses), len(at))), prepared, high=ARM_CAP
+            )
             radii[:, side, at] = np.maximum(radii[:, side, at], values)
     return radii
 
@@ -1713,18 +1808,18 @@ def repair_clearance(rig, poses, deltas, hold, pins, bodies, tick=lambda: None):
     Shared turns preserve smoothness; contacts and unreachable cases are left
     to the per-frame rollback guard. Repair displacement is capped at 30 mm.
     """
-    if hold.any() or (pins > .01).any():
+    if hold.any() or (pins > 0.01).any():
         return deltas
     baseline = np.maximum(0, depths(bodies, poses))
     original = deltas.copy()
-    ew = np.array([.5, .75, 1, .75, .5, .25, 0, 0, 0])
-    ww = np.array([0, 0, 0, .25, .5, .75, 1, 1, 1])
+    ew = np.array([0.5, 0.75, 1, 0.75, 0.5, 0.25, 0, 0, 0])
+    ww = np.array([0, 0, 0, 0.25, 0.5, 0.75, 1, 1, 1])
     joints0 = np.array([[rig.joints(w, side) for side in range(2)] for w in poses])
     for _ in range(8):
         tick()
         fixed = _repose(rig, poses, deltas, hold)
         depth, gradient = depth_gradients(bodies, fixed)
-        if (np.maximum(depth, 0) - baseline).max() < .0007:
+        if (np.maximum(depth, 0) - baseline).max() < 0.0007:
             return deltas
         joints = np.array([[rig.joints(w, side) for side in range(2)] for w in fixed])
         upper = joints[:, :, 1] - joints[:, :, 0]
@@ -1732,9 +1827,14 @@ def repair_clearance(rig, poses, deltas, hold, pins, bodies, tick=lambda: None):
         lengths = np.stack((np.linalg.norm(upper, axis=2), np.linalg.norm(fore, axis=2)), axis=2).mean(axis=0)
         lever_u = ew[None, None, :, None] * upper[:, :, None] + ww[None, None, :, None] * (upper + fore)[:, :, None]
         lever_f = ww[None, None, :, None] * fore[:, :, None]
-        coefficients = np.concatenate((np.cross(gradient, lever_u) / lengths[None, :, 0, None, None],
-                                       np.cross(gradient, lever_f) / lengths[None, :, 1, None, None]), axis=3)
-        rhs = depth - baseline + .0003
+        coefficients = np.concatenate(
+            (
+                np.cross(gradient, lever_u) / lengths[None, :, 0, None, None],
+                np.cross(gradient, lever_f) / lengths[None, :, 1, None, None],
+            ),
+            axis=3,
+        )
+        rhs = depth - baseline + 0.0003
         for side in range(2):
             a = coefficients[:, side].reshape(-1, 6)
             target = rhs[:, side].ravel()
@@ -1745,12 +1845,12 @@ def repair_clearance(rig, poses, deltas, hold, pins, bodies, tick=lambda: None):
                 if violation[k] <= 1e-5:
                     break
                 shift += violation[k] / max(a[k] @ a[k], 1e-9) * a[k]
-                shift *= .999
+                shift *= 0.999
             turns = shift.reshape(2, 3) / lengths[side, :, None]
             matrices = []
             for turn in turns:
                 angle = np.linalg.norm(turn)
-                angle = min(angle, .1)
+                angle = min(angle, 0.1)
                 axis = turn / max(np.linalg.norm(turn), 1e-9)
                 x, y, z = axis
                 k = np.array([[0, -z, y], [z, 0, -x], [-y, x, 0]])
@@ -1761,8 +1861,8 @@ def repair_clearance(rig, poses, deltas, hold, pins, bodies, tick=lambda: None):
             deltas[:, side, 1] = w2 - joints0[:, side, 2]
         adjustment = deltas - original
         amount = np.linalg.norm(adjustment, axis=3).max(initial=0)
-        if amount > .03:
-            deltas = original + adjustment * (.03 / amount)
+        if amount > 0.03:
+            deltas = original + adjustment * (0.03 / amount)
     return deltas
 
 
@@ -1774,7 +1874,7 @@ def depth_batch(drawn, rig, poses, indices):
     """
     if not len(poses):
         return np.empty((0, 2, len(indices)))
-    if not hasattr(drawn, 'bindings'):
+    if not hasattr(drawn, "bindings"):
         return np.array([BodyFrame(drawn, rig, w).depth(w, indices) for w in poses])
     rows, triangles, _ = drawn.measure_mesh(True, False)
     matrices = (poses[:, drawn.pose_bones] @ drawn.bindings).astype(np.float32)
@@ -1784,12 +1884,14 @@ def depth_batch(drawn, rig, poses, indices):
     for k in range(joints.shape[1]):
         used = weights[:, k] != 0
         if used.any():
-            vertices[:, used] += weights[None, used, k:k + 1] * np.einsum(
-                'fvij,vj->fvi', matrices[:, joints[used, k]], h[used])[..., :3]
+            vertices[:, used] += (
+                weights[None, used, k : k + 1]
+                * np.einsum("fvij,vj->fvi", matrices[:, joints[used, k]], h[used])[..., :3]
+            )
     tri = vertices[:, triangles]
     a, b, c = tri[:, :, 0], tri[:, :, 1], tri[:, :, 2]
     prepared = [a, b - a, c - a, np.minimum(np.minimum(a, b), c), np.maximum(np.maximum(a, b), c)]
-    if not hasattr(drawn, '_body_index'):
+    if not hasattr(drawn, "_body_index"):
         drawn._body_index = TriangleIndex(tri[0])
     points = _samples(rig, poses)[:, :, indices].reshape(len(poses), -1, 3)
     _, direction, rho = radial_many(np.array([rig.axis(pose) for pose in poses]), points)

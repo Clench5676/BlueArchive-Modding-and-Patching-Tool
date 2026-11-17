@@ -26,15 +26,22 @@ def _plain_mesh(positions, normals, tangents):
     channel = lambda offset, fmt, dim: {"stream": 0, "offset": offset, "format": fmt, "dimension": dim}  # noqa: E731
     channels = [channel(0, 0, 3), channel(12, 0, 3), channel(24, 0, 4), channel(40, 2, 4)]
     channels += [channel(0, 0, 0)] * 10
-    return {"m_VertexData": {"m_VertexCount": count, "m_Channels": channels, "m_DataSize": bytes(raw)},
-            "m_CompressedMesh": {"m_Vertices": {"m_NumItems": 0}}, "m_StreamData": {"size": 0}}
+    return {
+        "m_VertexData": {"m_VertexCount": count, "m_Channels": channels, "m_DataSize": bytes(raw)},
+        "m_CompressedMesh": {"m_Vertices": {"m_NumItems": 0}},
+        "m_StreamData": {"size": 0},
+    }
 
 
 def _read_plain(mesh):
     raw = mesh["m_VertexData"]["m_DataSize"]
     rows = [struct.unpack_from("<3f3f4f4B", raw, 44 * v) for v in range(mesh["m_VertexData"]["m_VertexCount"])]
-    return (np.array([r[:3] for r in rows]), np.array([r[3:6] for r in rows]), np.array([r[6:10] for r in rows]),
-            [r[10:] for r in rows])
+    return (
+        np.array([r[:3] for r in rows]),
+        np.array([r[3:6] for r in rows]),
+        np.array([r[6:10] for r in rows]),
+        [r[10:] for r in rows],
+    )
 
 
 def test_plain_vertices_move_and_their_normals_and_tangents_turn():
@@ -66,8 +73,13 @@ def test_a_mirroring_transform_flips_the_tangent_handedness():
 
 def _packed(values, bits, start, span):
     steps = np.clip(np.rint((np.asarray(values, float) - start) / span * ((1 << bits) - 1)), 0, (1 << bits) - 1)
-    return {"m_NumItems": len(values), "m_BitSize": bits, "m_Start": start, "m_Range": span,
-            "m_Data": pack_bits([int(s) for s in steps], bits)}
+    return {
+        "m_NumItems": len(values),
+        "m_BitSize": bits,
+        "m_Start": start,
+        "m_Range": span,
+        "m_Data": pack_bits([int(s) for s in steps], bits),
+    }
 
 
 def _signs(values):
@@ -89,8 +101,11 @@ def test_compressed_vertices_are_packed_as_unity_reads_them():
         "m_Tangents": _packed(tangents[:, :2].reshape(-1), 10, -1.0, 2.0),
         "m_TangentSigns": _signs(np.c_[tangents[:, 2] >= 0, tangents[:, 3] > 0].reshape(-1)),
     }
-    mesh = {"m_CompressedMesh": compressed, "m_VertexData": {"m_VertexCount": 0, "m_Channels": []},
-            "m_StreamData": {"size": 0}}
+    mesh = {
+        "m_CompressedMesh": compressed,
+        "m_VertexData": {"m_VertexCount": 0, "m_Channels": []},
+        "m_StreamData": {"size": 0},
+    }
     layout = mg.geometry_of(mesh)
     assert isinstance(layout, mg.Packed) and layout.count == 3
     moved = positions * 2 + [1.0, 0.0, -1.0]
@@ -120,7 +135,15 @@ def test_meshes_with_streamed_data_or_other_formats_are_not_rewritten():
 
 def test_blend_shape_deltas_turn_with_their_vertex():
     mesh = _plain_mesh([[0, 0, 0], [1, 0, 0]], [[0, 0, 1]] * 2, [[1, 0, 0, 1]] * 2)
-    mesh["m_Shapes"] = {"vertices": [{"index": 1, "vertex": {"x": 1.0, "y": 0.0, "z": 0.0},
-                                      "normal": {"x": 0.0, "y": 0.0, "z": 0.0}, "tangent": {"x": 0.0, "y": 0.0, "z": 0.0}}]}
+    mesh["m_Shapes"] = {
+        "vertices": [
+            {
+                "index": 1,
+                "vertex": {"x": 1.0, "y": 0.0, "z": 0.0},
+                "normal": {"x": 0.0, "y": 0.0, "z": 0.0},
+                "tangent": {"x": 0.0, "y": 0.0, "z": 0.0},
+            }
+        ]
+    }
     mg.write_geometry(mesh, mg.geometry_of(mesh), np.zeros((2, 3)), np.array([np.eye(3), _turn(90)]))
     assert mesh["m_Shapes"]["vertices"][0]["vertex"] == pytest.approx({"x": 0.0, "y": 1.0, "z": 0.0}, abs=1e-9)

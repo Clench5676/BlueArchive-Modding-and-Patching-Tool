@@ -5,47 +5,111 @@ import { hasAsset, primaryKind, configuredKey, previewBase } from "../../src/bmp
 
 const source = readFileSync(new URL("../../src/bmpt/web/js/roster.js", import.meta.url), "utf8");
 const rowsCode = source.slice(source.indexOf("async function renderRow("), source.indexOf("function maxScroll("));
-const deferred = () => { let resolve; const promise = new Promise((r) => { resolve = r; }); return { promise, resolve }; };
-const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
+const deferred = () => {
+  let resolve;
+  const promise = new Promise((r) => {
+    resolve = r;
+  });
+  return { promise, resolve };
+};
+const flush = async () => {
+  for (let i = 0; i < 20; i++) await Promise.resolve();
+};
 
 test("declined licence keeps collection portraits with a configured source and mods off", () => {
   const code = source.slice(source.indexOf("const portraitOf ="), source.indexOf("// --- rows near the view"));
   const portraitOf = new Function("spineAllowed", `${code}\nreturn portraitOf;`)(() => false);
-  assert.equal(portraitOf({ portrait: "/asset/collection/portrait.png", configured: { spr: "mod:a" } }), "/asset/collection/portrait.png");
+  assert.equal(
+    portraitOf({ portrait: "/asset/collection/portrait.png", configured: { spr: "mod:a" } }),
+    "/asset/collection/portrait.png",
+  );
   assert.equal(portraitOf({ portrait: null, configured: { lobby: "mod:a" } }), null);
 });
 
 class El {
-  children = []; dataset = {}; style = {}; attrs = {};
-  setAttribute(k, v) { this.attrs[k] = v; }
+  children = [];
+  dataset = {};
+  style = {};
+  attrs = {};
+  setAttribute(k, v) {
+    this.attrs[k] = v;
+  }
   addEventListener() {}
-  appendChild(el) { this.children.push(el); }
-  insertBefore(el, before) { this.children.splice(before ? this.children.indexOf(before) : this.children.length, 0, el); }
+  appendChild(el) {
+    this.children.push(el);
+  }
+  insertBefore(el, before) {
+    this.children.splice(before ? this.children.indexOf(before) : this.children.length, 0, el);
+  }
   remove() {}
 }
 
 function harness(kind = "spr", generated = false) {
-  const requested = [], host = new El(), pictures = new Map(), renders = new Map();
-  const rows = new Map([0, 70, 150].map((top, key) => {
-    pictures.set(key, deferred()); renders.set(key, deferred());
-    return [key, { top, items: [{ x: 0, y: 0, e: { key, name: `Student ${key}`, mods: 0,
-      spr: kind === "spr" ? "spr" : null, lobby: kind === "lobby" ? "arona_workpage_daytime" : null } }] }];
-  }));
+  const requested = [],
+    host = new El(),
+    pictures = new Map(),
+    renders = new Map();
+  const rows = new Map(
+    [0, 70, 150].map((top, key) => {
+      pictures.set(key, deferred());
+      renders.set(key, deferred());
+      return [
+        key,
+        {
+          top,
+          items: [
+            {
+              x: 0,
+              y: 0,
+              e: {
+                key,
+                name: `Student ${key}`,
+                mods: 0,
+                spr: kind === "spr" ? "spr" : null,
+                lobby: kind === "lobby" ? "arona_workpage_daytime" : null,
+              },
+            },
+          ],
+        },
+      ];
+    }),
+  );
   const env = {
     thumbnailWork: { signal: { aborted: false } },
-    document: { createElement: () => new El() }, rows, rendered: new Map(), dom: { scrollHost: host }, hasAsset,
-    CLIP_BOTTOM: 100, PITCH: 50, S: 1, ORIGIN: [0, 0], view: { scroll: 0 }, clipTop: () => 0, ctx: {},
-    clipRosterBand: async () => {}, cardTree: (e) => e, portraitOf: (e) => `portrait-${e.key}`,
-    countText: () => "Portraits: 1, Memorial lobbies: 1", T: (key) => key,
-    NGUI: { render: async (tree) => {
-      requested.push(tree.key);
-      await renders.get(tree.key).promise;
-      return { images: generated ? [] : [pictures.get(tree.key).promise], pictures: [pictures.get(tree.key).promise] };
-    } },
+    document: { createElement: () => new El() },
+    rows,
+    rendered: new Map(),
+    dom: { scrollHost: host },
+    hasAsset,
+    CLIP_BOTTOM: 100,
+    PITCH: 50,
+    S: 1,
+    ORIGIN: [0, 0],
+    view: { scroll: 0 },
+    clipTop: () => 0,
+    ctx: {},
+    clipRosterBand: async () => {},
+    cardTree: (e) => e,
+    portraitOf: (e) => `portrait-${e.key}`,
+    countText: () => "Portraits: 1, Memorial lobbies: 1",
+    T: (key) => key,
+    NGUI: {
+      render: async (tree) => {
+        requested.push(tree.key);
+        await renders.get(tree.key).promise;
+        return {
+          images: generated ? [] : [pictures.get(tree.key).promise],
+          pictures: [pictures.get(tree.key).promise],
+        };
+      },
+    },
   };
-  const api = new Function("env", `const { ${Object.keys(env).join(", ")} } = env;
+  const api = new Function(
+    "env",
+    `const { ${Object.keys(env).join(", ")} } = env;
     ${rowsCode}
-    return { syncRows };`)(env);
+    return { syncRows };`,
+  )(env);
   return { ...api, requested, pictures, renders, host, rows, signal: env.thumbnailWork.signal };
 }
 
@@ -58,86 +122,159 @@ test("roster cards keep their full accessible name and counts without a hover ti
   assert.equal(card.attrs["aria-label"], "Student 0 - Portraits: 1, Memorial lobbies: 1");
   assert.equal(card.title, undefined);
   assert.equal(card.attrs.title, undefined);
-  for (const key of [0, 1]) { h.renders.get(key).resolve(); h.pictures.get(key).resolve(); }
+  for (const key of [0, 1]) {
+    h.renders.get(key).resolve();
+    h.pictures.get(key).resolve();
+  }
   await pending;
 });
 
-for (const kind of ["spr", "lobby"]) test(`visible generated ${kind} thumbnails complete before the roster is revealed`, async () => {
-  const h = harness(kind, true);
-  let ready = false;
-  const showing = h.syncRows().then(() => { ready = true; });
-  await flush();
-  assert.equal(ready, false, "prefab construction still precedes reveal");
-  for (const key of [0, 1]) h.renders.get(key).resolve();
-  await flush(); assert.equal(ready, false, "card frames cannot release the portrait barrier");
-  h.pictures.get(0).resolve(); await flush(); assert.equal(ready, false);
-  h.pictures.get(1).resolve();
-  await showing;
-  assert.equal(ready, true, "only offscreen thumbnails may remain unresolved");
-  assert.deepEqual(h.requested, [0, 1, 2]);
-});
+for (const kind of ["spr", "lobby"])
+  test(`visible generated ${kind} thumbnails complete before the roster is revealed`, async () => {
+    const h = harness(kind, true);
+    let ready = false;
+    const showing = h.syncRows().then(() => {
+      ready = true;
+    });
+    await flush();
+    assert.equal(ready, false, "prefab construction still precedes reveal");
+    for (const key of [0, 1]) h.renders.get(key).resolve();
+    await flush();
+    assert.equal(ready, false, "card frames cannot release the portrait barrier");
+    h.pictures.get(0).resolve();
+    await flush();
+    assert.equal(ready, false);
+    h.pictures.get(1).resolve();
+    await showing;
+    assert.equal(ready, true, "only offscreen thumbnails may remain unresolved");
+    assert.deepEqual(h.requested, [0, 1, 2]);
+  });
 
 test("leaving the roster cancels overscan queued behind the visible rows", async () => {
   const h = harness();
   const pending = h.syncRows();
   h.signal.aborted = true;
-  for (const key of [0, 1]) { h.renders.get(key).resolve(); h.pictures.get(key).resolve(); }
-  await pending; await flush();
+  for (const key of [0, 1]) {
+    h.renders.get(key).resolve();
+    h.pictures.get(key).resolve();
+  }
+  await pending;
+  await flush();
   assert.deepEqual(h.requested, [0, 1]);
 });
 
-for (const kind of ["spr", "lobby"]) test(`the first screenful waits for every ${kind} picture before overscan is requested`, async () => {
-  const h = harness(kind);
-  let ready = false;
-  const first = h.syncRows().then(() => { ready = true; });
-  assert.deepEqual(h.requested, [0, 1]);
-  h.renders.get(0).resolve(); h.renders.get(1).resolve();
-  await flush(); assert.equal(ready, false, "rendered card geometry is insufficient");
-  h.pictures.get(0).resolve(); await flush();
-  assert.equal(ready, false, "one finished portrait cannot reveal the row");
-  h.pictures.get(1).resolve(); await first;
-  assert.equal(ready, true);
-  assert.deepEqual(h.requested, [0, 1, 2]);
-  // The off-screen portrait may stay pending without delaying the first frame.
-});
+for (const kind of ["spr", "lobby"])
+  test(`the first screenful waits for every ${kind} picture before overscan is requested`, async () => {
+    const h = harness(kind);
+    let ready = false;
+    const first = h.syncRows().then(() => {
+      ready = true;
+    });
+    assert.deepEqual(h.requested, [0, 1]);
+    h.renders.get(0).resolve();
+    h.renders.get(1).resolve();
+    await flush();
+    assert.equal(ready, false, "rendered card geometry is insufficient");
+    h.pictures.get(0).resolve();
+    await flush();
+    assert.equal(ready, false, "one finished portrait cannot reveal the row");
+    h.pictures.get(1).resolve();
+    await first;
+    assert.equal(ready, true);
+    assert.deepEqual(h.requested, [0, 1, 2]);
+    // The off-screen portrait may stay pending without delaying the first frame.
+  });
 
-for (const kind of ["spr", "lobby"]) test(`a repeated row sync still waits for rows whose ${kind} pictures are being prepared`, async () => {
-  const h = harness(kind);
-  const first = h.syncRows();
-  let ready = false;
-  const second = h.syncRows().then(() => { ready = true; });
-  await flush(); assert.equal(ready, false);
-  assert.deepEqual(h.requested, [0, 1], "existing rows are reused");
-  for (const key of [0, 1]) { h.renders.get(key).resolve(); h.pictures.get(key).resolve(); }
-  await Promise.all([first, second]);
-  assert.equal(ready, true);
-});
+for (const kind of ["spr", "lobby"])
+  test(`a repeated row sync still waits for rows whose ${kind} pictures are being prepared`, async () => {
+    const h = harness(kind);
+    const first = h.syncRows();
+    let ready = false;
+    const second = h.syncRows().then(() => {
+      ready = true;
+    });
+    await flush();
+    assert.equal(ready, false);
+    assert.deepEqual(h.requested, [0, 1], "existing rows are reused");
+    for (const key of [0, 1]) {
+      h.renders.get(key).resolve();
+      h.pictures.get(key).resolve();
+    }
+    await Promise.all([first, second]);
+    assert.equal(ready, true);
+  });
 
 test("roster fallback and configured-source stills receive the variant's default background", () => {
   const code = source.slice(source.indexOf("const portraitOf ="), source.indexOf("// --- rows near the view"));
-  const requested = [], student = { key: "np0189", family: "student", spr: "np0189_spr", bg: "/bg/practice-room", portrait: null };
-  let enabled = true, configured = false;
-  const env = { spineAllowed: () => true, thumbnailWork: { thumb: (...args) => requested.push(args) },
-    primaryKind: () => "spr", data: { families: [{ key: "student", variants: [student] }] },
-    modsState: () => ({ enabled }), configuredKey: () => configured ? "mod:incoming" : null, previewBase: () => "configured-skeleton",
-    spineBase: () => "live-skeleton", specialFraming: () => null, hasAsset: () => true };
-  const portraitOf = new Function("env", `const { ${Object.keys(env).join(", ")} } = env; ${code} return portraitOf;`)(env);
-  portraitOf(student); configured = true; portraitOf(student); enabled = false; portraitOf(student);
-  assert.deepEqual(requested.map((args) => [args[0], args[1], args[5]]), [
-    ["live-skeleton", "roster", "/bg/practice-room"],
-    ["configured-skeleton", "roster", "/bg/practice-room"], ["configured-skeleton", "roster", "/bg/practice-room"],
-  ]);
+  const requested = [],
+    student = { key: "np0189", family: "student", spr: "np0189_spr", bg: "/bg/practice-room", portrait: null };
+  let enabled = true,
+    configured = false;
+  const env = {
+    spineAllowed: () => true,
+    thumbnailWork: { thumb: (...args) => requested.push(args) },
+    primaryKind: () => "spr",
+    data: { families: [{ key: "student", variants: [student] }] },
+    modsState: () => ({ enabled }),
+    configuredKey: () => (configured ? "mod:incoming" : null),
+    previewBase: () => "configured-skeleton",
+    spineBase: () => "live-skeleton",
+    specialFraming: () => null,
+    hasAsset: () => true,
+  };
+  const portraitOf = new Function("env", `const { ${Object.keys(env).join(", ")} } = env; ${code} return portraitOf;`)(
+    env,
+  );
+  portraitOf(student);
+  configured = true;
+  portraitOf(student);
+  enabled = false;
+  portraitOf(student);
+  assert.deepEqual(
+    requested.map((args) => [args[0], args[1], args[5]]),
+    [
+      ["live-skeleton", "roster", "/bg/practice-room"],
+      ["configured-skeleton", "roster", "/bg/practice-room"],
+      ["configured-skeleton", "roster", "/bg/practice-room"],
+    ],
+  );
 });
 
 test("library-only roster cards use saved Mod previews without inventing local cores", () => {
   const code = source.slice(source.indexOf("const portraitOf ="), source.indexOf("// --- rows near the view"));
-  const requested = [], variants = [];
-  const env = { spineAllowed: () => true, thumbnailWork: { thumb: (...args) => { requested.push(args); return args[0]; } },
-    primaryKind, configuredKey, previewBase, hasAsset, data: { families: [{ key: "assigned", variants }] },
-    spineBase: () => { throw new Error("No local core is available"); }, specialFraming: () => null };
-  const portraitOf = new Function("env", `const { ${Object.keys(env).join(", ")} } = env; ${code} return portraitOf;`)(env);
+  const requested = [],
+    variants = [];
+  const env = {
+    spineAllowed: () => true,
+    thumbnailWork: {
+      thumb: (...args) => {
+        requested.push(args);
+        return args[0];
+      },
+    },
+    primaryKind,
+    configuredKey,
+    previewBase,
+    hasAsset,
+    data: { families: [{ key: "assigned", variants }] },
+    spineBase: () => {
+      throw new Error("No local core is available");
+    },
+    specialFraming: () => null,
+  };
+  const portraitOf = new Function("env", `const { ${Object.keys(env).join(", ")} } = env; ${code} return portraitOf;`)(
+    env,
+  );
   for (const kind of ["spr", "lobby", "model"]) {
-    const student = { key: kind, family: "assigned", spr: null, lobby: null, model: null, storedKinds: [kind], configured: {} };
+    const student = {
+      key: kind,
+      family: "assigned",
+      spr: null,
+      lobby: null,
+      model: null,
+      storedKinds: [kind],
+      configured: {},
+    };
     variants.push(student);
     assert.equal(hasAsset(student), true);
     assert.equal(portraitOf(student), null, "preview opt-out stays unselected");
@@ -150,21 +287,54 @@ test("library-only roster cards use saved Mod previews without inventing local c
 });
 
 test("the empty list is placed by emptyListY on the middle of the visible paper, whether or not the search box is open", () => {
-  const code = source.slice(source.indexOf("function emptyTree() {"), source.indexOf("// the empty list's picture for the current items"));
+  const code = source.slice(
+    source.indexOf("function emptyTree() {"),
+    source.indexOf("// the empty list's picture for the current items"),
+  );
   assert.match(code, /emptyListY\(\(listTop\(\) \+ PAPER_BOTTOM\) \/ 2, message\)/);
   assert.doesNotMatch(code, /PAPER_TOP/, "the old shift by the search box's height is gone");
-  const root = () => ({ name: "LeftInfo_Empty", active: false, pos: [0, 53], widgets: [], children: [{ name: "Label_Locale", pos: [0, -589], widgets: [{ text: "empty", fontSize: 48, w_: 146, h_: 56 }], children: [] }] });
+  const root = () => ({
+    name: "LeftInfo_Empty",
+    active: false,
+    pos: [0, 53],
+    widgets: [],
+    children: [
+      {
+        name: "Label_Locale",
+        pos: [0, -589],
+        widgets: [{ text: "empty", fontSize: 48, w_: 146, h_: 56 }],
+        children: [],
+      },
+    ],
+  });
   const find = (tree, path) => path.split("/").reduce((n, part) => n?.children.find((c) => c.name === part), tree);
   const collection = { children: [{ name: "SeletControl", children: [root()] }] };
-  for (const [top, centre] of [[334.5, -190], [182, -266.25]]) {
+  for (const [top, centre] of [
+    [334.5, -190],
+    [182, -266.25],
+  ]) {
     const calls = [];
-    const emptyTree = new Function("env", `const { layouts, clone, find, T, listTop, PAPER_BOTTOM, emptyListY } = env;\n${code}\nreturn emptyTree;`)({
-      layouts: { collection }, clone: structuredClone, find: (tree, path) => path === "SeletControl/LeftInfo_Empty" ? collection.children[0].children[0] : find(tree, path),
-      T: (key) => `[${key}]`, listTop: () => top, PAPER_BOTTOM: -714.5, emptyListY: (...args) => { calls.push(args); return 1234; },
+    const emptyTree = new Function(
+      "env",
+      `const { layouts, clone, find, T, listTop, PAPER_BOTTOM, emptyListY } = env;\n${code}\nreturn emptyTree;`,
+    )({
+      layouts: { collection },
+      clone: structuredClone,
+      find: (tree, path) =>
+        path === "SeletControl/LeftInfo_Empty" ? collection.children[0].children[0] : find(tree, path),
+      T: (key) => `[${key}]`,
+      listTop: () => top,
+      PAPER_BOTTOM: -714.5,
+      emptyListY: (...args) => {
+        calls.push(args);
+        return 1234;
+      },
     });
     const tree = emptyTree();
-    assert.equal(tree.active, true); assert.equal(tree.pos[1], 1234);
-    assert.equal(calls.length, 1); assert.equal(calls[0][0], centre);
+    assert.equal(tree.active, true);
+    assert.equal(tree.pos[1], 1234);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0][0], centre);
     assert.deepEqual([calls[0][1].text, calls[0][1].w_], ["[roster.empty]", 1200]);
     assert.equal(collection.children[0].children[0].pos[1], 53, "the layout is cloned, never moved");
   }

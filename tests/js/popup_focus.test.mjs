@@ -7,14 +7,38 @@ import { afterEach, test } from "node:test";
 const STOPS = new Set(["BUTTON", "INPUT", "SELECT", "TEXTAREA"]);
 class El {
   constructor(tag = "div") {
-    Object.assign(this, { tagName: tag.toUpperCase(), children: [], parentNode: null, style: {}, dataset: {}, attrs: {}, listeners: {},
-      hidden: false, inert: false, disabled: false, className: "", id: "" });
+    Object.assign(this, {
+      tagName: tag.toUpperCase(),
+      children: [],
+      parentNode: null,
+      style: {},
+      dataset: {},
+      attrs: {},
+      listeners: {},
+      hidden: false,
+      inert: false,
+      disabled: false,
+      className: "",
+      id: "",
+    });
     this.tabIndex = STOPS.has(this.tagName) ? 0 : -1;
   }
-  get childNodes() { return [...this.children]; }
-  get parentElement() { return this.parentNode; }
-  appendChild(child) { child.remove(); child.parentNode = this; this.children.push(child); return child; }
-  replaceChildren(...kids) { for (const c of [...this.children]) c.remove(); for (const k of kids) this.appendChild(k); }
+  get childNodes() {
+    return [...this.children];
+  }
+  get parentElement() {
+    return this.parentNode;
+  }
+  appendChild(child) {
+    child.remove();
+    child.parentNode = this;
+    this.children.push(child);
+    return child;
+  }
+  replaceChildren(...kids) {
+    for (const c of [...this.children]) c.remove();
+    for (const k of kids) this.appendChild(k);
+  }
   remove() {
     if (!this.parentNode) return;
     this.parentNode.children = this.parentNode.children.filter((c) => c !== this);
@@ -22,13 +46,29 @@ class El {
     // a removed focused element drops the focus to the body, as the browser does
     if (document.activeElement && this.contains(document.activeElement)) document.activeElement = body;
   }
-  contains(node) { for (let x = node; x; x = x.parentNode) if (x === this) return true; return false; }
-  get isConnected() { return body.contains(this); }
-  hasAttribute(k) { return k in this.attrs; }
-  setAttribute(k, v) { this.attrs[k] = String(v); if (k === "tabindex") this.tabIndex = Number(v); }
-  getAttribute(k) { return this.attrs[k] ?? null; }
-  addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); }
-  click() { for (const fn of this.listeners.click || []) fn({ type: "click" }); }
+  contains(node) {
+    for (let x = node; x; x = x.parentNode) if (x === this) return true;
+    return false;
+  }
+  get isConnected() {
+    return body.contains(this);
+  }
+  hasAttribute(k) {
+    return k in this.attrs;
+  }
+  setAttribute(k, v) {
+    this.attrs[k] = String(v);
+    if (k === "tabindex") this.tabIndex = Number(v);
+  }
+  getAttribute(k) {
+    return this.attrs[k] ?? null;
+  }
+  addEventListener(type, fn) {
+    (this.listeners[type] ||= []).push(fn);
+  }
+  click() {
+    for (const fn of this.listeners.click || []) fn({ type: "click" });
+  }
   // focus() works on a tab stop or on an element with a tabindex (even -1); a hidden, inert or disabled one keeps it away
   focus() {
     if (this.hidden || this.inert || this.disabled || !this.isConnected || this.tabIndex === undefined) return;
@@ -36,18 +76,46 @@ class El {
     for (let x = this.parentNode; x; x = x.parentNode) if (x.hidden || x.inert) return;
     document.activeElement = this;
   }
-  querySelector() { return null; }
-  getContext() { return { font: "", measureText(s) { return { width: s.length * 10 }; } }; }
+  querySelector() {
+    return null;
+  }
+  getContext() {
+    return {
+      font: "",
+      measureText(s) {
+        return { width: s.length * 10 };
+      },
+    };
+  }
 }
 const body = new El("body");
-const walk = (x, out = []) => { out.push(x); for (const c of x.children) walk(c, out); return out; };
-globalThis.document = { body, activeElement: body, documentElement: { lang: "en-US", appendChild() {} },
-  createElement: (tag) => new El(tag), getElementById: (id) => walk(body).find((x) => x.id === id) || null, querySelector: () => null };
+const walk = (x, out = []) => {
+  out.push(x);
+  for (const c of x.children) walk(c, out);
+  return out;
+};
+globalThis.document = {
+  body,
+  activeElement: body,
+  documentElement: { lang: "en-US", appendChild() {} },
+  createElement: (tag) => new El(tag),
+  getElementById: (id) => walk(body).find((x) => x.id === id) || null,
+  querySelector: () => null,
+};
 const keyListeners = [];
-globalThis.addEventListener = (type, fn) => { if (type === "keydown") keyListeners.push(fn); };
+globalThis.addEventListener = (type, fn) => {
+  if (type === "keydown") keyListeners.push(fn);
+};
 globalThis.removeEventListener = () => {};
 function press(key, extra = {}) {
-  const ev = { key, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, ...extra };
+  const ev = {
+    key,
+    defaultPrevented: false,
+    preventDefault() {
+      this.defaultPrevented = true;
+    },
+    ...extra,
+  };
   for (const fn of keyListeners) fn(ev);
   return ev;
 }
@@ -56,16 +124,26 @@ dialog.id = "dialog";
 dialog.hidden = true;
 globalThis.fetch = async () => ({ ok: false, status: 404, json: async () => null });
 const warn = console.warn;
-console.warn = (...args) => { if (!/popup layout|message popup without/.test(String(args[0]))) warn(...args); };
+console.warn = (...args) => {
+  if (!/popup layout|message popup without/.test(String(args[0]))) warn(...args);
+};
 const Popup = await import("../../src/bmpt/web/js/popup.js");
 
 const mount = (tag = "div") => body.appendChild(new El(tag));
 const buttons = (host, n) => Array.from({ length: n }, () => host.appendChild(new El("button")));
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 let hosts = [];
-const popupHost = () => { const host = mount(); host.className = "popup-host"; hosts.push(host); return host; };
+const popupHost = () => {
+  const host = mount();
+  host.className = "popup-host";
+  hosts.push(host);
+  return host;
+};
 afterEach(() => {
-  for (const host of hosts) { host.hidden = true; host.remove(); }
+  for (const host of hosts) {
+    host.hidden = true;
+    host.remove();
+  }
   hosts = [];
   Popup.top(); // prune what is left
   document.activeElement = body;
@@ -92,7 +170,8 @@ test("a popup takes the focus in when it opens and gives it back to the opener w
 });
 
 test("the focus is not taken from the popup's own control, and not given back over a user who moved on", () => {
-  const opener = mount("button"), elsewhere = mount("button");
+  const opener = mount("button"),
+    elsewhere = mount("button");
   opener.focus();
   const host = popupHost();
   const [a] = buttons(host, 1);
@@ -103,7 +182,8 @@ test("the focus is not taken from the popup's own control, and not given back ov
   host.hidden = true;
   Popup.closed(host);
   assert.equal(document.activeElement, elsewhere, "focus moved to another control meanwhile");
-  opener.remove(); elsewhere.remove();
+  opener.remove();
+  elsewhere.remove();
 });
 
 test("Tab and Shift+Tab wrap at the ends and step by the browser inside", () => {
@@ -173,8 +253,10 @@ test("a popup with no control keeps the focus on itself", () => {
 });
 
 test("the topmost popup holds the trap, answered or not, and the one under it takes over when it closes", () => {
-  const lower = popupHost(), upper = popupHost();
-  const [l1, l2] = buttons(lower, 2), [u1, u2] = buttons(upper, 2);
+  const lower = popupHost(),
+    upper = popupHost();
+  const [l1, l2] = buttons(lower, 2),
+    [u1, u2] = buttons(upper, 2);
   Popup.opened(lower, () => {});
   Popup.opened(upper, null); // must be answered with a button: it traps just the same
   assert.equal(document.activeElement, upper);
@@ -194,9 +276,11 @@ test("the topmost popup holds the trap, answered or not, and the one under it ta
 
 test("a popup layer in a shared host traps by its own layer, not the host", () => {
   const host = popupHost();
-  const lowerLayer = host.appendChild(new El()), upperLayer = host.appendChild(new El());
+  const lowerLayer = host.appendChild(new El()),
+    upperLayer = host.appendChild(new El());
   lowerLayer.tabIndex = upperLayer.tabIndex = -1;
-  const [l] = buttons(lowerLayer, 1), [u1, u2] = buttons(upperLayer, 2);
+  const [l] = buttons(lowerLayer, 1),
+    [u1, u2] = buttons(upperLayer, 2);
   Popup.opened(host, () => {}, { el: lowerLayer });
   Popup.opened(host, () => {}, { el: upperLayer });
   l.focus();
@@ -212,7 +296,14 @@ test("keys the trap leaves alone: another handler's, composing, modified, and ev
   const [a, b] = buttons(host, 2);
   Popup.opened(host, () => {});
   b.focus();
-  for (const extra of [{ defaultPrevented: true }, { isComposing: true }, { keyCode: 229 }, { ctrlKey: true }, { altKey: true }, { metaKey: true }]) {
+  for (const extra of [
+    { defaultPrevented: true },
+    { isComposing: true },
+    { keyCode: 229 },
+    { ctrlKey: true },
+    { altKey: true },
+    { metaKey: true },
+  ]) {
     const ev = press("Tab", extra);
     assert.equal(document.activeElement, b);
     assert.ok(!ev.defaultPrevented || extra.defaultPrevented, JSON.stringify(extra));
@@ -249,8 +340,10 @@ test("a popup closed by hiding its host gives the focus back when the stack is n
 test("a popup under another one is not given the focus back over it", () => {
   const opener = mount("button");
   opener.focus();
-  const lower = popupHost(), upper = popupHost();
-  const [l] = buttons(lower, 1), [u] = buttons(upper, 1);
+  const lower = popupHost(),
+    upper = popupHost();
+  const [l] = buttons(lower, 1),
+    [u] = buttons(upper, 1);
   Popup.opened(lower, () => {});
   l.focus();
   Popup.opened(upper, () => {});
@@ -268,7 +361,8 @@ test("a message popup takes the focus, traps Tab between its buttons and returns
   for (let i = 0; i < 200 && !walk(dialog).some((e) => e.dataset?.action === "ok"); i++) await tick();
   const layer = dialog.children.at(-1);
   assert.equal(document.activeElement, layer, "the popup holds the focus");
-  const close = walk(layer).find((e) => e.dataset?.action === "close"), ok = walk(layer).find((e) => e.dataset?.action === "ok");
+  const close = walk(layer).find((e) => e.dataset?.action === "close"),
+    ok = walk(layer).find((e) => e.dataset?.action === "ok");
   assert.ok(press("Tab").defaultPrevented);
   assert.equal(document.activeElement, close, "the close icon is the first control");
   ok.focus();
@@ -333,22 +427,41 @@ test("popup.js keeps one trap: the Hall modal and the import dialogs no longer c
 test("asset-free messages use the same class, title, close, check and footer boxes", async () => {
   const { POPUP_FRAME: P, CONTROL: C } = await import("../../src/bmpt/web/js/ui-tokens.js");
   const scale = 1920 / 2960;
-  const shown = Popup.message({ title: "Title", lines: ["Line"], width: 1301, ok: "OK", cancel: "Cancel", check: { label: "Check", checked: false } });
-  for (let i = 0; i < 200 && !walk(dialog).some(e => e.dataset?.action === "ok"); i++) await tick();
-  const box = walk(dialog).find(e => e.className === "plain-popup"), heading = box.children.find(e => e.tagName === "H2");
-  const action = name => walk(box).find(e => e.dataset?.action === name);
+  const shown = Popup.message({
+    title: "Title",
+    lines: ["Line"],
+    width: 1301,
+    ok: "OK",
+    cancel: "Cancel",
+    check: { label: "Check", checked: false },
+  });
+  for (let i = 0; i < 200 && !walk(dialog).some((e) => e.dataset?.action === "ok"); i++) await tick();
+  const box = walk(dialog).find((e) => e.className === "plain-popup"),
+    heading = box.children.find((e) => e.tagName === "H2");
+  const action = (name) => walk(box).find((e) => e.dataset?.action === name);
   const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} != ${b}`);
   near(parseFloat(box.style.width), P.M.w * scale);
   // as high as its lines, check and footer need, as the prefab popup's layout says
-  const layout = Popup.messageLayout({ lines: ["Line"], width: 1301, ok: "OK", cancel: "Cancel", check: { label: "Check", checked: false }, assets: false });
+  const layout = Popup.messageLayout({
+    lines: ["Line"],
+    width: 1301,
+    ok: "OK",
+    cancel: "Cancel",
+    check: { label: "Check", checked: false },
+    assets: false,
+  });
   near(parseFloat(box.style.height), layout.height * scale);
   // the title one size under the game's, centred where the game's 72 stood
-  const NGUI = await import("../../src/bmpt/web/js/ngui.js"), { textItem } = await import("../../src/bmpt/web/js/ui-grid.js");
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js"),
+    { textItem } = await import("../../src/bmpt/web/js/ui-grid.js");
   const { POPUP_TYPE, TYPE } = await import("../../src/bmpt/web/js/ui-tokens.js");
-  near(parseFloat(heading.style.top), (P.titleTop + (textItem(NGUI, "Title", TYPE.display).h - textItem(NGUI, "Title", POPUP_TYPE.title).h) / 2) * scale);
+  near(
+    parseFloat(heading.style.top),
+    (P.titleTop + (textItem(NGUI, "Title", TYPE.display).h - textItem(NGUI, "Title", POPUP_TYPE.title).h) / 2) * scale,
+  );
   near(parseFloat(action("close").style.left), (P.M.w - P.close.right - C.icon.h) * scale);
   near(parseFloat(action("close").style.top), P.close.top * scale);
-  const footer = walk(box).find(e => e.className === "message-actions");
+  const footer = walk(box).find((e) => e.className === "message-actions");
   // the default footer is XS, its bodies as wide as the captions need
   const bodyW = Popup.footerLayout(["Cancel", "OK"], P.M.w).bodyW;
   near(parseFloat(footer.style.top), (layout.height - Popup.footerBottom() - C.buttonXS.h) * scale);
@@ -363,19 +476,30 @@ test("asset-free messages use the same class, title, close, check and footer box
 test("the asset-free text viewer uses the XL content box and keeps Copy and Close usable", async () => {
   const { TEXT_VIEWER } = await import("../../src/bmpt/web/js/popup-frames.js");
   let copies = 0;
-  const shown = Popup.textViewer({ title: "Log", text: "One\nTwo", copy: "Copy", close: "Close", onCopy: () => copies++ });
-  for (let i = 0; i < 200 && !walk(dialog).some(e => e.dataset?.action === "copy"); i++) await tick();
-  const scale = 1920 / 2960, box = walk(dialog).find(e => e.className === "plain-popup");
-  const pre = walk(box).find(e => e.className === "log-text");
+  const shown = Popup.textViewer({
+    title: "Log",
+    text: "One\nTwo",
+    copy: "Copy",
+    close: "Close",
+    onCopy: () => copies++,
+  });
+  for (let i = 0; i < 200 && !walk(dialog).some((e) => e.dataset?.action === "copy"); i++) await tick();
+  const scale = 1920 / 2960,
+    box = walk(dialog).find((e) => e.className === "plain-popup");
+  const pre = walk(box).find((e) => e.className === "log-text");
   assert.equal(pre.textContent, "One\nTwo");
   assert.equal(parseFloat(box.style.width), TEXT_VIEWER.w * scale);
   assert.equal(parseFloat(pre.style.width), TEXT_VIEWER.box.width * scale);
   assert.equal(parseFloat(pre.style.height), TEXT_VIEWER.box.height * scale);
   assert.equal(parseFloat(box.style.height), TEXT_VIEWER.h * scale);
   assert.equal(parseFloat(pre.parentNode.style.top), 170 * scale);
-  walk(box).find(e => e.dataset?.action === "copy").click();
+  walk(box)
+    .find((e) => e.dataset?.action === "copy")
+    .click();
   assert.equal(copies, 1);
-  walk(box).find(e => e.dataset?.action === "close").click();
+  walk(box)
+    .find((e) => e.dataset?.action === "close")
+    .click();
   await shown;
   assert.equal(dialog.hidden, true);
 });

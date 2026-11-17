@@ -7,8 +7,15 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const WEB = new URL("../../src/bmpt/web/", import.meta.url).pathname;
-const files = (dir, ext) => readdirSync(join(WEB, dir), { recursive: true }).filter((f) => f.endsWith(ext)).map((f) => join(dir, f)).sort();
-const read = (file) => readFileSync(join(WEB, file), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, ""); // without comments
+const files = (dir, ext) =>
+  readdirSync(join(WEB, dir), { recursive: true })
+    .filter((f) => f.endsWith(ext))
+    .map((f) => join(dir, f))
+    .sort();
+const read = (file) =>
+  readFileSync(join(WEB, file), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, ""); // without comments
 const ALLOWED = new Set(["grab", "grabbing", "text", "var(--cursor)", "var(--cursor-press)"]);
 
 // every `cursor: value` of a stylesheet and every `cursor: "value"` or `.cursor = "value"` of a script (custom
@@ -16,11 +23,13 @@ const ALLOWED = new Set(["grab", "grabbing", "text", "var(--cursor)", "var(--cur
 function declarations() {
   const found = [];
   for (const file of files("css", ".css")) {
-    for (const [, value] of read(file).matchAll(/(?<![-\w])cursor\s*:\s*([^;}\n]+?)\s*(?:!important\s*)?(?=[;}\n])/g)) found.push([file, value]);
+    for (const [, value] of read(file).matchAll(/(?<![-\w])cursor\s*:\s*([^;}\n]+?)\s*(?:!important\s*)?(?=[;}\n])/g))
+      found.push([file, value]);
   }
   for (const file of files("js", ".js")) {
     if (file === "js/cursor.js") continue;
-    for (const [, value] of read(file).matchAll(/(?<![-\w])cursor\s*(?::|=(?!=))\s*["'`]([^"'`]+)["'`]/g)) found.push([file, value]);
+    for (const [, value] of read(file).matchAll(/(?<![-\w])cursor\s*(?::|=(?!=))\s*["'`]([^"'`]+)["'`]/g))
+      found.push([file, value]);
   }
   return found;
 }
@@ -29,7 +38,9 @@ test("the page's own styles use the game's pointer, grab, grabbing or the text c
   const found = declarations();
   assert.ok(found.length > 15, `${found.length} cursor declarations found`);
   // the recovery panel (fallback.css) has no game assets by definition: it keeps the system hand on its buttons
-  const stray = found.filter(([file, value]) => !ALLOWED.has(value) && !(file === "css/fallback.css" && value === "pointer"));
+  const stray = found.filter(
+    ([file, value]) => !ALLOWED.has(value) && !(file === "css/fallback.css" && value === "pointer"),
+  );
   assert.deepEqual(stray, []);
 });
 
@@ -48,8 +59,10 @@ test("only the root sets the pointer variables, cursor.js once the game's pointe
   const sets = [];
   for (const file of [...files("css", ".css"), ...files("js", ".js"), "index.html"]) {
     const text = read(file);
-    for (const [, name, value] of text.matchAll(/(--cursor(?:-press)?)\s*:\s*([^;}\n]+)/g)) sets.push(`${file} ${name}: ${value.trim()}`);
-    if (file === "js/cursor.js") for (const [, name] of text.matchAll(/setProperty\("(--cursor(?:-press)?)"/g)) sets.push(`${file} ${name}`);
+    for (const [, name, value] of text.matchAll(/(--cursor(?:-press)?)\s*:\s*([^;}\n]+)/g))
+      sets.push(`${file} ${name}: ${value.trim()}`);
+    if (file === "js/cursor.js")
+      for (const [, name] of text.matchAll(/setProperty\("(--cursor(?:-press)?)"/g)) sets.push(`${file} ${name}`);
   }
   assert.deepEqual(sets, [
     "css/app.css --cursor: default",

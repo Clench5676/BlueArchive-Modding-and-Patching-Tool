@@ -18,13 +18,13 @@ import { freezeWhileLoading, onScreen } from "./preview-lifecycle.js";
 const ease = (t) => 1 - Math.pow(1 - t, 3);
 const clamp = THREE.MathUtils.clamp;
 
-const ZOOM_TAU = 0.08;   // s: a zoom or pan eases to its goal, as in the lobby
-const NOTCH = 100;       // px: a wheel notch zooms at least as far as one of Chromium's (a slow notch on macOS is 4 px)
-const NOTCHES = 5;       // notches from the front view to the bust
-const PINCH = 1.5;       // a pinch zooms half as far again as the fingers spread: one pinch from the front view to the bust
+const ZOOM_TAU = 0.08; // s: a zoom or pan eases to its goal, as in the lobby
+const NOTCH = 100; // px: a wheel notch zooms at least as far as one of Chromium's (a slow notch on macOS is 4 px)
+const NOTCHES = 5; // notches from the front view to the bust
+const PINCH = 1.5; // a pinch zooms half as far again as the fingers spread: one pinch from the front view to the bust
 const CTRL_PINCH = 0.01; // Chromium's pinch as ctrl + wheel: the fingers' scale is exp(-deltaY / 100)
-const SCROLL_MS = 120;   // wheel events this close together belong to one scroll
-const PINCH_HOLD = 300;  // ms: WebKit's ctrl + wheel events beside its gesture events are left to the gesture
+const SCROLL_MS = 120; // wheel events this close together belong to one scroll
+const PINCH_HOLD = 300; // ms: WebKit's ctrl + wheel events beside its gesture events are left to the gesture
 
 // The formation screen's view of one character (UIFormation under GameMain's camera): the game camera (vertical
 // field of view 10, at the origin, level) shows the NGUI root 11.43 ahead, 2 units high (2 / 1665 of a unit per NGUI
@@ -33,15 +33,19 @@ const PINCH_HOLD = 300;  // ms: WebKit's ctrl + wheel events beside its gesture 
 // character's units the camera stands 14.6 away and 0.44 above its feet, looking level: the screen's centre lies at
 // that height, and a character takes the same share of the screen's height whatever its size.
 export const FORMATION_VIEW = (() => {
-  const s = 2 / 1665, k = 630 * s;
+  const s = 2 / 1665,
+    k = 630 * s;
   return { fov: 10, distance: (11.43 - 316.4 * s) / k, eye: ((222.6 + 56.25) * s) / k };
 })();
 
 // where the formation view's centre (the point 0.44 above the feet) lands on the host, in stage pixels, for a host of
 // w x h: beside the panel the feet stay above the nameplate (floor); fullscreen it is the formation screen's centre.
 // Pixels, not fractions, so the chibi does not jump when the host widens for fullscreen.
-const FRAMES = { left: { x: 490, y: 500, w: 1000, h: 1080, floor: 700 }, full: { x: 960, y: 540, w: 1920, h: 1080, floor: 1056 },
-  still: { x: 320, y: 320, w: 640, h: 640, floor: 616 } };
+const FRAMES = {
+  left: { x: 490, y: 500, w: 1000, h: 1080, floor: 700 },
+  full: { x: 960, y: 540, w: 1920, h: 1080, floor: 1056 },
+  still: { x: 320, y: 320, w: 640, h: 640, floor: 616 },
+};
 const TWEEN = 450;
 
 // The camera distance (character units) for a frame: the formation screen's, or further back where the chibi's box
@@ -51,8 +55,12 @@ export function frameDistance(box, frame, fov = FORMATION_VIEW.fov, base = FORMA
   const t = 2 * Math.tan(THREE.MathUtils.degToRad(fov) / 2); // the visible height per unit of distance
   const at = (units, px) => (units > 0 ? (units * frame.h) / (t * Math.max(px, 1)) : 0); // `units` over `px`
   const side = Math.min(frame.x, frame.w - frame.x) - margin;
-  return Math.max(base, at(box.max.y, frame.y - margin), at(-box.min.y, Math.min(frame.floor, frame.h - margin) - frame.y),
-    at(Math.max(box.max.x, -box.min.x), side));
+  return Math.max(
+    base,
+    at(box.max.y, frame.y - margin),
+    at(-box.min.y, Math.min(frame.floor, frame.h - margin) - frame.y),
+    at(Math.max(box.max.x, -box.min.x), side),
+  );
 }
 
 // The closest camera distance for a frame: the bust. Closing in lifts the orbit target to the face (`face`: its
@@ -130,18 +138,29 @@ export function restoreZoom(view, saved) {
 }
 
 export function attachInput(el, sink) {
-  let scroll = { kind: null, at: -Infinity }, pinchUntil = -Infinity, gesture = 1, gesturing = false, drag = null;
+  let scroll = { kind: null, at: -Infinity },
+    pinchUntil = -Infinity,
+    gesture = 1,
+    gesturing = false,
+    drag = null;
   const touches = new Map();
   const wheel = (e) => {
     e.preventDefault();
-    const unit = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 800 : 1, now = performance.now(), step = wheelStep(e);
+    const unit = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 800 : 1,
+      now = performance.now(),
+      step = wheelStep(e);
     if (e.ctrlKey) {
       scroll = { kind: null, at: -Infinity };
       if (now < pinchUntil) return;
-      sink.zoom(step === "smooth" ? pinchZoom(Math.exp(-e.deltaY * unit * CTRL_PINCH)) : wheelZoom(e.deltaY * unit, sink.span()));
+      sink.zoom(
+        step === "smooth"
+          ? pinchZoom(Math.exp(-e.deltaY * unit * CTRL_PINCH))
+          : wheelZoom(e.deltaY * unit, sink.span()),
+      );
       return;
     }
-    const fresh = !(now - scroll.at < SCROLL_MS && scroll.kind), kind = wheelKind(e, now, scroll);
+    const fresh = !(now - scroll.at < SCROLL_MS && scroll.kind),
+      kind = wheelKind(e, now, scroll);
     if (fresh) {
       // a scroll that starts like a wheel zooming in pixels keeps the zoom it started from, to go back to if it turns
       // out a trackpad (lobby-touch.js); a second notch confirms the wheel
@@ -153,11 +172,17 @@ export function attachInput(el, sink) {
       scroll.kind = kind;
       scroll.at = now;
     }
-    if (kind === "mouse" && Math.abs(e.deltaY) >= Math.abs(e.deltaX)) sink.zoom(wheelZoom(e.deltaY * unit, sink.span()));
+    if (kind === "mouse" && Math.abs(e.deltaY) >= Math.abs(e.deltaX))
+      sink.zoom(wheelZoom(e.deltaY * unit, sink.span()));
     else sink.pan(-e.deltaX * unit, kind === "mouse" ? 0 : -e.deltaY * unit);
   };
   // WebKit's trackpad pinch (and its touch pinch, which also comes as pointers)
-  const gestureStart = (e) => { e.preventDefault(); gesture = 1; gesturing = true; pinchUntil = performance.now() + PINCH_HOLD; };
+  const gestureStart = (e) => {
+    e.preventDefault();
+    gesture = 1;
+    gesturing = true;
+    pinchUntil = performance.now() + PINCH_HOLD;
+  };
   const gestureChange = (e) => {
     e.preventDefault();
     pinchUntil = performance.now() + PINCH_HOLD;
@@ -165,8 +190,15 @@ export function attachInput(el, sink) {
     sink.zoom(pinchZoom(e.scale / gesture));
     gesture = e.scale;
   };
-  const gestureEnd = (e) => { e.preventDefault(); gesturing = false; pinchUntil = performance.now() + PINCH_HOLD; };
-  const spread = () => { const [a, b] = [...touches.values()]; return Math.hypot(a[0] - b[0], a[1] - b[1]); };
+  const gestureEnd = (e) => {
+    e.preventDefault();
+    gesturing = false;
+    pinchUntil = performance.now() + PINCH_HOLD;
+  };
+  const spread = () => {
+    const [a, b] = [...touches.values()];
+    return Math.hypot(a[0] - b[0], a[1] - b[1]);
+  };
   const down = (e) => {
     if (e.pointerType === "touch") touches.set(e.pointerId, [e.clientX, e.clientY]);
     else if ((e.button === 1 || e.button === 2) && !drag) {
@@ -192,10 +224,20 @@ export function attachInput(el, sink) {
     touches.delete(e.pointerId);
     if (drag?.id === e.pointerId) drag = null;
   };
-  const handlers = [["wheel", wheel, { passive: false }], ["gesturestart", gestureStart], ["gesturechange", gestureChange],
-    ["gestureend", gestureEnd], ["pointerdown", down], ["pointermove", move], ["pointerup", up], ["pointercancel", up]];
+  const handlers = [
+    ["wheel", wheel, { passive: false }],
+    ["gesturestart", gestureStart],
+    ["gesturechange", gestureChange],
+    ["gestureend", gestureEnd],
+    ["pointerdown", down],
+    ["pointermove", move],
+    ["pointerup", up],
+    ["pointercancel", up],
+  ];
   for (const [type, fn, opts] of handlers) el.addEventListener(type, fn, opts);
-  return () => { for (const [type, fn, opts] of handlers) el.removeEventListener(type, fn, opts); };
+  return () => {
+    for (const [type, fn, opts] of handlers) el.removeEventListener(type, fn, opts);
+  };
 }
 
 // the front view, level, as on the formation screen
@@ -204,15 +246,22 @@ const HOME = new THREE.Vector3(0, 0, 1);
 // Frame the rendered silhouette, including the halo and props but excluding transparent mesh margins.
 // WebGL rows start at the bottom; camera view offsets start at the top. The second draw keeps full resolution.
 export function visibleStillFrame(pixels, width, height, margin = 24) {
-  let left = width, right = -1, bottom = height, top = -1;
-  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
-    if (!pixels[(y * width + x) * 4 + 3]) continue;
-    left = Math.min(left, x); right = Math.max(right, x);
-    bottom = Math.min(bottom, y); top = Math.max(top, y);
-  }
+  let left = width,
+    right = -1,
+    bottom = height,
+    top = -1;
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++) {
+      if (!pixels[(y * width + x) * 4 + 3]) continue;
+      left = Math.min(left, x);
+      right = Math.max(right, x);
+      bottom = Math.min(bottom, y);
+      top = Math.max(top, y);
+    }
   if (right < left) throw new Error("3D still: no visible pixels");
   const scale = Math.max((right - left + 1) / (width - 2 * margin), (top - bottom + 1) / (height - 2 * margin));
-  const w = width * scale, h = height * scale;
+  const w = width * scale,
+    h = height * scale;
   return { x: (left + right + 1 - w) / 2, y: height - (bottom + top + 1 + h) / 2, w, h };
 }
 
@@ -233,9 +282,14 @@ export function stillCamera(camera, target, fit, frame, w, h) {
 // as projected: its height, its centre over the root
 export function stillCrop(camera, target, box, W, H, aspect) {
   const at = (y) => new THREE.Vector3(target.x, target.y + y, target.z).project(camera);
-  const top = at(box.max.y), bottom = at(box.min.y);
-  const h = ((top.y - bottom.y) / 2) * H, x = ((top.x + 1) / 2) * W, y = ((1 - (top.y + bottom.y) / 2) / 2) * H;
-  const ch = h * 0.5, cw = ch * aspect, cy = y - h * 0.18;
+  const top = at(box.max.y),
+    bottom = at(box.min.y);
+  const h = ((top.y - bottom.y) / 2) * H,
+    x = ((top.x + 1) / 2) * W,
+    y = ((1 - (top.y + bottom.y) / 2) / 2) * H;
+  const ch = h * 0.5,
+    cw = ch * aspect,
+    cy = y - h * 0.18;
   return { x: Math.max(0, Math.min(W - cw, x - cw / 2)), y: Math.max(0, Math.min(H - ch, cy - ch / 2)), w: cw, h: ch };
 }
 
@@ -244,6 +298,7 @@ export function stillCrop(camera, target, box, W, H, aspect) {
 // the view turns to the character's front once the action's first frame is posed
 export const ACTIONS = {
   idle: { slots: ["Formation_Idle", "Cafe_Idle", "Idle"] },
+  // biome-ignore lint/suspicious/noThenProperty: "then" names the action that follows, the object is never awaited
   reaction: { slots: ["Cafe_Reaction"], then: "idle" },
   walk: { slots: ["Cafe_Walk"] },
   victory: { slots: ["Victory_Start"], next: "Victory_End" },
@@ -258,9 +313,15 @@ export const ACTIONS = {
 // a story model's own cutscene clips (slots Story_1, Story_2, ...): actions story1, story2, ..., each played
 // once and held on its last frame
 const STORY = /^Story_(\d+)$/;
-export const storyActions = (clips) => [...(clips?.keys() || [])].map((slot) => STORY.exec(slot)?.[1]).filter(Boolean)
-  .map(Number).sort((a, b) => a - b).map((n) => `story${n}`);
-export const storyAction = (name) => (/^story\d+$/.test(name) ? { slots: [`Story_${name.slice(5)}`], hold: true } : null);
+export const storyActions = (clips) =>
+  [...(clips?.keys() || [])]
+    .map((slot) => STORY.exec(slot)?.[1])
+    .filter(Boolean)
+    .map(Number)
+    .sort((a, b) => a - b)
+    .map((n) => `story${n}`);
+export const storyAction = (name) =>
+  /^story\d+$/.test(name) ? { slots: [`Story_${name.slice(5)}`], hold: true } : null;
 
 // The skeleton's paired bones and trunk the facing is read from: a biped's (3ds Max's "Bip001 L Thigh", any rig's
 // left/right thigh and clavicle or shoulder, its pelvis or hips and its head); null without a pair and the trunk.
@@ -275,8 +336,13 @@ export function facingBones(root) {
     } else if (!found.head && /(?:^|[\s_.:-])head$/i.test(o.name || "")) found.head = o;
   });
   const hips = anchorNode(root);
-  const pairs = [["lLeg", "rLeg"], ["lArm", "rArm"]].filter(([l, r]) => found[l] && found[r]);
-  return hips && found.head && pairs.length ? { hips, head: found.head, pairs: pairs.map(([l, r]) => [found[l], found[r]]) } : null;
+  const pairs = [
+    ["lLeg", "rLeg"],
+    ["lArm", "rArm"],
+  ].filter(([l, r]) => found[l] && found[r]);
+  return hips && found.head && pairs.length
+    ? { hips, head: found.head, pairs: pairs.map(([l, r]) => [found[l], found[r]]) }
+    : null;
 }
 
 // The head's own forward, in its local space: `front` (the front view's direction) as the head is turned now, read
@@ -311,14 +377,20 @@ export function facingOf(bones, out = new THREE.Vector3(), front = null) {
 export function frontView(facing, offset) {
   const length = offset.length();
   const sin = length > 0 ? THREE.MathUtils.clamp(offset.y / length, -1, 1) : 0;
-  return facing.clone().multiplyScalar(Math.sqrt(1 - sin * sin)).setY(sin).normalize();
+  return facing
+    .clone()
+    .multiplyScalar(Math.sqrt(1 - sin * sin))
+    .setY(sin)
+    .normalize();
 }
 
 // The node the view follows: the hips (3ds Max's Bip001, else a pelvis or hips bone), whose horizontal
 // travel a clip's walk, run or cutscene path makes; null without one (the view then stays put).
 export function anchorNode(root) {
   let found = root?.getObjectByName("Bip001") || null;
-  root?.traverse((o) => { if (!found && /(^|[\s_])(pelvis|hips)$/i.test(o.name)) found = o; });
+  root?.traverse((o) => {
+    if (!found && /(^|[\s_])(pelvis|hips)$/i.test(o.name)) found = o;
+  });
   return found;
 }
 
@@ -385,11 +457,16 @@ function discardScene(scene) {
 // is not the shown one's (another source answered).
 export function retarget(clip, clipJson, clipNodes, nodes, json) {
   const count = clipJson.extras?.hierarchy;
-  if (!Number.isInteger(count) || count > (json.nodes || []).length
-      || clipJson.nodes.slice(0, count).some((n, i) => n.name !== json.nodes[i].name)) return null;
+  if (
+    !Number.isInteger(count) ||
+    count > (json.nodes || []).length ||
+    clipJson.nodes.slice(0, count).some((n, i) => n.name !== json.nodes[i].name)
+  )
+    return null;
   const names = new Map();
   for (const ch of clipJson.animations?.[0]?.channels || []) {
-    const i = ch.target?.node, from = clipNodes[i];
+    const i = ch.target?.node,
+      from = clipNodes[i];
     if (from && i < count && nodes[i]) names.set(from.name || from.uuid, nodes[i].uuid);
   }
   const tracks = [];
@@ -419,13 +496,21 @@ class ChibiView {
     host?.appendChild(this.canvas);
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(FORMATION_VIEW.fov, 1, 0.01, 100);
-    this.controls = still ? { target: new THREE.Vector3(), update() {}, dispose() {} } : new OrbitControls(this.camera, this.canvas);
+    this.controls = still
+      ? { target: new THREE.Vector3(), update() {}, dispose() {} }
+      : new OrbitControls(this.camera, this.canvas);
     // the controls orbit, at any angle (straight from above to straight from below), with one finger or the left
     // button; zoom and pan are attachInput's, between the bust and a step back (frameTo, bustDistance). The controls'
     // own zoom took 58 Chromium notches or about 1430 slow macOS ones (on a 2x screen) to the bust, and WebKit's
     // pinch never reached them.
-    Object.assign(this.controls, { enableDamping: true, dampingFactor: 0.12, enablePan: false, enableZoom: false,
-      minPolarAngle: 0, maxPolarAngle: Math.PI });
+    Object.assign(this.controls, {
+      enableDamping: true,
+      dampingFactor: 0.12,
+      enablePan: false,
+      enableZoom: false,
+      minPolarAngle: 0,
+      maxPolarAngle: Math.PI,
+    });
     this.controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: null }; // a second finger pinches (attachInput)
     this.clock = new THREE.Clock();
     this.mode = "left";
@@ -443,8 +528,11 @@ class ChibiView {
       return;
     }
     this.detachInput = attachInput(this.canvas, {
-      zoom: (f) => this.zoomBy(f), zoomSave: () => saveZoom(this), zoomRestore: (saved) => restoreZoom(this, saved),
-      span: () => this.span(), pan: (dx, dy) => this.panBy(dx, dy),
+      zoom: (f) => this.zoomBy(f),
+      zoomSave: () => saveZoom(this),
+      zoomRestore: (saved) => restoreZoom(this, saved),
+      span: () => this.span(),
+      pan: (dx, dy) => this.panBy(dx, dy),
     });
     this.observer = new ResizeObserver(() => this.resize());
     this.observer.observe(host);
@@ -460,7 +548,9 @@ class ChibiView {
 
   // the canvas at the stage's on-screen size: the stage is a 1920 x 1080 box scaled by CSS
   resize() {
-    const w = this.host.clientWidth || 1, h = this.host.clientHeight || 1, scale = stageScale();
+    const w = this.host.clientWidth || 1,
+      h = this.host.clientHeight || 1,
+      scale = stageScale();
     this.renderer.setPixelRatio(Math.min(2, (window.devicePixelRatio || 1) * scale));
     this.renderer.setSize(w, h, false);
     setOutlineScale(w, h); // the game's outline is 0.1 % of its screen width: here the stage's
@@ -472,33 +562,48 @@ class ChibiView {
   watchPixelRatio() {
     this.dpr?.removeEventListener("change", this.onPixelRatio);
     this.dpr = matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
-    this.onPixelRatio = () => { this.watchPixelRatio(); this.resize(); };
+    this.onPixelRatio = () => {
+      this.watchPixelRatio();
+      this.resize();
+    };
     this.dpr.addEventListener("change", this.onPixelRatio);
   }
 
   // the orbit target projects to the host's centre; shift the view so it lands on the frame's point instead
   applyView() {
-    const w = this.still ? 640 : this.host.clientWidth || 1, h = this.still ? 640 : this.host.clientHeight || 1;
+    const w = this.still ? 640 : this.host.clientWidth || 1,
+      h = this.still ? 640 : this.host.clientHeight || 1;
     this.camera.setViewOffset(w, h, w / 2 - this.view.x, h / 2 - this.view.y, w, h);
     this.camera.updateProjectionMatrix();
   }
 
   async load(url, { signal } = {}) {
     const gltf = await readGlb(url, signal);
-    if (this.disposed) { discardScene(gltf.scene); return; }
-    const json = gltf.parser.json, parser = gltf.parser;
+    if (this.disposed) {
+      discardScene(gltf.scene);
+      return;
+    }
+    const json = gltf.parser.json,
+      parser = gltf.parser;
     const ex = json.extras || {};
     const textures = await gltfTextures(gltf);
     const nodes = await Promise.all((json.nodes || []).map((_, i) => parser.getDependency("node", i)));
-    if (this.disposed) { discardScene(gltf.scene); for (const t of textures) t.dispose(); return; }
+    if (this.disposed) {
+      discardScene(gltf.scene);
+      for (const t of textures) t.dispose();
+      return;
+    }
     this.textures = textures; // they are only in shader uniforms: disposed by hand
     // the mouth atlas comes as a texture of the EyeMouth material (_MouthTileTex); SetMouthTile moves its offset
     const mats = json.materials || [];
     const eye = mats.find((m) => m.extras?.kind === "eyemouth" && m.extras.textures?._MouthTileTex);
     if (eye) {
       const t = eye.extras.textures._MouthTileTex;
-      this.mouth = { st: { value: new THREE.Vector4(t.scale[0], t.scale[1], t.offset[0], t.offset[1]) },
-        cols: eye.extras.floats?._MouthTileCols || 8, rows: eye.extras.floats?._MouthTileRows || 8 };
+      this.mouth = {
+        st: { value: new THREE.Vector4(t.scale[0], t.scale[1], t.offset[0], t.offset[1]) },
+        cols: eye.extras.floats?._MouthTileCols || 8,
+        rows: eye.extras.floats?._MouthTileRows || 8,
+      };
     }
     const root = gltf.scene;
     const meshes = [];
@@ -534,7 +639,10 @@ class ChibiView {
     });
     // without a clip (NPC placeholders) the rest pose shows the props and the weapon where their bones rest, beside
     // the character; the game's clips scale them away, so fold them here
-    if (!this.clips.size) root.traverse((o) => { if (/^(prop_root|Bip001_Weapon)$/i.test(o.name)) o.scale.setScalar(0); });
+    if (!this.clips.size)
+      root.traverse((o) => {
+        if (/^(prop_root|Bip001_Weapon)$/i.test(o.name)) o.scale.setScalar(0);
+      });
     await this.setupHalo(ex.haloFollower);
     if (this.disposed) return;
     // the halo's particles (Tsurugi's drops, Mika's stars and rings), placed by their nodes as the halo moves
@@ -554,7 +662,9 @@ class ChibiView {
   // whose space a skinned renderer's shader reads directions (its root bone; the hierarchy's indices are the same in
   // an added clip's GLB)
   dress(meshes, gltf, textures, nodes) {
-    const json = gltf.parser.json, parser = gltf.parser, mats = json.materials || [];
+    const json = gltf.parser.json,
+      parser = gltf.parser,
+      mats = json.materials || [];
     // the node of a mesh object: a node of one primitive is the mesh, of several a group around them
     const nodeOf = (o) => {
       for (let q = o; q; q = q.parent) {
@@ -581,7 +691,8 @@ class ChibiView {
         this.spaces.push([material, o.isSkinnedMesh && skeleton !== undefined ? nodes[skeleton] : o]);
       }
       if (outline && o.geometry.attributes._outline) {
-        const ol = o.isSkinnedMesh ? new THREE.SkinnedMesh(o.geometry, outlineMaterial(mex, texs._MainTex))
+        const ol = o.isSkinnedMesh
+          ? new THREE.SkinnedMesh(o.geometry, outlineMaterial(mex, texs._MainTex))
           : new THREE.Mesh(o.geometry, outlineMaterial(mex, texs._MainTex));
         if (o.isSkinnedMesh) ol.bind(o.skeleton, o.bindMatrix);
         ol.frustumCulled = false;
@@ -601,13 +712,24 @@ class ChibiView {
     for (const name of names) {
       if (this.named.has(name)) continue;
       const gltf = await readGlb(modelUrl(this.key, this.source, name), signal);
-      if (this.disposed) { discardScene(gltf.scene); return; }
-      const cj = gltf.parser.json, cp = gltf.parser;
+      if (this.disposed) {
+        discardScene(gltf.scene);
+        return;
+      }
+      const cj = gltf.parser.json,
+        cp = gltf.parser;
       const cnodes = await Promise.all((cj.nodes || []).map((_, i) => cp.getDependency("node", i)));
       const clip = gltf.animations[0] && retarget(gltf.animations[0], cj, cnodes, this.nodes, this.json);
-      if (!clip) { discardScene(gltf.scene); throw new Error(`${name}: the clip does not fit the shown model`); }
+      if (!clip) {
+        discardScene(gltf.scene);
+        throw new Error(`${name}: the clip does not fit the shown model`);
+      }
       const textures = await gltfTextures(gltf);
-      if (this.disposed || this.named.has(name)) { discardScene(gltf.scene); for (const t of textures) t.dispose(); return; }
+      if (this.disposed || this.named.has(name)) {
+        discardScene(gltf.scene);
+        for (const t of textures) t.dispose();
+        return;
+      }
       const extras = cj.animations[0].extras || {};
       const toggles = [];
       for (const t of extras.toggles || []) {
@@ -636,7 +758,9 @@ class ChibiView {
     const holder = src === undefined ? null : cnodes[src];
     if (!holder) return null;
     // the primitives: the node's mesh, or the meshes of a node of several (not its child nodes)
-    const parts = holder.isMesh ? [holder] : holder.children.filter((c) => c.isMesh && cp.associations.get(c)?.nodes === undefined);
+    const parts = holder.isMesh
+      ? [holder]
+      : holder.children.filter((c) => c.isMesh && cp.associations.get(c)?.nodes === undefined);
     if (!parts.length) return null;
     const bone = (b) => this.nodes[cp.associations.get(b)?.nodes] || null;
     for (const p of parts) {
@@ -684,7 +808,8 @@ class ChibiView {
 
   // the face and hair shaders read directions in their renderer's space (Unity's unity_ObjectToWorld)
   updateSpaces() {
-    for (const [material, object] of this.spaces || []) material.uniforms.objectToWorld.value.setFromMatrix4(object.matrixWorld);
+    for (const [material, object] of this.spaces || [])
+      material.uniforms.objectToWorld.value.setFromMatrix4(object.matrixWorld);
   }
 
   // FxFollower: the halo eases toward a point and rotation fixed to the head bone, clamped in head space
@@ -692,8 +817,17 @@ class ChibiView {
     if (!f || f.node == null || f.target == null) return;
     const p = this.gltf.parser;
     const [halo, head] = await Promise.all([p.getDependency("node", f.node), p.getDependency("node", f.target)]);
-    this.halo = { halo, head, f, pos: null, rot: null, rel: new THREE.Vector3(...f.relativePosition),
-      relQ: new THREE.Quaternion(...f.relativeRotation), min: new THREE.Vector3(...f.clampMin), max: new THREE.Vector3(...f.clampMax) };
+    this.halo = {
+      halo,
+      head,
+      f,
+      pos: null,
+      rot: null,
+      rel: new THREE.Vector3(...f.relativePosition),
+      relQ: new THREE.Quaternion(...f.relativeRotation),
+      min: new THREE.Vector3(...f.clampMin),
+      max: new THREE.Vector3(...f.clampMax),
+    };
   }
 
   followHalo(dt, snap = false) {
@@ -702,7 +836,10 @@ class ChibiView {
     h.head.updateWorldMatrix(true, false);
     const want = h.rel.clone().applyMatrix4(h.head.matrixWorld);
     const wantQ = h.head.getWorldQuaternion(new THREE.Quaternion()).multiply(h.relQ);
-    if (!h.pos || snap) { h.pos = want.clone(); h.rot = wantQ.clone(); }
+    if (!h.pos || snap) {
+      h.pos = want.clone();
+      h.rot = wantQ.clone();
+    }
     const k = (p) => 1 - Math.pow(1 - p, dt * 60);
     h.pos.lerp(want, k(h.f.positionPower));
     h.rot.slerp(wantQ, k(h.f.rotationPower));
@@ -722,13 +859,19 @@ class ChibiView {
     this.applySwitches();
     this.followHalo(0, true);
     this.root.updateMatrixWorld(true);
-    const all = new THREE.Box3(), body = new THREE.Box3();
+    const all = new THREE.Box3(),
+      body = new THREE.Box3();
     this.root.traverse((o) => {
       if (!o.isMesh || o.name.endsWith("_outline")) return;
       for (let p = o; p; p = p.parent) if (!p.visible) return;
       let box;
-      if (o.isSkinnedMesh) { o.computeBoundingBox(); box = o.boundingBox.clone().applyMatrix4(o.matrixWorld); }
-      else { o.geometry.computeBoundingBox(); box = o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld); }
+      if (o.isSkinnedMesh) {
+        o.computeBoundingBox();
+        box = o.boundingBox.clone().applyMatrix4(o.matrixWorld);
+      } else {
+        o.geometry.computeBoundingBox();
+        box = o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld);
+      }
       all.union(box);
       if (o.isSkinnedMesh) body.union(box);
     });
@@ -762,7 +905,11 @@ class ChibiView {
   frameTo(mode, snap = false) {
     this.mode = FRAMES[mode] ? mode : "left";
     const f = FRAMES[this.mode];
-    if (!this.size) { this.view = { x: f.x, y: f.y }; this.applyView(); return; }
+    if (!this.size) {
+      this.view = { x: f.x, y: f.y };
+      this.applyView();
+      return;
+    }
     const fit = frameDistance(this.box, f);
     const range = { fit, min: bustDistance(this.box, this.faceY - this.target.y, f, fit) };
     const offset = this.camera.position.clone().sub(this.controls.target);
@@ -792,7 +939,10 @@ class ChibiView {
 
   // the head's forward (headFront), from the formation idle as posed now: its face looks into the front view
   readHeadFront() {
-    if (!this.root || this.slot?.clip !== this.clips?.get("Formation_Idle")?.clip) { this.headFront = false; return; }
+    if (!this.root || this.slot?.clip !== this.clips?.get("Formation_Idle")?.clip) {
+      this.headFront = false;
+      return;
+    }
     this.root.updateMatrixWorld(true);
     this.headFront = headFront(facingBones(this.root)) || false;
   }
@@ -808,7 +958,8 @@ class ChibiView {
   // the zoom range the target's lift spans, {fit, min}; while the camera glides to another framing it goes from the
   // old range to the new one with the camera, so the lift (and the target) does not jump
   range() {
-    const r = { fit: this.fit, min: this.limits?.min ?? this.fit }, tw = this.tween;
+    const r = { fit: this.fit, min: this.limits?.min ?? this.fit },
+      tw = this.tween;
     if (!tw?.range0) return r;
     const k = ease(THREE.MathUtils.clamp((performance.now() - tw.t0) / TWEEN, 0, 1));
     return { fit: tw.range0.fit + (r.fit - tw.range0.fit) * k, min: tw.range0.min + (r.min - tw.range0.min) * k };
@@ -820,11 +971,23 @@ class ChibiView {
   moveTo(direction, distance, view, snap, range0 = null) {
     const offset = this.camera.position.clone().sub(this.controls.target);
     this.goal = null;
-    const tw = (this.tween = { t0: performance.now(), dir0: offset.lengthSq() ? offset.clone().normalize() : direction.clone(), dist0: offset.length() || distance,
-      dir1: direction.clone(), dist1: distance, view0: { ...this.view }, view1: { x: view.x, y: view.y }, range0 });
+    const tw = (this.tween = {
+      t0: performance.now(),
+      dir0: offset.lengthSq() ? offset.clone().normalize() : direction.clone(),
+      dist0: offset.length() || distance,
+      dir1: direction.clone(),
+      dist1: distance,
+      view0: { ...this.view },
+      view1: { x: view.x, y: view.y },
+      range0,
+    });
     if (snap) tw.t0 = -Infinity;
     this.stepTween();
-    if (snap) { this.pan.copy(this.panGoal); this.liftTarget(); this.controls.update(); }
+    if (snap) {
+      this.pan.copy(this.panGoal);
+      this.liftTarget();
+      this.controls.update();
+    }
   }
 
   // the glide's step; an orbit (turned) or a zoom (zoomed) under way since it began keeps its part, and the framing
@@ -832,7 +995,8 @@ class ChibiView {
   stepTween() {
     const tw = this.tween;
     if (!tw) return;
-    const t = Math.min(1, (performance.now() - tw.t0) / TWEEN), k = ease(t);
+    const t = Math.min(1, (performance.now() - tw.t0) / TWEEN),
+      k = ease(t);
     const offset = this.camera.position.clone().sub(this.controls.target);
     const dir = tw.turned ? offset.clone() : new THREE.Vector3().lerpVectors(tw.dir0, tw.dir1, k);
     if (dir.lengthSq() < 1e-8) dir.copy(tw.dir1);
@@ -847,8 +1011,12 @@ class ChibiView {
   // view is the bust, plus the pan; the camera keeps its offset from the target
   liftTarget() {
     if (!this.fit) return;
-    const o = this.controls, offset = this.camera.position.clone().sub(o.target);
-    o.target.set(this.target.x, this.target.y + this.lift(offset.length()), this.target.z).add(this.pan).add(this.follow);
+    const o = this.controls,
+      offset = this.camera.position.clone().sub(o.target);
+    o.target
+      .set(this.target.x, this.target.y + this.lift(offset.length()), this.target.z)
+      .add(this.pan)
+      .add(this.follow);
     this.camera.position.copy(o.target).add(offset);
   }
 
@@ -858,10 +1026,14 @@ class ChibiView {
   }
 
   // --- zoom and pan (attachInput) ---
-  distance() { return this.camera.position.distanceTo(this.controls.target); }
+  distance() {
+    return this.camera.position.distanceTo(this.controls.target);
+  }
 
   // the distance a zoom goes on from: where a zoom under way heads, or where the camera is
-  zoomGoal() { return this.goal ?? this.distance(); }
+  zoomGoal() {
+    return this.goal ?? this.distance();
+  }
 
   zoomBy(factor) {
     if (factor > 0 && factor !== 1) this.setZoomGoal(this.zoomGoal() * factor);
@@ -884,7 +1056,8 @@ class ChibiView {
   // lets it (clampPan)
   panBy(dx, dy) {
     if (!this.limits || (!dx && !dy)) return;
-    const r = this.canvas.getBoundingClientRect(), d = this.distance();
+    const r = this.canvas.getBoundingClientRect(),
+      d = this.distance();
     const unit = (2 * d * Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2)) / Math.max(r.height, 1);
     this.camera.updateMatrixWorld();
     const e = this.camera.matrixWorld.elements; // the camera's right (x) and up (y) axes
@@ -900,12 +1073,17 @@ class ChibiView {
     if (!this.limits) return;
     const k = 1 - Math.exp(-dt / ZOOM_TAU);
     if (this.goal != null) {
-      const offset = this.camera.position.clone().sub(this.controls.target), d = offset.length(), g = this.goal;
+      const offset = this.camera.position.clone().sub(this.controls.target),
+        d = offset.length(),
+        g = this.goal;
       const next = Math.abs(Math.log(g / d)) < 1e-4 ? g : d * Math.pow(g / d, k);
       if (next === g) this.goal = null;
       this.camera.position.copy(this.controls.target).addScaledVector(offset.normalize(), next);
     }
-    const range = this.range(), d = this.distance(), s = zoomShare(d, range), lift = this.lift(d, range);
+    const range = this.range(),
+      d = this.distance(),
+      s = zoomShare(d, range),
+      lift = this.lift(d, range);
     clampPan(this.panGoal, s, this.box, lift);
     this.pan.lerp(this.panGoal, k);
     clampPan(this.pan, s, this.box, lift);
@@ -913,8 +1091,10 @@ class ChibiView {
 
   // --- actions ---
   actions() {
-    return [...Object.keys(ACTIONS).filter((name) => ACTIONS[name].slots.some((s) => this.clips?.has(s))),
-      ...storyActions(this.clips)];
+    return [
+      ...Object.keys(ACTIONS).filter((name) => ACTIONS[name].slots.some((s) => this.clips?.has(s))),
+      ...storyActions(this.clips),
+    ];
   }
 
   act(name, { fade = 0.3, quiet = false } = {}) {
@@ -960,8 +1140,10 @@ class ChibiView {
     const looping = !once && entry.loop !== false;
     a.reset().setLoop(looping ? THREE.LoopRepeat : THREE.LoopOnce, looping ? Infinity : 1);
     a.clampWhenFinished = !looping;
-    if (this.action && this.action !== a && fade > 0) { a.play(); a.crossFadeFrom(this.action, fade, false); }
-    else {
+    if (this.action && this.action !== a && fade > 0) {
+      a.play();
+      a.crossFadeFrom(this.action, fade, false);
+    } else {
       // a cut stops every clip, one still fading out of an earlier cross-fade too
       if (fade <= 0) this.mixer.stopAllAction();
       else if (this.action && this.action !== a) this.action.stop();
@@ -1002,16 +1184,25 @@ class ChibiView {
     this.canvas.addEventListener("pointerdown", (e) => {
       if (e.isPrimary) pressed.clear(); // the first finger, or a mouse: nothing else is down (a lost release)
       pressed.add(e.pointerId);
-      down = pressed.size === 1 && e.button === 0 ? { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now() } : null;
+      down =
+        pressed.size === 1 && e.button === 0
+          ? { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now() }
+          : null;
     });
     this.canvas.addEventListener("pointermove", (e) => {
       if (down?.id === e.pointerId && this.tween && moved(e)) this.tween.turned = true;
     });
     const lift = (e) => pressed.delete(e.pointerId);
-    this.canvas.addEventListener("pointercancel", (e) => { lift(e); down = null; });
+    this.canvas.addEventListener("pointercancel", (e) => {
+      lift(e);
+      down = null;
+    });
     this.canvas.addEventListener("pointerup", (e) => {
       lift(e);
-      if (down?.id !== e.pointerId || moved(e) || performance.now() - down.t > 400) { down = null; return; }
+      if (down?.id !== e.pointerId || moved(e) || performance.now() - down.t > 400) {
+        down = null;
+        return;
+      }
       down = null;
       if (this.root && this.current !== "reaction" && this.hit(e)) this.act("reaction", { fade: 0.2 });
     });
@@ -1022,8 +1213,13 @@ class ChibiView {
     const p = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
     const ray = new THREE.Raycaster();
     ray.setFromCamera(p, this.camera);
-    const visible = (o) => { for (let q = o; q; q = q.parent) if (!q.visible) return false; return true; };
-    return ray.intersectObjects(this.root.children, true).some((h) => !h.object.name.endsWith("_outline") && visible(h.object));
+    const visible = (o) => {
+      for (let q = o; q; q = q.parent) if (!q.visible) return false;
+      return true;
+    };
+    return ray
+      .intersectObjects(this.root.children, true)
+      .some((h) => !h.object.name.endsWith("_outline") && visible(h.object));
   }
 
   // the render loop; resolves once the first frame is on the canvas (or the view is disposed first)
@@ -1033,8 +1229,12 @@ class ChibiView {
       this.drawn = drawn;
       this.renderer.setAnimationLoop(() => {
         // under Now Loading the shown model holds its pose: drawn again (a resize clears the canvas), not advanced
-        if (this.frozen) { this.renderer.render(this.scene, this.camera); return; }
-        this.tick(); drawn();
+        if (this.frozen) {
+          this.renderer.render(this.scene, this.camera);
+          return;
+        }
+        this.tick();
+        drawn();
       });
     });
   }
@@ -1046,7 +1246,9 @@ class ChibiView {
     let pending;
     try {
       pending = r.compile(this.scene, this.camera);
-    } catch { return; } // compiled on the first frame instead
+    } catch {
+      return;
+    } // compiled on the first frame instead
     if (!r.extensions.has("KHR_parallel_shader_compile")) return;
     // isReady() is false while the driver compiles (null once the context is lost: nothing to wait for)
     while (pending.size && !this.disposed) {
@@ -1091,7 +1293,8 @@ class ChibiView {
     this.fx?.settle(this.camera); // the halo's particles at a fixed moment: the same still every time
     setOutlineScale(640, 640, 640);
     this.renderer.render(this.scene, this.camera);
-    const gl = this.renderer.getContext(), pixels = new Uint8Array(640 * 640 * 4);
+    const gl = this.renderer.getContext(),
+      pixels = new Uint8Array(640 * 640 * 4);
     if (gl.isContextLost()) throw new Error("3D still: WebGL context lost");
     gl.readPixels(0, 0, 640, 640, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
     const frame = visibleStillFrame(pixels, 640, 640);
@@ -1105,11 +1308,13 @@ class ChibiView {
     const frozen = document.createElement("canvas");
     frozen.width = frozen.height = 640;
     frozen.getContext("2d").drawImage(this.canvas, 0, 0);
-    return new Promise((resolve, reject) => frozen.toBlob((blob) => {
-      if (signal.aborted) resolve(null);
-      else if (!blob) reject(new Error("3D still: PNG encoding failed"));
-      else resolve(URL.createObjectURL(blob));
-    }, "image/png"));
+    return new Promise((resolve, reject) =>
+      frozen.toBlob((blob) => {
+        if (signal.aborted) resolve(null);
+        else if (!blob) reject(new Error("3D still: PNG encoding failed"));
+        else resolve(URL.createObjectURL(blob));
+      }, "image/png"),
+    );
   }
 
   // a still of the upper body for the switch card, from the front view at the fit distance in the current framing
@@ -1117,7 +1322,8 @@ class ChibiView {
   // in one go (the drawing buffer is not kept), then the live view is drawn again before the canvas is shown.
   snapshot(aspect = 450 / 253) {
     if (!this.root || !this.fit) return null;
-    const w = this.host.clientWidth || 1, h = this.host.clientHeight || 1;
+    const w = this.host.clientWidth || 1,
+      h = this.host.clientHeight || 1;
     const target = this.target.clone().add(this.follow); // where the character is now (followOffset)
     const camera = stillCamera(this.camera, target, this.fit, FRAMES[this.mode], w, h);
     this.renderer.render(this.scene, camera);
@@ -1138,8 +1344,13 @@ class ChibiView {
     this.canvas.classList.add("ready");
     this.loadingFreeze ||= freezeWhileLoading({
       shown: () => !this.disposed && onScreen(this.canvas),
-      freeze: () => { this.frozen = true; },
-      thaw: () => { this.frozen = false; this.clock.getDelta(); },
+      freeze: () => {
+        this.frozen = true;
+      },
+      thaw: () => {
+        this.frozen = false;
+        this.clock.getDelta();
+      },
     });
   }
 
@@ -1173,7 +1384,8 @@ class ChibiView {
 
 export const createStillView = (options = {}) => new ChibiView(null, null, { ...options, still: true });
 
-let view = null, token = 0;
+let view = null,
+  token = 0;
 
 // show(variantKey, host, {frame, onAction}): load and show a variant's chibi; resolves with the action names once
 // the first frame is drawn, or null when another show or a hide came first. onAction(name) follows the current
@@ -1216,18 +1428,28 @@ export async function show(key, host, { frame: mode = "left", onAction = null, v
 // free the view and its WebGL context
 export function hide(host) {
   token += 1;
-  if (view) { view.dispose(); view = null; }
+  if (view) {
+    view.dispose();
+    view = null;
+  }
   if (host) host.replaceChildren();
 }
 
-export function frame(mode) { view?.frameTo(mode); }
+export function frame(mode) {
+  view?.frameTo(mode);
+}
 // resolves once the camera has arrived at its framing (a change of framing glides there)
 export function settled() {
-  return new Promise((resolve) => { const check = () => (view?.tween ? requestAnimationFrame(check) : resolve()); check(); });
+  return new Promise((resolve) => {
+    const check = () => (view?.tween ? requestAnimationFrame(check) : resolve());
+    check();
+  });
 }
 export const actions = () => view?.actions() || [];
 export const current = () => view?.current || null;
-export function play(name) { return view?.act(name, { quiet: true }) || false; }
+export function play(name) {
+  return view?.act(name, { quiet: true }) || false;
+}
 // the shown model's clips by name (the GLB's extras.clips) and its prefab's dev name, for the action bar
 // (clip-names.js actionsOf); empty before a model is shown
 export const clipNames = () => view?.json?.extras?.clips || [];
@@ -1257,9 +1479,23 @@ export const snapshot = () => view?.snapshot() || null;
 // where the anchor (the hips) projects on the canvas (-1..1 across and up)
 export function zoomState() {
   if (!view?.limits) return null;
-  const d = view.distance(), range = view.range();
-  return { distance: d, goal: view.goal, fit: view.fit, min: view.limits.min, max: view.limits.max, share: zoomShare(d, range),
-    lift: view.lift(d, range), pan: view.pan.toArray(), panGoal: view.panGoal.toArray(), gliding: !!view.tween,
-    follow: view.follow.toArray(), anchor: view.anchor?.name || null,
-    anchorView: view.anchor ? view.anchor.getWorldPosition(new THREE.Vector3()).project(view.camera).toArray().slice(0, 2) : null };
+  const d = view.distance(),
+    range = view.range();
+  return {
+    distance: d,
+    goal: view.goal,
+    fit: view.fit,
+    min: view.limits.min,
+    max: view.limits.max,
+    share: zoomShare(d, range),
+    lift: view.lift(d, range),
+    pan: view.pan.toArray(),
+    panGoal: view.panGoal.toArray(),
+    gliding: !!view.tween,
+    follow: view.follow.toArray(),
+    anchor: view.anchor?.name || null,
+    anchorView: view.anchor
+      ? view.anchor.getWorldPosition(new THREE.Vector3()).project(view.camera).toArray().slice(0, 2)
+      : null,
+  };
 }

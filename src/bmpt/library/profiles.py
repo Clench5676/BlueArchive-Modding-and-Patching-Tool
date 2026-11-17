@@ -69,9 +69,18 @@ def normalized(data: dict[str, Any] | None) -> dict[str, Any]:
         data["enabled"] = True
     if not isinstance(data.get("folders"), dict):
         data["folders"] = {}
-    data["unfinished"] = [item for item in data.get("unfinished", []) if isinstance(item, dict)
-                          and isinstance(item.get("install"), str) and isinstance(item.get("core"), str)
-                          and item.get("why") in WHY] if isinstance(data.get("unfinished"), list) else []
+    data["unfinished"] = (
+        [
+            item
+            for item in data.get("unfinished", [])
+            if isinstance(item, dict)
+            and isinstance(item.get("install"), str)
+            and isinstance(item.get("core"), str)
+            and item.get("why") in WHY
+        ]
+        if isinstance(data.get("unfinished"), list)
+        else []
+    )
     for key, folder in list(data["folders"].items()):
         if not isinstance(folder, dict):
             del data["folders"][key]
@@ -81,8 +90,11 @@ def normalized(data: dict[str, Any] | None) -> dict[str, Any]:
                 folder[name] = {}
         if not isinstance(folder.get("hidden"), list):
             folder["hidden"] = []
-        folder["configured"] = {core: entry for core, entry in folder["configured"].items()
-                                if isinstance(entry, dict) and isinstance(entry.get("source"), str)}
+        folder["configured"] = {
+            core: entry
+            for core, entry in folder["configured"].items()
+            if isinstance(entry, dict) and isinstance(entry.get("source"), str)
+        }
     return data
 
 
@@ -170,8 +182,9 @@ class Profiles:
         """Whether a configuration exists (profiles.json or its .prev)."""
         return self.path.exists() or self.prev.exists()
 
-    def update(self, change: Callable[[dict[str, Any]], Any],
-               after: Callable[[dict[str, Any]], Any] | None = None) -> dict[str, Any]:
+    def update(
+        self, change: Callable[[dict[str, Any]], Any], after: Callable[[dict[str, Any]], Any] | None = None
+    ) -> dict[str, Any]:
         """Apply one change to the file's current contents, read again under the shared lock, and write it back
         (unknown keys and folders kept, the last good file kept as .prev first). ``change`` gets the normalized
         configuration to change in place, and returns False to write nothing. ``after`` gets the configuration as

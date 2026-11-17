@@ -94,7 +94,8 @@ export const CAPTION_EXCEPTIONS = Object.freeze({
   // the picker's compact Add, Added and Select (a body half an XS body high holds one line): Thai "Added" is nine code points
   "hall.add": Object.freeze({ "th-TH": 16 }),
 });
-export const captionMinimum = (site, locale, minimum) => Math.min(CAPTION_EXCEPTIONS[site]?.[locale] ?? minimum, minimum);
+export const captionMinimum = (site, locale, minimum) =>
+  Math.min(CAPTION_EXCEPTIONS[site]?.[locale] ?? minimum, minimum);
 
 // UICharacterDetail/Inventory_ListControl/LeftInfo/CharInfo/Char_Target/Type/MainType/BG: Common_Bg_Raius10px 272 x 72
 // inclined 10 degrees, Label fs 40. Chips stand 290 apart, a second row 84 under the first (the nameplate's rows).
@@ -196,8 +197,16 @@ export const APPLIED_SELECTION_GOLD = "#ffe900";
 // (Front/NUITop/Top/Right, at rest y 702) drops from 333.7 units above and the bottom menu (Front/Bottom/Menu, left at
 // y -678) rises from 1045 below. Unweighted Hermite keys, [time s, y offset from the rest position, slope].
 export const LOBBY_ENTRY = Object.freeze({
-  top: Object.freeze([Object.freeze([0, 333.7, 0]), Object.freeze([0.2, 28.55, -271.9047]), Object.freeze([0.42, 0, 0])]),
-  bottom: Object.freeze([Object.freeze([0, -1045, 0]), Object.freeze([0.2, -31.52, 300.1906]), Object.freeze([0.42, 0, 0])]),
+  top: Object.freeze([
+    Object.freeze([0, 333.7, 0]),
+    Object.freeze([0.2, 28.55, -271.9047]),
+    Object.freeze([0.42, 0, 0]),
+  ]),
+  bottom: Object.freeze([
+    Object.freeze([0, -1045, 0]),
+    Object.freeze([0.2, -31.52, 300.1906]),
+    Object.freeze([0.42, 0, 0]),
+  ]),
 });
 
 // --- The design system (docs/design-system/): the scales every composed screen takes its sizes from. Values are the game's,
@@ -206,27 +215,27 @@ export const LOBBY_ENTRY = Object.freeze({
 
 // Spacing, in units. Where a prefab gives a composition its own spacing, that wins; these are for what the App composes.
 export const SPACE = Object.freeze({
-  hair: 4,    // an outline's outset, an ink nudge
-  xs: 8,      // a label to its own decoration
-  s: 12,      // stacked cards (UIPopup_Option_PC rows), a pair of small buttons in a card
-  m: 20,      // a list panel's padding (UINonEquipmentInventory Inbox in PaperBG), buttons side by side (SMALL_BUTTON.gap)
-  l: 28,      // a control to its label (UIPopup_Sort radio to label, 26), a column of a row to the next
-  xl: 40,     // the grid's gutter; a popup's side padding around panels (survey median 41 to 43)
-  xxl: 60,    // a card's padding (UIPopup_Option_PC card to its title, 58); the page margin (UICharacterCollection, 66)
-  xxxl: 100,  // a popup's side padding around text (UIPopup_Sort 101, UIPopup_TicketUse 102)
+  hair: 4, // an outline's outset, an ink nudge
+  xs: 8, // a label to its own decoration
+  s: 12, // stacked cards (UIPopup_Option_PC rows), a pair of small buttons in a card
+  m: 20, // a list panel's padding (UINonEquipmentInventory Inbox in PaperBG), buttons side by side (SMALL_BUTTON.gap)
+  l: 28, // a control to its label (UIPopup_Sort radio to label, 26), a column of a row to the next
+  xl: 40, // the grid's gutter; a popup's side padding around panels (survey median 41 to 43)
+  xxl: 60, // a card's padding (UIPopup_Option_PC card to its title, 58); the page margin (UICharacterCollection, 66)
+  xxxl: 100, // a popup's side padding around text (UIPopup_Sort 101, UIPopup_TicketUse 102)
 });
 
 // Type roles: the size (fs) and the floor a fit may shrink to (min), NGUI font sizes in units.
 export const TYPE = Object.freeze({
-  display: Object.freeze({ fs: 72, min: 48 }),  // popup titles (135 of 158 titled popups), footer captions
-  title: Object.freeze({ fs: 62, min: 48 }),    // a list row's title (UIMailBoxContent/List_01/Label_System)
-  heading: Object.freeze({ fs: 52, min: 40 }),  // option labels (UIPopup_Sort radio labels), card titles (50)
-  body: Object.freeze({ fs: 48, min: 34 }),     // meta lines (List_01/Label_Locale_Received), small-button captions
-  dense: Object.freeze({ fs: 42, min: 42 }),    // the App's dense list rows (import-layout.js ROW_TEXT_SIZE)
-  chip: Object.freeze({ fs: 40, min: 28 }),     // chips (CHIP)
-  caption: Object.freeze({ fs: 36, min: 28 }),  // descriptions (UIPopup_Option_PC Label_Option_Description)
-  badge: Object.freeze({ fs: 34, min: 28 }),    // status badges (List_01/TimeLimit/Label_Locale_TimeLimit)
-  micro: Object.freeze({ fs: 28, min: 24 }),    // a secondary line (STATS_BOX.secondary)
+  display: Object.freeze({ fs: 72, min: 48 }), // popup titles (135 of 158 titled popups), footer captions
+  title: Object.freeze({ fs: 62, min: 48 }), // a list row's title (UIMailBoxContent/List_01/Label_System)
+  heading: Object.freeze({ fs: 52, min: 40 }), // option labels (UIPopup_Sort radio labels), card titles (50)
+  body: Object.freeze({ fs: 48, min: 34 }), // meta lines (List_01/Label_Locale_Received), small-button captions
+  dense: Object.freeze({ fs: 42, min: 42 }), // the App's dense list rows (import-layout.js ROW_TEXT_SIZE)
+  chip: Object.freeze({ fs: 40, min: 28 }), // chips (CHIP)
+  caption: Object.freeze({ fs: 36, min: 28 }), // descriptions (UIPopup_Option_PC Label_Option_Description)
+  badge: Object.freeze({ fs: 34, min: 28 }), // status badges (List_01/TimeLimit/Label_Locale_TimeLimit)
+  micro: Object.freeze({ fs: 28, min: 24 }), // a secondary line (STATS_BOX.secondary)
 });
 // Line pitch as a share of the size: NGUI's own (a label's lines) and a stack of separate lines (List_01's meta lines, 66
 // apart at 48)
@@ -235,14 +244,14 @@ export const LINE = Object.freeze({ label: 1.15, stack: 1.375 });
 // Control heights: everything in one row shares one of these, and a control's caption has its size. pad: the clear space a
 // caption-sized control keeps on each side of its caption (a button's includes its 30-unit slice border).
 export const CONTROL = Object.freeze({
-  badge: Object.freeze({ h: 54, fs: 34, pad: 16, minW: 220 }),             // List_01/TimeLimit/Bg 220 x 54
-  chip: Object.freeze({ h: 72, fs: 40, pad: 20, minW: 272 }),              // CHIP
-  buttonXXS: Object.freeze({ h: 88, fs: 34, pad: 26, minW: 140 }),        // XS at 0.85 (a details panel's row of four)
-  buttonXS: Object.freeze({ h: 104, fs: 40, pad: 34, minW: 200 }),         // XS_BUTTON (glyphPad 68), the app's small button
-  buttonS: Object.freeze({ h: 136, fs: 48, pad: 45, minW: 240 }),          // SMALL_BUTTON (glyphPad 90), the S preset
-  buttonM: Object.freeze({ h: 162, fs: 60, pad: 45, minW: 348 }),          // List_01/Btn_Receive 348 x 162
-  buttonL: Object.freeze({ h: 176, fs: 72, pad: 39.5, minW: 551 }),        // UIPopup_RaidEnterCheck footer, 551 x 176
-  icon: Object.freeze({ h: 60 }),                                          // Common_Icon_Close, Common_Btn_Radio_BG
+  badge: Object.freeze({ h: 54, fs: 34, pad: 16, minW: 220 }), // List_01/TimeLimit/Bg 220 x 54
+  chip: Object.freeze({ h: 72, fs: 40, pad: 20, minW: 272 }), // CHIP
+  buttonXXS: Object.freeze({ h: 88, fs: 34, pad: 26, minW: 140 }), // XS at 0.85 (a details panel's row of four)
+  buttonXS: Object.freeze({ h: 104, fs: 40, pad: 34, minW: 200 }), // XS_BUTTON (glyphPad 68), the app's small button
+  buttonS: Object.freeze({ h: 136, fs: 48, pad: 45, minW: 240 }), // SMALL_BUTTON (glyphPad 90), the S preset
+  buttonM: Object.freeze({ h: 162, fs: 60, pad: 45, minW: 348 }), // List_01/Btn_Receive 348 x 162
+  buttonL: Object.freeze({ h: 176, fs: 72, pad: 39.5, minW: 551 }), // UIPopup_RaidEnterCheck footer, 551 x 176
+  icon: Object.freeze({ h: 60 }), // Common_Icon_Close, Common_Btn_Radio_BG
   toolbar: Object.freeze({ h: 104 }), // UILobby/Front/Right/Btn_RotateSpine/ConditionRoot/Able_Count/Bg
 });
 
@@ -261,13 +270,22 @@ export const GRID = Object.freeze({ columns: 12, gutter: 40, pageMargin: 60, sta
 export const POPUP_TYPE = Object.freeze({
   title: Object.freeze({ fs: 62, min: 48 }),
   text: Object.freeze({ fs: 48, min: 40 }),
-  card: Object.freeze({ title: Object.freeze({ fs: 44, min: 36 }), option: Object.freeze({ fs: 42, min: 30 }), path: Object.freeze({ fs: 40, min: 28 }) }),
+  card: Object.freeze({
+    title: Object.freeze({ fs: 44, min: 36 }),
+    option: Object.freeze({ fs: 42, min: 30 }),
+    path: Object.freeze({ fs: 40, min: 28 }),
+  }),
 });
 
 // Every popup's footer: XS bodies, as far above the frame's bottom as the prefab's 102 under its
 // 176-high buttonL bodies scaled to theirs (popup.js footerBottom: 60), the content SPACE.xl above their tops. clearance:
 // the room a frame keeps under its content for the footer.
-export const POPUP_FOOTER = Object.freeze({ control: CONTROL.buttonXS, bottom: 60, above: 40, clearance: 60 + 104 + 40 });
+export const POPUP_FOOTER = Object.freeze({
+  control: CONTROL.buttonXS,
+  bottom: 60,
+  above: 40,
+  clearance: 60 + 104 + 40,
+});
 
 // Popup frames (Common_Popup_Bg), by width class: S 1300 x 1050 (19 popups; UIPopup_RaidEnterCheck), M 1540 (UIPopup_
 // ConquestBattleEnter_Sub), L 2098 x 1110 (UIPopup_Option_PC), XL 2841 x 1353 (UIPopup_GachaCharList). Their anatomy is
@@ -299,5 +317,15 @@ export const PANEL = Object.freeze({ padList: 20, padCard: 58, cardTitleTop: 17,
 // A list row (UIMailBoxContent/List_01, 2208 x 329): the icon's circle 304 from 36 in, the text column from 342, the title's
 // top 19 down, meta lines 66 apart from 163, the action (buttonM) 31 from the right and 26 from the bottom; a badge sits on
 // the centre of the line it qualifies.
-export const LIST_ROW = Object.freeze({ w: 2208, h: 329, iconX: 36, icon: 304, textX: 342, titleTop: 19, metaTop: 163,
-  metaPitch: 66, actionRight: 31, actionBottom: 26 });
+export const LIST_ROW = Object.freeze({
+  w: 2208,
+  h: 329,
+  iconX: 36,
+  icon: 304,
+  textX: 342,
+  titleTop: 19,
+  metaTop: 163,
+  metaPitch: 66,
+  actionRight: 31,
+  actionBottom: 26,
+});

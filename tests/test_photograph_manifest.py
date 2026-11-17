@@ -54,8 +54,15 @@ def test_a_bad_photo_record_costs_that_record_only_and_is_written_back_unchanged
     good = gallery.save("student:a", capture()[0], "portrait")["saved"]
     data = manifest(gallery)
     stale = {"id": BAD, "variant": "student:a", "sha256": "short"}
-    data["photos"].update({"not-an-id": row("x" * 32), BAD: stale, "c" * 32: "not an object",
-                           "e" * 32: row("f" * 32), "a" * 32: {"id": "a" * 32, "sha256": DIGEST}})
+    data["photos"].update(
+        {
+            "not-an-id": row("x" * 32),
+            BAD: stale,
+            "c" * 32: "not an object",
+            "e" * 32: row("f" * 32),
+            "a" * 32: {"id": "a" * 32, "sha256": DIGEST},
+        }
+    )
     put(gallery, data)
     fresh = store(gallery.root.parent)
     with caplog.at_level(logging.WARNING, logger=LOG):
@@ -161,23 +168,34 @@ def test_deleting_a_photo_a_kept_row_names_is_refused(tmp_path):
     assert manifest(gallery)["selected"]["student:b"] is None and not file.exists()
 
 
-@pytest.mark.parametrize("content", [
-    b"bad JSON", b"", b"[]", b'{"version": 2, "photos": {}, "selected": {}, "next": 1}',
-    b'{"version": 1, "photos": [], "selected": {}, "next": 1}',
-    b'{"version": 1, "photos": {}, "selected": [], "next": 1}',
-    b'{"version": 1, "photos": {}, "selected": {}, "next": 0}',
-    b'{"version": 1, "photos": {}, "selected": {}, "next": 1, "next_by_variant": []}',
-    b'{"version": 1, "photos": {}, "selected": {}, "next": 1, "next_by_variant": {"a": 0}}',
-    b"\xff\xfe"])
+@pytest.mark.parametrize(
+    "content",
+    [
+        b"bad JSON",
+        b"",
+        b"[]",
+        b'{"version": 2, "photos": {}, "selected": {}, "next": 1}',
+        b'{"version": 1, "photos": [], "selected": {}, "next": 1}',
+        b'{"version": 1, "photos": {}, "selected": [], "next": 1}',
+        b'{"version": 1, "photos": {}, "selected": {}, "next": 0}',
+        b'{"version": 1, "photos": {}, "selected": {}, "next": 1, "next_by_variant": []}',
+        b'{"version": 1, "photos": {}, "selected": {}, "next": 1, "next_by_variant": {"a": 0}}',
+        b"\xff\xfe",
+    ],
+)
 def test_an_unreadable_manifest_is_left_alone_and_every_write_refuses(gallery, content):
     gallery.root.mkdir()
     gallery.index.write_bytes(content)
     with pytest.raises(ServiceError, match="photo_library_invalid"):
         gallery.selection("student:a")
-    for call in (lambda: gallery.list("student:a"), lambda: gallery.app_url("student:a"),
-                 lambda: gallery.save("student:a", capture()[0], "portrait"),
-                 lambda: gallery.save("student:a", capture()[0], "portrait", builtin=True),
-                 lambda: gallery.select("student:a", None), lambda: gallery.delete("student:a", "a" * 32)):
+    for call in (
+        lambda: gallery.list("student:a"),
+        lambda: gallery.app_url("student:a"),
+        lambda: gallery.save("student:a", capture()[0], "portrait"),
+        lambda: gallery.save("student:a", capture()[0], "portrait", builtin=True),
+        lambda: gallery.select("student:a", None),
+        lambda: gallery.delete("student:a", "a" * 32),
+    ):
         with pytest.raises(ServiceError, match="photo_library_invalid"):
             call()
     assert gallery.index.read_bytes() == content
@@ -246,12 +264,17 @@ def test_a_corrupt_manifest_leaves_every_student_list_working_and_the_file_uncha
             roster = rpc(app, "roster.list")
             assert "error" not in family and "error" not in roster
     assert all("thumbnail" not in variant for item in roster["result"]["families"] for variant in item["variants"])
-    assert len([r for r in caplog.records if "Photograph lookup failed" in r.getMessage()]) == 1  # once, not per student
+    assert (
+        len([r for r in caplog.records if "Photograph lookup failed" in r.getMessage()]) == 1
+    )  # once, not per student
     # the photograph features themselves refuse, and nothing overwrites the file
     assert rpc(app, "photography.list", variant="hoshino")["error"]["code"] == "photo_library_invalid"
     assert rpc(app, "photography.select", variant="hoshino", id=None)["error"]["code"] == "photo_library_invalid"
     png = capture()[0]
-    assert rpc(app, "photography.save", variant="hoshino", png=png, mode="portrait")["error"]["code"] == "photo_library_invalid"
+    assert (
+        rpc(app, "photography.save", variant="hoshino", png=png, mode="portrait")["error"]["code"]
+        == "photo_library_invalid"
+    )
     assert gallery.index.read_bytes() == b"{ not json"
     assert sorted(path.name for path in gallery.root.iterdir() if path.name != "index.lock") == ["index.json"]
 

@@ -10,13 +10,13 @@ import shutil
 import SpineAtlas
 
 from ba_modding_toolkit.spine import (
-        get_skel_version,
-        atlas_downgrade,
-        unpack_atlas,
-        _build_rename_mapping,
-        check_legacy_rename_needed,
-        normalize_legacy_assets
-    )
+    get_skel_version,
+    atlas_downgrade,
+    unpack_atlas,
+    _build_rename_mapping,
+    check_legacy_rename_needed,
+    normalize_legacy_assets,
+)
 from ba_modding_toolkit.bundle import Bundle
 from ba_modding_toolkit.models import NameTypeKey, AssetType
 
@@ -114,7 +114,7 @@ class TestNormalizeLegacySpineAssets:
             "filter: Linear, Linear\nrepeat: none\n"
             "frame1\n  rotate: false\n  xy: 0, 0\n  size: 100, 100\n"
             "  orig: 100, 100\n  offset: 0, 0\n  index: -1\n",
-            encoding="utf-8"
+            encoding="utf-8",
         )
         result = normalize_legacy_assets(tmp_path, MOCK_BUNDLE_PNG_NAMES)
         result_atlas_content = (result / "test.atlas").read_text(encoding="utf-8")
@@ -139,7 +139,7 @@ class TestNormalizeLegacySpineAssets:
         """原始文件不被修改"""
         original = tmp_path / "CH0808_home2.png"
         original.write_bytes(b"original data")
-        result = normalize_legacy_assets(tmp_path, MOCK_BUNDLE_PNG_NAMES)
+        normalize_legacy_assets(tmp_path, MOCK_BUNDLE_PNG_NAMES)
         assert original.exists()
         assert original.read_bytes() == b"original data"
         assert original.name == "CH0808_home2.png"
@@ -210,14 +210,12 @@ class TestAtlasOperations:
 
         shutil.copy(sample_case.atlas_path, output_dir / sample_case.atlas_path.name)
 
-        atlas_downgrade(
-            sample_case.atlas_path, output_dir
-        )
+        atlas_downgrade(sample_case.atlas_path, output_dir)
 
         files = list(output_dir.glob("*.atlas"))
         assert len(files) == 1
         output_atlas = SpineAtlas.ReadAtlasFile(files[0])
-        assert output_atlas.version == False # Spine 3
+        assert output_atlas.version == False  # noqa: E712  Spine 3
 
     def test_unpack_atlas_frames(self, sample_case: "SampleCase", tmp_path: Path):
         """测试解包 atlas 帧"""
@@ -231,9 +229,7 @@ class TestAtlasOperations:
             for frame in tex.frames:
                 expected_frame_names.add(frame.name)
 
-        result = unpack_atlas(
-            sample_case.atlas_path, output_dir
-        )
+        result = unpack_atlas(sample_case.atlas_path, output_dir)
         assert result
 
         images_dir = output_dir / "images"
@@ -247,6 +243,7 @@ class TestAtlasOperations:
         # 验证解包的帧名称与 atlas 记录一致
         actual_frame_names = {f.relative_to(images_dir).with_suffix("").as_posix() for f in files}
         assert actual_frame_names == expected_frame_names
+
 
 class TestLegacyRenameWithRealData:
     """使用真实 Spine 资产数据测试旧版文件名修正
@@ -282,18 +279,20 @@ class TestLegacyRenameWithRealData:
             assert (result / f"{name}.png").exists(), f"期望 {name}.png 存在"
 
         # 旧版名称不应存在（如果已被重命名）
-        old_stems = {f.stem for f in legacy_rename_case.assets_dir.iterdir() if f.suffix.lower() == '.png'}
+        old_stems = {f.stem for f in legacy_rename_case.assets_dir.iterdir() if f.suffix.lower() == ".png"}
         mapping = _build_rename_mapping(bundle_png_names, old_stems)
         for old_stem in mapping:
             assert not (result / f"{old_stem}.png").exists(), f"旧版 {old_stem}.png 不应存在"
 
-    def test_renamed_png_data_matches_original(self, legacy_rename_case: "LegacyRenameCase", bundle_png_names: set[str]):
+    def test_renamed_png_data_matches_original(
+        self, legacy_rename_case: "LegacyRenameCase", bundle_png_names: set[str]
+    ):
         """重命名后的 PNG 数据应与原始文件一致"""
         assert bundle_png_names, "Bundle 中未找到 Texture2D 资产"
 
         result = normalize_legacy_assets(legacy_rename_case.assets_dir, bundle_png_names)
 
-        old_stems = {f.stem for f in legacy_rename_case.assets_dir.iterdir() if f.suffix.lower() == '.png'}
+        old_stems = {f.stem for f in legacy_rename_case.assets_dir.iterdir() if f.suffix.lower() == ".png"}
         mapping = _build_rename_mapping(bundle_png_names, old_stems)
 
         for old_stem, new_stem in mapping.items():
@@ -307,11 +306,11 @@ class TestLegacyRenameWithRealData:
 
         result = normalize_legacy_assets(legacy_rename_case.assets_dir, bundle_png_names)
 
-        old_stems = {f.stem for f in legacy_rename_case.assets_dir.iterdir() if f.suffix.lower() == '.png'}
+        old_stems = {f.stem for f in legacy_rename_case.assets_dir.iterdir() if f.suffix.lower() == ".png"}
         mapping = _build_rename_mapping(bundle_png_names, old_stems)
 
-        for atlas_file in result.glob('*.atlas'):
-            content = atlas_file.read_text(encoding='utf-8')
+        for atlas_file in result.glob("*.atlas"):
+            content = atlas_file.read_text(encoding="utf-8")
             for old_stem in mapping:
                 assert f"{old_stem}.png" not in content, f"Atlas 中仍包含旧版引用 {old_stem}.png"
 
@@ -321,6 +320,6 @@ class TestLegacyRenameWithRealData:
 
         result = normalize_legacy_assets(legacy_rename_case.assets_dir, bundle_png_names)
 
-        for skel_file in legacy_rename_case.assets_dir.glob('*.skel'):
+        for skel_file in legacy_rename_case.assets_dir.glob("*.skel"):
             assert (result / skel_file.name).exists()
             assert (result / skel_file.name).read_bytes() == skel_file.read_bytes()

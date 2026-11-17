@@ -52,12 +52,22 @@ def _read_directory(path: Path, max_directory: int) -> tuple[bytes, int] | None:
         engine = _engine_version(_cstring(stream))
         length, compressed, uncompressed, flags = struct.unpack(">qIII", stream.read(20))
         physical = os.fstat(stream.fileno()).st_size
-        if (length < stream.tell() or length > physical or not 0 < compressed <= max_directory
-                or not 24 <= uncompressed <= max_directory):
+        if (
+            length < stream.tell()
+            or length > physical
+            or not 0 < compressed <= max_directory
+            or not 24 <= uncompressed <= max_directory
+        ):
             raise ValueError("Invalid UnityFS directory size")
-        old = (engine < (2020,) or engine[0] == 2020 and engine < (2020, 3, 34)
-               or engine[0] == 2021 and engine < (2021, 3, 2)
-               or engine[0] == 2022 and engine < (2022, 1, 1))
+        old = (
+            engine < (2020,)
+            or engine[0] == 2020
+            and engine < (2020, 3, 34)
+            or engine[0] == 2021
+            and engine < (2021, 3, 2)
+            or engine[0] == 2022
+            and engine < (2022, 1, 1)
+        )
         archive_flags = ArchiveFlagsOld(flags) if old else ArchiveFlags(flags)
         if archive_flags & archive_flags.UsesAssetBundleEncryption:
             raise ValueError("Encrypted UnityFS directory")
@@ -148,7 +158,7 @@ def read_layout(path: Path, max_directory: int = _MAX_BLOCK_INFO) -> Layout | No
         data, physical = directory
         count, _ = _block_table(data)
         largest = total = 0
-        for uncompressed, _, _ in struct.iter_unpack(">IIH", memoryview(data)[20:20 + count * 10]):
+        for uncompressed, _, _ in struct.iter_unpack(">IIH", memoryview(data)[20 : 20 + count * 10]):
             total += uncompressed
             largest = max(largest, uncompressed)
         return Layout(physical, len(data), count, largest, total)

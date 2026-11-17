@@ -39,11 +39,19 @@ class CabIndex:
     include inode and ctime, so preserving size and mtime cannot retain stale names.
     """
 
-    def __init__(self, directories: Iterable[Path], *, cache: PreviewCache | None = None,
-                 namespace: str = "", reader: Callable = cab_names):
+    def __init__(
+        self,
+        directories: Iterable[Path],
+        *,
+        cache: PreviewCache | None = None,
+        namespace: str = "",
+        reader: Callable = cab_names,
+    ):
         self.directories = tuple(Path(path).resolve() for path in directories)
         self.cache, self.reader = cache, reader
-        self.key = json.dumps([namespace, [str(path) for path in self.directories]], separators=(",", ":")) + "/" + _SCHEMA
+        self.key = (
+            json.dumps([namespace, [str(path) for path in self.directories]], separators=(",", ":")) + "/" + _SCHEMA
+        )
         self._lock = threading.RLock()
         self._entries: OrderedDict[Path, tuple[tuple[int, ...], tuple[str, ...]]] = OrderedDict()
         self._reverse: dict[str, set[Path]] = {}
@@ -59,8 +67,7 @@ class CabIndex:
         self._complete = False
 
     def _permitted(self, path: Path) -> bool:
-        return (path.parent in self._safe_roots
-                and (not path.is_symlink() or path.resolve().parent in self._safe_roots))
+        return path.parent in self._safe_roots and (not path.is_symlink() or path.resolve().parent in self._safe_roots)
 
     def _drop(self, path: Path) -> None:
         prior = self._entries.pop(path, None)
@@ -122,11 +129,19 @@ class CabIndex:
                 return
             records = []
             for root, name, stamp, names in saved["entries"]:
-                if (type(root) is not int or not 0 <= root < len(self.directories) or not isinstance(name, str)
-                        or name in (".", "..") or Path(name).name != name or not name.endswith(".bundle")
-                        or len(stamp) != 5 or not all(type(n) is int for n in stamp)
-                        or not isinstance(names, list) or len(names) > 8192
-                        or not all(isinstance(n, str) and len(n) <= 4096 for n in names)):
+                if (
+                    type(root) is not int
+                    or not 0 <= root < len(self.directories)
+                    or not isinstance(name, str)
+                    or name in (".", "..")
+                    or Path(name).name != name
+                    or not name.endswith(".bundle")
+                    or len(stamp) != 5
+                    or not all(type(n) is int for n in stamp)
+                    or not isinstance(names, list)
+                    or len(names) > 8192
+                    or not all(isinstance(n, str) and len(n) <= 4096 for n in names)
+                ):
                     raise ValueError("Invalid CAB cache entry")
                 path = self.directories[root] / name
                 if path.parent not in self.directories:
@@ -142,9 +157,15 @@ class CabIndex:
         if not self._dirty or self.cache is None:
             return
         roots = {path: i for i, path in enumerate(self.directories)}
-        data = json.dumps({"schema": _SCHEMA, "entries": [
-            [roots[path.parent], path.name, stamp, names] for path, (stamp, names) in self._entries.items()
-        ]}, separators=(",", ":")).encode()
+        data = json.dumps(
+            {
+                "schema": _SCHEMA,
+                "entries": [
+                    [roots[path.parent], path.name, stamp, names] for path, (stamp, names) in self._entries.items()
+                ],
+            },
+            separators=(",", ":"),
+        ).encode()
         if len(data) <= _MAX_SNAPSHOT:
             self.cache.put(self.key, data, generation=self._generation)
         self._dirty = False
@@ -177,9 +198,12 @@ class CabIndex:
                     with os.scandir(directory) as entries:
                         for entry in entries:
                             path = Path(entry.path)
-                            if (entry.name.endswith(".bundle") and entry.name not in found
-                                    and entry.is_file()
-                                    and (not entry.is_symlink() or self._permitted(path))):
+                            if (
+                                entry.name.endswith(".bundle")
+                                and entry.name not in found
+                                and entry.is_file()
+                                and (not entry.is_symlink() or self._permitted(path))
+                            ):
                                 found[entry.name] = path, entry.stat().st_size
                 except OSError:
                     logger.debug("Cannot enumerate CAB source directory %s", directory, exc_info=True)
@@ -214,8 +238,9 @@ class CabIndex:
             self._validated.add(path)
         return names
 
-    def resolve(self, wanted: set[str], hint_path: Path | None = None, *,
-                exclude: Iterable[Path] = ()) -> dict[str, str]:
+    def resolve(
+        self, wanted: set[str], hint_path: Path | None = None, *, exclude: Iterable[Path] = ()
+    ) -> dict[str, str]:
         with self._lock, self.batch():
             self._sync()
             remaining = {name.lower() for name in wanted}
@@ -226,8 +251,13 @@ class CabIndex:
 
             def priority(path):
                 name = path.name
-                return (0 if prefix and name.startswith(prefix) or core and f"-{core}-" in name.lower()
-                        else 1 if name.startswith(PRELOAD_PREFIX) else 2)
+                return (
+                    0
+                    if prefix and name.startswith(prefix) or core and f"-{core}-" in name.lower()
+                    else 1
+                    if name.startswith(PRELOAD_PREFIX)
+                    else 2
+                )
 
             def rank(path):
                 return priority(path), self.directories.index(path.parent), path.name

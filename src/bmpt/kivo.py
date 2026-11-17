@@ -48,6 +48,7 @@ def lobby_lines(page: dict[str, Any]) -> dict[str, dict[str, str]]:
     zh-CN is the CN server's text when Kivo has it, else Kivo's translation; ja is the original line; audio is the
     Japanese voice (the one the Global and Japanese clients play). Thai text comes
     from the Global table; Kivo supplies no Thai dialogue fallback."""
+
     def by_clip(entries: list[dict]) -> dict[str, dict]:
         # several entries can share a clip id ("<clip>_new" re-recordings with empty text): keep the one with text
         out: dict[str, dict] = {}
@@ -67,8 +68,11 @@ def lobby_lines(page: dict[str, Any]) -> dict[str, dict[str, str]]:
         audio = j.get("file") or ""
         if audio.startswith("//"):
             audio = "https:" + audio
-        lines[cid] = {"zh-CN": _one_line(c.get("text") or j.get("text")), "ja": _one_line(j.get("text_original")),
-                      "audio": audio}
+        lines[cid] = {
+            "zh-CN": _one_line(c.get("text") or j.get("text")),
+            "ja": _one_line(j.get("text_original")),
+            "audio": audio,
+        }
     return lines
 
 

@@ -52,9 +52,11 @@ def depot_manifest(files: dict[str, bytes], *, depot: int = 3557621, gid: int = 
 
 
 def app_manifest(gid: int = GID) -> str:
-    return ('"AppState"\n{\n\t"appid"\t\t"3557620"\n\t"StateFlags"\t\t"4"\n\t"installdir"\t\t"BlueArchive"\n'
-            '\t"InstalledDepots"\n\t{\n\t\t"3557621"\n\t\t{\n\t\t\t"manifest"\t\t"%d"\n\t\t\t"size"\t\t"1"\n\t\t}\n\t}\n}\n'
-            % gid)
+    return (
+        '"AppState"\n{\n\t"appid"\t\t"3557620"\n\t"StateFlags"\t\t"4"\n\t"installdir"\t\t"BlueArchive"\n'
+        '\t"InstalledDepots"\n\t{\n\t\t"3557621"\n\t\t{\n\t\t\t"manifest"\t\t"%d"\n\t\t\t"size"\t\t"1"\n\t\t}\n\t}\n}\n'
+        % gid
+    )
 
 
 @pytest.fixture
@@ -82,8 +84,10 @@ def test_a_depot_manifest_gives_each_file_its_size_and_sha1():
     data = b"bundle bytes"
     depot, gid, files = steam_records.parse_depot_manifest(depot_manifest({"a/b.bundle": data, "a/empty": b""}))
     assert (depot, gid) == (3557621, GID)
-    assert files == {"a/b.bundle": steam_records.OfficialFile(len(data), hashlib.sha1(data).hexdigest()),
-                     "a/empty": steam_records.OfficialFile(0, hashlib.sha1(b"").hexdigest())}
+    assert files == {
+        "a/b.bundle": steam_records.OfficialFile(len(data), hashlib.sha1(data).hexdigest()),
+        "a/empty": steam_records.OfficialFile(0, hashlib.sha1(b"").hexdigest()),
+    }
     with pytest.raises(steam_records.ManifestError):
         steam_records.parse_depot_manifest(depot_manifest({"a": data}, broken=True))
     with pytest.raises(steam_records.ManifestError):
@@ -103,8 +107,11 @@ def test_the_bundles_of_an_install_come_from_the_depot_cache_of_its_library(stea
     keep(listed, gid=1)
     assert files.bundles(game_data) == {}  # a list of another build is not this install's
     keep({**listed, "BlueArchive.exe": b"exe", f"{RESOURCE}/GameData/Windows/sub/x.bundle": b"x"})
-    expected = {official.name: steam_records.OfficialFile(len(listed[next(iter(listed))]),
-                                                          hashlib.sha1(official.read_bytes()).hexdigest())}
+    expected = {
+        official.name: steam_records.OfficialFile(
+            len(listed[next(iter(listed))]), hashlib.sha1(official.read_bytes()).hexdigest()
+        )
+    }
     assert files.bundles(game_data) == expected == files.bundles(install)
     assert files.bundles(library.parent / "elsewhere") == {}
 
@@ -141,6 +148,7 @@ def test_with_steams_list_a_file_is_official_by_its_sha1_not_by_the_crc_in_its_n
 
 # --- how a kept original was verified ---
 
+
 def crc_matching_mod(official: Path) -> bytes:
     """A mod of the official file's size whose CRC32 matches its name, with nothing after the bundle."""
     expected = int(official.name.rsplit("_", 1)[1].split(".")[0])
@@ -152,6 +160,7 @@ def crc_matching_mod(official: Path) -> bytes:
 
 def checks_of(library: ModLibrary) -> dict:
     import json
+
     return json.loads((library.root / "originals.json").read_text())["originals"]
 
 

@@ -75,10 +75,13 @@ def dialogues(rows: Iterable[dict[str, Any]]) -> dict[int, Dialogues]:
     out: dict[int, Dialogues] = {}
     for (character, group_id), group in sorted(groups.items()):
         group.sort(key=lambda row: row.get("DisplayOrder") or 0)
-        anim = next((str(row["AnimationName"]) for row in group if TALK.fullmatch(str(row.get("AnimationName") or ""))),
-                    f"Talk_{group_id:02d}_M")
+        anim = next(
+            (str(row["AnimationName"]) for row in group if TALK.fullmatch(str(row.get("AnimationName") or ""))),
+            f"Talk_{group_id:02d}_M",
+        )
         out.setdefault(character, {})[anim] = [
-            {lang: text for column, lang in COLUMNS.items() if (text := one_line(row.get(column)))} for row in group]
+            {lang: text for column, lang in COLUMNS.items() if (text := one_line(row.get(column)))} for row in group
+        ]
     return out
 
 
@@ -86,9 +89,13 @@ def portrait_dialogues(rows: Iterable[dict[str, Any]]) -> dict[int, dict[int, li
     """Ordinary lobby Idle groups; greetings and memorial scenes are different voice sequences."""
     groups: dict[tuple[int, int], list[dict]] = {}
     for row in rows:
-        if (not isinstance(row, dict) or row.get("DialogCategory") != "UILobby" or row.get("TeenMode")
-                or row.get("DialogCondition") not in (None, "", "Idle")
-                or row.get("Anniversary") not in (None, "", "None")):
+        if (
+            not isinstance(row, dict)
+            or row.get("DialogCategory") != "UILobby"
+            or row.get("TeenMode")
+            or row.get("DialogCondition") not in (None, "", "Idle")
+            or row.get("Anniversary") not in (None, "", "None")
+        ):
             continue
         try:
             key = int(row["CharacterId"]), int(row["GroupId"])
@@ -96,16 +103,29 @@ def portrait_dialogues(rows: Iterable[dict[str, Any]]) -> dict[int, dict[int, li
             continue
         groups.setdefault(key, []).append(row)
     out: dict[int, dict[int, list[dict[str, Any]]]] = {}
+
     def caption(value: Any) -> str:
         return "\n".join(part.strip() for part in str(value or "").splitlines()).strip()
+
     for (character, group), values in groups.items():
         values.sort(key=lambda row: row.get("DisplayOrder") or 0)
         out.setdefault(character, {})[group] = [
-            {**{lang: text for column, lang in COLUMNS.items() if (text := caption(row.get(column)))},
-             **({"expression": row["AnimationName"]} if isinstance(row.get("AnimationName"), str) and row["AnimationName"] else {}),
-             **({"duration": max(0, row["Duration"]) / 1000} if isinstance(row.get("Duration"), (int, float)) else {}),
-             **({"voiceIds": row["VoiceId"]} if isinstance(row.get("VoiceId"), list) else {})}
-            for row in values]
+            {
+                **{lang: text for column, lang in COLUMNS.items() if (text := caption(row.get(column)))},
+                **(
+                    {"expression": row["AnimationName"]}
+                    if isinstance(row.get("AnimationName"), str) and row["AnimationName"]
+                    else {}
+                ),
+                **(
+                    {"duration": max(0, row["Duration"]) / 1000}
+                    if isinstance(row.get("Duration"), (int, float))
+                    else {}
+                ),
+                **({"voiceIds": row["VoiceId"]} if isinstance(row.get("VoiceId"), list) else {}),
+            }
+            for row in values
+        ]
     return out
 
 
@@ -121,7 +141,7 @@ def portrait_by_clip(groups: dict, clips: dict[str, list[str | None]]) -> dict[s
             if not segments or row.get("voiceIds") or "voiceIds" not in row:
                 segments.append([])
             segments[-1].append(row)
-        assigned = [*segments[:len(ids) - 1], [row for segment in segments[len(ids) - 1:] for row in segment]]
+        assigned = [*segments[: len(ids) - 1], [row for segment in segments[len(ids) - 1 :] for row in segment]]
         for clip, values in zip(ids, assigned):
             if not clip or not values:
                 continue
@@ -191,10 +211,10 @@ def by_clip(talks: Dialogues, clips: dict[str, list[str]]) -> dict[str, dict[str
         if not ids or not rows:
             continue
         last: dict[str, str] = {}
-        for row in rows[len(ids) - 1:]:
+        for row in rows[len(ids) - 1 :]:
             for lang, text in row.items():
                 last[lang] = _join(last.get(lang, ""), text)
-        for clip, row in zip(ids, [*rows[:len(ids) - 1], last]):
+        for clip, row in zip(ids, [*rows[: len(ids) - 1], last]):
             if row:
                 out[clip] = dict(row)
     return out

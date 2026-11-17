@@ -1,4 +1,5 @@
 """The upstream Font path retains target metrics and the fork's complete-update checks."""
+
 from copy import deepcopy
 from types import SimpleNamespace
 
@@ -9,26 +10,43 @@ from ba_modding_toolkit.models import AssetType, FontAssetData, SaveOptions
 
 
 def font(data, names, spacing):
-    tree = {"m_Name": "shared-font", "m_FontData": data, "m_FontNames": names,
-            "m_LineSpacing": spacing, "m_CharacterInfo": [{"index": 1}], "m_CharacterRects": [1]}
+    tree = {
+        "m_Name": "shared-font",
+        "m_FontData": data,
+        "m_FontNames": names,
+        "m_LineSpacing": spacing,
+        "m_CharacterInfo": [{"index": 1}],
+        "m_CharacterRects": [1],
+    }
+
     def save(value):
-        tree.clear(); tree.update(deepcopy(value))
-    return SimpleNamespace(type=AssetType.Font, peek_name=lambda: tree["m_Name"],
-        read=lambda: SimpleNamespace(**tree), read_typetree=lambda: deepcopy(tree), save_typetree=save,
-        get_raw_data=lambda: repr(tree).encode()), tree
+        tree.clear()
+        tree.update(deepcopy(value))
+
+    return SimpleNamespace(
+        type=AssetType.Font,
+        peek_name=lambda: tree["m_Name"],
+        read=lambda: SimpleNamespace(**tree),
+        read_typetree=lambda: deepcopy(tree),
+        save_typetree=save,
+        get_raw_data=lambda: repr(tree).encode(),
+    ), tree
 
 
 def test_font_update_moves_only_payload_and_names_and_preserves_target_metrics(tmp_path, monkeypatch):
     incoming, _ = font(b"new-font", ["New family"], 4)
     target, target_tree = font(b"old-font", ["Old family"], 27)
     source_path, target_path = tmp_path / "source.bundle", tmp_path / "target.bundle"
-    bundles = {path: Bundle(path, SimpleNamespace(objects=[obj], file=SimpleNamespace(files={})))
-               for path, obj in ((source_path, incoming), (target_path, target))}
+    bundles = {
+        path: Bundle(path, SimpleNamespace(objects=[obj], file=SimpleNamespace(files={})))
+        for path, obj in ((source_path, incoming), (target_path, target))
+    }
     saves = []
     monkeypatch.setattr(Bundle, "load", lambda path, *args: bundles[path])
     monkeypatch.setattr(Bundle, "save", lambda *args: (saves.append(args) or True, "saved"))
-    result = core.process_mod_update([source_path], [target_path], tmp_path / "output", {"Font"},
-                                     SaveOptions(), match_strategy="name_type")
+    result = core.process_mod_update(
+        [source_path], [target_path], tmp_path / "output", {"Font"}, SaveOptions(), match_strategy="name_type"
+    )
     assert result.success and len(result.file_pairs) == 1 and len(saves) == 1
     assert target_tree["m_FontData"] == b"new-font" and target_tree["m_FontNames"] == ["New family"]
     assert target_tree["m_LineSpacing"] == 27

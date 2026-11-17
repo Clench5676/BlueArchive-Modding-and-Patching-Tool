@@ -100,6 +100,7 @@ def test_an_unknown_game_state_is_reported_without_a_scan_when_it_clears(world):
 def test_a_failing_process_check_counts_as_unknown(world):
     def broken():
         raise RuntimeError("no ps")
+
     assert world.watch(check_game=broken).poll().reason == "game_status_unavailable"
 
 
@@ -175,8 +176,12 @@ def test_a_watched_classic_window_ending_publishes_classic_closed(world):
     world.classic = None  # find_classic found the pid dead and removed classic.json
     watch.poll()
     # the snapshot first, so whatever runs on classic.closed sees the switch available
-    assert world.take() == [("change", WatchState()), ("classic.closed", {"code": None}), ("classic closed",),
-                            ("scan",)]
+    assert world.take() == [
+        ("change", WatchState()),
+        ("classic.closed", {"code": None}),
+        ("classic closed",),
+        ("scan",),
+    ]
     watch.poll()
     assert world.take() == []
 
@@ -291,10 +296,13 @@ def test_the_defaults_are_the_write_time_checks_and_read_no_game_file(world, tmp
     install = steamapps / "common" / "BlueArchive"
     install.mkdir(parents=True)
     (steamapps / f"appmanifest_{game_paths.STEAM_APP_ID}.acf").write_text(
-        '"AppState"\n{\n\t"StateFlags"\t\t"1048580"\n}\n', encoding="utf-8")
+        '"AppState"\n{\n\t"StateFlags"\t\t"1048580"\n}\n', encoding="utf-8"
+    )
     resource = install / "BlueArchive_Data" / "StreamingAssets" / "PUB" / "Resource" / "GameData" / "Windows"
     resource.mkdir(parents=True)
-    (resource / "assets-_mx-spinecharacters-test_spr-_mxdependency-2024-01-01_assets_all_1.bundle").write_bytes(b"UnityFS")
+    (resource / "assets-_mx-spinecharacters-test_spr-_mxdependency-2024-01-01_assets_all_1.bundle").write_bytes(
+        b"UnityFS"
+    )
     opened = []
     real_open = io.open
 
@@ -308,7 +316,9 @@ def test_the_defaults_are_the_write_time_checks_and_read_no_game_file(world, tmp
     watch = world.watch(check_game=None, check_steam=None, installs=lambda: [install, resource])
     assert watch.poll() == WatchState(steam_busy=(str(install), str(resource)))
     assert set(opened) == {f"appmanifest_{game_paths.STEAM_APP_ID}.acf"}  # never a game file
-    monkeypatch.setattr(safety, "game_processes", lambda: ["/Applications/Blue Archive.app/Contents/MacOS/Blue Archive"])
+    monkeypatch.setattr(
+        safety, "game_processes", lambda: ["/Applications/Blue Archive.app/Contents/MacOS/Blue Archive"]
+    )
     assert watch.poll().reason == "game_running"
 
 

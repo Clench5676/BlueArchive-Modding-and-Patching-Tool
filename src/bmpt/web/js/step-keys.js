@@ -19,10 +19,12 @@ export function deltaOf(ev) {
   return KEYS[ev.key] || 0;
 }
 
-export const typing = (el) => !!el && (el.isContentEditable === true || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName || ""));
+export const typing = (el) =>
+  !!el && (el.isContentEditable === true || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName || ""));
 
 export function pacer(run) {
-  let running = false, next = null;
+  let running = false,
+    next = null;
   const go = (delta) => {
     running = true;
     const done = () => {
@@ -31,7 +33,12 @@ export function pacer(run) {
       next = null;
       if (n) go(n.delta);
     };
-    Promise.resolve().then(() => run(delta)).then(done, (err) => { console.error(err); done(); });
+    Promise.resolve()
+      .then(() => run(delta))
+      .then(done, (err) => {
+        console.error(err);
+        done();
+      });
   };
   return {
     press(delta, repeat = false) {
@@ -43,7 +50,11 @@ export function pacer(run) {
     release(delta) {
       if (next?.repeat && (delta === undefined || next.delta === delta)) next = null;
     },
-    clear() { next = null; },
-    get busy() { return running; },
+    clear() {
+      next = null;
+    },
+    get busy() {
+      return running;
+    },
   };
 }

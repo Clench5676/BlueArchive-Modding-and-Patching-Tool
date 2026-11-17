@@ -32,8 +32,25 @@ MAJOR = 1
 #: a larger file is not a manifest
 MAX_BYTES = 1024 * 1024
 
-KINDS = ("portrait", "lobby", "spine_scene", "model", "prop", "stage", "cafe", "effect", "cutscene", "ui",
-         "story_art", "voice", "audio", "video", "table", "minigame", "other")
+KINDS = (
+    "portrait",
+    "lobby",
+    "spine_scene",
+    "model",
+    "prop",
+    "stage",
+    "cafe",
+    "effect",
+    "cutscene",
+    "ui",
+    "story_art",
+    "voice",
+    "audio",
+    "video",
+    "table",
+    "minigame",
+    "other",
+)
 #: kinds that name their character or scene
 CORE_KINDS = ("portrait", "lobby", "spine_scene", "model")
 SPINE_KINDS = ("portrait", "lobby", "spine_scene")
@@ -53,16 +70,36 @@ _CATALOG_ROOT = re.compile(r"^r[0-9]+_[a-z0-9]+$")
 # The bundle families of each kind, by the family word of the bundle name (``assets-_mx-<family>-...`` or
 # ``<family>-..._mxload-...``), as the format's kind table lists them.
 _FAMILIES = {
-    "spinelobbies": "lobby", "spinebackground": "spine_scene",
-    "characters": "model", "character": "model", "npcs": "model",
-    "3dobject": "prop", "obstacles": "prop", "obstacle": "prop", "arms": "prop", "battleitem": "prop",
-    "scenes": "stage", "academy": "stage", "hexamaps": "stage", "campaign": "stage", "conquest": "stage",
+    "spinelobbies": "lobby",
+    "spinebackground": "spine_scene",
+    "characters": "model",
+    "character": "model",
+    "npcs": "model",
+    "3dobject": "prop",
+    "obstacles": "prop",
+    "obstacle": "prop",
+    "arms": "prop",
+    "battleitem": "prop",
+    "scenes": "stage",
+    "academy": "stage",
+    "hexamaps": "stage",
+    "campaign": "stage",
+    "conquest": "stage",
     "cafe": "cafe",
-    "effect": "effect", "etceffects": "effect", "effectsfreezed": "effect", "projectile": "effect",
+    "effect": "effect",
+    "etceffects": "effect",
+    "effectsfreezed": "effect",
+    "projectile": "effect",
     "skillrange": "effect",
-    "timeline": "cutscene", "prodresources": "cutscene", "sccutscene": "cutscene",
-    "ui": "ui", "audio": "audio",
-    "minigame": "minigame", "field": "minigame", "undercover": "minigame", "iaworldraid": "minigame",
+    "timeline": "cutscene",
+    "prodresources": "cutscene",
+    "sccutscene": "cutscene",
+    "ui": "ui",
+    "audio": "audio",
+    "minigame": "minigame",
+    "field": "minigame",
+    "undercover": "minigame",
+    "iaworldraid": "minigame",
 }
 
 
@@ -153,12 +190,23 @@ def skeleton_name(name: str) -> str:
     return base
 
 
-def document(*, created_by: Mapping[str, str], kind: str, core: str | None, server: str, platform: str,
-             release: Mapping[str, Any], files: list[dict], skeletons: list[dict]) -> dict:
+def document(
+    *,
+    created_by: Mapping[str, str],
+    kind: str,
+    core: str | None,
+    server: str,
+    platform: str,
+    release: Mapping[str, Any],
+    files: list[dict],
+    skeletons: list[dict],
+) -> dict:
     """A manifest in the format's field order; empty optional parts are left out (never empty strings or nulls)."""
-    data: dict[str, Any] = {"format_version": FORMAT_VERSION,
-                            "created_by": {key: value for key, value in created_by.items() if value},
-                            "kind": kind if kind in KINDS else "other"}
+    data: dict[str, Any] = {
+        "format_version": FORMAT_VERSION,
+        "created_by": {key: value for key, value in created_by.items() if value},
+        "kind": kind if kind in KINDS else "other",
+    }
     if core and _CORE.fullmatch(core):
         data["core"] = core
     target: dict[str, Any] = {"server": server, "platform": platform}
@@ -259,16 +307,22 @@ def parse(data: bytes) -> dict | None:
     listed = raw.get("skeletons")
     for item in listed if isinstance(listed, list) else []:
         if isinstance(item, dict) and isinstance(item.get("name"), str) and item["name"]:
-            skeletons.append({"name": item["name"], **{part: item[part] for part in ("atlas", "skel", "textures")
-                                                       if item.get(part) in PART_ROLES}})
+            skeletons.append(
+                {
+                    "name": item["name"],
+                    **{part: item[part] for part in ("atlas", "skel", "textures") if item.get(part) in PART_ROLES},
+                }
+            )
     created = raw.get("created_by") if isinstance(raw.get("created_by"), dict) else {}
-    result: dict[str, Any] = {"format_version": version,
-                              "created_by": {key: created[key] for key in ("tool", "version")
-                                             if isinstance(created.get(key), str)},
-                              "kind": kind, "core": core,
-                              "target": {"server": server, "platform": platform,
-                                         "release": _release(server, target.get("release"))},
-                              "files": result_files, "skeletons": skeletons}
+    result: dict[str, Any] = {
+        "format_version": version,
+        "created_by": {key: created[key] for key in ("tool", "version") if isinstance(created.get(key), str)},
+        "kind": kind,
+        "core": core,
+        "target": {"server": server, "platform": platform, "release": _release(server, target.get("release"))},
+        "files": result_files,
+        "skeletons": skeletons,
+    }
     return result
 
 
@@ -307,4 +361,3 @@ def covers(manifest: Mapping[str, Any] | None, folder: Path, paths: Iterable[Pat
         return all(path.resolve().relative_to(folder.resolve()).as_posix().casefold() in listed for path in paths)
     except (OSError, ValueError):
         return False
-

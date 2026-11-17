@@ -68,8 +68,9 @@ def parse_atlas(text: str | bytes, file: str = "—") -> Atlas:
         try:
             text = text.decode("utf-8-sig")
         except UnicodeError as error:
-            raise RemapError("atlas_remap_property", file=file, page="—", region="—",
-                             field="UTF-8", value="—") from error
+            raise RemapError(
+                "atlas_remap_property", file=file, page="—", region="—", field="UTF-8", value="—"
+            ) from error
     atlas = Atlas(file=file)
     page = None
     name = None
@@ -77,8 +78,14 @@ def parse_atlas(text: str | bytes, file: str = "—") -> Atlas:
     page_start = True
 
     def invalid(key: str, value: str) -> RemapError:
-        return RemapError("atlas_remap_property", file=file, page=page.name if page else "—",
-                          region=name or "—", field=key, value=value)
+        return RemapError(
+            "atlas_remap_property",
+            file=file,
+            page=page.name if page else "—",
+            region=name or "—",
+            field=key,
+            value=value,
+        )
 
     def numbers(key: str, default: tuple) -> tuple:
         if key not in props:
@@ -105,9 +112,8 @@ def parse_atlas(text: str | bytes, file: str = "—") -> Atlas:
                 raise invalid("rotate", rotation) from error
         if degrees not in (0, 90, 180, 270):
             raise invalid("rotate", rotation)
-        index, = numbers("index", (-1,))
-        region = Region(name, index, page.name, bounds[:2], bounds[2:],
-                        offsets[2:], offsets[:2], degrees)
+        (index,) = numbers("index", (-1,))
+        region = Region(name, index, page.name, bounds[:2], bounds[2:], offsets[2:], offsets[:2], degrees)
         if min(*region.size, *region.original) <= 0 or min(*region.xy, *region.offset) < 0:
             raise invalid("bounds/offsets", f"{bounds}/{offsets}")
         if any(o + s > original for o, s, original in zip(region.offset, region.size, region.original)):
@@ -172,11 +178,14 @@ def pair_atlases(old: dict, new: dict) -> dict[str, str]:
 def region_layout(region: Region, atlas: Atlas) -> tuple:
     """Drawing coordinates, independent of page density and atlas spelling."""
     width, height = atlas.pages[region.page].size
-    return (texture_key(region.page), region.degrees,
-            tuple(v / (width or 1) for v in (region.xy[0], region.size[0])),
-            tuple(v / (height or 1) for v in (region.xy[1], region.size[1])),
-            tuple(v / size for v, size in zip(region.offset, region.original)),
-            tuple(v / size for v, size in zip(region.size, region.original)))
+    return (
+        texture_key(region.page),
+        region.degrees,
+        tuple(v / (width or 1) for v in (region.xy[0], region.size[0])),
+        tuple(v / (height or 1) for v in (region.xy[1], region.size[1])),
+        tuple(v / size for v, size in zip(region.offset, region.original)),
+        tuple(v / size for v, size in zip(region.size, region.original)),
+    )
 
 
 def skeleton_regions(skeletons: dict[str, bytes]) -> set[str] | None:
@@ -196,8 +205,10 @@ def skeleton_regions(skeletons: dict[str, bytes]) -> set[str] | None:
                         path = attachment.get("path", name)
                         sequence = attachment.get("sequence")
                         if sequence:
-                            result.update(path + str(sequence.get("start", 1) + i).zfill(sequence.get("digits", 0))
-                                          for i in range(sequence["count"]))
+                            result.update(
+                                path + str(sequence.get("start", 1) + i).zfill(sequence.get("digits", 0))
+                                for i in range(sequence["count"])
+                            )
                         else:
                             result.add(path)
     except (ValueError, TypeError, KeyError, AttributeError):
@@ -207,12 +218,20 @@ def skeleton_regions(skeletons: dict[str, bytes]) -> set[str] | None:
 
 def layout_changes(old: dict[str, bytes], new: dict[str, bytes], regions: set[str] | None = None) -> list[str]:
     pairs = pair_atlases(old, new)
-    def layout(atlas: Atlas) -> dict:
-        return {(texture_key(r.page), r.name, r.index): region_layout(r, atlas) for r in atlas.regions.values()
-                if regions is None or r.name in regions}
 
-    changes = [name for inputs, names in ((old, old.keys() - set(pairs.values())), (new, new.keys() - pairs.keys()))
-               for name in names if regions is None or layout(parse_atlas(inputs[name], name))]
+    def layout(atlas: Atlas) -> dict:
+        return {
+            (texture_key(r.page), r.name, r.index): region_layout(r, atlas)
+            for r in atlas.regions.values()
+            if regions is None or r.name in regions
+        }
+
+    changes = [
+        name
+        for inputs, names in ((old, old.keys() - set(pairs.values())), (new, new.keys() - pairs.keys()))
+        for name in names
+        if regions is None or layout(parse_atlas(inputs[name], name))
+    ]
     for name, data in new.items():
         if name not in pairs:
             continue
@@ -238,17 +257,20 @@ def _box(region: Region, page: Page, image: Image.Image, file: str = "—") -> t
     x, y = region.xy
     box = round(x * sx), round(y * sy), round((x + width) * sx), round((y + height) * sy)
     if box[0] < 0 or box[1] < 0 or box[2] > image.width or box[3] > image.height:
-        raise RemapError("atlas_remap_bounds", file=file, region=region.label, page=page.name,
-                         width=image.width, height=image.height)
+        raise RemapError(
+            "atlas_remap_bounds", file=file, region=region.label, page=page.name, width=image.width, height=image.height
+        )
     if box[0] >= box[2] or box[1] >= box[3]:
-        raise RemapError("atlas_remap_property", file=file, page=page.name, region=region.label,
-                         field="bounds", value=str(box))
+        raise RemapError(
+            "atlas_remap_property", file=file, page=page.name, region=region.label, field="bounds", value=str(box)
+        )
     return box
 
 
 def _rotate(image: Image.Image, degrees: int) -> Image.Image:
-    operation = {90: Image.Transpose.ROTATE_90, 180: Image.Transpose.ROTATE_180,
-                 270: Image.Transpose.ROTATE_270}.get(degrees % 360)
+    operation = {90: Image.Transpose.ROTATE_90, 180: Image.Transpose.ROTATE_180, 270: Image.Transpose.ROTATE_270}.get(
+        degrees % 360
+    )
     return image.transpose(operation) if operation else image
 
 
@@ -264,8 +286,13 @@ def _resize(image: Image.Image, size: tuple[int, int], box: tuple, pma: bool) ->
     if all(value == round(value) for value in box) and (box[2] - box[0], box[3] - box[1]) == size:
         return image.crop(tuple(round(value) for value in box))
     if pma:
-        return Image.frombytes("RGBA", size, Image.frombytes("RGBa", image.size, image.tobytes())
-                               .resize(size, Image.Resampling.BICUBIC, box=box).tobytes())
+        return Image.frombytes(
+            "RGBA",
+            size,
+            Image.frombytes("RGBa", image.size, image.tobytes())
+            .resize(size, Image.Resampling.BICUBIC, box=box)
+            .tobytes(),
+        )
     # Float bands avoid the 8-bit premultiply/unpremultiply loss in Pillow's RGBA resize.
     red, green, blue, alpha = (band.convert("F") for band in image.split())
     resized_alpha = alpha.resize(size, Image.Resampling.BICUBIC, box=box)
@@ -273,8 +300,7 @@ def _resize(image: Image.Image, size: tuple[int, int], box: tuple, pma: bool) ->
     for channel in (red, green, blue):
         weighted = ImageMath.lambda_eval(lambda v: v["c"] * v["a"], c=channel, a=alpha)
         weighted = weighted.resize(size, Image.Resampling.BICUBIC, box=box)
-        straight = ImageMath.lambda_eval(lambda v: v["c"] / (v["a"] + (v["a"] == 0)) + 0.5,
-                                        c=weighted, a=resized_alpha)
+        straight = ImageMath.lambda_eval(lambda v: v["c"] / (v["a"] + (v["a"] == 0)) + 0.5, c=weighted, a=resized_alpha)
         channels.append(straight.convert("L"))
     return Image.merge("RGBA", (*channels, resized_alpha.convert("L")))
 
@@ -304,8 +330,12 @@ def _pair_regions(old: Atlas, new: Atlas) -> dict[tuple[str, str, int], Region]:
             if len(left) == len(right) == 1:
                 result[right[0][0]] = left[0]
             else:
-                raise RemapError("atlas_remap_region_ambiguous", file=old.file, region=left[0].label,
-                                 pages=", ".join(r.page for r in left))
+                raise RemapError(
+                    "atlas_remap_region_ambiguous",
+                    file=old.file,
+                    region=left[0].label,
+                    pages=", ".join(r.page for r in left),
+                )
     return result
 
 
@@ -316,8 +346,13 @@ def _page_image(atlas: Atlas, page: str, images: dict[str, Image.Image]) -> Imag
     return image if image.mode == "RGBA" else image.convert("RGBA")
 
 
-def remap_pages(old: Atlas, new: Atlas, mod_pages: dict[str, Image.Image],
-                official_pages: dict[str, Image.Image], required: set[str] | None = None) -> tuple[dict[str, Image.Image], dict]:
+def remap_pages(
+    old: Atlas,
+    new: Atlas,
+    mod_pages: dict[str, Image.Image],
+    official_pages: dict[str, Image.Image],
+    required: set[str] | None = None,
+) -> tuple[dict[str, Image.Image], dict]:
     """Move only painted pixels onto transparent pages; refuse unavailable required regions."""
     mod_pages, official_pages = dict(mod_pages), dict(official_pages)
     upscaled = []
@@ -338,8 +373,13 @@ def remap_pages(old: Atlas, new: Atlas, mod_pages: dict[str, Image.Image],
                 if atlas is new:
                     image = Image.new("RGBA", size)
                 elif atlas.pages[page].pma:
-                    image = Image.frombytes("RGBA", size, Image.frombytes("RGBa", image.size, image.tobytes())
-                                            .resize(size, Image.Resampling.LANCZOS).tobytes())
+                    image = Image.frombytes(
+                        "RGBA",
+                        size,
+                        Image.frombytes("RGBa", image.size, image.tobytes())
+                        .resize(size, Image.Resampling.LANCZOS)
+                        .tobytes(),
+                    )
                 else:
                     image = image.resize(size, Image.Resampling.LANCZOS)
                 images[key] = image
@@ -349,8 +389,9 @@ def remap_pages(old: Atlas, new: Atlas, mod_pages: dict[str, Image.Image],
                     _box(region, atlas.pages[page], image, atlas.file)
     pairs = _pair_regions(old, new)
     needed = required if required is not None else {r.name for r in new.regions.values()}
-    available = {target.name for key, target in new.regions.items() if key in pairs
-                 and texture_key(pairs[key].page) in mod_pages}
+    available = {
+        target.name for key, target in new.regions.items() if key in pairs and texture_key(pairs[key].page) in mod_pages
+    }
     missing = needed - available
     if missing:
         raise RemapError("atlas_remap_regions_missing", names=", ".join(sorted(missing)))
@@ -371,11 +412,16 @@ def remap_pages(old: Atlas, new: Atlas, mod_pages: dict[str, Image.Image],
         # Keep the source's physical resolution until the target crop is resampled.
         sx, sy = cut.width / source.size[0], cut.height / source.size[1]
         full = Image.new("RGBA", (round(source.original[0] * sx), round(source.original[1] * sy)))
-        full.paste(cut, (round(source.offset[0] * sx),
-                        round((source.original[1] - source.offset[1] - source.size[1]) * sy)))
+        full.paste(
+            cut, (round(source.offset[0] * sx), round((source.original[1] - source.offset[1] - source.size[1]) * sy))
+        )
         tx, ty = full.width / target.original[0], full.height / target.original[1]
-        crop = (target.offset[0] * tx, (target.original[1] - target.offset[1] - target.size[1]) * ty,
-                (target.offset[0] + target.size[0]) * tx, (target.original[1] - target.offset[1]) * ty)
+        crop = (
+            target.offset[0] * tx,
+            (target.original[1] - target.offset[1] - target.size[1]) * ty,
+            (target.offset[0] + target.size[0]) * tx,
+            (target.original[1] - target.offset[1]) * ty,
+        )
         size = box[2] - box[0], box[3] - box[1]
         if target.degrees % 180:
             size = size[::-1]
@@ -385,8 +431,12 @@ def remap_pages(old: Atlas, new: Atlas, mod_pages: dict[str, Image.Image],
         if region_layout(source, old) != region_layout(target, new):
             moved.append(target.label)
     matched = {(region.page, *region.key) for region in pairs.values()}
-    return output, {"moved": sorted(moved), "added": sorted(added), "upscaled": upscaled,
-                    "dropped": sorted(region.label for key, region in old.regions.items() if key not in matched)}
+    return output, {
+        "moved": sorted(moved),
+        "added": sorted(added),
+        "upscaled": upscaled,
+        "dropped": sorted(region.label for key, region in old.regions.items() if key not in matched),
+    }
 
 
 @dataclass
@@ -414,8 +464,7 @@ def read_inputs(paths: list[Path]) -> Inputs:
                 try:
                     result.textures[key] = texture_image(data).convert("RGBA")
                 except (ValueError, EOFError, OSError) as error:
-                    raise RemapError("atlas_remap_invalid", file=f"{path.name} - {name}",
-                                     reason=str(error)) from error
+                    raise RemapError("atlas_remap_invalid", file=f"{path.name} - {name}", reason=str(error)) from error
                 result.keys[key] = ContNameTypeKey(obj.container, name, "Texture2D")
             elif name.lower().endswith((".atlas", ".skel")):
                 raw = data.m_Script
@@ -452,8 +501,12 @@ def skeleton_warnings(old: dict[str, bytes], new: dict[str, bytes]) -> list[dict
     return warnings
 
 
-def rig_gains(mod_atlases: dict[str, bytes], mod_skeletons: dict[str, bytes],
-              official_atlases: dict[str, bytes], official_skeletons: dict[str, bytes]) -> dict:
+def rig_gains(
+    mod_atlases: dict[str, bytes],
+    mod_skeletons: dict[str, bytes],
+    official_atlases: dict[str, bytes],
+    official_skeletons: dict[str, bytes],
+) -> dict:
     """What the official rig has that a mod carrying its own atlas or skeleton lacks, per official asset name:
     ``animations`` the mod's counterpart skeleton does not declare, ``regions`` its counterpart atlas does not hold.
     Assets without a counterpart in the mod, and ones that cannot be read, are left out."""
@@ -461,8 +514,11 @@ def rig_gains(mod_atlases: dict[str, bytes], mod_skeletons: dict[str, bytes],
     for name, source in pair_atlases(mod_skeletons, official_skeletons).items():
         try:
             have = set(spine_names.read(mod_skeletons[source]).animations)
-            missing = [animation for animation in spine_names.read(official_skeletons[name]).animations
-                       if animation not in have]
+            missing = [
+                animation
+                for animation in spine_names.read(official_skeletons[name]).animations
+                if animation not in have
+            ]
         except ValueError:
             continue
         if missing:
@@ -470,8 +526,9 @@ def rig_gains(mod_atlases: dict[str, bytes], mod_skeletons: dict[str, bytes],
     for name, source in pair_atlases(mod_atlases, official_atlases).items():
         try:
             have = {region.label for region in parse_atlas(mod_atlases[source], source).regions.values()}
-            missing = sorted({region.label for region in parse_atlas(official_atlases[name], name).regions.values()}
-                             - have)
+            missing = sorted(
+                {region.label for region in parse_atlas(official_atlases[name], name).regions.values()} - have
+            )
         except (ValueError, UnicodeError):
             continue
         if missing:
@@ -479,9 +536,14 @@ def rig_gains(mod_atlases: dict[str, bytes], mod_skeletons: dict[str, bytes],
     return result
 
 
-def rerigged(gains: dict, mod_atlases: dict[str, bytes], mod_skeletons: dict[str, bytes],
-             official_atlases: dict[str, bytes], official_skeletons: dict[str, bytes],
-             textures: Iterable[str]) -> dict[str, str | None]:
+def rerigged(
+    gains: dict,
+    mod_atlases: dict[str, bytes],
+    mod_skeletons: dict[str, bytes],
+    official_atlases: dict[str, bytes],
+    official_skeletons: dict[str, bytes],
+    textures: Iterable[str],
+) -> dict[str, str | None]:
     """The official atlases a mod's own atlas should give way to (``rig_gains``), each with its official skeleton:
     the mod's skeleton lacks animations the official one has, or the mod brings no skeleton and its atlas lacks
     regions the official skeleton draws. Only atlases the mod has a page texture for (``textures``: texture keys)."""
@@ -508,8 +570,11 @@ def same_rig(mod: bytes, official: bytes) -> bool:
         left, right = spine_names.read(mod), spine_names.read(official)
     except ValueError:
         return False
-    return (set(left.bones) <= set(right.bones) and set(left.slots) <= set(right.slots)
-            and set(left.animations) <= set(right.animations))
+    return (
+        set(left.bones) <= set(right.bones)
+        and set(left.slots) <= set(right.slots)
+        and set(left.animations) <= set(right.animations)
+    )
 
 
 @dataclass
@@ -518,6 +583,7 @@ class OldRig:
     official atlas name the set's atlas text, the name of the official skeleton it stands in for and the set's
     skeleton. ``animations``: per official skeleton the animations it has that the set's lacks, which the game calls
     by name. ``complete``: every recorded rig could be set up."""
+
     atlases: dict[str, tuple[bytes, str, bytes]] = field(default_factory=dict)
     animations: dict[str, list[str]] = field(default_factory=dict)
     complete: bool = True
@@ -531,9 +597,14 @@ def _minor(version: str | None) -> str:
     return ".".join((version or "").split(".")[:2])
 
 
-def old_rig_plan(sources: dict[str, dict], official_atlases: dict[str, bytes], official_skeletons: dict[str, bytes],
-                 mod_skeletons: dict[str, bytes], mod_textures: Iterable[str],
-                 official_textures: Iterable[str]) -> OldRig:
+def old_rig_plan(
+    sources: dict[str, dict],
+    official_atlases: dict[str, bytes],
+    official_skeletons: dict[str, bytes],
+    mod_skeletons: dict[str, bytes],
+    mod_textures: Iterable[str],
+    official_textures: Iterable[str],
+) -> OldRig:
     """The set that applies a portrait mod's textures with the rig they were drawn for: per official atlas of
     ``sources`` (atlas name to a ``fingerprint.painted`` entry, the atlas ``text`` and the base64 ``skeleton``), that
     atlas with the mod's own skeleton of the official one's stem, else the recorded one, in place of the official
@@ -581,8 +652,7 @@ def prepare_patch(mod: Inputs, official: Inputs) -> tuple[Patch, dict]:
     pairs = pair_atlases(mod.atlases, official.atlases)
     if not pairs:
         raise RemapError("atlas_remap_atlas_missing", file=", ".join(official.atlases) or "*.atlas")
-    report = {"moved": [], "added": [], "dropped": [], "upscaled": [],
-              "warnings": []}
+    report = {"moved": [], "added": [], "dropped": [], "upscaled": [], "warnings": []}
     current_pages = {name: Image.new("RGBA", image.size) for name, image in official.textures.items()}
     patch = {official.keys[name]: image for name, image in current_pages.items() if name in official.keys}
     skeleton_pairs = pair_atlases(official.skeletons, official.atlases)
@@ -591,8 +661,12 @@ def prepare_patch(mod: Inputs, official: Inputs) -> tuple[Patch, dict]:
         skeleton = official.skeletons.get(skeleton_pairs.get(name, ""))
         required = skeleton_regions({name: skeleton}) if skeleton is not None else None
         if name not in pairs:
-            raise RemapError("atlas_remap_regions_missing", names=", ".join(sorted(
-                required if required is not None else {r.name for r in target.regions.values()})))
+            raise RemapError(
+                "atlas_remap_regions_missing",
+                names=", ".join(
+                    sorted(required if required is not None else {r.name for r in target.regions.values()})
+                ),
+            )
         source = parse_atlas(mod.atlases[pairs[name]], pairs[name])
         if skeleton is not None and required is None:
             # Without a binary attachment reader, require every source and target region.
@@ -617,8 +691,8 @@ def prepare_patch(mod: Inputs, official: Inputs) -> tuple[Patch, dict]:
     for name in mod.atlases.keys() - set(pairs.values()):
         report["dropped"].extend(f"{name} - {r.label}" for r in parse_atlas(mod.atlases[name], name).regions.values())
     report["partial"] = bool(report["warnings"])
-    report["unchanged"] = (
-        set(current_pages) == set(mod.textures) and all(
-            image.size == mod.textures[key].size and image.tobytes() == mod.textures[key].tobytes()
-            for key, image in current_pages.items()))
+    report["unchanged"] = set(current_pages) == set(mod.textures) and all(
+        image.size == mod.textures[key].size and image.tobytes() == mod.textures[key].tobytes()
+        for key, image in current_pages.items()
+    )
     return patch, report

@@ -24,6 +24,7 @@ class RpcRegistry:
                 raise ValueError(f"duplicate RPC method {name}")
             self._methods[name] = fn
             return fn
+
         return register
 
     def names(self) -> list[str]:
@@ -31,6 +32,7 @@ class RpcRegistry:
 
     def call(self, name: str, params: dict[str, Any] | None) -> dict[str, Any]:
         """Run a method; returns ``{"result": ...}`` or a coded ``error``, never raises."""
+
         def failed(error: ServiceError) -> dict[str, Any]:
             log_service_error(logger, error)
             return {"error": error.to_json()}

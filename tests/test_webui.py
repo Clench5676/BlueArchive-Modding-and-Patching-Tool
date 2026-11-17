@@ -84,7 +84,9 @@ class FakeGame:
 
 class FakeCatalog:
     def __init__(self):
-        self.v = FakeVariant("hoshino", "hoshino", "hoshino", {"zh-CN": {"full": "星野", "short": "原皮"}}, spr="hoshino_spr")
+        self.v = FakeVariant(
+            "hoshino", "hoshino", "hoshino", {"zh-CN": {"full": "星野", "short": "原皮"}}, spr="hoshino_spr"
+        )
         self.f = FakeFamily("hoshino", {"zh-CN": "星野"}, "Abydos", [self.v])
 
     def families(self):
@@ -154,8 +156,13 @@ class FakeLibrary:
 
     def roster_snapshot(self, keys):
         pin = self.current_pin()
-        return {"install": pin.key if pin else None, "mods": self.mods(), "favorites": self.favorites(),
-                "modified": self.modified(), "configured": {key: self.configured(key) for key in keys}}
+        return {
+            "install": pin.key if pin else None,
+            "mods": self.mods(),
+            "favorites": self.favorites(),
+            "modified": self.modified(),
+            "configured": {key: self.configured(key) for key in keys},
+        }
 
     def apply(self, variant_key, source, log, progress, kind="spr", pin=None):
         log("applying")
@@ -186,10 +193,16 @@ class FakeLibrary:
 
     def status(self):
         current = self.current_pin()
-        return {"installs": [{"id": p.id, "key": p.key, "server": p.server, "folder": str(p.root), "named": True,
-                              "distinct": None} for p in self.pins],
-                "current": current.key if current else None, "reason": None,
-                "configured": 0, **self.intent()}
+        return {
+            "installs": [
+                {"id": p.id, "key": p.key, "server": p.server, "folder": str(p.root), "named": True, "distinct": None}
+                for p in self.pins
+            ],
+            "current": current.key if current else None,
+            "reason": None,
+            "configured": 0,
+            **self.intent(),
+        }
 
     def toggle(self, enabled, expect, pins=None, log=None, progress=None, cancel=None):
         self.toggled.append((enabled, expect, pins))
@@ -208,23 +221,35 @@ class FakeLibrary:
 
 @pytest.fixture
 def services(tmp_path: Path):
-    s = Services(Settings(tmp_path / "config.toml"), tmp_path, state=UiState(tmp_path / "webui.json"),
-                 cache=object(), game=FakeGame(), catalog=FakeCatalog(), library=FakeLibrary())
+    s = Services(
+        Settings(tmp_path / "config.toml"),
+        tmp_path,
+        state=UiState(tmp_path / "webui.json"),
+        cache=object(),
+        game=FakeGame(),
+        catalog=FakeCatalog(),
+        library=FakeLibrary(),
+    )
     yield s
     s.close()
 
 
 @pytest.fixture
 def app(services):
-    return WebApp(build_api(services), services.events, assets=services.asset, token="tok",
-                  consent=lambda: services.state.consent)
+    return WebApp(
+        build_api(services), services.events, assets=services.asset, token="tok", consent=lambda: services.state.consent
+    )
 
 
 def call(app, path, method="GET", body=None, token="tok", host=None, cookie=None):
     data = json.dumps(body).encode() if body is not None else b""
-    environ = {"REQUEST_METHOD": method, "PATH_INFO": path.split("?")[0],
-               "QUERY_STRING": path.split("?", 1)[1] if "?" in path else "",
-               "CONTENT_LENGTH": str(len(data)), "wsgi.input": io.BytesIO(data)}
+    environ = {
+        "REQUEST_METHOD": method,
+        "PATH_INFO": path.split("?")[0],
+        "QUERY_STRING": path.split("?", 1)[1] if "?" in path else "",
+        "CONTENT_LENGTH": str(len(data)),
+        "wsgi.input": io.BytesIO(data),
+    }
     if token:
         environ["HTTP_X_BAMT_TOKEN"] = token
     if host:
@@ -288,7 +313,10 @@ def test_previous_spine_answers_reach_the_first_screen_unchanged(app, services, 
 def test_spine_consent_rpc_rejects_non_boolean_choices(app, services, granted):
     services.set_spine_consent(False)
     assert rpc(app, "app.spineConsent", granted=granted)["error"] == {
-        "code": "bad_params", "ref": "E1001", "params": {"key": "granted"}}
+        "code": "bad_params",
+        "ref": "E1001",
+        "params": {"key": "granted"},
+    }
     assert services.state.spine_consent is False
 
 
@@ -349,10 +377,13 @@ def test_mod_search_keeps_alias_core_and_file_names_in_roster_and_family(app, se
     for alias in ("Painted <summer>", "Evening", ""):
         mod.alias = alias
         mod.label = alias or mod.core
-        for result in (rpc(app, "roster.list")["result"]["families"][0],
-                       rpc(app, "family.get", key="hoshino")["result"]):
-            assert result["variants"][0]["modNames"] == list(dict.fromkeys(
-                name for name in (alias, mod.core, mod.file.name) if name))
+        for result in (
+            rpc(app, "roster.list")["result"]["families"][0],
+            rpc(app, "family.get", key="hoshino")["result"],
+        ):
+            assert result["variants"][0]["modNames"] == list(
+                dict.fromkeys(name for name in (alias, mod.core, mod.file.name) if name)
+            )
 
 
 def test_library_counts_and_configured_sources_reach_roster_and_family(app, services, monkeypatch):
@@ -379,8 +410,9 @@ def test_library_counts_and_configured_sources_reach_roster_and_family(app, serv
 
 
 def test_roster_uses_one_snapshot_and_validates_saved_previews_without_library_reads(app, services, monkeypatch):
-    variants = [FakeVariant(f"v{i}", "hoshino", spr=f"v{i}_spr", lobby=f"v{i}_home", model=f"ch{i:04}")
-                for i in range(100)]
+    variants = [
+        FakeVariant(f"v{i}", "hoshino", spr=f"v{i}_spr", lobby=f"v{i}_home", model=f"ch{i:04}") for i in range(100)
+    ]
     services.catalog.f.variants = variants
     mods = [FakeMod(f"m{i}", v.key) for i, v in enumerate(variants)]
     mods += [FakeMod("lobby", "v0", kind="lobby"), FakeMod("model", "v0", kind="model")]
@@ -389,8 +421,13 @@ def test_roster_uses_one_snapshot_and_validates_saved_previews_without_library_r
 
     def snapshot(keys):
         calls.append(keys)
-        return {"install": "current", "mods": mods, "favorites": {"v1"}, "configured": choices,
-                "modified": {"v2": "mod:m2"}}
+        return {
+            "install": "current",
+            "mods": mods,
+            "favorites": {"v1"},
+            "configured": choices,
+            "modified": {"v2": "mod:m2"},
+        }
 
     def forbidden(*args, **kwargs):
         pytest.fail("The roster must use its snapshot instead of per-variant library or UI-state reads")
@@ -430,10 +467,20 @@ def test_roster_uses_one_snapshot_and_validates_saved_previews_without_library_r
 
 def test_preview_snapshot_filters_malformed_choices_and_does_not_share_state(tmp_path):
     path = tmp_path / "webui.json"
-    path.write_text(json.dumps({"asset_previews": {"current": {
-        "valid": {"spr": "official", "lobby": "mod:one", "model": "mod:two", "future": "ignored"},
-        "bad-sources": {"spr": None, "lobby": False, "model": 1}, "bad-variant": [],
-    }, "bad-folder": []}}))
+    path.write_text(
+        json.dumps(
+            {
+                "asset_previews": {
+                    "current": {
+                        "valid": {"spr": "official", "lobby": "mod:one", "model": "mod:two", "future": "ignored"},
+                        "bad-sources": {"spr": None, "lobby": False, "model": 1},
+                        "bad-variant": [],
+                    },
+                    "bad-folder": [],
+                }
+            }
+        )
+    )
     state = UiState(path)
     snapshot = state.preview_snapshot("current")
     assert snapshot == {"valid": {"spr": "official", "lobby": "mod:one", "model": "mod:two"}, "bad-sources": {}}
@@ -454,8 +501,11 @@ def mod_marks(app):
 @pytest.mark.parametrize("first", ["roster.list", "family.get"])
 @pytest.mark.parametrize("state", ["missing", "older"])
 def test_mod_marks_first_run_baselines_the_whole_library(app, services, monkeypatch, first, state):
-    mods = [FakeMod("portrait", "hoshino"), FakeMod("lobby", "hoshino", kind="lobby"),
-            *[FakeMod(f"other-{i}", f"student-{i}", user_added=i % 2 == 0) for i in range(80)]]
+    mods = [
+        FakeMod("portrait", "hoshino"),
+        FakeMod("lobby", "hoshino", kind="lobby"),
+        *[FakeMod(f"other-{i}", f"student-{i}", user_added=i % 2 == 0) for i in range(80)],
+    ]
     monkeypatch.setattr(services._library, "mods", lambda: mods)
     if state == "older":
         services.state.set("voice_volume", 20)  # an older UI state, without seen_mods
@@ -472,8 +522,11 @@ def test_mod_marks_first_run_baselines_the_whole_library(app, services, monkeypa
 
 def test_mod_marks_only_explicit_adds_after_the_baseline(app, services, monkeypatch):
     services.state.mark_mods_seen(["baseline"])
-    mods = [FakeMod("baseline", "hoshino"), FakeMod("upload", "hoshino", fresh=False),
-            *[FakeMod(origin, "hoshino", user_added=False) for origin in ("legacy", "adopted", "kept", "remapped")]]
+    mods = [
+        FakeMod("baseline", "hoshino"),
+        FakeMod("upload", "hoshino", fresh=False),
+        *[FakeMod(origin, "hoshino", user_added=False) for origin in ("legacy", "adopted", "kept", "remapped")],
+    ]
     monkeypatch.setattr(services._library, "mods", lambda: mods)
     expected = {m.id: m.id == "upload" for m in mods}
     assert mod_marks(app) == (True, expected)
@@ -506,8 +559,15 @@ def test_mod_marks_update_preserves_existing_seen_state_and_pending_dots(app, se
     expected = (True, {"m1": "m1" not in seen, "pending": True})
     assert mod_marks(app) == expected
     before = services.state.path.read_bytes()
-    updated = Services(services.settings, services.data_dir, state=UiState(services.state.path), cache=object(),
-                       game=FakeGame(), catalog=services.catalog, library=services._library)
+    updated = Services(
+        services.settings,
+        services.data_dir,
+        state=UiState(services.state.path),
+        cache=object(),
+        game=FakeGame(),
+        catalog=services.catalog,
+        library=services._library,
+    )
     updated._game.resource_version = "rv2"
     try:
         updated_app = WebApp(build_api(updated), updated.events, token="tok")
@@ -567,8 +627,9 @@ def test_mod_marks_follow_ui_state_per_mod_and_survive_restart(app, services, mo
     assert mod_marks(app)[0] is False
 
 
-@pytest.mark.parametrize("params", [{}, {"id": ""}, {"id": 1}, {"ids": "mod"}, {"ids": [1]},
-                                        {"ids": [""]}, {"id": "mod", "ids": ["mod"]}])
+@pytest.mark.parametrize(
+    "params", [{}, {"id": ""}, {"id": 1}, {"ids": "mod"}, {"ids": [1]}, {"ids": [""]}, {"id": "mod", "ids": ["mod"]}]
+)
 def test_mods_seen_rejects_invalid_ids(app, services, params):
     assert rpc(app, "mods.seen", **params)["error"]["code"] == "bad_params"
     assert services.state.seen_mods() is None
@@ -638,7 +699,9 @@ def test_legacy_family_aliases_migrate_to_original_only_and_skins_save_independe
 
 @pytest.mark.parametrize("explicit", [False, True])
 @pytest.mark.parametrize("family_key", ["special", "arona"])
-def test_special_only_family_alias_migrates_once_to_one_scene(app, services, tmp_path, monkeypatch, explicit, family_key):
+def test_special_only_family_alias_migrates_once_to_one_scene(
+    app, services, tmp_path, monkeypatch, explicit, family_key
+):
     path = tmp_path / "webui.json"
     scene = replace(services.catalog.v, key="special:alpha", family=family_key, spr=None, lobby="alpha", order=0)
     sibling = replace(scene, key="special:beta", lobby="beta", order=1)
@@ -686,14 +749,18 @@ def test_family_lists_the_model_prefab_bundles(app, services, monkeypatch, tmp_p
     new = _bundle(tmp_path, "character-hoshino_original-_mxload-2025-07-25_assets_all", trailing=b"\x01\x02\x03\x04")
     broken = tmp_path / "character-hoshino_original-_mxload-2025-08-01_assets_all_12345.bundle"
     broken.write_bytes(old.read_bytes())
-    monkeypatch.setattr(FakeGame, "_model_index", lambda self: {"hoshino_original": [str(old), str(new), str(broken)]},
-                        raising=False)
+    monkeypatch.setattr(
+        FakeGame, "_model_index", lambda self: {"hoshino_original": [str(old), str(new), str(broken)]}, raising=False
+    )
     services.catalog.v.model = "hoshino_original"
     files = rpc(app, "family.get", key="hoshino")["result"]["variants"][0]["modelFiles"]
     # newest first, each with the date and CRC state the info panel shows, judged from the header only:
     # no switch writes model bundles, so a name whose CRC does not match without trailing bytes shows ok
     assert [(Path(f["file"]), f["date"], f["crc"], f["kind"]) for f in files] == [
-        (broken, "2025-08-01", "ok", "model"), (new, "2025-07-25", "fixed", "model"), (old, "2024-11-18", "ok", "model")]
+        (broken, "2025-08-01", "ok", "model"),
+        (new, "2025-07-25", "fixed", "model"),
+        (old, "2024-11-18", "ok", "model"),
+    ]
     assert files[2]["size"] == old.stat().st_size
     services.catalog.v.model = None
     assert rpc(app, "family.get", key="hoshino")["result"]["variants"][0]["modelFiles"] == []
@@ -702,8 +769,14 @@ def test_family_lists_the_model_prefab_bundles(app, services, monkeypatch, tmp_p
 def test_catalog_follows_the_selected_server(tmp_path: Path):
     settings = Settings(tmp_path / "config.toml")
     settings.set("file_source", "windows_japan")
-    s = Services(settings, tmp_path, state=UiState(tmp_path / "webui.json"), cache=object(), game=FakeGame(),
-                 library=FakeLibrary())
+    s = Services(
+        settings,
+        tmp_path,
+        state=UiState(tmp_path / "webui.json"),
+        cache=object(),
+        game=FakeGame(),
+        library=FakeLibrary(),
+    )
     try:
         assert s.catalog.server == "japan"
         settings.set("file_source", "windows_global")
@@ -733,8 +806,13 @@ def test_asset_routes(app):
 
 def test_preview_failures_are_logged_in_release_sessions(app, services, caplog):
     services.debug = False
-    result = rpc(app, "preview.failed", url="/asset/spine/lobby/shun_home/revision/home.skel",
-                 step="draw", error="Unsupported lobby Spine version: 3.8.75\n" + "x" * 9000)
+    result = rpc(
+        app,
+        "preview.failed",
+        url="/asset/spine/lobby/shun_home/revision/home.skel",
+        step="draw",
+        error="Unsupported lobby Spine version: 3.8.75\n" + "x" * 9000,
+    )
     assert result == {"result": None}
     assert "shun_home/revision/home.skel" in caplog.text
     assert '"step": "draw"' in caplog.text
@@ -774,9 +852,17 @@ def test_mod_skeleton_is_the_one_named_by_the_mods_core(app, services, monkeypat
     # a memorial lobby mod holds the character's skeleton and its background's
     bundle = Path("assets-_mx-spinelobbies-hoshino_home-_mxdependency-2026-01-01_assets_all_1.bundle")
     monkeypatch.setattr(services.library, "preview_bundles", lambda mod_id: [bundle], raising=False)
-    monkeypatch.setattr(services.game, "spine_files_from", lambda bundles: {
-        "Hoshino_home.skel": b"main", "Hoshino_home.atlas": b"main atlas",
-        "Hoshino_home_bg.skel": b"bg", "Hoshino_home_bg.atlas": b"bg atlas"}, raising=False)
+    monkeypatch.setattr(
+        services.game,
+        "spine_files_from",
+        lambda bundles: {
+            "Hoshino_home.skel": b"main",
+            "Hoshino_home.atlas": b"main atlas",
+            "Hoshino_home_bg.skel": b"bg",
+            "Hoshino_home_bg.atlas": b"bg atlas",
+        },
+        raising=False,
+    )
     assert call(app, "/asset/spine/mod/m1/skeleton.skel")[2] == b"main"
     assert call(app, "/asset/spine/mod/m1/skeleton.atlas")[2] == b"main atlas"
 
@@ -791,19 +877,28 @@ def test_official_skeleton_route_reads_the_librarys_official_parts(app, services
 
     def spine_files_from(bundles):
         assert bundles == [bundle]
-        return {"hoshino_spr.skel": b"official skel", "hoshino_spr.atlas": b"official atlas",
-                "hoshino_spr.png": b"official png"}
+        return {
+            "hoshino_spr.skel": b"official skel",
+            "hoshino_spr.atlas": b"official atlas",
+            "hoshino_spr.png": b"official png",
+        }
 
     monkeypatch.setattr(services.library, "official_bundles", official_bundles, raising=False)
     monkeypatch.setattr(services.game, "spine_files_from", spine_files_from, raising=False)
-    for name, expected in [("skeleton.skel", b"official skel"), ("skeleton.atlas", b"official atlas"),
-                           ("hoshino_spr.png", b"official png")]:
+    for name, expected in [
+        ("skeleton.skel", b"official skel"),
+        ("skeleton.atlas", b"official atlas"),
+        ("hoshino_spr.png", b"official png"),
+    ]:
         status, headers, body = call(app, f"/asset/spine/official-spr/hoshino_spr/{name}")
         assert status == "200 OK" and body == expected
         assert headers["Cache-Control"] == "no-store"
     assert requested and set(requested) == {"hoshino_spr"}
     assert json.loads(call(app, "/asset/spine/official-spr/hoshino_spr/files.json")[2]) == [
-        "hoshino_spr.atlas", "hoshino_spr.png", "hoshino_spr.skel"]
+        "hoshino_spr.atlas",
+        "hoshino_spr.png",
+        "hoshino_spr.skel",
+    ]
     assert call(app, "/asset/spine/spr/hoshino_spr/skeleton.skel")[2] == b"skel"
     assert call(app, "/asset/spine/official/hoshino_spr/skeleton.skel")[0] == "404 Not Found"
 
@@ -812,9 +907,16 @@ def test_official_skeleton_route_reads_the_librarys_official_parts(app, services
 def test_spine_revision_routes_reject_switched_files(app, services, monkeypatch, tmp_path, kind, caplog):
     bundle = _bundle(tmp_path, "assets-_mx-spinecharacters-hoshino_spr-_mxdependency-2026-01-01_assets_all")
     monkeypatch.setattr(services.game, "spine_cores", lambda kind: {"hoshino_spr": [bundle]}, raising=False)
-    monkeypatch.setattr(services.game, "spine_files_from", lambda paths: {
-        "hoshino_spr.skel": paths[0].read_bytes(), "hoshino_spr.atlas": paths[0].read_bytes(),
-        "Pages/portrait.png": paths[0].read_bytes()}, raising=False)
+    monkeypatch.setattr(
+        services.game,
+        "spine_files_from",
+        lambda paths: {
+            "hoshino_spr.skel": paths[0].read_bytes(),
+            "hoshino_spr.atlas": paths[0].read_bytes(),
+            "Pages/portrait.png": paths[0].read_bytes(),
+        },
+        raising=False,
+    )
     monkeypatch.setattr(services.game, "lobby_info", lambda core: {"content": bundle.read_bytes().hex()}, raising=False)
     monkeypatch.setattr(services.library, "preview_bundles", lambda mod: [bundle], raising=False)
     monkeypatch.setattr(services.library, "official_bundles", lambda core, pin=None: [bundle], raising=False)
@@ -842,15 +944,20 @@ def test_a_texture_only_mod_previews_on_the_rig_its_textures_were_drawn_for(app,
     old = "page.png\nsize: 16,16\nfilter: Linear,Linear\npart\n  bounds: 1,1,4,4\n"
     new = "Page.png\nsize: 16,16\nfilter: Linear,Linear\npart\n  bounds: 8,8,4,4\n"
     bundle = _bundle(tmp_path, "assets-_mx-spinecharacters-hoshino_spr-_mxdependency-2026-01-01_assets_all")
-    monkeypatch.setattr(services.game, "spine_files_from", lambda paths: {
-        "Hoshino_spr.atlas": new.encode(), "Hoshino_spr.skel": b"new skeleton", "Page.png": b"page"}, raising=False)
+    monkeypatch.setattr(
+        services.game,
+        "spine_files_from",
+        lambda paths: {"Hoshino_spr.atlas": new.encode(), "Hoshino_spr.skel": b"new skeleton", "Page.png": b"page"},
+        raising=False,
+    )
     monkeypatch.setattr(services.library, "preview_bundles", lambda mod: [bundle], raising=False)
     prefix = "/asset/spine/mod/m1"
     plain = json.loads(call(app, prefix + "/manifest.json")[2])["revision"]
     assert call(app, f"{prefix}/{plain}/skeleton.skel")[2] == b"new skeleton"
     entry = {**fingerprint.atlas(old.encode()), "skeleton": base64.b64encode(b"old skeleton").decode()}
-    monkeypatch.setattr(services.library, "recorded_rig", lambda mod, atlases=None: {"hoshino_spr.atlas": entry},
-                        raising=False)
+    monkeypatch.setattr(
+        services.library, "recorded_rig", lambda mod, atlases=None: {"hoshino_spr.atlas": entry}, raising=False
+    )
     drawn = json.loads(call(app, prefix + "/manifest.json")[2])["revision"]
     assert drawn != plain  # a preview drawn on the official rig before is drawn again
     assert call(app, f"{prefix}/{drawn}/skeleton.skel")[2] == b"old skeleton"
@@ -863,8 +970,12 @@ def test_a_texture_only_mod_previews_on_the_rig_its_textures_were_drawn_for(app,
     assert len({drawn, kept, json.loads(call(app, prefix + "/manifest.json")[2])["revision"]}) == 3
     monkeypatch.setattr(services.library, "rig_stamp", lambda mod: "", raising=False)
     # the official atlas as the textures follow it: drawn as the files have it
-    monkeypatch.setattr(services.game, "spine_files_from", lambda paths: {
-        "Hoshino_spr.atlas": old.encode(), "Hoshino_spr.skel": b"new skeleton", "Page.png": b"page"}, raising=False)
+    monkeypatch.setattr(
+        services.game,
+        "spine_files_from",
+        lambda paths: {"Hoshino_spr.atlas": old.encode(), "Hoshino_spr.skel": b"new skeleton", "Page.png": b"page"},
+        raising=False,
+    )
     assert call(app, f"{prefix}/{drawn}/skeleton.skel")[2] == b"new skeleton"
 
 
@@ -875,8 +986,12 @@ def test_live_spine_files_are_read_in_the_librarys_order(app, services, monkeypa
     mod = _bundle(tmp_path, "assets-_mx-spinelobbies-a-_mxdependency-2026-01-01_assets_all", b"x")
     monkeypatch.setattr(services.game, "spine_cores", lambda k: {name: [mod, official]}, raising=False)
     seen = []
-    monkeypatch.setattr(services.game, "spine_files_from", lambda paths: seen.append(list(paths)) or {
-        f"{name}.skel": b"skeleton"}, raising=False)
+    monkeypatch.setattr(
+        services.game,
+        "spine_files_from",
+        lambda paths: seen.append(list(paths)) or {f"{name}.skel": b"skeleton"},
+        raising=False,
+    )
     # a library that knows nothing of the core: the game's own order
     first = json.loads(call(app, f"/asset/spine/{kind}/{name}/manifest.json")[2])["revision"]
     assert call(app, f"/asset/spine/{kind}/{name}/{first}/skeleton.skel")[0] == "200 OK"
@@ -903,13 +1018,20 @@ def test_live_portrait_survives_cache_clear(app, services, monkeypatch, tmp_path
     services._game = GameAssets([game_dir], cache)
     services.library.live["ibuki_spr"] = [official, mod]
     reads = []
+
     def extract(paths):
         reads.append(list(paths))
-        return {"Ibuki_spr.skel": b"skeleton", "Ibuki_spr.atlas": b"page.png\nsize: 1,1\n",
-                "page.png": paths[-1].read_bytes()}
+        return {
+            "Ibuki_spr.skel": b"skeleton",
+            "Ibuki_spr.atlas": b"page.png\nsize: 1,1\n",
+            "page.png": paths[-1].read_bytes(),
+        }
+
     monkeypatch.setattr("bmpt.gameassets.service.extract_spine", extract)
+
     def no_preview(*args, **kwargs):
         pytest.fail("A current portrait must not need a mod preview or kept originals")
+
     monkeypatch.setattr(services.library, "preview_bundles", no_preview, raising=False)
     monkeypatch.setattr(services.library, "official_bundles", no_preview, raising=False)
     prefix = "/asset/spine/spr/ibuki_spr"
@@ -919,21 +1041,28 @@ def test_live_portrait_survives_cache_clear(app, services, monkeypatch, tmp_path
             cleared = rpc(app, "settings.clearCache")["result"]
             assert cleared["previewCache"] is True
         assert json.loads(call(app, prefix + "/manifest.json")[2])["revision"] == revision
-        for name, expected in (("skeleton.skel", b"skeleton"), ("skeleton.atlas", b"page.png\nsize: 1,1\n"),
-                               ("page.png", mod.read_bytes())):
+        for name, expected in (
+            ("skeleton.skel", b"skeleton"),
+            ("skeleton.atlas", b"page.png\nsize: 1,1\n"),
+            ("page.png", mod.read_bytes()),
+        ):
             status, headers, body = call(app, f"{prefix}/{revision}/{name}")
             assert (status, body) == ("200 OK", expected)
             assert headers["Cache-Control"] == "no-store"
     assert reads == [[official, mod], [official, mod]], "cold extraction keeps the manifest's merge order"
 
 
-@pytest.mark.parametrize("failure, status", [
-    (ServiceError("dev_path_outside", path="refused bundle"), "404 Not Found"),
-    (OSError("unreadable live bundle"), "500 Internal Server Error"),
-])
+@pytest.mark.parametrize(
+    "failure, status",
+    [
+        (ServiceError("dev_path_outside", path="refused bundle"), "404 Not Found"),
+        (OSError("unreadable live bundle"), "500 Internal Server Error"),
+    ],
+)
 def test_asset_failures_log_the_request_and_cause(app, services, monkeypatch, caplog, failure, status):
     def refused(core, pin=None):
         raise failure
+
     monkeypatch.setattr(services.library, "live_bundles", refused)
     assert call(app, "/asset/spine/spr/ibuki_spr/manifest.json")[0] == status
     assert str(failure) in caplog.text and "ibuki_spr/manifest.json" in caplog.text
@@ -976,14 +1105,20 @@ def test_current_mod_and_ui_routes_do_not_wait_for_library_preview(app, services
         raise ServiceError("original_unavailable", file="missing original")
 
     monkeypatch.setattr(services.library, "preview_bundles", preview, raising=False)
-    monkeypatch.setattr(services.library, "state", lambda key: {
-        "files": [{"kind": kind, "applied": "mod:m1", "official": False, "restorable": False}]})
+    monkeypatch.setattr(
+        services.library,
+        "state",
+        lambda key: {"files": [{"kind": kind, "applied": "mod:m1", "official": False, "restorable": False}]},
+    )
     with ThreadPoolExecutor(max_workers=2) as pool:
         pending = pool.submit(call, app, "/asset/spine/mod/m1/skeleton.skel")
         try:
             assert entered.wait(1)
-            for path in (f"/asset/spine/{kind}/{core}/skeleton.skel", "/asset/ui/atlases.json",
-                         "/asset/ui/sprite/Common/Common_Icon_Back.png"):
+            for path in (
+                f"/asset/spine/{kind}/{core}/skeleton.skel",
+                "/asset/ui/atlases.json",
+                "/asset/ui/sprite/Common/Common_Icon_Back.png",
+            ):
                 assert pool.submit(call, app, path).result(timeout=1)[0] == "200 OK"
             data = pool.submit(rpc, app, "family.get", key="hoshino").result(timeout=1)
             assert data["result"]["variants"][0]["state"]["files"][0]["applied"] == "mod:m1"
@@ -1010,8 +1145,14 @@ def test_a_new_library_prunes_its_kept_originals_once(tmp_path, monkeypatch):
             return 0
 
     monkeypatch.setattr("bmpt.library.ModLibrary", Library)
-    s = Services(Settings(tmp_path / "config.toml"), tmp_path, state=UiState(tmp_path / "webui.json"),
-                 cache=object(), game=FakeGame(), catalog=FakeCatalog())
+    s = Services(
+        Settings(tmp_path / "config.toml"),
+        tmp_path,
+        state=UiState(tmp_path / "webui.json"),
+        cache=object(),
+        game=FakeGame(),
+        catalog=FakeCatalog(),
+    )
     s.state.set_scan_consent(True)
     try:
         library = s.library
@@ -1032,8 +1173,12 @@ def test_startup_maintenance_waits_for_reveal_and_respects_the_preference(servic
     monkeypatch.setattr(services.scanner, "request", lambda *args: calls.append("scan"))
     monkeypatch.setattr(services.library, "prune", lambda: calls.append("prune") or [])
     # the official portrait rigs are kept after the prune, with the same consent, and stop at shutdown
-    monkeypatch.setattr(services.library, "archive_rigs", lambda cancel: calls.append(
-        "rigs" if "prune" in calls and cancel() is False else "rigs too early") or 0, raising=False)
+    monkeypatch.setattr(
+        services.library,
+        "archive_rigs",
+        lambda cancel: calls.append("rigs" if "prune" in calls and cancel() is False else "rigs too early") or 0,
+        raising=False,
+    )
     warm = services._warm
 
     def warmed():
@@ -1070,10 +1215,12 @@ def test_startup_repairs_what_older_builds_left_without_the_crc_silently(service
     monkeypatch.setattr(services.scanner, "request", lambda *args: None)
     monkeypatch.setattr(services.library, "prune", lambda: [])
     monkeypatch.setattr(services.library, "archive_rigs", lambda cancel: 0, raising=False)
-    monkeypatch.setattr(services.library, "crc_repair_due", lambda: {"due": True, "entries": [{"core": "a_spr"}]},
-                        raising=False)
-    monkeypatch.setattr(services.library, "repair_crc", lambda log=None, progress=None: calls.append("repair"),
-                        raising=False)
+    monkeypatch.setattr(
+        services.library, "crc_repair_due", lambda: {"due": True, "entries": [{"core": "a_spr"}]}, raising=False
+    )
+    monkeypatch.setattr(
+        services.library, "repair_crc", lambda log=None, progress=None: calls.append("repair"), raising=False
+    )
     warm, start, started = services._warm, services._start_crc_repair, []
 
     def warmed():
@@ -1093,10 +1240,12 @@ def test_startup_repairs_what_older_builds_left_without_the_crc_silently(service
 
 def test_startup_crc_repair_is_left_for_the_next_start_while_a_classic_window_is_open(services, monkeypatch):
     calls = []
-    monkeypatch.setattr(services.library, "crc_repair_due", lambda: {"due": True, "entries": [{"core": "a_spr"}]},
-                        raising=False)
-    monkeypatch.setattr(services.library, "repair_crc", lambda log=None, progress=None: calls.append("repair"),
-                        raising=False)
+    monkeypatch.setattr(
+        services.library, "crc_repair_due", lambda: {"due": True, "entries": [{"core": "a_spr"}]}, raising=False
+    )
+    monkeypatch.setattr(
+        services.library, "repair_crc", lambda log=None, progress=None: calls.append("repair"), raising=False
+    )
     monkeypatch.setattr(services, "classic_open", lambda: True)
     job = services._start_crc_repair(services.library)
     assert services.jobs.wait(job, 5) and services.jobs.get(job).state == "done"
@@ -1150,14 +1299,28 @@ def test_initial_html_selects_the_cached_loading_style_before_any_rpc(app, servi
 def test_startup_timings_are_bounded_named_and_recorded_in_seconds(app, services, monkeypatch):
     ready = []
     monkeypatch.setattr(services, "ready", lambda: ready.append(True))
-    assert rpc(app, "app.ready", timings={"boot": 1250, "fonts": 20, "fallback-loading": 50,
-                                         "sprite-loading": 1200, "private/path": 1, "settings": True,
-                                         "info": -1, "strings": float("nan"), "mod-state": float("inf")}) == {"result": None}
+    assert rpc(
+        app,
+        "app.ready",
+        timings={
+            "boot": 1250,
+            "fonts": 20,
+            "fallback-loading": 50,
+            "sprite-loading": 1200,
+            "private/path": 1,
+            "settings": True,
+            "info": -1,
+            "strings": float("nan"),
+            "mod-state": float("inf"),
+        },
+    ) == {"result": None}
     assert ready == [True]
     assert rpc(app, "app.timings")["result"] == services.timings.snapshot()
     measured = {key: value for key, value in services.timings.snapshot().items() if key.startswith("page.")}
-    assert measured == {"page." + key: {"seconds": seconds, "count": 1, "max": seconds} for key, seconds in
-                        {"boot": 1.25, "fonts": .02, "fallback-loading": .05, "sprite-loading": 1.2}.items()}
+    assert measured == {
+        "page." + key: {"seconds": seconds, "count": 1, "max": seconds}
+        for key, seconds in {"boot": 1.25, "fonts": 0.02, "fallback-loading": 0.05, "sprite-loading": 1.2}.items()
+    }
     assert rpc(app, "app.ready", timings=[])["error"]["code"] == "bad_params"
 
 
@@ -1171,8 +1334,9 @@ def test_lobby_warm_builds_the_prefab_index_once_per_game(app, services, monkeyp
 
     monkeypatch.setattr(FakeGame, "_lobby_prefabs", prefabs, raising=False)
     # Dependencies must remain demand-driven instead of scanning every CAB at startup.
-    monkeypatch.setattr(FakeGame, "_cab_index", lambda game, everything=False: cabs.append((game, everything)) or {},
-                        raising=False)
+    monkeypatch.setattr(
+        FakeGame, "_cab_index", lambda game, everything=False: cabs.append((game, everything)) or {}, raising=False
+    )
     first = services.game
     # answered at once while the index is built in the background; a second call does not start another build
     assert "error" not in rpc(app, "lobby.warm") and "error" not in rpc(app, "lobby.warm")
@@ -1202,8 +1366,12 @@ def test_static_files_stay_inside_web_dir(app, tmp_path):
 
 def test_job_runs_and_reports_events(services):
     q = services.events.subscribe()
-    job_id = services.jobs.submit("apply", lambda log, progress, **p: services.library.apply(log=log, progress=progress, **p),
-                                  variant_key="hoshino", source="mod:m1")
+    job_id = services.jobs.submit(
+        "apply",
+        lambda log, progress, **p: services.library.apply(log=log, progress=progress, **p),
+        variant_key="hoshino",
+        source="mod:m1",
+    )
     events = []
     deadline = time.monotonic() + 5
     while time.monotonic() < deadline and not any(e[0] in ("job.done", "job.failed") for e in events):
@@ -1281,12 +1449,32 @@ def test_non_ascii_token_is_refused_not_crashed(app):
 
 
 def test_roster_view_keeps_only_valid_fields():
-    assert roster_view(None) == {"merged": False, "mods": "all", "recruit": "all", "sort": "recent", "order": "desc",
-                                 "filters": {}}
-    view = roster_view({"merged": True, "mods": "none", "recruit": "maybe", "sort": "name", "extra": 1,
-                        "filters": {"lobby": ["no", "no", "x"], "kind": "npc", "favorite": [], "bogus": ["yes"]}})
-    assert view == {"merged": True, "mods": "none", "recruit": "all", "sort": "name", "order": "asc",
-                    "filters": {"lobby": ["no"]}}
+    assert roster_view(None) == {
+        "merged": False,
+        "mods": "all",
+        "recruit": "all",
+        "sort": "recent",
+        "order": "desc",
+        "filters": {},
+    }
+    view = roster_view(
+        {
+            "merged": True,
+            "mods": "none",
+            "recruit": "maybe",
+            "sort": "name",
+            "extra": 1,
+            "filters": {"lobby": ["no", "no", "x"], "kind": "npc", "favorite": [], "bogus": ["yes"]},
+        }
+    )
+    assert view == {
+        "merged": True,
+        "mods": "none",
+        "recruit": "all",
+        "sort": "name",
+        "order": "asc",
+        "filters": {"lobby": ["no"]},
+    }
     assert roster_view({"sort": "mods", "order": "asc"})["order"] == "asc"
 
 
@@ -1302,8 +1490,14 @@ def test_roster_view_is_kept_across_launches(app, services, tmp_path):
 @pytest.mark.parametrize("kind", [["student"], ["npc"], ["student", "npc"]])
 @pytest.mark.parametrize("recruit", ["all", "yes", "no"])
 def test_saved_roster_type_filter_is_dropped_on_load_and_save(app, services, tmp_path, kind, recruit):
-    kept = {"merged": True, "mods": "none", "recruit": recruit, "sort": "name", "order": "desc",
-            "filters": {"favorite": ["no"], "portrait": ["replaced"]}}
+    kept = {
+        "merged": True,
+        "mods": "none",
+        "recruit": recruit,
+        "sort": "name",
+        "order": "desc",
+        "filters": {"favorite": ["no"], "portrait": ["replaced"]},
+    }
     legacy = {**kept, "filters": {**kept["filters"], "kind": kind}}
     services.state.set("roster", legacy)
     services.state.set("voice_volume", 35)
@@ -1327,8 +1521,12 @@ def test_settings_offer_the_languages_with_a_locale_file(app, services, tmp_path
     monkeypatch.setattr(webui_api, "offered_languages", lambda: offered_languages(locales))
     monkeypatch.setattr(i18n_manager, "lang", i18n_manager.lang)  # restored after the test
     languages = rpc(app, "settings.get")["result"]["languages"]
-    assert languages == [{"code": "zh-CN", "name": "简体中文"}, {"code": "en-US", "name": "English"},
-                         {"code": "ko-KR", "name": "한국어"}, {"code": "th-TH", "name": "ไทย"}]
+    assert languages == [
+        {"code": "zh-CN", "name": "简体中文"},
+        {"code": "en-US", "name": "English"},
+        {"code": "ko-KR", "name": "한국어"},
+        {"code": "th-TH", "name": "ไทย"},
+    ]
     # a known language without its locale file yet (zh-TW, ja-JP) cannot be chosen
     assert rpc(app, "settings.set", key="language", value="zh-TW")["error"]["code"] == "bad_params"
     monkeypatch.setattr(i18n_manager, "set_language", lambda lang: None)
@@ -1346,8 +1544,14 @@ def test_install_update_needs_the_window_and_the_verified_download(app, services
 def update_env(services, tmp_path, monkeypatch):
     from bmpt import updater
 
-    info = updater.UpdateInfo("1.1.0", "1.0.0", "", updater.Asset("app.dmg", "https://example.invalid/app.dmg", 8),
-                              updater.Asset("app.dmg.md5", "https://example.invalid/app.dmg.md5", 32), installable=True)
+    info = updater.UpdateInfo(
+        "1.1.0",
+        "1.0.0",
+        "",
+        updater.Asset("app.dmg", "https://example.invalid/app.dmg", 8),
+        updater.Asset("app.dmg.md5", "https://example.invalid/app.dmg.md5", 32),
+        installable=True,
+    )
     env = SimpleNamespace(info=info, downloads=[], installs=[], quits=[])
     monkeypatch.setattr(updater, "check", lambda: env.info)
     monkeypatch.setattr(updater.urllib.request, "urlopen", lambda *a, **kw: pytest.fail("network access"))
@@ -1391,8 +1595,13 @@ def test_update_download_progress_names_the_action_and_asset(app, services, upda
     assert services.jobs.wait(job, 5)
     result = services.jobs.get(job)
     assert result.state == "done", result.error
-    assert result.progress == {"id": job, "current": 8, "total": 8, "sequence": 1,
-                               "label": translate("webui.progress.download", name="1.1.0.dmg")}
+    assert result.progress == {
+        "id": job,
+        "current": 8,
+        "total": 8,
+        "sequence": 1,
+        "label": translate("webui.progress.download", name="1.1.0.dmg"),
+    }
 
 
 def test_update_rpc_keeps_a_verified_version_for_later_and_installs_only_on_request(app, services, update_env):
@@ -1500,8 +1709,10 @@ def test_install_update_refusals_keep_the_download_for_retry(app, services, upda
     elif code == "update_unavailable":
         file += ".other"
     else:
+
         def unsupported(path, md5):
             raise ServiceError("update_unsupported")
+
         monkeypatch.setattr(updater, "prepare_install", unsupported)
     try:
         assert rpc(app, "app.installUpdate", file=file)["error"]["code"] == code
@@ -1521,7 +1732,8 @@ def test_install_update_refusals_keep_the_download_for_retry(app, services, upda
 
 @pytest.mark.parametrize("closing_event", [True, False])
 def test_install_update_reserves_admission_until_native_closed_and_starts_only_one_helper(
-        app, services, update_env, monkeypatch, closing_event):
+    app, services, update_env, monkeypatch, closing_event
+):
     from bmpt import updater
 
     rpc(app, "app.checkUpdate")
@@ -1532,6 +1744,7 @@ def test_install_update_reserves_admission_until_native_closed_and_starts_only_o
     def destroy():
         destroying.set()
         assert finish.wait(5)
+
         # Some native backends skip closing on destroy(), but all signal closed once the window is gone.
         def closed():
             if closing_event:
@@ -1584,7 +1797,8 @@ def test_install_update_reserves_admission_until_native_closed_and_starts_only_o
 
 @pytest.mark.parametrize("refusal", ["silent", "accepted", "exception", "classic_open"])
 def test_install_update_never_launches_a_helper_for_a_refused_native_close_and_releases_admission(
-        app, services, update_env, monkeypatch, refusal):
+    app, services, update_env, monkeypatch, refusal
+):
     from bmpt.webui import services as services_module
 
     monkeypatch.setattr(services_module, "UPDATE_QUIT_WAIT", 0.01)
@@ -1640,6 +1854,7 @@ def test_settings_change_waits_for_the_running_job(services):
 def test_every_service_error_has_a_string():
     import os
     import re
+
     src = Path(__file__).resolve().parents[1] / "src"
     codes = set()
     for root in (src / "ba_modding_toolkit", src / "bmpt"):
@@ -1647,7 +1862,9 @@ def test_every_service_error_has_a_string():
             directories[:] = [name for name in directories if not name.startswith(".")]
             for name in names:
                 if name.endswith(".py"):
-                    codes |= set(re.findall(r'ServiceError\("([a-z_]+)"', (Path(folder) / name).read_text(encoding="utf-8")))
+                    codes |= set(
+                        re.findall(r'ServiceError\("([a-z_]+)"', (Path(folder) / name).read_text(encoding="utf-8"))
+                    )
     for lang in offered_languages():
         strings = ui_strings(lang)
         assert not [c for c in sorted(codes) if f"webui.error.{c}" not in strings], lang
@@ -1669,6 +1886,7 @@ def test_static_files_behind_symlinks_are_served(app, tmp_path):
 
 def test_program_command_in_a_compiled_build(monkeypatch, tmp_path):
     from bmpt.webui import system
+
     exe = tmp_path / "Tool"
     exe.write_text("")
     monkeypatch.setitem(system.__dict__, "__compiled__", True)
@@ -1694,19 +1912,44 @@ def test_the_window_leaves_the_pointer_and_text_selection_to_the_page(monkeypatc
 
     monkeypatch.setattr(main.sys, "platform", platform)
     from bmpt.webui import native
+
     monkeypatch.setattr(native, "webview2_version", lambda: "120.0.0.0")
     created, started = {}, {}
 
     def create_window(title, url, **options):
         created.update(options)
-        return SimpleNamespace(events=SimpleNamespace(**{name: Hook() for name in ("initialized", "loaded", "closing", "closed", "before_show", "shown", "maximized", "minimized", "restored")}))
+        return SimpleNamespace(
+            events=SimpleNamespace(
+                **{
+                    name: Hook()
+                    for name in (
+                        "initialized",
+                        "loaded",
+                        "closing",
+                        "closed",
+                        "before_show",
+                        "shown",
+                        "maximized",
+                        "minimized",
+                        "restored",
+                    )
+                }
+            )
+        )
 
-    monkeypatch.setitem(sys.modules, "webview", SimpleNamespace(settings={}, create_window=create_window,
-                                                                start=lambda **options: started.update(options)))
+    monkeypatch.setitem(
+        sys.modules,
+        "webview",
+        SimpleNamespace(settings={}, create_window=create_window, start=lambda **options: started.update(options)),
+    )
     from bmpt.webui.tray import Tray
 
     monkeypatch.setattr(Tray, "supported", staticmethod(lambda platform=sys.platform: False))  # tests/test_tray.py
-    main._run_window(SimpleNamespace(window=None, data_dir=tmp_path, timings=Timings(), events=EventBus()), SimpleNamespace(url="http://127.0.0.1:1/"), False)
+    main._run_window(
+        SimpleNamespace(window=None, data_dir=tmp_path, timings=Timings(), events=EventBus()),
+        SimpleNamespace(url="http://127.0.0.1:1/"),
+        False,
+    )
     assert created["frameless"] is (platform != "win32")
     assert created["text_select"] is True
     assert started["private_mode"] is True
@@ -1738,11 +1981,31 @@ def test_the_close_button_preflights_readers_and_refuses_writers(services, monke
             assert handlers["closing"]() is True
             services.on_closed()
             destroyed.set()
-        return SimpleNamespace(events=SimpleNamespace(**{name: Hook(name) for name in
-            ("initialized", "loaded", "closing", "closed", "before_show", "shown", "maximized", "minimized", "restored")}),
-            evaluate_js=lambda script, callback=None: callback(True) if callback else None, destroy=destroy)
 
-    monkeypatch.setitem(sys.modules, "webview", SimpleNamespace(settings={}, create_window=create_window, start=lambda **o: None))
+        return SimpleNamespace(
+            events=SimpleNamespace(
+                **{
+                    name: Hook(name)
+                    for name in (
+                        "initialized",
+                        "loaded",
+                        "closing",
+                        "closed",
+                        "before_show",
+                        "shown",
+                        "maximized",
+                        "minimized",
+                        "restored",
+                    )
+                }
+            ),
+            evaluate_js=lambda script, callback=None: callback(True) if callback else None,
+            destroy=destroy,
+        )
+
+    monkeypatch.setitem(
+        sys.modules, "webview", SimpleNamespace(settings={}, create_window=create_window, start=lambda **o: None)
+    )
     destroyed = threading.Event()
     main._run_window(services, SimpleNamespace(url="http://127.0.0.1:1/"), False)
     gate = threading.Event()
@@ -1759,8 +2022,10 @@ def test_the_close_button_preflights_readers_and_refuses_writers(services, monke
 @pytest.mark.parametrize("unread", [False, True])
 def test_original_and_repaired_versions_share_roster_and_band_counts(app, services, monkeypatch, unread):
     originals = [FakeMod("portrait", "hoshino"), FakeMod("lobby", "hoshino", kind="lobby")]
-    repaired = [FakeMod("portrait-fixed", "hoshino", user_added=False),
-                FakeMod("lobby-fixed", "hoshino", kind="lobby", user_added=False)]
+    repaired = [
+        FakeMod("portrait-fixed", "hoshino", user_added=False),
+        FakeMod("lobby-fixed", "hoshino", kind="lobby", user_added=False),
+    ]
     services.state.mark_mods_seen([] if unread else [mod.id for mod in originals])
     for original, fixed in zip(originals, repaired):
         original.repaired_id = fixed.id
@@ -1776,7 +2041,8 @@ def test_original_and_repaired_versions_share_roster_and_band_counts(app, servic
             assert variant["fresh"] is (unread and any(mod.user_added for mod in mods))
             if method == "family.get":
                 assert {mod["id"]: mod["fresh"] for mod in variant["modList"]} == {
-                    mod.id: unread and mod.user_added for mod in mods}
+                    mod.id: unread and mod.user_added for mod in mods
+                }
 
 
 @pytest.mark.parametrize("orphan", [False, True])
@@ -1787,8 +2053,9 @@ def test_migrated_020_library_supplies_repair_labels_markers_and_counts(app, ser
 
     root = tmp_path / "legacy-library"
     original = legacy_record(root, 1, "hoshino_spr", core="hoshino_spr", target="hoshino")
-    repaired = legacy_record(root, 2, "hoshino_spr (remapped)", core="hoshino_spr", target="hoshino",
-                             date="2026-10-01", parts=("002", "003"))
+    repaired = legacy_record(
+        root, 2, "hoshino_spr (remapped)", core="hoshino_spr", target="hoshino", date="2026-10-01", parts=("002", "003")
+    )
     original["alias"] = "My painting"
     write_legacy_state(root, [repaired] if orphan else [original, repaired])
     library = ModLibrary(root, LibraryCatalog(LibraryVariant("hoshino", "hoshino_spr")))
@@ -1809,7 +2076,9 @@ def test_migrated_020_library_supplies_repair_labels_markers_and_counts(app, ser
 
 
 @pytest.mark.parametrize("copy", ["gone", "held"])
-def test_a_repaired_id_reaches_the_web_ui_only_while_its_copy_exists_or_is_held(app, services, monkeypatch, tmp_path, copy):
+def test_a_repaired_id_reaches_the_web_ui_only_while_its_copy_exists_or_is_held(
+    app, services, monkeypatch, tmp_path, copy
+):
     import shutil
 
     from bmpt.library import ModLibrary
@@ -1839,17 +2108,18 @@ def test_a_repaired_id_reaches_the_web_ui_only_while_its_copy_exists_or_is_held(
 
 def test_release_page_snapshot_survives_another_check(app, services, update_env, monkeypatch):
     from bmpt import updater
+
     opened = []
-    monkeypatch.setattr('bmpt.webui.api.webbrowser.open', opened.append)
-    page = f'https://github.com/{updater.REPO}/releases/tag/v1.1.0'
-    update_env.info.page, update_env.info.notes = page, 'Exact release notes'
-    assert rpc(app, 'app.checkUpdate')['result']['notes'] == 'Exact release notes'
+    monkeypatch.setattr("bmpt.webui.api.webbrowser.open", opened.append)
+    page = f"https://github.com/{updater.REPO}/releases/tag/v1.1.0"
+    update_env.info.page, update_env.info.notes = page, "Exact release notes"
+    assert rpc(app, "app.checkUpdate")["result"]["notes"] == "Exact release notes"
     update_env.info = None
-    rpc(app, 'app.checkUpdate')
-    assert rpc(app, 'app.openReleasePage', page=page) == {'result': None}
+    rpc(app, "app.checkUpdate")
+    assert rpc(app, "app.openReleasePage", page=page) == {"result": None}
     assert opened == [page]
-    for invalid in ('https://example.invalid/releases/tag/1.1.0', page + '/bad', page + '?next=bad', 42):
-        assert rpc(app, 'app.openReleasePage', page=invalid)['error']['code'] == 'update_unavailable'
+    for invalid in ("https://example.invalid/releases/tag/1.1.0", page + "/bad", page + "?next=bad", 42):
+        assert rpc(app, "app.openReleasePage", page=invalid)["error"]["code"] == "update_unavailable"
     assert update_env.downloads == update_env.installs == []
 
 
@@ -1858,215 +2128,255 @@ def test_tours_rpc_requires_normal_ready_and_keeps_replay_local(app, services, m
     from bmpt.webui import tours
     from test_tours import release, write_locales
 
-    manifest = (release('0.2.0', 'photos'),)
+    manifest = (release("0.2.0", "photos"),)
     write_locales(tmp_path, manifest)
-    monkeypatch.setattr('bmpt.webui.strings.get_locale_dir', lambda: tmp_path)
-    monkeypatch.setattr(tours, 'PUBLISHED_TOURS', manifest)
-    monkeypatch.setattr(services, 'game_found', lambda: pytest.fail('tour must not inspect the game'))
-    monkeypatch.setattr(services, 'ready', lambda: None)
-    tours.launch(services.state, '0.1.0', [])
-    assert rpc(app, 'app.tours', launching=True)['result']['automatic']['pages'] == []
+    monkeypatch.setattr("bmpt.webui.strings.get_locale_dir", lambda: tmp_path)
+    monkeypatch.setattr(tours, "PUBLISHED_TOURS", manifest)
+    monkeypatch.setattr(services, "game_found", lambda: pytest.fail("tour must not inspect the game"))
+    monkeypatch.setattr(services, "ready", lambda: None)
+    tours.launch(services.state, "0.1.0", [])
+    assert rpc(app, "app.tours", launching=True)["result"]["automatic"]["pages"] == []
     for lang in tours.LOCALES:
-        monkeypatch.setattr(i18n_manager, 'lang', lang)
-        available = rpc(app, 'app.tours')['result']['tours']
+        monkeypatch.setattr(i18n_manager, "lang", lang)
+        available = rpc(app, "app.tours")["result"]["tours"]
         assert len(available) == 1
-        page = available[0]['pages'][0]
-        assert (page['title'], page['body']) == (f'{lang} photos 0.2.0', f'{lang} feature copy')
+        page = available[0]["pages"][0]
+        assert (page["title"], page["body"]) == (f"{lang} photos 0.2.0", f"{lang} feature copy")
     services.safe_mode = True
-    rpc(app, 'app.ready')
-    assert rpc(app, 'app.tours', launching=True)['result']['automatic']['pages'] == []
+    rpc(app, "app.ready")
+    assert rpc(app, "app.tours", launching=True)["result"]["automatic"]["pages"] == []
     services.safe_mode = False
-    rpc(app, 'app.ready')
-    automatic = rpc(app, 'app.tours', launching=True)['result']['automatic']
-    assert automatic['versions'] == ['0.2.0']
-    assert rpc(app, 'app.tourPresented', versions=automatic['versions']) == {'result': None}
-    assert rpc(app, 'app.tours', launching=True)['result']['automatic']['pages'] == []
-    assert len(rpc(app, 'app.tours')['result']['tours']) == 1
+    rpc(app, "app.ready")
+    automatic = rpc(app, "app.tours", launching=True)["result"]["automatic"]
+    assert automatic["versions"] == ["0.2.0"]
+    assert rpc(app, "app.tourPresented", versions=automatic["versions"]) == {"result": None}
+    assert rpc(app, "app.tours", launching=True)["result"]["automatic"]["pages"] == []
+    assert len(rpc(app, "app.tours")["result"]["tours"]) == 1
 
 
-@pytest.mark.parametrize('legacy', [True, False])
-@pytest.mark.parametrize('consent', [True, False])
+@pytest.mark.parametrize("legacy", [True, False])
+@pytest.mark.parametrize("consent", [True, False])
 def test_historyless_profile_tour_rpc_distinguishes_upgrade_from_first_install(
-        app, services, monkeypatch, tmp_path, legacy, consent):
+    app, services, monkeypatch, tmp_path, legacy, consent
+):
     from bmpt.webui.state import UiState
 
-    path = tmp_path / 'tour-profile.json'
+    path = tmp_path / "tour-profile.json"
     if legacy:
-        path.write_text(json.dumps({'consent': consent, 'prefs': {'spine_consent': False}}), encoding='utf-8')
+        path.write_text(json.dumps({"consent": consent, "prefs": {"spine_consent": False}}), encoding="utf-8")
     services.state = UiState(path)
     # A new install's dialogs finish before the automatic tour request.
     services.state.set_consent(consent)
-    services.state.set('scan_consent', False)
-    monkeypatch.setattr('ba_modding_toolkit.utils.get_version_info', lambda: {'version': '0.6.0-alpha.13'})
-    monkeypatch.setattr(services, 'game_found', lambda: pytest.fail('tour must not inspect the game'))
-    monkeypatch.setattr(services, 'ready', lambda: None)
+    services.state.set("scan_consent", False)
+    monkeypatch.setattr("ba_modding_toolkit.utils.get_version_info", lambda: {"version": "0.6.0-alpha.13"})
+    monkeypatch.setattr(services, "game_found", lambda: pytest.fail("tour must not inspect the game"))
+    monkeypatch.setattr(services, "ready", lambda: None)
     app.rpc = build_api(services)
-    assert rpc(app, 'app.tours', launching=True)['result']['automatic']['pages'] == []
-    assert 'tours' not in json.loads(path.read_text())
+    assert rpc(app, "app.tours", launching=True)["result"]["automatic"]["pages"] == []
+    assert "tours" not in json.loads(path.read_text())
     services.safe_mode = True
-    rpc(app, 'app.ready')
-    assert rpc(app, 'app.tours', launching=True)['result']['automatic']['pages'] == []
-    assert 'tours' not in json.loads(path.read_text())
+    rpc(app, "app.ready")
+    assert rpc(app, "app.tours", launching=True)["result"]["automatic"]["pages"] == []
+    assert "tours" not in json.loads(path.read_text())
     services.safe_mode = False
-    rpc(app, 'app.ready')
-    automatic = rpc(app, 'app.tours', launching=True)['result']['automatic']
-    assert bool(automatic['pages']) is legacy
+    rpc(app, "app.ready")
+    automatic = rpc(app, "app.tours", launching=True)["result"]["automatic"]
+    assert bool(automatic["pages"]) is legacy
     if legacy:
-        assert automatic['versions'] == ['0.6.0']
-        assert rpc(app, 'app.tourPresented', versions=automatic['versions']) == {'result': None}
+        assert automatic["versions"] == ["0.6.0"]
+        assert rpc(app, "app.tourPresented", versions=automatic["versions"]) == {"result": None}
     services.state = UiState(path)
-    assert rpc(app, 'app.tours', launching=True)['result']['automatic']['pages'] == []
+    assert rpc(app, "app.tours", launching=True)["result"]["automatic"]["pages"] == []
 
 
-def test_upgrade_notes_rpc_shows_the_running_versions_notes_once_after_normal_ready(app, services, monkeypatch, tmp_path):
+def test_upgrade_notes_rpc_shows_the_running_versions_notes_once_after_normal_ready(
+    app, services, monkeypatch, tmp_path
+):
     from bmpt.webui.api import RELEASE_NOTES_DIR
     from bmpt.webui.state import UiState
 
-    path = tmp_path / 'notes-profile.json'
-    path.write_text(json.dumps({'consent': True, 'tours': {'highest': '0.7.0-rc.5'}}), encoding='utf-8')
+    path = tmp_path / "notes-profile.json"
+    path.write_text(json.dumps({"consent": True, "tours": {"highest": "0.7.0-rc.5"}}), encoding="utf-8")
     services.state = UiState(path)
-    monkeypatch.setattr('ba_modding_toolkit.utils.get_version_info', lambda: {'version': '0.7.0-rc.6'})
-    monkeypatch.setattr(services, 'game_found', lambda: pytest.fail('the notes must not inspect the game'))
-    monkeypatch.setattr(services, 'ready', lambda: None)
+    monkeypatch.setattr("ba_modding_toolkit.utils.get_version_info", lambda: {"version": "0.7.0-rc.6"})
+    monkeypatch.setattr(services, "game_found", lambda: pytest.fail("the notes must not inspect the game"))
+    monkeypatch.setattr(services, "ready", lambda: None)
     app.rpc = build_api(services)
-    quiet = {'version': '0.7.0-rc.6', 'notes': '', 'current': '0.7.0-rc.6', 'due': False}
-    assert rpc(app, 'app.upgradeNotes')['result'] == quiet, 'not before app.ready'
+    quiet = {"version": "0.7.0-rc.6", "notes": "", "current": "0.7.0-rc.6", "due": False}
+    assert rpc(app, "app.upgradeNotes")["result"] == quiet, "not before app.ready"
     services.safe_mode = True
-    rpc(app, 'app.ready')
-    assert rpc(app, 'app.upgradeNotes')['result'] == quiet
-    assert 'notes' not in json.loads(path.read_text())['tours']
+    rpc(app, "app.ready")
+    assert rpc(app, "app.upgradeNotes")["result"] == quiet
+    assert "notes" not in json.loads(path.read_text())["tours"]
     services.safe_mode = False
-    rpc(app, 'app.ready')
-    shown = rpc(app, 'app.upgradeNotes')['result']
-    assert shown == {'version': '0.7.0', 'current': '0.7.0-rc.6', 'due': True,
-                     'notes': (RELEASE_NOTES_DIR / '0.7.0.md').read_text(encoding='utf-8')}
-    assert rpc(app, 'app.upgradeNotesPresented', version='0.7.0-rc.6') == {'result': None}
-    assert rpc(app, 'app.upgradeNotes')['result']['due'] is False
-    assert rpc(app, 'app.upgradeNotesPresented', version=7)['error']['code'] == 'bad_params'
+    rpc(app, "app.ready")
+    shown = rpc(app, "app.upgradeNotes")["result"]
+    assert shown == {
+        "version": "0.7.0",
+        "current": "0.7.0-rc.6",
+        "due": True,
+        "notes": (RELEASE_NOTES_DIR / "0.7.0.md").read_text(encoding="utf-8"),
+    }
+    assert rpc(app, "app.upgradeNotesPresented", version="0.7.0-rc.6") == {"result": None}
+    assert rpc(app, "app.upgradeNotes")["result"]["due"] is False
+    assert rpc(app, "app.upgradeNotesPresented", version=7)["error"]["code"] == "bad_params"
 
 
 @pytest.fixture
 def native_exit(services):
     from bmpt.webui.window_close import CloseCoordinator
+
     waiting, destroyed = threading.Event(), threading.Event()
     callbacks = []
+
     def evaluate(script, callback=None):
-        if callback and 'bamtValidateClose' in script:
+        if callback and "bamtValidateClose" in script:
             callback(True)
         elif callback:
             callbacks.append(callback)
             waiting.set()
+
     def close():
         assert services.on_closing() is True
         services.on_closed()
         destroyed.set()
+
     services.window = SimpleNamespace(evaluate_js=evaluate)
     services.chrome = SimpleNamespace(close=close)
-    services.close_coordinator = CloseCoordinator(services, close, prompt_wait=1, close_wait=.1)
+    services.close_coordinator = CloseCoordinator(services, close, prompt_wait=1, close_wait=0.1)
     return SimpleNamespace(waiting=waiting, destroyed=destroyed, callbacks=callbacks)
 
 
-@pytest.mark.parametrize('origin', ['app', 'fallback', 'native', 'tray', 'safe-restart', 'consent'])
+@pytest.mark.parametrize("origin", ["app", "fallback", "native", "tray", "safe-restart", "consent"])
 def test_exit_routes_share_hall_preflight_and_writer_admission(app, services, native_exit, monkeypatch, origin):
     from bmpt.webui.tray import Tray
-    monkeypatch.setattr('bmpt.webui.api.can_restart_safe', lambda: True)
-    monkeypatch.setattr(services, 'set_consent', lambda granted: None)
-    if origin == 'native':
+
+    monkeypatch.setattr("bmpt.webui.api.can_restart_safe", lambda: True)
+    monkeypatch.setattr(services, "set_consent", lambda granted: None)
+    if origin == "native":
         assert services.on_closing() is False
-    elif origin == 'tray':
+    elif origin == "tray":
         Tray(services)._quit()
     else:
-        method, params = {'app': ('app.quit', {}), 'fallback': ('window.control', {'action': 'close'}),
-                          'safe-restart': ('app.restartSafe', {}), 'consent': ('app.consent', {'granted': False})}[origin]
-        assert rpc(app, method, **params) == {'result': None}
+        method, params = {
+            "app": ("app.quit", {}),
+            "fallback": ("window.control", {"action": "close"}),
+            "safe-restart": ("app.restartSafe", {}),
+            "consent": ("app.consent", {"granted": False}),
+        }[origin]
+        assert rpc(app, method, **params) == {"result": None}
     assert native_exit.waiting.wait(1)
     assert not native_exit.destroyed.is_set()
     assert services.restart_requested is False
-    save = services.jobs.submit('hall.save', lambda log, progress: None, writes='library')
+    save = services.jobs.submit("hall.save", lambda log, progress: None, writes="library")
     assert services.jobs.wait(save, 1)
     native_exit.callbacks[0](True)
     assert native_exit.destroyed.wait(1)
-    assert services.restart_requested is (origin == 'safe-restart')
-    with pytest.raises(ServiceError, match='busy'):
-        services.jobs.submit('writer', lambda log, progress: None, writes='game')
+    assert services.restart_requested is (origin == "safe-restart")
+    with pytest.raises(ServiceError, match="busy"):
+        services.jobs.submit("writer", lambda log, progress: None, writes="game")
 
 
 def test_update_draft_preflight_precedes_native_timeout_and_reservation(app, services, update_env, monkeypatch):
     from bmpt.webui.window_close import CloseCoordinator
-    rpc(app, 'app.checkUpdate')
+
+    rpc(app, "app.checkUpdate")
     file = download_update(app, services)
     waiting, release = threading.Event(), threading.Event()
+
     def evaluate(script, callback=None):
         if callback:
-            if 'bamtPrepareClose' in script:
+            if "bamtPrepareClose" in script:
                 waiting.set()
                 assert release.wait(1)
             callback(True)
+
     services.window.evaluate_js = evaluate
-    services.close_coordinator = CloseCoordinator(services, services.window.destroy, prompt_wait=1, close_wait=.1)
+    services.close_coordinator = CloseCoordinator(services, services.window.destroy, prompt_wait=1, close_wait=0.1)
     with ThreadPoolExecutor() as pool:
-        installed = pool.submit(lambda: rpc(app, 'app.installUpdate', file=file))
+        installed = pool.submit(lambda: rpc(app, "app.installUpdate", file=file))
         assert waiting.wait(1)
         assert not services.update_installing and services._pending_update is None
         assert update_env.installs == []
-        save = services.jobs.submit('hall.save', lambda log, progress: None, writes='library')
+        save = services.jobs.submit("hall.save", lambda log, progress: None, writes="library")
         assert services.jobs.wait(save, 1)
         release.set()
-        assert installed.result(2) == {'result': True}
+        assert installed.result(2) == {"result": True}
     assert len(update_env.installs) == 1
 
 
-@pytest.mark.parametrize('version, enabled', [
-    ('0.6.0-alpha.9', True), ('0.6.0-alpha.9-dev', True), ('0.6.0-dev', True),
-    ('0.6.0', False), ('0.6.0+build.9', False),
-])
-@pytest.mark.parametrize('lang', ['en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'th-TH'])
+@pytest.mark.parametrize(
+    "version, enabled",
+    [
+        ("0.6.0-alpha.9", True),
+        ("0.6.0-alpha.9-dev", True),
+        ("0.6.0-dev", True),
+        ("0.6.0", False),
+        ("0.6.0+build.9", False),
+    ],
+)
+@pytest.mark.parametrize("lang", ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
 def test_both_review_features_share_the_running_version_gate(app, services, monkeypatch, version, enabled, lang):
     from ba_modding_toolkit.i18n import i18n_manager
     from bmpt.webui import tours
+
     # the gate itself, on a tour still under review
-    monkeypatch.setattr(tours, 'PUBLISHED_TOURS', tuple({**tour, 'approved': 'prerelease'} for tour in tours.PUBLISHED_TOURS))
-    monkeypatch.setattr(i18n_manager, 'lang', lang)
-    monkeypatch.setattr('bmpt.webui.api.get_version_info', lambda: {'version': version})
-    monkeypatch.setattr('ba_modding_toolkit.utils.get_version_info', lambda: {'version': version})
+    monkeypatch.setattr(
+        tours, "PUBLISHED_TOURS", tuple({**tour, "approved": "prerelease"} for tour in tours.PUBLISHED_TOURS)
+    )
+    monkeypatch.setattr(i18n_manager, "lang", lang)
+    monkeypatch.setattr("bmpt.webui.api.get_version_info", lambda: {"version": version})
+    monkeypatch.setattr("ba_modding_toolkit.utils.get_version_info", lambda: {"version": version})
     app.rpc = build_api(services)
-    tours.launch(services.state, '0.6.0-alpha.8', [])
+    tours.launch(services.state, "0.6.0-alpha.8", [])
     services.tours_ready = True
-    prefs = rpc(app, 'settings.get')['result']
-    result = rpc(app, 'app.tours', launching=True)['result']
-    assert prefs['version'] == version
-    assert prefs['prereleasePreviews'] is enabled
-    assert bool(result['tours']) is enabled
-    assert bool(result['automatic']['pages']) is enabled
+    prefs = rpc(app, "settings.get")["result"]
+    result = rpc(app, "app.tours", launching=True)["result"]
+    assert prefs["version"] == version
+    assert prefs["prereleasePreviews"] is enabled
+    assert bool(result["tours"]) is enabled
+    assert bool(result["automatic"]["pages"]) is enabled
     if enabled:
         localized = ui_strings(lang)
-        for page in result['automatic']['pages']:
+        for page in result["automatic"]["pages"]:
             key = f"webui.tours.v0_6_0.{page['id']}"
-            assert (page['title'], page['body']) == (localized[f'{key}.title'], localized[f'{key}.body'])
+            assert (page["title"], page["body"]) == (localized[f"{key}.title"], localized[f"{key}.body"])
 
 
 def test_lobby_camera_save_checks_its_params_before_any_job(app, services):
     """lobby.camera.save: the variant's own lobby, a source the lobby can show, a framed view and a camera
     in range; refused before a job starts otherwise."""
     services.catalog.v.lobby = "hoshino_home"
-    good = {"variant": "hoshino", "lobby": "hoshino_home", "source": "official",
-            "view": {"x": -1000, "y": -600, "w": 2000, "h": 1125}, "scale": 1.48, "offset": [0, -120]}
-    for change, code in (({"lobby": "other_home"}, "bad_params"), ({"source": "mod:missing"}, "source_unsupported"),
-                         ({"view": {"x": 0}}, "bad_params"), ({"scale": 0}, "bad_params"),
-                         ({"offset": [0, float("1e9")]}, "bad_params")):
+    good = {
+        "variant": "hoshino",
+        "lobby": "hoshino_home",
+        "source": "official",
+        "view": {"x": -1000, "y": -600, "w": 2000, "h": 1125},
+        "scale": 1.48,
+        "offset": [0, -120],
+    }
+    for change, code in (
+        ({"lobby": "other_home"}, "bad_params"),
+        ({"source": "mod:missing"}, "source_unsupported"),
+        ({"view": {"x": 0}}, "bad_params"),
+        ({"scale": 0}, "bad_params"),
+        ({"offset": [0, float("1e9")]}, "bad_params"),
+    ):
         assert rpc(app, "lobby.camera.save", **{**good, **change})["error"]["code"] == code
     # a lobby without a prefab cannot keep a camera
     assert rpc(app, "lobby.camera.save", **good)["error"]["code"] == "lobby_camera_unsupported"
 
 
-@pytest.mark.parametrize('version, enabled', [('0.7.0-rc.2', True), ('0.7.0-dev', True), ('0.7.0', False)])
+@pytest.mark.parametrize("version, enabled", [("0.7.0-rc.2", True), ("0.7.0-dev", True), ("0.7.0", False)])
 def test_troubleshoot_mods_answers_only_in_pre_release_builds(app, services, monkeypatch, version, enabled):
-    monkeypatch.setattr('bmpt.webui.api.get_version_info', lambda: {'version': version})
-    monkeypatch.setattr('bmpt.library.troubleshoot.status', lambda library: {'active': False, 'count': 0, 'since': None})
+    monkeypatch.setattr("bmpt.webui.api.get_version_info", lambda: {"version": version})
+    monkeypatch.setattr(
+        "bmpt.library.troubleshoot.status", lambda library: {"active": False, "count": 0, "since": None}
+    )
     app.rpc = build_api(services)
-    state = rpc(app, 'mods.troubleshootState')
+    state = rpc(app, "mods.troubleshootState")
     if enabled:
-        assert state['result'] == {'active': False, 'count': 0, 'since': None}
+        assert state["result"] == {"active": False, "count": 0, "since": None}
     else:
-        for method in ('mods.troubleshootState', 'mods.applyOfficial', 'mods.restoreConfig'):
-            assert rpc(app, method)['error']['code'] == 'unknown_method'
+        for method in ("mods.troubleshootState", "mods.applyOfficial", "mods.restoreConfig"):
+            assert rpc(app, method)["error"]["code"] == "unknown_method"

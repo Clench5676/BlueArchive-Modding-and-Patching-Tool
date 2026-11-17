@@ -51,22 +51,22 @@ from .model_hems import pack_bits, unpack_bits
 
 logger = logging.getLogger(__name__)
 
-FRAMES = 7          # frames sampled per clip
-SAMPLES = 60        # vertices sampled per item, about
-SHOWN = 0.25        # drawn at this share of its modelled size or more: shown
-REACH = 2.0         # ... and within this far of the body (metres): some clips park a thing far away instead
-SHARE = 0.75        # shown in every sampled frame of this share of the clips that move the body, or more
-INSIDE = 0.05       # its farthest point at least this far from the skeleton (median over frames), else parked inside
-FOLLOW = 0.8        # moves against the bone it follows less than this times its motion in the prefab's space
-PACKED = 0.75       # enclosed by the costume in this share of the clips showing it, or more: packed
-ENCLOSED = 0.75     # ... a frame encloses it when this share of its sampled points is enclosed
-RAY = 0.4           # a point is enclosed when a ray in every direction meets a costume triangle this near (metres)
-PACK_POINTS = 12    # points sampled per item for that
+FRAMES = 7  # frames sampled per clip
+SAMPLES = 60  # vertices sampled per item, about
+SHOWN = 0.25  # drawn at this share of its modelled size or more: shown
+REACH = 2.0  # ... and within this far of the body (metres): some clips park a thing far away instead
+SHARE = 0.75  # shown in every sampled frame of this share of the clips that move the body, or more
+INSIDE = 0.05  # its farthest point at least this far from the skeleton (median over frames), else parked inside
+FOLLOW = 0.8  # moves against the bone it follows less than this times its motion in the prefab's space
+PACKED = 0.75  # enclosed by the costume in this share of the clips showing it, or more: packed
+ENCLOSED = 0.75  # ... a frame encloses it when this share of its sampled points is enclosed
+RAY = 0.4  # a point is enclosed when a ray in every direction meets a costume triangle this near (metres)
+PACK_POINTS = 12  # points sampled per item for that
 OVER_FACE = {"eyemouth", "eyebrow"}  # shading the game draws over the face and hair
-EDGE = 1e-6         # a ray through a shared edge counts for both triangles
+EDGE = 1e-6  # a ray through a shared edge counts for both triangles
 ARM = re.compile(r"(UpperArm|Forearm|Hand|Finger\d*)$")  # bones a thing held in a hand follows
 WEAPON_NODE = "Bip001_Weapon"
-VERSION = 2         # the layout of a stored verdict
+VERSION = 2  # the layout of a stored verdict
 
 
 class WornStore(Protocol):
@@ -82,32 +82,33 @@ class Item:
     """One thing a renderer draws: the bones of its branch(es) joined by triangles, with what the clips do to it."""
 
     part: ma.Part
-    top: int                     # the node standing for it (its first branch's top)
+    top: int  # the node standing for it (its first branch's top)
     bones: frozenset[int]
-    rows: np.ndarray             # the mesh's vertices it dominates
-    triangles: np.ndarray        # its triangles, numbered as ``read_mesh`` lists them (submeshes in order)
-    native: float                # its longest side in the mesh's space
+    rows: np.ndarray  # the mesh's vertices it dominates
+    triangles: np.ndarray  # its triangles, numbered as ``read_mesh`` lists them (submeshes in order)
+    native: float  # its longest side in the mesh's space
     gear: bool = False
     # what the clips do to it
-    clips: int = 0               # clips that move the body
-    full: int = 0                # of them, those showing it in every sampled frame
-    some: int = 0                # those showing it in some frame
-    size: float | None = None    # its longest side where the reference pose draws it
-    follow: str | None = None    # the body bone it moves least against
+    clips: int = 0  # clips that move the body
+    full: int = 0  # of them, those showing it in every sampled frame
+    some: int = 0  # those showing it in some frame
+    size: float | None = None  # its longest side where the reference pose draws it
+    follow: str | None = None  # the body bone it moves least against
     f_mean: float | None = None  # its mean motion against that bone (metres)
     w_mean: float | None = None  # its mean motion in the prefab's space
-    reach: float | None = None   # its farthest point from the skeleton, median over the frames showing it
+    reach: float | None = None  # its farthest point from the skeleton, median over the frames showing it
     ref: tuple[str, int] | None = None  # the pose to place it from: None for the idle, else (clip, frame)
     enclosed: float | None = None  # share of the clips showing it whose first frame showing it encloses it
-    carry: bool = True           # (in a verdict) carried onto another slot; packed items are not
-    _active: bool = True         # its GameObject active and its renderer enabled in the prefab
+    carry: bool = True  # (in a verdict) carried onto another slot; packed items are not
+    _active: bool = True  # its GameObject active and its renderer enabled in the prefab
     _shown: list[int] = field(default_factory=list, repr=False)  # the measured frames showing it
 
     def visible(self) -> bool:
         """Something the clips ever draw: switched on in the prefab, shown by some clip at a quarter of its modelled
         size or more."""
-        return bool(self._active and self.clips and self.some and self.size is not None
-                    and self.size >= SHOWN * self.native)
+        return bool(
+            self._active and self.clips and self.some and self.size is not None and self.size >= SHOWN * self.native
+        )
 
     def worn(self) -> bool:
         """The module's rule."""
@@ -120,9 +121,14 @@ class Item:
 
     def packable(self) -> bool:
         """Shown like a worn thing (rules 1 to 4), not drawn over the face: what may be packed."""
-        return bool(not self.gear and self.visible() and self.full >= SHARE * self.clips
-                    and self.reach is not None and self.reach >= INSIDE
-                    and not set(self.part.kinds) & OVER_FACE)
+        return bool(
+            not self.gear
+            and self.visible()
+            and self.full >= SHARE * self.clips
+            and self.reach is not None
+            and self.reach >= INSIDE
+            and not set(self.part.kinds) & OVER_FACE
+        )
 
     def packed(self) -> bool:
         """Inside the costume (the module's rule): enclosed by it in ``PACKED`` of the clips showing it or more."""
@@ -145,11 +151,26 @@ class Worn:
 
     def saved(self, skeleton: ma.Skeleton) -> dict:
         nodes = skeleton.nodes
-        return {"version": VERSION, "prefab": nodes[0].name if nodes else "",
-                "renderers": [{"renderer": nodes[node].path, "whole": node in self.whole,
-                               "items": [{"top": nodes[i.top].path, "follow": i.follow,
-                                          "ref": list(i.ref) if i.ref else None, "carry": i.carry} for i in items]}
-                              for node, items in sorted(self.by_renderer().items())]}
+        return {
+            "version": VERSION,
+            "prefab": nodes[0].name if nodes else "",
+            "renderers": [
+                {
+                    "renderer": nodes[node].path,
+                    "whole": node in self.whole,
+                    "items": [
+                        {
+                            "top": nodes[i.top].path,
+                            "follow": i.follow,
+                            "ref": list(i.ref) if i.ref else None,
+                            "carry": i.carry,
+                        }
+                        for i in items
+                    ],
+                }
+                for node, items in sorted(self.by_renderer().items())
+            ],
+        }
 
     @classmethod
     def restored(cls, skeleton: ma.Skeleton, parts: list[ma.Part], data: Mapping) -> "Worn | None":
@@ -180,6 +201,7 @@ class Worn:
 
 
 # --- the items -----------------------------------------------------------------------------------------------------
+
 
 def _under(skeleton: ma.Skeleton, i: int, top: int) -> bool:
     p, q = skeleton.nodes[i].path, skeleton.nodes[top].path
@@ -244,8 +266,16 @@ def split_items(skeleton: ma.Skeleton, part: ma.Part) -> list[Item]:
         js = [j for j, b in enumerate(part.bones) if b in bones]
         rows = np.where(np.isin(dom, js))[0]
         native = skin.vertices[rows]
-        items.append(Item(part, root, frozenset(bones), rows, np.where(tri_root == root)[0],
-                          float(np.ptp(native, axis=0).max()) if len(rows) else 0.0))
+        items.append(
+            Item(
+                part,
+                root,
+                frozenset(bones),
+                rows,
+                np.where(tri_root == root)[0],
+                float(np.ptp(native, axis=0).max()) if len(rows) else 0.0,
+            )
+        )
     return items
 
 
@@ -266,9 +296,13 @@ def _gear_nodes(skeleton: ma.Skeleton, body: set[int]) -> tuple[list[int], list[
             for pointer in tree.get("fxParentBones", []) or []:
                 obj = g.deref(behaviour, pointer)
                 n = skeleton.by_transform.get(_key(obj)) if obj is not None else None
-                if n is not None and n not in body and skeleton.nodes[n].parent is not None \
-                        and not skeleton.nodes[n].name.startswith("Bip001 ") \
-                        and skeleton.nodes[n].name not in ("Bip001", "bone_root"):
+                if (
+                    n is not None
+                    and n not in body
+                    and skeleton.nodes[n].parent is not None
+                    and not skeleton.nodes[n].name.startswith("Bip001 ")
+                    and skeleton.nodes[n].name not in ("Bip001", "bone_root")
+                ):
                     fx.append(n)
     return mounts, fx
 
@@ -296,15 +330,22 @@ def _segment_distance(points: np.ndarray, a: np.ndarray, b: np.ndarray) -> np.nd
     return np.linalg.norm(points[:, None, :] - closest, axis=2)
 
 
-def measure(skeleton: ma.Skeleton, parts: list[ma.Part], clips: Sequence[Any],
-            idle: list[np.ndarray] | None, step: Callable[[], None] = lambda: None) -> list[Item]:
+def measure(
+    skeleton: ma.Skeleton,
+    parts: list[ma.Part],
+    clips: Sequence[Any],
+    idle: list[np.ndarray] | None,
+    step: Callable[[], None] = lambda: None,
+) -> list[Item]:
     """Every item of the prefab's renderers that are no costume part or halo, measured under ``clips`` (the model's
     own) with ``idle`` (the idle clip's first frame) as the reference pose where it shows them. ``step`` is called
     after the clips are read and after each item (the caller's job yields there)."""
     nodes = skeleton.nodes
     g = skeleton.graph
     rig = skeleton.main_rig()
-    body = [i for i, n in enumerate(nodes) if ma.BIPED_CHAIN.match(n.name) and (rig is None or _under(skeleton, i, rig))]
+    body = [
+        i for i, n in enumerate(nodes) if ma.BIPED_CHAIN.match(n.name) and (rig is None or _under(skeleton, i, rig))
+    ]
     body_set = set(body)
     mounts, fx = _gear_nodes(skeleton, body_set)
     items: list[Item] = []
@@ -338,8 +379,11 @@ def measure(skeleton: ma.Skeleton, parts: list[ma.Part], clips: Sequence[Any],
     seg_b = np.array([[pose[j][:3, 3] for _, j in segs] for _, _, pose in frames]) if segs else None
     body_inverse = np.linalg.inv(np.array([[pose[c] for c in body] for _, _, pose in frames]))  # (frames, body, 4, 4)
     body_scale = np.array([_lin(rest[c]) for c in body])
-    idle_segs = (np.array([idle[i][:3, 3] for i, _ in segs]), np.array([idle[j][:3, 3] for _, j in segs])) \
-        if idle is not None and segs else None
+    idle_segs = (
+        (np.array([idle[i][:3, 3] for i, _ in segs]), np.array([idle[j][:3, 3] for _, j in segs]))
+        if idle is not None and segs
+        else None
+    )
     step()
     for item in items:
         _measure_item(skeleton, item, rows, frames, seg_a, seg_b, body, body_inverse, body_scale, idle, idle_segs)
@@ -348,9 +392,19 @@ def measure(skeleton: ma.Skeleton, parts: list[ma.Part], clips: Sequence[Any],
     return items
 
 
-def _measure_item(skeleton: ma.Skeleton, item: Item, rows: list, frames: list, seg_a: np.ndarray | None,
-                  seg_b: np.ndarray | None, body: list[int], body_inverse: np.ndarray, body_scale: np.ndarray,
-                  idle: list[np.ndarray] | None, idle_segs: tuple[np.ndarray, np.ndarray] | None) -> None:
+def _measure_item(
+    skeleton: ma.Skeleton,
+    item: Item,
+    rows: list,
+    frames: list,
+    seg_a: np.ndarray | None,
+    seg_b: np.ndarray | None,
+    body: list[int],
+    body_inverse: np.ndarray,
+    body_scale: np.ndarray,
+    idle: list[np.ndarray] | None,
+    idle_segs: tuple[np.ndarray, np.ndarray] | None,
+) -> None:
     part = item.part
     skin = ma.skin_of(part.mesh)
     bp = ma.bindposes(skeleton.graph, part.mesh)
@@ -359,7 +413,7 @@ def _measure_item(skeleton: ma.Skeleton, item: Item, rows: list, frames: list, s
     js = [j for j, b in enumerate(part.bones) if b in item.bones and j < len(bp)]
     if not js or not len(item.rows):
         return
-    sample = item.rows[::max(1, len(item.rows) // SAMPLES)]
+    sample = item.rows[:: max(1, len(item.rows) // SAMPLES)]
     vj = dom[sample]
     local = np.einsum("nij,nj->ni", bp[vj], np.c_[skin.vertices[sample], np.ones(len(sample))])
     vb = np.array([part.bones[j] for j in vj])
@@ -432,7 +486,7 @@ def enclosed_points(points: np.ndarray, triangles: np.ndarray) -> np.ndarray:
             continue
         a = triangles[near, 0]
         e1, e2 = triangles[near, 1] - a, triangles[near, 2] - a
-        p = np.cross(_DIRECTIONS[:, None, :], e2[None])          # (directions, triangles, 3)
+        p = np.cross(_DIRECTIONS[:, None, :], e2[None])  # (directions, triangles, 3)
         det = np.einsum("tj,dtj->dt", e1, p)
         ok = np.abs(det) > 1e-12
         inverse = np.where(ok, 1.0 / np.where(ok, det, 1.0), 0.0)
@@ -441,13 +495,16 @@ def enclosed_points(points: np.ndarray, triangles: np.ndarray) -> np.ndarray:
         q = np.cross(s, e1)
         v = np.einsum("dj,tj->dt", _DIRECTIONS, q) * inverse
         t = np.einsum("tj,tj->t", e2, q)[None] * inverse
-        hit = ok & (u >= -EDGE) & (v >= -EDGE) & (u + v <= 1 + EDGE) & (t > 1e-4) & (t < RAY)  # an edge meets both sides
+        hit = (
+            ok & (u >= -EDGE) & (v >= -EDGE) & (u + v <= 1 + EDGE) & (t > 1e-4) & (t < RAY)
+        )  # an edge meets both sides
         out[k] = bool(hit.any(axis=1).all())
     return out
 
 
-def _enclosure(skeleton: ma.Skeleton, parts: list[ma.Part], items: list[Item], frames: list,
-               step: Callable[[], None]) -> None:
+def _enclosure(
+    skeleton: ma.Skeleton, parts: list[ma.Part], items: list[Item], frames: list, step: Callable[[], None]
+) -> None:
     """``Item.enclosed`` of every item that may be packed: of the clips showing it, the share whose first frame showing
     it has the costume (its skinned triangles at that pose) enclose ``ENCLOSED`` of its points."""
     wanted = [item for item in items if item.packable() and item._shown]
@@ -466,21 +523,29 @@ def _enclosure(skeleton: ma.Skeleton, parts: list[ma.Part], items: list[Item], f
         return
 
     def matrices(part: ma.Part, bp: np.ndarray, pose: list[np.ndarray]) -> np.ndarray:
-        return np.array([pose[b] @ bp[j] if b is not None and j < len(bp) else pose[part.node]
-                         for j, b in enumerate(part.bones)] or [pose[part.node]])
+        return np.array(
+            [pose[b] @ bp[j] if b is not None and j < len(bp) else pose[part.node] for j, b in enumerate(part.bones)]
+            or [pose[part.node]]
+        )
 
     def skinned(skin: ma.Skin, carry: np.ndarray) -> np.ndarray:
-        return ma.deform(ma.Skin(skin.vertices, np.minimum(skin.joints, len(carry) - 1), skin.weights, skin.edges),
-                         carry)
+        return ma.deform(
+            ma.Skin(skin.vertices, np.minimum(skin.joints, len(carry) - 1), skin.weights, skin.edges), carry
+        )
 
     posed: dict[int, np.ndarray] = {}
 
     def costume_at(n: int) -> np.ndarray:
         if n not in posed:
             pose = frames[n][2]
-            posed[n] = np.concatenate([skinned(skin, matrices(part, bp, pose))[skin.triangles]
-                                       for part, skin, bp in costume if skin.triangles is not None and len(skin.triangles)]
-                                      or [np.zeros((0, 3, 3))])
+            posed[n] = np.concatenate(
+                [
+                    skinned(skin, matrices(part, bp, pose))[skin.triangles]
+                    for part, skin, bp in costume
+                    if skin.triangles is not None and len(skin.triangles)
+                ]
+                or [np.zeros((0, 3, 3))]
+            )
         return posed[n]
 
     for item in wanted:
@@ -502,8 +567,13 @@ def _enclosure(skeleton: ma.Skeleton, parts: list[ma.Part], items: list[Item], f
         step()
 
 
-def worn_items(skeleton: ma.Skeleton, parts: list[ma.Part], clips: Sequence[Any],
-               idle: list[np.ndarray] | None, step: Callable[[], None] = lambda: None) -> Worn:
+def worn_items(
+    skeleton: ma.Skeleton,
+    parts: list[ma.Part],
+    clips: Sequence[Any],
+    idle: list[np.ndarray] | None,
+    step: Callable[[], None] = lambda: None,
+) -> Worn:
     """The model's worn and packed items (the module's rules), with the renderers that draw nothing else the clips
     show."""
     items = measure(skeleton, parts, clips, idle, step)
@@ -518,8 +588,15 @@ def worn_items(skeleton: ma.Skeleton, parts: list[ma.Part], clips: Sequence[Any]
     return worn
 
 
-def worn_of(skeleton: ma.Skeleton, parts: list[ma.Part], clips: Sequence[Any], idle: list[np.ndarray] | None,
-            dev: str, store: WornStore | None = None, step: Callable[[], None] = lambda: None) -> Worn:
+def worn_of(
+    skeleton: ma.Skeleton,
+    parts: list[ma.Part],
+    clips: Sequence[Any],
+    idle: list[np.ndarray] | None,
+    dev: str,
+    store: WornStore | None = None,
+    step: Callable[[], None] = lambda: None,
+) -> Worn:
     """``worn_items``, through the caller's cache when there is one; ``step`` as :func:`measure` takes it."""
     if store is not None:
         try:
@@ -564,7 +641,7 @@ def drop_triangles(tree: dict, drop: np.ndarray) -> bool:
             return False
         code, size = fmt
         data = bytes(raw)
-        indices = list(struct.unpack(f"<{len(data) // size}{code}", data[:len(data) // size * size]))
+        indices = list(struct.unpack(f"<{len(data) // size}{code}", data[: len(data) // size * size]))
     starts, number = [], 0
     for s in subs:
         first = int(s["firstByte"]) // size
@@ -584,12 +661,13 @@ def drop_triangles(tree: dict, drop: np.ndarray) -> bool:
         compressed["m_Data"] = data if isinstance(compressed.get("m_Data"), (bytes, bytearray)) else list(data)
     else:
         code, size = INDEX_CODES[int(tree.get("m_IndexFormat", 0))]
-        data = struct.pack(f"<{len(indices)}{code}", *indices) + bytes(raw)[len(indices) * size:]
+        data = struct.pack(f"<{len(indices)}{code}", *indices) + bytes(raw)[len(indices) * size :]
         tree["m_IndexBuffer"] = data if isinstance(raw, (bytes, bytearray)) else list(data)
     return True
 
 
 # --- the switch ----------------------------------------------------------------------------------------------------
+
 
 def host_meshes(worn: Worn, add_mesh: Callable[[dict], int], mesh_tree: Callable[[Any], dict]) -> dict:
     """What the slot's renderers holding worn items draw instead, by their mesh (graph key): None for a renderer that
@@ -618,8 +696,8 @@ class Carried:
 
     part: ma.Part
     tree: dict
-    nodes: list[int]            # the slot node per bone entry
-    vertices: np.ndarray        # as written, the prefab root's space
+    nodes: list[int]  # the slot node per bone entry
+    vertices: np.ndarray  # as written, the prefab root's space
     linear: np.ndarray
     bindposes: np.ndarray
     joints: np.ndarray
@@ -627,8 +705,14 @@ class Carried:
     items: list[Item]
 
 
-def carried(t_skeleton: ma.Skeleton, s_skeleton: ma.Skeleton, worn: Worn, clips: Sequence[Any],
-            idle: list[np.ndarray] | None, mesh_tree: Callable[[Any], dict]) -> list[Carried]:
+def carried(
+    t_skeleton: ma.Skeleton,
+    s_skeleton: ma.Skeleton,
+    worn: Worn,
+    clips: Sequence[Any],
+    idle: list[np.ndarray] | None,
+    mesh_tree: Callable[[Any], dict],
+) -> list[Carried]:
     """The source's worn items as new meshes for the slot (:class:`Carried`), one per source renderer. An item whose
     bone the slot lacks, or a mesh whose geometry or triangles cannot be rewritten, is left out (logged)."""
     t_rest = t_skeleton.world()
@@ -670,18 +754,32 @@ def carried(t_skeleton: ma.Skeleton, s_skeleton: ma.Skeleton, worn: Worn, clips:
             s_bone = s_skeleton.first(item.follow) if item.follow else None
             t_bone = t_skeleton.first(item.follow) if item.follow else None
             if pose is None or s_bone is None or t_bone is None:
-                logger.info("Worn item %s of %s not carried: no %s on the slot", s_skeleton.nodes[item.top].name, name,
-                            item.follow)
+                logger.info(
+                    "Worn item %s of %s not carried: no %s on the slot",
+                    s_skeleton.nodes[item.top].name,
+                    name,
+                    item.follow,
+                )
                 continue
             rows = item.rows
-            carry = np.array([pose[b] @ bp[j] if b is not None and j < len(bp) else pose[part.node]
-                              for j, b in enumerate(part.bones)] or [pose[part.node]])
-            sub = ma.Skin(skin.vertices[rows], np.minimum(skin.joints[rows], len(carry) - 1), skin.weights[rows],
-                          np.zeros((0, 2), int))
+            carry = np.array(
+                [
+                    pose[b] @ bp[j] if b is not None and j < len(bp) else pose[part.node]
+                    for j, b in enumerate(part.bones)
+                ]
+                or [pose[part.node]]
+            )
+            sub = ma.Skin(
+                skin.vertices[rows],
+                np.minimum(skin.joints[rows], len(carry) - 1),
+                skin.weights[rows],
+                np.zeros((0, 2), int),
+            )
             blended = ma.drawn(sub, carry, pose[part.node])
             move = t_rest[t_bone] @ np.linalg.inv(pose[s_bone])  # from where the pose holds it to the slot's rest
-            vertices[rows] = np.einsum("ij,nj->ni", move, np.einsum("nij,nj->ni", blended,
-                                                                    np.c_[skin.vertices[rows], np.ones(len(rows))]))[:, :3]
+            vertices[rows] = np.einsum(
+                "ij,nj->ni", move, np.einsum("nij,nj->ni", blended, np.c_[skin.vertices[rows], np.ones(len(rows))])
+            )[:, :3]
             linear[rows] = move[:3, :3] @ blended[:, :3, :3]
             kept[rows] = True
             for j, b in enumerate(part.bones):
@@ -693,8 +791,10 @@ def carried(t_skeleton: ma.Skeleton, s_skeleton: ma.Skeleton, worn: Worn, clips:
         # the other things the renderer draws stay behind: their triangles draw nothing, their vertices sit at the
         # carried items' centre (no far point widens the bounds)
         vertices[~kept] = vertices[kept].mean(axis=0)
-        drop = np.setdiff1d(np.arange(len(skin.triangles) if skin.triangles is not None else 0),
-                            np.concatenate([item.triangles for item in placed]))
+        drop = np.setdiff1d(
+            np.arange(len(skin.triangles) if skin.triangles is not None else 0),
+            np.concatenate([item.triangles for item in placed]),
+        )
         if len(drop) and not drop_triangles(tree, drop):
             logger.info("Worn items of %s not carried: its triangles cannot be edited", name)
             continue
@@ -704,8 +804,9 @@ def carried(t_skeleton: ma.Skeleton, s_skeleton: ma.Skeleton, worn: Worn, clips:
         if not ((np.abs(totals - 1.0) <= ma.WEIGHT_TOLERANCE) | (totals <= 1e-9)).all():
             logger.info("Worn items of %s not carried: weights do not add up to 1", name)
             continue
-        if (skin.joints[skin.weights > 0] >= max(len(part.bones), 1)).any() \
-                or len(part.materials) > len(tree.get("m_SubMeshes") or []):
+        if (skin.joints[skin.weights > 0] >= max(len(part.bones), 1)).any() or len(part.materials) > len(
+            tree.get("m_SubMeshes") or []
+        ):
             logger.info("Worn items of %s not carried: its skin or materials do not match its mesh", name)
             continue
         if float(np.abs(vertices).max(initial=0.0)) > ma.VERTEX_LIMIT:

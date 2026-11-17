@@ -12,7 +12,17 @@ from typing import Iterable, Protocol
 from ..errors import ServiceError
 from bmpt.engine import parse_filename
 from ._data import base_rank, csv_entry, read_character_map
-from ._names import BASE_SHORT, LANGUAGES, apply_thai_names, cn_aliases, cn_base, cn_words, csv_bases, csv_names, name_head
+from ._names import (
+    BASE_SHORT,
+    LANGUAGES,
+    apply_thai_names,
+    cn_aliases,
+    cn_base,
+    cn_words,
+    csv_bases,
+    csv_names,
+    name_head,
+)
 from .models import CoreMap, Family, Variant
 from .special import SPECIAL_PREFIX, describe
 
@@ -68,8 +78,9 @@ class Catalog:
     cached snapshot. Only the supplied game object performs game asset access.
     """
 
-    def __init__(self, game: GameSource | None, character_map: Path | None, data: Path = DEFAULT_DATA,
-                 server: str = "global"):
+    def __init__(
+        self, game: GameSource | None, character_map: Path | None, data: Path = DEFAULT_DATA, server: str = "global"
+    ):
         self.game = game
         self.character_map = Path(character_map) if character_map is not None else None
         self.data = Path(data)
@@ -116,15 +127,38 @@ class Catalog:
                     continue
                 student = students[str(entry["student_id"])]
                 family_key = student["base"]
-                family = families.setdefault(family_key, Family(family_key, student["names"],
-                    student.get("school"), [], list(student.get("aliases", []))))
-                family.variants.append(Variant(key, entry["file_id"], family_key, entry["names"],
-                    entry["playable"], entry["order"], None, None, None, None, None,
-                    page_id=entry.get("page_id"), schale_id=entry.get("schale_id"),
-                    aliases=list(entry.get("aliases", []))))
+                family = families.setdefault(
+                    family_key,
+                    Family(family_key, student["names"], student.get("school"), [], list(student.get("aliases", []))),
+                )
+                family.variants.append(
+                    Variant(
+                        key,
+                        entry["file_id"],
+                        family_key,
+                        entry["names"],
+                        entry["playable"],
+                        entry["order"],
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        page_id=entry.get("page_id"),
+                        schale_id=entry.get("schale_id"),
+                        aliases=list(entry.get("aliases", [])),
+                    )
+                )
             for family in families.values():
-                family.variants.sort(key=lambda variant: (variant.key != family.key, not variant.recruitable,
-                    not variant.playable, variant.order, variant.key))
+                family.variants.sort(
+                    key=lambda variant: (
+                        variant.key != family.key,
+                        not variant.recruitable,
+                        not variant.playable,
+                        variant.order,
+                        variant.key,
+                    )
+                )
             return [families[key] for key in sorted(families)]
 
     def assignment_variant(self, key: str) -> Variant:
@@ -157,18 +191,22 @@ class Catalog:
             lower = core.lower()
             if lower in cores:
                 return copy.deepcopy(cores[lower])
-            suffix = next((s for s in sorted(("_spr", *HOME_SUFFIXES), key=len, reverse=True)
-                           if lower.endswith(s)), None)
+            suffix = next(
+                (s for s in sorted(("_spr", *HOME_SUFFIXES), key=len, reverse=True) if lower.endswith(s)), None
+            )
             if suffix is None:
                 return None
-            stem = lower[:-len(suffix)]
+            stem = lower[: -len(suffix)]
             if stem in cores and cores[stem].spine_category:
                 return copy.deepcopy(cores[stem])
             entries, _, _ = self._metadata()
             if stem in entries:
                 return copy.deepcopy(variants.get(stem))
-            matches = [variants[key] for key, entry in entries.items() if key in variants
-                       and stem in (alias.lower() for alias in entry.get("core_aliases", []))]
+            matches = [
+                variants[key]
+                for key, entry in entries.items()
+                if key in variants and stem in (alias.lower() for alias in entry.get("core_aliases", []))
+            ]
             return copy.deepcopy(matches[0]) if len(matches) == 1 else None
 
     def model_map(self, cores: Iterable[str]) -> dict[str, str]:
@@ -181,8 +219,11 @@ class Catalog:
                     entries.setdefault(key, {})
             result = {}
             for key, entry in entries.items():
-                aliases = [alias.lower() for alias in entry.get("core_aliases", [])
-                           if alias.lower() not in entries or alias.lower() == key]
+                aliases = [
+                    alias.lower()
+                    for alias in entry.get("core_aliases", [])
+                    if alias.lower() not in entries or alias.lower() == key
+                ]
                 # Direct file IDs take precedence over shared dev aliases.
                 for core in [key, key + "_original", *aliases, *(alias + "_original" for alias in aliases)]:
                     if core in available:
@@ -195,8 +236,9 @@ class Catalog:
         with self._lock:
             return copy.deepcopy(self._get()[1].get(key)) if key else None
 
-    def core_map(self, spr_cores: Iterable[str], lobby_cores: Iterable[str],
-                 special_cores: Iterable[str] = ()) -> CoreMap:
+    def core_map(
+        self, spr_cores: Iterable[str], lobby_cores: Iterable[str], special_cores: Iterable[str] = ()
+    ) -> CoreMap:
         """Map an install's portrait and memorial lobby cores to variant keys by the roster's own rules, for any
         install (the snapshot maps only the current one's). A portrait core's key is the core less "_spr"; a lobby
         core belongs to the installed variant whose key or core alias plus a lobby suffix names it, a direct file-id
@@ -212,8 +254,9 @@ class Catalog:
         spr = {keys[core.lower()]: core for core in sorted(portraits)}
         lobby = {key: cores[0] for key, cores in homes.items() if cores}
         names = {key: entries[key]["names"] for key in set(keys.values()) if key in shipped}
-        names.update({key: describe(core, entries, students)[2] for core, key in keys.items()
-                      if key.startswith(SPECIAL_PREFIX)})
+        names.update(
+            {key: describe(core, entries, students)[2] for core, key in keys.items() if key.startswith(SPECIAL_PREFIX)}
+        )
         return CoreMap(keys, spr, lobby, names)
 
     def _get(self) -> tuple[dict[str, Family], dict[str, Variant], dict[str, Variant]]:
@@ -248,8 +291,10 @@ class Catalog:
                 if not isinstance(entry["order"], int) or not isinstance(entry["playable"], bool):
                     raise ValueError("Invalid catalog variant")
                 released = entry.get("released")
-                if released is not None and not (isinstance(released, dict) and all(
-                        server in SERVERS and isinstance(flag, bool) for server, flag in released.items())):
+                if released is not None and not (
+                    isinstance(released, dict)
+                    and all(server in SERVERS and isinstance(flag, bool) for server, flag in released.items())
+                ):
                     raise ValueError("Invalid catalog release flags")
             for record in (*entries.values(), *students.values()):
                 if not _names_list(record.get("aliases", [])):
@@ -268,16 +313,23 @@ class Catalog:
                     entry["names"], entry["fallbacks"] = csv_names(row, student["names"])
                     base, server = student["names"]["zh-CN"], cn_base(row)
                     # a new student takes the CN server's name of its rows named by the base alone
-                    if (sid not in shipped_students and server and server != base
-                            and name_head(entry["names"]["zh-CN"]["full"]) == base):
+                    if (
+                        sid not in shipped_students
+                        and server
+                        and server != base
+                        and name_head(entry["names"]["zh-CN"]["full"]) == base
+                    ):
                         student["aliases"] = sorted({*student.get("aliases", []), server})
-                    entry["aliases"] = cn_aliases(entry["names"]["zh-CN"]["full"], base,
-                                                  student.get("aliases", []), words, [server])
-                    entry["order"] = 1 + max((e["order"] for e in entries.values()
-                                              if str(e["student_id"]) == sid), default=-1)
+                    entry["aliases"] = cn_aliases(
+                        entry["names"]["zh-CN"]["full"], base, student.get("aliases", []), words, [server]
+                    )
+                    entry["order"] = 1 + max(
+                        (e["order"] for e in entries.values() if str(e["student_id"]) == sid), default=-1
+                    )
                     entries[key] = entry
-                    if sid not in shipped_students and ("base" not in student or
-                                                        base_rank(entry) < base_rank(entries[student["base"]])):
+                    if sid not in shipped_students and (
+                        "base" not in student or base_rank(entry) < base_rank(entries[student["base"]])
+                    ):
                         student["base"] = key
             return entries, students, set(entries) - shipped_keys
         except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
@@ -285,9 +337,14 @@ class Catalog:
             raise ServiceError("catalog_data_invalid", path=str(self.data)) from exc
 
     @staticmethod
-    def _map(entries: dict, students: dict, added: set[str], portraits: list[str], lobbies: list[str],
-             special_cores: set[str] | None = None
-             ) -> tuple[dict[str, str], dict[str, list[str]], dict[str, list[str]]]:
+    def _map(
+        entries: dict,
+        students: dict,
+        added: set[str],
+        portraits: list[str],
+        lobbies: list[str],
+        special_cores: set[str] | None = None,
+    ) -> tuple[dict[str, str], dict[str, list[str]], dict[str, list[str]]]:
         """The roster's core rules on one install's core names: {lower-case core: variant key}, each key's lobby
         cores in the install (the primary one first) and each portrait key's aliases (its key, then the core aliases
         the rule kept). Unknown portrait keys are added to ``entries``, ``students`` and ``added``, as the roster
@@ -302,16 +359,34 @@ class Catalog:
             if key not in entries:
                 added.add(key)
                 file_id = core[:-4] if core.lower().endswith("_spr") else core
-                entries[key] = {"file_id": file_id, "student_id": f"unknown:{key}",
-                                "names": {lang: {"full": file_id, "short": BASE_SHORT[lang]} for lang in LANGUAGES},
-                                "playable": False, "order": 0, "school": None}
-                students[f"unknown:{key}"] = {"base": key, "names": {lang: file_id for lang in LANGUAGES},
-                                             "school": None}
+                entries[key] = {
+                    "file_id": file_id,
+                    "student_id": f"unknown:{key}",
+                    "names": {lang: {"full": file_id, "short": BASE_SHORT[lang]} for lang in LANGUAGES},
+                    "playable": False,
+                    "order": 0,
+                    "school": None,
+                }
+                students[f"unknown:{key}"] = {
+                    "base": key,
+                    "names": {lang: file_id for lang in LANGUAGES},
+                    "school": None,
+                }
             entry = entries[key]
-            aliases = [key, *(alias for alias in entry.get("core_aliases", [])
-                              if alias.lower() not in entries or alias.lower() == key)]
-            homes = [lobby_names[alias.lower() + suffix] for alias in aliases for suffix in HOME_SUFFIXES
-                     if alias.lower() + suffix in lobby_names]
+            aliases = [
+                key,
+                *(
+                    alias
+                    for alias in entry.get("core_aliases", [])
+                    if alias.lower() not in entries or alias.lower() == key
+                ),
+            ]
+            homes = [
+                lobby_names[alias.lower() + suffix]
+                for alias in aliases
+                for suffix in HOME_SUFFIXES
+                if alias.lower() + suffix in lobby_names
+            ]
             aliases_of[key], homes_of[key] = aliases, homes
             keys[core.lower()] = key
             for home in homes:
@@ -333,7 +408,7 @@ class Catalog:
             suffix = next((s for s in suffixes if lower.endswith(s)), None)
             if lower in keys or suffix is None:
                 continue
-            stem = lower[:-len(suffix)]
+            stem = lower[: -len(suffix)]
             key = stem if stem in entries else aliased.get(stem, stem)
             keys[lower] = key
             lobby_only.setdefault(key, []).append((stem != key, HOME_SUFFIXES.index(suffix), core))
@@ -346,23 +421,26 @@ class Catalog:
                 keys[lower], homes_of[key] = key, [core]
         return keys, homes_of, aliases_of
 
-    def _build(self, parsed: tuple[dict, dict, set[str]] | None = None
-               ) -> tuple[dict[str, Family], dict[str, Variant], dict[str, Variant]]:
+    def _build(
+        self, parsed: tuple[dict, dict, set[str]] | None = None
+    ) -> tuple[dict[str, Family], dict[str, Variant], dict[str, Variant]]:
         if self.game is None:
             return {}, {}, {}
         entries, students, added = copy.deepcopy(parsed) if parsed is not None else self._metadata()
         portraits = self.game.spine_cores("spr")
         lobbies = self.game.spine_cores("lobby")
-        art = {kind: {name.lower(): name for name in names}
-               for kind, names in self.game.collection_names().items()}
+        art = {kind: {name.lower(): name for name in names} for kind, names in self.game.collection_names().items()}
         collection = art.get("portrait", {})
         if portraits and not collection:
             logger.warning("No collection portraits found; recruitable follows the shipped release flags")
         models = getattr(self.game, "model_cores", set)()
         fields = getattr(self.game, "field_model_cores", set)()
         # the same mapping core_map gives any install, run on the core lists fetched once for this build
-        special_cores = {core for core, paths in lobbies.items() if paths and
-                         parse_filename(paths[0].name).category != "spinelobbies"}
+        special_cores = {
+            core
+            for core, paths in lobbies.items()
+            if paths and parse_filename(paths[0].name).category != "spinelobbies"
+        }
         keys, homes_of, aliases_of = self._map(entries, students, added, list(portraits), list(lobbies), special_cores)
         families, variants, cores = {}, {}, {}
         unmodelled: dict[str, list[str]] = {}  # variants with neither a character nor a field model: key -> aliases
@@ -376,18 +454,31 @@ class Catalog:
                     entry.update(playable=True, portrait=portrait)
                 entry["bg"] = entries[student["base"]].get("bg")
             family_key = student["base"]
-            family = families.setdefault(family_key, Family(family_key, student["names"], student.get("school"), [],
-                                                            list(student.get("aliases", []))))
+            family = families.setdefault(
+                family_key,
+                Family(family_key, student["names"], student.get("school"), [], list(student.get("aliases", []))),
+            )
             aliases, homes = aliases_of[key], homes_of[key]
             dates = [parse_filename(path.name).date for path in paths]
             portrait = collection.get((entry.get("portrait") or "").lower())
-            variant = Variant(key, entry["file_id"], family_key, entry["names"], entry["playable"],
-                              entry["order"], core, next(iter(homes), None),
-                              art.get("bg", {}).get((entry.get("bg") or "").lower()), portrait,
-                              max(filter(None, dates), default=None), entry.get("page_id") or None,
-                              recruitable=self._recruitable(entry, portrait is not None, bool(collection)),
-                              model=model_core(key, aliases[1:], models), schale_id=entry.get("schale_id"),
-                              aliases=list(entry.get("aliases", [])))
+            variant = Variant(
+                key,
+                entry["file_id"],
+                family_key,
+                entry["names"],
+                entry["playable"],
+                entry["order"],
+                core,
+                next(iter(homes), None),
+                art.get("bg", {}).get((entry.get("bg") or "").lower()),
+                portrait,
+                max(filter(None, dates), default=None),
+                entry.get("page_id") or None,
+                recruitable=self._recruitable(entry, portrait is not None, bool(collection)),
+                model=model_core(key, aliases[1:], models),
+                schale_id=entry.get("schale_id"),
+                aliases=list(entry.get("aliases", [])),
+            )
             if variant.model is None:
                 # an event or story variant with only a field-mode model: shown and offered as a costume, no slot
                 variant.field_model = model_core(key, aliases[1:], fields)
@@ -399,8 +490,11 @@ class Catalog:
             # a story-only or UI-only character's model in its own bundles (a cutscene's NP0206, Arona), read for
             # these variants only. Those bundles are the variant's model slot: a mod of them applies there,
             # unlike a field-mode model, which shares its bundles with other students' and has no slot
-            names = {name.lower() for key, aliases in unmodelled.items()
-                     for name in (key, key + "_original", *aliases, *(alias + "_original" for alias in aliases))}
+            names = {
+                name.lower()
+                for key, aliases in unmodelled.items()
+                for name in (key, key + "_original", *aliases, *(alias + "_original" for alias in aliases))
+            }
             owned = self.game.asset_model_cores(names)
             for key, aliases in unmodelled.items():
                 variants[key].model = model_core(key, aliases, owned)
@@ -412,8 +506,20 @@ class Catalog:
             family = families.setdefault(family_key, Family(family_key, base, None, []))
             dates = [parse_filename(path.name).date for path in paths]
             category = parse_filename(paths[0].name).category if paths else "spinebackground"
-            variant = Variant(key, core, family_key, names, False, len(family.variants), None, core, None, None,
-                              max(filter(None, dates), default=None), spine_category=category)
+            variant = Variant(
+                key,
+                core,
+                family_key,
+                names,
+                False,
+                len(family.variants),
+                None,
+                core,
+                None,
+                None,
+                max(filter(None, dates), default=None),
+                spine_category=category,
+            )
             family.variants.append(variant)
             variants[key] = variant
         cores = {lower: variants[key] for lower, key in keys.items() if key in variants}
@@ -422,8 +528,15 @@ class Catalog:
                 cores.setdefault(variant.model.lower(), variant)
         for family in families.values():
             # recruitable here first, then playable on another server, then story and NPC variants
-            family.variants.sort(key=lambda variant: (variant.key != family.key, not variant.recruitable,
-                                                      not variant.playable, variant.order, variant.key))
+            family.variants.sort(
+                key=lambda variant: (
+                    variant.key != family.key,
+                    not variant.recruitable,
+                    not variant.playable,
+                    variant.order,
+                    variant.key,
+                )
+            )
         return dict(sorted(families.items())), variants, cores
 
     def _recruitable(self, entry: dict, installed: bool, indexed: bool) -> bool:

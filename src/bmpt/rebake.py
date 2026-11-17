@@ -77,7 +77,11 @@ def rig(value, atlas: Atlas, max_poses: int | None = None) -> Rig:
     """The posted geometry of one rig, checked against the atlas the back end read itself (untrusted input: counts
     capped, numbers finite, UVs on the page, triangle indices in range, regions and pages of that atlas). Refused
     with ``bad_params``. ``max_poses``: the most poses taken (a graft's test rig asks for one per candidate)."""
-    if not isinstance(value, dict) or not isinstance(value.get("slots"), list) or not isinstance(value.get("poses"), dict):
+    if (
+        not isinstance(value, dict)
+        or not isinstance(value.get("slots"), list)
+        or not isinstance(value.get("poses"), dict)
+    ):
         raise _bad()
     slots = value["slots"]
     if len(slots) > MAX_SLOTS or not all(isinstance(slot, str) for slot in slots):
@@ -102,8 +106,7 @@ def rig(value, atlas: Atlas, max_poses: int | None = None) -> Rig:
             if page not in pages or (page, region) not in regions:
                 raise _bad()
             blend, alpha = item.get("blend"), item.get("alpha")
-            if type(blend) is not int or not 0 <= blend <= 3 or type(alpha) not in (int, float) \
-                    or not 0 <= alpha <= 1:
+            if type(blend) is not int or not 0 <= blend <= 3 or type(alpha) not in (int, float) or not 0 <= alpha <= 1:
                 raise _bad()
             vertices = _numbers(item.get("vertices"), MAX_VERTICES)
             uvs = _numbers(item.get("uvs"), MAX_VERTICES)
@@ -117,8 +120,12 @@ def rig(value, atlas: Atlas, max_poses: int | None = None) -> Rig:
             v = np.asarray(vertices, dtype=np.float64).reshape(-1, 2)
             uv = np.asarray(uvs, dtype=np.float64).reshape(-1, 2)
             t = np.asarray(triangles, dtype=np.int64).reshape(-1, 3)
-            if np.abs(v).max() > MAX_COORDINATE or uv.min() < -UV_SLACK or uv.max() > 1 + UV_SLACK \
-                    or (t.size and (t.min() < 0 or t.max() >= count)):
+            if (
+                np.abs(v).max() > MAX_COORDINATE
+                or uv.min() < -UV_SLACK
+                or uv.max() > 1 + UV_SLACK
+                or (t.size and (t.min() < 0 or t.max() >= count))
+            ):
                 raise _bad()
             items.append(Drawn(slot, region, page, blend, float(alpha), v, uv, t))
         poses[name] = tuple(items)
@@ -143,8 +150,12 @@ def _sample(page: np.ndarray, u: np.ndarray, v: np.ndarray) -> np.ndarray:
     def at(ix, iy):
         return page[np.clip(iy, 0, h - 1), np.clip(ix, 0, w - 1)]
 
-    return (at(x0, y0) * (1 - fx) * (1 - fy) + at(x0 + 1, y0) * fx * (1 - fy)
-            + at(x0, y0 + 1) * (1 - fx) * fy + at(x0 + 1, y0 + 1) * fx * fy)
+    return (
+        at(x0, y0) * (1 - fx) * (1 - fy)
+        + at(x0 + 1, y0) * fx * (1 - fy)
+        + at(x0, y0 + 1) * (1 - fx) * fy
+        + at(x0 + 1, y0 + 1) * fx * fy
+    )
 
 
 def _bary(px, py, a, b, c):
@@ -234,8 +245,14 @@ def _gather(candidates: list[Drawn], pages: dict[str, np.ndarray], wx: np.ndarra
         colour = np.zeros((len(wx), 4), dtype=np.float32)
         for triangle in candidate.triangles:
             w = candidate.vertices[triangle]
-            near = todo & ~got & (wx >= w[:, 0].min()) & (wx <= w[:, 0].max()) \
-                & (wy >= w[:, 1].min()) & (wy <= w[:, 1].max())
+            near = (
+                todo
+                & ~got
+                & (wx >= w[:, 0].min())
+                & (wx <= w[:, 0].max())
+                & (wy >= w[:, 1].min())
+                & (wy <= w[:, 1].max())
+            )
             if not near.any():
                 continue
             weights = _bary(wx[near], wy[near], w[0], w[1], w[2])
@@ -247,8 +264,9 @@ def _gather(candidates: list[Drawn], pages: dict[str, np.ndarray], wx: np.ndarra
             index = np.flatnonzero(near)[inside]
             l0, l1, l2 = (x[inside] for x in weights)
             q = candidate.uvs[triangle]
-            colour[index] = _sample(page, l0 * q[0, 0] + l1 * q[1, 0] + l2 * q[2, 0],
-                                    l0 * q[0, 1] + l1 * q[1, 1] + l2 * q[2, 1])
+            colour[index] = _sample(
+                page, l0 * q[0, 0] + l1 * q[1, 0] + l2 * q[2, 0], l0 * q[0, 1] + l1 * q[1, 1] + l2 * q[2, 1]
+            )
             got[index] = True
         acc[got] += (1 - acc[got, 3:4]) * colour[got]
         held |= got
@@ -292,20 +310,24 @@ def _silhouette(drawn: tuple[Drawn, ...], pages: dict[str, np.ndarray], frame) -
                 continue
             l0, l1, l2 = (w[inside] for w in weights)
             q = item.uvs[triangle]
-            alpha = _sample(page, l0 * q[0, 0] + l1 * q[1, 0] + l2 * q[2, 0],
-                            l0 * q[0, 1] + l1 * q[1, 1] + l2 * q[2, 1]) * item.alpha
+            alpha = (
+                _sample(page, l0 * q[0, 0] + l1 * q[1, 0] + l2 * q[2, 0], l0 * q[0, 1] + l1 * q[1, 1] + l2 * q[2, 1])
+                * item.alpha
+            )
             yy, xx = gy[inside], gx[inside]
             out[yy, xx] = alpha + (1 - alpha) * out[yy, xx]
     return out
 
 
 def _alpha_pages(pages: dict[str, Image.Image]) -> dict[str, np.ndarray]:
-    return {key: np.asarray(image.convert("RGBA").getchannel("A"), dtype=np.float32) / 255.0
-            for key, image in pages.items()}
+    return {
+        key: np.asarray(image.convert("RGBA").getchannel("A"), dtype=np.float32) / 255.0 for key, image in pages.items()
+    }
 
 
-def overlap(source: Rig, target: Rig, source_pages: dict[str, Image.Image],
-            official_pages: dict[str, Image.Image]) -> float:
+def overlap(
+    source: Rig, target: Rig, source_pages: dict[str, Image.Image], official_pages: dict[str, Image.Image]
+) -> float:
     """How far the two rest pictures cover the same place: the IoU of their alpha silhouettes (``_silhouette``).
     Pages are keyed by texture key."""
     frame = _frame(source.poses[""], target.poses[""])
@@ -315,8 +337,9 @@ def overlap(source: Rig, target: Rig, source_pages: dict[str, Image.Image],
     return float((left & right).sum() / union) if union else 1.0
 
 
-def bake(source: Rig, target: Rig, source_pages: dict[str, Image.Image],
-         official_pages: dict[str, Image.Image]) -> tuple[dict[str, Image.Image], dict]:
+def bake(
+    source: Rig, target: Rig, source_pages: dict[str, Image.Image], official_pages: dict[str, Image.Image]
+) -> tuple[dict[str, Image.Image], dict]:
     """The official pages with every region the target rig draws filled from the source pages through world space
     (pages keyed by texture key, straight alpha as the game's). A texel no source attachment holds keeps the
     official pixel; a region less than half of which the source holds keeps the official pixels whole (``official``
@@ -365,8 +388,14 @@ def bake(source: Rig, target: Rig, source_pages: dict[str, Image.Image],
             pixels[clear, :3] = official[hy[clear], hx[clear], :3]
             page[hy, hx] = pixels
             page[py[~held], px[~held]] = official[py[~held], px[~held]]
-    report = {"moved": sorted({region for (_page, region), result in done.items() if result == "baked"}),
-              "official": sorted({region for (_page, region), result in done.items() if result == "official"}),
-              "added": [], "dropped": [], "upscaled": [], "warnings": [], "unchanged": False}
+    report = {
+        "moved": sorted({region for (_page, region), result in done.items() if result == "baked"}),
+        "official": sorted({region for (_page, region), result in done.items() if result == "official"}),
+        "added": [],
+        "dropped": [],
+        "upscaled": [],
+        "warnings": [],
+        "unchanged": False,
+    }
     report["partial"] = bool(report["official"])
     return {key: Image.fromarray(page, "RGBA") for key, page in output.items()}, report

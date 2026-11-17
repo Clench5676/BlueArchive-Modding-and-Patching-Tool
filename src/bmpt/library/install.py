@@ -12,8 +12,18 @@ from enum import StrEnum
 from pathlib import Path
 
 from bmpt.engine import (
-    AnimCheckOptions, Bundle, CRCUtils, LogFunc, ParsedFilename, ProgressCallback, ReplaceAssetType, SaveOptions,
-    SkelConvertOptions, no_log, parse_filename, t,
+    AnimCheckOptions,
+    Bundle,
+    CRCUtils,
+    LogFunc,
+    ParsedFilename,
+    ProgressCallback,
+    ReplaceAssetType,
+    SaveOptions,
+    SkelConvertOptions,
+    no_log,
+    parse_filename,
+    t,
 )
 from .. import devmode
 from ..openfiles import temporary_directory
@@ -22,14 +32,16 @@ from .rebuild import rebuild
 
 class Action(StrEnum):
     """What the build does with one mod file (the values of upstream's ``InstallAction``)."""
+
     DIRECT_REPLACE = "direct_replace"  # the part's current release: written whole, re-saved for the CRC if needed
-    UPDATE = "update"                  # an older release or another build: its assets move into the parts
-    NOT_FOUND = "not_found"            # no part takes it
+    UPDATE = "update"  # an older release or another build: its assets move into the parts
+    NOT_FOUND = "not_found"  # no part takes it
 
 
 @dataclass
 class PlannedFile:
     """One mod file of a group. ``existing_path``: the part a direct replacement writes."""
+
     mod_path: Path
     parsed: ParsedFilename
     action: Action
@@ -40,6 +52,7 @@ class PlannedFile:
 @dataclass
 class PlannedGroup:
     """Mod files that build together, per name prefix and core. ``target_paths``: the parts an update writes."""
+
     prefix: str
     category: str | None
     core: str
@@ -93,9 +106,15 @@ def _direct(file: PlannedFile, save_options: SaveOptions, log: LogFunc) -> bool:
         return _replace(resaved, file.existing_path, log)
 
 
-def _build_group(group: PlannedGroup, output_dir: Path, asset_types: set[ReplaceAssetType],
-                 save_options: SaveOptions, spine_options: SkelConvertOptions | None,
-                 anim_check: AnimCheckOptions | None, log: LogFunc) -> list[tuple[str, str]]:
+def _build_group(
+    group: PlannedGroup,
+    output_dir: Path,
+    asset_types: set[ReplaceAssetType],
+    save_options: SaveOptions,
+    spine_options: SkelConvertOptions | None,
+    anim_check: AnimCheckOptions | None,
+    log: LogFunc,
+) -> list[tuple[str, str]]:
     direct = [file for file in group.files if file.action == Action.DIRECT_REPLACE]
     update = [file for file in group.files if file.action == Action.UPDATE]
     if not direct and not update:
@@ -109,9 +128,18 @@ def _build_group(group: PlannedGroup, output_dir: Path, asset_types: set[Replace
         if not _direct(file, save_options, log):
             failures.append((group.core, file.mod_path.name))
     if update:
-        result = rebuild([file.mod_path for file in update], group.target_paths, output_dir, asset_types,
-                         save_options, spine_options, skip_unchanged=True, match_strategy="cont_name_type",
-                         anim_check=anim_check, log=log)
+        result = rebuild(
+            [file.mod_path for file in update],
+            group.target_paths,
+            output_dir,
+            asset_types,
+            save_options,
+            spine_options,
+            skip_unchanged=True,
+            match_strategy="cont_name_type",
+            anim_check=anim_check,
+            log=log,
+        )
         if result.no_match:
             # The files hold nothing these parts take (e.g. a part of materials only that a game update rebuilt):
             # the parts stay the official copies they were staged as.
@@ -128,10 +156,17 @@ def _build_group(group: PlannedGroup, output_dir: Path, asset_types: set[Replace
     return failures
 
 
-def install_staged(groups: list[PlannedGroup], output_dir: Path, asset_types: set[ReplaceAssetType],
-                   save_options: SaveOptions, spine_options: SkelConvertOptions | None = None, *,
-                   anim_check: AnimCheckOptions | None = None, log: LogFunc = no_log,
-                   progress: ProgressCallback | None = None) -> list[tuple[str, str]]:
+def install_staged(
+    groups: list[PlannedGroup],
+    output_dir: Path,
+    asset_types: set[ReplaceAssetType],
+    save_options: SaveOptions,
+    spine_options: SkelConvertOptions | None = None,
+    *,
+    anim_check: AnimCheckOptions | None = None,
+    log: LogFunc = no_log,
+    progress: ProgressCallback | None = None,
+) -> list[tuple[str, str]]:
     """Build every group into the staged parts it names, in place, one group after another; the update builds go
     through ``output_dir``. ``progress`` hears (group number, groups, core) before each group. Returns the failures
     as (core, reason); a group that raises is one."""
@@ -141,8 +176,7 @@ def install_staged(groups: list[PlannedGroup], output_dir: Path, asset_types: se
         if progress:
             progress(i, len(groups), group.core)
         try:
-            failures.extend(_build_group(group, output_dir, asset_types, save_options, spine_options, anim_check,
-                                         log))
+            failures.extend(_build_group(group, output_dir, asset_types, save_options, spine_options, anim_check, log))
         except Exception as error:
             log(f"❌ {t('log.process_failed', error=error)}")
             failures.append((group.core, str(error)))

@@ -27,8 +27,19 @@ def release_run(tmp_path, monkeypatch):
     monkeypatch.setenv("GITHUB_OUTPUT", str(output))
     monkeypatch.delenv("RELEASE_TAG", raising=False)
     event_path = tmp_path / "release-event.json"
-    event_path.write_text(json.dumps({"action": "published", "release": {
-        "tag_name": "0.4.1", "draft": False, "prerelease": False, "published_at": "2026-10-22T10:00:00Z"}}))
+    event_path.write_text(
+        json.dumps(
+            {
+                "action": "published",
+                "release": {
+                    "tag_name": "0.4.1",
+                    "draft": False,
+                    "prerelease": False,
+                    "published_at": "2026-10-22T10:00:00Z",
+                },
+            }
+        )
+    )
     monkeypatch.setenv("GITHUB_EVENT_PATH", str(event_path))
     monkeypatch.setenv("GITHUB_EVENT_NAME", "release")
     monkeypatch.setenv("GITHUB_SHA", "a" * 40)
@@ -62,10 +73,26 @@ def test_published_stable_tag_matches_project_and_event_commit(release_run, monk
     assert release_run.read_text() == f"previous=value\ntag={tag}\n"
 
 
-@pytest.mark.parametrize("tag", [
-    "0.4.1-alpha", "0.4.1-alpha.1", "0.4.1-beta.2", "0.4.1-rc.1", "0.4.1-RC.1", "0.4.1-preview",
-    "0.4.1.alpha", "0.4.1a1", "v0.4.1", "0.4.1+build", "01.4.1", "0.4", "0.4.1\ninjected=true", None, True,
-])
+@pytest.mark.parametrize(
+    "tag",
+    [
+        "0.4.1-alpha",
+        "0.4.1-alpha.1",
+        "0.4.1-beta.2",
+        "0.4.1-rc.1",
+        "0.4.1-RC.1",
+        "0.4.1-preview",
+        "0.4.1.alpha",
+        "0.4.1a1",
+        "v0.4.1",
+        "0.4.1+build",
+        "01.4.1",
+        "0.4",
+        "0.4.1\ninjected=true",
+        None,
+        True,
+    ],
+)
 def test_prerelease_and_noncanonical_tags_never_reach_git(release_run, monkeypatch, tag):
     edit_event(tag_name=tag)
     monkeypatch.setattr(release_tag.subprocess, "run", lambda *args, **kwargs: pytest.fail("Rejected tag reached Git"))
@@ -74,18 +101,38 @@ def test_prerelease_and_noncanonical_tags_never_reach_git(release_run, monkeypat
     assert release_run.read_text() == "previous=value\n"
 
 
-@pytest.mark.parametrize("fields", [{"prerelease": True}, {"draft": True}, {"published_at": None},
-                                    {"published_at": ""}, {"prerelease": 0}, {"draft": "false"}])
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"prerelease": True},
+        {"draft": True},
+        {"published_at": None},
+        {"published_at": ""},
+        {"prerelease": 0},
+        {"draft": "false"},
+    ],
+)
 def test_non_stable_release_flags_are_rejected(release_run, monkeypatch, fields):
     edit_event(**fields)
-    monkeypatch.setattr(release_tag.subprocess, "run", lambda *args, **kwargs: pytest.fail("Rejected release reached Git"))
+    monkeypatch.setattr(
+        release_tag.subprocess, "run", lambda *args, **kwargs: pytest.fail("Rejected release reached Git")
+    )
     with pytest.raises(SystemExit, match="Draft, unpublished and prerelease"):
         release_tag.main()
 
 
-@pytest.mark.parametrize("name,action", [("push", "published"), ("workflow_dispatch", "published"),
-                                       ("pull_request", "published"), ("release", "created"),
-                                       ("release", "edited"), ("release", "released"), ("release", "prereleased")])
+@pytest.mark.parametrize(
+    "name,action",
+    [
+        ("push", "published"),
+        ("workflow_dispatch", "published"),
+        ("pull_request", "published"),
+        ("release", "created"),
+        ("release", "edited"),
+        ("release", "released"),
+        ("release", "prereleased"),
+    ],
+)
 def test_only_published_release_events_are_accepted(release_run, monkeypatch, name, action):
     monkeypatch.setenv("GITHUB_EVENT_NAME", name)
     event_path = Path(os.environ["GITHUB_EVENT_PATH"])
@@ -110,10 +157,13 @@ def test_project_version_must_equal_stable_release_tag(release_run, version):
         release_tag.main()
 
 
-@pytest.mark.parametrize("missing,commit,message", [
-    (True, "a" * 40, "does not exist"),
-    (False, "b" * 40, "does not point at the checked-out commit"),
-])
+@pytest.mark.parametrize(
+    "missing,commit,message",
+    [
+        (True, "a" * 40, "does not exist"),
+        (False, "b" * 40, "does not point at the checked-out commit"),
+    ],
+)
 def test_release_tag_rejects_missing_or_wrong_commit(release_run, monkeypatch, missing, commit, message):
     mock_git(monkeypatch, "0.4.1", missing=missing, commit=commit)
     with pytest.raises(SystemExit, match=message):
@@ -131,9 +181,9 @@ def test_event_commit_cannot_change_after_publication(release_run, monkeypatch, 
 
 def test_only_windows_gui_workflows_remain():
     workflows = sorted((ROOT / ".github/workflows").glob("*.y*ml"))
-    assert [path.name for path in workflows] == ["build.yml", "windows-build.yml"]
+    assert [path.name for path in workflows] == ["build.yml", "lint.yml", "windows-build.yml"]
     workflow = (ROOT / ".github/workflows/build.yml").read_text()
-    trigger = workflow[workflow.index("on:\n"):workflow.index("permissions:\n")]
+    trigger = workflow[workflow.index("on:\n") : workflow.index("permissions:\n")]
     assert trigger.strip() == "on:\n  release:\n    types: [published]"
     assert "github.event.release.prerelease == false" in workflow
     assert "github.event.release.draft == false" in workflow
@@ -153,27 +203,42 @@ def test_release_upload_uses_exact_gui_pair_and_rechecks_release(tmp_path, failu
     executable = dist / name
     executable.write_bytes(b"GUI executable")
     digest = hashlib.md5(executable.read_bytes()).hexdigest()
-    (dist / (name + ".md5")).write_text(f'{"bad" if failure == "checksum" else digest}  {name}\n')
+    (dist / (name + ".md5")).write_text(f"{'bad' if failure == 'checksum' else digest}  {name}\n")
     (dist / "unrelated-cli.exe").write_bytes(b"must not upload")
-    view = {"tagName": "0.4.2" if failure == "tag" else "0.4.1", "isDraft": failure == "draft", "isPrerelease": failure == "prerelease"}
-    harness = '''
+    view = {
+        "tagName": "0.4.2" if failure == "tag" else "0.4.1",
+        "isDraft": failure == "draft",
+        "isPrerelease": failure == "prerelease",
+    }
+    harness = """
 function gh {
     $global:LASTEXITCODE = 0
     if ($args[1] -eq "view") { Write-Output $env:TEST_RELEASE; return }
     if ($args[1] -eq "upload") { $args | ConvertTo-Json | Set-Content -LiteralPath "uploaded.json"; return }
     throw "Unexpected GitHub command"
 }
-'''
-    result = subprocess.run([PWSH, "-NoProfile", "-NonInteractive", "-Command", harness + upload], cwd=tmp_path,
-                            env={**os.environ, "RELEASE_TAG": "0.4.1", "TEST_RELEASE": json.dumps(view)},
-                            capture_output=True, text=True, timeout=30)
+"""
+    result = subprocess.run(
+        [PWSH, "-NoProfile", "-NonInteractive", "-Command", harness + upload],
+        cwd=tmp_path,
+        env={**os.environ, "RELEASE_TAG": "0.4.1", "TEST_RELEASE": json.dumps(view)},
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
     if failure:
         assert result.returncode != 0
         assert not (tmp_path / "uploaded.json").exists()
     else:
         assert result.returncode == 0, result.stdout + result.stderr
         assert json.loads((tmp_path / "uploaded.json").read_text()) == [
-            "release", "upload", "0.4.1", "--clobber", str(executable), str(dist / (name + ".md5"))]
+            "release",
+            "upload",
+            "0.4.1",
+            "--clobber",
+            str(executable),
+            str(dist / (name + ".md5")),
+        ]
 
 
 @pytest.mark.skipif(PWSH is None, reason="PowerShell is not installed")
@@ -181,7 +246,7 @@ function gh {
 def test_windows_build_python_default_and_override(tmp_path, python):
     script = (ROOT / "scripts" / "build_windows.ps1").read_text()
     harness = tmp_path / "parameters.ps1"
-    harness.write_text(script[:script.index('$ErrorActionPreference')] + 'Write-Output $Python\n')
+    harness.write_text(script[: script.index("$ErrorActionPreference")] + "Write-Output $Python\n")
     args = [PWSH, "-NoProfile", "-NonInteractive", "-File", str(harness)]
     if python is not None:
         args += ["-Python", python]
@@ -195,8 +260,8 @@ def test_windows_build_python_default_and_override(tmp_path, python):
 def test_windows_build_packages_selected_targets(tmp_path, target, kinds):
     # Run the build and packaging section with a compiler stub, bypassing dependency setup and downloads.
     script = (ROOT / "scripts" / "build_windows.ps1").read_text()
-    build = script[script.index('$Name = "Blue-Archive-Modding-and-Patching-Tool"'):]
-    harness = r'''
+    build = script[script.index('$Name = "Blue-Archive-Modding-and-Patching-Tool"') :]
+    harness = r"""
 $ErrorActionPreference = "Stop"
 $Root = (Get-Location).Path
 $Build = Join-Path $Root "build"
@@ -215,14 +280,20 @@ function Build-Python {
     $global:LASTEXITCODE = 0
 }
 $Py = "Build-Python"
-'''
-    result = subprocess.run([PWSH, "-NoProfile", "-NonInteractive", "-Command", harness + build],
-                            cwd=tmp_path, env={**os.environ, "TEST_BUILD_TARGET": target},
-                            capture_output=True, text=True, timeout=30)
+"""
+    result = subprocess.run(
+        [PWSH, "-NoProfile", "-NonInteractive", "-Command", harness + build],
+        cwd=tmp_path,
+        env={**os.environ, "TEST_BUILD_TARGET": target},
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
     assert result.returncode == 0, result.stdout + result.stderr
     names = [f"Blue-Archive-Modding-and-Patching-Tool{kind}-0.1.0-beta.1-windows-x64.exe" for kind in kinds]
     assert sorted(p.name for p in (tmp_path / "dist").iterdir()) == sorted(
-        name + suffix for name in names for suffix in ("", ".md5"))
+        name + suffix for name in names for suffix in ("", ".md5")
+    )
     for name in names:
         asset = tmp_path / "dist" / name
         expected = hashlib.md5(asset.read_bytes()).hexdigest()
@@ -249,7 +320,7 @@ def workflow_step(name):
     start = workflow.index(f"      - name: {name}\n        run: |\n")
     body = workflow[start:].split("        run: |\n", 1)[1]
     end = body.find("\n\n      - name: ")
-    return textwrap.dedent(body if end < 0 else body[:end + 1])
+    return textwrap.dedent(body if end < 0 else body[: end + 1])
 
 
 def draft(tag="0.7.0-alpha.28", **fields):
@@ -258,13 +329,19 @@ def draft(tag="0.7.0-alpha.28", **fields):
 
 def run_step(tmp_path, name, tag, release):
     env = {**os.environ, "RELEASE_TAG": tag, "GITHUB_REPOSITORY": "owner/repo", "TEST_RELEASE": release or ""}
-    return subprocess.run([PWSH, "-NoProfile", "-NonInteractive", "-Command", GH_HARNESS + workflow_step(name)],
-                          cwd=tmp_path, env=env, capture_output=True, text=True, timeout=30)
+    return subprocess.run(
+        [PWSH, "-NoProfile", "-NonInteractive", "-Command", GH_HARNESS + workflow_step(name)],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
 
 
 def test_prerelease_workflow_is_manual_and_uploads_only_to_releases():
     workflow = PRERELEASE_WORKFLOW.read_text()
-    trigger = workflow[workflow.index("on:\n"):workflow.index("permissions:\n")]
+    trigger = workflow[workflow.index("on:\n") : workflow.index("permissions:\n")]
     assert trigger.splitlines()[:2] == ["on:", "  workflow_dispatch:"]
     assert "push" not in trigger and "pull_request" not in trigger and "release" not in trigger.split("inputs:")[0]
     assert "upload-artifact" not in workflow and "actions/cache" not in workflow
@@ -273,27 +350,37 @@ def test_prerelease_workflow_is_manual_and_uploads_only_to_releases():
     # Inputs reach scripts only through the environment.
     for step in ("Validate Draft Pre-release", "Validate Checkout", "Upload EXE and MD5 to Draft Release"):
         assert "${{" not in workflow_step(step)
-    order = [workflow.index(marker) for marker in (
-        "name: Validate Draft Pre-release", "name: Checkout Release Tag", "name: Validate Checkout",
-        "-Target Gui", "name: Upload EXE and MD5 to Draft Release")]
+    order = [
+        workflow.index(marker)
+        for marker in (
+            "name: Validate Draft Pre-release",
+            "name: Checkout Release Tag",
+            "name: Validate Checkout",
+            "-Target Gui",
+            "name: Upload EXE and MD5 to Draft Release",
+        )
+    ]
     assert order == sorted(order)
 
 
 @pytest.mark.skipif(PWSH is None, reason="PowerShell is not installed")
-@pytest.mark.parametrize("tag,release,ok", [
-    ("0.7.0-alpha.28", draft(), True),
-    ("1.0.0-rc.1", draft("1.0.0-rc.1"), True),
-    ("0.7.0", draft("0.7.0"), False),
-    ("v0.7.0-alpha.28", draft("v0.7.0-alpha.28"), False),
-    ("0.7.0-alpha.28\n", draft("0.7.0-alpha.28\n"), False),
-    ("0.7.0-alpha.28;x", draft("0.7.0-alpha.28;x"), False),
-    ("07.0.0-alpha", draft("07.0.0-alpha"), False),
-    ("", draft(""), False),
-    ("0.7.0-alpha.28", None, False),
-    ("0.7.0-alpha.28", draft(isDraft=False), False),
-    ("0.7.0-alpha.28", draft(isPrerelease=False), False),
-    ("0.7.0-alpha.28", draft("0.7.0-alpha.27"), False),
-])
+@pytest.mark.parametrize(
+    "tag,release,ok",
+    [
+        ("0.7.0-alpha.28", draft(), True),
+        ("1.0.0-rc.1", draft("1.0.0-rc.1"), True),
+        ("0.7.0", draft("0.7.0"), False),
+        ("v0.7.0-alpha.28", draft("v0.7.0-alpha.28"), False),
+        ("0.7.0-alpha.28\n", draft("0.7.0-alpha.28\n"), False),
+        ("0.7.0-alpha.28;x", draft("0.7.0-alpha.28;x"), False),
+        ("07.0.0-alpha", draft("07.0.0-alpha"), False),
+        ("", draft(""), False),
+        ("0.7.0-alpha.28", None, False),
+        ("0.7.0-alpha.28", draft(isDraft=False), False),
+        ("0.7.0-alpha.28", draft(isPrerelease=False), False),
+        ("0.7.0-alpha.28", draft("0.7.0-alpha.27"), False),
+    ],
+)
 def test_prerelease_build_requires_a_draft_prerelease(tmp_path, tag, release, ok):
     result = run_step(tmp_path, "Validate Draft Pre-release", tag, release)
     assert (result.returncode == 0) == ok, result.stdout + result.stderr
@@ -311,10 +398,16 @@ def test_prerelease_upload_uses_exact_gui_pair_and_rechecks_draft(tmp_path, fail
     executable = dist / name
     executable.write_bytes(b"GUI executable")
     digest = hashlib.md5(executable.read_bytes()).hexdigest()
-    (dist / (name + ".md5")).write_text(f'{"bad" if failure == "checksum" else digest}  {name}\n')
+    (dist / (name + ".md5")).write_text(f"{'bad' if failure == 'checksum' else digest}  {name}\n")
     (dist / "unrelated.exe").write_bytes(b"must not upload")
-    release = {None: draft(), "published": draft(isDraft=False), "stable": draft(isPrerelease=False),
-               "tag": draft("0.7.0-alpha.27"), "checksum": draft(), "missing": None}[failure]
+    release = {
+        None: draft(),
+        "published": draft(isDraft=False),
+        "stable": draft(isPrerelease=False),
+        "tag": draft("0.7.0-alpha.27"),
+        "checksum": draft(),
+        "missing": None,
+    }[failure]
     result = run_step(tmp_path, "Upload EXE and MD5 to Draft Release", tag, release)
     if failure:
         assert result.returncode != 0
@@ -322,4 +415,12 @@ def test_prerelease_upload_uses_exact_gui_pair_and_rechecks_draft(tmp_path, fail
     else:
         assert result.returncode == 0, result.stdout + result.stderr
         assert json.loads((tmp_path / "uploaded.json").read_text()) == [
-            "release", "upload", tag, "--repo", "owner/repo", "--clobber", str(executable), str(dist / (name + ".md5"))]
+            "release",
+            "upload",
+            tag,
+            "--repo",
+            "owner/repo",
+            "--clobber",
+            str(executable),
+            str(dist / (name + ".md5")),
+        ]

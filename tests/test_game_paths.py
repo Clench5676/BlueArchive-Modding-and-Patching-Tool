@@ -24,7 +24,8 @@ def search_as_usual(monkeypatch):
     for name in ("BAMT_GAME_DIRS_GLOBAL", "BAMT_GAME_DIRS_JAPAN", "BAMT_DEV_ROOTS", "BAMT_DEV_WRITABLE"):
         monkeypatch.delenv(name, raising=False)
 
-LIBRARY_FOLDERS = r'''"libraryfolders"
+
+LIBRARY_FOLDERS = r""""libraryfolders"
 {
 	"0"
 	{
@@ -43,7 +44,7 @@ LIBRARY_FOLDERS = r'''"libraryfolders"
 		}
 	}
 }
-'''
+"""
 
 APP_MANIFEST = f'''"AppState"
 {{
@@ -53,7 +54,7 @@ APP_MANIFEST = f'''"AppState"
 }}
 '''
 
-SYSTEM_REG = r'''WINE REGISTRY Version 2
+SYSTEM_REG = r"""WINE REGISTRY Version 2
 ;; All keys relative to \\Machine
 
 [Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Steam App 3557620] 1790795416
@@ -63,7 +64,7 @@ SYSTEM_REG = r'''WINE REGISTRY Version 2
 
 [Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{6FA797CF-6B76-4B6D-87EE-768F92008720}] 1790796559
 "InstallLocation"="C:\\Other"
-'''
+"""
 
 
 def make_game_dir(path: Path) -> Path:
@@ -101,7 +102,10 @@ class TestVdfValues:
 class TestRegValue:
     def test_install_location(self):
         key = rf"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Steam App {STEAM_APP_ID}"
-        assert reg_value(SYSTEM_REG, key, "InstallLocation") == r"C:\Program Files (x86)\Steam\steamapps\common\BlueArchive"
+        assert (
+            reg_value(SYSTEM_REG, key, "InstallLocation")
+            == r"C:\Program Files (x86)\Steam\steamapps\common\BlueArchive"
+        )
 
     def test_value_of_another_key_is_not_used(self):
         key = rf"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Steam App {STEAM_APP_ID}"
@@ -151,7 +155,9 @@ class TestWinePrefix:
     def test_find_game_dirs_scans_prefixes_and_native_steam(self, tmp_path, monkeypatch):
         prefix = make_wine_prefix(tmp_path / "prefix")
         (prefix / "system.reg").write_text(SYSTEM_REG, encoding="utf-8")
-        wine_game_dir = make_game_dir(prefix / "drive_c" / "Program Files (x86)" / "Steam" / "steamapps" / "common" / "BlueArchive")
+        wine_game_dir = make_game_dir(
+            prefix / "drive_c" / "Program Files (x86)" / "Steam" / "steamapps" / "common" / "BlueArchive"
+        )
         native_game_dir = make_steam_library(tmp_path / "native_steam")
         monkeypatch.setattr(game_paths, "_wine_prefixes", lambda: iter([tmp_path / "not_a_prefix", prefix]))
         monkeypatch.setattr(game_paths, "_native_steam_dirs", lambda: [tmp_path / "native_steam"])

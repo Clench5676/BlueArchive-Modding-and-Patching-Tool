@@ -31,11 +31,16 @@ const toLinear = (c) => (c <= 0.04045 ? c / 12.92 : c < 1 ? Math.pow((c + 0.055)
 // tone = n * 0.75 + 0.25 with n = rgb / max(max(rgb), 1e-4); shadow tone = lerp(1, n / 2, t) with
 // t = saturate((max - min) / max * 0.88); data = (max * 0.85 + 0.15, (max + min) / 2).
 export function characterLight(rgb) {
-  const hi = Math.max(...rgb), lo = Math.min(...rgb), d = Math.max(hi, 1e-4);
+  const hi = Math.max(...rgb),
+    lo = Math.min(...rgb),
+    d = Math.max(hi, 1e-4);
   const n = rgb.map((c) => c / d);
   const t = Math.min(Math.max(((hi - lo) / d) * 0.88, 0), 1);
-  return { tone: n.map((c) => c * 0.75 + 0.25), shadowTone: n.map((c) => 1 + t * (c * 0.5 - 1)),
-    data: [hi * 0.85 + 0.15, (hi + lo) / 2] };
+  return {
+    tone: n.map((c) => c * 0.75 + 0.25),
+    shadowTone: n.map((c) => 1 + t * (c * 0.5 - 1)),
+    data: [hi * 0.85 + 0.15, (hi + lo) / 2],
+  };
 }
 
 // The formation screen turns every character to face its camera: UIFormation's slots (UnitPositions/Position1-4)
@@ -65,7 +70,9 @@ export const LIGHT = {
 // Outside battle the active scene is EmptyScene (it is loaded alone; the lobby, formation and other
 // screens open over it): Trilight ambient, the colours below, which are also SceneLightingLoader's defaults.
 export const EMPTY_SCENE_AMBIENT = {
-  sky: [0.5457247, 0.7230554, 0.9734455], equator: [1, 1, 1], ground: [0.0592293, 0.0740774, 0.1037736],
+  sky: [0.5457247, 0.7230554, 0.9734455],
+  equator: [1, 1, 1],
+  ground: [0.0592293, 0.0740774, 0.1037736],
 };
 
 // Unity 2021.3's Trilight probe (UnityPlayer.dll, m_UseRadianceAmbientProbe off): a cube map of 2 x 2 texels a face
@@ -73,13 +80,43 @@ export const EMPTY_SCENE_AMBIENT = {
 // spherical harmonics (each face weighted to 4 pi / 6), each coefficient then scaled by the cosine lobe. Returns the
 // shader constants in Unity space: [SHAr, SHAg, SHAb, SHBr, SHBg, SHBb, SHC].
 const SQRT_PI = Math.sqrt(Math.PI);
-const L0 = 1 / (2 * SQRT_PI), L1 = Math.sqrt(3) / (3 * SQRT_PI);
-const L2 = Math.sqrt(15) / (8 * SQRT_PI), L3 = Math.sqrt(5) / (16 * SQRT_PI);
+const L0 = 1 / (2 * SQRT_PI),
+  L1 = Math.sqrt(3) / (3 * SQRT_PI);
+const L2 = Math.sqrt(15) / (8 * SQRT_PI),
+  L3 = Math.sqrt(5) / (16 * SQRT_PI);
 const LOBE = [L0, -L1, L1, -L1, L2, -L2, L3, -L2, L2 / 2];
 // per face: its u and v axes and its normal (+X, -X, +Y, -Y, +Z, -Z)
 const CUBE = [
-  [[0, 0, -1], [0, -1, 0], [1, 0, 0]], [[0, 0, 1], [0, -1, 0], [-1, 0, 0]], [[1, 0, 0], [0, 0, 1], [0, 1, 0]],
-  [[1, 0, 0], [0, 0, -1], [0, -1, 0]], [[1, 0, 0], [0, -1, 0], [0, 0, 1]], [[-1, 0, 0], [0, -1, 0], [0, 0, -1]],
+  [
+    [0, 0, -1],
+    [0, -1, 0],
+    [1, 0, 0],
+  ],
+  [
+    [0, 0, 1],
+    [0, -1, 0],
+    [-1, 0, 0],
+  ],
+  [
+    [1, 0, 0],
+    [0, 0, 1],
+    [0, 1, 0],
+  ],
+  [
+    [1, 0, 0],
+    [0, 0, -1],
+    [0, -1, 0],
+  ],
+  [
+    [1, 0, 0],
+    [0, -1, 0],
+    [0, 0, 1],
+  ],
+  [
+    [-1, 0, 0],
+    [0, -1, 0],
+    [0, 0, -1],
+  ],
 ];
 export function trilightProbe({ sky, equator, ground }) {
   const faces = [equator, equator, sky, ground, equator, equator].map((c) => c.map(toLinear));
@@ -88,16 +125,27 @@ export function trilightProbe({ sky, equator, ground }) {
     const [ua, va, na] = CUBE[f];
     const acc = [0, 1, 2].map(() => new Array(9).fill(0));
     let weights = 0;
-    for (const v of [-0.5, 0.5]) for (const u of [-0.5, 0.5]) {
-      const t = 1 + u * u + v * v, w = 4 / (t * Math.sqrt(t));
-      const d = [0, 1, 2].map((k) => na[k] + u * ua[k] + v * va[k]);
-      const len = Math.hypot(...d);
-      const [x, y, z] = d.map((c) => c / len);
-      const basis = [0.2820948, -0.4886025 * y, 0.4886025 * z, -0.4886025 * x, 1.0925485 * x * y, -1.0925485 * y * z,
-        0.9461747 * (z * z - 1 / 3), -1.0925485 * x * z, 0.5462742 * (x * x - y * y)];
-      for (let c = 0; c < 3; c++) for (let k = 0; k < 9; k++) acc[c][k] += color[c] * w * basis[k];
-      weights += w;
-    }
+    for (const v of [-0.5, 0.5])
+      for (const u of [-0.5, 0.5]) {
+        const t = 1 + u * u + v * v,
+          w = 4 / (t * Math.sqrt(t));
+        const d = [0, 1, 2].map((k) => na[k] + u * ua[k] + v * va[k]);
+        const len = Math.hypot(...d);
+        const [x, y, z] = d.map((c) => c / len);
+        const basis = [
+          0.2820948,
+          -0.4886025 * y,
+          0.4886025 * z,
+          -0.4886025 * x,
+          1.0925485 * x * y,
+          -1.0925485 * y * z,
+          0.9461747 * (z * z - 1 / 3),
+          -1.0925485 * x * z,
+          0.5462742 * (x * x - y * y),
+        ];
+        for (let c = 0; c < 3; c++) for (let k = 0; k < 9; k++) acc[c][k] += color[c] * w * basis[k];
+        weights += w;
+      }
     const s = (4 * Math.PI) / weights / 6;
     for (let c = 0; c < 3; c++) for (let k = 0; k < 9; k++) sh[c][k] += acc[c][k] * LOBE[k] * s;
   });
@@ -112,11 +160,23 @@ export const AMBIENT = { ambientSH: { value: trilightProbe(EMPTY_SCENE_AMBIENT) 
 
 // the character shaders' ambient term at a world normal (Unity space), as the vertex shader computes it
 export function ambientAt(probe, n) {
-  const [x, y, z] = n, b = [x * y, y * z, z * z, z * x];
+  const [x, y, z] = n,
+    b = [x * y, y * z, z * z, z * x];
   const v = [0, 1, 2].map((c) => {
-    const a = probe[c], q = probe[3 + c];
-    return Math.max(a.x * x + a.y * y + a.z * z + a.w + q.x * b[0] + q.y * b[1] + q.z * b[2] + q.w * b[3]
-      + [probe[6].x, probe[6].y, probe[6].z][c] * (x * x - y * y), 0);
+    const a = probe[c],
+      q = probe[3 + c];
+    return Math.max(
+      a.x * x +
+        a.y * y +
+        a.z * z +
+        a.w +
+        q.x * b[0] +
+        q.y * b[1] +
+        q.z * b[2] +
+        q.w * b[3] +
+        [probe[6].x, probe[6].y, probe[6].z][c] * (x * x - y * y),
+      0,
+    );
   });
   const s = Math.max(v[0] + v[1] + v[2], 0.3);
   return v.map((c) => (c * 0.3) / s);
@@ -137,7 +197,12 @@ let defaults = null;
 function defaultTexture(name) {
   defaults ||= {};
   if (!defaults[name]) {
-    const v = { black: [0, 0, 0, 0], gray: [128, 128, 128, 128], linearGrey: [128, 128, 128, 128], white: [255, 255, 255, 255] }[name];
+    const v = {
+      black: [0, 0, 0, 0],
+      gray: [128, 128, 128, 128],
+      linearGrey: [128, 128, 128, 128],
+      white: [255, 255, 255, 255],
+    }[name];
     const t = new THREE.DataTexture(new Uint8Array(v), 1, 1);
     t.needsUpdate = true;
     defaults[name] = t;
@@ -524,23 +589,39 @@ void main() {
 // canvas size in stage pixels; shared by every outline and set on resize
 export const OUTLINE = { outlineScale: { value: new THREE.Vector2(0.002, 0.002) } };
 export function setOutlineScale(width, height, stageWidth = 1920) {
-  OUTLINE.outlineScale.value.set(0.002 * stageWidth / Math.max(1, width), 0.002 * stageWidth / Math.max(1, height));
+  OUTLINE.outlineScale.value.set((0.002 * stageWidth) / Math.max(1, width), (0.002 * stageWidth) / Math.max(1, height));
 }
 
 const SIDES = { 0: THREE.DoubleSide, 1: THREE.BackSide, 2: THREE.FrontSide };
 // UnityEngine.Rendering.BlendMode -> three.js blend factors
-const FACTORS = { 0: THREE.ZeroFactor, 1: THREE.OneFactor, 2: THREE.DstColorFactor, 3: THREE.SrcColorFactor,
-  4: THREE.OneMinusDstColorFactor, 5: THREE.SrcAlphaFactor, 6: THREE.OneMinusSrcColorFactor, 7: THREE.DstAlphaFactor,
-  8: THREE.OneMinusDstAlphaFactor, 9: THREE.SrcAlphaSaturateFactor, 10: THREE.OneMinusSrcAlphaFactor };
+const FACTORS = {
+  0: THREE.ZeroFactor,
+  1: THREE.OneFactor,
+  2: THREE.DstColorFactor,
+  3: THREE.SrcColorFactor,
+  4: THREE.OneMinusDstColorFactor,
+  5: THREE.SrcAlphaFactor,
+  6: THREE.OneMinusSrcColorFactor,
+  7: THREE.DstAlphaFactor,
+  8: THREE.OneMinusDstAlphaFactor,
+  9: THREE.SrcAlphaSaturateFactor,
+  10: THREE.OneMinusSrcAlphaFactor,
+};
 // the colour pass's state where the GLB has none (older exports): what the shaders usually do
-const FIXED = { transparent: { src: 5, dst: 10, zwrite: 0, queue: 3000 }, eyemouth: { src: 5, dst: 10, zwrite: 1, cull: 2, queue: 2001 },
-  weapon: { src: 1, dst: 0, zwrite: 1, cull: 2 } };
+const FIXED = {
+  transparent: { src: 5, dst: 10, zwrite: 0, queue: 3000 },
+  eyemouth: { src: 5, dst: 10, zwrite: 1, cull: 2, queue: 2001 },
+  weapon: { src: 1, dst: 0, zwrite: 1, cull: 2 },
+};
 
 // the unlit and effect shaders, from their compiled programs: the texture slot and the colour property they read
 // (null: none; Unlit/Texture draws its texture alone). Any other one, such as FX/General Unlit (Texture) or
 // Unlit/TexColorHDR, reads the first of these it has.
-const UNLIT = { "Unlit/Texture": { color: null }, "MX/Unlit Outline": { color: "_Tint" },
-  "DSFX/FX_SHADER_AlphaBlend_Add": { map: "_Texture", color: "_Color" } };
+const UNLIT = {
+  "Unlit/Texture": { color: null },
+  "MX/Unlit Outline": { color: "_Tint" },
+  "DSFX/FX_SHADER_AlphaBlend_Add": { map: "_Texture", color: "_Color" },
+};
 const UNLIT_MAPS = ["_MainTex", "_Main_Tex", "_BaseMap", "_Texture"];
 const UNLIT_COLORS = ["_Color", "_Main_Color", "_BaseColor", "_Tint"];
 
@@ -548,7 +629,14 @@ const UNLIT_COLORS = ["_Color", "_Main_Color", "_BaseColor", "_Tint"];
 function renderState(ex, kind) {
   if (ex.state) return ex.state;
   const f = ex.floats || {};
-  return { cull: f._Cull ?? 2, zwrite: f._ZWrite ?? 1, src: f._SrcBlend ?? 1, dst: f._DstBlend ?? 0, queue: 2000, ...FIXED[kind] };
+  return {
+    cull: f._Cull ?? 2,
+    zwrite: f._ZWrite ?? 1,
+    src: f._SrcBlend ?? 1,
+    dst: f._DstBlend ?? 0,
+    queue: 2000,
+    ...FIXED[kind],
+  };
 }
 
 function applyState(mat, state) {
@@ -600,9 +688,15 @@ export function chibiMaterial(ex, textures, mouth) {
   };
   // the glow tint is scaled by _GlowStrength (Layer4, Single, Hair: mask.b * tint * strength)
   uniforms.glowTint.value.w = floatOf(ex, "_GlowStrength", 0);
-  let objectSpace = false, outline = ex.outline ?? false;
+  let objectSpace = false,
+    outline = ex.outline ?? false;
   const state = renderState(ex, kind);
-  const mat = new THREE.ShaderMaterial({ uniforms, vertexShader: VERTEX, fragmentShader: FRAGMENT, vertexColors: true });
+  const mat = new THREE.ShaderMaterial({
+    uniforms,
+    vertexShader: VERTEX,
+    fragmentShader: FRAGMENT,
+    vertexColors: true,
+  });
   applyState(mat, state);
   // an opaque pass writes its colour only; the canvas alpha stays covered
   if (!mat.transparent) defines.OPAQUE = "";
@@ -615,12 +709,18 @@ export function chibiMaterial(ex, textures, mouth) {
     uniforms.maskMap.value = textures._MaskTex || defaultTexture("gray");
     const v4 = (name, fallback) => ({ value: colorOf(ex, name, fallback) });
     Object.assign(uniforms, {
-      layerTintR: v4("_ShadowTintR4", [1, 1, 1, 1]), layerTintG: v4("_ShadowTintG4", [1, 1, 1, 1]),
-      layerTintB: v4("_ShadowTintB4", [1, 1, 1, 1]), layerThreshold: v4("_ShadowThreshold4", [0, 0, 0, 0]),
-      layerBrightness: v4("_BaseBrightness4", [0, 0, 0, 0]), layerViewOffset: v4("_ViewOffset4", [0, 0, 0, 0]),
-      layerViewPower: v4("_ViewPower4", [1, 1, 1, 1]), layerViewStrength: v4("_ViewStrength4", [0, 0, 0, 0]),
-      layerInvViewPower: v4("_InvViewPower4", [1, 1, 1, 1]), layerInvViewStrength: v4("_InvViewStrength4", [0, 0, 0, 0]),
-      layerViewEdge: v4("_ViewLightEdge4", [0, 0, 0, 0]), layerRimMultiplier: v4("_RimAreaMultiplier4", [3, 3, 3, 3]),
+      layerTintR: v4("_ShadowTintR4", [1, 1, 1, 1]),
+      layerTintG: v4("_ShadowTintG4", [1, 1, 1, 1]),
+      layerTintB: v4("_ShadowTintB4", [1, 1, 1, 1]),
+      layerThreshold: v4("_ShadowThreshold4", [0, 0, 0, 0]),
+      layerBrightness: v4("_BaseBrightness4", [0, 0, 0, 0]),
+      layerViewOffset: v4("_ViewOffset4", [0, 0, 0, 0]),
+      layerViewPower: v4("_ViewPower4", [1, 1, 1, 1]),
+      layerViewStrength: v4("_ViewStrength4", [0, 0, 0, 0]),
+      layerInvViewPower: v4("_InvViewPower4", [1, 1, 1, 1]),
+      layerInvViewStrength: v4("_InvViewStrength4", [0, 0, 0, 0]),
+      layerViewEdge: v4("_ViewLightEdge4", [0, 0, 0, 0]),
+      layerRimMultiplier: v4("_RimAreaMultiplier4", [3, 3, 3, 3]),
       layerRimStrength: v4("_RimStrength4", [1, 1, 1, 1]),
     });
   } else if (kind === "hair") {
@@ -632,8 +732,14 @@ export function chibiMaterial(ex, textures, mouth) {
     Object.assign(uniforms, {
       specMap: { value: textures._HairSpecTex || defaultTexture("black") },
       specDir: { value: new THREE.Vector4(d.x, d.y, d.z, floatOf(ex, "_SpecTopMultiplier", 3)) },
-      spec: { value: new THREE.Vector4(floatOf(ex, "_SpecTopLeveler", 2), floatOf(ex, "_SpecBotArea", 0.3),
-        floatOf(ex, "_SpecBotMultiplier", 11), floatOf(ex, "_SpecStrength", 1)) },
+      spec: {
+        value: new THREE.Vector4(
+          floatOf(ex, "_SpecTopLeveler", 2),
+          floatOf(ex, "_SpecBotArea", 0.3),
+          floatOf(ex, "_SpecBotMultiplier", 11),
+          floatOf(ex, "_SpecStrength", 1),
+        ),
+      },
       adjustShadow: { value: floatOf(ex, "_AdjustiveHairShadow", 0) },
     });
     uniforms.glowTint.value.w = floatOf(ex, "_GlowStrength", 1);
@@ -653,8 +759,14 @@ export function chibiMaterial(ex, textures, mouth) {
     uniforms.maskMap.value = textures._SourceTex || textures._sourceTex || defaultTexture("white");
     // world space (not normalised) in the game: on the formation screen, a light from the screen's right
     uniforms.fakeLightDir = { value: slotSpace(ex.colors?._FakeLightDir || [0.1, 0.65, 0]) };
-    uniforms.weapon = { value: new THREE.Vector4(floatOf(ex, "_ShadowThreshold", 0.5), floatOf(ex, "_ShadowStrong", 10),
-      floatOf(ex, "_LightValue", 0.5), floatOf(ex, "_LightStrong", 10)) };
+    uniforms.weapon = {
+      value: new THREE.Vector4(
+        floatOf(ex, "_ShadowThreshold", 0.5),
+        floatOf(ex, "_ShadowStrong", 10),
+        floatOf(ex, "_LightValue", 0.5),
+        floatOf(ex, "_LightStrong", 10),
+      ),
+    };
     const s = colorOf(ex, "_SpecColor", [1, 1, 1, 1]);
     uniforms.specColor = { value: new THREE.Vector4(s.x, s.y, s.z, floatOf(ex, "_SpecStrong", 0.1)) };
     glowUniforms(ex, uniforms, defines);
@@ -703,7 +815,8 @@ export function chibiMaterial(ex, textures, mouth) {
   } else if (kind === "unlit") {
     // the effect and unlit shaders: their own texture slot and colour (the exporter tells whether one draws an
     // outline: MX/Unlit Outline does)
-    const fx = UNLIT[shader] || {}, slot = fx.map || UNLIT_MAPS.find((name) => textures[name]);
+    const fx = UNLIT[shader] || {},
+      slot = fx.map || UNLIT_MAPS.find((name) => textures[name]);
     uniforms.mainMap.value = (slot && textures[slot]) || defaultTexture("white");
     const color = fx.color === undefined ? UNLIT_COLORS.find((name) => ex.colors?.[name]) : fx.color;
     uniforms.tint.value = color ? colorOf(ex, color, [1, 1, 1, 1]) : new THREE.Vector4(1, 1, 1, 1);
@@ -719,10 +832,22 @@ export function chibiMaterial(ex, textures, mouth) {
     defines.KIND_SINGLE = "";
     defines.CODE_COLORS = "";
     uniforms.maskMap.value = textures._MaskTex || defaultTexture("black");
-    uniforms.viewLight = { value: new THREE.Vector4(floatOf(ex, "_ViewOffset", 0), floatOf(ex, "_ViewPower", 1),
-      floatOf(ex, "_ViewStrength", 0), floatOf(ex, "_BaseBrightness", 0)) };
-    uniforms.invViewLight = { value: new THREE.Vector4(floatOf(ex, "_InvViewPower", 1), floatOf(ex, "_InvViewStrength", 0),
-      floatOf(ex, "_ViewLightEdge", 0), 0) };
+    uniforms.viewLight = {
+      value: new THREE.Vector4(
+        floatOf(ex, "_ViewOffset", 0),
+        floatOf(ex, "_ViewPower", 1),
+        floatOf(ex, "_ViewStrength", 0),
+        floatOf(ex, "_BaseBrightness", 0),
+      ),
+    };
+    uniforms.invViewLight = {
+      value: new THREE.Vector4(
+        floatOf(ex, "_InvViewPower", 1),
+        floatOf(ex, "_InvViewStrength", 0),
+        floatOf(ex, "_ViewLightEdge", 0),
+        0,
+      ),
+    };
   }
   mat.defines = defines;
   return { material: mat, objectSpace, outline, queue: state.queue ?? 2000 };
@@ -733,7 +858,8 @@ function glowUniforms(ex, uniforms, defines) {
   const strength = floatOf(ex, "_GlowStrength0", 0);
   if (!(ex.keywords || []).includes("_GLOW_0") || strength <= 0) return;
   defines.GLOW = "";
-  const m = colorOf(ex, "_GlowMaskColor0", [1, 1, 1, 1]), g = colorOf(ex, "_GlowTint0", [0, 0, 0, 1]);
+  const m = colorOf(ex, "_GlowMaskColor0", [1, 1, 1, 1]),
+    g = colorOf(ex, "_GlowTint0", [0, 0, 0, 1]);
   uniforms.glowMask = { value: new THREE.Vector4(m.x, m.y, m.z, floatOf(ex, "_GlowStrictness0", 3)) };
   uniforms.glow = { value: new THREE.Vector4(g.x, g.y, g.z, strength) };
 }
@@ -742,9 +868,16 @@ function glowUniforms(ex, uniforms, defines) {
 export function outlineMaterial(ex, map) {
   const t = colorOf(ex, "_OutlineTint", [0.5, 0.5, 0.5, 1]);
   const mat = new THREE.ShaderMaterial({
-    uniforms: { ...OUTLINE, charLightTone: LIGHT.charLightTone, mainMap: { value: map || defaultTexture("white") },
-      outlineTint: { value: new THREE.Vector3(t.x, t.y, t.z) } },
-    vertexShader: OUTLINE_VERTEX, fragmentShader: OUTLINE_FRAGMENT, side: THREE.BackSide, vertexColors: true,
+    uniforms: {
+      ...OUTLINE,
+      charLightTone: LIGHT.charLightTone,
+      mainMap: { value: map || defaultTexture("white") },
+      outlineTint: { value: new THREE.Vector3(t.x, t.y, t.z) },
+    },
+    vertexShader: OUTLINE_VERTEX,
+    fragmentShader: OUTLINE_FRAGMENT,
+    side: THREE.BackSide,
+    vertexColors: true,
   });
   mat.name = "outline";
   return mat;

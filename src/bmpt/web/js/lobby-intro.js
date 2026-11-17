@@ -37,7 +37,9 @@ export function evaluate(c, t) {
   }
   const [begin, rate, values] = c.d || [0, 30, []];
   if (!values.length) return 0;
-  const f = Math.min(Math.max((t - begin) * rate, 0), values.length - 1), i = Math.floor(f), j = Math.min(i + 1, values.length - 1);
+  const f = Math.min(Math.max((t - begin) * rate, 0), values.length - 1),
+    i = Math.floor(f),
+    j = Math.min(i + 1, values.length - 1);
   return values[i] + (values[j] - values[i]) * (f - i);
 }
 
@@ -61,15 +63,30 @@ export function activeAt(n, t) {
 export function trs(p, q, s) {
   let [x, y, z, w] = q;
   const n = Math.hypot(x, y, z, w) || 1;
-  x /= n; y /= n; z /= n; w /= n;
-  return [(1 - 2 * (y * y + z * z)) * s[0], 2 * (x * y - z * w) * s[1], 2 * (x * z + y * w) * s[2], p[0],
-    2 * (x * y + z * w) * s[0], (1 - 2 * (x * x + z * z)) * s[1], 2 * (y * z - x * w) * s[2], p[1],
-    2 * (x * z - y * w) * s[0], 2 * (y * z + x * w) * s[1], (1 - 2 * (x * x + y * y)) * s[2], p[2]];
+  x /= n;
+  y /= n;
+  z /= n;
+  w /= n;
+  return [
+    (1 - 2 * (y * y + z * z)) * s[0],
+    2 * (x * y - z * w) * s[1],
+    2 * (x * z + y * w) * s[2],
+    p[0],
+    2 * (x * y + z * w) * s[0],
+    (1 - 2 * (x * x + z * z)) * s[1],
+    2 * (y * z - x * w) * s[2],
+    p[1],
+    2 * (x * z - y * w) * s[0],
+    2 * (y * z + x * w) * s[1],
+    (1 - 2 * (x * x + y * y)) * s[2],
+    p[2],
+  ];
 }
 // a moved GameObject's local matrix at time t: its animated position, rotation (quaternion or Euler angles in
 // degrees) and scale, the rest from its rest transform
 export function localAt(n, t) {
-  const r = n.trs, pick = (curves, k, rest) => (curves?.[k] ? evaluate(curves[k], t) : rest);
+  const r = n.trs,
+    pick = (curves, k, rest) => (curves?.[k] ? evaluate(curves[k], t) : rest);
   const p = [0, 1, 2].map((k) => pick(n.position, k, r[k]));
   const s = [0, 1, 2].map((k) => pick(n.scale, k, r[7 + k]));
   if (n.euler) {
@@ -82,7 +99,9 @@ export function localAt(n, t) {
 // M0 L(i1) M1 ... L(ik) Mk (intro.py moves) with the nodes' local matrices now
 export function compose(moves, local) {
   let W = moves.m[0];
-  moves.nodes.forEach((i, k) => { W = mul(mul(W, local(i)), moves.m[k + 1]); });
+  moves.nodes.forEach((i, k) => {
+    W = mul(mul(W, local(i)), moves.m[k + 1]);
+  });
   return W;
 }
 
@@ -95,13 +114,25 @@ const DEFAULTS = {
   LiftGammaGain: { lift: [1, 1, 1, 0], gamma: [1, 1, 1, 0], gain: [1, 1, 1, 0] },
   PaniniProjection: { distance: 0, cropToFit: 1 },
   ColorAdjustments: { postExposure: 0, contrast: 0, colorFilter: [1, 1, 1, 1], hueShift: 0, saturation: 0 },
-  DepthOfField: { mode: 0, gaussianStart: 10, gaussianEnd: 30, gaussianMaxRadius: 1, highQualitySampling: 0, focusDistance: 10,
-    aperture: 5.6, focalLength: 50 },
+  DepthOfField: {
+    mode: 0,
+    gaussianStart: 10,
+    gaussianEnd: 30,
+    gaussianMaxRadius: 1,
+    highQualitySampling: 0,
+    focusDistance: 10,
+    aperture: 5.6,
+    focalLength: 50,
+  },
 };
 // parameters that do not interpolate: an enum or a bool takes the volume's value once its weight is above 0
 const DISCRETE = new Set(["mode", "highQualitySampling"]);
-const KEYS = { ChromaticAberration: "chromaticAberration", LiftGammaGain: "liftGammaGain", PaniniProjection: "panini",
-  ColorAdjustments: "colorAdjustments" };
+const KEYS = {
+  ChromaticAberration: "chromaticAberration",
+  LiftGammaGain: "liftGammaGain",
+  PaniniProjection: "panini",
+  ColorAdjustments: "colorAdjustments",
+};
 const lerp = (a, b, t) => (Array.isArray(a) ? a.map((x, i) => x + (b[i] - x) * t) : a + (b - a) * t);
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 // What the volumes leave on screen, blended as URP's VolumeManager does (lobby.py post_processing): the enabled,
@@ -111,7 +142,9 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 // with "dof": {radius} while Gaussian depth of field is on.
 export function blend(volumes) {
   const stack = JSON.parse(JSON.stringify(DEFAULTS));
-  const ordered = volumes.map((v, i) => [v, i]).sort((a, b) => (a[0].priority || 0) - (b[0].priority || 0) || a[1] - b[1]);
+  const ordered = volumes
+    .map((v, i) => [v, i])
+    .sort((a, b) => (a[0].priority || 0) - (b[0].priority || 0) || a[1] - b[1]);
   for (const [v] of ordered) {
     if (!v.global || !v.enabled || !v.active || v.layer === false || !(v.weight > 0)) continue;
     const w = Math.min(1, v.weight);
@@ -127,11 +160,16 @@ export function blend(volumes) {
   const post = {};
   for (const [kind, params] of Object.entries(stack)) {
     if (kind === "DepthOfField") {
-      if (Math.round(params.mode) === 1) post.dof = { radius: params.gaussianMaxRadius, start: params.gaussianStart, end: params.gaussianEnd };
+      if (Math.round(params.mode) === 1)
+        post.dof = { radius: params.gaussianMaxRadius, start: params.gaussianStart, end: params.gaussianEnd };
       continue;
     }
-    if (same(params, DEFAULTS[kind]) || (kind === "PaniniProjection" && params.distance <= 0)
-      || (kind === "ChromaticAberration" && params.intensity <= 0)) continue;
+    if (
+      same(params, DEFAULTS[kind]) ||
+      (kind === "PaniniProjection" && params.distance <= 0) ||
+      (kind === "ChromaticAberration" && params.intensity <= 0)
+    )
+      continue;
     const out = { ...params };
     if (kind === "ColorAdjustments") out.colorFilter = out.colorFilter.slice(0, 3);
     post[KEYS[kind]] = kind === "ChromaticAberration" ? out.intensity : out;
@@ -154,13 +192,15 @@ export function startClip(st, data, track, c, t, delta) {
   }
   const anim = data.findAnimation(c.anim);
   if (!anim) return null;
-  const custom = c.mix ?? 0, cur = st.getCurrent(track);
+  const custom = c.mix ?? 0,
+    cur = st.getCurrent(track);
   let e;
   if (!cur && custom > 0) {
     st.setEmptyAnimation(track, 0);
     e = st.addAnimationWith(track, anim, c.loop, 0);
   } else e = st.setAnimationWith(track, anim, c.loop);
-  const speed = c.speed ?? 1, local = Math.max(0, t - c.t) * speed + (c.in || 0);
+  const speed = c.speed ?? 1,
+    local = Math.max(0, t - c.t) * speed + (c.in || 0);
   e.trackTime = Math.max(0, (local - delta) * speed);
   e.timeScale = speed;
   e.holdPrevious = !!c.hold;
@@ -173,7 +213,14 @@ export function startClip(st, data, track, c, t, delta) {
 
 // the intro's GameObjects with their curves (activity, transform), control and activation clips
 export function nodesOf(intro) {
-  const nodes = (intro.nodes || []).map((n) => ({ ...n, curve: null, control: [], activation: null, on: n.own, L: null }));
+  const nodes = (intro.nodes || []).map((n) => ({
+    ...n,
+    curve: null,
+    control: [],
+    activation: null,
+    on: n.own,
+    L: null,
+  }));
   for (const p of intro.props || []) {
     if (p.on !== "node" || !nodes[p.i]) continue;
     if (p.attr === "active") nodes[p.i].curve = p.c;
@@ -183,12 +230,16 @@ export function nodesOf(intro) {
   for (const a of intro.activation || []) if (nodes[a.node]) nodes[a.node].activation = a.clips;
   return nodes;
 }
-const restLocalOf = (n) => { const r = n?.trs; return r ? trs(r.slice(0, 3), r.slice(3, 7), r.slice(7, 10)) : IDENTITY; };
+const restLocalOf = (n) => {
+  const r = n?.trs;
+  return r ? trs(r.slice(0, 3), r.slice(3, 7), r.slice(7, 10)) : IDENTITY;
+};
 // where the intro has its skeletons at time t, without playing it: sample(t) gives, for each layer ({def, introOnly,
 // x, y, scale}: def the player's bamtLayer, the rest its resting place), whether it is shown, its place and the intro
 // clips its tracks play then ([track, animation, time in it, loop]), as create() would set them (no mixes)
 export function sampler(intro, layers) {
-  const nodes = nodesOf(intro), moved = nodes.filter((n) => n.trs);
+  const nodes = nodesOf(intro),
+    moved = nodes.filter((n) => n.trs);
   const gateOn = (gate) => gate.every((i) => nodes[i]?.on);
   const local = (i) => nodes[i].L || IDENTITY;
   const items = layers.map((l) => {
@@ -205,7 +256,9 @@ export function sampler(intro, layers) {
       let { x, y, scale } = l;
       if (def.moves) {
         const W = compose(def.moves, local);
-        x = W[3]; y = W[7]; scale = Math.hypot(W[0], W[4]) * ds;
+        x = W[3];
+        y = W[7];
+        scale = Math.hypot(W[0], W[4]) * ds;
       }
       const clips = [];
       for (const tr of tracks) {
@@ -229,11 +282,15 @@ export function sampler(intro, layers) {
 // visible() (the lobby is on screen), now() (the frame's time stamp, for tests)}. Returns {frame(player, delta), skip(),
 // running(), pending(), done(), state(), dispose()}.
 export function create(intro, env) {
-  const D = intro.duration || 0, hold = intro.wrap === "hold";
+  const D = intro.duration || 0,
+    hold = intro.wrap === "hold";
   const nodes = nodesOf(intro);
   const volumes = (intro.volumes || []).map((v) => ({ ...v, weightCurve: null, enabledCurve: null }));
-  const effects = env.fx?.effects || null, systems = effects?.systems || [], sprites = env.fx?.sprites || [];
-  const sysProps = new Map(), spriteProps = new Map();
+  const effects = env.fx?.effects || null,
+    systems = effects?.systems || [],
+    sprites = env.fx?.sprites || [];
+  const sysProps = new Map(),
+    spriteProps = new Map();
   for (const p of intro.props || []) {
     if (p.on === "volume" && volumes[p.i]) volumes[p.i][p.attr === "weight" ? "weightCurve" : "enabledCurve"] = p.c;
     else if (p.on === "system" && systems[p.i]) (sysProps.get(p.i) || sysProps.set(p.i, []).get(p.i)).push(p);
@@ -244,27 +301,45 @@ export function create(intro, env) {
   const local = (i) => nodes[i].L || IDENTITY;
 
   // the drawables it switches or moves; a skeleton's scale is its GameObject's times its skeleton data's (from rest)
-  const restLocal = (i) => { const r = nodes[i].trs; return r ? trs(r.slice(0, 3), r.slice(3, 7), r.slice(7, 10)) : IDENTITY; };
+  const restLocal = (i) => {
+    const r = nodes[i].trs;
+    return r ? trs(r.slice(0, 3), r.slice(3, 7), r.slice(7, 10)) : IDENTITY;
+  };
   const layerItems = env.layers.map((l) => {
-    const layer = l.player.bamtLayer, W = layer.moves ? compose(layer.moves, restLocal) : null;
-    return { l, layer, rest: { x: layer.x, y: layer.y, scale: layer.scale }, shown: !l.introOnly,
-      ds: W ? layer.scale / (Math.hypot(W[0], W[4]) || 1) : 1 };
+    const layer = l.player.bamtLayer,
+      W = layer.moves ? compose(layer.moves, restLocal) : null;
+    return {
+      l,
+      layer,
+      rest: { x: layer.x, y: layer.y, scale: layer.scale },
+      shown: !l.introOnly,
+      ds: W ? layer.scale / (Math.hypot(W[0], W[4]) || 1) : 1,
+    };
   });
   const controlOf = (def) => (def.gate || []).flatMap((i) => (nodes[i]?.control || []).filter((c) => c.particles));
   // the skeletons it moves: the effects on their bones go with them
   const movedSkeletons = new Set(layerItems.filter((it) => it.layer.moves).map((it) => it.layer.name));
   const onMoved = (def) => !!def.anchor && movedSkeletons.has(def.anchor.skeleton);
   const skeletonW = {}; // a moved skeleton's GameObject matrix this frame
-  const sysItems = systems.map((s, i) => ({ s, i, controls: controlOf(s.def), props: sysProps.get(i) || [], on: s.def.rest !== 0 }))
+  const sysItems = systems
+    .map((s, i) => ({ s, i, controls: controlOf(s.def), props: sysProps.get(i) || [], on: s.def.rest !== 0 }))
     .filter((e) => e.s.def.gate || e.s.def.moves || e.props.length || onMoved(e.s.def));
   const spriteItems = sprites.map((sp, i) => ({ sp, props: spriteProps.get(i) || [] }));
   const tracks = (intro.spine || []).map((t) => ({ ...t, prev: new Set(), started: null, end: true, endMix: 0.1 }));
   const sounds = (intro.sounds || []).slice().sort((a, b) => a.t - b.t);
   const audios = new Set();
 
-  let T = 0, stamp = null, started = false, finished = false, skipped = false, soundAt = 0, lastPost = null;
+  let T = 0,
+    stamp = null,
+    started = false,
+    finished = false,
+    skipped = false,
+    soundAt = 0,
+    lastPost = null;
   let settle;
-  const settled = new Promise((r) => { settle = r; });
+  const settled = new Promise((r) => {
+    settle = r;
+  });
 
   // --- one frame's state at time t ---
   function apply(t, { play = true } = {}) {
@@ -288,7 +363,8 @@ export function create(intro, env) {
     // particle systems: switched on (from their start) and off, moved, recoloured; one a control clip plays runs only
     // during that clip
     for (const e of sysItems) {
-      const def = e.s.def, clip = e.controls.find((x) => t >= x.t && t < x.t + x.d);
+      const def = e.s.def,
+        clip = e.controls.find((x) => t >= x.t && t < x.t + x.d);
       const on = (def.gate ? def.base !== false && gateOn(def.gate) : true) && (!e.controls.length || !!clip);
       if (on !== e.on) {
         e.on = on;
@@ -300,14 +376,16 @@ export function create(intro, env) {
       }
       if (def.moves) {
         const W = compose(def.moves, local);
-        if (def.moves.of === "rel") e.s.rel = W; else e.s.static = W;
+        if (def.moves.of === "rel") e.s.rel = W;
+        else e.s.static = W;
       }
       if (onMoved(def)) e.s.go = skeletonW[def.anchor.skeleton];
       for (const p of e.props) {
         const v = evaluate(p.c, t);
         if (p.attr === "speed") e.s.speed = v;
         else if (p.attr === "startColor") {
-          const base = def.main.color?.col || [1, 1, 1, 1], col = (e.s.startColor?.col || base).slice();
+          const base = def.main.color?.col || [1, 1, 1, 1],
+            col = (e.s.startColor?.col || base).slice();
           col[p.k] = v;
           e.s.startColor = { col };
         } else if (p.attr === "material") {
@@ -349,17 +427,30 @@ export function create(intro, env) {
     const a = def.anchor;
     if (a && env.bone) {
       const b = env.bone(a.skeleton, a.bone);
-      if (b) return mul(skeletonW[a.skeleton] || a.go, mul([b.a, b.b, 0, b.worldX * a.ds, b.c, b.d, 0, b.worldY * a.ds, 0, 0, 1, 0], def.moves?.of === "rel" && W ? W : def.rel));
+      if (b)
+        return mul(
+          skeletonW[a.skeleton] || a.go,
+          mul(
+            [b.a, b.b, 0, b.worldX * a.ds, b.c, b.d, 0, b.worldY * a.ds, 0, 0, 1, 0],
+            def.moves?.of === "rel" && W ? W : def.rel,
+          ),
+        );
     }
     return W && def.moves?.of !== "rel" ? W : def.static;
   }
   function show(it, on) {
     if (it.shown === on) return;
     it.shown = on;
-    if (env.show) { env.show(it.l.player, on); return; }
+    if (env.show) {
+      env.show(it.l.player, on);
+      return;
+    }
     // hidden, and left out of the stills and fades taken of the lobby's canvases (lobby-off)
     const el = it.l.player.parent || it.l.player.dom?.parentElement;
-    if (el) { el.style.visibility = on ? "" : "hidden"; el.classList.toggle("lobby-off", !on); }
+    if (el) {
+      el.style.visibility = on ? "" : "hidden";
+      el.classList.toggle("lobby-off", !on);
+    }
   }
   let clearOwner = null;
   function clearOn(it) {
@@ -381,7 +472,9 @@ export function create(intro, env) {
 
   // the Spine clips of the tracks on one player's skeleton that start or end now
   function spine(p, t, delta) {
-    const st = p.animationState, data = p.skeleton?.data, name = p.bamtLayer?.name;
+    const st = p.animationState,
+      data = p.skeleton?.data,
+      name = p.bamtLayer?.name;
     if (!st || !data) return;
     for (const tr of tracks) {
       if (tr.skeleton !== name) continue;
@@ -401,7 +494,11 @@ export function create(intro, env) {
 
   // the timeline built: the particle systems its control clips play stop and clear, until their clip
   function begin() {
-    for (const e of sysItems) if (e.controls.length && e.on) { effects.stop(e.s); e.on = false; }
+    for (const e of sysItems)
+      if (e.controls.length && e.on) {
+        effects.stop(e.s);
+        e.on = false;
+      }
     env.host?.addEventListener("pointerdown", onTap, true);
   }
   // its end: wrap None puts back what it changed, Hold keeps the last frame
@@ -429,17 +526,26 @@ export function create(intro, env) {
     for (const n of nodes) n.on = n.own;
     for (const it of layerItems) {
       show(it, !it.l.introOnly);
-      if (it.layer.moves) { Object.assign(it.layer, it.rest); env.screen?.(it.l.player); }
+      if (it.layer.moves) {
+        Object.assign(it.layer, it.rest);
+        env.screen?.(it.l.player);
+      }
     }
     clearOn(layerItems.find((it) => it.shown));
     for (const e of sysItems) {
-      const def = e.s.def, on = def.rest !== 0;
+      const def = e.s.def,
+        on = def.rest !== 0;
       if (on !== e.on) {
         e.on = on;
         if (!on) effects.stop(e.s);
         else if (!def.isSub && def.playOnAwake !== 0) effects.restart(e.s);
       }
-      delete e.s.static; delete e.s.rel; delete e.s.go; delete e.s.speed; delete e.s.startColor; delete e.s.colors;
+      delete e.s.static;
+      delete e.s.rel;
+      delete e.s.go;
+      delete e.s.speed;
+      delete e.s.startColor;
+      delete e.s.colors;
     }
     for (const { sp } of spriteItems) {
       sp.visible = sp.def.rest !== 0;
@@ -449,7 +555,10 @@ export function create(intro, env) {
     }
     if (volumes.length) {
       lastPost = null;
-      for (const { l } of layerItems) { Linear.setPost(l.player, env.post); Dof.set(l.player, null, Linear); }
+      for (const { l } of layerItems) {
+        Linear.setPost(l.player, env.post);
+        Dof.set(l.player, null, Linear);
+      }
     }
   }
   function onTap(e) {
@@ -464,29 +573,56 @@ export function create(intro, env) {
     // lobby is on screen), the intro's state, then this player's Spine clips
     frame(p, delta) {
       if (finished) return;
-      const now = env.now ? env.now() : typeof document !== "undefined" ? document.timeline?.currentTime ?? performance.now() : performance.now();
+      const now = env.now
+        ? env.now()
+        : typeof document !== "undefined"
+          ? (document.timeline?.currentTime ?? performance.now())
+          : performance.now();
       if (now !== stamp) {
         stamp = now;
-        if (!started && (!env.visible || env.visible())) { started = true; T = 0; begin(); apply(0); }
-        else if (started) {
+        if (!started && (!env.visible || env.visible())) {
+          started = true;
+          T = 0;
+          begin();
+          apply(0);
+        } else if (started) {
           T += Math.max(0, delta);
-          if (T >= D) { finish(false); return; }
+          if (T >= D) {
+            finish(false);
+            return;
+          }
           apply(T);
         }
       }
       if (started) spine(p, T, delta);
     },
-    skip() { if (!finished) finish(true); },
+    skip() {
+      if (!finished) finish(true);
+    },
     running: () => started && !finished,
     pending: () => !finished,
     done: () => settled,
-    state: () => ({ t: +T.toFixed(4), duration: D, wrap: intro.wrap, started, finished, skipped,
-      nodes: nodes.map((n) => n.on), volumes: volumes.map((v) => ({ weight: +(+v.weight).toFixed(4), active: !!v.active, enabled: !!v.enabled })),
+    state: () => ({
+      t: +T.toFixed(4),
+      duration: D,
+      wrap: intro.wrap,
+      started,
+      finished,
+      skipped,
+      nodes: nodes.map((n) => n.on),
+      volumes: volumes.map((v) => ({ weight: +(+v.weight).toFixed(4), active: !!v.active, enabled: !!v.enabled })),
       post: lastPost ? JSON.parse(lastPost) : null,
       sprites: sprites.map((s) => ({ visible: s.visible, color: s.color.map((c) => +c.toFixed(4)) })),
-      layers: layerItems.map((it) => ({ name: it.layer.name, shown: it.shown, x: +it.layer.x.toFixed(2), y: +it.layer.y.toFixed(2), scale: +it.layer.scale.toFixed(5) })),
+      layers: layerItems.map((it) => ({
+        name: it.layer.name,
+        shown: it.shown,
+        x: +it.layer.x.toFixed(2),
+        y: +it.layer.y.toFixed(2),
+        scale: +it.layer.scale.toFixed(5),
+      })),
       systems: sysItems.map((e) => ({ name: e.s.def.name, on: e.on, particles: e.s.particles.length })),
-      tracks: tracks.map((tr) => ({ skeleton: tr.skeleton, current: tr.started?.animation?.name || null })) }),
+      tracks: tracks.map((tr) => ({ skeleton: tr.skeleton, current: tr.started?.animation?.name || null })),
+    }),
     // the lobby closes: its sounds stop, the depth of field's targets go
     dispose() {
       for (const a of audios) a.pause();

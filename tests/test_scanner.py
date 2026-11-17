@@ -40,8 +40,12 @@ class Fake:
         return SimpleNamespace(stale=False, entries=[], counts={}, n=len(self.calls))
 
     def scanner(self):
-        return Scanner(self.scan, allowed=lambda: self.allowed, writer_busy=lambda: self.busy,
-                       on_done=lambda result, served: self.done.append((result, served)))
+        return Scanner(
+            self.scan,
+            allowed=lambda: self.allowed,
+            writer_busy=lambda: self.busy,
+            on_done=lambda result, served: self.done.append((result, served)),
+        )
 
 
 def test_no_scan_without_the_consent():
@@ -139,19 +143,19 @@ def test_scoped_requests_coalesce_and_full_requests_take_precedence():
 
     scanner = Scanner(scan, allowed=lambda: True)
     try:
-        scanner.request(cores={'a_spr'})
+        scanner.request(cores={"a_spr"})
         assert wait_for(lambda: len(calls) == 1)
-        scanner.request(cores={'b_spr'})
-        scanner.request(cores={'c_home'})
+        scanner.request(cores={"b_spr"})
+        scanner.request(cores={"c_home"})
         gate.set()
         assert scanner.wait_idle(5)
-        assert calls == [{'a_spr'}, {'b_spr', 'c_home'}]
+        assert calls == [{"a_spr"}, {"b_spr", "c_home"}]
         gate.clear()
-        scanner.request(cores={'d_spr'})
+        scanner.request(cores={"d_spr"})
         assert wait_for(lambda: len(calls) == 3)
-        scanner.request(cores={'e_spr'})
+        scanner.request(cores={"e_spr"})
         scanner.request()
-        scanner.request(cores={'f_home'})
+        scanner.request(cores={"f_home"})
         gate.set()
         assert scanner.wait_idle(5)
         assert calls[3] is None
@@ -169,7 +173,7 @@ def test_a_dismissed_request_widens_the_scan_to_everything():
 
     scanner = Scanner(scan, allowed=lambda: True)
     try:
-        scanner.request(cores={'a_spr'}, dismissed=True)
+        scanner.request(cores={"a_spr"}, dismissed=True)
         assert scanner.wait_idle(5)
         assert calls == [(True, None)]
     finally:

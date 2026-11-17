@@ -24,7 +24,12 @@ import * as FX from "./touch-fx.js";
 import { textureUrl } from "./api.js";
 
 const POINTER = "PCIcon_MousePoint";
-const TEXTURES = { ring: "FX_TEX_Grad_Ring3", disc: "FX_TEX_Circle_01", tri: "FX_TEX_Triangle_02_1", trail: "FX_TEX_Trail_03" };
+const TEXTURES = {
+  ring: "FX_TEX_Grad_Ring3",
+  disc: "FX_TEX_Circle_01",
+  tri: "FX_TEX_Triangle_02_1",
+  trail: "FX_TEX_Trail_03",
+};
 const SIZE = 32; // CSS px
 const STEP = 4; // CSS px between the cuts kept for the window's right and bottom edges
 const RETRIES = [2000, 8000]; // ms before the second and third try
@@ -48,7 +53,8 @@ function canvas(w, h) {
 // the pointer at `scale` times its CSS size, cut to a box of w x h CSS px from its top left (the hotspot), as an object
 // URL: the cursor value stays short (every button resolves it), unlike with data: URLs
 function cut(img, scale, w, h) {
-  const c = canvas(w * scale, h * scale), g = c.getContext("2d");
+  const c = canvas(w * scale, h * scale),
+    g = c.getContext("2d");
   g.imageSmoothingQuality = "high";
   g.drawImage(img, 0, 0, SIZE * scale, SIZE * scale);
   return new Promise((resolve) => c.toBlob((blob) => resolve(blob && URL.createObjectURL(blob)), "image/png"));
@@ -56,13 +62,17 @@ function cut(img, scale, w, h) {
 
 // the opaque part of the pointer's texture (an ImageData) from its top left, in CSS px at `size`
 export function opaqueBox({ data, width, height }, size = SIZE) {
-  let w = 0, h = 0;
+  let w = 0,
+    h = 0;
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      if (data[(y * width + x) * 4 + 3]) { w = Math.max(w, x + 1); h = y + 1; }
+      if (data[(y * width + x) * 4 + 3]) {
+        w = Math.max(w, x + 1);
+        h = y + 1;
+      }
     }
   }
-  return w ? [Math.ceil(w * size / width), Math.ceil(h * size / height)] : [size, size];
+  return w ? [Math.ceil((w * size) / width), Math.ceil((h * size) / height)] : [size, size];
 }
 
 // the pointer's boxes in the order WebKit tries them: the whole pointer, then narrower ones for the right edge,
@@ -74,18 +84,25 @@ export function pointerBoxes([w, h], step = STEP) {
     const fine = Array.from({ length: Math.min(step, n) - 1 }, (_, i) => Math.min(step, n) - 1 - i);
     return [...coarse, ...fine];
   };
-  return [[w, h], ...cuts(w).map((x) => [x, h]), ...cuts(h).map((y) => [w, y]), ...cuts(Math.min(w, h)).map((s) => [s, s])];
+  return [
+    [w, h],
+    ...cuts(w).map((x) => [x, h]),
+    ...cuts(h).map((y) => [w, y]),
+    ...cuts(Math.min(w, h)).map((s) => [s, s]),
+  ];
 }
 
 // the pointer as a CSS cursor value, in the first syntax the engine takes (image-set keeps it sharp on HiDPI): sets
 // lists each box's 1x and 2x image, the system cursor comes last
 export function cursorValue(sets, supports = (v) => CSS.supports("cursor", v)) {
   const list = (one) => [...sets.map((set) => `${one(set)} 0 0`), "auto"].join(", ");
-  return [
-    list(([a, b]) => `image-set(url("${a}") 1x, url("${b}") 2x)`),
-    list(([a, b]) => `-webkit-image-set(url("${a}") 1x, url("${b}") 2x)`),
-    list(([a]) => `url("${a}")`),
-  ].find(supports) || null;
+  return (
+    [
+      list(([a, b]) => `image-set(url("${a}") 1x, url("${b}") 2x)`),
+      list(([a, b]) => `-webkit-image-set(url("${a}") 1x, url("${b}") 2x)`),
+      list(([a]) => `url("${a}")`),
+    ].find(supports) || null
+  );
 }
 
 // One step failing leaves the system cursor for the whole run: each step names itself, for the session log.
@@ -101,10 +118,15 @@ async function pointerValue() {
 }
 
 // run attempt until it succeeds, waiting `delays` ms between tries; every failure is reported, the last one rethrown
-export async function withRetries(attempt, delays, { wait = (ms) => new Promise((r) => setTimeout(r, ms)), report = () => {} } = {}) {
+export async function withRetries(
+  attempt,
+  delays,
+  { wait = (ms) => new Promise((r) => setTimeout(r, ms)), report = () => {} } = {},
+) {
   for (let i = 0; ; i++) {
-    try { return await attempt(); }
-    catch (error) {
+    try {
+      return await attempt();
+    } catch (error) {
       report(error);
       if (i >= delays.length) throw error;
       await wait(delays[i]);
@@ -118,20 +140,27 @@ async function initPointer() {
   const root = document.documentElement.style;
   root.setProperty("--cursor", value);
   root.setProperty("--cursor-press", value);
-  if (!getComputedStyle(document.body).cursor.includes("url(")) report(new Error("Pointer: body did not take the cursor"));
+  if (!getComputedStyle(document.body).cursor.includes("url("))
+    report(new Error("Pointer: body did not take the cursor"));
 }
 
 // --- touch effect ---
 
-let tex = null, shade = null, glow = null, raf = 0, shown = false;
+let tex = null,
+  shade = null,
+  glow = null,
+  raf = 0,
+  shown = false;
 const effects = new Map(); // pointerId -> effect (a released one moves to a fresh key)
-let released = 0, reduced = null;
+let released = 0,
+  reduced = null;
 
 // world units -> CSS px: the stage's height is the game's 2 units
 const unit = () => 540 * Math.min(innerWidth / 1920, innerHeight / 1080);
 
 function pixels(img) {
-  const c = canvas(img.width, img.height), g = c.getContext("2d", { willReadFrequently: true });
+  const c = canvas(img.width, img.height),
+    g = c.getContext("2d", { willReadFrequently: true });
   g.drawImage(img, 0, 0);
   return g.getImageData(0, 0, img.width, img.height);
 }
@@ -139,8 +168,15 @@ function pixels(img) {
 // one canvas per colour channel (red, green, blue) and a black one, each with the mask as alpha: drawn with
 // "lighter" and a global alpha per channel they add any colour, the black one hides
 function channels(mask, w, h) {
-  return [[255, 0, 0], [0, 255, 0], [0, 0, 255], [0, 0, 0]].map((rgb) => {
-    const c = canvas(w, h), g = c.getContext("2d"), data = g.createImageData(w, h);
+  return [
+    [255, 0, 0],
+    [0, 255, 0],
+    [0, 0, 255],
+    [0, 0, 0],
+  ].map((rgb) => {
+    const c = canvas(w, h),
+      g = c.getContext("2d"),
+      data = g.createImageData(w, h);
     for (let i = 0; i < w * h; i++) {
       data.data.set(rgb, i * 4);
       data.data[i * 4 + 3] = mask[i];
@@ -162,17 +198,20 @@ async function loadTextures() {
     ringAlpha[x] = sum / ring.height / 255;
   }
   // Trail_03: its red (sRGB, decoded) along the trail, in the middle of its width
-  const trailU = new Float32Array(trail.width), mid = Math.floor(trail.height / 2);
+  const trailU = new Float32Array(trail.width),
+    mid = Math.floor(trail.height / 2);
   for (let x = 0; x < trail.width; x++) trailU[x] = FX.toLinear(trail.data[(mid * trail.width + x) * 4] / 255);
   // Circle_01: the disc is in the colour (alpha is opaque); the shader takes red as the mask
   const discMask = new Uint8ClampedArray(disc.width * disc.height);
   for (let i = 0; i < discMask.length; i++) discMask[i] = Math.round(FX.toLinear(disc.data[i * 4] / 255) * 255);
   // Triangle_02_1: two frames side by side, white with the shape in alpha
-  const tw = tri.width / 2, frames = [0, 1].map((f) => {
-    const mask = new Uint8ClampedArray(tw * tri.height);
-    for (let y = 0; y < tri.height; y++) for (let x = 0; x < tw; x++) mask[y * tw + x] = tri.data[(y * tri.width + f * tw + x) * 4 + 3];
-    return channels(mask, tw, tri.height);
-  });
+  const tw = tri.width / 2,
+    frames = [0, 1].map((f) => {
+      const mask = new Uint8ClampedArray(tw * tri.height);
+      for (let y = 0; y < tri.height; y++)
+        for (let x = 0; x < tw; x++) mask[y * tw + x] = tri.data[(y * tri.width + f * tw + x) * 4 + 3];
+      return channels(mask, tw, tri.height);
+    });
   // the flash's multiplied disc is tinted on this one
   const tint = canvas(disc.width, disc.height);
   return { ringAlpha, trailU, disc: channels(discMask, disc.width, disc.height), frames, tint };
@@ -192,8 +231,13 @@ function layer(cls) {
 }
 
 function fit(c) {
-  const dpr = devicePixelRatio || 1, w = Math.round(innerWidth * dpr), h = Math.round(innerHeight * dpr);
-  if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+  const dpr = devicePixelRatio || 1,
+    w = Math.round(innerWidth * dpr),
+    h = Math.round(innerHeight * dpr);
+  if (c.width !== w || c.height !== h) {
+    c.width = w;
+    c.height = h;
+  }
   const g = c.getContext("2d");
   g.setTransform(1, 0, 0, 1, 0, 0);
   g.globalCompositeOperation = "source-over";
@@ -223,7 +267,8 @@ function drawTrail(g, fx, U, t) {
   for (const s of segments) {
     const k = sample(t.trailU, s.u);
     if (k <= 0) continue;
-    const a = points[s.from], b = points[s.to];
+    const a = points[s.from],
+      b = points[s.to];
     g.strokeStyle = rgb(s.color, k);
     g.beginPath();
     g.moveTo(a.x * U, a.y * U);
@@ -233,19 +278,29 @@ function drawTrail(g, fx, U, t) {
 }
 
 function drawArc(g, p, fx, now, U, t) {
-  const st = FX.arcState(p, now), A = t.ringAlpha, n = A.length;
+  const st = FX.arcState(p, now),
+    A = t.ringAlpha,
+    n = A.length;
   // the dissolve keeps the part of the ring whose alpha reaches the threshold: one stretch around u = 0.5
-  let lo = 0, hi = n - 1;
+  let lo = 0,
+    hi = n - 1;
   while (lo < n && A[lo] < st.threshold) lo++;
   while (hi > lo && A[hi] < st.threshold) hi--;
   if (lo > hi) return;
-  const a = FX.FX.arc, r = st.size * (a.inner + a.outer) / 2 * U, cx = fx.ox * U, cy = fx.oy * U;
+  const a = FX.FX.arc,
+    r = ((st.size * (a.inner + a.outer)) / 2) * U,
+    cx = fx.ox * U,
+    cy = fx.oy * U;
   g.lineWidth = Math.max(0.75, st.size * (a.outer - a.inner) * U);
   g.lineCap = "butt";
   // its colour along u, in pieces; neighbours of one colour (most of it: the light saturates) are one stroke
-  const pieces = 48, u0 = lo / n, u1 = (hi + 1) / n, at = (i) => u0 + (u1 - u0) * i / pieces;
+  const pieces = 48,
+    u0 = lo / n,
+    u1 = (hi + 1) / n,
+    at = (i) => u0 + ((u1 - u0) * i) / pieces;
   const angle = (u) => st.rot + (u - 0.5) * Math.PI * 2;
-  let start = 0, style = null;
+  let start = 0,
+    style = null;
   for (let i = 0; i <= pieces; i++) {
     const next = i < pieces ? rgb(st.color, sample(A, (at(i) + at(i + 1)) / 2) * st.alpha) : null;
     if (next === style) continue;
@@ -270,7 +325,10 @@ export function paint(front, back, list, now, U, t = tex) {
     for (const p of fx.items) {
       if (p.kind === "arc") drawArc(front, p, fx, now, U, t);
       else if (p.kind === "flash") {
-        const st = FX.flashState(p, now), d = st.size * U, x = fx.ox * U - d / 2, y = fx.oy * U - d / 2;
+        const st = FX.flashState(p, now),
+          d = st.size * U,
+          x = fx.ox * U - d / 2,
+          y = fx.oy * U - d / 2;
         const { add, keep } = FX.overBlend(st.color, st.alpha);
         addSprite(front, t.disc, add, x, y, d, d);
         // what is behind keeps (1 - alpha) of itself: the disc's mask in that colour, multiplied
@@ -282,15 +340,18 @@ export function paint(front, back, list, now, U, t = tex) {
         tg.fillRect(0, 0, t.tint.width, t.tint.height);
         back.drawImage(t.tint, x, y, d, d);
       } else {
-        const st = FX.sparkState(p, now), d = st.size * U;
-        if (d > 0.1) addSprite(front, t.frames[st.frame], st.color.map(FX.toSrgb), st.x * U - d / 2, st.y * U - d / 2, d, d);
+        const st = FX.sparkState(p, now),
+          d = st.size * U;
+        if (d > 0.1)
+          addSprite(front, t.frames[st.frame], st.color.map(FX.toSrgb), st.x * U - d / 2, st.y * U - d / 2, d, d);
       }
     }
   }
 }
 
 function draw(now) {
-  const back = fit(shade), front = fit(glow);
+  const back = fit(shade),
+    front = fit(glow);
   paint(front, back, [...effects.values()], now, unit());
 }
 
@@ -320,15 +381,24 @@ function frame() {
   raf = requestAnimationFrame(frame);
 }
 
-const wake = () => { if (!raf) raf = requestAnimationFrame(frame); };
-const world = (e) => { const U = unit(); return [e.clientX / U, e.clientY / U]; };
+const wake = () => {
+  if (!raf) raf = requestAnimationFrame(frame);
+};
+const world = (e) => {
+  const U = unit();
+  return [e.clientX / U, e.clientY / U];
+};
 
 function down(e) {
   if (e.pointerType === "mouse" && e.button !== 0) return;
-  const now = performance.now() / 1000, [x, y] = world(e);
+  const now = performance.now() / 1000,
+    [x, y] = world(e);
   const fx = FX.press(x, y, now);
   const old = effects.get(e.pointerId);
-  if (old) { FX.release(old, now); effects.set(`r${released++}`, old); }
+  if (old) {
+    FX.release(old, now);
+    effects.set(`r${released++}`, old);
+  }
   effects.set(e.pointerId, fx);
   wake();
 }
@@ -336,10 +406,15 @@ function down(e) {
 function move(e) {
   const fx = effects.get(e.pointerId);
   if (!fx?.pressed) return;
-  const now = performance.now() / 1000, moves = e.getCoalescedEvents?.() || [];
+  const now = performance.now() / 1000,
+    moves = e.getCoalescedEvents?.() || [];
   // reduced motion: the press still answers (the burst), the drag leaves no trail and no sparks
-  const calm = !!reduced?.matches, opts = { trail: !calm, sparks: !calm };
-  for (const m of moves.length ? moves : [e]) { const [x, y] = world(m); FX.drag(fx, x, y, now, Math.random, opts); }
+  const calm = !!reduced?.matches,
+    opts = { trail: !calm, sparks: !calm };
+  for (const m of moves.length ? moves : [e]) {
+    const [x, y] = world(m);
+    FX.drag(fx, x, y, now, Math.random, opts);
+  }
   wake();
 }
 
@@ -358,7 +433,12 @@ async function initTouch() {
   reduced = matchMedia("(prefers-reduced-motion: reduce)");
   shade = layer("shade");
   glow = layer("glow");
-  for (const [type, fn] of [["pointerdown", down], ["pointermove", move], ["pointerup", up], ["pointercancel", up]]) {
+  for (const [type, fn] of [
+    ["pointerdown", down],
+    ["pointermove", move],
+    ["pointerup", up],
+    ["pointercancel", up],
+  ]) {
     addEventListener(type, fn, { capture: true, passive: true });
   }
 }

@@ -4,7 +4,10 @@ import { test } from "node:test";
 import { decodeAll } from "../../src/bmpt/web/js/image-decode.js";
 
 const source = readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8");
-const portraitCode = source.slice(source.indexOf("async function showSpine("), source.indexOf("// the detail screen's portrait framing"));
+const portraitCode = source.slice(
+  source.indexOf("async function showSpine("),
+  source.indexOf("// the detail screen's portrait framing"),
+);
 const noop = () => {};
 
 class Element {
@@ -14,28 +17,60 @@ class Element {
     this.style = {};
     this.classList = { add: noop, remove: noop };
   }
-  appendChild(el) { el.parent = this; this.children.push(el); }
-  remove() { if (this.parent) this.parent.children = this.parent.children.filter((el) => el !== this); this.parent = null; }
-  querySelectorAll() { return this.children; }
+  appendChild(el) {
+    el.parent = this;
+    this.children.push(el);
+  }
+  remove() {
+    if (this.parent) this.parent.children = this.parent.children.filter((el) => el !== this);
+    this.parent = null;
+  }
+  querySelectorAll() {
+    return this.children;
+  }
 }
 
 function portraitHarness(portrait, confirm = async () => false, decode = () => Promise.resolve()) {
-  const host = new Element("div"), status = [], unexpected = [];
+  const host = new Element("div"),
+    status = [],
+    unexpected = [];
   const controller = new AbortController();
-  let consentAllowed = false, retries = 0;
+  let consentAllowed = false,
+    retries = 0;
   const env = {
-    ensureSpine: async () => { consentAllowed = await confirm(); return consentAllowed; },
-    $: () => host, document: { createElement: (tag) => Object.assign(new Element(tag), tag === "img" ? { decode } : {}) },
-    decodeAll, HARD_CAP: 15000,
-    Loading: { covering: () => true }, commit: (fn) => fn(), variant: () => ({ portrait }),
+    ensureSpine: async () => {
+      consentAllowed = await confirm();
+      return consentAllowed;
+    },
+    $: () => host,
+    document: { createElement: (tag) => Object.assign(new Element(tag), tag === "img" ? { decode } : {}) },
+    decodeAll,
+    HARD_CAP: 15000,
+    Loading: { covering: () => true },
+    commit: (fn) => fn(),
+    variant: () => ({ portrait }),
     Lobby: { licenseRequired: (layer, retry) => status.push({ layer, retry }) },
-    renderLeft: () => { retries++; }, prioritise: () => unexpected.push("prioritise"),
-    loadSpineAssets: () => unexpected.push("assets"), clearTimeout: noop,
+    renderLeft: () => {
+      retries++;
+    },
+    prioritise: () => unexpected.push("prioritise"),
+    loadSpineAssets: () => unexpected.push("assets"),
+    clearTimeout: noop,
   };
-  const show = new Function("env", `const { ${Object.keys(env).join(", ")} } = env;
+  const show = new Function(
+    "env",
+    `const { ${Object.keys(env).join(", ")} } = env;
     let spineToken = 1, batch = null, blinkTimer, mainPlayer = null, open = true;
-    ${portraitCode}; return showSpine;`)(env);
-  return { host, status, unexpected, controller, show: () => show("preview", 1, controller.signal), retries: () => retries };
+    ${portraitCode}; return showSpine;`,
+  )(env);
+  return {
+    host,
+    status,
+    unexpected,
+    controller,
+    show: () => show("preview", 1, controller.signal),
+    retries: () => retries,
+  };
 }
 
 test("the detail portrait uses the collection image without loading preview assets", async () => {
@@ -51,9 +86,19 @@ test("the detail portrait uses the collection image without loading preview asse
 });
 
 test("the static portrait waits for decoding before its preview is ready", async () => {
-  let finish, ready = false;
-  const h = portraitHarness("/portrait.png", async () => false, () => new Promise((resolve) => { finish = resolve; }));
-  const showing = h.show().then(() => { ready = true; });
+  let finish,
+    ready = false;
+  const h = portraitHarness(
+    "/portrait.png",
+    async () => false,
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const showing = h.show().then(() => {
+    ready = true;
+  });
   await new Promise(setImmediate);
   assert.equal(ready, false);
   assert.equal(h.host.children[0].children[0].src, "/portrait.png");
@@ -64,7 +109,14 @@ test("the static portrait waits for decoding before its preview is ready", async
 
 test("cancelling a pending static decode removes its layer and settles readiness", async () => {
   let decoding = false;
-  const h = portraitHarness("/portrait.png", async () => false, () => { decoding = true; return new Promise(() => {}); });
+  const h = portraitHarness(
+    "/portrait.png",
+    async () => false,
+    () => {
+      decoding = true;
+      return new Promise(() => {});
+    },
+  );
   const showing = h.show();
   await new Promise(setImmediate);
   assert.equal(decoding, true);
@@ -84,7 +136,13 @@ test("a missing collection portrait leaves an empty preview without a licence ac
 
 test("a cancelled confirmation read cannot add a portrait after detail was left", async () => {
   let finish;
-  const h = portraitHarness("/portrait.png", () => new Promise((resolve) => { finish = resolve; }));
+  const h = portraitHarness(
+    "/portrait.png",
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
   const showing = h.show();
   h.controller.abort();
   finish(false);
@@ -94,10 +152,15 @@ test("a cancelled confirmation read cannot add a portrait after detail was left"
 
 test("detail thumbnail fallbacks use collection portraits only for the matching official source", () => {
   const code = source.slice(source.indexOf("function collectionPortrait("), source.indexOf("function begin()"));
-  const variants = [{ key: "ibuki", spr: "ibuki_spr", portrait: "/ibuki.png", modList: [{ id: "added", kind: "spr" }] },
-    { key: "special:npc", lobby: "npc" }];
-  const read = new Function("fam", "spineBase", "variantBase", `${code}; return collectionPortrait;`)
-    ({ variants }, (kind, core) => `${kind}/${core}`, (v) => `installed/${v.spr}`);
+  const variants = [
+    { key: "ibuki", spr: "ibuki_spr", portrait: "/ibuki.png", modList: [{ id: "added", kind: "spr" }] },
+    { key: "special:npc", lobby: "npc" },
+  ];
+  const read = new Function("fam", "spineBase", "variantBase", `${code}; return collectionPortrait;`)(
+    { variants },
+    (kind, core) => `${kind}/${core}`,
+    (v) => `installed/${v.spr}`,
+  );
   assert.equal(read("official-spr/ibuki_spr"), "/ibuki.png");
   for (const base of ["spr/ibuki_spr", "installed/ibuki_spr", "mod/added"]) assert.equal(read(base), null);
   assert.equal(read("lobby/npc"), null);

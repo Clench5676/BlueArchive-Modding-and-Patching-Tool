@@ -25,10 +25,10 @@ from typing import Any, Mapping
 
 import numpy as np
 
-DEEP = 0.01        # a leg vertex this far outside the cloth passes through (metres)
+DEEP = 0.01  # a leg vertex this far outside the cloth passes through (metres)
 TOLERANCE = 0.003  # crossings this close to a leg vertex decide nothing
-NEAR_AXIS = 0.01   # leg vertices this close to the body axis have no direction
-WORSE = 5.0        # no clip may get more than this many points worse than rigid weights
+NEAR_AXIS = 0.01  # leg vertices this close to the body axis have no direction
+WORSE = 5.0  # no clip may get more than this many points worse than rigid weights
 STRETCH_FLOOR = 1.5
 RAY_CHUNK = 32
 
@@ -51,6 +51,7 @@ def leg_distance(points: np.ndarray, hip: np.ndarray, knee: np.ndarray, ankle: n
 
 # --- weights -------------------------------------------------------------------------------------------------------
 
+
 def densify(columns: np.ndarray, weights: np.ndarray, width: int) -> np.ndarray:
     """Per-vertex influences (column, weight) as a dense (vertices x ``width``) matrix; influences on the same column
     (several bones driving the same slot bone) add up, so keeping four later drops no real influence."""
@@ -60,8 +61,9 @@ def densify(columns: np.ndarray, weights: np.ndarray, width: int) -> np.ndarray:
     return dense
 
 
-def reweight(dense: np.ndarray, rigid: np.ndarray, fraction: np.ndarray, moves: np.ndarray,
-             columns: list[int]) -> np.ndarray:
+def reweight(
+    dense: np.ndarray, rigid: np.ndarray, fraction: np.ndarray, moves: np.ndarray, columns: list[int]
+) -> np.ndarray:
     """``dense`` (vertices x bones) with ``fraction`` of each vertex's rigid part (``rigid``, part of ``dense``) moved
     to ``columns``, shared by ``moves`` (rows summing to 1)."""
     share = rigid.sum(axis=1)
@@ -70,8 +72,15 @@ def reweight(dense: np.ndarray, rigid: np.ndarray, fraction: np.ndarray, moves: 
     return out
 
 
-def ramp(height: np.ndarray, near: np.ndarray, left: np.ndarray, right: np.ndarray, alpha: float, top: float,
-         knee: tuple[float, float]) -> tuple[np.ndarray, np.ndarray]:
+def ramp(
+    height: np.ndarray,
+    near: np.ndarray,
+    left: np.ndarray,
+    right: np.ndarray,
+    alpha: float,
+    top: float,
+    knee: tuple[float, float],
+) -> tuple[np.ndarray, np.ndarray]:
     """The fraction of the rigid part to move and its shares on (left thigh, right thigh, left calf, right calf).
     ``height``: below the hip in thigh lengths; ``near``: 1 next to the legs, 0 from two hip widths away; ``left`` and
     ``right``: closeness to each leg. The fraction rises over ``top`` thigh lengths, the calf takes over across
@@ -103,7 +112,7 @@ def skin(rest: np.ndarray, joints: np.ndarray, weights: np.ndarray, matrices: np
     homogeneous = np.c_[rest, np.ones(len(rest))]
     out = np.zeros((len(rest), 3))
     for k in range(joints.shape[1]):
-        out += weights[:, k:k + 1] * np.einsum("nij,nj->ni", matrices[joints[:, k]], homogeneous)[:, :3]
+        out += weights[:, k : k + 1] * np.einsum("nij,nj->ni", matrices[joints[:, k]], homogeneous)[:, :3]
     return out
 
 
@@ -144,8 +153,11 @@ def fit_simplex(normal: Normal) -> tuple[np.ndarray, np.ndarray]:
         except np.linalg.LinAlgError:
             continue
         feasible = (solution >= -1e-9).all(axis=1)
-        residual = (normal.square - 2 * (solution * normal.right[:, chosen]).sum(axis=1)
-                    + np.einsum("ni,nij,nj->n", solution, gram, solution))
+        residual = (
+            normal.square
+            - 2 * (solution * normal.right[:, chosen]).sum(axis=1)
+            + np.einsum("ni,nij,nj->n", solution, gram, solution)
+        )
         better = feasible & (residual < best - 1e-12)
         best[better] = residual[better]
         weights = np.zeros((int(better.sum()), bones))
@@ -155,6 +167,7 @@ def fit_simplex(normal: Normal) -> tuple[np.ndarray, np.ndarray]:
 
 
 # --- measures ------------------------------------------------------------------------------------------------------
+
 
 def stretch_p99(rest: np.ndarray, posed: np.ndarray, edges: np.ndarray) -> float:
     """The 99th percentile of how much the edges grow (1 = unchanged)."""
@@ -186,8 +199,9 @@ def _far_hits(origins: np.ndarray, directions: np.ndarray, corners: np.ndarray) 
     return np.where(np.isfinite(t), t, np.nan)
 
 
-def cover(points: np.ndarray, legs: np.ndarray, triangles: np.ndarray, centre: np.ndarray,
-          up: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def cover(
+    points: np.ndarray, legs: np.ndarray, triangles: np.ndarray, centre: np.ndarray, up: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
     """For the leg vertices ``legs`` (indices into ``points``), on the ray from the body axis (through ``centre``
     along ``up``) through each: +1 when cloth (``triangles``, indices into ``points``) lies beyond it, -1 when every
     crossing lies nearer, 0 without a crossing or on the axis; and how far it lies outside the farthest crossing."""
@@ -207,7 +221,7 @@ def cover(points: np.ndarray, legs: np.ndarray, triangles: np.ndarray, centre: n
     rays = np.where(keep)[0]
     rays = rays[np.argsort(height[rays], kind="stable")]
     for start in range(0, len(rays), RAY_CHUNK):
-        chunk = rays[start:start + RAY_CHUNK]
+        chunk = rays[start : start + RAY_CHUNK]
         lo, hi = height[chunk].min(), height[chunk].max()
         near = (high >= lo - 1e-6) & (low <= hi + 1e-6)
         if near.any():
@@ -231,8 +245,8 @@ def deep_share(state: np.ndarray, depth: np.ndarray) -> float:
 class Score:
     rule: str
     deep: dict[str, float]  # per clip: worst frame's deep pass-through, percent
-    stretch: float          # worst cloth stretch p99 over the clips
-    complete: bool = True   # a rejected candidate may stop before its remaining clips
+    stretch: float  # worst cloth stretch p99 over the clips
+    complete: bool = True  # a rejected candidate may stop before its remaining clips
 
     @property
     def mean(self) -> float:
@@ -244,8 +258,13 @@ def choose(scores: list[Score], limit: float) -> Score:
     gets more than ``WORSE`` points worse than rigid; the lowest mean wins, ties go to rigid, then to less stretch."""
     rigid = scores[0]
     ceiling = max(limit, rigid.stretch)
-    allowed = [s for s in scores[1:] if s.complete and s.stretch <= ceiling + 1e-9
-               and all(s.deep.get(c, 0.0) <= d + WORSE for c, d in rigid.deep.items())]
+    allowed = [
+        s
+        for s in scores[1:]
+        if s.complete
+        and s.stretch <= ceiling + 1e-9
+        and all(s.deep.get(c, 0.0) <= d + WORSE for c, d in rigid.deep.items())
+    ]
     return min([*allowed, rigid], key=lambda s: (round(s.mean, 1), s is not rigid, s.stretch))
 
 
@@ -287,13 +306,20 @@ def skin_layout(mesh: Mapping[str, Any]) -> SkinLayout | None:
     if len(channels) <= BLEND_INDICES or not count or not isinstance(raw, (bytes, bytearray)):
         return None
     weight, index = channels[BLEND_WEIGHT], channels[BLEND_INDICES]
-    if (weight["dimension"] & 0xF) != 4 or (index["dimension"] & 0xF) != 4 or \
-            weight["format"] not in WEIGHT_CODES or index["format"] not in INDEX_CODES:
+    if (
+        (weight["dimension"] & 0xF) != 4
+        or (index["dimension"] & 0xF) != 4
+        or weight["format"] not in WEIGHT_CODES
+        or index["format"] not in INDEX_CODES
+    ):
         return None
     starts, strides, offset = [], [], 0
     for stream in range(1 + max(c["stream"] for c in channels)):
-        stride = sum((c["dimension"] & 0xF) * FORMAT_SIZE.get(c["format"], 0)
-                     for c in channels if c["stream"] == stream and c["dimension"])
+        stride = sum(
+            (c["dimension"] & 0xF) * FORMAT_SIZE.get(c["format"], 0)
+            for c in channels
+            if c["stream"] == stream and c["dimension"]
+        )
         starts.append(offset)
         strides.append(stride)
         offset = (offset + count * stride + 15) & ~15
@@ -307,8 +333,9 @@ def skin_layout(mesh: Mapping[str, Any]) -> SkinLayout | None:
         return starts[s] + channel["offset"], strides[s], code
 
     try:
-        return SkinLayout(count, place(weight, WEIGHT_CODES[weight["format"]]),
-                          place(index, INDEX_CODES[index["format"]]))
+        return SkinLayout(
+            count, place(weight, WEIGHT_CODES[weight["format"]]), place(index, INDEX_CODES[index["format"]])
+        )
     except ValueError:
         return None
 
@@ -325,8 +352,14 @@ class SkinNotWritable(ValueError):
     """The skin cannot take the new bone indices in this mesh's index format: the part keeps its skin."""
 
 
-INDEX_RANGE = {"B": (0, 1 << 8), "b": (-(1 << 7), 1 << 7), "H": (0, 1 << 16), "h": (-(1 << 15), 1 << 15),
-               "I": (0, 1 << 32), "i": (-(1 << 31), 1 << 31)}
+INDEX_RANGE = {
+    "B": (0, 1 << 8),
+    "b": (-(1 << 7), 1 << 7),
+    "H": (0, 1 << 16),
+    "h": (-(1 << 15), 1 << 15),
+    "I": (0, 1 << 32),
+    "i": (-(1 << 31), 1 << 31),
+}
 
 
 def write_skin(mesh: dict, layout: SkinLayout, rows: np.ndarray, joints: np.ndarray, weights: np.ndarray) -> None:
@@ -354,7 +387,7 @@ def unpack_bits(packed: Mapping[str, Any]) -> list[int]:
     if not count or not bits:
         return [0] * count
     raw = np.frombuffer(bytes(packed["m_Data"]), np.uint8)
-    flat = np.unpackbits(raw, bitorder="little")[:count * bits].reshape(count, bits).astype(np.int64)
+    flat = np.unpackbits(raw, bitorder="little")[: count * bits].reshape(count, bits).astype(np.int64)
     return (flat << np.arange(bits)).sum(axis=1).tolist()
 
 
@@ -397,7 +430,7 @@ def quantize(weights: np.ndarray) -> list[int]:
     """Weights (summing to 1) as steps of 1/31 summing to 31, by the largest remainders."""
     scaled = np.clip(np.asarray(weights, float), 0.0, None) * STEPS / max(float(np.sum(weights)), 1e-12)
     steps = np.floor(scaled).astype(int)
-    for k in np.argsort(-(scaled - steps), kind="stable")[:STEPS - int(steps.sum())]:
+    for k in np.argsort(-(scaled - steps), kind="stable")[: STEPS - int(steps.sum())]:
         steps[k] += 1
     return steps.tolist()
 
@@ -428,8 +461,9 @@ def compressed_layout(mesh: Mapping[str, Any]) -> CompressedLayout | None:
     return CompressedLayout(count, rows) if rows is not None else None
 
 
-def write_compressed(mesh: dict, layout: CompressedLayout, rows: np.ndarray, joints: np.ndarray,
-                     weights: np.ndarray) -> None:
+def write_compressed(
+    mesh: dict, layout: CompressedLayout, rows: np.ndarray, joints: np.ndarray, weights: np.ndarray
+) -> None:
     """Re-encode the skin of the vertices ``rows``; the other vertices keep their stored items."""
     stored = list(layout.rows)
     for row, j, w in zip(rows.tolist(), joints, weights):
@@ -437,9 +471,14 @@ def write_compressed(mesh: dict, layout: CompressedLayout, rows: np.ndarray, joi
     w_items = [w for items, _ in stored for w in items]
     b_items = [b for _, items in stored for b in items]
     compressed = mesh["m_CompressedMesh"]
-    for key, items, bits in (("m_Weights", w_items, 5),
-                             ("m_BoneIndices", b_items, max(int(compressed["m_BoneIndices"].get("m_BitSize") or 0),
-                                                            max(b_items, default=0).bit_length(), 1))):
+    for key, items, bits in (
+        ("m_Weights", w_items, 5),
+        (
+            "m_BoneIndices",
+            b_items,
+            max(int(compressed["m_BoneIndices"].get("m_BitSize") or 0), max(b_items, default=0).bit_length(), 1),
+        ),
+    ):
         packed = compressed[key]
         data = pack_bits(items, bits)
         packed["m_NumItems"] = len(items)
@@ -455,8 +494,9 @@ def store_of(mesh: Mapping[str, Any]) -> SkinLayout | CompressedLayout | None:
     return skin_layout(mesh) or compressed_layout(mesh)
 
 
-def write_weights(mesh: dict, store: SkinLayout | CompressedLayout, rows: np.ndarray, joints: np.ndarray,
-                  weights: np.ndarray) -> None:
+def write_weights(
+    mesh: dict, store: SkinLayout | CompressedLayout, rows: np.ndarray, joints: np.ndarray, weights: np.ndarray
+) -> None:
     if isinstance(store, CompressedLayout):
         write_compressed(mesh, store, rows, joints, weights)
     else:

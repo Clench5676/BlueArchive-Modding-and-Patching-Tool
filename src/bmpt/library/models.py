@@ -15,6 +15,7 @@ class JsonResult:
 
     def to_json(self) -> dict[str, Any]:
         """Return a dictionary with absolute paths represented as strings."""
+
         def convert(value: Any) -> Any:
             if isinstance(value, Path):
                 return str(value.absolute())
@@ -71,13 +72,17 @@ class AddResult(list[ModEntry]):
         return list(self)
 
     def to_json(self) -> dict[str, Any]:
-        return {"added": [entry.to_json() for entry in self],
-                "duplicates": [entry.to_json() for entry in self.duplicates],
-                "installed": [entry.to_json() for entry in self.installed],
-                "applied": [entry.to_json() for entry in self.applied],
-                "configured": [entry.to_json() for entry in self.configured],
-                "failed": self.failed, "compatibility": self.compatibility,
-                "kept_current": self.kept_current, "incomplete": self.incomplete}
+        return {
+            "added": [entry.to_json() for entry in self],
+            "duplicates": [entry.to_json() for entry in self.duplicates],
+            "installed": [entry.to_json() for entry in self.installed],
+            "applied": [entry.to_json() for entry in self.applied],
+            "configured": [entry.to_json() for entry in self.configured],
+            "failed": self.failed,
+            "compatibility": self.compatibility,
+            "kept_current": self.kept_current,
+            "incomplete": self.incomplete,
+        }
 
 
 @dataclass(frozen=True)
@@ -215,8 +220,9 @@ class Pin(JsonResult):
         return hashlib.sha1(self.key.encode("utf-8")).hexdigest()[:12]
 
 
-EntryStateName = Literal["damaged", "missing", "untracked", "changed", "source_missing", "updated", "reset", "ok",
-                         "pending"]
+EntryStateName = Literal[
+    "damaged", "missing", "untracked", "changed", "source_missing", "updated", "reset", "ok", "pending"
+]
 
 
 @dataclass(frozen=True)

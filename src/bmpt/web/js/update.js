@@ -41,10 +41,17 @@ export function notesLines(markdown, lang = language()) {
 // releasePage: false leaves out the release page button (a local build's tag may not be published)
 export async function releaseNotes(info, { simulation = false, onSimulatedPage, releasePage = true } = {}) {
   const lines = notesLines(info.notes);
-  const result = await Popup.message({ title: `${dialogTitle("update.notes", simulation)} - ${info.version}`,
-    lines, plain: true, scroll: true, width: "L",
-    buttons: [...(releasePage ? [{ label: T("update.releasePage"), value: "page" }] : []),
-      { label: T("display.close"), value: "dismiss" }] });
+  const result = await Popup.message({
+    title: `${dialogTitle("update.notes", simulation)} - ${info.version}`,
+    lines,
+    plain: true,
+    scroll: true,
+    width: "L",
+    buttons: [
+      ...(releasePage ? [{ label: T("update.releasePage"), value: "page" }] : []),
+      { label: T("display.close"), value: "dismiss" },
+    ],
+  });
   if (result.button === "page") {
     if (simulation) await onSimulatedPage?.();
     else await rpc("app.openReleasePage", { page: info.page });
@@ -67,8 +74,16 @@ export async function afterUpgrade({ blocked = () => false } = {}) {
 export async function simulate(host, prefs, notes = true) {
   if (prefs?.prereleasePreviews !== true || checks.has(host)) return null;
   const own = notes ? await rpc("app.releaseNotes").catch(() => null) : null;
-  return check(host, { current: prefs.version, version: own?.notes ? own.version : "0.6.0", installable: true,
-    notes: notes ? own?.notes || T("update.simulation.sample") : "" }, { simulation: true });
+  return check(
+    host,
+    {
+      current: prefs.version,
+      version: own?.notes ? own.version : "0.6.0",
+      installable: true,
+      notes: notes ? own?.notes || T("update.simulation.sample") : "",
+    },
+    { simulation: true },
+  );
 }
 
 // resolves with what closed the popup: "later" (Later or Escape), "page" (the download page opened) or "update" (a
@@ -84,13 +99,18 @@ export function check(host, info, { onCheck, onError, beforeShow, simulation = f
     return current.done;
   }
   // Reserve the host before asking the server, including checks that have not drawn their popup yet.
-  const checked = Promise.resolve().then(() => info === undefined ? rpc("app.checkUpdate") : info);
+  const checked = Promise.resolve().then(() => (info === undefined ? rpc("app.checkUpdate") : info));
   observe(checked);
-  const done = checked.then(async (release) => {
-    if (!release) return null;
-    await beforeShow?.();
-    return show(host, release, { simulation });
-  }, () => null).finally(() => checks.delete(host)); // automatic checks stay quiet when offline
+  const done = checked
+    .then(
+      async (release) => {
+        if (!release) return null;
+        await beforeShow?.();
+        return show(host, release, { simulation });
+      },
+      () => null,
+    )
+    .finally(() => checks.delete(host)); // automatic checks stay quiet when offline
   checks.set(host, { checked, done });
   return done;
 }
@@ -99,7 +119,8 @@ export function check(host, info, { onCheck, onError, beforeShow, simulation = f
 // frames' class): the popups' footer fit (popupFrame applies the same to the three choices), a long one wraps to two lines
 // before it shrinks, clear of the body's edges; all three share one size
 export function offerCaptions(widgets) {
-  const texts = widgets.map((l) => l.text), { kind, room } = Popup.footerLayout(texts, frameGeometry(FRAME_W).w);
+  const texts = widgets.map((l) => l.text),
+    { kind, room } = Popup.footerLayout(texts, frameGeometry(FRAME_W).w);
   return Popup.footerLabels(widgets, texts, { width: room, caption: kind.caption });
 }
 
@@ -114,8 +135,10 @@ const FRAME_W = 1700;
 export function frameFor(boxH) {
   const below = STATUS.gap + STATUS.h + PROGRESS.gap + PROGRESS.h;
   const h = Math.ceil(TOP + boxH + below + POPUP_FOOTER.clearance);
-  const boxTop = POPUP.frameY + h / 2 - TOP, boxBottom = boxTop - boxH;
-  const status = boxBottom - STATUS.gap - STATUS.h / 2, progress = boxBottom - STATUS.gap - STATUS.h - PROGRESS.gap - PROGRESS.h / 2;
+  const boxTop = POPUP.frameY + h / 2 - TOP,
+    boxBottom = boxTop - boxH;
+  const status = boxBottom - STATUS.gap - STATUS.h / 2,
+    progress = boxBottom - STATUS.gap - STATUS.h - PROGRESS.gap - PROGRESS.h / 2;
   return { w: FRAME_W, h, boxTop, status, progress, contentBottom: progress - PROGRESS.h / 2 };
 }
 // The content shown is centred in the room the frame keeps under the title: the version box alone while the offer waits,
@@ -127,8 +150,10 @@ export function contentShift({ status = false, progress = false } = {}) {
   return (full - shown) / 2;
 }
 // the rows of the box: the current version in black, the latest in the success colour
-export const versionRows = (info) => [{ caption: T("update.current"), value: info.current.replace(/-dev$/, "") },
-  { caption: T("update.latest"), value: info.version, colour: `${COLOUR.success}/1.00` }];
+export const versionRows = (info) => [
+  { caption: T("update.current"), value: info.current.replace(/-dev$/, "") },
+  { caption: T("update.latest"), value: info.version, colour: `${COLOUR.success}/1.00` },
+];
 // the two versions are one line each: two rows of the box's minimum
 export const FRAME = frameFor(2 * STATS_BOX.rowMin + 2 * STATS_BOX.padY);
 
@@ -147,7 +172,11 @@ async function draw(host, info, resolve, { simulation = false } = {}) {
   host.hidden = false;
   let ended = false;
   let phase = !simulation && info.installable && info.downloaded ? "ready" : "offer";
-  let file = info.file, error = "", status = "", percent = 0, revision = 0;
+  let file = info.file,
+    error = "",
+    status = "",
+    percent = 0,
+    revision = 0;
   let buttons = [];
   const blocked = () => phase === "downloading" || phase === "installing";
   const close = (how) => {
@@ -171,23 +200,47 @@ async function draw(host, info, resolve, { simulation = false } = {}) {
   const content = [
     ...statsBox({ holder: "frame", width: FRAME_W, at: [0, frame.boxTop], rows }).nodes,
     node("Status", [0, frame.status], [label("", 40, "#2d4664/1.00", 1250, STATUS.h, { depth: 8 })]),
-    node("Progress", [0, frame.progress], [sprite("Common_Bg_Raius10px", 1200, PROGRESS.h, { depth: 5, color: "#c0c9d4/1.00" })], [
-      node("Fill", [-600, 0], [sprite("Common_Bg_Raius10px", 1200, PROGRESS.h, { pivot: 3, depth: 6, color: `${COLOUR.success}/1.00` })]),
-    ]),
+    node(
+      "Progress",
+      [0, frame.progress],
+      [sprite("Common_Bg_Raius10px", 1200, PROGRESS.h, { depth: 5, color: "#c0c9d4/1.00" })],
+      [
+        node(
+          "Fill",
+          [-600, 0],
+          [sprite("Common_Bg_Raius10px", 1200, PROGRESS.h, { pivot: 3, depth: 6, color: `${COLOUR.success}/1.00` })],
+        ),
+      ],
+    ),
   ];
 
   async function render() {
-    const rev = ++revision, locked = blocked();
+    const rev = ++revision,
+      locked = blocked();
     if (locked) for (const b of buttons) b.disabled = true;
     const action = !installable ? "page" : phase === "ready" || phase === "installing" ? "restart" : "update";
     const okText = T(action === "update" ? "update.now" : `update.${action}`);
     // the shared popup frame, no close button; Later, Release Notes and the action are its three choices
-    const tree = Popup.popupFrame(dialogTitle("update.title", simulation), frame.w, frame.h, { close: false, buttons: [
-      { label: T("update.later"), name: "Btn_Cancel" }, { label: T("update.notes"), name: "Btn_Notes" },
-      { label: okText, name: "Btn_Ok", primary: true, semantic: "update" }] });
-    const body = find(tree, "Popup"), controls = find(body, "Btn");
-    const text = error || status || (phase === "downloading" ? T("update.downloading", { p: percent })
-      : phase === "ready" ? T("update.complete") : phase === "installing" ? T("update.restarting") : "");
+    const tree = Popup.popupFrame(dialogTitle("update.title", simulation), frame.w, frame.h, {
+      close: false,
+      buttons: [
+        { label: T("update.later"), name: "Btn_Cancel" },
+        { label: T("update.notes"), name: "Btn_Notes" },
+        { label: okText, name: "Btn_Ok", primary: true, semantic: "update" },
+      ],
+    });
+    const body = find(tree, "Popup"),
+      controls = find(body, "Btn");
+    const text =
+      error ||
+      status ||
+      (phase === "downloading"
+        ? T("update.downloading", { p: percent })
+        : phase === "ready"
+          ? T("update.complete")
+          : phase === "installing"
+            ? T("update.restarting")
+            : "");
     const shift = contentShift({ status: !!text, progress: phase === "downloading" });
     body.children.push(node("Content", [0, -shift], [], clone(content)));
     for (const name of ["Btn_Cancel", "Btn_Notes", "Btn_Ok"]) {
@@ -197,21 +250,41 @@ async function draw(host, info, resolve, { simulation = false } = {}) {
       }
     }
     const f = NGUI.fitText(text, 40, 30, 1250, 2);
-    Object.assign(find(body, "Content/Status").widgets[0], { text: f.text, fontSize: f.fs, color: error ? `${COLOUR.error}/1.00` : "#2d4664/1.00" });
+    Object.assign(find(body, "Content/Status").widgets[0], {
+      text: f.text,
+      fontSize: f.fs,
+      color: error ? `${COLOUR.error}/1.00` : "#2d4664/1.00",
+    });
     const progress = find(body, "Content/Progress");
     progress.active = phase === "downloading";
     find(progress, "Fill").active = percent > 0;
-    find(progress, "Fill").widgets[0].w_ = 1200 * percent / 100;
+    find(progress, "Fill").widgets[0].w_ = (1200 * percent) / 100;
     const next = document.createElement("div");
     const view = await NGUI.render(tree, next, { scale: S, origin: [960, 540], z: 2000 });
     if (ended || rev !== revision) return;
-    const hit = (name, fn, caption, action) => Popup.hit(next, view, `Center/Popup/Btn/${name}/BG (1)`, fn, { name: caption, action, z: 2100 });
-    buttons = [hit("Btn_Cancel", () => close("later"), T("update.later"), "later"),
-      hit("Btn_Notes", () => releaseNotes(info, { simulation, onSimulatedPage: async () => {
-        status = T("update.simulation.pageStatus"); await render();
-      } }).catch((err) => console.error("release notes", err)), T("update.notes"), "notes"),
-      hit("Btn_Ok", () => act(action), okText, action)];
-    for (const b of buttons) { b.disabled = locked; b.setAttribute("aria-disabled", String(locked)); }
+    const hit = (name, fn, caption, action) =>
+      Popup.hit(next, view, `Center/Popup/Btn/${name}/BG (1)`, fn, { name: caption, action, z: 2100 });
+    buttons = [
+      hit("Btn_Cancel", () => close("later"), T("update.later"), "later"),
+      hit(
+        "Btn_Notes",
+        () =>
+          releaseNotes(info, {
+            simulation,
+            onSimulatedPage: async () => {
+              status = T("update.simulation.pageStatus");
+              await render();
+            },
+          }).catch((err) => console.error("release notes", err)),
+        T("update.notes"),
+        "notes",
+      ),
+      hit("Btn_Ok", () => act(action), okText, action),
+    ];
+    for (const b of buttons) {
+      b.disabled = locked;
+      b.setAttribute("aria-disabled", String(locked));
+    }
     host.replaceChildren(...next.childNodes);
   }
 
@@ -235,7 +308,11 @@ async function draw(host, info, resolve, { simulation = false } = {}) {
     try {
       await render();
       if (installing) {
-        if (await rpc("app.installUpdate", { file }) === false) { phase = "ready"; await render(); return; }
+        if ((await rpc("app.installUpdate", { file })) === false) {
+          phase = "ready";
+          await render();
+          return;
+        }
         await new Promise((resolve) => setTimeout(resolve, RESTART_WAIT));
         // A successful quit destroys this page. If it is still here, allow dismissal and another Restart.
         phase = "ready";
@@ -244,7 +321,7 @@ async function draw(host, info, resolve, { simulation = false } = {}) {
         return;
       }
       const result = await waitJob(await rpc("app.update"), (p) => {
-        const next = p.total > 0 ? Math.max(0, Math.min(100, Math.floor(p.current / p.total * 100))) : 0;
+        const next = p.total > 0 ? Math.max(0, Math.min(100, Math.floor((p.current / p.total) * 100))) : 0;
         if (next === percent) return; // the popup is drawn again only when the number changes
         percent = next;
         render().catch((err) => console.error("update progress", err));

@@ -5,10 +5,12 @@ import { register } from "node:module";
 import { test } from "node:test";
 
 const VENDOR = new URL("../../src/bmpt/web/vendor/three-0.160.0/", import.meta.url).href;
-register(`data:text/javascript,${encodeURIComponent(`export async function resolve(spec, ctx, next) {
+register(
+  `data:text/javascript,${encodeURIComponent(`export async function resolve(spec, ctx, next) {
   if (spec === "three") return { url: ${JSON.stringify(VENDOR + "build/three.module.min.js")}, shortCircuit: true };
   if (spec.startsWith("three/addons/")) return { url: ${JSON.stringify(VENDOR + "examples/jsm/")} + spec.slice(13), shortCircuit: true };
-  return next(spec, ctx); }`)}`);
+  return next(spec, ctx); }`)}`,
+);
 const THREE = await import("three");
 const { FORMATION_VIEW, bustDistance, carryZoom, frameDistance, stillCamera, stillCrop, storyAction, storyActions } =
   await import("../../src/bmpt/web/js/model.js");
@@ -72,8 +74,12 @@ test("the closest zoom is the bust, beside the panel and fullscreen", () => {
 });
 
 test("a change of framing keeps the zoom's place between the bust and the fit", () => {
-  const range = (frame) => { const fit = frameDistance(KOHARU, frame); return { fit, min: bustDistance(KOHARU, FACE, frame, fit) }; };
-  const left = range(LEFT), full = range(FULL);
+  const range = (frame) => {
+    const fit = frameDistance(KOHARU, frame);
+    return { fit, min: bustDistance(KOHARU, FACE, frame, fit) };
+  };
+  const left = range(LEFT),
+    full = range(FULL);
   assert.notEqual(left.min, full.min);
   near(carryZoom(left.min, left, full), full.min); // the bust stays the bust
   near(carryZoom(left.fit, left, full), full.fit);
@@ -88,7 +94,9 @@ test("a change of framing keeps the zoom's place between the bust and the fit", 
 });
 
 test("the switch card's still is the front view whatever the orbit and the zoom", () => {
-  const target = new THREE.Vector3(0, FORMATION_VIEW.eye, 0), fit = FORMATION_VIEW.distance, aspect = 450 / 253;
+  const target = new THREE.Vector3(0, FORMATION_VIEW.eye, 0),
+    fit = FORMATION_VIEW.distance,
+    aspect = 450 / 253;
   const live = (direction, distance) => {
     const c = new THREE.PerspectiveCamera(FORMATION_VIEW.fov, 1, fit / 50, fit * 20);
     c.position.copy(target).addScaledVector(direction.normalize(), distance);
@@ -97,13 +105,17 @@ test("the switch card's still is the front view whatever the orbit and the zoom"
     c.updateMatrixWorld();
     return c;
   };
-  const crop = (camera) => stillCrop(stillCamera(camera, target, fit, LEFT, 1000, 1080), target, KOHARU, 2000, 2160, aspect);
+  const crop = (camera) =>
+    stillCrop(stillCamera(camera, target, fit, LEFT, 1000, 1080), target, KOHARU, 2000, 2160, aspect);
   const home = crop(live(new THREE.Vector3(0, 0, 1), fit));
   // the upper body: half the box's height, at the formation scale (the box 1.12 units tall at 845 px per unit here)
   near(home.h, ((KOHARU.max.y - KOHARU.min.y) * pxPerUnit(fit, LEFT) * 2) / 2, 1e-3);
   near(home.w / home.h, aspect);
   // seen from straight above (and zoomed in, or from below and further back) the still is the same
-  for (const [direction, distance] of [[new THREE.Vector3(0, 1, 1e-4), fit * 0.3], [new THREE.Vector3(0.3, -1, 0.2), fit * 1.3]]) {
+  for (const [direction, distance] of [
+    [new THREE.Vector3(0, 1, 1e-4), fit * 0.3],
+    [new THREE.Vector3(0.3, -1, 0.2), fit * 1.3],
+  ]) {
     const c = live(direction, distance);
     const r = crop(c);
     for (const k of ["x", "y", "w", "h"]) near(r[k], home[k], 1e-3);
@@ -114,7 +126,12 @@ test("the switch card's still is the front view whatever the orbit and the zoom"
 
 test("a story model's cutscene clips are its actions, in order, each held on its last frame", () => {
   // Ayame's story forms have no idle; their slots Story_1.. come from their cutscenes
-  const clips = new Map([["Story_10", {}], ["Story_2", {}], ["Story_1", {}], ["Formation_Idle", {}]]);
+  const clips = new Map([
+    ["Story_10", {}],
+    ["Story_2", {}],
+    ["Story_1", {}],
+    ["Formation_Idle", {}],
+  ]);
   assert.deepEqual(storyActions(clips), ["story1", "story2", "story10"]);
   assert.deepEqual(storyAction("story10"), { slots: ["Story_10"], hold: true });
   assert.equal(storyAction("idle"), null);
@@ -131,12 +148,20 @@ test("the retreat cuts straight to the crying loop; the knockdown falls and stay
   const view = createStillView({ renderer });
   const root = new THREE.Object3D();
   root.name = "root";
-  const clip = (name, length, loop) => ({ clip: new THREE.AnimationClip(name, length, [new THREE.NumberKeyframeTrack(".position[x]", [0, length], [0, 1])]), loop });
+  const clip = (name, length, loop) => ({
+    clip: new THREE.AnimationClip(name, length, [new THREE.NumberKeyframeTrack(".position[x]", [0, length], [0, 1])]),
+    loop,
+  });
   view.mixer = new THREE.AnimationMixer(root);
   view.mixer.addEventListener("finished", (e) => view.finished(e.action));
-  const run = (seconds) => { for (let t = 0; t < seconds; t += 0.05) view.mixer.update(0.05); };
+  const run = (seconds) => {
+    for (let t = 0; t < seconds; t += 0.05) view.mixer.update(0.05);
+  };
   // the retreat needs its own clip alone, the knockdown the fall
-  view.clips = new Map([["Formation_Idle", clip("Formation_Idle", 2, true)], ["Vital_Death", clip("Vital_Death", 2, false)]]);
+  view.clips = new Map([
+    ["Formation_Idle", clip("Formation_Idle", 2, true)],
+    ["Vital_Death", clip("Vital_Death", 2, false)],
+  ]);
   assert.deepEqual(view.actions(), ["idle", "knockdown"]);
   view.clips.set("Vital_Retreat", clip("Vital_Retreat", 1.6, true));
   assert.deepEqual(view.actions(), ["idle", "retreat", "knockdown"]);
@@ -157,7 +182,8 @@ test("the retreat cuts straight to the crying loop; the knockdown falls and stay
   assert.equal(view.slot.clip.name, "Vital_Retreat");
   assert.ok(view.action.isRunning());
   // the knockdown plays the fall once and holds it
-  view.act("knockdown", { quiet: true }); run(5);
+  view.act("knockdown", { quiet: true });
+  run(5);
   assert.equal(view.slot.clip.name, "Vital_Death");
   assert.equal(view.action.loop, THREE.LoopOnce);
   assert.ok(view.action.clampWhenFinished);
@@ -171,7 +197,13 @@ function biped(yaw = 0, names = {}) {
   hips.name = "Bip001";
   hips.position.set(0, 0.34, 0);
   root.add(hips);
-  const bone = (name, x, y) => { const o = new THREE.Object3D(); o.name = names[name] ?? name; o.position.set(x, y, 0); hips.add(o); return o; };
+  const bone = (name, x, y) => {
+    const o = new THREE.Object3D();
+    o.name = names[name] ?? name;
+    o.position.set(x, y, 0);
+    hips.add(o);
+    return o;
+  };
   bone("Bip001 Head", 0, 0.29);
   bone("Bip001 L Thigh", 0.05, -0.03);
   bone("Bip001 R Thigh", -0.05, -0.03);
@@ -183,7 +215,10 @@ function biped(yaw = 0, names = {}) {
 
 test("the facing is read from the skeleton: trunk across the left-to-right line, whatever the student", async () => {
   const { facingBones, facingOf } = await import("../../src/bmpt/web/js/model.js");
-  const facing = (root) => facingOf(facingBones(root))?.toArray().map((v) => Math.round(v * 1000) / 1000 + 0);
+  const facing = (root) =>
+    facingOf(facingBones(root))
+      ?.toArray()
+      .map((v) => Math.round(v * 1000) / 1000 + 0);
   assert.deepEqual(facing(biped()), [0, 0, 1]);
   assert.deepEqual(facing(biped(Math.PI)), [0, 0, -1]);
   assert.deepEqual(facing(biped(Math.PI / 2)), [1, 0, 0]);
@@ -193,8 +228,14 @@ test("the facing is read from the skeleton: trunk across the left-to-right line,
   bowed.updateMatrixWorld(true);
   assert.deepEqual(facing(bowed), [0, 0, 1]);
   // another rig's names: left/right shoulders and up-legs, a pelvis and a head
-  const other = biped(Math.PI, { Bip001: "pelvis", "Bip001 Head": "head", "Bip001 L Thigh": "LeftUpLeg", "Bip001 R Thigh": "RightUpLeg",
-    "Bip001 L Clavicle": "Left_Shoulder", "Bip001 R Clavicle": "Right_Shoulder" });
+  const other = biped(Math.PI, {
+    Bip001: "pelvis",
+    "Bip001 Head": "head",
+    "Bip001 L Thigh": "LeftUpLeg",
+    "Bip001 R Thigh": "RightUpLeg",
+    "Bip001 L Clavicle": "Left_Shoulder",
+    "Bip001 R Clavicle": "Right_Shoulder",
+  });
   assert.deepEqual(facing(other), [0, 0, -1]);
   // one pair is enough; none, or no head, gives no facing
   assert.deepEqual(facing(biped(0, { "Bip001 L Clavicle": "x", "Bip001 R Clavicle": "y" })), [0, 0, 1]);
@@ -211,7 +252,8 @@ test("the face's facing: the head's forward read on the formation idle, carried 
   const head = root.getObjectByName("Bip001 Head");
   head.rotation.y = -0.5;
   root.updateMatrixWorld(true);
-  const bones = facingBones(root), front = headFront(bones);
+  const bones = facingBones(root),
+    front = headFront(bones);
   assert.deepEqual(round(facingOf(bones, new THREE.Vector3(), front)), [0, 0, 1]);
   assert.notDeepEqual(round(facingOf(bones)), [0, 0, 1], "the body alone looks aside");
   // the retreat turns the whole character round: the face's facing follows the head
@@ -229,20 +271,30 @@ test("the face's facing: the head's forward read on the formation idle, carried 
 test("the front view keeps the camera's height angle and turns the yaw to the facing", async () => {
   const { frontView } = await import("../../src/bmpt/web/js/model.js");
   const round = (v) => v.toArray().map((x) => Math.round(x * 1000) / 1000 + 0);
+  // biome-ignore lint/suspicious/noApproximativeNumericConstant: the expected value is rounded to three places
   assert.deepEqual(round(frontView(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 2, 2))), [0.707, 0.707, 0]);
   assert.deepEqual(round(frontView(new THREE.Vector3(0, 0, -1), new THREE.Vector3(3, 0, 0))), [0, 0, -1]);
 });
 
 test("only the retreat turns the view to the face, from its first posed frame, and keeps the zoom", async () => {
   const { ACTIONS, createStillView } = await import("../../src/bmpt/web/js/model.js");
-  assert.deepEqual(Object.keys(ACTIONS).filter((name) => ACTIONS[name].face), ["retreat"]);
+  assert.deepEqual(
+    Object.keys(ACTIONS).filter((name) => ACTIONS[name].face),
+    ["retreat"],
+  );
   const renderer = { domElement: {}, setPixelRatio() {}, setSize() {} };
   const view = createStillView({ renderer });
-  const clip = (name, loop) => ({ clip: new THREE.AnimationClip(name, 1, [new THREE.NumberKeyframeTrack(".position[x]", [0, 1], [0, 0])]), loop });
+  const clip = (name, loop) => ({
+    clip: new THREE.AnimationClip(name, 1, [new THREE.NumberKeyframeTrack(".position[x]", [0, 1], [0, 0])]),
+    loop,
+  });
   view.root = biped(Math.PI); // the retreat's pose: turned away from the front view
   view.mixer = new THREE.AnimationMixer(view.root);
-  view.clips = new Map([["Formation_Idle", clip("Formation_Idle", true)], ["Vital_Retreat", clip("Vital_Retreat", true)],
-    ["Vital_Death", clip("Vital_Death", false)]]);
+  view.clips = new Map([
+    ["Formation_Idle", clip("Formation_Idle", true)],
+    ["Vital_Retreat", clip("Vital_Retreat", true)],
+    ["Vital_Death", clip("Vital_Death", false)],
+  ]);
   view.named = new Map([["R02", clip("R02", true)]]);
   view.fit = 3;
   view.limits = { min: 1, max: 4 };
@@ -261,7 +313,10 @@ test("only the retreat turns the view to the face, from its first posed frame, a
   assert.equal(view.facing, true, "turned on the next frame, once the clip has posed the skeleton");
   assert.ok(view.turnToFace());
   assert.equal(view.facing, false);
-  assert.deepEqual(view.tween.dir1.toArray().map((v) => Math.round(v * 1000) / 1000 + 0), [0, 0, -1]);
+  assert.deepEqual(
+    view.tween.dir1.toArray().map((v) => Math.round(v * 1000) / 1000 + 0),
+    [0, 0, -1],
+  );
   near(view.tween.dist1, 2.5);
   // a second battle form's retreat plays as the tab's retreat, and turns too; a pick of another action cancels a turn
   // not yet made
@@ -273,7 +328,10 @@ test("only the retreat turns the view to the face, from its first posed frame, a
   view.headFront = new THREE.Vector3(0, 0, 1);
   view.act("retreat", { quiet: true });
   assert.ok(view.turnToFace());
-  assert.deepEqual(view.tween.dir1.toArray().map((v) => Math.round(v * 1000) / 1000 + 0), [0, 0, -1]);
+  assert.deepEqual(
+    view.tween.dir1.toArray().map((v) => Math.round(v * 1000) / 1000 + 0),
+    [0, 0, -1],
+  );
   // a model without the formation idle (a cafe idle) has none: the body's facing
   view.clips.delete("Formation_Idle");
   view.clips.set("Cafe_Idle", clip("Cafe_Idle", true));
@@ -290,14 +348,21 @@ test("only the retreat turns the view to the face, from its first posed frame, a
 test("the view follows the hips across the floor, so any clip plays in place", async () => {
   const { anchorNode, followOffset } = await import("../../src/bmpt/web/js/model.js");
   const root = new THREE.Group();
-  const boneRoot = new THREE.Bone(); boneRoot.name = "bone_root";
-  const hips = new THREE.Bone(); hips.name = "Bip001";
-  const pelvis = new THREE.Bone(); pelvis.name = "Bip001 Pelvis";
-  root.add(boneRoot); boneRoot.add(hips); hips.add(pelvis);
+  const boneRoot = new THREE.Bone();
+  boneRoot.name = "bone_root";
+  const hips = new THREE.Bone();
+  hips.name = "Bip001";
+  const pelvis = new THREE.Bone();
+  pelvis.name = "Bip001 Pelvis";
+  root.add(boneRoot);
+  boneRoot.add(hips);
+  hips.add(pelvis);
   assert.equal(anchorNode(root), hips);
   // without Bip001, a pelvis or hips bone; without either, none
-  const other = new THREE.Group(), p = new THREE.Bone();
-  p.name = "Character_Hips"; other.add(p);
+  const other = new THREE.Group(),
+    p = new THREE.Bone();
+  p.name = "Character_Hips";
+  other.add(p);
   assert.equal(anchorNode(other), p);
   assert.equal(anchorNode(new THREE.Group()), null);
   assert.equal(anchorNode(null), null);
@@ -306,7 +371,9 @@ test("the view follows the hips across the floor, so any clip plays in place", a
   boneRoot.position.set(0.5, 0.1, 2);
   root.updateMatrixWorld(true);
   const off = followOffset(hips.getWorldPosition(new THREE.Vector3()), rest);
-  near(off.x, 0.5); near(off.y, 0); near(off.z, 2);
+  near(off.x, 0.5);
+  near(off.y, 0);
+  near(off.z, 2);
 });
 
 test("the target stands over the prefab's root, or over the hips of a model placed off its root", async () => {

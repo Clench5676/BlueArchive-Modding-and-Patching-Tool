@@ -63,7 +63,7 @@ def unpack(data: str) -> np.ndarray | None:
         return None
     if bits.size * 8 < MASK * MASK:
         return None
-    return np.unpackbits(bits)[:MASK * MASK].reshape(MASK, MASK).astype(bool)
+    return np.unpackbits(bits)[: MASK * MASK].reshape(MASK, MASK).astype(bool)
 
 
 def iou(a: np.ndarray, b: np.ndarray) -> float:
@@ -82,6 +82,7 @@ def overlap(mod: Mapping[str, np.ndarray], masks: Mapping[str, np.ndarray]) -> f
 class Rig:
     """One kept release of a portrait's rig: its official atlas and skeleton (asset names, SHA-1 of their bytes), the
     atlas's layout (``fingerprint.atlas``) and the alpha mask of each page it names (texture keys)."""
+
     core: str
     atlas: str
     skeleton: str
@@ -100,7 +101,9 @@ class Rig:
         return out
 
 
-def best(rigs: Iterable[Rig], mod: Mapping[str, np.ndarray], current: Mapping[str, np.ndarray]) -> tuple[Rig, float] | None:
+def best(
+    rigs: Iterable[Rig], mod: Mapping[str, np.ndarray], current: Mapping[str, np.ndarray]
+) -> tuple[Rig, float] | None:
     """Of kept releases, the one a mod's pages (``mod``, texture key to mask) were drawn on, with its overlap: the
     closest, where it reaches MATCH_MIN and beats the release installed now (``current``, its masks) by MATCH_MARGIN.
     None otherwise: the mod follows the release installed now, or nothing tells."""
@@ -169,8 +172,16 @@ class RigArchive:
             masks = item.get("masks") or {}
             if not isinstance(masks, dict) or not all(isinstance(v, str) for v in masks.values()):
                 return None
-            return Rig(core, str(item["atlas"]), str(item["skeleton"]), str(item["atlasSha1"]),
-                       str(item["skeletonSha1"]), str(item["layout"]), dict(masks), str(item.get("seen", "")))
+            return Rig(
+                core,
+                str(item["atlas"]),
+                str(item["skeleton"]),
+                str(item["atlasSha1"]),
+                str(item["skeletonSha1"]),
+                str(item["layout"]),
+                dict(masks),
+                str(item.get("seen", "")),
+            )
         except KeyError:
             return None
 
@@ -193,8 +204,16 @@ class RigArchive:
             self._load()["stamps"][install] = stamp
             self._save()
 
-    def add(self, core: str, atlas: str, atlas_data: bytes, skeleton: str, skeleton_data: bytes, layout: str,
-            masks: Mapping[str, np.ndarray]) -> bool:
+    def add(
+        self,
+        core: str,
+        atlas: str,
+        atlas_data: bytes,
+        skeleton: str,
+        skeleton_data: bytes,
+        layout: str,
+        masks: Mapping[str, np.ndarray],
+    ) -> bool:
         """Keep one official rig of a portrait core (its atlas and skeleton, named and as bytes, the atlas's layout and
         its pages' masks). False when it is kept already. Every distinct rig is kept: an entry is added only when a
         release changes a rig, and a dropped one could no longer repair a mod drawn for it."""
@@ -208,9 +227,15 @@ class RigArchive:
                 temporary = path.with_name(f".{sha1}.tmp")
                 temporary.write_bytes(data)
                 temporary.replace(path)
-        item = {"atlas": atlas, "skeleton": skeleton, "atlasSha1": atlas_sha1, "skeletonSha1": skeleton_sha1,
-                "layout": layout, "masks": {key: pack(mask) for key, mask in sorted(masks.items())},
-                "seen": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+        item = {
+            "atlas": atlas,
+            "skeleton": skeleton,
+            "atlasSha1": atlas_sha1,
+            "skeletonSha1": skeleton_sha1,
+            "layout": layout,
+            "masks": {key: pack(mask) for key, mask in sorted(masks.items())},
+            "seen": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        }
         with self._lock:
             data = self._load()
             items = data["rigs"].setdefault(core.lower(), [])

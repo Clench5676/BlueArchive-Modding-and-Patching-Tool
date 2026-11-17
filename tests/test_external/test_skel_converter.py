@@ -5,6 +5,7 @@
   1. subprocess 层：run() 返回 True
   2. 运行时层：get_skel_version 版本号正确 + SpineViewer query 可读
 """
+
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -32,9 +33,7 @@ def sample_38(
 ) -> SpineAssetSet:
     """自举到 3.8 + spine3 atlas 的三件套副本（本地编辑环境基准）"""
     return _require_bootstrap(
-        bootstrap_spine_assets(
-            sample_case.assets_dir, EDIT_SPINE_VERSION, spine_converter_path, tmp_path / "sample_38"
-        )
+        bootstrap_spine_assets(sample_case.assets_dir, EDIT_SPINE_VERSION, spine_converter_path, tmp_path / "sample_38")
     )
 
 
@@ -46,9 +45,7 @@ def sample_42(
 ) -> SpineAssetSet:
     """自举到 4.2.x 的三件套副本（游戏运行时目标版本基准）"""
     return _require_bootstrap(
-        bootstrap_spine_assets(
-            sample_case.assets_dir, GAME_SPINE_VERSION, spine_converter_path, tmp_path / "sample_42"
-        )
+        bootstrap_spine_assets(sample_case.assets_dir, GAME_SPINE_VERSION, spine_converter_path, tmp_path / "sample_42")
     )
 
 
@@ -64,9 +61,7 @@ class TestSkelConverter:
         out_skel = tmp_path / "upgraded.skel"
 
         # 第一层：subprocess 转换成功
-        assert SkelConverter.run(
-            sample_38.skel_path, out_skel, spine_converter_path, GAME_SPINE_VERSION
-        )
+        assert SkelConverter.run(sample_38.skel_path, out_skel, spine_converter_path, GAME_SPINE_VERSION)
 
         # 第二层：版本号正确 + SpineViewer 实际可读
         version = get_skel_version(out_skel)
@@ -88,9 +83,7 @@ class TestSkelConverter:
         out_skel = out_dir / sample_42.skel_path.name
 
         # 第一层：skel 与 atlas 均降级成功
-        assert SkelConverter.run(
-            sample_42.skel_path, out_skel, spine_converter_path, EDIT_SPINE_VERSION
-        )
+        assert SkelConverter.run(sample_42.skel_path, out_skel, spine_converter_path, EDIT_SPINE_VERSION)
         assert atlas_downgrade(sample_42.atlas_path, out_dir)
 
         # 第二层：版本号正确 + SpineViewer 实际可读
@@ -108,16 +101,12 @@ class TestSkelConverter:
     ):
         """4.2 → 3.8 → 4.2：转换非双射，断言各阶段版本号（major.minor）恢复"""
         down_skel = tmp_path / "roundtrip_38.skel"
-        assert SkelConverter.run(
-            sample_42.skel_path, down_skel, spine_converter_path, EDIT_SPINE_VERSION
-        )
+        assert SkelConverter.run(sample_42.skel_path, down_skel, spine_converter_path, EDIT_SPINE_VERSION)
         down_version = get_skel_version(down_skel)
         assert down_version and down_version.startswith("3.8")
 
         up_skel = tmp_path / "roundtrip_42.skel"
-        assert SkelConverter.run(
-            down_skel, up_skel, spine_converter_path, GAME_SPINE_VERSION
-        )
+        assert SkelConverter.run(down_skel, up_skel, spine_converter_path, GAME_SPINE_VERSION)
         up_version = get_skel_version(up_skel)
         assert up_version and up_version.startswith("4.2")
 

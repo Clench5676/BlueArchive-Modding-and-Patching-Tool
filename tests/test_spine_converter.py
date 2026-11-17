@@ -13,20 +13,37 @@ from bmpt import spine_converter as sc
 def _official():
     return {
         "skeleton": {"spine": "4.2.33"},
-        "bones": [{"name": "root"}, {"name": "face", "parent": "root"}, {"name": "tear", "parent": "face"},
-                  {"name": "tear_tip", "parent": "tear"}],
-        "slots": [{"name": "body", "bone": "root"}, {"name": "face", "bone": "face"},
-                  {"name": "tear", "bone": "tear_tip", "attachment": None}, {"name": "glow", "bone": "root"}],
+        "bones": [
+            {"name": "root"},
+            {"name": "face", "parent": "root"},
+            {"name": "tear", "parent": "face"},
+            {"name": "tear_tip", "parent": "tear"},
+        ],
+        "slots": [
+            {"name": "body", "bone": "root"},
+            {"name": "face", "bone": "face"},
+            {"name": "tear", "bone": "tear_tip", "attachment": None},
+            {"name": "glow", "bone": "root"},
+        ],
         "events": {"sob": {"int": 1}},
         "ik": [{"name": "tear_ik", "bones": ["tear"], "target": "tear_tip"}],
-        "skins": [{"name": "default", "attachments": {
-            "face": {"face_00": {"type": "mesh", "vertices": [0, 0, 1, 1]}, "face_09": {"type": "region"}},
-            "tear": {"drop": {"type": "region"}}}}],
+        "skins": [
+            {
+                "name": "default",
+                "attachments": {
+                    "face": {"face_00": {"type": "mesh", "vertices": [0, 0, 1, 1]}, "face_09": {"type": "region"}},
+                    "tear": {"drop": {"type": "region"}},
+                },
+            }
+        ],
         "animations": {
             "00": {"slots": {"face": {"attachment": [{"name": "face_00"}]}}},
-            "09": {"slots": {"face": {"attachment": [{"name": "face_09"}]}, "tear": {"attachment": [{"name": "drop"}]}},
-                   "bones": {"tear": {"rotate": [{"value": 10}]}}, "ik": {"tear_ik": [{"mix": 1}]},
-                   "events": [{"name": "sob"}]},
+            "09": {
+                "slots": {"face": {"attachment": [{"name": "face_09"}]}, "tear": {"attachment": [{"name": "drop"}]}},
+                "bones": {"tear": {"rotate": [{"value": 10}]}},
+                "ik": {"tear_ik": [{"mix": 1}]},
+                "events": [{"name": "sob"}],
+            },
             "10": {"attachments": {"default": {"face": {"face_00": {"deform": [{"vertices": [0.1]}]}}}}},
             "11": {"attachments": {"blush": {"face": {"face_00": {"deform": [{}]}}}}},
         },
@@ -38,8 +55,9 @@ def _mod():
         "skeleton": {"spine": "4.2.33"},
         "bones": [{"name": "root"}, {"name": "face", "parent": "root"}],
         "slots": [{"name": "body", "bone": "root"}, {"name": "face", "bone": "face"}, {"name": "glow", "bone": "root"}],
-        "skins": [{"name": "default", "attachments": {
-            "face": {"face_00": {"type": "mesh", "vertices": [0, 0, 1, 1, 2, 2]}}}}],
+        "skins": [
+            {"name": "default", "attachments": {"face": {"face_00": {"type": "mesh", "vertices": [0, 0, 1, 1, 2, 2]}}}}
+        ],
         "animations": {"00": {"slots": {"face": {"attachment": [{"name": "face_00"}]}}}},
     }
 
@@ -66,8 +84,13 @@ def test_an_animation_the_built_in_graft_refuses_is_added_in_json_with_what_it_n
 
 def test_the_release_is_used_only_at_its_pinned_size_and_hash(tmp_path, monkeypatch):
     payload = b"MZ" + b"\0" * 100
-    monkeypatch.setattr(sc, "RELEASE", sc.Release("v9", "Tool.exe", "https://example.invalid/Tool.exe",
-                                                  hashlib.sha256(payload).hexdigest(), len(payload)))
+    monkeypatch.setattr(
+        sc,
+        "RELEASE",
+        sc.Release(
+            "v9", "Tool.exe", "https://example.invalid/Tool.exe", hashlib.sha256(payload).hexdigest(), len(payload)
+        ),
+    )
 
     class Response(io.BytesIO):
         def __enter__(self):
@@ -92,8 +115,9 @@ def test_the_release_is_used_only_at_its_pinned_size_and_hash(tmp_path, monkeypa
     assert sc.located(tmp_path, "win32") == path
     path.write_bytes(payload[:-1] + b"x")  # changed since: never run
     assert sc.located(tmp_path, "win32") is None
-    monkeypatch.setattr(sc, "RELEASE", sc.Release("v9", "Tool.exe", "https://example.invalid/Tool.exe", "0" * 64,
-                                                  len(payload)))
+    monkeypatch.setattr(
+        sc, "RELEASE", sc.Release("v9", "Tool.exe", "https://example.invalid/Tool.exe", "0" * 64, len(payload))
+    )
     with pytest.raises(sc.ConverterError, match="converter_mismatch"):
         sc.download(tmp_path, consented=True, platform="win32", opener=opener)
     assert not list(sc.tool_dir(tmp_path).glob("*.part"))
@@ -123,7 +147,7 @@ def test_the_converter_runs_on_a_temporary_copy_with_an_argument_list(tmp_path, 
 
     monkeypatch.setattr(sc, "_run", run)
     assert sc.convert(tmp_path / "tool", b'{"skeleton": {}}', ".json", ".skel") == b"converted"
-    (exe, source, target), = calls
+    ((exe, source, target),) = calls
     assert not source.exists() and source.suffix == ".json" and target.suffix == ".skel"
     monkeypatch.setattr(sc, "_run", lambda exe, source, target: type("Done", (), {"returncode": 3})())
     with pytest.raises(sc.ConverterError, match="converter_failed"):

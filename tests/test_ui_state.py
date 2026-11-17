@@ -133,6 +133,7 @@ def test_seen_mods_unreadable_state_suppresses_marks_without_repair(tmp_path, mo
 
             monkeypatch.setattr(Path, "read_text", read)
         else:
+
             def locked(*args):
                 raise OSError("State cannot be locked")
 
@@ -201,8 +202,9 @@ def test_a_write_waits_for_another_instance_reading(tmp_path, monkeypatch):
 
     def replace(src, dst):
         if Path(dst) == path and held[0]:
-            raise PermissionError(13, "The process cannot access the file because it is being used by another "
-                                      "process", str(dst))
+            raise PermissionError(
+                13, "The process cannot access the file because it is being used by another process", str(dst)
+            )
         real_replace(src, dst)
 
     monkeypatch.setattr(Path, "read_text", read_text)
@@ -271,20 +273,25 @@ def test_own_aliases_are_kept_per_student_and_merged(tmp_path):
 
 def test_own_aliases_are_cleaned(tmp_path):
     state = UiState(tmp_path / "webui.json")
-    kept = state.set_aliases("momoi", [
-        "  Momo \t chan ",        # whitespace runs become one space, trimmed
-        "momo  chan",             # the same alias ignoring case: dropped
-        "\uff2d\uff4f\uff4d\uff4f chan",  # full width: the same again
-        "a\u0000b\u200bc\u202ed",  # control and format characters are dropped
-        "x" * (ALIAS_LENGTH + 1),  # too long: dropped
-        "<b>x</b>",               # markup is kept as text; the page never reads it as HTML
-        7, None,                  # not text
-    ])
+    kept = state.set_aliases(
+        "momoi",
+        [
+            "  Momo \t chan ",  # whitespace runs become one space, trimmed
+            "momo  chan",  # the same alias ignoring case: dropped
+            "\uff2d\uff4f\uff4d\uff4f chan",  # full width: the same again
+            "a\u0000b\u200bc\u202ed",  # control and format characters are dropped
+            "x" * (ALIAS_LENGTH + 1),  # too long: dropped
+            "<b>x</b>",  # markup is kept as text; the page never reads it as HTML
+            7,
+            None,  # not text
+        ],
+    )
     assert kept == ["Momo chan", "abcd", "<b>x</b>"]
     assert state.set_aliases("many", [f"a{i}" for i in range(ALIAS_MAX + 3)]) == [f"a{i}" for i in range(ALIAS_MAX)]
     # a hand-edited file is read the same way
-    (tmp_path / "webui.json").write_text(json.dumps({"aliases": {"x": ["ok", 3, ""], "y": "no", "z": []}}),
-                                         encoding="utf-8")
+    (tmp_path / "webui.json").write_text(
+        json.dumps({"aliases": {"x": ["ok", 3, ""], "y": "no", "z": []}}), encoding="utf-8"
+    )
     assert UiState(tmp_path / "webui.json").aliases() == {"x": ["ok"]}
     (tmp_path / "webui.json").write_text(json.dumps({"aliases": ["x"]}), encoding="utf-8")
     state = UiState(tmp_path / "webui.json")
@@ -332,9 +339,12 @@ def test_a_copied_data_directory_gets_its_own_id_and_a_moved_one_keeps_it(tmp_pa
 
 def test_the_switch_flags_and_the_scan_consent_have_their_defaults(tmp_path):
     state = UiState(tmp_path / "webui.json")
-    assert {key: state.flag(key) for key in FLAGS} == {"tray": False,
-                                                        "classic_prompt": True, "mods_explained": False,
-                                                        "startup_update": True}
+    assert {key: state.flag(key) for key in FLAGS} == {
+        "tray": False,
+        "classic_prompt": True,
+        "mods_explained": False,
+        "startup_update": True,
+    }
     assert state.scan_consent is None
     state.set("scan_consent", False)
     state.set("tray", "yes")  # not a boolean: the default
@@ -360,8 +370,11 @@ def test_spine_notice_is_unanswered_by_default_and_acknowledgement_persists(tmp_
 def test_old_spine_answers_are_kept_at_startup(tmp_path, previous, monkeypatch):
     # A stored No is never turned into Yes: the start shows the notice again until it is acknowledged.
     path = tmp_path / "webui.json"
-    original = {"consent": False, "recent": ["student"],
-                "prefs": {"spine_consent": previous, "voice_volume": 35, "scan_consent": False}}
+    original = {
+        "consent": False,
+        "recent": ["student"],
+        "prefs": {"spine_consent": previous, "voice_volume": 35, "scan_consent": False},
+    }
     path.write_text(json.dumps(original))
     writes = []
     write = UiState._write
@@ -398,8 +411,11 @@ def test_spine_consent_never_grants_for_non_boolean_state(tmp_path, value):
 @pytest.mark.parametrize("shown", [True, False, None, "no"])
 def test_legacy_switch_visibility_is_dropped_without_changing_other_state(tmp_path, shown):
     path = tmp_path / "webui.json"
-    data = {"consent": True, "recent": ["student"],
-            "prefs": {"mod_switch_shown": shown, "tray": True, "scan_consent": None}}
+    data = {
+        "consent": True,
+        "recent": ["student"],
+        "prefs": {"mod_switch_shown": shown, "tray": True, "scan_consent": None},
+    }
     path.write_text(json.dumps(data))
     state = UiState(path)
     assert state.get("mod_switch_shown") is None
@@ -415,8 +431,11 @@ def test_legacy_switch_visibility_is_dropped_without_changing_other_state(tmp_pa
 @pytest.mark.parametrize("consent", [True, False, None])
 def test_legacy_file_check_modes_migrate_without_granting_automatic_consent(tmp_path, startup, consent):
     path = tmp_path / "webui.json"
-    path.write_text(json.dumps({"prefs": {"scan_consent": consent, "startup_checks": startup,
-                                          "mod_switch_shown": False, "tray": True}}))
+    path.write_text(
+        json.dumps(
+            {"prefs": {"scan_consent": consent, "startup_checks": startup, "mod_switch_shown": False, "tray": True}}
+        )
+    )
     state = UiState(path)
     expected = False if consent is True and not startup else consent
     # an Allow from before the consent covered Steam's records is asked again; the file keeps the answer
@@ -431,6 +450,7 @@ def test_legacy_file_check_modes_migrate_without_granting_automatic_consent(tmp_
 
 
 # --- a damaged webui.json (FUN-9): the profiles.json convention ---
+
 
 def _siblings(path: Path) -> tuple[Path, Path]:
     return path.with_name("webui.json.prev"), path.with_name("webui.json.bad")

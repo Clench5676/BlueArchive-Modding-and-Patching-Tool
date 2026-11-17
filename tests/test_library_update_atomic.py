@@ -29,8 +29,12 @@ def two_part_mod(setup_library, monkeypatch):
     """An applied two-part mod and a rebuild that changes both parts, keeping their names (split: renaming one)."""
     env = setup_library
     second = game_bundle(env.game_dir, part="textassets", payload=b"official text")
-    entry = env.library.add([make_mod(target, env.tmp / "first", payload=b"first " + target.name.encode()[:8])
-                             for target in (env.original, second)])[0]
+    entry = env.library.add(
+        [
+            make_mod(target, env.tmp / "first", payload=b"first " + target.name.encode()[:8])
+            for target in (env.original, second)
+        ]
+    )[0]
     env.library.apply("test", f"mod:{entry.id}")
     directory = env.root / "mods" / entry.id
     old = {path.name: path.read_bytes() for path in directory.glob("*.bundle")}
@@ -51,7 +55,7 @@ def assert_old_mod_whole(env):
     assert not journals(env)
     assert {path.name: path.read_bytes() for path in env.directory.glob("*.bundle")} == env.old
     assert raw_record(env, env.entry.id) == env.record
-    mod, = env.library.mods()
+    (mod,) = env.library.mods()
     assert mod.id == env.entry.id and sorted(path.name for path in env.library._paths(env.record)) == sorted(env.old)
     assert env.library.configured("test")["spr"] == f"mod:{env.entry.id}"
     previous = env.directory / "previous"
@@ -59,8 +63,9 @@ def assert_old_mod_whole(env):
 
 
 @pytest.mark.parametrize("boundary", ["journal", "backup", "replace", "metadata"])
-def test_an_interrupted_update_leaves_the_old_mod_whole_or_finishes_after_its_commit(two_part_mod, monkeypatch,
-                                                                                     boundary):
+def test_an_interrupted_update_leaves_the_old_mod_whole_or_finishes_after_its_commit(
+    two_part_mod, monkeypatch, boundary
+):
     env = two_part_mod
     copy, write = service.atomic_copy, service.atomic_json
     copies = 0
@@ -89,20 +94,21 @@ def test_an_interrupted_update_leaves_the_old_mod_whole_or_finishes_after_its_co
         patch.setattr(service, "atomic_json", writing)
         with pytest.raises(SystemExit):
             env.library.update(env.entry.id)
-    journal, = journals(env)
+    (journal,) = journals(env)
     assert journal.parent.name == env.entry.id and json.loads(journal.read_text())["operation"] == "update"
     if boundary == "replace":
         mixed = {path.name: path.read_bytes() for path in env.directory.glob("*.bundle")}
         assert mixed != env.old and set(mixed.values()) & set(env.old.values())
     env.library = reload_library(env)
     if boundary == "metadata":
-        mod, = env.library.mods()
+        (mod,) = env.library.mods()
         assert not journals(env)
         assert mod.id == env.entry.id
         assert all(b"rebuilt" in path.read_bytes() for path in env.library._paths(raw_record(env, mod.id)))
         record = raw_record(env, mod.id)
         assert {key: value for key, value in record.items() if key != "files"} == {
-            key: value for key, value in env.record.items() if key != "files"}
+            key: value for key, value in env.record.items() if key != "files"
+        }
         assert len(list((env.directory / "previous").iterdir())) == 1
         assert env.library.configured("test")["spr"] == f"mod:{env.entry.id}"
     else:
@@ -135,6 +141,7 @@ def test_a_split_update_interrupted_after_a_new_part_removes_it(setup_library, m
     for part in ("002", "003"):
         game_bundle(env.game_dir, part=part, date="2026-10-01", payload=part.encode())
     from ba_modding_toolkit.core import mod_install
+
     monkeypatch.setattr("ba_modding_toolkit.searching.asset_match", lambda sources, candidates, log: (candidates, ""))
 
     def rebuild(sources, current, output, *args, **kwargs):
@@ -212,8 +219,15 @@ def test_the_update_publishes_under_the_mod_writer_and_refuses_changed_files(two
 def test_an_invalid_update_journal_is_left_pending_and_deletes_nothing(two_part_mod, damage):
     env = two_part_mod
     old = dict(env.old)
-    data = {"version": 1, "operation": "update", "id": env.entry.id, "phase": "replacing",
-            "old": {name: "0" * 40 for name in old}, "new": {name: "1" * 40 for name in old}, "previous": "a" * 32}
+    data = {
+        "version": 1,
+        "operation": "update",
+        "id": env.entry.id,
+        "phase": "replacing",
+        "old": {name: "0" * 40 for name in old},
+        "new": {name: "1" * 40 for name in old},
+        "previous": "a" * 32,
+    }
     if damage == "previous":
         data["previous"] = "../../outside"
     elif damage == "name":

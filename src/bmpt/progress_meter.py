@@ -13,8 +13,8 @@ from __future__ import annotations
 import time
 from typing import Callable, Mapping, Sequence
 
-EVERY = 0.2   # seconds between two reports at most
-CAP = 0.99    # the highest fraction before the item ends: never 100 % while it runs
+EVERY = 0.2  # seconds between two reports at most
+CAP = 0.99  # the highest fraction before the item ends: never 100 % while it runs
 
 
 class Meter:
@@ -22,8 +22,14 @@ class Meter:
     left out of ``weights`` counts as nothing). ``report(fraction)`` is called when the shown percent grows, at most
     every ``every`` seconds."""
 
-    def __init__(self, report: Callable[[float], None] | None, weights: Sequence[tuple[str, float]] | Mapping[str, float],
-                 *, every: float | None = None, clock: Callable[[], float] = time.monotonic):
+    def __init__(
+        self,
+        report: Callable[[float], None] | None,
+        weights: Sequence[tuple[str, float]] | Mapping[str, float],
+        *,
+        every: float | None = None,
+        clock: Callable[[], float] = time.monotonic,
+    ):
         pairs = list(weights.items()) if isinstance(weights, Mapping) else list(weights)
         total = sum(max(0.0, float(w)) for _, w in pairs) or 1.0
         self._start: dict[str, tuple[float, float]] = {}
@@ -38,7 +44,7 @@ class Meter:
         self._every = EVERY if every is None else every
         self._clock = clock
         self._last = float("-inf")  # when it last reported
-        self._shown = 0              # the whole percent last reported: the first report is 1 % or more
+        self._shown = 0  # the whole percent last reported: the first report is 1 % or more
         self.fraction = 0.0
 
     def phase(self, name: str, done: float = 0, count: float = 1) -> None:

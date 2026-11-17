@@ -15,7 +15,9 @@ from bmpt.library import safety
 
 WINE_LINE = r"C:\Program Files (x86)\Steam\steamapps\common\BlueArchive\BlueArchive.exe"
 NATIVE_COMM = "/Applications/Blue Archive.app/Contents/MacOS/Blue Archive"
-OWN_COMM = "/Applications/Blue Archive Modding and Patching Tool.app/Contents/MacOS/Blue-Archive-Modding-and-Patching-Tool"
+OWN_COMM = (
+    "/Applications/Blue Archive Modding and Patching Tool.app/Contents/MacOS/Blue-Archive-Modding-and-Patching-Tool"
+)
 
 
 @pytest.fixture(autouse=True)
@@ -47,43 +49,67 @@ def fake_ps(monkeypatch, comm: str = "", args: str = ""):
 
 # --- process matching ---
 
-@pytest.mark.parametrize("name", [
-    "BlueArchive.exe", "bluearchive.exe", "Blue Archive.exe", r"C:\Games\BlueArchive\BlueArchive.exe",
-    "BlueArchive", NATIVE_COMM, "/home/user/.wine/drive_c/BlueArchive/BlueArchive.exe",
-])
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "BlueArchive.exe",
+        "bluearchive.exe",
+        "Blue Archive.exe",
+        r"C:\Games\BlueArchive\BlueArchive.exe",
+        "BlueArchive",
+        NATIVE_COMM,
+        "/home/user/.wine/drive_c/BlueArchive/BlueArchive.exe",
+    ],
+)
 def test_game_names(name):
     assert safety.is_game_name(name)
 
 
-@pytest.mark.parametrize("name", [
-    "BlueArchiveTool.exe", "MyBlueArchive.exe", "BlueArchive.exe.bak", "Blue-Archive-Modding-and-Patching-Tool",
-    "Blue-Archive-Modding-and-Patching-Tool-0.1.0-alpha.4-windows-x64.exe", OWN_COMM, "steam.exe", "",
-])
+@pytest.mark.parametrize(
+    "name",
+    [
+        "BlueArchiveTool.exe",
+        "MyBlueArchive.exe",
+        "BlueArchive.exe.bak",
+        "Blue-Archive-Modding-and-Patching-Tool",
+        "Blue-Archive-Modding-and-Patching-Tool-0.1.0-alpha.4-windows-x64.exe",
+        OWN_COMM,
+        "steam.exe",
+        "",
+    ],
+)
 def test_names_that_are_not_the_game(name):
     assert not safety.is_game_name(name)
 
 
-@pytest.mark.parametrize("line", [
-    WINE_LINE,
-    WINE_LINE + " -popupwindow",
-    f'"{WINE_LINE}" -screen-fullscreen 0',
-    r"/Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/wine64-preloader " + WINE_LINE,
-    r"Z:\Users\me\Games\Blue Archive\Blue Archive.exe",
-    "wine bluearchive.exe",
-])
+@pytest.mark.parametrize(
+    "line",
+    [
+        WINE_LINE,
+        WINE_LINE + " -popupwindow",
+        f'"{WINE_LINE}" -screen-fullscreen 0',
+        r"/Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/wine64-preloader " + WINE_LINE,
+        r"Z:\Users\me\Games\Blue Archive\Blue Archive.exe",
+        "wine bluearchive.exe",
+    ],
+)
 def test_wine_command_lines(line):
     assert safety.is_game_command(line)
 
 
-@pytest.mark.parametrize("line", [
-    r"C:\Program Files (x86)\Steam\steamapps\common\BlueArchive\BlueArchiveTool.exe",
-    r"C:\Games\MyBlueArchive.exe",
-    r"C:\Games\BlueArchive.exe.bak",
-    r"C:\Program Files (x86)\Steam\steam.exe -silent",
-    OWN_COMM + " --classic --tab update",
-    "/usr/bin/python3 -m bmpt.webui --serve --port 8790",
-    "Blue-Archive-Modding-and-Patching-Tool-0.1.0-alpha.4-windows-x64.exe --classic",
-])
+@pytest.mark.parametrize(
+    "line",
+    [
+        r"C:\Program Files (x86)\Steam\steamapps\common\BlueArchive\BlueArchiveTool.exe",
+        r"C:\Games\MyBlueArchive.exe",
+        r"C:\Games\BlueArchive.exe.bak",
+        r"C:\Program Files (x86)\Steam\steam.exe -silent",
+        OWN_COMM + " --classic --tab update",
+        "/usr/bin/python3 -m bmpt.webui --serve --port 8790",
+        "Blue-Archive-Modding-and-Patching-Tool-0.1.0-alpha.4-windows-x64.exe --classic",
+    ],
+)
 def test_command_lines_that_are_not_the_game(line):
     assert not safety.is_game_command(line)
 
@@ -96,17 +122,22 @@ def test_a_native_build_is_found_by_its_executable_path(monkeypatch):
 
 
 def test_wine_is_found_by_its_command_line(monkeypatch):
-    calls = fake_ps(monkeypatch, comm="  900 /Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/wine64-preloader\n",
-                    args=f"  900 {WINE_LINE}\n  901 C:\\windows\\system32\\services.exe\n")
+    calls = fake_ps(
+        monkeypatch,
+        comm="  900 /Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/wine64-preloader\n",
+        args=f"  900 {WINE_LINE}\n  901 C:\\windows\\system32\\services.exe\n",
+    )
     assert safety.game_processes() == [WINE_LINE]
     assert [command[4] for command, _ in calls] == ["pid=,comm=", "pid=,args="]
     assert all(kwargs["timeout"] and kwargs["check"] for _, kwargs in calls)
 
 
 def test_this_programs_own_command_line_is_never_the_game(monkeypatch):
-    fake_ps(monkeypatch, comm=f"{os.getpid()} /usr/bin/python3\n{os.getppid()} /bin/zsh\n",
-            args=f"{os.getpid()} /usr/bin/python3 -m pytest -k {WINE_LINE}\n"
-                 f"{os.getppid()} /bin/zsh -c 'run {WINE_LINE}'\n")
+    fake_ps(
+        monkeypatch,
+        comm=f"{os.getpid()} /usr/bin/python3\n{os.getppid()} /bin/zsh\n",
+        args=f"{os.getpid()} /usr/bin/python3 -m pytest -k {WINE_LINE}\n{os.getppid()} /bin/zsh -c 'run {WINE_LINE}'\n",
+    )
     assert safety.game_processes() == []
     safety.check_game_not_running()
 
@@ -117,11 +148,13 @@ def test_no_game_process(monkeypatch):
     safety.check_game_not_running()
 
 
-@pytest.mark.parametrize("error", [OSError("ps blocked"), subprocess.TimeoutExpired("ps", 5),
-                                   subprocess.CalledProcessError(1, "ps")])
+@pytest.mark.parametrize(
+    "error", [OSError("ps blocked"), subprocess.TimeoutExpired("ps", 5), subprocess.CalledProcessError(1, "ps")]
+)
 def test_an_unreadable_process_list_is_reported(monkeypatch, error):
     def run(*args, **kwargs):
         raise error
+
     monkeypatch.setattr(safety, "_WINDOWS", False)
     monkeypatch.setattr(safety.subprocess, "run", run)
     expect_error("game_status_unavailable", safety.check_game_not_running)
@@ -129,9 +162,16 @@ def test_an_unreadable_process_list_is_reported(monkeypatch, error):
 
 def test_windows_matches_exe_names_and_skips_its_own_pid(monkeypatch):
     monkeypatch.setattr(safety, "_WINDOWS", True)
-    monkeypatch.setattr(safety, "_toolhelp_processes", lambda: [
-        (4, "System"), (300, "BlueArchiveTool.exe"), (301, "BlueArchive.exe"), (os.getpid(), "BlueArchive.exe"),
-    ])
+    monkeypatch.setattr(
+        safety,
+        "_toolhelp_processes",
+        lambda: [
+            (4, "System"),
+            (300, "BlueArchiveTool.exe"),
+            (301, "BlueArchive.exe"),
+            (os.getpid(), "BlueArchive.exe"),
+        ],
+    )
     assert safety.game_processes() == ["BlueArchive.exe"]
     expect_error("game_running", safety.check_game_not_running)
 
@@ -144,8 +184,9 @@ def test_windows_falls_back_to_tasklist_without_a_console_window(monkeypatch):
 
     def run(command, **kwargs):
         calls.append((command, kwargs))
-        return SimpleNamespace(stdout='"System","4","Services","0","152 K"\n'
-                                      '"BlueArchive.exe","5120","Console","1","1,024,000 K"\n')
+        return SimpleNamespace(
+            stdout='"System","4","Services","0","152 K"\n"BlueArchive.exe","5120","Console","1","1,024,000 K"\n'
+        )
 
     monkeypatch.setattr(safety, "_WINDOWS", True)
     monkeypatch.setattr(safety, "_toolhelp_processes", no_snapshot)
@@ -164,9 +205,12 @@ def test_toolhelp_lists_this_process():
 
 # --- Steam ---
 
+
 def manifest_text(flags: int | str) -> str:
-    return (f'"AppState"\n{{\n\t"appid"\t\t"{game_paths.STEAM_APP_ID}"\n\t"name"\t\t"Blue Archive"\n'
-            f'\t"StateFlags"\t\t"{flags}"\n\t"installdir"\t\t"BlueArchive"\n}}\n')
+    return (
+        f'"AppState"\n{{\n\t"appid"\t\t"{game_paths.STEAM_APP_ID}"\n\t"name"\t\t"Blue Archive"\n'
+        f'\t"StateFlags"\t\t"{flags}"\n\t"installdir"\t\t"BlueArchive"\n}}\n'
+    )
 
 
 def steam_install(root: Path, flags: int | str | None = 4) -> Path:
@@ -225,12 +269,15 @@ def test_steam_folder_names_ignore_case(tmp_path):
     expect_error("steam_busy", lambda: safety.check_steam_idle(install))
 
 
-@pytest.mark.parametrize("make", [
-    lambda root: steam_install(root, flags=None),  # a Steam library without the manifest
-    lambda root: steam_install(root, flags="busy"),  # unreadable flags
-    lambda root: (root / "Games" / "BlueArchive").mkdir(parents=True) or root / "Games" / "BlueArchive",  # no Steam
-    lambda root: root / "missing",  # no folder at all
-])
+@pytest.mark.parametrize(
+    "make",
+    [
+        lambda root: steam_install(root, flags=None),  # a Steam library without the manifest
+        lambda root: steam_install(root, flags="busy"),  # unreadable flags
+        lambda root: (root / "Games" / "BlueArchive").mkdir(parents=True) or root / "Games" / "BlueArchive",  # no Steam
+        lambda root: root / "missing",  # no folder at all
+    ],
+)
 def test_no_manifest_no_refusal(tmp_path, make):
     folder = make(tmp_path)
     assert safety.steam_state_flags(folder) is None
@@ -246,6 +293,7 @@ def test_a_common_folder_outside_steamapps_is_not_a_library(tmp_path):
 
 
 # --- the call site ---
+
 
 def game_file(install: Path) -> tuple[Path, list[Path]]:
     resource = install / "BlueArchive_Data" / "StreamingAssets" / "PUB" / "Resource" / "GameData" / "Windows"

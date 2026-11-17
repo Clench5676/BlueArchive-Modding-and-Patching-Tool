@@ -66,6 +66,7 @@ STEAM_BUSY_MASK = sum(STEAM_BUSY_FLAGS)  # distinct bits
 
 # --- game processes ---
 
+
 def is_game_name(path: str) -> bool:
     """Whether an executable path or name (``ps -o comm``, a Toolhelp exe name) is the game's."""
     return path.strip().replace("\\", "/").rsplit("/", 1)[-1].casefold() in GAME_NAMES
@@ -103,8 +104,14 @@ def check_game_not_running() -> None:
 
 def _ps(column: str) -> list[tuple[int | None, str]]:
     """Every process's id and one ``ps`` column; ``-ww`` keeps paths with spaces and long command lines whole."""
-    result = subprocess.run(["ps", "-A", "-ww", "-o", f"pid=,{column}="], capture_output=True, check=True,
-                            encoding="utf-8", errors="replace", timeout=PROCESS_TIMEOUT)
+    result = subprocess.run(
+        ["ps", "-A", "-ww", "-o", f"pid=,{column}="],
+        capture_output=True,
+        check=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=PROCESS_TIMEOUT,
+    )
     rows: list[tuple[int | None, str]] = []
     for line in result.stdout.splitlines():
         pid, _, text = line.strip().partition(" ")
@@ -122,8 +129,14 @@ def _windows_processes() -> list[tuple[int | None, str]]:
 
 
 def _tasklist_processes() -> list[tuple[int | None, str]]:
-    result = subprocess.run(["tasklist", "/FO", "CSV", "/NH"], capture_output=True, text=True, check=True,
-                            timeout=PROCESS_TIMEOUT, creationflags=CREATE_NO_WINDOW)
+    result = subprocess.run(
+        ["tasklist", "/FO", "CSV", "/NH"],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=PROCESS_TIMEOUT,
+        creationflags=CREATE_NO_WINDOW,
+    )
     rows: list[tuple[int | None, str]] = []
     for row in csv.reader(io.StringIO(result.stdout)):
         if row:
@@ -184,6 +197,7 @@ def _toolhelp_processes() -> list[tuple[int | None, str]]:
 
 # --- Steam ---
 
+
 def steam_state_flags(game_folder: Path | str) -> int | None:
     """``StateFlags`` of the app manifest of the Steam library holding a game folder; ``None`` outside a Steam
     library or when the manifest cannot be read."""
@@ -216,6 +230,7 @@ def check_steam_idle(game_folder: Path | str) -> None:
 
 # --- destinations ---
 
+
 def check_resource_path(path: Path, resource_dirs: list[Path]) -> Path:
     """Resolve a game destination and reject symlinks that escape resource folders."""
     resolved = path.resolve()
@@ -240,8 +255,9 @@ def check_game_for(paths: list[Path]) -> None:
 
 
 @contextmanager
-def writable_game_files(paths: list[Path], resource_dirs: list[Path], *,
-                        game_folder: Path | None = None, allow_missing: bool = False) -> Iterator[None]:
+def writable_game_files(
+    paths: list[Path], resource_dirs: list[Path], *, game_folder: Path | None = None, allow_missing: bool = False
+) -> Iterator[None]:
     """Preflight destinations and hold POSIX advisory locks through replacement.
 
     With ``game_folder`` (the install the files belong to), Steam busy with that install refuses too.

@@ -11,8 +11,8 @@ import { T } from "./i18n.js";
 const MAX_NAMES = 10; // file names a result lists; the rest are counted
 
 // statusText(state): the row's value from mods.troubleshootState {active, count}
-export const statusText = (state) => (state?.active
-  ? T("settings.troubleshoot.active", { n: state.count || 0 }) : T("settings.troubleshoot.inactive"));
+export const statusText = (state) =>
+  state?.active ? T("settings.troubleshoot.active", { n: state.count || 0 }) : T("settings.troubleshoot.inactive");
 
 // checkLines(check): the check against Steam's file list, then the first names of the files that differ
 export function checkLines(check) {
@@ -34,11 +34,14 @@ export function resultLines(result, nameOf) {
 async function submit(method, title) {
   let result;
   try {
-    result = await Loading.hold(async (update) => {
-      const id = await rpc(method, {}, { timeout: 30000 });
-      update(title);
-      return waitJob(id, (p) => update(Loading.progressLine(p, title)));
-    }, { all: true });
+    result = await Loading.hold(
+      async (update) => {
+        const id = await rpc(method, {}, { timeout: 30000 });
+        update(title);
+        return waitJob(id, (p) => update(Loading.progressLine(p, title)));
+      },
+      { all: true },
+    );
   } catch (err) {
     // the untested build's confirmation, then the same call again; else the error's string
     await ModSwitch.refused(err, null, null, () => submit(method, title));
@@ -52,8 +55,12 @@ async function submit(method, title) {
 
 async function run(method, key, confirmKey) {
   const title = T(`settings.troubleshoot.${key}`);
-  const answer = await Popup.message({ title, lines: [T(`settings.troubleshoot.${confirmKey}`)], ok: title,
-    cancel: T("popup.cancel") });
+  const answer = await Popup.message({
+    title,
+    lines: [T(`settings.troubleshoot.${confirmKey}`)],
+    ok: title,
+    cancel: T("popup.cancel"),
+  });
   if (answer.button !== "ok") return false;
   return submit(method, title);
 }

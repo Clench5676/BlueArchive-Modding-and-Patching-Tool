@@ -14,8 +14,9 @@ LOG_LINES = 500
 LOG_BYTES = 2 * 1024 * 1024
 REDACTED = "[redacted]"
 _CREDENTIAL = re.compile(
-    r'''(?ix)(?<![\w-])(["']?(?:[\w-]*(?:token|secret|password|passwd|api[_-]?key)|authorization|cookie|set-cookie)["']?\s*[:=]\s*)
-        ("[^"\r\n]*"|'[^'\r\n]*'|[^\s,;&]+)''')
+    r"""(?ix)(?<![\w-])(["']?(?:[\w-]*(?:token|secret|password|passwd|api[_-]?key)|authorization|cookie|set-cookie)["']?\s*[:=]\s*)
+        ("[^"\r\n]*"|'[^'\r\n]*'|[^\s,;&]+)"""
+)
 _QUERY = re.compile(r"(?i)([?&](?:t|token|key|access_token|session_token)=)[^\s&#\"']+")
 _BEARER = re.compile(r"(?i)\b(Bearer|Basic)\s+[A-Za-z0-9+/_.=-]+")
 _USERINFO = re.compile(r"(https?://)[^/\s:@]+:[^/\s@]+@", re.I)
@@ -66,24 +67,29 @@ def open_run_log(path: Path, secrets: set[str], *, safe_mode: bool = False) -> l
 
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        for source, target in ((path.with_name("webui.1.log"), path.with_name("webui.2.log")),
-                               (path, path.with_name("webui.1.log"))):
+        for source, target in (
+            (path.with_name("webui.1.log"), path.with_name("webui.2.log")),
+            (path, path.with_name("webui.1.log")),
+        ):
             if source.exists():
                 source.replace(target)
         handler = logging.FileHandler(path, mode="w", encoding="utf-8")
     except OSError:
         try:
             import os
+
             fd, name = tempfile.mkstemp(prefix="BAMT-", suffix=".log")
             os.close(fd)
             handler = logging.FileHandler(name, mode="w", encoding="utf-8")
         except OSError:
             handler = logging.StreamHandler()
     handler.setFormatter(RedactingFormatter(secrets))
+
     def header_values():
         values = environment(safe_mode, configured_language(path.parent))
         app = values.pop("app")
         return {**clean(values, secrets), "app": app, "dataDir": private_text(str(path.parent), secrets)}
+
     header = Reports(path.parent).optional("environment", header_values, time.monotonic() + COLLECTION_TIMEOUT)
     try:
         handler.stream.write("Environment " + json.dumps(header, ensure_ascii=False) + "\n")

@@ -8,5 +8,7 @@ export async function clipRosterBand(view, root, { load } = {}) {
   const band = view.nodes.get(`${root}/Sort/Sprite`)?.els[0];
   const portrait = view.nodes.get(`${root}/Char_Portrait`)?.els[0];
   if (!frame) return;
-  await Promise.all([band, portrait].filter(Boolean).map((element) => maskWithSprite(frame, element, load, { surface: true })));
+  await Promise.all(
+    [band, portrait].filter(Boolean).map((element) => maskWithSprite(frame, element, load, { surface: true })),
+  );
 }

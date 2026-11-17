@@ -51,8 +51,14 @@ class Job:
     stop: threading.Event = field(default_factory=threading.Event)
 
     def to_json(self) -> dict[str, Any]:
-        return {"id": self.id, "kind": self.kind, "state": self.state, "result": self.result, "error": self.error,
-                "progress": self.progress}
+        return {
+            "id": self.id,
+            "kind": self.kind,
+            "state": self.state,
+            "result": self.result,
+            "error": self.error,
+            "progress": self.progress,
+        }
 
     @property
     def pending(self) -> bool:
@@ -84,8 +90,16 @@ class JobRunner:
         self._thread = threading.Thread(target=self._run, name="bamt-jobs", daemon=True)
         self._thread.start()
 
-    def submit(self, kind: str, fn: Callable[..., Any], *, writes: str | None = None, rank: int = USER,
-               cancellable: bool = False, **params: Any) -> str:
+    def submit(
+        self,
+        kind: str,
+        fn: Callable[..., Any],
+        *,
+        writes: str | None = None,
+        rank: int = USER,
+        cancellable: bool = False,
+        **params: Any,
+    ) -> str:
         """Queue ``fn(log=..., progress=..., **params)``; returns the job id. ``writes`` marks a writer job; ``rank``
         is its class (``USER`` unless start-up or maintenance work). ``cancellable`` (read-only jobs only): ``cancel``
         may stop it, and ``fn`` also gets ``cancelled``, a callable that says whether it was; the job checks it between
@@ -96,8 +110,9 @@ class JobRunner:
             raise ValueError(f"unknown rank {rank!r}")
         if cancellable and writes is not None:
             raise ValueError("a writer job cannot be cancelled")
-        job = Job(id=f"j{next(self._ids)}", kind=kind, params=params, fn=fn, writes=writes, rank=rank,
-                  cancellable=cancellable)
+        job = Job(
+            id=f"j{next(self._ids)}", kind=kind, params=params, fn=fn, writes=writes, rank=rank, cancellable=cancellable
+        )
         if cancellable:
             job.params = {**params, "cancelled": job.stop.is_set}
         with self._lock:
@@ -200,8 +215,10 @@ class JobRunner:
         if wait is not None and self._thread.is_alive() and self.busy():
             deadline = time.monotonic() + wait
             with self._idle:
-                self._idle.wait_for(lambda: not any(j.writes and j.pending for j in self._jobs.values()),
-                                    max(0.0, deadline - time.monotonic()))
+                self._idle.wait_for(
+                    lambda: not any(j.writes and j.pending for j in self._jobs.values()),
+                    max(0.0, deadline - time.monotonic()),
+                )
 
     def _run(self) -> None:
         while True:
@@ -261,8 +278,13 @@ class JobRunner:
                     job.progress = {**current, "id": job.id, "sequence": next(progress_sequence)}
                 else:
                     label = label or t("webui.progress.process", name=t("webui.progress.mods"))
-                    job.progress = {"id": job.id, "current": current, "total": total, "label": label,
-                                    "sequence": next(progress_sequence)}
+                    job.progress = {
+                        "id": job.id,
+                        "current": current,
+                        "total": total,
+                        "label": label,
+                        "sequence": next(progress_sequence),
+                    }
                     now = time.monotonic()
                     if current < total and now - last_progress[0] < PROGRESS_SECONDS:
                         return

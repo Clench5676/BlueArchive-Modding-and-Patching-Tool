@@ -32,7 +32,12 @@ export function listen(entry, handlers) {
   const merged = { ...old };
   for (const [kind, fn] of Object.entries(handlers)) {
     const prev = old[kind];
-    merged[kind] = prev ? (e, ...rest) => { prev(e, ...rest); fn(e, ...rest); } : fn;
+    merged[kind] = prev
+      ? (e, ...rest) => {
+          prev(e, ...rest);
+          fn(e, ...rest);
+        }
+      : fn;
   }
   entry.listener = merged;
   return entry;
@@ -59,14 +64,19 @@ export class Runs {
     return run;
   }
 
-  stop(name) { this.runs.delete(name); }
-  stopAll() { this.runs.clear(); }
+  stop(name) {
+    this.runs.delete(name);
+  }
+  stopAll() {
+    this.runs.clear();
+  }
 
   // a dialogue starts or ends (the game returns to the
   // idle keeping its sync clips): a clip that has not played yet, its track still empty, starts again
   returnToIdle(names) {
     for (const name of names) {
-      const c = this.clip(name), run = this.runs.get(name);
+      const c = this.clip(name),
+        run = this.runs.get(name);
       if (c?.mode === 2 && (!run || !this.state.tracks[c.track])) this.start(name);
     }
   }
@@ -74,12 +84,18 @@ export class Runs {
   // every frame, before the animation update: the clock, and the runs that are due
   tick(dt) {
     this.time += Math.max(0, dt || 0);
-    for (const run of [...this.runs.values()]) if (this.runs.get(run.name) === run && this.time - run.from >= run.wait) this.fire(run);
+    for (const run of [...this.runs.values()])
+      if (this.runs.get(run.name) === run && this.time - run.from >= run.wait) this.fire(run);
   }
 
   fire(run) {
-    const c = this.clip(run.name), d = this.duration(run.name), st = this.state;
-    if (!c || !(d > 0)) { this.runs.delete(run.name); return; }
+    const c = this.clip(run.name),
+      d = this.duration(run.name),
+      st = this.state;
+    if (!c || !(d > 0)) {
+      this.runs.delete(run.name);
+      return;
+    }
     const entry = st.setAnimation(c.track, run.name, false);
     entry.mixDuration = c.intro || 0;
     this.onEntry(entry, c, run.name);
@@ -99,8 +115,12 @@ export class Runs {
 
   // for checks: each run's clip, track, seconds until it plays, plays so far
   list() {
-    return [...this.runs.values()].map((r) => ({ clip: r.name, track: r.track, in: +(r.from + r.wait - this.time).toFixed(3),
-      plays: r.plays }));
+    return [...this.runs.values()].map((r) => ({
+      clip: r.name,
+      track: r.track,
+      in: +(r.from + r.wait - this.time).toFixed(3),
+      plays: r.plays,
+    }));
   }
 }
 
@@ -117,7 +137,14 @@ export class SoundKeys {
     if (entry.loop && !(entry.animationEnd > 0)) return;
     this.watches.set(entry, { keys, k: 0, started: false, wrap: false, last: 0 });
     const drop = () => this.watches.delete(entry);
-    listen(entry, { interrupt: drop, end: drop, dispose: drop, complete: (e) => { if (!e.loop) drop(); } });
+    listen(entry, {
+      interrupt: drop,
+      end: drop,
+      dispose: drop,
+      complete: (e) => {
+        if (!e.loop) drop();
+      },
+    });
   }
 
   // after the animation update: the keys the entries' animation time has reached
@@ -138,10 +165,15 @@ export class SoundKeys {
         w.k += 1;
       }
       if (w.k >= w.keys.length) {
-        if (entry.loop) { w.wrap = true; w.last = t; } else this.watches.delete(entry);
+        if (entry.loop) {
+          w.wrap = true;
+          w.last = t;
+        } else this.watches.delete(entry);
       }
     }
   }
 
-  clear() { this.watches.clear(); }
+  clear() {
+    this.watches.clear();
+  }
 }

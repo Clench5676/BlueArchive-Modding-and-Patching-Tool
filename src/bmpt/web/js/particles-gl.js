@@ -9,7 +9,16 @@
 // Without linear light (no WebGL2) nothing is drawn.
 import * as Linear from "./linear.js";
 import { Meshes } from "./mesh-fx.js";
-import { Effects, STRIDE, drawOrder, geometry, lastBefore, queuesOf, spriteGeometry, trailGeometry } from "./particles.js";
+import {
+  Effects,
+  STRIDE,
+  drawOrder,
+  geometry,
+  lastBefore,
+  queuesOf,
+  spriteGeometry,
+  trailGeometry,
+} from "./particles.js";
 import { toLinear } from "./touch-fx.js";
 
 const VS_HEAD = `#version 300 es
@@ -35,8 +44,12 @@ const CD_UV = `vec2 cdUv(vec2 base, vec4 t1, vec4 t2, vec4 o1, vec4 o2) {
   return base * (a.xy + a.zw + b.xy + b.zw) + c.xy + c.zw + d.xy + d.zw;
 }`;
 // the selector vectors of one UV in a *_1a material (the double distortion's per channel: DistortTilingR_CD1XYXY)
-const cd = (uv, ch = "") => [`_CustomData_${uv}Tiling${ch}_CD1XYXY`, `_CustomData_${uv}Tiling${ch}_CD2XYXY`,
-  `_CustomData_${uv}Offset${ch}_CD1XYXY`, `_CustomData_${uv}Offset${ch}_CD2XYXY`];
+const cd = (uv, ch = "") => [
+  `_CustomData_${uv}Tiling${ch}_CD1XYXY`,
+  `_CustomData_${uv}Tiling${ch}_CD2XYXY`,
+  `_CustomData_${uv}Offset${ch}_CD1XYXY`,
+  `_CustomData_${uv}Offset${ch}_CD2XYXY`,
+];
 const cdUv = (base, uv, ch = "") => `cdUv(${base}, ${cd(uv, ch).join(", ")})`;
 const tiled = (t) => `uv * ${t}_ST.xy + ${t}_ST.zw`;
 
@@ -56,7 +69,9 @@ const on = (name) => `(${name} != 0.0)`;
 export const PROGRAMS = {
   // DSFX/FX_SHADER_Additive_0 (One One)
   additive: {
-    tex: ["_Texture"], floats: ["_Custom_Data_Offset_Use"], colors: ["_Color"],
+    tex: ["_Texture"],
+    floats: ["_Custom_Data_Offset_Use"],
+    colors: ["_Color"],
     src: `void main() {
   vec2 uv = v_t0.xy * _Texture_ST.xy + _Texture_ST.zw;
   if ${on("_Custom_Data_Offset_Use")} uv += v_t1.xy;
@@ -66,7 +81,9 @@ export const PROGRAMS = {
   },
   // DSFX/FX_SHADER_AlphaBlend_0 (SrcAlpha OneMinusSrcAlpha)
   alphaBlend: {
-    tex: ["_Texture"], floats: ["_Custom_Data_Offset_Use", "_Main_Texture_No", "_Multiply", "_RGBRGBA"], colors: ["_Color"],
+    tex: ["_Texture"],
+    floats: ["_Custom_Data_Offset_Use", "_Main_Texture_No", "_Multiply", "_RGBRGBA"],
+    colors: ["_Color"],
     src: `void main() {
   vec2 uv = v_t0.xy * _Texture_ST.xy + _Texture_ST.zw;
   if ${on("_Custom_Data_Offset_Use")} uv += v_t1.xy;
@@ -78,7 +95,9 @@ export const PROGRAMS = {
   },
   // DSFX/FX_SHADER_AlphaBlend_Add (One OneMinusSrcAlpha)
   alphaBlendAdd: {
-    tex: ["_Texture"], floats: ["_Custom_Data_Offset_Use", "_Main_Texture_No", "_Multiply", "_RGBRGBA"], colors: ["_Color"],
+    tex: ["_Texture"],
+    floats: ["_Custom_Data_Offset_Use", "_Main_Texture_No", "_Multiply", "_RGBRGBA"],
+    colors: ["_Color"],
     src: `void main() {
   vec2 uv = v_t0.xy * _Texture_ST.xy + _Texture_ST.zw;
   if ${on("_Custom_Data_Offset_Use")} uv += v_t1.xy;
@@ -90,8 +109,17 @@ export const PROGRAMS = {
   },
   // DSFX/FX_SHADER_AlphaBlend_Add_Mask_0 (One OneMinusSrcAlpha)
   mask: {
-    tex: ["_Tex_Main", "_Tex_Mask"], colors: ["_Color"],
-    floats: ["_Custom_Data_MainMask_Offset_Use", "_Main_Speed_X", "_Main_Speed_Y", "_Mask_Speed_X", "_Mask_Speed_Y", "_Multiply", "_RGBRGBA"],
+    tex: ["_Tex_Main", "_Tex_Mask"],
+    colors: ["_Color"],
+    floats: [
+      "_Custom_Data_MainMask_Offset_Use",
+      "_Main_Speed_X",
+      "_Main_Speed_Y",
+      "_Mask_Speed_X",
+      "_Mask_Speed_Y",
+      "_Multiply",
+      "_RGBRGBA",
+    ],
     src: `void main() {
   vec4 off = ${on("_Custom_Data_MainMask_Offset_Use")} ? v_t1 : vec4(0.0);
   vec4 m = texture(_Tex_Main, v_t0.xy * _Tex_Main_ST.xy + _Tex_Main_ST.zw + _TimeY * vec2(_Main_Speed_X, _Main_Speed_Y) + off.xy);
@@ -102,10 +130,24 @@ export const PROGRAMS = {
   },
   // DSFX/FX_SHADER_AlphaBlend_Add_Distort_0 (One OneMinusSrcAlpha)
   distort: {
-    tex: ["_Tex_Main", "_Tex_Mask", "_Tex_Distort"], colors: ["_Color"],
-    floats: ["_Custom_Data_Distort_Power_Use", "_Custom_Data_MainMask_Offset_Use", "_Main_Distortion_Use", "_Mask_Distortion_Use",
-      "_Distortion_Power_X", "_Distortion_Power_Y", "_Dis_Speed_X", "_Dis_Speed_Y", "_Main_Speed_X", "_Main_Speed_Y",
-      "_Mask_Speed_X", "_Mask_Speed_Y", "_Multiply", "_RGBRGBA"],
+    tex: ["_Tex_Main", "_Tex_Mask", "_Tex_Distort"],
+    colors: ["_Color"],
+    floats: [
+      "_Custom_Data_Distort_Power_Use",
+      "_Custom_Data_MainMask_Offset_Use",
+      "_Main_Distortion_Use",
+      "_Mask_Distortion_Use",
+      "_Distortion_Power_X",
+      "_Distortion_Power_Y",
+      "_Dis_Speed_X",
+      "_Dis_Speed_Y",
+      "_Main_Speed_X",
+      "_Main_Speed_Y",
+      "_Mask_Speed_X",
+      "_Mask_Speed_Y",
+      "_Multiply",
+      "_RGBRGBA",
+    ],
     src: `void main() {
   vec2 uv = v_t0.xy;
   vec4 d = texture(_Tex_Distort, uv * _Tex_Distort_ST.xy + _Tex_Distort_ST.zw + _TimeY * vec2(_Dis_Speed_X, _Dis_Speed_Y));
@@ -126,11 +168,25 @@ export const PROGRAMS = {
   // the custom data's share of the distortion UV in v_t3.zw, of the main and mask UVs in v_t5; v_t4 is custom data 2.
   // Only the alpha takes the main texture's red with RGB (_RGBRGBA 0); the colour is always times its alpha.
   distort1a: {
-    tex: ["_Tex_Main", "_Tex_Mask", "_Tex_Distort"], colors: ["_Color"],
+    tex: ["_Tex_Main", "_Tex_Mask", "_Tex_Distort"],
+    colors: ["_Color"],
     vectors: [...cd("Main"), ...cd("Mask"), ...cd("Distort"), "_CustomData_DistortPower_CD2XYXY"],
-    floats: ["_Main_Distort_Use", "_Mask_Distort_Use", "_RGBRGBA", "_AlphaPremultiplyOn", "_Alphaclip_Value", "_Multiply",
-      "_Dis_Speed_X", "_Dis_Speed_Y", "_Distortion_Power_X", "_Distortion_Power_Y", "_Main_Speed_X", "_Main_Speed_Y",
-      "_Tex_Mask_Speed_X", "_Tex_Mask_Speed_Y"],
+    floats: [
+      "_Main_Distort_Use",
+      "_Mask_Distort_Use",
+      "_RGBRGBA",
+      "_AlphaPremultiplyOn",
+      "_Alphaclip_Value",
+      "_Multiply",
+      "_Dis_Speed_X",
+      "_Dis_Speed_Y",
+      "_Distortion_Power_X",
+      "_Distortion_Power_Y",
+      "_Main_Speed_X",
+      "_Main_Speed_Y",
+      "_Tex_Mask_Speed_X",
+      "_Tex_Mask_Speed_Y",
+    ],
     vertex: {
       outs: 3,
       src: `  vec2 uv = a_t0.xy;
@@ -160,12 +216,38 @@ export const PROGRAMS = {
   // data as in distort1a: v_t3.zw red, v_t5.xy green, v_t5.zw main, v_t6.xy mask; the vertex program tiles the custom
   // data's distortion UVs by _Tex_DistortRG_ST, the fragment program the plain ones by _R / _GTilingxyOffsetzw.
   doubleDistort: {
-    tex: ["_Tex_Main", "_Tex_Mask", "_Tex_DistortRG"], colors: ["_Color"],
-    vectors: [...cd("Main"), ...cd("Mask"), ...cd("Distort", "R"), ...cd("Distort", "G"), "_CustomData_DistortPowerR_CD2XYXY",
-      "_CustomData_DistortPowerG_CD2XYXY", "_RTilingxyOffsetzw", "_GTilingxyOffsetzw"],
-    floats: ["_Tex_Main_Distort", "_Tex_Mask_Distort", "_RGBRGBA", "_AlphaPremultiplyOn", "_Alphaclip_Value", "_Multiply",
-      "_Main_Speed_X", "_Main_Speed_Y", "_Mask_Speed_X", "_Mask_Speed_Y", "_RDistort_Speed_X", "_RDistort_Speed_Y",
-      "_RDistort_Power_X", "_RDistort_Power_Y", "_GDistort_Speed_X", "_GDistort_Speed_Y", "_GDistort_Power_X", "_GDistort_Power_Y"],
+    tex: ["_Tex_Main", "_Tex_Mask", "_Tex_DistortRG"],
+    colors: ["_Color"],
+    vectors: [
+      ...cd("Main"),
+      ...cd("Mask"),
+      ...cd("Distort", "R"),
+      ...cd("Distort", "G"),
+      "_CustomData_DistortPowerR_CD2XYXY",
+      "_CustomData_DistortPowerG_CD2XYXY",
+      "_RTilingxyOffsetzw",
+      "_GTilingxyOffsetzw",
+    ],
+    floats: [
+      "_Tex_Main_Distort",
+      "_Tex_Mask_Distort",
+      "_RGBRGBA",
+      "_AlphaPremultiplyOn",
+      "_Alphaclip_Value",
+      "_Multiply",
+      "_Main_Speed_X",
+      "_Main_Speed_Y",
+      "_Mask_Speed_X",
+      "_Mask_Speed_Y",
+      "_RDistort_Speed_X",
+      "_RDistort_Speed_Y",
+      "_RDistort_Power_X",
+      "_RDistort_Power_Y",
+      "_GDistort_Speed_X",
+      "_GDistort_Speed_Y",
+      "_GDistort_Power_X",
+      "_GDistort_Power_Y",
+    ],
     vertex: {
       outs: 4,
       src: `  vec2 uv = a_t0.xy, base = ${tiled("_Tex_DistortRG")};
@@ -201,9 +283,22 @@ void main() {
   // DSFX/FX_SHADER_Step_0 (One OneMinusSrcAlpha): the mask against a threshold cuts the main texture; also
   // DSFX/FX_SHADER_Step_0_MXChar, the same program with dither and grayscale variants (the material's blend)
   step: {
-    tex: ["_Tex_Main", "_Tex_Mask"], colors: ["_Color"],
-    floats: ["_Custom_Data_Mask_Offset_Use", "_Custom_Data_Main_Offset_Use", "_Step_Custom_DataVertex_color_Use", "_Step_Power",
-      "_Step_Scroll_Use", "_Main_Speed_X", "_Main_Speed_Y", "_Mask_Speed_X", "_Mask_Speed_Y", "_Multiply", "_RGBRGBA", "_Vertex_Alpha_Use"],
+    tex: ["_Tex_Main", "_Tex_Mask"],
+    colors: ["_Color"],
+    floats: [
+      "_Custom_Data_Mask_Offset_Use",
+      "_Custom_Data_Main_Offset_Use",
+      "_Step_Custom_DataVertex_color_Use",
+      "_Step_Power",
+      "_Step_Scroll_Use",
+      "_Main_Speed_X",
+      "_Main_Speed_Y",
+      "_Mask_Speed_X",
+      "_Mask_Speed_Y",
+      "_Multiply",
+      "_RGBRGBA",
+      "_Vertex_Alpha_Use",
+    ],
     src: `void main() {
   vec2 uv = v_t0.xy;
   float mk = texture(_Tex_Mask, uv * _Tex_Mask_ST.xy + _Tex_Mask_ST.zw + _TimeY * vec2(_Mask_Speed_X, _Mask_Speed_Y)
@@ -219,11 +314,29 @@ void main() {
   },
   // DSFX/FX_SHADER_Step_Distort_0 (One OneMinusSrcAlpha)
   stepDistort: {
-    tex: ["_Tex_Main", "_Tex_Mask", "_Tex_Distort"], colors: ["_Color"], vectors: ["_UV_Add_TilingOffset"],
-    floats: ["_Custom_Data_Mask_Offset_Usecustom78", "_Custom_Data_Main_Offset_Use", "_Custom_Data_Distort_Power_Use", "_UV_Add_Use",
-      "_Step_Custom_DataVertex_color_Use", "_Step_Power", "_Step_Scroll_Use", "_Distortion_Power_X", "_Distortion_Power_Y",
-      "_Dis_Speed_X", "_Dis_Speed_Y", "_Main_Speed_X", "_Main_Speed_Y", "_Mask_Speed_X", "_Mask_Speed_Y", "_Multiply", "_RGBRGBA",
-      "_Vertex_Alpha_Use"],
+    tex: ["_Tex_Main", "_Tex_Mask", "_Tex_Distort"],
+    colors: ["_Color"],
+    vectors: ["_UV_Add_TilingOffset"],
+    floats: [
+      "_Custom_Data_Mask_Offset_Usecustom78",
+      "_Custom_Data_Main_Offset_Use",
+      "_Custom_Data_Distort_Power_Use",
+      "_UV_Add_Use",
+      "_Step_Custom_DataVertex_color_Use",
+      "_Step_Power",
+      "_Step_Scroll_Use",
+      "_Distortion_Power_X",
+      "_Distortion_Power_Y",
+      "_Dis_Speed_X",
+      "_Dis_Speed_Y",
+      "_Main_Speed_X",
+      "_Main_Speed_Y",
+      "_Mask_Speed_X",
+      "_Mask_Speed_Y",
+      "_Multiply",
+      "_RGBRGBA",
+      "_Vertex_Alpha_Use",
+    ],
     src: `void main() {
   vec2 uv = v_t0.xy;
   vec2 maskUv = uv * _Tex_Mask_ST.xy + _Tex_Mask_ST.zw + _TimeY * vec2(_Mask_Speed_X, _Mask_Speed_Y);
@@ -245,7 +358,9 @@ void main() {
   },
   // DSFX/FX_SHADER_AlphaBlend_2_Roz (SrcAlpha OneMinusSrcAlpha)
   alphaBlend2: {
-    tex: ["_Texture"], floats: ["_Float0"], colors: ["_Color0"],
+    tex: ["_Texture"],
+    floats: ["_Float0"],
+    colors: ["_Color0"],
     src: `void main() {
   vec4 t = texture(_Texture, v_t0.xy * _Texture_ST.xy + _Texture_ST.zw) * v_col;
   o = vec4(t.rgb * _Color0.rgb * _Float0, t.a * _Color0.a);
@@ -253,7 +368,9 @@ void main() {
   },
   // DSFX/FX_SHADER_AlwaysView_Add (SrcAlpha One)
   alwaysViewAdd: {
-    tex: ["_FX_TEX_FocusLine", "_TextureSample0"], floats: [], colors: ["_Color"],
+    tex: ["_FX_TEX_FocusLine", "_TextureSample0"],
+    floats: [],
+    colors: ["_Color"],
     src: `void main() {
   float k = texture(_TextureSample0, v_t0.xy * _TextureSample0_ST.xy + _TextureSample0_ST.zw).a;
   vec4 f = texture(_FX_TEX_FocusLine, v_t0.xy * _FX_TEX_FocusLine_ST.xy + _FX_TEX_FocusLine_ST.zw) * _Color;
@@ -263,7 +380,9 @@ void main() {
   // DSFX/FX_SHADER_Matcap_0 (the material's blend): the matcap looked up by the normal in view space (the camera's
   // axes are the world's, its view matrix only turns z round)
   matcap: {
-    tex: ["_Main_Tex", "_Matcap_Tex"], floats: ["_Multiply"], colors: ["_Main_Color"],
+    tex: ["_Main_Tex", "_Matcap_Tex"],
+    floats: ["_Multiply"],
+    colors: ["_Main_Color"],
     src: `void main() {
   vec3 m = texture(_Main_Tex, v_t0.xy * _Main_Tex_ST.xy + _Main_Tex_ST.zw).rgb * _Main_Color.rgb * v_col.rgb;
   vec4 c = texture(_Matcap_Tex, v_n.xy * 0.5 + 0.5);
@@ -275,7 +394,9 @@ void main() {
   // FX/FX_SHADER_Lobby_Order (One One): the lens-dirt and light quads (mesh-fx.js); the texture times _Color0 and the
   // vertex colour, its alpha never read
   lobbyOrder: {
-    tex: ["_TextureSample0"], floats: [], colors: ["_Color0"],
+    tex: ["_TextureSample0"],
+    floats: [],
+    colors: ["_Color0"],
     src: `void main() {
   vec4 t = texture(_TextureSample0, v_t0.xy * _TextureSample0_ST.xy + _TextureSample0_ST.zw);
   o = vec4(t.rgb * _Color0.rgb * v_col.rgb, 1.0);
@@ -284,7 +405,9 @@ void main() {
   // Unity's Sprites/Default (One OneMinusSrcAlpha): the sprite's texture times the renderer's colour and the material's,
   // premultiplied; the intro's flash and fade sprites
   sprite: {
-    tex: ["_MainTex"], floats: [], colors: ["_Color"],
+    tex: ["_MainTex"],
+    floats: [],
+    colors: ["_Color"],
     src: `void main() {
   vec4 c = texture(_MainTex, v_t0.xy * _MainTex_ST.xy + _MainTex_ST.zw) * v_col * _Color;
   o = vec4(c.rgb * c.a, c.a);
@@ -292,7 +415,9 @@ void main() {
   },
   // Unity's Mobile/Particles/Additive (SrcAlpha One): the texture times the vertex colour
   particleAdd: {
-    tex: ["_MainTex"], floats: [], colors: [],
+    tex: ["_MainTex"],
+    floats: [],
+    colors: [],
     src: "void main() { o = texture(_MainTex, v_t0.xy * _MainTex_ST.xy + _MainTex_ST.zw) * v_col; }",
   },
 };
@@ -303,7 +428,8 @@ const extra = (p, dir) => Array.from({ length: p.vertex?.outs || 0 }, (_, i) => 
 // the vertex GLSL of a program: the particle's position, its vertex streams passed on as they are and, for the
 // programs that port their vertex program too, what that computes (with the textures' _ST and the vectors)
 export function vertexSource(kind) {
-  const p = PROGRAMS[kind], v = p.vertex;
+  const p = PROGRAMS[kind],
+    v = p.vertex;
   const lines = [VS_HEAD];
   if (v) {
     for (const t of p.tex) lines.push(`uniform vec4 ${t}_ST;`);
@@ -329,23 +455,53 @@ export function fragmentSource(kind) {
 }
 
 // Unity's built-in default textures, for a texture property a material leaves empty
-const DEFAULT_TEXEL = { white: [255, 255, 255, 255], black: [0, 0, 0, 0], gray: [128, 128, 128, 128], grey: [128, 128, 128, 128],
-  bump: [128, 128, 255, 128], red: [255, 0, 0, 0] };
-const ATTRS = [["a_pos", 2, 0], ["a_t0", 4, 2], ["a_t1", 4, 6], ["a_t2", 4, 10], ["a_col", 4, 14], ["a_n", 3, 18]];
+const DEFAULT_TEXEL = {
+  white: [255, 255, 255, 255],
+  black: [0, 0, 0, 0],
+  gray: [128, 128, 128, 128],
+  grey: [128, 128, 128, 128],
+  bump: [128, 128, 255, 128],
+  red: [255, 0, 0, 0],
+};
+const ATTRS = [
+  ["a_pos", 2, 0],
+  ["a_t0", 4, 2],
+  ["a_t1", 4, 6],
+  ["a_t2", 4, 10],
+  ["a_col", 4, 14],
+  ["a_n", 3, 18],
+];
 // UnityEngine.Rendering.BlendMode -> GL factors
-const FACTOR = (gl) => [gl.ZERO, gl.ONE, gl.DST_COLOR, gl.SRC_COLOR, gl.ONE_MINUS_DST_COLOR, gl.SRC_ALPHA,
-  gl.ONE_MINUS_SRC_COLOR, gl.DST_ALPHA, gl.ONE_MINUS_DST_ALPHA, gl.SRC_ALPHA_SATURATE, gl.ONE_MINUS_SRC_ALPHA];
+const FACTOR = (gl) => [
+  gl.ZERO,
+  gl.ONE,
+  gl.DST_COLOR,
+  gl.SRC_COLOR,
+  gl.ONE_MINUS_DST_COLOR,
+  gl.SRC_ALPHA,
+  gl.ONE_MINUS_SRC_COLOR,
+  gl.DST_ALPHA,
+  gl.ONE_MINUS_DST_ALPHA,
+  gl.SRC_ALPHA_SATURATE,
+  gl.ONE_MINUS_SRC_ALPHA,
+];
 
 function compile(gl, kind) {
   const prog = gl.createProgram();
-  for (const [type, src] of [[gl.VERTEX_SHADER, vertexSource(kind)], [gl.FRAGMENT_SHADER, fragmentSource(kind)]]) {
+  for (const [type, src] of [
+    [gl.VERTEX_SHADER, vertexSource(kind)],
+    [gl.FRAGMENT_SHADER, fragmentSource(kind)],
+  ]) {
     const s = gl.createShader(type);
     gl.shaderSource(s, src);
     gl.compileShader(s);
     gl.attachShader(prog, s);
     const log = gl.getShaderParameter(s, gl.COMPILE_STATUS) ? null : gl.getShaderInfoLog(s) || "shader";
     gl.deleteShader(s);
-    if (log) { gl.deleteProgram(prog); throw new Error(`${kind}: ${log}`); }
+    if (log) {
+      gl.deleteProgram(prog);
+      throw new Error(`${kind}: ${log}`);
+    }
   }
   ATTRS.forEach(([name], i) => gl.bindAttribLocation(prog, i, name));
   gl.linkProgram(prog);
@@ -396,7 +552,8 @@ class Context {
   // a texture of this context: the image as the game samples it (sRGB or not, filter, mipmaps, wrap), flipped so UV
   // (0, 0) is its bottom-left corner as in Unity; a default texture by name
   texture(meta, image) {
-    const gl = this.gl, key = meta.id || `default:${meta.default}`;
+    const gl = this.gl,
+      key = meta.id || `default:${meta.default}`;
     if (this.textures.has(key)) return this.textures.get(key);
     if (!meta.default && !image) return null;
     const tex = gl.createTexture();
@@ -416,8 +573,19 @@ class Context {
     if (mips) gl.generateMipmap(gl.TEXTURE_2D);
     const point = meta.filter === 0;
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, point ? gl.NEAREST : gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, !mips ? (point ? gl.NEAREST : gl.LINEAR)
-      : point ? gl.NEAREST_MIPMAP_NEAREST : meta.filter === 2 ? gl.LINEAR_MIPMAP_LINEAR : gl.LINEAR_MIPMAP_NEAREST);
+    gl.texParameteri(
+      gl.TEXTURE_2D,
+      gl.TEXTURE_MIN_FILTER,
+      !mips
+        ? point
+          ? gl.NEAREST
+          : gl.LINEAR
+        : point
+          ? gl.NEAREST_MIPMAP_NEAREST
+          : meta.filter === 2
+            ? gl.LINEAR_MIPMAP_LINEAR
+            : gl.LINEAR_MIPMAP_NEAREST,
+    );
     const wrap = (w) => (w === 1 || w === 3 ? gl.CLAMP_TO_EDGE : w === 2 ? gl.MIRRORED_REPEAT : gl.REPEAT);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap(meta.wrap?.[0] ?? 0));
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap(meta.wrap?.[1] ?? 0));
@@ -449,16 +617,19 @@ class Context {
 
 // for checks: draw the effects (true) or leave them out (false); they keep simulating either way
 export let shown = true;
-export const show = (on) => { shown = !!on; };
+export const show = (on) => {
+  shown = !!on;
+};
 
 // column-major 4 x 4 product a * b
 function mat4(a, b) {
   const o = new Float32Array(16);
-  for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) {
-    let s = 0;
-    for (let k = 0; k < 4; k++) s += a[k * 4 + r] * b[c * 4 + k];
-    o[c * 4 + r] = s;
-  }
+  for (let c = 0; c < 4; c++)
+    for (let r = 0; r < 4; r++) {
+      let s = 0;
+      for (let k = 0; k < 4; k++) s += a[k * 4 + r] * b[c * 4 + k];
+      o[c * 4 + r] = s;
+    }
   return o;
 }
 
@@ -471,19 +642,33 @@ export function create(fx, { base, bone, load = loadImage } = {}) {
   const plain = new Meshes(fx, { bone }); // the mesh renderers, drawn like the systems
   // the prefab's sprites (fx.sprites: the intro's flash and fade), drawn like a system with one quad; lobby-intro.js
   // shows them (visible), colours (color) and moves (M) them
-  const sprites = (fx?.sprites || []).map((def, i) => ({ def, index: 2e6 + i, sprite: true, visible: def.rest !== 0,
-    color: def.color, M: def.static }));
+  const sprites = (fx?.sprites || []).map((def, i) => ({
+    def,
+    index: 2e6 + i,
+    sprite: true,
+    visible: def.rest !== 0,
+    color: def.color,
+    M: def.static,
+  }));
   const images = new Map(); // texture id -> HTMLImageElement once loaded (null while loading)
   const contexts = new Map(); // player -> Context
   const restorables = new Map(); // player -> what its context calls once restored after a loss
-  let slots = new Map(), bottom = null, disposed = false;
+  let slots = new Map(),
+    bottom = null,
+    disposed = false;
   const cpu = { ms: 0, frames: 0 };
-  const materials = fx?.materials || {}, meshes = fx?.meshes || {};
+  const materials = fx?.materials || {},
+    meshes = fx?.meshes || {};
 
   // every texture of the effects, fetched once; the systems draw once theirs are in
   for (const t of Object.values(fx?.textures || {})) {
     images.set(t.id, null);
-    load(`${base}fx_${encodeURIComponent(t.id)}.png`).then((img) => { if (!disposed) images.set(t.id, img); }, () => {});
+    load(`${base}fx_${encodeURIComponent(t.id)}.png`).then(
+      (img) => {
+        if (!disposed) images.set(t.id, img);
+      },
+      () => {},
+    );
   }
 
   // the player's GL objects, made on its first draw; a lost context has freed them, so once it is restored (spine's
@@ -493,7 +678,11 @@ export function create(fx, { base, bone, load = loadImage } = {}) {
     const gl = player?.context?.gl;
     if (!gl || !Linear.active(player)) return null;
     if (!restorables.has(player)) {
-      const restorable = { restore: () => { contexts.delete(player); } };
+      const restorable = {
+        restore: () => {
+          contexts.delete(player);
+        },
+      };
       restorables.set(player, restorable);
       player.context.addRestorable?.(restorable);
     }
@@ -514,7 +703,10 @@ export function create(fx, { base, bone, load = loadImage } = {}) {
     const cam = player.sceneRenderer.camera;
     cam.update();
     const s = layer.scale || 1;
-    return mat4(cam.projectionView.values, new Float32Array([1 / s, 0, 0, 0, 0, 1 / s, 0, 0, 0, 0, 1, 0, -layer.x / s, -layer.y / s, 0, 1]));
+    return mat4(
+      cam.projectionView.values,
+      new Float32Array([1 / s, 0, 0, 0, 0, 1 / s, 0, 0, 0, 0, 1, 0, -layer.x / s, -layer.y / s, 0, 1]),
+    );
   }
 
   function draw(player, list) {
@@ -522,7 +714,9 @@ export function create(fx, { base, bone, load = loadImage } = {}) {
     const ctx = contextOf(player);
     const layer = player.bamtLayer;
     if (!ctx || !layer) return;
-    const gl = ctx.gl, F = FACTOR(gl), proj = projection(player, layer);
+    const gl = ctx.gl,
+      F = FACTOR(gl),
+      proj = projection(player, layer);
     gl.bindVertexArray(ctx.vao);
     gl.enable(gl.BLEND);
     for (const { s, trail } of list) {
@@ -534,13 +728,23 @@ export function create(fx, { base, bone, load = loadImage } = {}) {
       let ready = true;
       for (const name of PROGRAMS[mat.program].tex) {
         const meta = mat.tex?.[name] || { default: mat.defaults?.[name] || "white" };
-        const tex = meta.id ? ctx.texture(meta, images.get(meta.id)) : ctx.texture({ default: meta.default || "white" });
-        if (!tex) { ready = false; break; }
+        const tex = meta.id
+          ? ctx.texture(meta, images.get(meta.id))
+          : ctx.texture({ default: meta.default || "white" });
+        if (!tex) {
+          ready = false;
+          break;
+        }
         texs.push([name, tex, meta.st || [1, 1, 0, 0]]);
       }
       if (!ready) continue;
-      const geo = s.sprite ? spriteGeometry(s.def, s.M, s.color) : s.mesh ? plain.geometry(s, { meshes })
-        : trail ? trailGeometry(effects, s, { linear: true }) : geometry(effects, s, { meshes, linear: true });
+      const geo = s.sprite
+        ? spriteGeometry(s.def, s.M, s.color)
+        : s.mesh
+          ? plain.geometry(s, { meshes })
+          : trail
+            ? trailGeometry(effects, s, { linear: true })
+            : geometry(effects, s, { meshes, linear: true });
       if (!geo.count) continue;
       ctx.upload(geo.data);
       gl.useProgram(prog.prog);
@@ -558,7 +762,8 @@ export function create(fx, { base, bone, load = loadImage } = {}) {
         // Color properties reach the shader in linear light (HDR above 1 by a 2.2 power), alpha as stored; the
         // intro animates some (s.colors, the renderer's property block), a mesh's animated ones as mesh-fx.js works
         // them out
-        const v = s.colors?.[c] || mat.colors?.[c] || [1, 1, 1, 1], u = s.uniforms?.[c];
+        const v = s.colors?.[c] || mat.colors?.[c] || [1, 1, 1, 1],
+          u = s.uniforms?.[c];
         if (L[c] && u) gl.uniform4f(L[c], u[0], u[1], u[2], u[3]);
         else if (L[c]) gl.uniform4f(L[c], toLinear(v[0]), toLinear(v[1]), toLinear(v[2]), v[3]);
       }
@@ -568,7 +773,8 @@ export function create(fx, { base, bone, load = loadImage } = {}) {
       }
       // the game's blend for colour; coverage only where the game's blend covers what is behind (additive light adds
       // none, as linear.js does for additive slots)
-      const src = F[mat.src] ?? gl.ONE, dst = F[mat.dst] ?? gl.ZERO;
+      const src = F[mat.src] ?? gl.ONE,
+        dst = F[mat.dst] ?? gl.ZERO;
       const additive = dst === gl.ONE;
       gl.blendFuncSeparate(src, dst, additive ? gl.ZERO : gl.ONE, additive ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA);
       gl.drawArrays(gl.TRIANGLES, 0, geo.count);
@@ -579,14 +785,19 @@ export function create(fx, { base, bone, load = loadImage } = {}) {
 
   // what draws after a part of a player's skeleton (none: nothing, or after the dispose)
   const after = (player, part) => (disposed ? null : slots.get(player)?.after[part]);
-  const timed = (fn) => { const t0 = performance.now(); fn(); cpu.ms += performance.now() - t0; };
+  const timed = (fn) => {
+    const t0 = performance.now();
+    fn();
+    cpu.ms += performance.now() - t0;
+  };
   function between(player, part) {
     const list = after(player, part);
     if (list?.length) timed(() => draw(player, list));
   }
 
   return {
-    effects, sprites,
+    effects,
+    sprites,
     // players: the lobby's skeleton players in stacking order, each with its layer (bamtLayer: sortingLayer, order,
     // queue, pages, z) and drawn in the parts of its pages' queues (skeleton-parts.js). steps: those parts in the
     // order they draw, each {owner, sortingLayer, order, queue, z} with the player that draws it (lobby-stage.js
@@ -594,7 +805,10 @@ export function create(fx, { base, bone, load = loadImage } = {}) {
     // them (the tests' single players) each player's own parts, player after player. A system draws after the last
     // step that sorts before it, in its owner's context (between(owner, k) after the owner's k-th step), or before the
     // first one, in the bottom player's.
-    layers(players, steps = players.flatMap((p) => queuesOf(p.bamtLayer).map((queue) => ({ ...p.bamtLayer, owner: p, queue })))) {
+    layers(
+      players,
+      steps = players.flatMap((p) => queuesOf(p.bamtLayer).map((queue) => ({ ...p.bamtLayer, owner: p, queue }))),
+    ) {
       bottom = players[0] || null;
       slots = new Map(players.map((p) => [p, { below: [], after: [] }]));
       const at = steps.map((step) => {
@@ -606,9 +820,11 @@ export function create(fx, { base, bone, load = loadImage } = {}) {
       const draws = [];
       for (const s of effects.systems) {
         if (s.def.material || s.def.subs) draws.push({ s, trail: false, def: s.def, index: s.index });
-        if (s.def.trailMaterial) draws.push({ s, trail: true, def: { ...s.def, queue: s.def.trailQueue ?? 3000 }, index: s.index });
+        if (s.def.trailMaterial)
+          draws.push({ s, trail: true, def: { ...s.def, queue: s.def.trailQueue ?? 3000 }, index: s.index });
       }
-      for (const s of [...plain.items, ...sprites]) if (s.def.material) draws.push({ s, trail: false, def: s.def, index: s.index });
+      for (const s of [...plain.items, ...sprites])
+        if (s.def.material) draws.push({ s, trail: false, def: s.def, index: s.index });
       for (const d of drawOrder(draws)) {
         const i = lastBefore(d.def, steps);
         (i < 0 ? slots.get(bottom)?.below : at[i])?.push(d);
@@ -618,7 +834,11 @@ export function create(fx, { base, bone, load = loadImage } = {}) {
     below(player, dt) {
       if (disposed) return;
       timed(() => {
-        if (player === bottom) { effects.update(dt); plain.update(dt); cpu.frames++; }
+        if (player === bottom) {
+          effects.update(dt);
+          plain.update(dt);
+          cpu.frames++;
+        }
         draw(player, slots.get(player)?.below);
       });
     },
@@ -646,10 +866,15 @@ export function create(fx, { base, bone, load = loadImage } = {}) {
     // for checks: live particles, systems, textures loaded, GL contexts in use and the main-thread time the effects
     // took per frame (simulation, geometry and draw calls) since the last reset
     stats: ({ reset = false, meshes: detail = false } = {}) => {
-      const out = { particles: effects.count(), systems: effects.systems.length,
+      const out = {
+        particles: effects.count(),
+        systems: effects.systems.length,
         meshes: detail ? plain.stats({ meshes }) : plain.items.length,
         textures: [...images.values()].filter(Boolean).length,
-        contexts: contexts.size, frames: cpu.frames, msPerFrame: cpu.frames ? +(cpu.ms / cpu.frames).toFixed(3) : 0 };
+        contexts: contexts.size,
+        frames: cpu.frames,
+        msPerFrame: cpu.frames ? +(cpu.ms / cpu.frames).toFixed(3) : 0,
+      };
       if (reset) cpu.ms = cpu.frames = 0;
       return out;
     },

@@ -27,8 +27,9 @@ STEP_RESTORE = "import.step.restore"
 COSTUME_STEPS = {
     **dict.fromkeys(("stage", "read", "skeleton", "clips", "idle", "worn", "probes"), "import.step.readModel"),
     **dict.fromkeys(("plan", "arms", "hems", "rigid", "springs", "face", "chains"), "import.step.fitCostume"),
-    **dict.fromkeys(("open", "materials", "meshes", "carried", "halo", "prefabs", "curves", "check"),
-                    "import.step.buildModel"),
+    **dict.fromkeys(
+        ("open", "materials", "meshes", "carried", "halo", "prefabs", "curves", "check"), "import.step.buildModel"
+    ),
     "save": STEP_SAVE,
 }
 # The phases of a write into the game files, after any build: a mod's files written, or the official ones put back.
@@ -42,8 +43,9 @@ class Part:
     line's step. A write starts where the build ended, at the share's start when it holds no build (``build`` 0), or
     halfway through it when its build was not needed."""
 
-    def __init__(self, owner: "ItemProgress", start: float, end: float, steps: dict[str, str] | None,
-                 build: float = 1.0):
+    def __init__(
+        self, owner: "ItemProgress", start: float, end: float, steps: dict[str, str] | None, build: float = 1.0
+    ):
         self._owner, self._start, self._end, self._steps = owner, start, end, steps or {}
         self._build, self._built = build, False
 
@@ -80,10 +82,27 @@ class ItemProgress:
         self._item: dict[str, Any] = {}
         self._step, self._fraction = "", 0.0
 
-    def item(self, current: int, *, variant: str = "", kind: str = "", name: str = "", source: str = "",
-             core: str = "", step: str = "", action: str = "") -> None:
-        self._item = {"current": current, "variant": variant, "kind": kind, "name": name, "source": source,
-                      "core": core, "action": action or self.action}
+    def item(
+        self,
+        current: int,
+        *,
+        variant: str = "",
+        kind: str = "",
+        name: str = "",
+        source: str = "",
+        core: str = "",
+        step: str = "",
+        action: str = "",
+    ) -> None:
+        self._item = {
+            "current": current,
+            "variant": variant,
+            "kind": kind,
+            "name": name,
+            "source": source,
+            "core": core,
+            "action": action or self.action,
+        }
         self._step, self._fraction = step, 0.0
         self._emit()
 
@@ -107,15 +126,13 @@ class ItemProgress:
         """The item at hand has ended: its whole share, so a count of the items done includes it."""
         self.fraction(1.0)
 
-    def part(self, start: float, end: float, steps: dict[str, str] | None = COSTUME_STEPS,
-             build: float = 1.0) -> Part:
+    def part(self, start: float, end: float, steps: dict[str, str] | None = COSTUME_STEPS, build: float = 1.0) -> Part:
         return Part(self, start, end, steps, build)
 
     def _emit(self) -> None:
         if self._progress is None or not self._item:
             return
-        self._progress({**self._item, "total": self.total, "step": self._step,
-                        "fraction": round(self._fraction, 3)})
+        self._progress({**self._item, "total": self.total, "step": self._step, "fraction": round(self._fraction, 3)})
 
 
 def single(progress: ProgressCallback | None, current: int = 1, total: int = 1, build: float = 0.9) -> Part | None:
@@ -126,8 +143,9 @@ def single(progress: ProgressCallback | None, current: int = 1, total: int = 1, 
 
     class _Plain(ItemProgress):
         def _emit(self) -> None:
-            self._progress({"current": current, "total": total, "step": self._step,
-                            "fraction": round(self._fraction, 3)})
+            self._progress(
+                {"current": current, "total": total, "step": self._step, "fraction": round(self._fraction, 3)}
+            )
 
     owner = _Plain(progress, total)
     owner._item = {"current": current}

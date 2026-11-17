@@ -48,8 +48,9 @@ class TroubleshootResult(ToggleResult):
 
 
 def _result(toggle: ToggleResult, check_: dict | None, cancelled: bool = False) -> TroubleshootResult:
-    return TroubleshootResult(**{f.name: getattr(toggle, f.name) for f in dataclasses.fields(ToggleResult)},
-                              check=check_, cancelled=cancelled)
+    return TroubleshootResult(
+        **{f.name: getattr(toggle, f.name) for f in dataclasses.fields(ToggleResult)}, check=check_, cancelled=cancelled
+    )
 
 
 def snapshot(config: dict | None) -> dict | None:
@@ -69,8 +70,13 @@ def status(library: ModLibrary) -> dict[str, Any]:
     return {"active": True, "count": count, "since": saved.get("since")}
 
 
-def apply_official(library: ModLibrary, pins: list[Pin], log: Callable = lambda *_: None,
-                   progress: Callable | None = None, cancel: Callable[[], bool] | None = None) -> TroubleshootResult:
+def apply_official(
+    library: ModLibrary,
+    pins: list[Pin],
+    log: Callable = lambda *_: None,
+    progress: Callable | None = None,
+    cancel: Callable[[], bool] | None = None,
+) -> TroubleshootResult:
     """Apply Official to All: the Off over ``pins``, the snapshot (an earlier one is kept: pressed again while
     troubleshooting, the configuration from before stays the one to restore), the configuration of ``pins`` cleared
     and mods on. A cancelled or stopped Off leaves the intent Off and takes no snapshot."""
@@ -84,9 +90,15 @@ def apply_official(library: ModLibrary, pins: list[Pin], log: Callable = lambda 
     def change(data: dict) -> bool:
         folders = data.get("folders") or {}
         if snapshot(data) is None:
-            data[TAG] = {"since": stamp, "enabled": current,
-                         "folders": {key: copy.deepcopy(folder.get("configured") or {})
-                                     for key, folder in folders.items() if key in keys and folder.get("configured")}}
+            data[TAG] = {
+                "since": stamp,
+                "enabled": current,
+                "folders": {
+                    key: copy.deepcopy(folder.get("configured") or {})
+                    for key, folder in folders.items()
+                    if key in keys and folder.get("configured")
+                },
+            }
         for key, folder in folders.items():
             if key in keys:
                 folder["configured"] = {}
@@ -98,8 +110,13 @@ def apply_official(library: ModLibrary, pins: list[Pin], log: Callable = lambda 
     return _result(result, check(library, pins, progress, cancel))
 
 
-def restore(library: ModLibrary, pins: list[Pin], log: Callable = lambda *_: None,
-            progress: Callable | None = None, cancel: Callable[[], bool] | None = None) -> TroubleshootResult:
+def restore(
+    library: ModLibrary,
+    pins: list[Pin],
+    log: Callable = lambda *_: None,
+    progress: Callable | None = None,
+    cancel: Callable[[], bool] | None = None,
+) -> TroubleshootResult:
     """Restore Configuration: the snapshot's configuration back in the installs it names (a core configured meanwhile
     and absent from it goes back to official), then the toggle to the intent it was taken with. The snapshot is
     dropped once the toggle ran; a refusal (``untested_build``, the game running) keeps it for the same call again.
@@ -141,8 +158,9 @@ def restore(library: ModLibrary, pins: list[Pin], log: Callable = lambda *_: Non
     return _result(result, None if target else check(library, pins, progress, cancel))
 
 
-def check(library: ModLibrary, pins: list[Pin], progress: Callable | None = None,
-          cancel: Callable[[], bool] | None = None) -> dict[str, Any]:
+def check(
+    library: ModLibrary, pins: list[Pin], progress: Callable | None = None, cancel: Callable[[], bool] | None = None
+) -> dict[str, Any]:
     """Every bundle Steam's file list names in each of ``pins`` against its size and SHA-1: {verified, checked,
     changed: [names], missing: [names], unverified: [install keys]} (each list cut at ``MAX_LISTED``; ``changedCount``
     and ``missingCount`` exact). An install without a readable list, or without the consent to read Steam's records,
@@ -176,6 +194,12 @@ def check(library: ModLibrary, pins: list[Pin], progress: Callable | None = None
             progress(i, total, t("webui.progress.check"))
     if changed or missing:
         logger.warning("Troubleshoot check: %d changed, %d missing of %d", len(changed), len(missing), total)
-    return {"verified": not unverified and total > 0, "checked": total,
-            "changed": changed[:MAX_LISTED], "changedCount": len(changed),
-            "missing": missing[:MAX_LISTED], "missingCount": len(missing), "unverified": unverified}
+    return {
+        "verified": not unverified and total > 0,
+        "checked": total,
+        "changed": changed[:MAX_LISTED],
+        "changedCount": len(changed),
+        "missing": missing[:MAX_LISTED],
+        "missingCount": len(missing),
+        "unverified": unverified,
+    }

@@ -35,8 +35,7 @@ def test_startup_keeps_recent_imports_even_without_an_active_lease(setup_library
     age_tree(path)
     if recent:
         modified = time.time() - 24 * 60 * 60 + 60
-        os.utime({"directory": path, "nested_directory": nested, "nested_file": output}[recent],
-                 (modified, modified))
+        os.utime({"directory": path, "nested_directory": nested, "nested_file": output}[recent], (modified, modified))
     ModLibrary(env.library.root, env.catalog, settings=env.settings)
     assert path.exists() is bool(recent)
     if recent:
@@ -95,8 +94,9 @@ with import_directory(Path(sys.argv[1])) as path:
     print(path, flush=True)
     sys.stdin.readline()
 """
-    process = subprocess.Popen([sys.executable, "-c", script, str(env.library.root)],
-                               stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+    process = subprocess.Popen(
+        [sys.executable, "-c", script, str(env.library.root)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
+    )
     try:
         path = Path(process.stdout.readline().strip())
         assert path.parent == env.library.root / "staging"

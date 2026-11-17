@@ -28,12 +28,33 @@ from typing import TYPE_CHECKING, Any, Callable, Collection, Hashable, Iterable,
 
 from UnityPy.helpers.ResourceReader import get_resource_data
 
-from bmpt import atlas_remap, devmode, game_paths, graft as grafting, mod_origin, preview_gate, rebake, spans, \
-    spine_converter, steam_records
+from bmpt import (
+    atlas_remap,
+    devmode,
+    game_paths,
+    graft as grafting,
+    mod_origin,
+    preview_gate,
+    rebake,
+    spans,
+    spine_converter,
+    steam_records,
+)
 from bmpt.progress_meter import Meter
 from bmpt.engine import (
-    SEARCH_DIR_SUFFIXES, AssetType, Bundle, LogFunc, ProgressCallback, SaveOptions, core, get_search_dirs,
-    get_skel_version, is_safe_file_name, no_log, parse_filename, t,
+    SEARCH_DIR_SUFFIXES,
+    AssetType,
+    Bundle,
+    LogFunc,
+    ProgressCallback,
+    SaveOptions,
+    core,
+    get_search_dirs,
+    get_skel_version,
+    is_safe_file_name,
+    no_log,
+    parse_filename,
+    t,
 )
 from ..catalog.models import CoreMap
 from ..errors import ServiceError
@@ -52,20 +73,62 @@ from . import targets as resolver
 from .bundle_saves import save_bundles
 from .identity import identify
 from .judge import (
-    CRC_STATES, KINDS, LIBRARY_SOURCES, carried_of, classify, core_of, crc_state, date_of, distinguishing_folders,
-    install_key, install_root, kind_of, kind_of_file, learn_packed, leaves, mod_versions, now, other_target, packed_cab,
-    part_of, says_official, seconds, supports_kind,
+    CRC_STATES,
+    KINDS,
+    LIBRARY_SOURCES,
+    carried_of,
+    classify,
+    core_of,
+    crc_state,
+    date_of,
+    distinguishing_folders,
+    install_key,
+    install_root,
+    kind_of,
+    kind_of_file,
+    learn_packed,
+    leaves,
+    mod_versions,
+    now,
+    other_target,
+    packed_cab,
+    part_of,
+    says_official,
+    seconds,
+    supports_kind,
 )
 from .migrations import LEGACY_REMAP, legacy_remapped
 from .models import (
-    AddResult, AdoptResult, ApplyResult, AssetDifference, CompareResult, DeleteResult, EntryState, GameFileState, Kind,
-    ModEntry, Pin, RemapResult, ScanResult, ToggleResult, UpdateResult, VariantState,
+    AddResult,
+    AdoptResult,
+    ApplyResult,
+    AssetDifference,
+    CompareResult,
+    DeleteResult,
+    EntryState,
+    GameFileState,
+    Kind,
+    ModEntry,
+    Pin,
+    RemapResult,
+    ScanResult,
+    ToggleResult,
+    UpdateResult,
+    VariantState,
 )
 from .profiles import Profiles
 from .safety import check_resource_path
 from .storage import (
-    Fingerprint, Fingerprints, atomic_clone, atomic_copy, atomic_json, read_tail, sync_directory, trailing_bytes,
-    verified_move, verify_file,
+    Fingerprint,
+    Fingerprints,
+    atomic_clone,
+    atomic_copy,
+    atomic_json,
+    read_tail,
+    sync_directory,
+    trailing_bytes,
+    verified_move,
+    verify_file,
 )
 from .variants import adapt_variant_sources
 
@@ -115,8 +178,8 @@ def _game_folder(game_file: Path) -> Path:
     folder = game_file.parent
     for suffix in sorted(filter(None, SEARCH_DIR_SUFFIXES), key=len, reverse=True):
         parts = tuple(part.lower() for part in Path(suffix).parts)
-        if len(folder.parts) > len(parts) and tuple(part.lower() for part in folder.parts[-len(parts):]) == parts:
-            return Path(*folder.parts[:-len(parts)])
+        if len(folder.parts) > len(parts) and tuple(part.lower() for part in folder.parts[-len(parts) :]) == parts:
+            return Path(*folder.parts[: -len(parts)])
     return folder
 
 
@@ -225,16 +288,19 @@ def _serialized(method: Callable) -> Callable:
     """Run a public method under the library lock, after bringing the state up to date. A pending journal is
     recovered if it can be, and never fails the call: reads work, and a write is refused by its own gates
     (``ModLibrary._check_recovery``) with the real failure."""
+
     @wraps(method)
     def call(self: ModLibrary, *args: Any, **kwargs: Any) -> Any:
         with spans.held("library-lock", self._lock, floor=0.05), _errors(method.__name__):
             self._refresh_state()
             return method(self, *args, **kwargs)
+
     return call
 
 
 def _mod_writer(method: Callable) -> Callable:
     """Serialize source additions and deletions across instances, before state and profiles locks."""
+
     @wraps(method)
     def call(self: ModLibrary, *args: Any, **kwargs: Any) -> Any:
         if self._writing_mods:
@@ -247,6 +313,7 @@ def _mod_writer(method: Callable) -> Callable:
                 return method(self, *args, **kwargs)
             finally:
                 self._writing_mods = False
+
     return call
 
 
@@ -261,8 +328,9 @@ def _errors(operation: str) -> Iterator[None]:
     except ServiceError:
         raise
     except Exception as error:
-        log_failure(logger, logging.ERROR, f"Library operation failed ({operation})", error,
-                    code="library_operation_failed")
+        log_failure(
+            logger, logging.ERROR, f"Library operation failed ({operation})", error, code="library_operation_failed"
+        )
         raise ServiceError("library_operation_failed", operation=operation) from error
 
 
@@ -338,8 +406,9 @@ def _revision(files: Iterable[tuple[Path, Path]]) -> str:
     return hashlib.sha1(repr(sorted((game.name, read.stat().st_size) for game, read in files)).encode()).hexdigest()
 
 
-def _item_fraction(progress: Callable[..., None] | None, current: int = 1, total: int = 1,
-                   build: float = 0.9) -> Callable[[float], None] | None:
+def _item_fraction(
+    progress: Callable[..., None] | None, current: int = 1, total: int = 1, build: float = 0.9
+) -> Callable[[float], None] | None:
     """How far a costume build is (``_stage_costume``'s ``fraction``), reported as the job's progress of its item
     ``current`` of ``total``: {"current", "total", "step", "fraction"}, the build's phases as steps
     (``mod_progress.single``). ``build``: the item's share the build fills, the rest for a write into the game files
@@ -388,8 +457,9 @@ class _WornVerdicts:
             with self._lock, file_lock(self.path.with_name(self.path.name + ".lock"), timeout=WORN_LOCK_WAIT):
                 models = self._read()
                 models[key] = {"worn": verdict, "at": now()}
-                kept = dict(sorted(models.items(), key=lambda item: str(item[1].get("at", "")),
-                                   reverse=True)[:WORN_VERDICTS])
+                kept = dict(
+                    sorted(models.items(), key=lambda item: str(item[1].get("at", "")), reverse=True)[:WORN_VERDICTS]
+                )
                 atomic_json(self.path, {"version": 1, "models": kept})
         except (OSError, TimeoutError) as error:
             log_failure(logger, logging.WARNING, "Could not save a worn-item verdict", error)
@@ -445,9 +515,11 @@ def _rebuilt(index: dict[str, list[Path]], path: Path) -> Path | None:
     if not parse_filename(path.name).crc:
         return None
     key = integrity.replacement_key(path.name)
-    rebuilt = [other for other in index.get(core_of(path.name), [])
-               if other.parent == path.parent and other.name != path.name
-               and integrity.replacement_key(other.name) == key]
+    rebuilt = [
+        other
+        for other in index.get(core_of(path.name), [])
+        if other.parent == path.parent and other.name != path.name and integrity.replacement_key(other.name) == key
+    ]
     return rebuilt[0] if len(rebuilt) == 1 else None
 
 
@@ -459,7 +531,8 @@ def _has_successor(index: dict[str, list[Path]], path: Path) -> bool:
     part, date = part_of(path.name), date_of(path.name)
     return bool(date) and any(
         other.parent == path.parent and part_of(other.name) == part and date_of(other.name) > date
-        for other in index.get(core_of(path.name), []))
+        for other in index.get(core_of(path.name), [])
+    )
 
 
 class _View:
@@ -472,8 +545,9 @@ class _View:
     - ``full``: write strength, every file the library cannot show unchanged is hashed in full (switching).
     """
 
-    def __init__(self, library: ModLibrary, pins: list[Pin], config: dict | None, allow: str,
-                 snapshot: bool = False) -> None:
+    def __init__(
+        self, library: ModLibrary, pins: list[Pin], config: dict | None, allow: str, snapshot: bool = False
+    ) -> None:
         """``snapshot``: copy the records, for a view read outside the library lock (the scan). A view used under
         the lock shares the library's records and the maps built from them."""
         self.library = library
@@ -511,8 +585,14 @@ class _View:
             steam = self.library._steam_official(name, roots=[pin.root for pin in self.pins.values()])
             size = steam.size if steam is not None else self.originals.get(name)
             if size is None:
-                size = next((record.get("size") for _path, record in self.by_name.get(name, [])
-                             if says_official(record) and isinstance(record.get("size"), int)), None)
+                size = next(
+                    (
+                        record.get("size")
+                        for _path, record in self.by_name.get(name, [])
+                        if says_official(record) and isinstance(record.get("size"), int)
+                    ),
+                    None,
+                )
             self._sizes[name] = size
         return self._sizes[name]
 
@@ -589,8 +669,7 @@ class _View:
                     if read_tail(path) == record["tail"]:
                         matched, restamp = True, mtime
             if trailing is None:
-                return _Part(path, size, mtime, "damaged", False, False, record is not None, None, "needs_fix",
-                             record)
+                return _Part(path, size, mtime, "damaged", False, False, record is not None, None, "needs_fix", record)
         if matched:
             flag = record.get("official")
             if not isinstance(flag, bool):
@@ -610,14 +689,35 @@ class _View:
                 if trailing is ...:
                     trailing = self._header(path, True)
                 crc = "fixed" if trailing else "ok"
-            return _Part(path, size, mtime, carried, flag, True, False, None if trailing is ... else trailing,
-                         crc, record, restamp)
+            return _Part(
+                path,
+                size,
+                mtime,
+                carried,
+                flag,
+                True,
+                False,
+                None if trailing is ... else trailing,
+                crc,
+                record,
+                restamp,
+            )
         official = self.official_now(path, size, trailing)
         if official and self.allow != "full" and _outside(record, size, mtime):
             # a full judgement found these very bytes changed outside the library: the cheap rule cannot tell
             official = False
-        return _Part(path, size, mtime, "official" if official else "unknown", official, False, record is not None,
-                     trailing, "fixed" if trailing else "ok", record)
+        return _Part(
+            path,
+            size,
+            mtime,
+            "official" if official else "unknown",
+            official,
+            False,
+            record is not None,
+            trailing,
+            "fixed" if trailing else "ok",
+            record,
+        )
 
     def says_nonofficial(self, path: Path, record: dict, present: bool) -> bool:
         """Whether a record says the library wrote non-official bytes there. A record of an older build without the
@@ -694,8 +794,7 @@ class _View:
     def entry(self, pin: Pin, core: str) -> _Entry:
         core = self.maps[pin.key].slot(core)
         kind = self.library._kind(core, pin) or "spr"
-        files = [path for value in self.maps[pin.key].slot_cores(core)
-                 for path in self.indexes[pin.key].get(value, [])]
+        files = [path for value in self.maps[pin.key].slot_cores(core) for path in self.indexes[pin.key].get(value, [])]
         parts = [self.part(path, pin, kind) for path in files]
         folder = self.folder(pin.key)
         config = self.configured(pin.key, core)
@@ -715,32 +814,70 @@ class _View:
                         drifted_present = True
                 elif path.parent.is_dir() and self.successor(pin, path) and not self.later_record(path, pin):
                     drifted_gone = True
-        written = max((seconds(part.record.get("at")) or seconds(part.record.get("mtime")) or 0.0
-                       for part in parts if part.carried == carried and part.record), default=None)
+        written = max(
+            (
+                seconds(part.record.get("at")) or seconds(part.record.get("mtime")) or 0.0
+                for part in parts
+                if part.carried == carried and part.record
+            ),
+            default=None,
+        )
         toggled = seconds((self.config or {}).get("toggled"))
         marker = core in (folder.get("updated") or {})
 
         def judged(source: str | None) -> tuple[str, str | None]:
             return classify(
-                self.enabled, source, carried, files=bool(files), damaged=damaged,
+                self.enabled,
+                source,
+                carried,
+                files=bool(files),
+                damaged=damaged,
                 configured_exists=self.source_exists(source, pin.key, kind) if source else True,
-                carried_exists=self.source_exists(carried, pin.key, kind) if carried.startswith(LIBRARY_SOURCES)
-                else True, drifted_present=drifted_present, drifted_gone=drifted_gone, marker=marker,
-                written=written, since=seconds((config or {}).get("since")), toggled=toggled)
+                carried_exists=self.source_exists(carried, pin.key, kind)
+                if carried.startswith(LIBRARY_SOURCES)
+                else True,
+                drifted_present=drifted_present,
+                drifted_gone=drifted_gone,
+                marker=marker,
+                written=written,
+                since=seconds((config or {}).get("since")),
+                toggled=toggled,
+            )
 
         state, takeover = judged(configured)
         if state == "takeover":
             configured = takeover
-            state, _ = classify(self.enabled, takeover, carried, files=bool(files),
-                                drifted_present=drifted_present, drifted_gone=drifted_gone, marker=marker)
+            state, _ = classify(
+                self.enabled,
+                takeover,
+                carried,
+                files=bool(files),
+                drifted_present=drifted_present,
+                drifted_gone=drifted_gone,
+                marker=marker,
+            )
         copies = {str(part.path): self.copy_of(part, pin) for part in parts}
-        overwritten = any(not part.official and part.carried != "damaged" and copies[str(part.path)] is None
-                          for part in parts) and self.allow != "recorded"
+        overwritten = (
+            any(not part.official and part.carried != "damaged" and copies[str(part.path)] is None for part in parts)
+            and self.allow != "recorded"
+        )
         variant = self.maps[pin.key].key(core) or (config or {}).get("variant") or core
         if kind == "other" and files:
             variant = parse_filename(files[0].name).core
-        entry = _Entry(pin, core, kind, variant, parts, carried, configured, state, takeover,
-                       drifted_present or drifted_gone or marker, overwritten, copies)
+        entry = _Entry(
+            pin,
+            core,
+            kind,
+            variant,
+            parts,
+            carried,
+            configured,
+            state,
+            takeover,
+            drifted_present or drifted_gone or marker,
+            overwritten,
+            copies,
+        )
         entry.dismissed = self.dismissed(entry)
         return entry
 
@@ -755,12 +892,19 @@ class _View:
         cores = {core for core in self.indexes[pin.key] if self.library._kind(core, pin)}
         cores.update(self.folder(pin.key).get("configured") or {})
         for folder in pin.dirs:
-            cores.update(core_of(path.name) for path, _record in self.by_folder.get(folder, [])
-                         if kind_of_file(path.name))
+            cores.update(
+                core_of(path.name) for path, _record in self.by_folder.get(folder, []) if kind_of_file(path.name)
+            )
         return {self.maps[pin.key].slot(core) for core in cores}
 
-    def entries(self, pins: list[Pin], cancel: Callable[[], bool] | None = None,
-                cores: set[str] | None = None, *, background: bool = False) -> list[_Entry]:
+    def entries(
+        self,
+        pins: list[Pin],
+        cancel: Callable[[], bool] | None = None,
+        cores: set[str] | None = None,
+        *,
+        background: bool = False,
+    ) -> list[_Entry]:
         """Every entry that is configured, not in its intended state, or overwritten. A ``background`` pass (the
         scan, outside the library lock) pauses while a model preview is exported; callers holding the library lock
         never pause, since a preview may need that lock."""
@@ -821,10 +965,18 @@ class ModLibrary:
     call); without one it takes the current game folder, or every known one, from the settings at the call.
     """
 
-    def __init__(self, root: Path, catalog: Catalog, game: GameAssets | None = None, settings: Settings | None = None,
-                 *, scan_allowed: Callable[[], bool] = lambda: False, data_id: str = "local",
-                 write_check: Callable[[Pin], None] | None = None,
-                 steam_files: steam_records.OfficialFiles | None = None) -> None:
+    def __init__(
+        self,
+        root: Path,
+        catalog: Catalog,
+        game: GameAssets | None = None,
+        settings: Settings | None = None,
+        *,
+        scan_allowed: Callable[[], bool] = lambda: False,
+        data_id: str = "local",
+        write_check: Callable[[Pin], None] | None = None,
+        steam_files: steam_records.OfficialFiles | None = None,
+    ) -> None:
         """``write_check(pin)`` runs right before game files of an install are written, with the other checks of a
         write, and refuses by raising ServiceError (the web UI: ``classic_open`` while a classic window is open).
         ``steam_files`` is Steam's file list cache to share (the web UI's error report reads the same one)."""
@@ -861,7 +1013,12 @@ class ModLibrary:
         self._applied: dict[str, dict[str, Any]] = {}
         self._migrations: set[str] = set()
         self._migration_pending = False
-        self._base: tuple[dict, set, dict, set] = ({}, set(), {}, set())  # the state as last read or written, for merges
+        self._base: tuple[dict, set, dict, set] = (
+            {},
+            set(),
+            {},
+            set(),
+        )  # the state as last read or written, for merges
         self._held: list[Any] = []  # state.json records this library cannot use now, written back unchanged
         self._warned: set[tuple[str, str]] = set()  # held records already logged
         self._state_good = False  # whether this instance holds state from a good read of state.json
@@ -889,7 +1046,9 @@ class ModLibrary:
         self._mod_masks: dict[tuple, dict] = {}
         self._impacts: dict[tuple, tuple[str, dict]] = {}  # judged impacts of game updates (_impact_of)
         self._impact_cache: dict[str, tuple[str, dict]] = {}  # the last summary per install (update_impact)
-        self._untested_ok: dict[tuple[str, str], set[str]] = {}  # confirmed cores of an untested build (confirm_untested)
+        self._untested_ok: dict[
+            tuple[str, str], set[str]
+        ] = {}  # confirmed cores of an untested build (confirm_untested)
         self._maps_cache: tuple[tuple, Any] | None = None
         self.profiles = Profiles(self.root)
         self.profiles.gate = self._check_writes  # no change of the configuration while writes are refused
@@ -922,10 +1081,16 @@ class ModLibrary:
             raise _NewerState(version)
         if version != 1:
             raise ValueError("not a version 1 library state")
-        mods, listed, written, migrated = (data.get(key, empty) for key, empty in
-                                           (("mods", []), ("favorites", []), ("applied", {}), ("migrations", [])))
-        if not (isinstance(mods, list) and isinstance(listed, list) and isinstance(written, dict)
-                and isinstance(migrated, list)):
+        mods, listed, written, migrated = (
+            data.get(key, empty)
+            for key, empty in (("mods", []), ("favorites", []), ("applied", {}), ("migrations", []))
+        )
+        if not (
+            isinstance(mods, list)
+            and isinstance(listed, list)
+            and isinstance(written, dict)
+            and isinstance(migrated, list)
+        ):
             raise ValueError("invalid library state")
         records: dict[str, dict] = {}
         held: list[Any] = []
@@ -937,16 +1102,20 @@ class ModLibrary:
                 key = (reason, _held_id(raw) or json.dumps(raw, sort_keys=True, default=str))
                 if key not in self._warned:  # once per record, not at every read of the file
                     self._warned.add(key)
-                    logger.warning("Holding a library record that cannot be used (%s): %s", reason,
-                                   _held_id(raw) or "no usable id")
+                    logger.warning(
+                        "Holding a library record that cannot be used (%s): %s", reason, _held_id(raw) or "no usable id"
+                    )
                 held.append(raw)
                 continue
             records[raw["id"]] = raw
         favorites = {key for key in listed if isinstance(key, str)}
         applied = {
-            path: record for path, record in written.items()
-            if isinstance(path, str) and isinstance(record, dict)
-            and isinstance(record.get("source"), str) and isinstance(record.get("sha1"), str)
+            path: record
+            for path, record in written.items()
+            if isinstance(path, str)
+            and isinstance(record, dict)
+            and isinstance(record.get("source"), str)
+            and isinstance(record.get("sha1"), str)
         }
         migrations = {key for key in migrated if isinstance(key, str)}
         return records, favorites, applied, migrations, held
@@ -960,8 +1129,11 @@ class ModLibrary:
             if not _valid_id(record["id"]):
                 return "bad id"
             files = record["files"]
-            if not isinstance(files, list) or not files or not all(
-                    isinstance(f, str) and Path(f).name == f and f.endswith(".bundle") for f in files):
+            if (
+                not isinstance(files, list)
+                or not files
+                or not all(isinstance(f, str) and Path(f).name == f and f.endswith(".bundle") for f in files)
+            ):
                 return "bad files"
             if not all(isinstance(record[key], str) for key in ("label", "target", "added")):
                 return "bad text"
@@ -995,8 +1167,9 @@ class ModLibrary:
             log_failure(logger, logging.WARNING, "Cannot read the library state", error)
             return _Reading("io", error=ServiceError("library_io_error", file=str(path)))
         except _UNREADABLE as error:
-            log_failure(logger, logging.WARNING, "Cannot read the library state, reading the previous copy instead",
-                        error)
+            log_failure(
+                logger, logging.WARNING, "Cannot read the library state, reading the previous copy instead", error
+            )
         if not exists:
             if not self._prev_path.exists():
                 return _Reading("missing")
@@ -1136,8 +1309,13 @@ class ModLibrary:
                 held = _held_after(self._disk_held(reading), merged[0], base[0], mine[0])
             if LEGACY_REMAP not in merged[3]:
                 merged = (legacy_remapped(merged[0]), merged[1], merged[2], merged[3] | {LEGACY_REMAP})
-            payload = {"version": 1, "mods": [*merged[0].values(), *held], "favorites": sorted(merged[1]),
-                       "applied": merged[2], "migrations": sorted(merged[3])}
+            payload = {
+                "version": 1,
+                "mods": [*merged[0].values(), *held],
+                "favorites": sorted(merged[1]),
+                "applied": merged[2],
+                "migrations": sorted(merged[3]),
+            }
             self._keep_state_file(reading.kind)
             atomic_json(path, payload)
             self._seen = self._state_signature()
@@ -1178,21 +1356,40 @@ class ModLibrary:
             if isinstance(error, ServiceError) and error.code != "catalog_variant_not_found":
                 raise
             if callable(getattr(self.catalog, "assignment_variant", None)) and any(
-                    (record.get("assignment") or record.get("target")) == key for record in self._records.values()):
+                (record.get("assignment") or record.get("target")) == key for record in self._records.values()
+            ):
                 try:
                     return self.catalog.assignment_variant(key)
                 except (KeyError, ServiceError) as lookup:
                     if isinstance(lookup, ServiceError) and lookup.code != "catalog_variant_not_found":
                         raise
             # Current NPC bundles may have no roster entry. Their stored filename owns the model slot.
-            record = next((record for record in self._records.values() if record["kind"] == "model"
-                           and record["target"] == key and core_of(record["files"][0]) == key), None)
+            record = next(
+                (
+                    record
+                    for record in self._records.values()
+                    if record["kind"] == "model" and record["target"] == key and core_of(record["files"][0]) == key
+                ),
+                None,
+            )
             if record:
                 from ..catalog.models import Variant
                 from ..catalog._names import LANGUAGES, BASE_SHORT
-                return Variant(key, key, key, {lang: {"full": key, "short": BASE_SHORT[lang]}
-                                               for lang in LANGUAGES}, False, 0, None, None, None, None, None,
-                               model=key)
+
+                return Variant(
+                    key,
+                    key,
+                    key,
+                    {lang: {"full": key, "short": BASE_SHORT[lang]} for lang in LANGUAGES},
+                    False,
+                    0,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    model=key,
+                )
             if isinstance(error, KeyError):
                 raise ServiceError("variant_not_found", variant=key) from error
             raise
@@ -1207,7 +1404,8 @@ class ModLibrary:
         directory = self.root / "mods" / record["id"]
         paths = [directory / name for name in record["files"]]
         if not directory.resolve().is_relative_to(self.root) or any(
-                not path.resolve().is_relative_to(directory.resolve()) for path in paths):
+            not path.resolve().is_relative_to(directory.resolve()) for path in paths
+        ):
             raise ServiceError("mod_unsupported", file=paths[0])
         return paths
 
@@ -1244,8 +1442,11 @@ class ModLibrary:
         (``refresh_costumes``)."""
         from ..gameassets.costume_rule import COSTUME_RULE
 
-        return (bool(cls._optimized_from(record)) and record.get("costume_rule") != COSTUME_RULE
-                and record.get("costume_kept") != COSTUME_RULE)
+        return (
+            bool(cls._optimized_from(record))
+            and record.get("costume_rule") != COSTUME_RULE
+            and record.get("costume_kept") != COSTUME_RULE
+        )
 
     def _entry(self, record: dict[str, Any]) -> ModEntry:
         from .lobby_camera import meta_of
@@ -1255,15 +1456,26 @@ class ModLibrary:
         # a memorial lobby camera is one of its variant's lobby choices (lobby_camera)
         camera = meta_of(record)
         # The parts of one mod can carry different dates: the mod is dated by its newest part, not by the first one.
-        return ModEntry(record["id"], paths[0], self._label(record), camera["variant"] if camera else self._target_of(record),
-                        "lobby" if camera else record["kind"],
-                        record["added"], not record["seen"], sum(p.stat().st_size for p in paths),
-                        max(date_of(path.name) for path in paths), parsed.crc,
-                        camera["core"] if camera else core_of(paths[0].name),
-                        repaired_from=record.get("repaired_from", ""), repaired_id=self._repaired_id(record),
-                        user_added=record.get("user_added") is True, alias=record.get("alias", ""),
-                        label_base=record["label"], optimized_from=self._optimized_from(record),
-                        camera={key: camera[key] for key in ("source", "number", "scale", "offset")} if camera else None)
+        return ModEntry(
+            record["id"],
+            paths[0],
+            self._label(record),
+            camera["variant"] if camera else self._target_of(record),
+            "lobby" if camera else record["kind"],
+            record["added"],
+            not record["seen"],
+            sum(p.stat().st_size for p in paths),
+            max(date_of(path.name) for path in paths),
+            parsed.crc,
+            camera["core"] if camera else core_of(paths[0].name),
+            repaired_from=record.get("repaired_from", ""),
+            repaired_id=self._repaired_id(record),
+            user_added=record.get("user_added") is True,
+            alias=record.get("alias", ""),
+            label_base=record["label"],
+            optimized_from=self._optimized_from(record),
+            camera={key: camera[key] for key in ("source", "number", "scale", "offset")} if camera else None,
+        )
 
     def _label(self, record: dict[str, Any], seen: frozenset[str] = frozenset()) -> str:
         """Resolve internal aliases and repaired names without touching bundle names or bytes."""
@@ -1298,9 +1510,13 @@ class ModLibrary:
 
     def _migrate_collection_slots(self) -> None:
         """Partition legacy shared Collection slots by batch without changing any game bytes."""
-        if not any(name.lower().startswith("uis-01_common-14_charactercollect-")
-                   for record in self._records.values() for name in record["files"]):
+        if not any(
+            name.lower().startswith("uis-01_common-14_charactercollect-")
+            for record in self._records.values()
+            for name in record["files"]
+        ):
             return
+
         def update(data):
             changed = False
             for install, folder in data.get("folders", {}).items():
@@ -1308,10 +1524,20 @@ class ModLibrary:
                 for old, entry in list(configured.items()):
                     source = entry.get("source", "")
                     record = self._records.get(source[4:], {}) if source.startswith("mod:") else {}
-                    names = [name for name in record.get("files", [])
-                             if name.lower().startswith("uis-01_common-14_charactercollect-")]
-                    targets = {core_of(name) for name in names if "other:" + hashlib.sha256(
-                        repr((parse_filename(name).prefix, parse_filename(name).res_type)).encode()).hexdigest() == old}
+                    names = [
+                        name
+                        for name in record.get("files", [])
+                        if name.lower().startswith("uis-01_common-14_charactercollect-")
+                    ]
+                    targets = {
+                        core_of(name)
+                        for name in names
+                        if "other:"
+                        + hashlib.sha256(
+                            repr((parse_filename(name).prefix, parse_filename(name).res_type)).encode()
+                        ).hexdigest()
+                        == old
+                    }
                     if len(targets) != 1:
                         continue
                     new = targets.pop()
@@ -1329,6 +1555,7 @@ class ModLibrary:
                             item["core"] = new
                     changed = True
             return changed
+
         self.profiles.update(update)
 
     @_serialized
@@ -1340,13 +1567,19 @@ class ModLibrary:
     @_serialized
     def photograph_removal_info(self, variant: str, key: str) -> dict:
         from .portrait_edit import usage_targets
-        if key == 'official':
-            return {'official': True, 'used': False, 'used_here': False, 'used_elsewhere': False, 'targets': []}
+
+        if key == "official":
+            return {"official": True, "used": False, "used_here": False, "used_elsewhere": False, "targets": []}
         self.photographs._entry(variant, key)
         uses = usage_targets(self)
         targets = sorted(uses.get(key, set()))
-        return {'official': False, 'used': key in uses, 'used_here': variant in targets,
-                'used_elsewhere': any(target != variant for target in targets), 'targets': targets}
+        return {
+            "official": False,
+            "used": key in uses,
+            "used_here": variant in targets,
+            "used_elsewhere": any(target != variant for target in targets),
+            "targets": targets,
+        }
 
     @_serialized
     @_mod_writer
@@ -1359,6 +1592,7 @@ class ModLibrary:
         if key in portrait_edit.in_use(self) and not confirm:
             raise ServiceError("asset_delete_confirm")
         from .asset_delete import transaction
+
         with transaction(self) as deletion:
             if key in portrait_edit.in_use(self):
                 portrait_edit.remove_photo(self, key, log)
@@ -1369,8 +1603,15 @@ class ModLibrary:
 
     @_serialized
     @_mod_writer
-    def apply_photograph(self, variant: str, key: str | None, descriptor: dict, pin: Pin | None = None,
-                         log: LogFunc = no_log, progress: ProgressCallback | None = None) -> ApplyResult:
+    def apply_photograph(
+        self,
+        variant: str,
+        key: str | None,
+        descriptor: dict,
+        pin: Pin | None = None,
+        log: LogFunc = no_log,
+        progress: ProgressCallback | None = None,
+    ) -> ApplyResult:
         from . import portrait_edit
 
         target = self._variant(variant)
@@ -1381,9 +1622,17 @@ class ModLibrary:
 
     supports_kind = staticmethod(supports_kind)
 
-    def add_files(self, kind: Kind, paths: list[Path], progress: ProgressCallback | None = None,
-                  pin: Pin | None = None, *, apply: bool = False, log: LogFunc = no_log,
-                  direct: bool = False) -> AddResult:
+    def add_files(
+        self,
+        kind: Kind,
+        paths: list[Path],
+        progress: ProgressCallback | None = None,
+        pin: Pin | None = None,
+        *,
+        apply: bool = False,
+        log: LogFunc = no_log,
+        direct: bool = False,
+    ) -> AddResult:
         """Import a batch of one supported kind, optionally applying through the master switch."""
         if not supports_kind(kind):
             if not paths:
@@ -1395,8 +1644,15 @@ class ModLibrary:
 
     @_serialized
     @_mod_writer
-    def add(self, paths: list[Path], progress: ProgressCallback | None = None, pin: Pin | None = None,
-            *, kind: Kind | None = None, direct: bool = False) -> AddResult:
+    def add(
+        self,
+        paths: list[Path],
+        progress: ProgressCallback | None = None,
+        pin: Pin | None = None,
+        *,
+        kind: Kind | None = None,
+        direct: bool = False,
+    ) -> AddResult:
         """Store one mod per slot and kind, whatever the dates of its parts (a part repeated under another date starts
         a version per date, judge.mod_versions), deduplicating complete bundle sets. In dev mode (devmode) only files
         inside the dev roots are taken."""
@@ -1411,10 +1667,14 @@ class ModLibrary:
     @_serialized
     def import_source_identity(self, files: dict[str, Path], target: dict, originals: list[Path]) -> dict:
         """Content identities survive moves; official bytes scope conversions to their target release."""
-        return {"files": sorted(([list(part_of(name)), self._hashes.get(path).sha1] for name, path in files.items()),
-                                key=lambda item: json.dumps(item)),
-                "target": dict(target),
-                "originals": sorted([path.name, self._hashes.get(path).sha1] for path in originals)}
+        return {
+            "files": sorted(
+                ([list(part_of(name)), self._hashes.get(path).sha1] for name, path in files.items()),
+                key=lambda item: json.dumps(item),
+            ),
+            "target": dict(target),
+            "originals": sorted([path.name, self._hashes.get(path).sha1] for path in originals),
+        }
 
     def _output_identity(self, paths: list[Path]) -> list:
         """Bind every stored output hash to its complete part filename."""
@@ -1458,20 +1718,23 @@ class ModLibrary:
     @_serialized
     def legacy_import_snapshot(self, kind: str, target: str) -> list:
         """Limit legacy comparison to this asset's unlinked records and their current bytes."""
-        return sorted([record["id"], self._output_identity(self._paths(record))]
-                      for record in self._records.values()
-                      if record["kind"] == kind and record["target"] == target
-                      and not record.get("import_sources") and not record.get("source_hashes"))
+        return sorted(
+            [record["id"], self._output_identity(self._paths(record))]
+            for record in self._records.values()
+            if record["kind"] == kind
+            and record["target"] == target
+            and not record.get("import_sources")
+            and not record.get("source_hashes")
+        )
 
     @_serialized
     def find_import_output(self, paths: list[Path], candidates: set[str] | None = None) -> str | None:
         output = self._output_identity(paths)
-        records = [record for record in self._records.values()
-                   if candidates is None or record["id"] in candidates]
-        exact = next((record["id"] for record in records
-                      if self._output_identity(self._paths(record)) == output), None)
+        records = [record for record in self._records.values() if candidates is None or record["id"] in candidates]
+        exact = next((record["id"] for record in records if self._output_identity(self._paths(record)) == output), None)
         if exact or candidates is None:
             return exact
+
         # Normalize only the container packing and CRC tail. Serialized objects,
         # external references, streams and complete part filenames must still agree.
         def contents(files):
@@ -1482,6 +1745,7 @@ class ModLibrary:
                     raise ServiceError("bundle_invalid", file=path)
                 result.append([path.name, hashlib.sha256(bundle.compress("none")).hexdigest()])
             return sorted(result)
+
         wanted = contents(paths)
         names = {path.name for path in paths}
         for record in records:
@@ -1494,8 +1758,7 @@ class ModLibrary:
     @_mod_writer
     def remember_import_source(self, mod_id: str, source: dict) -> None:
         record = self._record(mod_id)
-        item = {"source": copy.deepcopy(source),
-                "output": self._output_identity(self._paths(record))}
+        item = {"source": copy.deepcopy(source), "output": self._output_identity(self._paths(record))}
         previous = copy.deepcopy(record)
         imports = record.setdefault("import_sources", [])
         if item in imports:
@@ -1512,14 +1775,26 @@ class ModLibrary:
         for record in self._records.values():
             identity = self._identity({path.name: path for path in self._paths(record)})
             if identity in known:
-                logger.warning("Duplicate library mods: %s (%s), %s (%s)", known[identity],
-                               self._records[known[identity]]["label"], record["id"], record["label"])
+                logger.warning(
+                    "Duplicate library mods: %s (%s), %s (%s)",
+                    known[identity],
+                    self._records[known[identity]]["label"],
+                    record["id"],
+                    record["label"],
+                )
             else:
                 known[identity] = record["id"]
         return known
 
-    def _add(self, paths: list[Path], progress: ProgressCallback | None = None, pin: Pin | None = None,
-             expected_kind: Kind | None = None, *, direct: bool = False) -> AddResult:
+    def _add(
+        self,
+        paths: list[Path],
+        progress: ProgressCallback | None = None,
+        pin: Pin | None = None,
+        expected_kind: Kind | None = None,
+        *,
+        direct: bool = False,
+    ) -> AddResult:
         pin = pin or self.current_pin()
         known = self._known()
         groups: dict[tuple[str, ...], dict[str, Path]] = {}
@@ -1535,8 +1810,12 @@ class ModLibrary:
                 raise ServiceError("mod_unsupported", file=source)
             if not parsed.prefix or not parsed.crc or kind is None:
                 fingerprint = self._hashes.get(source).sha1
-                matches = [path.name for record in self._records.values() for path in self._paths(record)
-                           if self._hashes.get(path).sha1 == fingerprint]
+                matches = [
+                    path.name
+                    for record in self._records.values()
+                    for path in self._paths(record)
+                    if self._hashes.get(path).sha1 == fingerprint
+                ]
                 if len({core_of(name) for name in matches}) != 1:
                     raise ServiceError("mod_unsupported", file=source)
                 name = matches[0]
@@ -1546,11 +1825,11 @@ class ModLibrary:
             core = self.import_core(parse_filename(name).core, kind, pin)
             taken.append((source, name, target, kind, core))
         # Model sets share their prefab slot key; other character kinds keep their physical core.
-        versions = iter(self.import_versions([((core, kind), name)
-                                              for _, name, _, kind, core in taken if kind != "other"], pin))
+        versions = iter(
+            self.import_versions([((core, kind), name) for _, name, _, kind, core in taken if kind != "other"], pin)
+        )
         for source, name, target, kind, core in taken:
-            key = (str(source.parent), "other") if kind == "other" else (
-                core, kind, next(versions))
+            key = (str(source.parent), "other") if kind == "other" else (core, kind, next(versions))
             targets[key] = (target, kind)
             group = groups.setdefault(key, {})
             if kind == "other":
@@ -1587,21 +1866,39 @@ class ModLibrary:
             target, kind = targets[key]
             if kind == "other":
                 target = other_target(group)
-            record = self._store(group, parsed.core, target, kind, user_added=True,
-                                 built_against=self._built_against(group, pin, "import", painted=key in whole))
+            record = self._store(
+                group,
+                parsed.core,
+                target,
+                kind,
+                user_added=True,
+                built_against=self._built_against(group, pin, "import", painted=key in whole),
+            )
             known[signature_] = record["id"]
             entry = self._entry(record)
             added.append(entry)
             if self._recognize_installed(entry.id, signature_):
                 added.installed.append(entry)
         if progress:
-            progress(len(paths), len(paths), t("webui.progress.add",
-                                              name=paths[-1].name if paths else t("webui.progress.mods")))
+            progress(
+                len(paths),
+                len(paths),
+                t("webui.progress.add", name=paths[-1].name if paths else t("webui.progress.mods")),
+            )
         return added
 
-    def _check_group(self, files: dict[str, Path], pin: Pin | None, *, compatibility: bool = True,
-                     dependencies: bool = True, conversion: bool = False, variant_key: str | None = None,
-                     inspection: integrity.Inspection | None = None, built: dict | None = None) -> dict:
+    def _check_group(
+        self,
+        files: dict[str, Path],
+        pin: Pin | None,
+        *,
+        compatibility: bool = True,
+        dependencies: bool = True,
+        conversion: bool = False,
+        variant_key: str | None = None,
+        inspection: integrity.Inspection | None = None,
+        built: dict | None = None,
+    ) -> dict:
         """``built`` is the stored fingerprint of the files when they are a library mod's (``_read_built_against``).
         The report's ``rig`` names what the official rig changed under the mod: atlases repacked since its textures
         were drawn (``layout``), animations its skeleton lacks and regions its atlas lacks (``atlas_remap.rig_gains``).
@@ -1610,8 +1907,9 @@ class ModLibrary:
         cab_inspection = inspection or integrity.Inspection()
         selected, official, effective = integrity.Contents(), integrity.Contents(), integrity.Contents()
         baseline = integrity.Contents()
-        sources = {name: inspect(path, allow_unknown=True) if conversion else inspect(path)
-                   for name, path in files.items()}
+        sources = {
+            name: inspect(path, allow_unknown=True) if conversion else inspect(path) for name, path in files.items()
+        }
         core = core_of(next(iter(files)))
         kind = kind_of_file(next(iter(files)))
         target_core = core
@@ -1644,8 +1942,14 @@ class ModLibrary:
                 integrity.check_platform(contents, files[name], expected)
             selected.merge(contents)
         # Compatibility may address a variant whose installed core changed after this Mod was stored.
-        target_names = {name.replace(f"-{parse_filename(name).core}-", f"-{target_core}-", 1): path
-                        for name, path in files.items()} if target_core != core and kind != "other" else files
+        target_names = (
+            {
+                name.replace(f"-{parse_filename(name).core}-", f"-{target_core}-", 1): path
+                for name, path in files.items()
+            }
+            if target_core != core and kind != "other"
+            else files
+        )
         resolution = self._resolve(target_names, targets, pin, cab_inspection)
         replacements = resolution.current
         replaced = set(replacements)
@@ -1663,16 +1967,20 @@ class ModLibrary:
         if not compatibility:
             # Import validates dependencies only; absent text parts use the current official assets.
             paired = atlas_remap.pair_atlases(selected.atlases, baseline.atlases)
-            selected.atlases = {**{name: data for name, data in baseline.atlases.items() if name not in paired},
-                               **selected.atlases}
+            selected.atlases = {
+                **{name: data for name, data in baseline.atlases.items() if name not in paired},
+                **selected.atlases,
+            }
         effective.merge(selected)
-        missing = (integrity.missing_parts(effective) - integrity.missing_parts(baseline)
-                   if check_dependencies else set())
+        missing = (
+            integrity.missing_parts(effective) - integrity.missing_parts(baseline) if check_dependencies else set()
+        )
         if missing and pin:
             references = missing & effective.references
             if references:
-                missing.difference_update(self._cab_index(pin).resolve(references, targets[0] if targets else None,
-                                                                     exclude=replaced))
+                missing.difference_update(
+                    self._cab_index(pin).resolve(references, targets[0] if targets else None, exclude=replaced)
+                )
         if missing:
             if inspection is not None:
                 inspection.missing_cabs.update(missing & effective.references)
@@ -1695,49 +2003,81 @@ class ModLibrary:
                             continue
                         names.update({name: path.name for name in contents.files})
                         names.update({name + ".png": path.name for name in contents.textures})
-            raise ServiceError("mod_parts_missing", files=", ".join(sorted({names.get(name, name) for name in missing})))
+            raise ServiceError(
+                "mod_parts_missing", files=", ".join(sorted({names.get(name, name) for name in missing}))
+            )
         if not compatibility:
             return {}
-        current = (self._replacements(files, targets, pin, cab_inspection)
-                   if target_names is not files else replacements)
-        report = {"kind": kind, "official": official.spine(), "mod": effective.spine(), "unavailable": unavailable,
-                "outdated": bool(targets) and len(current) != len(files)}
+        current = self._replacements(files, targets, pin, cab_inspection) if target_names is not files else replacements
+        report = {
+            "kind": kind,
+            "official": official.spine(),
+            "mod": effective.spine(),
+            "unavailable": unavailable,
+            "outdated": bool(targets) and len(current) != len(files),
+        }
         if conversion:
             # Internal preflight metadata; ordinary compatibility RPCs remain JSON-only.
             report["sourceContents"], report["officialContents"] = selected, official
             report["originalPaths"] = original_paths
         try:
-            mixed = {name: data for name, data in effective.atlases.items() if name not in selected.atlases
-                     and any(integrity.texture_key(page) in selected.textures
-                             for page in atlas_remap.parse_atlas(data, name).pages)}
-            misfits = {name for name, data in mixed.items()
-                       if atlas_remap.page_size_mismatch({name: data}, effective.textures)}
+            mixed = {
+                name: data
+                for name, data in effective.atlases.items()
+                if name not in selected.atlases
+                and any(
+                    integrity.texture_key(page) in selected.textures
+                    for page in atlas_remap.parse_atlas(data, name).pages
+                )
+            }
+            misfits = {
+                name for name, data in mixed.items() if atlas_remap.page_size_mismatch({name: data}, effective.textures)
+            }
             misfit = bool(misfits)
             layout = fingerprint.changed_layouts(built, mixed)
             if kind == "spr" and not unavailable:
                 # Where no record keeps the rig the mod's textures were drawn for, the earlier release the archive
                 # keeps that they follow (rig_archive), against the installed pages of the verified official copies.
-                unrecorded = {name: data for name, data in mixed.items()
-                              if not isinstance((layout.get(name) or {}).get("skeleton"), str)}
-                layout = {**layout, **self._archived_rigs(list(files.values()), unrecorded,
-                                                          lambda: self._official_page_masks(original_paths))}
+                unrecorded = {
+                    name: data
+                    for name, data in mixed.items()
+                    if not isinstance((layout.get(name) or {}).get("skeleton"), str)
+                }
+                layout = {
+                    **layout,
+                    **self._archived_rigs(
+                        list(files.values()), unrecorded, lambda: self._official_page_masks(original_paths)
+                    ),
+                }
             gains = atlas_remap.rig_gains(selected.atlases, selected.skeletons, official.atlases, official.skeletons)
-            rerig = atlas_remap.rerigged(gains, selected.atlases, selected.skeletons, official.atlases,
-                                         official.skeletons, selected.textures)
-            report["rig"] = {"layout": sorted(layout), "animations": gains["animations"],
-                             "regions": {name: gains["regions"][name] for name in rerig if name in gains["regions"]}}
+            rerig = atlas_remap.rerigged(
+                gains, selected.atlases, selected.skeletons, official.atlases, official.skeletons, selected.textures
+            )
+            report["rig"] = {
+                "layout": sorted(layout),
+                "animations": gains["animations"],
+                "regions": {name: gains["regions"][name] for name in rerig if name in gains["regions"]},
+            }
             # The rig a repacked atlas's textures were drawn for, where it was recorded: the source of the
             # world-space rebake (rig-geometry.js forRemap).
             recorded = {name: entry for name, entry in layout.items() if isinstance(entry.get("skeleton"), str)}
-            dated = (self._dated_rig(list(files.values()), misfits - recorded.keys(), official.atlases, original_paths)
-                     if kind == "spr" and not unavailable else {})
+            dated = (
+                self._dated_rig(list(files.values()), misfits - recorded.keys(), official.atlases, original_paths)
+                if kind == "spr" and not unavailable
+                else {}
+            )
             # repacked since the textures were drawn, with no rig to repair them from (mod-compatibility.js tells it)
-            report["rig"]["unknown"] = sorted(name for name, entry in layout.items()
-                                              if not isinstance(entry.get("skeleton"), str)
-                                              and not isinstance((dated.get(name) or {}).get("skeleton"), str))
+            report["rig"]["unknown"] = sorted(
+                name
+                for name, entry in layout.items()
+                if not isinstance(entry.get("skeleton"), str)
+                and not isinstance((dated.get(name) or {}).get("skeleton"), str)
+            )
             drawn_by = atlas_remap.pair_atlases(official.skeletons, dict.fromkeys({**dated, **recorded}))
-            report["source"] = {"atlases": {name: entry["text"] for name, entry in {**dated, **recorded}.items()},
-                                "skeletons": {}}
+            report["source"] = {
+                "atlases": {name: entry["text"] for name, entry in {**dated, **recorded}.items()},
+                "skeletons": {},
+            }
             for name, entry in {**dated, **recorded}.items():
                 if not isinstance(entry.get("skeleton"), str):
                     continue
@@ -1746,24 +2086,46 @@ class ModLibrary:
                 report["source"]["skeletons"][skeleton] = {"version": get_skel_version(data), "data": entry["skeleton"]}
             # The whole rig a texture-only portrait's textures were drawn for (``old_rig``): what Update offers for
             # a portrait the game drew anew, which the rebake cannot move (mod-compatibility.js).
-            old_rig = (atlas_remap.old_rig_plan({**layout, **dated}, official.atlases, official.skeletons,
-                                                selected.skeletons, selected.textures, official.textures)
-                       if kind == "spr" else atlas_remap.OldRig())
-            report["oldRig"] = {"atlases": sorted(old_rig.atlases), "animations": old_rig.animations,
-                                "available": not unavailable and old_rig.available}
+            old_rig = (
+                atlas_remap.old_rig_plan(
+                    {**layout, **dated},
+                    official.atlases,
+                    official.skeletons,
+                    selected.skeletons,
+                    selected.textures,
+                    official.textures,
+                )
+                if kind == "spr"
+                else atlas_remap.OldRig()
+            )
+            report["oldRig"] = {
+                "atlases": sorted(old_rig.atlases),
+                "animations": old_rig.animations,
+                "available": not unavailable and old_rig.available,
+            }
             # The graft (bmpt.graft): the mod's own binary skeleton keeps its rig and takes the animations the
             # official one gained; or the old rig above takes them, where they keep it from being offered.
             # Memorial lobbies and Spine backgrounds take the graft too (``graft.plain``): what each new animation
             # needs is known from the two skeletons alone, so the check tells which it carries and why not the others.
-            own = {name: names for name, names in gains["animations"].items() if self._graftable(
-                selected, official, name)} if kind in ("spr", "lobby") else {}
+            own = (
+                {
+                    name: names
+                    for name, names in gains["animations"].items()
+                    if self._graftable(selected, official, name)
+                }
+                if kind in ("spr", "lobby")
+                else {}
+            )
             plans = {name: self._graft_plan(selected, official, name) for name in own}
             refused = {name: plan[1] for name, plan in plans.items() if plan[1]}
             own = {name: plan[0] for name, plan in plans.items() if plan[0]}
             gained = old_rig.animations if kind == "spr" and old_rig.atlases and old_rig.complete else {}
-            report["graft"] = {"kind": "own" if own else "oldRig" if gained else None,
-                               "animations": own or gained, "refused": refused,
-                               "available": not unavailable and bool(own or gained)}
+            report["graft"] = {
+                "kind": "own" if own else "oldRig" if gained else None,
+                "animations": own or gained,
+                "refused": refused,
+                "available": not unavailable and bool(own or gained),
+            }
             report["misfit"] = not unavailable and misfit
             # Portraits are baked through world space; other kinds only move regions onto a page size that fits.
             wanted = misfit or bool(recorded) or bool(rerig) if kind == "spr" else misfit
@@ -1780,8 +2142,14 @@ class ModLibrary:
         """Whether the mod carries a binary 4.2 skeleton for the official ``skeleton`` and the atlas of its stem
         with the pages of that atlas."""
         own = atlas_remap.pair_atlases(selected.skeletons, official.skeletons).get(skeleton)
-        atlas = next((name for name, other in atlas_remap.pair_atlases(official.skeletons, official.atlases).items()
-                      if other == skeleton), None)
+        atlas = next(
+            (
+                name
+                for name, other in atlas_remap.pair_atlases(official.skeletons, official.atlases).items()
+                if other == skeleton
+            ),
+            None,
+        )
         source = atlas_remap.pair_atlases(selected.atlases, official.atlases).get(atlas) if atlas else None
         if own is None or source is None or not self._binary_42(selected.skeletons[own]):
             return False
@@ -1792,8 +2160,9 @@ class ModLibrary:
         return bool(pages) and pages <= set(selected.textures)
 
     @staticmethod
-    def _graft_plan(selected: integrity.Contents, official: integrity.Contents,
-                    skeleton: str) -> tuple[list[str], dict[str, list[str]]]:
+    def _graft_plan(
+        selected: integrity.Contents, official: integrity.Contents, skeleton: str
+    ) -> tuple[list[str], dict[str, list[str]]]:
         """(carried, refused) of a graft of the official ``skeleton``'s new animations into the mod's own
         (``graft.SkeletonGraft``): the names it carries and, per animation it cannot carry, the reasons
         (``kind:name``). Nothing carried when a skeleton cannot be read."""
@@ -1818,7 +2187,9 @@ class ModLibrary:
             targets = self._spine_parts(target_core, pin)
         paths = set(files.values()) | set(targets)
         for target in targets:
-            paths.update([self._original_path(target), target.with_name(target.name + ".backup"), *self._elsewhere(target)])
+            paths.update(
+                [self._original_path(target), target.with_name(target.name + ".backup"), *self._elsewhere(target)]
+            )
         stamps = []
         for path in sorted(paths):
             try:
@@ -1827,19 +2198,29 @@ class ModLibrary:
             except FileNotFoundError:
                 stamp = None
             stamps.append([str(path.resolve()), stamp])
-        identity = [pin.key if pin else None, self._target_of(record), record.get("repaired_from"),
-                    self._repaired_id(record) or None, stamps]
+        identity = [
+            pin.key if pin else None,
+            self._target_of(record),
+            record.get("repaired_from"),
+            self._repaired_id(record) or None,
+            stamps,
+        ]
         return hashlib.sha256(json.dumps(identity).encode()).hexdigest()
 
     @_serialized
-    def compatibility(self, mod_id: str, pin: Pin | None = None,
-                      progress: Callable[[dict], None] | None = None) -> dict:
+    def compatibility(
+        self, mod_id: str, pin: Pin | None = None, progress: Callable[[dict], None] | None = None
+    ) -> dict:
         """Fresh official and effective Spine data, without building or rewriting a mod."""
         record = self._record(mod_id)
         if progress:
             progress({"current": 1, "total": 1, "step": "import.step.check"})
-        report = self._check_group({path.name: path for path in self._paths(record)}, pin or self.current_pin(),
-                                   variant_key=self._target_of(record), built=self._read_built_against(record))
+        report = self._check_group(
+            {path.name: path for path in self._paths(record)},
+            pin or self.current_pin(),
+            variant_key=self._target_of(record),
+            built=self._read_built_against(record),
+        )
         report["repaired_from"], report["repaired_id"] = record.get("repaired_from", ""), self._repaired_id(record)
         report["remappable"] = report["remappable"] and not (report["repaired_from"] or report["repaired_id"])
         old_rig = report.setdefault("oldRig", {"atlases": [], "animations": {}, "available": False})
@@ -1860,8 +2241,11 @@ class ModLibrary:
         targets = self._spine_parts(core_of(name), pin) if pin else []
         named = any(integrity.replacement_key(target.name) == integrity.replacement_key(name) for target in targets)
         if not named:
-            named = any(integrity.replacement_key(kept) == integrity.replacement_key(name)
-                        and self._is_official_as(self.root / "originals" / kept, kept) for kept in self._originals())
+            named = any(
+                integrity.replacement_key(kept) == integrity.replacement_key(name)
+                and self._is_official_as(self.root / "originals" / kept, kept)
+                for kept in self._originals()
+            )
         return identify(path, name, self.catalog, filename_only=named)
 
     def import_core(self, core: str, kind: str, pin: Pin | None = None) -> str:
@@ -1884,8 +2268,15 @@ class ModLibrary:
             self._cab_indexes[key] = CabIndex(pin.dirs)
         return self._cab_indexes[key]
 
-    def _readers(self, targets: Sequence[Path], pin: Pin | None, inspection: integrity.Inspection | None = None,
-                 *, keys: bool = True, release: bool = True) -> resolver.Readers:
+    def _readers(
+        self,
+        targets: Sequence[Path],
+        pin: Pin | None,
+        inspection: integrity.Inspection | None = None,
+        *,
+        keys: bool = True,
+        release: bool = True,
+    ) -> resolver.Readers:
         """What the resolver reads of a file: its CABs, asset paths and (with ``keys``) asset names and types; a file
         of ``targets`` is read from its official copy where there is one, else as it is. Asset evidence is on top of
         the name rules: a file the readers cannot read gives none. With ``release``, a file naming a part without its
@@ -1933,21 +2324,43 @@ class ModLibrary:
 
         return resolver.Readers(cabs, paths, asset_keys, same_release if release else resolver.NAMES_ONLY.release)
 
-    def _resolve(self, files: dict[str, Path], targets: Sequence[Path], pin: Pin | None,
-                 inspection: integrity.Inspection | None = None, *, whole: bool = True,
-                 keys: bool = True, release: bool = True, older: Collection[Path] = ()) -> resolver.Resolution:
+    def _resolve(
+        self,
+        files: dict[str, Path],
+        targets: Sequence[Path],
+        pin: Pin | None,
+        inspection: integrity.Inspection | None = None,
+        *,
+        whole: bool = True,
+        keys: bool = True,
+        release: bool = True,
+        older: Collection[Path] = (),
+    ) -> resolver.Resolution:
         """The one rule for the official parts these files replace or update (``targets.resolve``)."""
-        return resolver.resolve(files, targets, self._readers(targets, pin, inspection, keys=keys, release=release),
-                                whole=whole, older=older)
+        return resolver.resolve(
+            files,
+            targets,
+            self._readers(targets, pin, inspection, keys=keys, release=release),
+            whole=whole,
+            older=older,
+        )
 
-    def _replacements(self, files: dict[str, Path], targets: list[Path], pin: Pin | None,
-                      inspection: integrity.Inspection | None = None, *, release: bool = True) -> dict[Path, Path]:
+    def _replacements(
+        self,
+        files: dict[str, Path],
+        targets: list[Path],
+        pin: Pin | None,
+        inspection: integrity.Inspection | None = None,
+        *,
+        release: bool = True,
+    ) -> dict[Path, Path]:
         """The files that are a part's current release: {target: source}. ``release=False`` takes the names and
         CABs alone, for a caller that judges the release itself."""
         return self._resolve(files, targets, pin, inspection, release=release).current
 
-    def _update_groups(self, older: dict[str, Path], targets: Sequence[Path], pin: Pin,
-                       inspection: integrity.Inspection | None = None) -> list[PlannedGroup]:
+    def _update_groups(
+        self, older: dict[str, Path], targets: Sequence[Path], pin: Pin, inspection: integrity.Inspection | None = None
+    ) -> list[PlannedGroup]:
         """Install groups for files of older releases or other builds (every file treated as one)."""
         return self._groups_of(self._resolve(older, targets, pin, inspection, whole=False))
 
@@ -1959,12 +2372,22 @@ class ModLibrary:
         for group in resolution.groups:
             parsed = parse_filename(group.names[0])
             if not group.targets:
-                planned.append(PlannedGroup(parsed.prefix, parsed.category, parsed.core, [
-                    PlannedFile(path, parse_filename(path.name), Action.NOT_FOUND) for path in group.sources]))
+                planned.append(
+                    PlannedGroup(
+                        parsed.prefix,
+                        parsed.category,
+                        parsed.core,
+                        [PlannedFile(path, parse_filename(path.name), Action.NOT_FOUND) for path in group.sources],
+                    )
+                )
                 continue
-            merged = PlannedGroup(parsed.prefix, parsed.category, parsed.core, [
-                PlannedFile(path, parse_filename(path.name), Action.UPDATE)
-                for path in group.sources], target_paths=sorted(group.targets))
+            merged = PlannedGroup(
+                parsed.prefix,
+                parsed.category,
+                parsed.core,
+                [PlannedFile(path, parse_filename(path.name), Action.UPDATE) for path in group.sources],
+                target_paths=sorted(group.targets),
+            )
             for other in [other for other in planned if set(other.target_paths) & set(merged.target_paths)]:
                 planned.remove(other)
                 merged.files[:0] = other.files
@@ -1976,15 +2399,17 @@ class ModLibrary:
         """The parts a preview drops for these files (``Resolution.replaced``)."""
         return self._resolve(files, targets, pin).replaced
 
-    def direct_import(self, files: dict[str, Path], pin: Pin | None = None, *,
-                      inspection: integrity.Inspection | None = None) -> dict | None:
+    def direct_import(
+        self, files: dict[str, Path], pin: Pin | None = None, *, inspection: integrity.Inspection | None = None
+    ) -> dict | None:
         """Validate current parts and the resulting set before admitting a whole-file copy."""
         pin = pin or self.current_pin()
         if not pin:
             return None
         name = next(iter(files))
-        targets = (self._other_targets(files, pin) if kind_of_file(name) == "other"
-                   else self._spine_parts(core_of(name), pin))
+        targets = (
+            self._other_targets(files, pin) if kind_of_file(name) == "other" else self._spine_parts(core_of(name), pin)
+        )
         inspection = inspection or integrity.Inspection()
         # Named for current parts: this check judges their release itself and refuses another one by name.
         replacements = self._replacements(files, targets, pin, inspection, release=False)
@@ -2032,17 +2457,33 @@ class ModLibrary:
             # The current slot already identifies a direct replacement; absent official CAB evidence
             # must not turn the missing baseline into an import refusal.
             evidence, error = mod_origin.constraints(set(files), selected, official, target_origin)
-            source_origin = {**target_origin, **{key: value for key, value in evidence.items() if value},
-                             "detected": False}
+            source_origin = {
+                **target_origin,
+                **{key: value for key, value in evidence.items() if value},
+                "detected": False,
+            }
         if error:
             raise ServiceError(error)
-        return {"direct": replacements, "targets": list(replacements), "originals": originals,
-                "sourceContents": selected, "officialContents": official, "source": source_origin,
-                "compatibility": compatibility}
+        return {
+            "direct": replacements,
+            "targets": list(replacements),
+            "originals": originals,
+            "sourceContents": selected,
+            "officialContents": official,
+            "source": source_origin,
+            "compatibility": compatibility,
+        }
 
-    def _check_model_references(self, source: Path, incoming: integrity.Contents, baseline: integrity.Contents,
-                                replacements: dict[Path, Path], targets: list[Path], pin: Pin,
-                                inspection: integrity.Inspection) -> None:
+    def _check_model_references(
+        self,
+        source: Path,
+        incoming: integrity.Contents,
+        baseline: integrity.Contents,
+        replacements: dict[Path, Path],
+        targets: list[Path],
+        pin: Pin,
+        inspection: integrity.Inspection,
+    ) -> None:
         """Only changes to objects consumed outside a replaced part can break its public interface."""
         changed = {}
         for cab, layout in baseline.layout.items():
@@ -2055,15 +2496,22 @@ class ModLibrary:
             return  # Preserving every original object is safe without scanning other bundles.
         consumers = {path: path for paths in self._index(pin).values() for path in paths}
         for target in targets:
-            consumers[target] = (replacements[target] if target in replacements else
-                                 self._official_or_current(target, pin))
+            consumers[target] = (
+                replacements[target] if target in replacements else self._official_or_current(target, pin)
+            )
         for path in consumers.values():
             if path != source and integrity.references_changed_objects(path, changed, removed_cabs, inspection):
                 raise ServiceError("mod_release_mismatch", file=source.name)
 
     @_serialized
-    def inspect_import(self, files: dict[str, Path], pin: Pin | None = None, *, conversion: bool = False,
-                       inspection: integrity.Inspection | None = None) -> dict:
+    def inspect_import(
+        self,
+        files: dict[str, Path],
+        pin: Pin | None = None,
+        *,
+        conversion: bool = False,
+        inspection: integrity.Inspection | None = None,
+    ) -> dict:
         """Preflight canonical upload names without storing or adopting anything.
 
         Use the same identities, dependency checks and installed-content judgement as add().
@@ -2102,11 +2550,20 @@ class ModLibrary:
             direct = self.direct_import(files, pin, inspection=inspection) if conversion else None
         except ServiceError as error:
             if (duplicate or installed) and error.code in ("original_unavailable", "original_invalid"):
-                return {"identity": identity, "libraryId": duplicate, "installed": installed,
-                        "targets": targets, "recognized": True}
+                return {
+                    "identity": identity,
+                    "libraryId": duplicate,
+                    "installed": installed,
+                    "targets": targets,
+                    "recognized": True,
+                }
             if kind_of_file(next(iter(files))) not in ("spr", "lobby") or error.code not in (
-                    "mod_platform_mismatch", "mod_platform_unknown", "mod_unity_version_mismatch",
-                    "mod_release_mismatch", "source_conflict"):
+                "mod_platform_mismatch",
+                "mod_platform_unknown",
+                "mod_unity_version_mismatch",
+                "mod_release_mismatch",
+                "source_conflict",
+            ):
                 raise
             # Current Spine filenames identify slots, not a compatible whole-file format.
             # Preserve this verdict even on the same platform: extraction and target
@@ -2118,15 +2575,34 @@ class ModLibrary:
         # Old CAB references are replaced by the rebuild. Its output goes through add()'s full preflight.
         if not report["outdated"] and not conversion:
             self._check_group(files, pin, compatibility=False, inspection=inspection)
-        originals = report.pop("originalPaths", []) if conversion else (
-            [self._official_for(path, pin) for path in targets] if generic else [])
-        return {"identity": identity, "libraryId": duplicate, "installed": installed, "compatibility": report,
-                "targets": targets, "originals": originals if generic else [], "rebuild": rebuild}
+        originals = (
+            report.pop("originalPaths", [])
+            if conversion
+            else ([self._official_for(path, pin) for path in targets] if generic else [])
+        )
+        return {
+            "identity": identity,
+            "libraryId": duplicate,
+            "installed": installed,
+            "compatibility": report,
+            "targets": targets,
+            "originals": originals if generic else [],
+            "rebuild": rebuild,
+        }
 
     @_serialized
-    def apply_import(self, variant_key: str, source: str, *, kind: Kind, pin: Pin,
-                     settings: Settings, backup: bool, log: LogFunc = no_log,
-                     progress: ProgressCallback | None = None) -> ApplyResult:
+    def apply_import(
+        self,
+        variant_key: str,
+        source: str,
+        *,
+        kind: Kind,
+        pin: Pin,
+        settings: Settings,
+        backup: bool,
+        log: LogFunc = no_log,
+        progress: ProgressCallback | None = None,
+    ) -> ApplyResult:
         """Apply with one import's save settings, retaining the normal switch and transaction checks.
 
         The settings adapter is local to this serialized operation; neither config.toml nor
@@ -2135,24 +2611,34 @@ class ModLibrary:
         previous = self.settings
         self.settings = settings
         try:
-            return self.apply(variant_key, source, kind=kind, pin=pin, log=log,
-                              progress=progress, create_backup=backup)
+            return self.apply(variant_key, source, kind=kind, pin=pin, log=log, progress=progress, create_backup=backup)
         finally:
             self.settings = previous
 
-    def add_and_apply(self, paths: list[Path], progress: ProgressCallback | None = None,
-                      pin: Pin | None = None, log: LogFunc = no_log, *, kind: Kind | None = None) -> AddResult:
+    def add_and_apply(
+        self,
+        paths: list[Path],
+        progress: ProgressCallback | None = None,
+        pin: Pin | None = None,
+        log: LogFunc = no_log,
+        *,
+        kind: Kind | None = None,
+    ) -> AddResult:
         """The web add action: store, check, then use the same switch as a source selection."""
         pin = pin or self.current_pin()
         added = self.add(paths, progress, pin=pin, kind=kind)
         for entry in added:
             try:
-                result = self.apply(entry.target, f"mod:{entry.id}", kind=entry.kind, pin=pin, log=log,
-                                    progress=progress)
+                result = self.apply(
+                    entry.target, f"mod:{entry.id}", kind=entry.kind, pin=pin, log=log, progress=progress
+                )
             except ServiceError as error:
                 added.failed.append({"id": entry.id, **error.to_json()})
-                if (pin is not None and entry.kind != "other"
-                        and self.configured(entry.target, pin).get(entry.kind) == f"mod:{entry.id}"):
+                if (
+                    pin is not None
+                    and entry.kind != "other"
+                    and self.configured(entry.target, pin).get(entry.kind) == f"mod:{entry.id}"
+                ):
                     added.configured.append(entry)
             else:
                 (added.configured if result.deferred else added.applied).append(entry)
@@ -2163,8 +2649,7 @@ class ModLibrary:
 
     @_serialized
     @_mod_writer
-    def add_assigned_files(self, files: dict[str, Path], variant: str, kind: str,
-                           pin: Pin | None = None) -> AddResult:
+    def add_assigned_files(self, files: dict[str, Path], variant: str, kind: str, pin: Pin | None = None) -> AddResult:
         """Store an explicitly attributed, self-contained Mod without claiming an install target."""
         from .manual_identity import validate
 
@@ -2183,9 +2668,19 @@ class ModLibrary:
         result.append(self._entry(record))
         return result
 
-    def _store(self, files: dict[str, Path], label: str, target: str, kind: str,
-               *, repaired_from: str = "", user_added: bool = False, assignment: str = "",
-               metadata: dict[str, Any] | None = None, built_against: dict | None = None) -> dict[str, Any]:
+    def _store(
+        self,
+        files: dict[str, Path],
+        label: str,
+        target: str,
+        kind: str,
+        *,
+        repaired_from: str = "",
+        user_added: bool = False,
+        assignment: str = "",
+        metadata: dict[str, Any] | None = None,
+        built_against: dict | None = None,
+    ) -> dict[str, Any]:
         """Publish a complete directory before its metadata, with durable recovery of either outcome.
         ``built_against`` (``_built_against``) is stored with the files, as part of the same directory."""
         names = sorted(files)
@@ -2199,11 +2694,23 @@ class ModLibrary:
         transaction = self.root / "import-transactions" / mod_id
         journal = transaction / "journal.json"
         staged = transaction / "files"
-        if directory.parent.is_symlink() or transaction.parent.is_symlink() or directory.exists() or transaction.exists():
+        if (
+            directory.parent.is_symlink()
+            or transaction.parent.is_symlink()
+            or directory.exists()
+            or transaction.exists()
+        ):
             raise ServiceError("library_io_error", file=transaction)
-        record = {"id": mod_id, "files": names, "label": label, "target": target,
-                  "kind": kind, "added": datetime.now(timezone.utc).isoformat(), "seen": False,
-                  "user_added": user_added}
+        record = {
+            "id": mod_id,
+            "files": names,
+            "label": label,
+            "target": target,
+            "kind": kind,
+            "added": datetime.now(timezone.utc).isoformat(),
+            "seen": False,
+            "user_added": user_added,
+        }
         if metadata:
             if set(metadata) & set(record):
                 raise ValueError("Generated Mod metadata overrides a reserved field")
@@ -2213,9 +2720,15 @@ class ModLibrary:
         if assignment:
             record["assignment"] = assignment
         hashes = {name: self._hashes.get(files[name]).sha1 for name in names}
-        data = {"version": 1, "id": mod_id, "phase": "preparing", "record": record, "hashes": hashes,
-                "repaired_from": repaired_from,
-                "old_repaired_id": self._record(repaired_from).get("repaired_id") if repaired_from else None}
+        data = {
+            "version": 1,
+            "id": mod_id,
+            "phase": "preparing",
+            "record": record,
+            "hashes": hashes,
+            "repaired_from": repaired_from,
+            "old_repaired_id": self._record(repaired_from).get("repaired_id") if repaired_from else None,
+        }
         atomic_json(journal, data)
         try:
             for name in names:
@@ -2260,10 +2773,15 @@ class ModLibrary:
     def _rollback_import(self, journal: Path, data: dict) -> None:
         mod_id = data["id"]
         directory = self.root / "mods" / mod_id
-        if (re.fullmatch(r"[0-9a-f]{32}", mod_id) is None or directory.parent.is_symlink()
-                or directory.is_symlink() or not directory.resolve().is_relative_to(self.root)
-                or journal.is_symlink() or journal.parent.is_symlink()
-                or not journal.resolve().is_relative_to(self.root / "import-transactions")):
+        if (
+            re.fullmatch(r"[0-9a-f]{32}", mod_id) is None
+            or directory.parent.is_symlink()
+            or directory.is_symlink()
+            or not directory.resolve().is_relative_to(self.root)
+            or journal.is_symlink()
+            or journal.parent.is_symlink()
+            or not journal.resolve().is_relative_to(self.root / "import-transactions")
+        ):
             raise ServiceError("library_io_error", file=journal)
         self._records.pop(mod_id, None)
         repaired = self._records.get(data["repaired_from"])
@@ -2279,18 +2797,26 @@ class ModLibrary:
             except FileNotFoundError:
                 state = None
             if state is not None:
-                if isinstance(state, dict) and isinstance(state.get("version"), (int, float)) \
-                        and not isinstance(state["version"], bool) and state["version"] > 1:
+                if (
+                    isinstance(state, dict)
+                    and isinstance(state.get("version"), (int, float))
+                    and not isinstance(state["version"], bool)
+                    and state["version"] > 1
+                ):
                     raise ServiceError("library_state_unreadable", file=path)
                 if not isinstance(state, dict) or state.get("version") != 1 or not isinstance(state.get("mods"), list):
                     raise ServiceError("library_io_error", file=path)
                 before = copy.deepcopy(state)
                 # held records are raw JSON, whatever their shape: only an object with this id goes
-                state["mods"] = [record for record in state["mods"]
-                                 if not (isinstance(record, dict) and record.get("id") == mod_id)]
+                state["mods"] = [
+                    record for record in state["mods"] if not (isinstance(record, dict) and record.get("id") == mod_id)
+                ]
                 for record in state["mods"]:
-                    if (isinstance(record, dict) and record.get("id") == data["repaired_from"]
-                            and record.get("repaired_id") == mod_id):
+                    if (
+                        isinstance(record, dict)
+                        and record.get("id") == data["repaired_from"]
+                        and record.get("repaired_id") == mod_id
+                    ):
                         if data["old_repaired_id"] is None:
                             record.pop("repaired_id", None)
                         else:
@@ -2324,27 +2850,46 @@ class ModLibrary:
         with file_lock(self.root / "mods.lock"):
             for journal in journals:
                 try:
-                    if (journal.is_symlink() or journal.parent.is_symlink()
-                            or not journal.resolve().is_relative_to(root.resolve())):
+                    if (
+                        journal.is_symlink()
+                        or journal.parent.is_symlink()
+                        or not journal.resolve().is_relative_to(root.resolve())
+                    ):
                         raise ValueError("Invalid import journal path")
                     data = json.loads(journal.read_text(encoding="utf-8"))
                     if isinstance(data, dict) and data.get("operation") == "update":
                         self._recover_update(journal, data)
                         continue
                     mod_id, record, hashes = data["id"], data["record"], data["hashes"]
-                    if (not isinstance(mod_id, str) or re.fullmatch(r"[0-9a-f]{32}", mod_id) is None
-                            or journal != root / mod_id / "journal.json" or journal.is_symlink()
-                            or journal.parent.is_symlink() or not isinstance(record, dict)
-                            or record.get("id") != mod_id or not isinstance(hashes, dict)
-                            or data["version"] != 1 or data["phase"] not in ("preparing", "publishing", "rollback")
-                            or not record.get("files") or set(record["files"]) != set(hashes)
-                            or any(not isinstance(name, str) or Path(name).name != name or not name.endswith(".bundle")
-                                   or not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{40}", value) is None
-                                   for name, value in hashes.items())):
+                    if (
+                        not isinstance(mod_id, str)
+                        or re.fullmatch(r"[0-9a-f]{32}", mod_id) is None
+                        or journal != root / mod_id / "journal.json"
+                        or journal.is_symlink()
+                        or journal.parent.is_symlink()
+                        or not isinstance(record, dict)
+                        or record.get("id") != mod_id
+                        or not isinstance(hashes, dict)
+                        or data["version"] != 1
+                        or data["phase"] not in ("preparing", "publishing", "rollback")
+                        or not record.get("files")
+                        or set(record["files"]) != set(hashes)
+                        or any(
+                            not isinstance(name, str)
+                            or Path(name).name != name
+                            or not name.endswith(".bundle")
+                            or not isinstance(value, str)
+                            or re.fullmatch(r"[0-9a-f]{40}", value) is None
+                            for name, value in hashes.items()
+                        )
+                    ):
                         raise ValueError("Invalid import journal")
                     directory = self.root / "mods" / mod_id
-                    if (directory.parent.is_symlink() or directory.is_symlink()
-                            or not directory.resolve().is_relative_to(self.root)):
+                    if (
+                        directory.parent.is_symlink()
+                        or directory.is_symlink()
+                        or not directory.resolve().is_relative_to(self.root)
+                    ):
                         raise ValueError("Invalid import directory")
                     committed = self._records.get(mod_id)
                     if data["phase"] == "publishing" and committed and committed.get("files") == record["files"]:
@@ -2377,8 +2922,13 @@ class ModLibrary:
         if kind is None:
             raise ServiceError("mod_unsupported", file=paths[0])
         key = other_target(files) if kind == "other" else self._core_map(pin).key(core_name) or core_name.lower()
-        return self._store(files, label if kind == "other" else core_name, key, kind,
-                           built_against=self._built_against(files, pin, "import", painted=True))["id"], True
+        return self._store(
+            files,
+            label if kind == "other" else core_name,
+            key,
+            kind,
+            built_against=self._built_against(files, pin, "import", painted=True),
+        )["id"], True
 
     def _recognize_installed(self, mod_id: str, identity: frozenset) -> bool:
         """Adopt exact outside content without writing any game files."""
@@ -2392,8 +2942,7 @@ class ModLibrary:
             if not parts or not self._identity({p.path.name: p.path for p in parts if not p.official}) <= identity:
                 continue
             for entry in entries:
-                local = frozenset(item for item in identity
-                                  if item[0] in view.maps[pin.key].slot_cores(entry.core))
+                local = frozenset(item for item in identity if item[0] in view.maps[pin.key].slot_cores(entry.core))
                 if entry.state not in ("untracked", "changed") or not self._matches_installed(local, entry):
                     continue
                 try:
@@ -2430,7 +2979,11 @@ class ModLibrary:
             entries = [view.entry(pin, core_of(path.name)) for path in targets]
             selected = sum(entry.configured == source for entry in entries)
             active = sum(entry.carried == source for entry in entries)
-            state = "official" if all(not entry.configured and entry.carried == "official" for entry in entries) else "inactive"
+            state = (
+                "official"
+                if all(not entry.configured and entry.carried == "official" for entry in entries)
+                else "inactive"
+            )
             if not entries:
                 state = "missing"
             elif selected == len(entries):
@@ -2439,10 +2992,17 @@ class ModLibrary:
                 state = "changed"
             elif selected or active:
                 state = "mixed"
-            rows.append({"id": record["id"], "label": self._label(record), "target": record["target"],
-                         "files": [path.name for path in targets] or list(record["files"]),
-                         "selected": bool(entries) and selected == len(entries), "state": state,
-                         **({"overwritten": True} if any(entry.overwritten for entry in entries) else {})})
+            rows.append(
+                {
+                    "id": record["id"],
+                    "label": self._label(record),
+                    "target": record["target"],
+                    "files": [path.name for path in targets] or list(record["files"]),
+                    "selected": bool(entries) and selected == len(entries),
+                    "state": state,
+                    **({"overwritten": True} if any(entry.overwritten for entry in entries) else {}),
+                }
+            )
         return rows
 
     @_serialized
@@ -2452,18 +3012,21 @@ class ModLibrary:
 
     def _removal_info(self, mod_id: str) -> dict:
         source = f"mod:{mod_id}"
-        used = any(entry.get("source") == source
-                   for folder in ((self.profiles.read() or {}).get("folders") or {}).values()
-                   for entry in folder["configured"].values()) or bool(self._in_use(mod_id))
+        used = any(
+            entry.get("source") == source
+            for folder in ((self.profiles.read() or {}).get("folders") or {}).values()
+            for entry in folder["configured"].values()
+        ) or bool(self._in_use(mod_id))
         return {"name": self._label(self._record(mod_id)), "used": used}
 
     @_serialized
     @_mod_writer
-    def remove(self, mod_id: str, confirm: bool = False, log: LogFunc = no_log,
-               reconcile: Callable[[], None] | None = None) -> DeleteResult:
+    def remove(
+        self, mod_id: str, confirm: bool = False, log: LogFunc = no_log, reconcile: Callable[[], None] | None = None
+    ) -> DeleteResult:
         """Reconcile every use through the protected writer before deleting its managed source."""
-        if mod_id == 'official':
-            raise ServiceError('asset_official')
+        if mod_id == "official":
+            raise ServiceError("asset_official")
         record = self._record(mod_id)
         directory = self.root / "mods" / mod_id
         self._paths(record)  # refuse a stored directory or file that resolves outside the library
@@ -2481,8 +3044,9 @@ class ModLibrary:
         for name, applied in self._applied.items():
             if applied.get("source") == source:
                 path = Path(name)
-                affected.update((pin.key, self._core_map(pin).slot(core_of(path.name)))
-                                for pin in pins if path.parent in pin.dirs)
+                affected.update(
+                    (pin.key, self._core_map(pin).slot(core_of(path.name))) for pin in pins if path.parent in pin.dirs
+                )
         keys: list[dict] = []
 
         def change(data: dict) -> None:
@@ -2498,18 +3062,21 @@ class ModLibrary:
                     for entries in folder["dismissed"].values():
                         if isinstance(entries, dict):
                             entries.pop(core, None)
-            data["unfinished"] = [item for item in data["unfinished"]
-                                  if (item["install"], item["core"]) not in affected]
+            data["unfinished"] = [
+                item for item in data["unfinished"] if (item["install"], item["core"]) not in affected
+            ]
 
         if self._removal_info(mod_id)["used"] and not confirm:
             raise ServiceError("asset_delete_confirm")
         # the lobby cameras framed on this mod's art go with it: each puts its prefab back first
         from .lobby_camera import cameras, meta_of
+
         for camera in [r["id"] for r in cameras(self) if meta_of(r).get("source") == source]:
             gone = self.remove(camera, confirm=True, log=log)
             if gone.failed:
                 return gone
         from .asset_delete import transaction
+
         done = []
         try:
             with transaction(self) as deletion:
@@ -2519,16 +3086,16 @@ class ModLibrary:
                     for key, core in sorted(affected):
                         pin = by_key.get(key)
                         if pin is None:
-                            raise ServiceError('game_not_found')
-                        config = (self.profiles.read() or {}).get('folders', {}).get(key, {})
-                        target = config.get('configured', {}).get(core, {}).get('source', 'official')
-                        with _errors('restore'):
+                            raise ServiceError("game_not_found")
+                        config = (self.profiles.read() or {}).get("folders", {}).get(key, {})
+                        target = config.get("configured", {}).get(core, {}).get("source", "official")
+                        with _errors("restore"):
                             self._switch(pin, core, target, log)
-                        done.append({'install': key, 'core': core})
+                        done.append({"install": key, "core": core})
                 for applied in self._applied.values():
-                    if applied.get('source') == source:
-                        applied.update(source='removed', removed=True)
-                        applied.pop('build', None)
+                    if applied.get("source") == source:
+                        applied.update(source="removed", removed=True)
+                        applied.pop("build", None)
                 del self._records[mod_id]
                 for other in self._records.values():
                     if other.get("repaired_id") == mod_id:
@@ -2539,10 +3106,15 @@ class ModLibrary:
                 if reconcile:
                     reconcile()
         except ServiceError as error:
-            return DeleteResult([], [{'entry': {'id': mod_id}, **error.to_json()}], [], [], [])
+            return DeleteResult([], [{"entry": {"id": mod_id}, **error.to_json()}], [], [], [])
         self._prune_quietly()
-        return DeleteResult(done, [], [{'install': key, 'core': core} for key, core in sorted(affected)],
-                            sorted({core for _, core in affected}), [record['kind']] if affected else [])
+        return DeleteResult(
+            done,
+            [],
+            [{"install": key, "core": core} for key, core in sorted(affected)],
+            sorted({core for _, core in affected}),
+            [record["kind"]] if affected else [],
+        )
 
     def _in_use(self, mod_id: str) -> list[Path]:
         """The game files still carrying the mod: stats and tails first, then SHA-1 when their stamp changed.
@@ -2558,7 +3130,8 @@ class ModLibrary:
                 stat = path.stat()
                 matched = record.get("size") == stat.st_size and (
                     record.get("mtime") == stat.st_mtime_ns
-                    or (bool(record.get("tail")) and read_tail(path) == record["tail"]))
+                    or (bool(record.get("tail")) and read_tail(path) == record["tail"])
+                )
                 if not matched and self._hashes.get(path).sha1 != record.get("sha1"):
                     continue
                 flag = record.get("official")
@@ -2578,17 +3151,27 @@ class ModLibrary:
         original = self._original_path(Path(name))
         with contextlib.suppress(OSError):
             return original.stat().st_size
-        return next((record.get("size") for path, record in self._applied.items()
-                     if Path(path).name == name and says_official(record) and isinstance(record.get("size"), int)),
-                    None)
+        return next(
+            (
+                record.get("size")
+                for path, record in self._applied.items()
+                if Path(path).name == name and says_official(record) and isinstance(record.get("size"), int)
+            ),
+            None,
+        )
 
     @_serialized
     def rename(self, mod_id: str, label: str) -> ModEntry:
         """Set or clear a metadata-only alias, retaining the default name."""
         if not isinstance(label, str):
             raise ServiceError("bad_params", key="label")
-        alias = " ".join("".join(ch for ch in unicodedata.normalize("NFC", label)
-                                 if ch.isspace() or not unicodedata.category(ch).startswith("C")).split())
+        alias = " ".join(
+            "".join(
+                ch
+                for ch in unicodedata.normalize("NFC", label)
+                if ch.isspace() or not unicodedata.category(ch).startswith("C")
+            ).split()
+        )
         if len(alias) > 120:
             raise ServiceError("bad_params", key="label")
         record = self._record(mod_id)
@@ -2687,8 +3270,12 @@ class ModLibrary:
     def variant_cores(self, variant_key: str) -> set[str]:
         """The asset cores of a variant in every known install (lower case), for a scan of them."""
         if variant_key.startswith(("other:", "other-set:")):
-            return {core_of(name) for record in self._records.values()
-                    if record["kind"] == "other" and record["target"] == variant_key for name in record["files"]}
+            return {
+                core_of(name)
+                for record in self._records.values()
+                if record["kind"] == "other" and record["target"] == variant_key
+                for name in record["files"]
+            }
         cores = set()
         for pin in self.installs():
             for kind in KINDS:
@@ -2771,8 +3358,12 @@ class ModLibrary:
     def _wanted_packed(self) -> set[tuple]:
         """The parts of the generic mods' files and of files being imported: only bundles of those parts need their CAB
         learned."""
-        return {part_of(name) for record in self._records.values() if record.get("kind") == "other"
-                for name in record["files"]} | self._packed_wanted
+        return {
+            part_of(name)
+            for record in self._records.values()
+            if record.get("kind") == "other"
+            for name in record["files"]
+        } | self._packed_wanted
 
     def _learn_packed(self, paths: Iterable[Path]) -> bool:
         """Learn each bundle's CAB from its header for ``judge.core_of``; True when a slot key changed."""
@@ -2821,8 +3412,11 @@ class ModLibrary:
         for directory in pin.dirs:
             try:
                 with os.scandir(directory) as entries:
-                    listing.extend((entry.name, entry.path) for entry in entries
-                                   if entry.name.endswith(".bundle") and entry.is_file(follow_symlinks=False))
+                    listing.extend(
+                        (entry.name, entry.path)
+                        for entry in entries
+                        if entry.name.endswith(".bundle") and entry.is_file(follow_symlinks=False)
+                    )
             except OSError:
                 continue
         return listing
@@ -2909,13 +3503,17 @@ class ModLibrary:
                             value = marker.pop(old)
                             for key in sorted(new):
                                 marker.setdefault(key, copy.deepcopy(value))
-                    items = [item for item in data.get("unfinished", [])
-                             if item.get("install") == install and item.get("core") == old]
+                    items = [
+                        item
+                        for item in data.get("unfinished", [])
+                        if item.get("install") == install and item.get("core") == old
+                    ]
                     for item in items:
                         data["unfinished"].remove(item)
                         data["unfinished"].extend({**item, "core": key} for key in sorted(new))
                     done = True
             return done
+
         self.profiles.update(update)
 
     def _index(self, pin: Pin) -> dict[str, list[Path]]:
@@ -2978,12 +3576,18 @@ class ModLibrary:
         cached = self._maps.get(pin.key)
         if cached and cached[0] == built_for:
             return cached[1]
-        slots = [parse_filename(path.name) for paths in index.values()
-                 if (path := next((part for part in paths if kind_of_file(part.name)), None)) is not None]
+        slots = [
+            parse_filename(path.name)
+            for paths in index.values()
+            if (path := next((part for part in paths if kind_of_file(part.name)), None)) is not None
+        ]
         spr = [slot.core for slot in slots if kind_of(slot.core, slot.category) == "spr"]
         lobby = [slot.core for slot in slots if kind_of(slot.core, slot.category) == "lobby"]
-        special = [slot.core for slot in slots if kind_of(slot.core, slot.category) == "lobby" and
-                   slot.category in ("spinebackground", "spinecharacters")]
+        special = [
+            slot.core
+            for slot in slots
+            if kind_of(slot.core, slot.category) == "lobby" and slot.category in ("spinebackground", "spinecharacters")
+        ]
         build = getattr(self.catalog, "core_map", None)
         if build is not None:
             mapped = build(spr, lobby, special_cores=special) if special else build(spr, lobby)
@@ -2999,16 +3603,24 @@ class ModLibrary:
         models = [slot.core.lower() for slot in slots if kind_of(slot.core, slot.category) == "model"]
         model_map = getattr(self.catalog, "model_map", None)
         model_variant = getattr(self.catalog, "variant_for_model_core", self.catalog.variant_for_core)
-        keys = model_map(models) if model_map else {
-            core.lower(): variant.key for core in models
-            if (variant := model_variant(core.lower())) is not None}
+        keys = (
+            model_map(models)
+            if model_map
+            else {core.lower(): variant.key for core in models if (variant := model_variant(core.lower())) is not None}
+        )
         model_of = {}
-        preferred = {v.key: v.model.lower() for family in getattr(self.catalog, "families", lambda: [])()
-                     for v in family.variants
-                     if getattr(v, "model", None)}
+        preferred = {
+            v.key: v.model.lower()
+            for family in getattr(self.catalog, "families", lambda: [])()
+            for v in family.variants
+            if getattr(v, "model", None)
+        }
         # Prefer this install's prefab over its dependency cores, even when a dependency sorts first.
-        prefabs = {core for core in models if any(parse_filename(path.name).category == "character"
-                                                  for path in index[core.lower()])}
+        prefabs = {
+            core
+            for core in models
+            if any(parse_filename(path.name).category == "character" for path in index[core.lower()])
+        }
         for core in sorted(models):
             key = keys.get(core.lower(), core.lower())
             mapped.keys.setdefault(core.lower(), key)
@@ -3019,9 +3631,10 @@ class ModLibrary:
             if key in model_of:
                 model_of[key] = core
                 mapped.keys.setdefault(core, key)
-        model_cores = {key: (core, *sorted(value for value in models
-                                          if value != core and keys.get(value.lower()) == key))
-                       for key, core in model_of.items()}
+        model_cores = {
+            key: (core, *sorted(value for value in models if value != core and keys.get(value.lower()) == key))
+            for key, core in model_of.items()
+        }
         mapped = replace(mapped, model=model_of, model_cores=model_cores)
         self._maps[pin.key] = (built_for, mapped)
         return mapped
@@ -3066,8 +3679,10 @@ class ModLibrary:
     def _game_files(self, key: str, kind: Kind | None = None, pin: Pin | None = None) -> list[Path]:
         if kind == "other":
             pin = self._current(pin)
-            record = next((record for record in self._records.values()
-                           if record["kind"] == "other" and record["target"] == key), None)
+            record = next(
+                (record for record in self._records.values() if record["kind"] == "other" and record["target"] == key),
+                None,
+            )
             if record is None:
                 return self._index(pin).get(key, []) if key.startswith("other:") else []
             index = self._index(pin)
@@ -3078,10 +3693,17 @@ class ModLibrary:
         variant = self._variant(key)
         pin = self._current(pin)
         index = self._index(pin)
-        return [path for current, value in (("spr", variant.spr), ("lobby", variant.lobby), ("model", getattr(variant, "model", None)))
-                if value and (kind is None or current == kind)
-                for core in (self._core_map(pin).slot_cores(value) if current == "model" else (value.lower(),))
-                for path in index.get(core, [])]
+        return [
+            path
+            for current, value in (
+                ("spr", variant.spr),
+                ("lobby", variant.lobby),
+                ("model", getattr(variant, "model", None)),
+            )
+            if value and (kind is None or current == kind)
+            for core in (self._core_map(pin).slot_cores(value) if current == "model" else (value.lower(),))
+            for path in index.get(core, [])
+        ]
 
     @_serialized
     def model_cores(self, variant_key: str, pin: Pin | None = None) -> list[str]:
@@ -3109,11 +3731,13 @@ class ModLibrary:
                 bundle = Bundle.load(self._official_for(path, pin))
             return bundle.get_asset_keys("cont_name_type") if bundle else set()
 
-        return resolver.generic(files, available, self._readers(available, pin, keys=False),
-                                container_keys=container_keys)
+        return resolver.generic(
+            files, available, self._readers(available, pin, keys=False), container_keys=container_keys
+        )
 
-    def _view(self, pins: list[Pin], allow: str, config: dict | None | type(...) = ...,
-              snapshot: bool = False) -> _View:
+    def _view(
+        self, pins: list[Pin], allow: str, config: dict | None | type(...) = ..., snapshot: bool = False
+    ) -> _View:
         self._refresh_state()
         if config is ...:
             config = self.profiles.read()
@@ -3124,8 +3748,9 @@ class ModLibrary:
     def _is_official(self, path: Path) -> bool:
         return self._is_official_as(path, path.name)
 
-    def _steam_official(self, name: str, path: Path | None = None,
-                        roots: Sequence[Path] | None = None) -> steam_records.OfficialFile | None:
+    def _steam_official(
+        self, name: str, path: Path | None = None, roots: Sequence[Path] | None = None
+    ) -> steam_records.OfficialFile | None:
         """What Steam's file list says the official file of a bundle name is (its size and SHA-1), only with the
         consent to read Steam's records: the list of the Steam install holding ``path``, else of ``roots``, else of
         every known install. None when no list names it, or two lists disagree."""
@@ -3184,8 +3809,9 @@ class ModLibrary:
         except (OSError, RuntimeError):
             return False
 
-    def _judge_original(self, original: Path, fingerprint: Fingerprint,
-                        steam: steam_records.OfficialFile | None) -> Verdict | None:
+    def _judge_original(
+        self, original: Path, fingerprint: Fingerprint, steam: steam_records.OfficialFile | None
+    ) -> Verdict | None:
         """How a kept original's bytes pass, recorded: ``steam`` (Steam's list gives its size and SHA-1, now
         or when it was recorded), ``crc`` (no list names it, the CRC rule alone), ``failed`` (a Steam list gave other
         bytes: never official again, list or not); None when it fails the CRC rule (damaged, ``original_invalid``)."""
@@ -3207,8 +3833,12 @@ class ModLibrary:
         its record while the file is unchanged since."""
         try:
             if full:
-                return self._judge_original(original, self._hashes.get(original),
-                                            self._steam_official(original.name, original)) == "failed"
+                return (
+                    self._judge_original(
+                        original, self._hashes.get(original), self._steam_official(original.name, original)
+                    )
+                    == "failed"
+                )
             return self._original_checks.of_file(original) == "failed"
         except OSError:
             return False
@@ -3273,8 +3903,13 @@ class ModLibrary:
                     out.append(path)
         for recorded in self._applied:
             path = Path(recorded)
-            if path.name == name and path != exclude and path not in out and devmode.allows_read(path) \
-                    and path.is_file():
+            if (
+                path.name == name
+                and path != exclude
+                and path not in out
+                and devmode.allows_read(path)
+                and path.is_file()
+            ):
                 out.append(path)
         return out
 
@@ -3395,14 +4030,14 @@ class ModLibrary:
         their folders stay: a record whose files are gone is held, never dropped."""
         if not mod_ids:
             return
-        deletion = getattr(self, '_asset_deletion', None)
+        deletion = getattr(self, "_asset_deletion", None)
         if deletion:
             deletion.remember_mods(mod_ids)
             for mod_id in mod_ids:
                 self._records.pop(mod_id, None)
             self._save()
             for mod_id in mod_ids:
-                remove_tree(self.root / 'mods' / mod_id)
+                remove_tree(self.root / "mods" / mod_id)
             return
         removed = {mod_id: self._records.pop(mod_id) for mod_id in mod_ids if mod_id in self._records}
         try:
@@ -3423,8 +4058,14 @@ class ModLibrary:
             return self._other_targets(dict(files), pin)
         return self._spine_parts(core_of(name), pin)
 
-    def _built_against(self, files: Mapping[str, Path], pin: Pin | None, event: str, *,
-                       painted: bool | Mapping[str, dict] | None = None) -> dict | None:
+    def _built_against(
+        self,
+        files: Mapping[str, Path],
+        pin: Pin | None,
+        event: str,
+        *,
+        painted: bool | Mapping[str, dict] | None = None,
+    ) -> dict | None:
         """The fingerprint (``fingerprint.document``) of the official parts a mod's files are built against: every
         part its core has now, from a verified official copy, each with how the mod's own files stand to it
         (``fingerprint.standing``). A part with no official copy is left out (``complete`` False). Headers and text
@@ -3525,8 +4166,7 @@ class ModLibrary:
         """The fingerprint the official parts of a mod's core give now, to hold against the one the mod was built
         against (``built_against``, ``fingerprint.diff`` per part). Nothing is stored. None when nothing tells."""
         record = self._record(mod_id)
-        return self._built_against({path.name: path for path in self._paths(record)}, pin or self.current_pin(),
-                                   "now")
+        return self._built_against({path.name: path for path in self._paths(record)}, pin or self.current_pin(), "now")
 
     # --- what a game update did under each mod ---
 
@@ -3546,23 +4186,33 @@ class ModLibrary:
             if not files:
                 return fingerprint.UNKNOWN, {}
             targets = self._core_targets(files, pin)
-            key = (record["id"], tuple(sorted(self._mod_hashes(record).items())), pin.key,
-                   tuple(sorted(str(path) for path in targets)))
+            key = (
+                record["id"],
+                tuple(sorted(self._mod_hashes(record).items())),
+                pin.key,
+                tuple(sorted(str(path) for path in targets)),
+            )
             known = self._impacts.get(key)
             if known is not None:
                 return known
             if not targets:
                 # a variant whose core moved since (the catalog maps it elsewhere) is no target gone
-                mapped = (self._core_map(pin).core(self._target_of(record), record["kind"])
-                          if record["kind"] != "other" else None)
+                mapped = (
+                    self._core_map(pin).core(self._target_of(record), record["kind"])
+                    if record["kind"] != "other"
+                    else None
+                )
                 moved = bool(mapped) and mapped.lower() != core_of(next(iter(files)))
                 gone = bool(self._read_built_against(record)) and not moved
                 found = (fingerprint.GONE, {"gone": True}) if gone else (fingerprint.UNKNOWN, {})
             else:
                 built = self._read_built_against(record) or self._backfill_built_against(record, pin)
                 now = self._built_against(files, pin, "now") if built else None
-                found = ((fingerprint.impact(built, now), fingerprint.changes(built, now)) if built
-                         else (fingerprint.UNKNOWN, {}))
+                found = (
+                    (fingerprint.impact(built, now), fingerprint.changes(built, now))
+                    if built
+                    else (fingerprint.UNKNOWN, {})
+                )
             if len(self._impacts) >= 4096:
                 self._impacts.clear()
             self._impacts[key] = found
@@ -3589,8 +4239,9 @@ class ModLibrary:
         except OSError:
             return None
 
-    def update_impact(self, pin: Pin | None = None, *, force: bool = False,
-                      progress: Callable[[dict], None] | None = None) -> dict[str, Any]:
+    def update_impact(
+        self, pin: Pin | None = None, *, force: bool = False, progress: Callable[[dict], None] | None = None
+    ) -> dict[str, Any]:
         """The impact summary of a game update on an install (the current one by default): when its resource version
         differs from the last one seen there (or none was recorded yet), every library mod classified from the
         fingerprint it was built against (``fingerprint.impact``), each mod told with what changed in its official
@@ -3605,12 +4256,20 @@ class ModLibrary:
         config = self.profiles.read() or {}
         seen = ((config.get("folders") or {}).get(pin.key) or {}).get("resource") or {}
         previous = seen.get("version") if isinstance(seen, dict) else None
-        out: dict[str, Any] = {"due": False, "install": pin.key, "version": version, "previous": previous,
-                               "mods": [], "counts": {name: 0 for name in fingerprint.IMPACTS}}
+        out: dict[str, Any] = {
+            "due": False,
+            "install": pin.key,
+            "version": version,
+            "previous": previous,
+            "mods": [],
+            "counts": {name: 0 for name in fingerprint.IMPACTS},
+        }
         if version is None or (version == previous and not force):
             return out
-        configured = {entry.get("source") for entry in
-                      (((config.get("folders") or {}).get(pin.key) or {}).get("configured") or {}).values()}
+        configured = {
+            entry.get("source")
+            for entry in (((config.get("folders") or {}).get(pin.key) or {}).get("configured") or {}).values()
+        }
         with self._lock:
             entries = {entry.id: entry for entry in self.mods()}
             records = [self._records[mod_id] for mod_id in entries if mod_id in self._records]
@@ -3626,8 +4285,14 @@ class ModLibrary:
         for i, record in enumerate(records, 1):
             if progress:
                 entry = entries[record["id"]]
-                line.item(i, variant=entry.target, kind=entry.kind, name=self._progress_name(record), core=entry.core,
-                          step=mod_progress.STEP_CHECK)
+                line.item(
+                    i,
+                    variant=entry.target,
+                    kind=entry.kind,
+                    name=self._progress_name(record),
+                    core=entry.core,
+                    step=mod_progress.STEP_CHECK,
+                )
             with self._lock:
                 if record["id"] not in self._records:
                     continue
@@ -3637,7 +4302,10 @@ class ModLibrary:
                 continue
             out["mods"].append(self._impact_item(entries[record["id"]], found, changes, configured))
         out["due"] = bool(out["mods"])
-        self._impact_cache[pin.key] = (stamp, {"mods": [dict(mod) for mod in out["mods"]], "counts": dict(out["counts"])})
+        self._impact_cache[pin.key] = (
+            stamp,
+            {"mods": [dict(mod) for mod in out["mods"]], "counts": dict(out["counts"])},
+        )
         self._keep_impact(pin.key, version, out["mods"])
         if not out["due"] and not force:
             self.impact_seen(pin.key, version)
@@ -3646,9 +4314,17 @@ class ModLibrary:
     @staticmethod
     def _impact_item(entry: Any, found: str, changes: dict, configured: set) -> dict[str, Any]:
         """A mod as the impact summary names it."""
-        return {"id": entry.id, "label": entry.label, "target": entry.target, "kind": entry.kind, "core": entry.core,
-                "impact": found, "changes": changes, "configured": f"mod:{entry.id}" in configured,
-                "repaired_id": entry.repaired_id}
+        return {
+            "id": entry.id,
+            "label": entry.label,
+            "target": entry.target,
+            "kind": entry.kind,
+            "core": entry.core,
+            "impact": found,
+            "changes": changes,
+            "configured": f"mod:{entry.id}" in configured,
+            "repaired_id": entry.repaired_id,
+        }
 
     def _impact_mark(self, record: dict[str, Any]) -> str:
         """What a kept impact of a mod depends on: its files and its stored baseline (by its modification time). A
@@ -3664,8 +4340,15 @@ class ModLibrary:
         """Keep the outcome of an impact check of an install (``last_impact``): its resource version and the mods
         whose rig changed, each with what changed and its mark (``_impact_mark``). Never fails."""
         with self._lock:
-            kept = [{"id": mod["id"], "changes": mod.get("changes") or {}, "mark": self._impact_mark(self._records[mod["id"]])}
-                    for mod in mods if mod.get("impact") == fingerprint.RIG_CHANGED and mod["id"] in self._records]
+            kept = [
+                {
+                    "id": mod["id"],
+                    "changes": mod.get("changes") or {},
+                    "mark": self._impact_mark(self._records[mod["id"]]),
+                }
+                for mod in mods
+                if mod.get("impact") == fingerprint.RIG_CHANGED and mod["id"] in self._records
+            ]
         if self._writes_refused():
             return
 
@@ -3699,10 +4382,15 @@ class ModLibrary:
         seen = folder.get("resource") if isinstance(folder.get("resource"), dict) else {}
         checked = kept.get("version") if isinstance(kept.get("version"), str) else None
         reference = checked or (seen.get("version") if isinstance(seen.get("version"), str) else None)
-        out.update(install=pin.key, version=version, checked=checked,
-                   update=version is None or reference is None or version != reference)
-        configured = {entry.get("source") for entry in (folder.get("configured") or {}).values()
-                      if isinstance(entry, dict)}
+        out.update(
+            install=pin.key,
+            version=version,
+            checked=checked,
+            update=version is None or reference is None or version != reference,
+        )
+        configured = {
+            entry.get("source") for entry in (folder.get("configured") or {}).values() if isinstance(entry, dict)
+        }
         with self._lock:
             entries = {entry.id: entry for entry in self.mods()}
             for item in kept.get("mods") or []:
@@ -3740,10 +4428,20 @@ class ModLibrary:
                 if not self._costume_outdated(record):
                     continue
                 entry = self._entry(record)
-                held = any(choice.get("source") == f"mod:{entry.id}" and holds(core, choice)
-                           for core, choice in choices.items())
-                out.append({"id": entry.id, "target": entry.target, "kind": entry.kind, "core": entry.core,
-                            "source": f"mod:{entry.id}", "installed": held})
+                held = any(
+                    choice.get("source") == f"mod:{entry.id}" and holds(core, choice)
+                    for core, choice in choices.items()
+                )
+                out.append(
+                    {
+                        "id": entry.id,
+                        "target": entry.target,
+                        "kind": entry.kind,
+                        "core": entry.core,
+                        "source": f"mod:{entry.id}",
+                        "installed": held,
+                    }
+                )
             for core, choice in sorted(choices.items()):
                 if choice.get("kind") != "model" or not str(choice.get("source") or "").startswith("variant:"):
                     continue
@@ -3755,12 +4453,26 @@ class ModLibrary:
                 except (OSError, ServiceError) as error:
                     log_failure(logger, logging.DEBUG, "Could not judge a costume swap", error)
                     continue
-                out.append({"id": "", "target": choice.get("variant"), "kind": "model", "core": core,
-                            "source": choice["source"], "installed": True})
+                out.append(
+                    {
+                        "id": "",
+                        "target": choice.get("variant"),
+                        "kind": "model",
+                        "core": core,
+                        "source": choice["source"],
+                        "installed": True,
+                    }
+                )
         return out
 
-    def refresh_costumes(self, pin: Pin | None = None, log: LogFunc = no_log,
-                         progress: ProgressCallback | None = None, *, write_game: bool = True) -> dict[str, list]:
+    def refresh_costumes(
+        self,
+        pin: Pin | None = None,
+        log: LogFunc = no_log,
+        progress: ProgressCallback | None = None,
+        *,
+        write_game: bool = True,
+    ) -> dict[str, list]:
         """At the start, without asking: what the App built from a costume under an older costume rule
         (``_outdated_costumes``) built again under the program's. An Optimize Physics copy is rebuilt in place
         (``update``) and, where the game files hold it, applied again; one that cannot be rebuilt (no physics rule
@@ -3779,8 +4491,9 @@ class ModLibrary:
             return result
         line = mod_progress.ItemProgress(progress, len(items), "process")
         for i, item in enumerate(items, 1):
-            line.item(i, **self._progress_identity(item["target"], "model", item["source"]),
-                      step=mod_progress.STEP_CHECK)
+            line.item(
+                i, **self._progress_identity(item["target"], "model", item["source"]), step=mod_progress.STEP_CHECK
+            )
             # each build tells how far it is: an Optimize Physics copy's rebuild, or the costume swap's build, most of
             # the item; then the write into the game files
             if item["id"]:
@@ -3821,8 +4534,12 @@ class ModLibrary:
                     continue
             result["done"].append(named)
         if items:
-            logger.info("Costume builds of an older rule: %d built again, %d kept, %d left",
-                        len(result["done"]), len(result["kept"]), len(result["left"]))
+            logger.info(
+                "Costume builds of an older rule: %d built again, %d kept, %d left",
+                len(result["done"]),
+                len(result["kept"]),
+                len(result["left"]),
+            )
         return result
 
     def _entry_identity(self, pin: Pin, core: str, config: dict[str, Any] | None) -> dict[str, str]:
@@ -3880,11 +4597,15 @@ class ModLibrary:
         if folder.get("retried") == _app_version():
             return []
         with self._lock:
-            return [core for core, choice in sorted((folder.get("configured") or {}).items())
-                    if isinstance(choice, dict) and choice.get("error") and self._kind(core, pin)]
+            return [
+                core
+                for core, choice in sorted((folder.get("configured") or {}).items())
+                if isinstance(choice, dict) and choice.get("error") and self._kind(core, pin)
+            ]
 
-    def retry_failed(self, pin: Pin | None = None, log: LogFunc = no_log,
-                     progress: ProgressCallback | None = None) -> ToggleResult | None:
+    def retry_failed(
+        self, pin: Pin | None = None, log: LogFunc = no_log, progress: ProgressCallback | None = None
+    ) -> ToggleResult | None:
         """At the start, without asking: the entries whose last write failed (``_failed_writes``) written again once
         under this build, as an On's Retry does for them alone. One that is written, or already holds its source,
         loses its error; one that fails keeps a fresh one. Refusals of the moment (the game running, an untested
@@ -3907,8 +4628,9 @@ class ModLibrary:
 
         with _errors("toggle"):
             self.profiles.update(change)
-        logger.info("Entries whose last write failed: %d written, %d failed again", len(result.done),
-                    len(result.failed))
+        logger.info(
+            "Entries whose last write failed: %d written, %d failed again", len(result.done), len(result.failed)
+        )
         return result
 
     def _impact_stamp(self, pin: Pin, version: str, records: list[dict[str, Any]], configured: set) -> str:
@@ -3935,8 +4657,14 @@ class ModLibrary:
         ``retry``: entries whose last write failed, not tried again under this build of the App (``_failed_writes``):
         the start writes them again (``retry_failed``), without asking; after the check while ``due``."""
         pin = pin or self.current_pin()
-        out: dict[str, Any] = {"due": False, "outdated": False, "retry": False, "install": None, "version": None,
-                               "previous": None}
+        out: dict[str, Any] = {
+            "due": False,
+            "outdated": False,
+            "retry": False,
+            "install": None,
+            "version": None,
+            "previous": None,
+        }
         if pin is None:
             return out
         version = self.resource_version(pin)
@@ -4022,13 +4750,18 @@ class ModLibrary:
                 changed.append(core)
         return changed
 
-    def _untested_entry(self, pin: Pin, core: str, targets: Sequence[Path], variant: str | None = None,
-                        kind: str | None = None) -> dict[str, Any]:
+    def _untested_entry(
+        self, pin: Pin, core: str, targets: Sequence[Path], variant: str | None = None, kind: str | None = None
+    ) -> dict[str, Any]:
         """An entry an untested build's confirmation names: {install, core, variant, kind}, with its file names for a
         generic part."""
         kind = kind or self._kind(core, pin) or "spr"
-        entry = {"install": pin.key, "core": core, "variant": variant or self._core_map(pin).key(core) or core,
-                 "kind": kind}
+        entry = {
+            "install": pin.key,
+            "core": core,
+            "variant": variant or self._core_map(pin).key(core) or core,
+            "kind": kind,
+        }
         if kind == "other":
             entry["files"] = [{"file": path.name} for path in targets]
         return entry
@@ -4063,9 +4796,14 @@ class ModLibrary:
         for install, item in confirm.items():
             cores = item.get("cores") if isinstance(item, Mapping) else None
             version = item.get("version") if isinstance(item, Mapping) else None
-            if (not isinstance(install, str) or not isinstance(version, str) or not version
-                    or not isinstance(cores, list) or len(cores) > 65536
-                    or not all(isinstance(core, str) and core for core in cores)):
+            if (
+                not isinstance(install, str)
+                or not isinstance(version, str)
+                or not version
+                or not isinstance(cores, list)
+                or len(cores) > 65536
+                or not all(isinstance(core, str) and core for core in cores)
+            ):
                 raise ServiceError("bad_params", key="confirm")
             self._untested_ok.setdefault((install, version), set()).update(cores)
             logger.info("Untested game build: %d cores confirmed in %s", len(cores), install)
@@ -4078,8 +4816,12 @@ class ModLibrary:
         try:
             paths = self._paths(record)
             files = {path.name: path for path in paths}
-            miss = (record["id"], tuple(sorted(self._mod_hashes(record).items())), pin.key if pin else None,
-                    tuple(sorted(self._originals())))
+            miss = (
+                record["id"],
+                tuple(sorted(self._mod_hashes(record).items())),
+                pin.key if pin else None,
+                tuple(sorted(self._originals())),
+            )
             if miss in self._backfill_misses:
                 return None
             candidates: list[tuple[str, Path]] = []
@@ -4152,8 +4894,9 @@ class ModLibrary:
             if not path.is_file():
                 return False
             stat = path.stat()
-            return not (says_official(record) and record.get("size") == stat.st_size
-                        and record.get("mtime") == stat.st_mtime_ns)
+            return not (
+                says_official(record) and record.get("size") == stat.st_size and record.get("mtime") == stat.st_mtime_ns
+            )
         except OSError:
             return True
 
@@ -4210,7 +4953,8 @@ class ModLibrary:
         for target in targets:
             original = self._original_path(target)
             if self._kept_for_configuration(target.name, config, pins) or self._needed_elsewhere(
-                    target.name, {str(target.resolve())}, pins):
+                target.name, {str(target.resolve())}, pins
+            ):
                 continue
             with contextlib.suppress(OSError):
                 if not original.resolve().is_relative_to(self.root):
@@ -4271,8 +5015,11 @@ class ModLibrary:
                 if self._needed_elsewhere(name, {str(path.resolve()) for path in files}, guarded):
                     continue
             else:
-                gone = [Path(path) for path in self._applied if Path(path).name == name
-                        and Path(path).parent in known_dirs and not Path(path).exists()]
+                gone = [
+                    Path(path)
+                    for path in self._applied
+                    if Path(path).name == name and Path(path).parent in known_dirs and not Path(path).exists()
+                ]
                 if not gone or not all(view.successor(known_dirs[path.parent], path) for path in gone):
                     continue
                 if self._needed_elsewhere(name, {str(path) for path in gone}, guarded):
@@ -4298,8 +5045,11 @@ class ModLibrary:
                         continue
                     stale.append(str(path))
                     core = view.maps[pin.key].slot(core_of(path.name))
-                    if (view.says_nonofficial(path, record, present=False) and view.configured(pin.key, core)
-                            and not view.later_record(path, pin)):
+                    if (
+                        view.says_nonofficial(path, record, present=False)
+                        and view.configured(pin.key, core)
+                        and not view.later_record(path, pin)
+                    ):
                         markers.setdefault(pin.key, set()).add(core)
         built_drops: dict[str, set[str]] = {}
         for pin in pins:
@@ -4362,7 +5112,7 @@ class ModLibrary:
     def _prune_quietly(self) -> None:
         # Writers already hold the library lock, possibly followed by transaction
         # and Mod locks. Do not reacquire it after those higher-order locks.
-        if getattr(self, '_asset_deletion', None):
+        if getattr(self, "_asset_deletion", None):
             return
         if self._deferred_prunes:
             self._prune_pending = True
@@ -4399,11 +5149,25 @@ class ModLibrary:
         parsed = parse_filename(part.path.name)
         copy_ = entry.copies.get(str(part.path))
         applied = "unknown" if part.carried == "damaged" else part.carried
-        checked = None if part.official else self.original_check(
-            part.path.name, copy_, roots=[pin.root for pin in view.pins.values()])
-        return GameFileState(part.path, entry.core if entry.kind == "other" else parsed.core, entry.kind,
-                             applied, part.crc, part.path.name in view.originals,
-                             parsed.date, part.size, copy_, copy_ is not None, part.official, checked)
+        checked = (
+            None
+            if part.official
+            else self.original_check(part.path.name, copy_, roots=[pin.root for pin in view.pins.values()])
+        )
+        return GameFileState(
+            part.path,
+            entry.core if entry.kind == "other" else parsed.core,
+            entry.kind,
+            applied,
+            part.crc,
+            part.path.name in view.originals,
+            parsed.date,
+            part.size,
+            copy_,
+            copy_ is not None,
+            part.official,
+            checked,
+        )
 
     @_serialized
     def state(self, variant_key: str, pin: Pin | None = None) -> VariantState:
@@ -4424,10 +5188,14 @@ class ModLibrary:
             entry = view.entry(pin, core)
             files.extend(self._file_state(view, entry, part) for part in entry.parts)
         sources = {file.applied for file in files}
-        crc = "needs_fix" if any(f.crc == "needs_fix" for f in files) else (
-            "fixed" if any(f.crc == "fixed" for f in files) else "ok")
-        return VariantState(variant_key, files, sources.pop() if len(sources) == 1 else "unknown",
-                            crc, any(f.original for f in files))
+        crc = (
+            "needs_fix"
+            if any(f.crc == "needs_fix" for f in files)
+            else ("fixed" if any(f.crc == "fixed" for f in files) else "ok")
+        )
+        return VariantState(
+            variant_key, files, sources.pop() if len(sources) == 1 else "unknown", crc, any(f.original for f in files)
+        )
 
     def _view_pins(self, pin: Pin) -> list[Pin]:
         pins = [pin]
@@ -4442,14 +5210,21 @@ class ModLibrary:
         folder = (((self.profiles.read() or {}).get("folders") or {}).get(pin.key) or {}).get("configured") or {}
         from . import lobby_camera
 
-        return lobby_camera.overlay(lobby_camera.cameras(self, variant_key), folder,
-                                    self._configured_sources(variant, folder))
+        return lobby_camera.overlay(
+            lobby_camera.cameras(self, variant_key), folder, self._configured_sources(variant, folder)
+        )
 
     @staticmethod
     def _configured_sources(variant: Any, folder: dict) -> dict[str, str | None]:
-        return {kind: (folder.get(value.lower()) or {}).get("source") if value else None
-                for kind, value in (("spr", variant.spr), ("lobby", variant.lobby), ("model", getattr(variant, "model", None)))
-                if kind != "model" or hasattr(variant, "model")}
+        return {
+            kind: (folder.get(value.lower()) or {}).get("source") if value else None
+            for kind, value in (
+                ("spr", variant.spr),
+                ("lobby", variant.lobby),
+                ("model", getattr(variant, "model", None)),
+            )
+            if kind != "model" or hasattr(variant, "model")
+        }
 
     @_serialized
     def roster_snapshot(self, variant_keys: list[str]) -> dict[str, Any]:
@@ -4472,18 +5247,27 @@ class ModLibrary:
             made.setdefault(lobby_camera.meta_of(record)["variant"], []).append(record)
         for key in dict.fromkeys([*variant_keys, *sorted(assigned)]):
             try:
-                configured[key] = lobby_camera.overlay(made.get(key, []), choices, self._configured_sources(
-                    self._variant(key), choices)) if pin else {"spr": None, "lobby": None}
+                configured[key] = (
+                    lobby_camera.overlay(
+                        made.get(key, []), choices, self._configured_sources(self._variant(key), choices)
+                    )
+                    if pin
+                    else {"spr": None, "lobby": None}
+                )
             except ServiceError:
                 configured[key] = {"spr": None, "lobby": None}
         modified = {}
         if pin is not None:
             allow = "scan" if self._scan_allowed() else "recorded"
             modified = self._modified(pin, _View(self, [pin], config, allow))
-        return {"install": pin.key if pin else None,
-                "mods": [self._entry(record) for record in self._records.values()],
-                "favorites": set(self._favorites), "configured": configured, "modified": modified,
-                "assigned": sorted(assigned)}
+        return {
+            "install": pin.key if pin else None,
+            "mods": [self._entry(record) for record in self._records.values()],
+            "favorites": set(self._favorites),
+            "configured": configured,
+            "modified": modified,
+            "assigned": sorted(assigned),
+        }
 
     @_serialized
     def selection(self, variant_key: str, pin: Pin | None = None) -> dict[str, dict]:
@@ -4513,21 +5297,35 @@ class ModLibrary:
         try:
             for path in paths:
                 record = self._applied.get(str(path.resolve())) or {}
-                if (record.get("source") != choice["source"] or record.get("removed")
-                        or self._hashes.get(path).sha1 != record.get("sha1")):
+                if (
+                    record.get("source") != choice["source"]
+                    or record.get("removed")
+                    or self._hashes.get(path).sha1 != record.get("sha1")
+                ):
                     installed = False
                     break
-            recorded = {Path(name) for name, record in self._applied.items()
-                        if Path(name).parent in pin.dirs
-                        and self._core_map(pin).slot(core_of(Path(name).name)) == core.lower()
-                        and record.get("source") == choice["source"] and not record.get("removed")}
+            recorded = {
+                Path(name)
+                for name, record in self._applied.items()
+                if Path(name).parent in pin.dirs
+                and self._core_map(pin).slot(core_of(Path(name).name)) == core.lower()
+                and record.get("source") == choice["source"]
+                and not record.get("removed")
+            }
             installed = installed and recorded == set(paths)
         except (OSError, ServiceError):
             installed = False
-        entry = {"source": choice["source"], "installed": installed,
-                 "error": None if installed else choice.get("error")}
+        entry = {
+            "source": choice["source"],
+            "installed": installed,
+            "error": None if installed else choice.get("error"),
+        }
         source = choice["source"]
-        if source.startswith("mod:") and source[4:] in self._records and self._incomplete(self._records[source[4:]], pin):
+        if (
+            source.startswith("mod:")
+            and source[4:] in self._records
+            and self._incomplete(self._records[source[4:]], pin)
+        ):
             entry["incomplete"] = True
         return entry
 
@@ -4554,6 +5352,7 @@ class ModLibrary:
                         choice["error"] = error
                     changed = True
             return changed
+
         self._update_profiles(change)
 
     @_serialized
@@ -4647,13 +5446,25 @@ class ModLibrary:
         camera = meta_of(record)
         if camera is not None:  # a lobby camera shows its source's art
             source = camera["source"]
-            return (self._preview(self._record(source[4:]), pin) if source.startswith("mod:")
-                    else self.official_bundles(camera["core"], pin=pin))
+            return (
+                self._preview(self._record(source[4:]), pin)
+                if source.startswith("mod:")
+                else self.official_bundles(camera["core"], pin=pin)
+            )
         return self._preview(record, pin)
 
     @_serialized
-    def save_camera(self, variant_key: str, source: str, scale: float, offset: list[float], prefab: str, root: str,
-                    pin: Pin | None = None, log: LogFunc = no_log) -> dict[str, Any]:
+    def save_camera(
+        self,
+        variant_key: str,
+        source: str,
+        scale: float,
+        offset: list[float],
+        prefab: str,
+        root: str,
+        pin: Pin | None = None,
+        log: LogFunc = no_log,
+    ) -> dict[str, Any]:
         """Keep a memorial lobby camera as a new lobby choice of a variant (``lobby_camera.save``)."""
         from . import lobby_camera
 
@@ -4666,7 +5477,11 @@ class ModLibrary:
 
         record = self._record(mod_id)
         meta = lobby_camera.meta_of(record)
-        return None if meta is None else (copy.deepcopy(meta), *lobby_camera.preview_files(self, record, self._current(pin)))
+        return (
+            None
+            if meta is None
+            else (copy.deepcopy(meta), *lobby_camera.preview_files(self, record, self._current(pin)))
+        )
 
     @_serialized
     def lobby_prefab_base(self, core: str, pin: Pin | None = None) -> Path | None:
@@ -4692,10 +5507,14 @@ class ModLibrary:
                 return 0
             with self._lock:
                 index = self._index(pin)
-                cores = sorted(core for core, paths in index.items()
-                               if paths and all(kind_of_file(path.name) == "spr" for path in paths))
-                stamp = hashlib.sha1(json.dumps([[core, sorted(p.name for p in index[core])] for core in cores])
-                                     .encode()).hexdigest()
+                cores = sorted(
+                    core
+                    for core, paths in index.items()
+                    if paths and all(kind_of_file(path.name) == "spr" for path in paths)
+                )
+                stamp = hashlib.sha1(
+                    json.dumps([[core, sorted(p.name for p in index[core])] for core in cores]).encode()
+                ).hexdigest()
             if self.rigs.stamp(pin.key) == stamp:
                 return 0
             kept, waited = 0, 0.0
@@ -4768,8 +5587,9 @@ class ModLibrary:
         kept = 0
         for name, text in atlases.items():
             skeleton = drawn_by.get(name)
-            if skeleton is None or self.rigs.has(core, hashlib.sha1(text).hexdigest(),
-                                                 hashlib.sha1(skeletons[skeleton]).hexdigest()):
+            if skeleton is None or self.rigs.has(
+                core, hashlib.sha1(text).hexdigest(), hashlib.sha1(skeletons[skeleton]).hexdigest()
+            ):
                 continue
             try:
                 pages = {atlas_remap.texture_key(page) for page in atlas_remap.parse_atlas(text, name).pages}
@@ -4777,8 +5597,9 @@ class ModLibrary:
             except (atlas_remap.RemapError, ValueError, UnicodeError, OSError, EOFError):
                 continue
             masks = {key: rig_archive.alpha_mask(images[key]) for key in pages if key in images}
-            if masks and self.rigs.add(core, name, text, skeleton, skeletons[skeleton],
-                                       fingerprint.atlas(text)["layout"], masks):
+            if masks and self.rigs.add(
+                core, name, text, skeleton, skeletons[skeleton], fingerprint.atlas(text)["layout"], masks
+            ):
                 kept += 1
         return kept
 
@@ -4798,8 +5619,9 @@ class ModLibrary:
         """The alpha masks of the pages of verified official copies (texture key to mask), kept per file content."""
         return self._mod_page_masks(paths)
 
-    def _archived_rigs(self, paths: list[Path], atlases: Mapping[str, bytes],
-                       current: Callable[[], Mapping[str, Any]] | None = None) -> dict[str, dict]:
+    def _archived_rigs(
+        self, paths: list[Path], atlases: Mapping[str, bytes], current: Callable[[], Mapping[str, Any]] | None = None
+    ) -> dict[str, dict]:
         """Of the official ``atlases`` as they are now that a mod's textures paint without the mod carrying them, the
         ones its pages were drawn for in an earlier release the archive keeps (``rig_archive.best``): per atlas name a
         ``fingerprint.painted``-style entry (``text``, base64 ``skeleton``, ``layout``, ``archived``). ``current`` gives
@@ -4813,20 +5635,32 @@ class ModLibrary:
             kept = self.rigs.rigs(core)
             now = {name: fingerprint.atlas(text)["layout"] for name, text in atlases.items()}
             stem = lambda name: Path(atlas_remap.texture_key(name)).stem
-            candidates = {name: [rig for rig in kept if stem(rig.atlas) == stem(name) and rig.layout != layout]
-                          for name, layout in now.items()}
+            candidates = {
+                name: [rig for rig in kept if stem(rig.atlas) == stem(name) and rig.layout != layout]
+                for name, layout in now.items()
+            }
             if not any(candidates.values()):
                 return {}
-            key = (tuple(sorted((path.name, self._hashes.get(path).sha1) for path in paths)),
-                   tuple(sorted(now.items())), self.rigs.generation(), current is not None)
+            key = (
+                tuple(sorted((path.name, self._hashes.get(path).sha1) for path in paths)),
+                tuple(sorted(now.items())),
+                self.rigs.generation(),
+                current is not None,
+            )
             if key in self._rig_matches:
                 return self._rig_matches[key]
             mod = self._mod_page_masks(paths)
             masks_now = current() if current is not None else None
             result = {}
             for name, rigs in candidates.items():
-                installed = masks_now if masks_now is not None else next(
-                    (rig.unpacked() for rig in kept if stem(rig.atlas) == stem(name) and rig.layout == now[name]), None)
+                installed = (
+                    masks_now
+                    if masks_now is not None
+                    else next(
+                        (rig.unpacked() for rig in kept if stem(rig.atlas) == stem(name) and rig.layout == now[name]),
+                        None,
+                    )
+                )
                 if not rigs or installed is None:
                     continue
                 found = rig_archive.best(rigs, mod, installed)
@@ -4836,8 +5670,12 @@ class ModLibrary:
                 text, skeleton = self.rigs.read(rig.atlas_sha1), self.rigs.read(rig.skeleton_sha1)
                 if text is None or skeleton is None:
                     continue
-                result[name] = {"text": text.decode("utf-8-sig"), "layout": rig.layout, "archived": True,
-                                "skeleton": base64.b64encode(skeleton).decode("ascii")}
+                result[name] = {
+                    "text": text.decode("utf-8-sig"),
+                    "layout": rig.layout,
+                    "archived": True,
+                    "skeleton": base64.b64encode(skeleton).decode("ascii"),
+                }
             if len(self._rig_matches) >= 256:
                 self._rig_matches.clear()
             self._rig_matches[key] = result
@@ -4857,8 +5695,11 @@ class ModLibrary:
         if record.get("kind") != "spr":
             return {}
         painted = (self._read_built_against(record) or {}).get("painted") or {}
-        known = {name: entry for name, entry in painted.items()
-                 if isinstance(entry.get("text"), str) and isinstance(entry.get("skeleton"), str)}
+        known = {
+            name: entry
+            for name, entry in painted.items()
+            if isinstance(entry.get("text"), str) and isinstance(entry.get("skeleton"), str)
+        }
         unrecorded = {name: data for name, data in (atlases or {}).items() if integrity.basename(name) not in known}
         if unrecorded:
             archived = self._archived_rigs(self._paths(record), unrecorded)
@@ -4887,8 +5728,9 @@ class ModLibrary:
         return others + paths
 
     @_serialized
-    def preview_complements(self, core: str, names: list[str], pin: Pin | None = None, *,
-                            files: dict[str, Path] | None = None) -> list[Path]:
+    def preview_complements(
+        self, core: str, names: list[str], pin: Pin | None = None, *, files: dict[str, Path] | None = None
+    ) -> list[Path]:
         """Parts omitted by an incoming preview, resolved with the same rule as a library mod."""
         pin = self._current(pin)
         targets = self._spine_parts(core, pin)
@@ -4917,7 +5759,7 @@ class ModLibrary:
         folder: dict[str, Any] = {}
         if policy == "configured":
             with contextlib.suppress(ServiceError):
-                folder = (((self.profiles.read() or {}).get("folders") or {}).get(pin.key) or {})
+                folder = ((self.profiles.read() or {}).get("folders") or {}).get(pin.key) or {}
         configured, built = folder.get("configured") or {}, folder.get("built") or {}
         key = hashlib.sha256(json.dumps([policy, configured, built], sort_keys=True, default=str).encode()).hexdigest()
         core_map = self._core_map(pin)
@@ -4947,9 +5789,15 @@ class ModLibrary:
             part = (kept.get("parts") or {}).get(path.name) if kept.get("source") == source else None
             if isinstance(part, dict):
                 sha1 = part.get("sha1")
-                candidate = own.get(part.get("mod_file")) if part.get("mod_file") else (
-                    self.root / "built" / f"{sha1}.bundle"
-                    if isinstance(sha1, str) and re.fullmatch(r"[0-9a-f]{40}", sha1) else None)
+                candidate = (
+                    own.get(part.get("mod_file"))
+                    if part.get("mod_file")
+                    else (
+                        self.root / "built" / f"{sha1}.bundle"
+                        if isinstance(sha1, str) and re.fullmatch(r"[0-9a-f]{40}", sha1)
+                        else None
+                    )
+                )
                 if candidate is not None and candidate.is_file() and self._hashes.get(candidate).sha1 == sha1:
                     return candidate
             if path.name in own and own[path.name].is_file():
@@ -4980,8 +5828,11 @@ class ModLibrary:
     def _incomplete(self, record: dict[str, Any], pin: Pin) -> bool:
         targets = self._spine_parts(core_of(record["files"][0]), pin)
         replaced = self._replaced_parts({path.name: path for path in self._paths(record)}, targets, pin)
-        return any(self._official_or_current(path, pin) == path and not self._is_official(path)
-                   for path in targets if path not in replaced)
+        return any(
+            self._official_or_current(path, pin) == path and not self._is_official(path)
+            for path in targets
+            if path not in replaced
+        )
 
     @_serialized
     def preview_incomplete(self, mod_id: str, pin: Pin | None = None) -> bool:
@@ -5000,14 +5851,24 @@ class ModLibrary:
 
     # --- switching ---
 
-    def _plan(self, record: dict[str, Any], log: LogFunc, pin: Pin, *,
-              older: Collection[Path] = (), check_references: bool = True) -> list[PlannedGroup]:
+    def _plan(
+        self,
+        record: dict[str, Any],
+        log: LogFunc,
+        pin: Pin,
+        *,
+        older: Collection[Path] = (),
+        check_references: bool = True,
+    ) -> list[PlannedGroup]:
         """Install groups, demoting stale whole files before a build. Comparisons only ask for targets, without
         reference reads; ``older`` carries any files the whole-file shortcut already found stale."""
         paths = self._paths(record)
         files = {path.name: path for path in paths}
-        targets = (self._other_targets(files, pin) if record["kind"] == "other" else
-                   self._spine_parts(core_of(paths[0].name), pin))
+        targets = (
+            self._other_targets(files, pin)
+            if record["kind"] == "other"
+            else self._spine_parts(core_of(paths[0].name), pin)
+        )
         resolution = self._resolve(files, targets, pin, older=older)
         stale = self._stale_sources(resolution.current, pin, targets=targets) if check_references else set()
         if stale:
@@ -5018,8 +5879,9 @@ class ModLibrary:
         for target, path in current.items():
             if path.name != target.name:
                 # A whole file under another name is written as it is: it must use the part's serialized format.
-                integrity.check_format(inspection.metadata(path), path,
-                                       inspection.metadata(self._official_or_current(target, pin)))
+                integrity.check_format(
+                    inspection.metadata(path), path, inspection.metadata(self._official_or_current(target, pin))
+                )
             parsed = parse_filename(path.name)
             group = groups.setdefault(parsed.prefix, PlannedGroup(parsed.prefix, parsed.category, parsed.core, []))
             group.files.append(PlannedFile(path, parsed, Action.DIRECT_REPLACE, existing_path=target))
@@ -5027,23 +5889,38 @@ class ModLibrary:
         older = {name: path for name, path in files.items() if path not in current.values()}
         if older:
             if record["kind"] == "other":
-                planned.append(PlannedGroup(prefix="", category=None, core=record["target"], files=[
-                    PlannedFile(path, parse_filename(name), Action.UPDATE)
-                    for name, path in older.items()], target_paths=self._other_targets(older, pin)))
+                planned.append(
+                    PlannedGroup(
+                        prefix="",
+                        category=None,
+                        core=record["target"],
+                        files=[PlannedFile(path, parse_filename(name), Action.UPDATE) for name, path in older.items()],
+                        target_paths=self._other_targets(older, pin),
+                    )
+                )
             else:
                 planned.extend(self._groups_of(resolution))
-        if not planned or any(file.action not in (Action.DIRECT_REPLACE, Action.UPDATE)
-                              for group in planned for file in group.files):
+        if not planned or any(
+            file.action not in (Action.DIRECT_REPLACE, Action.UPDATE) for group in planned for file in group.files
+        ):
             raise ServiceError("game_file_not_found", variant=record["target"])
         return planned
 
     @staticmethod
     def _plan_targets(groups: list[PlannedGroup]) -> list[Path]:
-        return sorted({path for group in groups for path in (
-            group.target_paths + [file.existing_path for file in group.files if file.existing_path is not None])})
+        return sorted(
+            {
+                path
+                for group in groups
+                for path in (
+                    group.target_paths + [file.existing_path for file in group.files if file.existing_path is not None]
+                )
+            }
+        )
 
-    def _stage_official(self, paths: list[Path], directory: Path, pin: Pin,
-                        *, current_fallback: bool = False) -> dict[Path, Path]:
+    def _stage_official(
+        self, paths: list[Path], directory: Path, pin: Pin, *, current_fallback: bool = False
+    ) -> dict[Path, Path]:
         staged = {}
         directory.mkdir(parents=True, exist_ok=True)
         for path in paths:
@@ -5055,8 +5932,9 @@ class ModLibrary:
             staged[path] = target
         return staged
 
-    def _stage_direct(self, targets: list[Path], sources: dict[str, Path], directory: Path, pin: Pin,
-                      updating: set[Path]) -> dict[Path, Path]:
+    def _stage_direct(
+        self, targets: list[Path], sources: dict[str, Path], directory: Path, pin: Pin, updating: set[Path]
+    ) -> dict[Path, Path]:
         """Stage whole-file replacements and omitted parts without requiring an official base.
 
         Asset transfers still require verified official targets, including generic updates.
@@ -5077,11 +5955,20 @@ class ModLibrary:
             staged[path] = prepared
         return staged
 
-    def _commit(self, replacements: dict[Path, Path], source: str, log: LogFunc,
-                progress: ProgressCallback | None = None, pin: Pin | None = None, prune: bool = True,
-                build_keys: dict[Path, str] | None = None, create_backup: bool = False,
-                expected: dict[Path, str] | None = None, kept_current: list[str] | None = None,
-                untested: bool = True) -> list[Path]:
+    def _commit(
+        self,
+        replacements: dict[Path, Path],
+        source: str,
+        log: LogFunc,
+        progress: ProgressCallback | None = None,
+        pin: Pin | None = None,
+        prune: bool = True,
+        build_keys: dict[Path, str] | None = None,
+        create_backup: bool = False,
+        expected: dict[Path, str] | None = None,
+        kept_current: list[str] | None = None,
+        untested: bool = True,
+    ) -> list[Path]:
         """Write prepared files over game files as one unit, keeping what they replace: the official file in
         originals/ (once), a file kept nowhere else as a library mod (_keep_replaced). Every written part is rolled
         back on failure. With ``prune``, kept originals no longer needed are deleted afterwards, whatever the
@@ -5089,15 +5976,23 @@ class ModLibrary:
         a core an untested build changed needs the user's confirmation (``_check_untested``); False for a rollback
         that puts back what was there."""
         pin = self._current(pin)
-        deletion = getattr(self, '_asset_deletion', None)
+        deletion = getattr(self, "_asset_deletion", None)
         if deletion:
             deletion.remember_game(replacements, pin)
         try:
             with self._transaction_lock():
-                return self._write(replacements, source, log, progress, pin, build_keys,
-                                   create_backup=create_backup, untested=untested,
-                                   **({"expected": expected} if expected else {}),
-                                   **({"kept_current": kept_current} if kept_current is not None else {}))
+                return self._write(
+                    replacements,
+                    source,
+                    log,
+                    progress,
+                    pin,
+                    build_keys,
+                    create_backup=create_backup,
+                    untested=untested,
+                    **({"expected": expected} if expected else {}),
+                    **({"kept_current": kept_current} if kept_current is not None else {}),
+                )
         finally:
             if prune:
                 self._prune_quietly()
@@ -5138,8 +6033,13 @@ class ModLibrary:
 
     def _journals(self) -> tuple[str, ...]:
         """The pending journals: write, import and deletion journals under the library, as sorted paths."""
-        return tuple(sorted(str(path) for folder in ("transactions", "import-transactions", "asset-deletions")
-                            for path in (self.root / folder).glob("*/journal.json")))
+        return tuple(
+            sorted(
+                str(path)
+                for folder in ("transactions", "import-transactions", "asset-deletions")
+                for path in (self.root / folder).glob("*/journal.json")
+            )
+        )
 
     def _recover_pending(self) -> None:
         """Recover before indexing game files, including one moved away just before a crash. Raises the failure of a
@@ -5229,8 +6129,11 @@ class ModLibrary:
         for path in sorted((self.root / "transactions").glob("*/journal.json")):
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
-                if data["version"] != 1 or data["phase"] not in ("preparing", "writing", "committed") \
-                        or not path.resolve().is_relative_to(self.root / "transactions"):
+                if (
+                    data["version"] != 1
+                    or data["phase"] not in ("preparing", "writing", "committed")
+                    or not path.resolve().is_relative_to(self.root / "transactions")
+                ):
                     raise ValueError("Invalid write journal")
                 if data["phase"] == "committed":
                     shutil.rmtree(path.parent)
@@ -5243,8 +6146,9 @@ class ModLibrary:
                     # _prune refuses while a journal exists).
                     if path.parent.name not in self._waiting:
                         self._waiting.add(path.parent.name)
-                        logger.warning("Write journal %s waits for its install, which is not known now",
-                                       path.parent.name)
+                        logger.warning(
+                            "Write journal %s waits for its install, which is not known now", path.parent.name
+                        )
                     continue
                 # Another resource subfolder or a moved game folder is no reason to stop, if every target still lies in
                 # a resource folder of the install; otherwise the folders changed.
@@ -5266,8 +6170,10 @@ class ModLibrary:
                     targets.append(target)
                 with self._writable(targets, pin, recovering=True):
                     left = self._rollback_write(data, pin)
-                self._release_failed([Path(item["target"]) for item in data["files"]
-                                      if item["kept_now"] and item["target"] not in left], pin)
+                self._release_failed(
+                    [Path(item["target"]) for item in data["files"] if item["kept_now"] and item["target"] not in left],
+                    pin,
+                )
                 self._drop_mods(self._droppable(data["kept"], left))
                 shutil.rmtree(path.parent)
                 self._waiting.discard(path.parent.name)
@@ -5275,6 +6181,7 @@ class ModLibrary:
             except (ValueError, TypeError, KeyError) as error:
                 raise ServiceError("library_io_error", file=path) from error
         from .asset_delete import recover
+
         recover(self)
 
     def _droppable(self, kept: list[str], left: set[str]) -> list[str]:
@@ -5301,8 +6208,7 @@ class ModLibrary:
         for item in reversed(data["files"]):
             target = Path(item["target"])
             if not target.exists() and _has_successor(self._index(pin), target):
-                logger.warning("Game file %s was superseded by a game update, not restoring it",
-                               core_of(target.name))
+                logger.warning("Game file %s was superseded by a game update, not restoring it", core_of(target.name))
                 left.add(item["target"])
                 superseded.add(item["target"])
                 continue
@@ -5316,14 +6222,18 @@ class ModLibrary:
             if current == item["before"]:
                 continue
             if current not in (None, item["after"]):
-                logger.warning("Game file %s was changed outside the library, leaving it as it is",
-                               core_of(target.name))
+                logger.warning(
+                    "Game file %s was changed outside the library, leaving it as it is", core_of(target.name)
+                )
                 left.add(item["target"])
                 continue
             backup = self.root / item["rollback"]
             verify_file(backup, item["before"])
-            if item["official"] and item["kept_now"] and not self._needed_elsewhere(
-                    target.name, {str(target.resolve())}, self._all_pins()):
+            if (
+                item["official"]
+                and item["kept_now"]
+                and not self._needed_elsewhere(target.name, {str(target.resolve())}, self._all_pins())
+            ):
                 verified_move(backup, target, item["before"])
             elif not atomic_clone(backup, target):
                 atomic_copy(backup, target)
@@ -5382,8 +6292,9 @@ class ModLibrary:
         self._layout_cache.move_to_end(key)
         return layouts
 
-    def _broken_references(self, replacements: Mapping[Path, Path], pin: Pin, *,
-                           targets: Collection[Path] = ()) -> dict[Path, set[pointers.Pointer]]:
+    def _broken_references(
+        self, replacements: Mapping[Path, Path], pin: Pin, *, targets: Collection[Path] = ()
+    ) -> dict[Path, set[pointers.Pointer]]:
         """The written files of ``replacements`` ({target: prepared}) that point at objects the game does not hold:
         a pointer into another bundle's CAB whose object is gone there or of a type the field cannot hold
         (``pointers.dangling``), {target: those pointers}. ``targets`` completes a planned entry: its omitted parts
@@ -5400,8 +6311,11 @@ class ModLibrary:
                 if error.code not in ("original_unavailable", "original_invalid"):
                     raise
                 official[target] = None
-        written = [target for target, prepared in replacements.items() if official[target] is None
-                   or self._hashes.get(official[target]).sha1 != self._hashes.get(prepared).sha1]
+        written = [
+            target
+            for target, prepared in replacements.items()
+            if official[target] is None or self._hashes.get(official[target]).sha1 != self._hashes.get(prepared).sha1
+        ]
         if not written:
             return {}
         index = self._cab_index(pin)
@@ -5425,11 +6339,15 @@ class ModLibrary:
                         return self._layouts_of(path).get(cab)
                     except (ServiceError, OSError, ValueError):
                         return None
+
                 return layout
+
             return layout_for
 
-        resulting = {target: replacements.get(target, original if original is not None else target)
-                     for target, original in official.items()}
+        resulting = {
+            target: replacements.get(target, original if original is not None else target)
+            for target, original in official.items()
+        }
         current, baseline = world(resulting), world(official)
         broken: dict[Path, set[pointers.Pointer]] = {}
         for target in written:
@@ -5451,8 +6369,10 @@ class ModLibrary:
             log_failure(logger, logging.DEBUG, "Could not read the references of a built copy", error)
             return False
         if broken:
-            logger.info("The built copy of %s points at objects the game no longer holds, rebuilding",
-                        ", ".join(sorted(target.name for target in broken)))
+            logger.info(
+                "The built copy of %s points at objects the game no longer holds, rebuilding",
+                ", ".join(sorted(target.name for target in broken)),
+            )
         return bool(broken)
 
     def _stale_sources(self, current: Mapping[Path, Path], pin: Pin, *, targets: Collection[Path]) -> set[Path]:
@@ -5470,8 +6390,10 @@ class ModLibrary:
             log_failure(logger, logging.DEBUG, "Could not read the references of a mod file", error)
             return set()
         if broken:
-            logger.info("%s points at objects the game no longer holds, updating it as a file of an older release",
-                        ", ".join(sorted(current[target].name for target in broken)))
+            logger.info(
+                "%s points at objects the game no longer holds, updating it as a file of an older release",
+                ", ".join(sorted(current[target].name for target in broken)),
+            )
         return {current[target] for target in broken}
 
     def _check_references(self, changed: Mapping[Path, Path], pin: Pin) -> None:
@@ -5480,8 +6402,12 @@ class ModLibrary:
         (mod_release_mismatch, naming the file)."""
         broken = self._broken_references(changed, pin)
         for target, found in sorted(broken.items()):
-            logger.warning("Refused a write pointing at %d objects the game no longer holds: %s (%s)", len(found),
-                           target.name, ", ".join(f"{item.cab}:{item.path_id}" for item in sorted(found)[:3]))
+            logger.warning(
+                "Refused a write pointing at %d objects the game no longer holds: %s (%s)",
+                len(found),
+                target.name,
+                ", ".join(f"{item.cab}:{item.path_id}" for item in sorted(found)[:3]),
+            )
             raise ServiceError("mod_release_mismatch", file=changed[target].name)
 
     def _check_target_crc(self, changed: dict[Path, Path]) -> None:
@@ -5489,15 +6415,26 @@ class ModLibrary:
         that needs the CRC fix, whatever step before missed it (crc_fix_failed, naming the file)."""
         for target, prepared in changed.items():
             fingerprint = self._hashes.get(prepared)
-            if crc_state(fingerprint.crc, fingerprint.trailing, target.name) == "needs_fix" and \
-                    self.settings.crc_needed(target):
+            if crc_state(
+                fingerprint.crc, fingerprint.trailing, target.name
+            ) == "needs_fix" and self.settings.crc_needed(target):
                 logger.warning("Refused a write whose CRC does not match the target name: %s", target.name)
                 raise ServiceError("crc_fix_failed", file=target)
 
-    def _write(self, replacements: dict[Path, Path], source: str, log: LogFunc,
-               progress: ProgressCallback | None, pin: Pin, build_keys: dict[Path, str] | None = None,
-               *, create_backup: bool = False, expected: dict[Path, str] | None = None,
-               kept_current: list[str] | None = None, untested: bool = True) -> list[Path]:
+    def _write(
+        self,
+        replacements: dict[Path, Path],
+        source: str,
+        log: LogFunc,
+        progress: ProgressCallback | None,
+        pin: Pin,
+        build_keys: dict[Path, str] | None = None,
+        *,
+        create_backup: bool = False,
+        expected: dict[Path, str] | None = None,
+        kept_current: list[str] | None = None,
+        untested: bool = True,
+    ) -> list[Path]:
         from ..gameassets.costume_rule import COSTUME_RULE
 
         dirs = list(pin.dirs)
@@ -5505,8 +6442,11 @@ class ModLibrary:
             check_resource_path(target, dirs)
             if self._hashes.get(prepared).trailing is None:
                 raise ServiceError("bundle_invalid", file=prepared)
-        changed = {target: prepared for target, prepared in replacements.items()
-                   if self._hashes.get(target).sha1 != self._hashes.get(prepared).sha1}
+        changed = {
+            target: prepared
+            for target, prepared in replacements.items()
+            if self._hashes.get(target).sha1 != self._hashes.get(prepared).sha1
+        }
         if untested and source != "official":  # restores and rollbacks put back what was there
             self._check_target_crc(changed)
             self._check_references(changed, pin)
@@ -5515,8 +6455,10 @@ class ModLibrary:
             written = sorted(changed)
             self._check_untested([(pin, self._untested_entry(pin, core_of(written[0].name), written), written)])
         fingerprints = {target: self._hashes.get(prepared) for target, prepared in replacements.items()}
-        tails = {target: read_tail(prepared) if fingerprints[target].trailing else None
-                 for target, prepared in replacements.items()}
+        tails = {
+            target: read_tail(prepared) if fingerprints[target].trailing else None
+            for target, prepared in replacements.items()
+        }
         old_applied = dict(self._applied)
         stamp = now()
 
@@ -5525,11 +6467,16 @@ class ModLibrary:
             for target in replacements:
                 fingerprint = fingerprints[target]
                 stat = target.stat()
-                record = {"source": source, "sha1": fingerprint.sha1, "size": stat.st_size,
-                          "mtime": stat.st_mtime_ns,
-                          "official": self._official_sha1(target, pin) == fingerprint.sha1,
-                          "at": stamp, "tail": tails[target],
-                          "crc": crc_state(fingerprint.crc, fingerprint.trailing, target.name)}
+                record = {
+                    "source": source,
+                    "sha1": fingerprint.sha1,
+                    "size": stat.st_size,
+                    "mtime": stat.st_mtime_ns,
+                    "official": self._official_sha1(target, pin) == fingerprint.sha1,
+                    "at": stamp,
+                    "tail": tails[target],
+                    "crc": crc_state(fingerprint.crc, fingerprint.trailing, target.name),
+                }
                 if build_keys and target in build_keys:
                     record["build"] = build_keys[target]
                 if source.startswith("variant:"):
@@ -5537,7 +6484,8 @@ class ModLibrary:
                     record["costume_rule"] = COSTUME_RULE
                 previous = self._applied.get(str(target.resolve()))
                 if previous and {k: v for k, v in previous.items() if k != "at"} == {
-                        k: v for k, v in record.items() if k != "at"}:
+                    k: v for k, v in record.items() if k != "at"
+                }:
                     record = previous  # nothing new: the write time stays the one of the bytes there
                 out[str(target.resolve())] = record
             return out
@@ -5582,22 +6530,43 @@ class ModLibrary:
                 pins = self._all_pins()
                 for i, target in enumerate(changed):
                     original = self._original_path(target)
-                    official = target in officials and self._hashes.get(officials[target]).sha1 == self._hashes.get(target).sha1
+                    official = (
+                        target in officials
+                        and self._hashes.get(officials[target]).sha1 == self._hashes.get(target).sha1
+                    )
                     new_original = officials.get(target) == target and not original.exists()
                     if new_original:
                         kept_now.append(target)
-                    restore = source == "official" and changed[target] == original and not self._needed_elsewhere(
-                        target.name, {str(target.resolve())}, pins)
+                    restore = (
+                        source == "official"
+                        and changed[target] == original
+                        and not self._needed_elsewhere(target.name, {str(target.resolve())}, pins)
+                    )
                     backup = original if official else directory / f"{i}.bundle"
-                    items.append({"target": str(target.resolve()), "before": self._hashes.get(target).sha1,
-                                  "after": fingerprints[target].sha1, "official": official,
-                                  "rollback": str(backup.relative_to(self.root)),
-                                  "kept_now": new_original,
-                                  "restore": str(original.relative_to(self.root)) if restore else None})
-                transaction = {"version": 1, "phase": "preparing",
-                               "pin": {"key": pin.key, "root": str(pin.root), "dirs": list(map(str, pin.dirs)),
-                                       "server": pin.server}, "files": items, "kept": kept,
-                               "old_applied": {item["target"]: old_applied.get(item["target"]) for item in items}}
+                    items.append(
+                        {
+                            "target": str(target.resolve()),
+                            "before": self._hashes.get(target).sha1,
+                            "after": fingerprints[target].sha1,
+                            "official": official,
+                            "rollback": str(backup.relative_to(self.root)),
+                            "kept_now": new_original,
+                            "restore": str(original.relative_to(self.root)) if restore else None,
+                        }
+                    )
+                transaction = {
+                    "version": 1,
+                    "phase": "preparing",
+                    "pin": {
+                        "key": pin.key,
+                        "root": str(pin.root),
+                        "dirs": list(map(str, pin.dirs)),
+                        "server": pin.server,
+                    },
+                    "files": items,
+                    "kept": kept,
+                    "old_applied": {item["target"]: old_applied.get(item["target"]) for item in items},
+                }
                 atomic_json(journal, transaction)
                 stage = "backup"  # what failed, for the log: the user only sees the error code
                 try:
@@ -5630,8 +6599,14 @@ class ModLibrary:
                         written.append(target)
                         log(f"Installed {target.name}")
                         if progress:
-                            progress(i, len(changed), t("webui.progress.restore" if source == "official"
-                                                        else "webui.progress.apply", name=target.name))
+                            progress(
+                                i,
+                                len(changed),
+                                t(
+                                    "webui.progress.restore" if source == "official" else "webui.progress.apply",
+                                    name=target.name,
+                                ),
+                            )
                     saving_state = True
                     stage = "state"
                     self._applied.update(records())
@@ -5669,18 +6644,27 @@ class ModLibrary:
             kept_current.extend(kept)
         return written
 
-    def _stage_adapted(self, sources: list[Path], targets: list[Path], directory: Path,
-                       log: LogFunc, pin: Pin) -> dict[Path, Path]:
+    def _stage_adapted(
+        self, sources: list[Path], targets: list[Path], directory: Path, log: LogFunc, pin: Pin
+    ) -> dict[Path, Path]:
         staged = self._stage_official(targets, directory / "targets", pin, current_fallback=True)
         output = directory / "output"
         output.mkdir(parents=True)
         adapted = adapt_variant_sources(
-            sources, list(staged.values()), directory / "sources", self.settings.asset_types(), log)
+            sources, list(staged.values()), directory / "sources", self.settings.asset_types(), log
+        )
         result = rebuild(
-            adapted, list(staged.values()), output,
-            self.settings.asset_types(), self.settings.save_options(self.settings.crc_needed(targets[0])),
-            self.settings.spine_options(), skip_unchanged=True, match_strategy="name_type",
-            anim_check=self.settings.anim_check_options(), log=log)
+            adapted,
+            list(staged.values()),
+            output,
+            self.settings.asset_types(),
+            self.settings.save_options(self.settings.crc_needed(targets[0])),
+            self.settings.spine_options(),
+            skip_unchanged=True,
+            match_strategy="name_type",
+            anim_check=self.settings.anim_check_options(),
+            log=log,
+        )
         if not result.success:
             raise ServiceError("mod_apply_failed", file=targets[0])
         reverse = {value: key for key, value in staged.items()}
@@ -5708,8 +6692,15 @@ class ModLibrary:
         dev = getattr(variant, "field_model", None)
         if dev:
             names = self._names(pin)
-            files = sorted((path for name, path in names.items() if name.startswith("field-character-_mxload")
-                            or (own_bundle(name, dev) and may_hold_model_root(name))), key=lambda path: path.name)
+            files = sorted(
+                (
+                    path
+                    for name, path in names.items()
+                    if name.startswith("field-character-_mxload")
+                    or (own_bundle(name, dev) and may_hold_model_root(name))
+                ),
+                key=lambda path: path.name,
+            )
             if files:
                 return dev.lower(), files, files
         raise ServiceError("game_file_not_found", variant=other)
@@ -5733,9 +6724,15 @@ class ModLibrary:
         except OSError:
             revisions = {}
         return _CostumeInputs(
-            originals=originals, dev=dev, chosen={path.name for path in prefab_files},
-            sources=sources, cabs=self._cab_index(pin), target_dev=target_dev,
-            official=lambda path: self._official_or_current(path, pin), revisions=revisions)
+            originals=originals,
+            dev=dev,
+            chosen={path.name for path in prefab_files},
+            sources=sources,
+            cabs=self._cab_index(pin),
+            target_dev=target_dev,
+            official=lambda path: self._official_or_current(path, pin),
+            revisions=revisions,
+        )
 
     def _stage_copies(self, originals: dict[Path, Path], directory: Path) -> dict[Path, Path]:
         """Copy the bytes chosen for each game file (``originals``) into ``directory`` under the game file's name."""
@@ -5749,11 +6746,21 @@ class ModLibrary:
             staged[path] = target
         return staged
 
-    def _stage_costume(self, other: str, targets: list[Path], directory: Path, log: LogFunc, pin: Pin, *,
-                       preview: bool = False, report: dict[str, Any] | None = None,
-                       physics: bool = False, inputs: _CostumeInputs | None = None,
-                       step: Callable[[], None] | None = None,
-                       fraction: Callable[[float], None] | None = None) -> dict[Path, Path]:
+    def _stage_costume(
+        self,
+        other: str,
+        targets: list[Path],
+        directory: Path,
+        log: LogFunc,
+        pin: Pin,
+        *,
+        preview: bool = False,
+        report: dict[str, Any] | None = None,
+        physics: bool = False,
+        inputs: _CostumeInputs | None = None,
+        step: Callable[[], None] | None = None,
+        fraction: Callable[[float], None] | None = None,
+    ) -> dict[Path, Path]:
         """The model slot ``targets`` (official copies) carrying the costume of ``other``'s model: changed parts built
         into ``directory``, the others as staged official copies. Reads official bytes only: the slot's own parts, the
         source model's files, and any other bundle the CAB index finds. ``physics``: Optimize Physics, the
@@ -5790,19 +6797,38 @@ class ModLibrary:
 
         step = step or (lambda: None)
         with spans.span("costume.build"):
-            result = adapt(index=index, resolver=resolver, target_files=list(staged.values()),
-                           target_dev=inputs.target_dev, source_files=[p for p in sources if p.name in inputs.chosen],
-                           source_dev=inputs.dev, open_writable=Bundle.load, physics=physics,
-                           halo=True, step=step,
-                           worn=_WornVerdicts(self.root / "worn-items.json", inputs.revisions), meter=meter,
-                           poses=PoseStore(self.root / "costume-poses", inputs.revisions))
+            result = adapt(
+                index=index,
+                resolver=resolver,
+                target_files=list(staged.values()),
+                target_dev=inputs.target_dev,
+                source_files=[p for p in sources if p.name in inputs.chosen],
+                source_dev=inputs.dev,
+                open_writable=Bundle.load,
+                physics=physics,
+                halo=True,
+                step=step,
+                worn=_WornVerdicts(self.root / "worn-items.json", inputs.revisions),
+                meter=meter,
+                poses=PoseStore(self.root / "costume-poses", inputs.revisions),
+            )
         if report is not None and result.plan.unfit:
-            report["unfit"] = {"source": "stretch", "adapted": f"{result.plan.stretch:.2f}", "own": f"{result.plan.own:.2f}"}
+            report["unfit"] = {
+                "source": "stretch",
+                "adapted": f"{result.plan.stretch:.2f}",
+                "own": f"{result.plan.own:.2f}",
+            }
         if report is not None:
             # Optimize Physics gains something: hem or chain rules, or arms pushed out of a bulkier costume
             report["physics"] = bool(result.arms) or (
-                result.hems is not None and (result.hems.skirt is not None or result.hems.regrouped
-                                             or result.hems.thin is not None or bool(result.hems.springs)))
+                result.hems is not None
+                and (
+                    result.hems.skirt is not None
+                    or result.hems.regrouped
+                    or result.hems.thin is not None
+                    or bool(result.hems.springs)
+                )
+            )
             report["cautions"] = list(result.cautions)
         output = directory / "output"
         output.mkdir(parents=True, exist_ok=True)
@@ -5810,10 +6836,17 @@ class ModLibrary:
         replacements = dict(staged)
         # A preview's parts are only read by the App's own 3D export and never reach the game: written uncompressed and
         # without the CRC fix, which skips the LZMA pass (most of the save phase). Game-bound builds keep the settings.
-        jobs = [(reverse[path], bundle, output / path.name,
-                 SaveOptions(perform_crc=False, compression="none") if preview
-                 else self.settings.save_options(self.settings.crc_needed(reverse[path])))
-                for path, bundle in result.changed.items()]
+        jobs = [
+            (
+                reverse[path],
+                bundle,
+                output / path.name,
+                SaveOptions(perform_crc=False, compression="none")
+                if preview
+                else self.settings.save_options(self.settings.crc_needed(reverse[path])),
+            )
+            for path, bundle in result.changed.items()
+        ]
         # in threads, at most half the cores: step() still runs before each save starts; a game-bound costume's LZMA
         # in the fast mode (``bundle_saves``: the same format, about three times faster, some 3 % larger)
         save_bundles(jobs, step=step, progress=lambda done, count: meter.phase("save", done, count), fast=not preview)
@@ -5841,8 +6874,11 @@ class ModLibrary:
         except ServiceError as error:
             if error.code != "original_unavailable":
                 raise
-            return hashlib.sha1(repr(("current", rule, [(p.name, p.stat().st_size, p.stat().st_mtime_ns)
-                                                                    for p in [*inputs, *targets]])).encode()).hexdigest(), targets
+            return hashlib.sha1(
+                repr(
+                    ("current", rule, [(p.name, p.stat().st_size, p.stat().st_mtime_ns) for p in [*inputs, *targets]])
+                ).encode()
+            ).hexdigest(), targets
 
     def _costume_allowed(self, verdict: dict[str, Any] | None) -> bool:
         """Whether a pair's saved verdict lets it be built for the game: unchecked, "ok" or "preview" (past the
@@ -5856,20 +6892,37 @@ class ModLibrary:
         except (OSError, ValueError):
             return {}
         verdicts = data.get("verdicts") if isinstance(data, dict) and data.get("version") == 1 else None
-        return {key: value for key, value in (verdicts or {}).items()
-                if isinstance(key, str) and isinstance(value, dict) and isinstance(value.get("ok"), bool)}
+        return {
+            key: value
+            for key, value in (verdicts or {}).items()
+            if isinstance(key, str) and isinstance(value, dict) and isinstance(value.get("ok"), bool)
+        }
 
-    def _save_verdict(self, signature: str, ok: bool, reason: str | None = None,
-                      detail: Mapping[str, Any] | None = None, *, preview: bool = False,
-                      cautions: Iterable[str] = ()) -> dict[str, Any]:
+    def _save_verdict(
+        self,
+        signature: str,
+        ok: bool,
+        reason: str | None = None,
+        detail: Mapping[str, Any] | None = None,
+        *,
+        preview: bool = False,
+        cautions: Iterable[str] = (),
+    ) -> dict[str, Any]:
         """``cautions``: what the built pair may draw differently in the game (``model_adapt.Result.cautions``)."""
         cautions = sorted({str(c) for c in cautions})
-        verdict = {"ok": ok, "reason": reason, "detail": {str(k): str(v) for k, v in (detail or {}).items()},
-                   "at": now(), **({"preview": True} if preview and not ok else {}),
-                   **({"cautions": cautions} if cautions and (ok or preview) else {})}
+        verdict = {
+            "ok": ok,
+            "reason": reason,
+            "detail": {str(k): str(v) for k, v in (detail or {}).items()},
+            "at": now(),
+            **({"preview": True} if preview and not ok else {}),
+            **({"cautions": cautions} if cautions and (ok or preview) else {}),
+        }
         verdicts = self._verdicts()
         verdicts[signature] = verdict
-        kept = dict(sorted(verdicts.items(), key=lambda item: str(item[1].get("at", "")), reverse=True)[:COSTUME_VERDICTS])
+        kept = dict(
+            sorted(verdicts.items(), key=lambda item: str(item[1].get("at", "")), reverse=True)[:COSTUME_VERDICTS]
+        )
         try:
             atomic_json(self.root / "costume-verdicts.json", {"version": 1, "verdicts": kept})
         except OSError as error:  # the verdict is still returned; the pair is checked again next time
@@ -5886,8 +6939,15 @@ class ModLibrary:
         return self._verdicts().get(signature)
 
     @_serialized
-    def record_costume_verdict(self, variant_key: str, other: str, ok: bool, reason: str | None = None,
-                               detail: Mapping[str, Any] | None = None, pin: Pin | None = None) -> dict[str, Any]:
+    def record_costume_verdict(
+        self,
+        variant_key: str,
+        other: str,
+        ok: bool,
+        reason: str | None = None,
+        detail: Mapping[str, Any] | None = None,
+        pin: Pin | None = None,
+    ) -> dict[str, Any]:
         """Save the verdict of a pair checked to its end (its preview built and exported, or refused), with the
         cautions its preview build found."""
         signature, _ = self._costume_signature(variant_key, other, self._current(pin))
@@ -5903,8 +6963,9 @@ class ModLibrary:
         return [c for c in cautions if isinstance(c, str)] if isinstance(cautions, list) else []
 
     @_serialized
-    def optimize_costume(self, variant_key: str, source: str, name: str, pin: Pin | None = None,
-                         progress: ProgressCallback | None = None) -> dict[str, Any]:
+    def optimize_costume(
+        self, variant_key: str, source: str, name: str, pin: Pin | None = None, progress: ProgressCallback | None = None
+    ) -> dict[str, Any]:
         """Optimize Physics: a variant's model slot carrying ``source``'s costume ("variant:<key>") built with
         the physics rules (Rule B, the skirt chains as new bones), kept as a model mod of the variant named after
         ``name`` (the costume as the screen shows it): {"mod": id}, the copy made before when there is one. {"unneeded":
@@ -5924,25 +6985,47 @@ class ModLibrary:
         verdict = self._verdicts().get(signature)
         if not self._costume_allowed(verdict):  # refused: never built for the game
             raise ServiceError("source_unsupported", source=verdict.get("reason") or source)
-        made = next((record for record in self._records.values() if self._optimized_from(record) == source
-                     and record["kind"] == "model" and self._target_of(record) == variant_key), None)
+        made = next(
+            (
+                record
+                for record in self._records.values()
+                if self._optimized_from(record) == source
+                and record["kind"] == "model"
+                and self._target_of(record) == variant_key
+            ),
+            None,
+        )
         if made is not None:
             return {"mod": made["id"]}
         label = name.strip()[:200] if isinstance(name, str) and name.strip() else other
         report: dict[str, Any] = {}
         with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
-            replacements = self._stage_costume(other, targets, Path(temporary) / "model", no_log, pin, report=report,
-                                               physics=True, fraction=_item_fraction(progress, build=1.0))
+            replacements = self._stage_costume(
+                other,
+                targets,
+                Path(temporary) / "model",
+                no_log,
+                pin,
+                report=report,
+                physics=True,
+                fraction=_item_fraction(progress, build=1.0),
+            )
             if not report.get("physics"):
                 return {"unneeded": True, "reason": "no_gain"}
             built = {path.name: path for path in replacements.values() if path.parent.name == "output"}
-            record = self._store(built, label, variant_key, "model",
-                                 metadata={"optimized_from": source, "costume_rule": COSTUME_RULE},
-                                 built_against=self._built_against(built, pin, "import"))
+            record = self._store(
+                built,
+                label,
+                variant_key,
+                "model",
+                metadata={"optimized_from": source, "costume_rule": COSTUME_RULE},
+                built_against=self._built_against(built, pin, "import"),
+            )
         return {"mod": record["id"]}
 
-    def costume_preview(self, variant_key: str, other: str, pin: Pin | None = None, *,
-                        cancelled: Callable[[], bool] | None = None) -> list[Path]:
+    def costume_preview(
+        self, variant_key: str, other: str, pin: Pin | None = None, *, cancelled: Callable[[], bool] | None = None
+    ) -> list[Path]:
         """The parts of a variant's model slot carrying another variant's costume, for a 3D preview: built once per
         build signature into built/previews/<signature> and kept for the newest few (the export cache keys on their
         paths). Reads official bytes where there are any, else the current ones, like the other previews.
@@ -5958,6 +7041,7 @@ class ModLibrary:
         preview waiting for a build of the same pair waits outside its own time (``preview_gate.waiting``).
         ``cancelled`` (the costume check's ``jobs.cancel``): once set, the build stops at its next step (``busy``)
         and no verdict is saved; a build that ended is still kept."""
+
         def stopped() -> bool:
             return cancelled is not None and cancelled()
 
@@ -5985,17 +7069,26 @@ class ModLibrary:
                     report: dict[str, Any] = {}
                     with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
                         try:
-                            replacements = self._stage_costume(other, targets, Path(temporary) / "model", no_log,
-                                                               built_pin, preview=True, report=report, inputs=inputs,
-                                                               step=step)
+                            replacements = self._stage_costume(
+                                other,
+                                targets,
+                                Path(temporary) / "model",
+                                no_log,
+                                built_pin,
+                                preview=True,
+                                report=report,
+                                inputs=inputs,
+                                step=step,
+                            )
                         except ServiceError as error:
                             if error.code == "source_unsupported" and not stopped():
                                 # the rule cannot carry this pair: never offered again
                                 self._costume_preview_refused(variant_key, other, pin, signature, error)
                             raise
                         built = [path for path in replacements.values() if path.parent.name == "output"]
-                        parts = self._costume_preview_store(variant_key, other, pin, signature, built, report,
-                                                            verdicts=not stopped())
+                        parts = self._costume_preview_store(
+                            variant_key, other, pin, signature, built, report, verdicts=not stopped()
+                        )
                     if parts is not None:
                         return parts
                     logger.info("Costume preview %s <- %s changed while it was built: built again", variant_key, other)
@@ -6019,8 +7112,9 @@ class ModLibrary:
             building.set()
 
     @_serialized
-    def _costume_preview_start(self, variant_key: str, other: str, pin: Pin | None, *,
-                               verdicts: bool = True) -> list[Path] | tuple[str, list[Path], Pin, _CostumeInputs]:
+    def _costume_preview_start(
+        self, variant_key: str, other: str, pin: Pin | None, *, verdicts: bool = True
+    ) -> list[Path] | tuple[str, list[Path], Pin, _CostumeInputs]:
         """``costume_preview``'s first step, under the library lock: the kept preview of the pair's build signature
         when there is one (with the stretch verdict it found, unless ``verdicts`` is False), else (signature, the
         slot's files, the install, the build's inputs)."""
@@ -6036,23 +7130,39 @@ class ModLibrary:
                 if parts and all(path.is_file() for path in parts):
                     os.utime(folder)
                     if verdicts and kept.get("unfit") and signature not in self._verdicts():
-                        self._save_verdict(signature, False, "stretch", kept["unfit"], preview=True,
-                                           cautions=kept.get("cautions") or ())
+                        self._save_verdict(
+                            signature,
+                            False,
+                            "stretch",
+                            kept["unfit"],
+                            preview=True,
+                            cautions=kept.get("cautions") or (),
+                        )
                     return parts
             except (OSError, ValueError, KeyError, TypeError):
                 pass
         return signature, targets, pin, self._costume_inputs(other, targets, pin, preview=True)
 
     @_serialized
-    def _costume_preview_refused(self, variant_key: str, other: str, pin: Pin | None, signature: str,
-                                 error: ServiceError) -> None:
+    def _costume_preview_refused(
+        self, variant_key: str, other: str, pin: Pin | None, signature: str, error: ServiceError
+    ) -> None:
         """Save the rule's refusal of a pair built without the lock, when its signature is still the current one."""
         if self._costume_signature(variant_key, other, self._current(pin))[0] == signature:
             self._save_verdict(signature, False, error.params.get("source"), error.params)
 
     @_serialized
-    def _costume_preview_store(self, variant_key: str, other: str, pin: Pin | None, signature: str,
-                               built: list[Path], report: dict[str, Any], *, verdicts: bool = True) -> list[Path] | None:
+    def _costume_preview_store(
+        self,
+        variant_key: str,
+        other: str,
+        pin: Pin | None,
+        signature: str,
+        built: list[Path],
+        report: dict[str, Any],
+        *,
+        verdicts: bool = True,
+    ) -> list[Path] | None:
         """``costume_preview``'s last step, under the library lock: the parts built without it copied into
         built/previews/<signature>, with the stretch verdict the build found (unless ``verdicts`` is False), and the
         older previews pruned; None, keeping nothing, when the pair's signature is no longer ``signature``."""
@@ -6062,25 +7172,44 @@ class ModLibrary:
         folder.mkdir(parents=True, exist_ok=True)
         for path in built:
             atomic_copy(path, folder / path.name)
-        (folder / "parts.json").write_text(json.dumps({"parts": [path.name for path in built],
-                                                       "unfit": report.get("unfit"),
-                                                       "cautions": report.get("cautions") or []}))
+        (folder / "parts.json").write_text(
+            json.dumps(
+                {
+                    "parts": [path.name for path in built],
+                    "unfit": report.get("unfit"),
+                    "cautions": report.get("cautions") or [],
+                }
+            )
+        )
         if verdicts and report.get("unfit"):  # past the stretch limit: still offered, with a caution
-            self._save_verdict(signature, False, "stretch", report["unfit"], preview=True,
-                               cautions=report.get("cautions") or ())
-        previews = sorted((p for p in folder.parent.iterdir() if p.is_dir()), key=lambda p: p.stat().st_mtime, reverse=True)
+            self._save_verdict(
+                signature, False, "stretch", report["unfit"], preview=True, cautions=report.get("cautions") or ()
+            )
+        previews = sorted(
+            (p for p in folder.parent.iterdir() if p.is_dir()), key=lambda p: p.stat().st_mtime, reverse=True
+        )
         for stale in previews[COSTUME_PREVIEWS:]:
             remove_tree(stale)
         return [folder / path.name for path in built]
 
-    def _install_direct(self, record: dict[str, Any], targets: list[Path], work: Path, log: LogFunc,
-                        progress: ProgressCallback | None, pin: Pin) -> dict[Path, Path]:
+    def _install_direct(
+        self,
+        record: dict[str, Any],
+        targets: list[Path],
+        work: Path,
+        log: LogFunc,
+        progress: ProgressCallback | None,
+        pin: Pin,
+    ) -> dict[Path, Path]:
         sources = {path.name: path for path in self._paths(record)}
         by_name = {path.name: path for path in targets}
         stale: set[Path] = set()
-        if (len(sources) == len(record["files"]) and len(by_name) == len(targets)
-                and sources.keys() <= by_name.keys()
-                and all(not self._needs_crc_fix(path, by_name[name]) for name, path in sources.items())):
+        if (
+            len(sources) == len(record["files"])
+            and len(by_name) == len(targets)
+            and sources.keys() <= by_name.keys()
+            and all(not self._needs_crc_fix(path, by_name[name]) for name, path in sources.items())
+        ):
             stale = self._stale_sources({by_name[name]: path for name, path in sources.items()}, pin, targets=targets)
             if not stale:
                 # These parts have current names, references and the required CRC. The
@@ -6088,16 +7217,17 @@ class ModLibrary:
                 # official copy and replacing it with the same Mod adds no protection.
                 if progress:
                     progress(0, 1, t("webui.progress.process", name=core_of(record["files"][0])))
-                return {target: sources[target.name] if target.name in sources else self._official_or_current(target, pin)
-                        for target in targets}
+                return {
+                    target: sources[target.name] if target.name in sources else self._official_or_current(target, pin)
+                    for target in targets
+                }
         if record["kind"] == "other":
             resolution = self._resolve(sources, targets, pin, older=stale)
             more_stale = self._stale_sources(resolution.current, pin, targets=targets)
             if more_stale:
                 resolution = self._resolve(sources, targets, pin, older=stale | more_stale)
             current = resolution.current
-            staged = self._stage_direct(targets, sources, work / "targets", pin,
-                                        set(targets) - current.keys())
+            staged = self._stage_direct(targets, sources, work / "targets", pin, set(targets) - current.keys())
             output = work / "output"
             output.mkdir(parents=True, exist_ok=True)
             sources = self._paths(record)
@@ -6109,21 +7239,38 @@ class ModLibrary:
                         continue
                     # Same-name mods retain the whole uploaded bundle, including types outside the update filter.
                     parsed = parse_filename(exact.name)
-                    group = PlannedGroup(parsed.prefix, parsed.category, parsed.core, [
-                        PlannedFile(exact, parsed, Action.DIRECT_REPLACE, existing_path=original, need_crc_fix=True)])
-                    failures = install_staged([group], output, self.settings.asset_types(),
-                                              self.settings.save_options(self.settings.crc_needed(target)),
-                                              self.settings.spine_options(), log=log)
+                    group = PlannedGroup(
+                        parsed.prefix,
+                        parsed.category,
+                        parsed.core,
+                        [PlannedFile(exact, parsed, Action.DIRECT_REPLACE, existing_path=original, need_crc_fix=True)],
+                    )
+                    failures = install_staged(
+                        [group],
+                        output,
+                        self.settings.asset_types(),
+                        self.settings.save_options(self.settings.crc_needed(target)),
+                        self.settings.spine_options(),
+                        log=log,
+                    )
                     if failures:
                         raise ServiceError("mod_apply_failed", id=record["id"], reason=_reasons(failures))
                     continue
                 matching = resolver.same_prefix(sources, target)
                 if not matching:
                     raise ServiceError("mod_target_mismatch", id=record["id"], variant=core_of(target.name))
-                result = rebuild(matching, [original], output, self.settings.asset_types(),
-                    self.settings.save_options(self.settings.crc_needed(target)), self.settings.spine_options(),
-                    match_strategy="cont_name_type", skip_unchanged=True,
-                    anim_check=self.settings.anim_check_options(), log=log)
+                result = rebuild(
+                    matching,
+                    [original],
+                    output,
+                    self.settings.asset_types(),
+                    self.settings.save_options(self.settings.crc_needed(target)),
+                    self.settings.spine_options(),
+                    match_strategy="cont_name_type",
+                    skip_unchanged=True,
+                    anim_check=self.settings.anim_check_options(),
+                    log=log,
+                )
                 if result.no_match:  # the part takes nothing from the mod: it stays the official copy
                     log(f"  ⏭️ {t('log.mod_update.target_unchanged', name=target.name, count=0)}")
                     continue
@@ -6138,24 +7285,46 @@ class ModLibrary:
         planned = self._plan_targets(groups)
         if any(path not in allowed for path in planned):
             raise ServiceError("game_file_outside_resources", file=next(p for p in planned if p not in allowed))
-        updating = {path for group in groups for path in group.target_paths
-                    if any(file.action == Action.UPDATE for file in group.files)}
+        updating = {
+            path
+            for group in groups
+            for path in group.target_paths
+            if any(file.action == Action.UPDATE for file in group.files)
+        }
         staged = self._stage_direct(targets, sources, work / "targets", pin, updating)
         logger.info("Mod apply plan and stage: %.3f s", time.perf_counter() - started)
         started = time.perf_counter()
         # Build only into temporary copies: a part is copied whole or rebuilt; all real game writes go through
         # _commit.
-        staged_groups = [replace(group, files=[replace(file,
-            existing_path=staged.get(file.existing_path),
-            need_crc_fix=self._needs_crc_fix(file.mod_path, file.existing_path)
-            if file.existing_path else False) for file in group.files],
-            target_paths=[staged[path] for path in group.target_paths]) for group in groups]
+        staged_groups = [
+            replace(
+                group,
+                files=[
+                    replace(
+                        file,
+                        existing_path=staged.get(file.existing_path),
+                        need_crc_fix=self._needs_crc_fix(file.mod_path, file.existing_path)
+                        if file.existing_path
+                        else False,
+                    )
+                    for file in group.files
+                ],
+                target_paths=[staged[path] for path in group.target_paths],
+            )
+            for group in groups
+        ]
         failures = install_staged(
-            staged_groups, work / "output", self.settings.asset_types(),
+            staged_groups,
+            work / "output",
+            self.settings.asset_types(),
             self.settings.save_options(self.settings.crc_needed(targets[0])),
-            self.settings.spine_options(), anim_check=self.settings.anim_check_options(), log=log, progress=(
-                lambda current, total, name: progress(current, total, t("webui.progress.process", name=name))
-            ) if progress else None)
+            self.settings.spine_options(),
+            anim_check=self.settings.anim_check_options(),
+            log=log,
+            progress=(lambda current, total, name: progress(current, total, t("webui.progress.process", name=name)))
+            if progress
+            else None,
+        )
         logger.info("Mod apply build and CRC: %.3f s", time.perf_counter() - started)
         if failures:
             raise ServiceError("mod_apply_failed", id=record["id"], reason=_reasons(failures))
@@ -6170,9 +7339,18 @@ class ModLibrary:
         return fingerprint.trailing is None or not expected or fingerprint.crc != int(expected)
 
     @_serialized
-    def apply(self, variant_key: str, source: str, log: LogFunc = no_log, progress: ProgressCallback | None = None,
-              kind: Kind | None = "spr", pin: Pin | None = None, *, create_backup: bool = False,
-              fraction: Callable[[float], None] | None = None) -> ApplyResult:
+    def apply(
+        self,
+        variant_key: str,
+        source: str,
+        log: LogFunc = no_log,
+        progress: ProgressCallback | None = None,
+        kind: Kind | None = "spr",
+        pin: Pin | None = None,
+        *,
+        create_backup: bool = False,
+        fraction: Callable[[float], None] | None = None,
+    ) -> ApplyResult:
         """Install and configure one kind from a mod, variant, or originals (``_apply_choice``). A memorial lobby camera
         (``lobby_camera``) is a lobby choice: its source's art and its own prefab; any other lobby choice puts the
         variant's prefab back to its base. ``fraction``: told how far a costume build is, instead of ``progress``
@@ -6184,15 +7362,25 @@ class ModLibrary:
             self._untested_apply(variant_key, source, kind, self._current(pin), camera)
         if camera is not None:
             return lobby_camera.apply(self, variant_key, camera, log, progress, self._current(pin), create_backup)
-        result = self._apply_choice(variant_key, source, log, progress, kind, pin, create_backup=create_backup,
-                                    fraction=fraction)
+        result = self._apply_choice(
+            variant_key, source, log, progress, kind, pin, create_backup=create_backup, fraction=fraction
+        )
         if kind in ("lobby", None) and lobby_camera.cameras(self, variant_key):
             lobby_camera.release(self, variant_key, self._current(pin), log, progress)
         return result
 
-    def _apply_choice(self, variant_key: str, source: str, log: LogFunc = no_log,
-                      progress: ProgressCallback | None = None, kind: Kind | None = "spr", pin: Pin | None = None, *,
-                      create_backup: bool = False, fraction: Callable[[float], None] | None = None) -> ApplyResult:
+    def _apply_choice(
+        self,
+        variant_key: str,
+        source: str,
+        log: LogFunc = no_log,
+        progress: ProgressCallback | None = None,
+        kind: Kind | None = "spr",
+        pin: Pin | None = None,
+        *,
+        create_backup: bool = False,
+        fraction: Callable[[float], None] | None = None,
+    ) -> ApplyResult:
         """Install and configure one kind from a mod, variant, or originals.
 
         None selects all kinds for originals, and both Spine kinds for variant adaptation.
@@ -6205,8 +7393,10 @@ class ModLibrary:
             pin = self._current(pin)
             if not profiles_mod.enabled(self.profiles.read()):
                 targets = self._game_files(variant_key, kind, pin)
-                kinds = {(core_of(path.name) if kind == "other" else kind_of_file(path.name)): core_of(path.name)
-                         for path in targets}
+                kinds = {
+                    (core_of(path.name) if kind == "other" else kind_of_file(path.name)): core_of(path.name)
+                    for path in targets
+                }
                 return self._defer(pin, variant_key, kinds, None)
             return self._restore(variant_key, log, kind, pin=pin)
         if kind == "other":
@@ -6229,17 +7419,21 @@ class ModLibrary:
                     record = self._record(source[4:])
                     target_variant = self._target_of(record)
                     if (kind is not None and record["kind"] != kind) or (
-                            self._variant(target_variant).family != variant.family):
+                        self._variant(target_variant).family != variant.family
+                    ):
                         raise ServiceError("mod_target_mismatch", id=record["id"], variant=variant_key)
                     targets = self._game_files(variant_key, record["kind"], pin)
                     if not targets:
                         raise ServiceError("game_file_not_found", variant=variant_key)
-                    cores = [getattr(variant, "model").lower() if record["kind"] == "model"
-                             else core_of(targets[0].name)]
+                    cores = [
+                        getattr(variant, "model").lower() if record["kind"] == "model" else core_of(targets[0].name)
+                    ]
                     own_model = record["kind"] == "model" and all(
-                        core_of(name) in self._core_map(pin).slot_cores(cores[0]) for name in record["files"])
+                        core_of(name) in self._core_map(pin).slot_cores(cores[0]) for name in record["files"]
+                    )
                     if (record["kind"] == "model" and not own_model) or (
-                            record["kind"] == "lobby" and core_of(record["files"][0]) != cores[0]):
+                        record["kind"] == "lobby" and core_of(record["files"][0]) != cores[0]
+                    ):
                         raise ServiceError("mod_target_mismatch", id=record["id"], variant=variant_key)
                     if not on:
                         return self._defer(pin, variant_key, {record["kind"]: cores[0]}, source)
@@ -6255,12 +7449,22 @@ class ModLibrary:
                             change.configure({record["kind"]: cores[0]})
                             self._selection_error(pin, kinds.values(), None)
                             return ApplyResult(variant_key, source, [], unchanged=True, incomplete=incomplete)
-                        replacements = self._cached_build(self._paths(record), targets, pin,
-                            lambda: self._install_direct(record, targets, work, log, progress, pin), build_keys)
+                        replacements = self._cached_build(
+                            self._paths(record),
+                            targets,
+                            pin,
+                            lambda: self._install_direct(record, targets, work, log, progress, pin),
+                            build_keys,
+                        )
                     elif target_variant != variant_key:
                         sources = self._preview(record, pin)
-                        replacements = self._cached_build(sources, targets, pin,
-                            lambda: self._stage_adapted(sources, targets, work / record["kind"], log, pin), build_keys)
+                        replacements = self._cached_build(
+                            sources,
+                            targets,
+                            pin,
+                            lambda: self._stage_adapted(sources, targets, work / record["kind"], log, pin),
+                            build_keys,
+                        )
                     else:  # a lobby mod of another core of this variant: not offered, never written there
                         raise ServiceError("game_file_outside_resources", file=targets[0])
                     kinds = {record["kind"]: cores[0]}
@@ -6281,9 +7485,15 @@ class ModLibrary:
                     if not on:
                         return self._defer(pin, variant_key, kinds, source)
                     _, inputs = self._costume_source(other, pin)
-                    replacements = self._cached_build(inputs, targets, pin,
-                        lambda: self._stage_costume(other, targets, work / "model", log, pin,
-                                                    fraction=fraction or _item_fraction(progress)), build_keys)
+                    replacements = self._cached_build(
+                        inputs,
+                        targets,
+                        pin,
+                        lambda: self._stage_costume(
+                            other, targets, work / "model", log, pin, fraction=fraction or _item_fraction(progress)
+                        ),
+                        build_keys,
+                    )
                 elif source.startswith("variant:"):
                     other = source[8:]
                     self._variant(other)
@@ -6291,7 +7501,7 @@ class ModLibrary:
                         raise ServiceError("source_unsupported", source=source)
                     replacements: dict[Path, Path] = {}
                     kinds = {}
-                    for current in (("spr", "lobby") if kind is None else (kind,)):
+                    for current in ("spr", "lobby") if kind is None else (kind,):
                         targets = self._game_files(variant_key, current, pin)
                         sources = self._game_files(other, current, pin)
                         if not targets or not sources:
@@ -6305,8 +7515,15 @@ class ModLibrary:
                             targets = self._game_files(variant_key, current, pin)
                             sources = self._game_files(other, current, pin)
                             official = [self._official_for(path, pin) for path in sources]
-                            replacements.update(self._cached_build(official, targets, pin,
-                                lambda: self._stage_adapted(official, targets, work / current, log, pin), build_keys))
+                            replacements.update(
+                                self._cached_build(
+                                    official,
+                                    targets,
+                                    pin,
+                                    lambda: self._stage_adapted(official, targets, work / current, log, pin),
+                                    build_keys,
+                                )
+                            )
                     if not kinds:
                         raise ServiceError("game_file_not_found", variant=variant_key)
                     if not on:
@@ -6315,46 +7532,80 @@ class ModLibrary:
                     raise ServiceError("source_unsupported", source=source)
                 prepared = time.perf_counter()
                 mod_progress.entered(fraction, "write")
-                files = self._commit(replacements, source, log, progress, pin, prune=False, build_keys=build_keys,
-                                     create_backup=create_backup, kept_current=kept_current)
+                files = self._commit(
+                    replacements,
+                    source,
+                    log,
+                    progress,
+                    pin,
+                    prune=False,
+                    build_keys=build_keys,
+                    create_backup=create_backup,
+                    kept_current=kept_current,
+                )
                 change.configure(kinds)
                 self._selection_error(pin, kinds.values(), None)
                 for core in kinds.values():
                     self._clear_marker(pin, core)
                 logger.info("Mod apply copy and record: %.3f s", time.perf_counter() - prepared)
-                return ApplyResult(variant_key, source, files, unchanged=not files,
-                                   kept_current=bool(kept_current), incomplete=incomplete)
+                return ApplyResult(
+                    variant_key,
+                    source,
+                    files,
+                    unchanged=not files,
+                    kept_current=bool(kept_current),
+                    incomplete=incomplete,
+                )
         except Exception as error:
             if not change.refused(error) and kinds:
-                self._selection_error(pin, kinds.values(), error.to_json() if isinstance(error, ServiceError)
-                                      else {"code": "library_io_error" if isinstance(error, OSError) else "library_operation_failed",
-                                            "params": {"operation": "apply"}})
+                self._selection_error(
+                    pin,
+                    kinds.values(),
+                    error.to_json()
+                    if isinstance(error, ServiceError)
+                    else {
+                        "code": "library_io_error" if isinstance(error, OSError) else "library_operation_failed",
+                        "params": {"operation": "apply"},
+                    },
+                )
             raise
         finally:
             change.close()
             pruning = time.perf_counter()
             self._prune_quietly()
-            logger.info("Mod apply prune: %.3f s; total: %.3f s", time.perf_counter() - pruning,
-                        time.perf_counter() - started)
+            logger.info(
+                "Mod apply prune: %.3f s; total: %.3f s", time.perf_counter() - pruning, time.perf_counter() - started
+            )
 
-    def _untested_apply(self, variant_key: str, source: str, kind: Kind | None, pin: Pin,
-                        camera: dict[str, Any] | None) -> None:
+    def _untested_apply(
+        self, variant_key: str, source: str, kind: Kind | None, pin: Pin, camera: dict[str, Any] | None
+    ) -> None:
         """An apply's confirmation on an untested build (``_check_untested``), before anything is built or configured:
         the targets of each kind it writes, a camera's art and prefab together. Nothing to confirm while mods are off,
         when an apply only configures."""
         if self.untested_version(pin) is None or not profiles_mod.enabled(self.profiles.read()):
             return
         if camera is not None:  # one entry, the lobby, for the art and the prefab it holds
-            groups = [(variant_key, "lobby", [*self._game_files(variant_key, "lobby", pin),
-                                              *self._game_files(camera["target"], "other", pin)])]
+            groups = [
+                (
+                    variant_key,
+                    "lobby",
+                    [*self._game_files(variant_key, "lobby", pin), *self._game_files(camera["target"], "other", pin)],
+                )
+            ]
         elif kind == "other":
             groups = [(variant_key, "other", self._game_files(variant_key, "other", pin))]
         else:
             record = self._records.get(source[4:]) if source.startswith("mod:") else None
             kinds = (kind,) if kind else ((record["kind"],) if record else ("spr", "lobby"))
             groups = [(variant_key, current, self._game_files(variant_key, current, pin)) for current in kinds]
-        self._check_untested([(pin, self._untested_entry(pin, core_of(targets[0].name), targets, variant, current),
-                               targets) for variant, current, targets in groups if targets])
+        self._check_untested(
+            [
+                (pin, self._untested_entry(pin, core_of(targets[0].name), targets, variant, current), targets)
+                for variant, current, targets in groups
+                if targets
+            ]
+        )
 
     def _defer(self, pin: Pin, variant_key: str, kinds: dict[str, str], source: str | None) -> ApplyResult:
         """While mods are off: configure the source without writing, applied when mods are on."""
@@ -6363,8 +7614,17 @@ class ModLibrary:
             self._prune_quietly()
         return ApplyResult(variant_key, source or "official", [], unchanged=True, deferred=True)
 
-    def _apply_other(self, target: str, source: str, log: LogFunc, progress: ProgressCallback | None,
-                     pin: Pin, create_backup: bool, *, untested: bool = True) -> ApplyResult:
+    def _apply_other(
+        self,
+        target: str,
+        source: str,
+        log: LogFunc,
+        progress: ProgressCallback | None,
+        pin: Pin,
+        create_backup: bool,
+        *,
+        untested: bool = True,
+    ) -> ApplyResult:
         if not source.startswith("mod:"):
             raise ServiceError("source_unsupported", source=source)
         record = self._record(source[4:])
@@ -6381,11 +7641,25 @@ class ModLibrary:
             change.configure(kinds)
             with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
                 build_keys = {}
-                replacements = self._cached_build(self._paths(record), targets, pin,
-                    lambda: self._install_direct(record, targets, Path(temporary), log, progress, pin), build_keys)
-                files = self._commit(replacements, source, log, progress, pin, prune=False,
-                                     build_keys=build_keys, create_backup=create_backup, kept_current=kept_current,
-                                     untested=untested)
+                replacements = self._cached_build(
+                    self._paths(record),
+                    targets,
+                    pin,
+                    lambda: self._install_direct(record, targets, Path(temporary), log, progress, pin),
+                    build_keys,
+                )
+                files = self._commit(
+                    replacements,
+                    source,
+                    log,
+                    progress,
+                    pin,
+                    prune=False,
+                    build_keys=build_keys,
+                    create_backup=create_backup,
+                    kept_current=kept_current,
+                    untested=untested,
+                )
             self._configure(pin, target, kinds, source)
             self._selection_error(pin, kinds, None)
             for slot in kinds:
@@ -6393,30 +7667,52 @@ class ModLibrary:
             return ApplyResult(target, source, files, unchanged=not files, kept_current=bool(kept_current))
         except Exception as error:
             if not change.refused(error):
-                self._selection_error(pin, kinds, error.to_json() if isinstance(error, ServiceError)
-                                      else {"code": "library_io_error" if isinstance(error, OSError) else "library_operation_failed",
-                                            "params": {"operation": "apply"}})
+                self._selection_error(
+                    pin,
+                    kinds,
+                    error.to_json()
+                    if isinstance(error, ServiceError)
+                    else {
+                        "code": "library_io_error" if isinstance(error, OSError) else "library_operation_failed",
+                        "params": {"operation": "apply"},
+                    },
+                )
             raise
         finally:
             change.close()
             self._prune_quietly()
 
     @_serialized
-    def restore(self, variant_key: str, log: LogFunc = no_log, kind: Kind | None = "spr",
-                pin: Pin | None = None, progress: ProgressCallback | None = None) -> ApplyResult:
+    def restore(
+        self,
+        variant_key: str,
+        log: LogFunc = no_log,
+        kind: Kind | None = "spr",
+        pin: Pin | None = None,
+        progress: ProgressCallback | None = None,
+    ) -> ApplyResult:
         """Restore one kind to official bytes and drop its configuration; None restores all kinds. Files that
         are official already are not written (only recorded). A lobby's restore puts its prefab back too, when one of
         its cameras holds it (``lobby_camera.release``)."""
         from . import lobby_camera
 
         result = self._restore(variant_key, log, kind, pin, progress)
-        if kind in ("lobby", None) and not variant_key.startswith(("other:", "other-set:")) and (
-                lobby_camera.cameras(self, variant_key)):
+        if (
+            kind in ("lobby", None)
+            and not variant_key.startswith(("other:", "other-set:"))
+            and (lobby_camera.cameras(self, variant_key))
+        ):
             lobby_camera.release(self, variant_key, self._current(pin), log, progress)
         return result
 
-    def _restore(self, variant_key: str, log: LogFunc = no_log, kind: Kind | None = "spr",
-                 pin: Pin | None = None, progress: ProgressCallback | None = None) -> ApplyResult:
+    def _restore(
+        self,
+        variant_key: str,
+        log: LogFunc = no_log,
+        kind: Kind | None = "spr",
+        pin: Pin | None = None,
+        progress: ProgressCallback | None = None,
+    ) -> ApplyResult:
         pin = self._current(pin)
         self.profiles.read()
         targets = self._game_files(variant_key, kind, pin)
@@ -6425,16 +7721,19 @@ class ModLibrary:
         try:
             replacements = {path: self._official_for(path, pin) for path in targets}
             files = self._commit(replacements, "official", log, progress=progress, pin=pin, prune=False)
-            kinds = {(core_of(path.name) if kind == "other" else kind_of_file(path.name)): core_of(path.name)
-                     for path in targets}
+            kinds = {
+                (core_of(path.name) if kind == "other" else kind_of_file(path.name)): core_of(path.name)
+                for path in targets
+            }
             self._configure(pin, variant_key, kinds, None)
         finally:
             self._prune_quietly()
         return ApplyResult(variant_key, "official", files, unchanged=not files)
 
     @_serialized
-    def would_write(self, variant_key: str, source: str, kind: Kind | None = "spr", pin: Pin | None = None,
-                    *, setting: bool = False) -> bool:
+    def would_write(
+        self, variant_key: str, source: str, kind: Kind | None = "spr", pin: Pin | None = None, *, setting: bool = False
+    ) -> bool:
         """Whether a setting (setting=True) or explicit restore would write a game file, judged cheaply: not a deferred
         apply while mods are off, nor a restore of files that are official already. Such calls only change the
         configuration (allowed while the classic UI is open)."""
@@ -6451,9 +7750,16 @@ class ModLibrary:
                 return True
         return False
 
-    def _switch(self, pin: Pin, core: str, source: str, log: LogFunc = no_log,
-                progress: ProgressCallback | None = None, use_built: bool = True,
-                fraction: Callable[[float], None] | None = None) -> list[Path]:
+    def _switch(
+        self,
+        pin: Pin,
+        core: str,
+        source: str,
+        log: LogFunc = no_log,
+        progress: ProgressCallback | None = None,
+        use_built: bool = True,
+        fraction: Callable[[float], None] | None = None,
+    ) -> list[Path]:
         """The internal write of an entry: its core's parts in its own install switched to a source, and nothing
         else (the configuration stays). From a built copy when one still fits; a mod made for the core is installed
         directly, another variant's mod adapted, another variant's files (in that same install) adapted.
@@ -6475,28 +7781,50 @@ class ModLibrary:
                 if source.startswith("mod:"):
                     record = self._record(source[4:])
                     if record["kind"] == "model" and any(
-                            core_of(name) not in self._core_map(pin).slot_cores(core) for name in record["files"]):
+                        core_of(name) not in self._core_map(pin).slot_cores(core) for name in record["files"]
+                    ):
                         raise ServiceError("mod_target_mismatch", id=record["id"], variant=core)
                     if record["kind"] in ("other", "model") or core_of(record["files"][0]) == core:
-                        replacements = self._cached_build(self._paths(record), targets, pin,
-                            lambda: self._install_direct(record, targets, work, log, progress, pin), build_keys)
+                        replacements = self._cached_build(
+                            self._paths(record),
+                            targets,
+                            pin,
+                            lambda: self._install_direct(record, targets, work, log, progress, pin),
+                            build_keys,
+                        )
                     else:
                         sources = self._preview(record, pin)
-                        replacements = self._cached_build(sources, targets, pin,
-                            lambda: self._stage_adapted(sources, targets, work / kind, log, pin), build_keys)
+                        replacements = self._cached_build(
+                            sources,
+                            targets,
+                            pin,
+                            lambda: self._stage_adapted(sources, targets, work / kind, log, pin),
+                            build_keys,
+                        )
                 elif source.startswith("variant:") and kind == "model":
                     _, inputs = self._costume_source(source[8:], pin)
-                    replacements = self._cached_build(inputs, targets, pin,
-                        lambda: self._stage_costume(source[8:], targets, work / kind, log, pin,
-                                                    fraction=fraction or _item_fraction(progress)), build_keys)
+                    replacements = self._cached_build(
+                        inputs,
+                        targets,
+                        pin,
+                        lambda: self._stage_costume(
+                            source[8:], targets, work / kind, log, pin, fraction=fraction or _item_fraction(progress)
+                        ),
+                        build_keys,
+                    )
                 elif source.startswith("variant:"):
                     other = self._core_map(pin).core(source[8:], kind)
                     sources = self._index(pin).get(other.lower(), []) if other else []
                     if not sources:
                         raise ServiceError("game_file_not_found", variant=source[8:])
                     official = [self._official_for(path, pin) for path in sources]
-                    replacements = self._cached_build(official, targets, pin,
-                        lambda: self._stage_adapted(official, targets, work / kind, log, pin), build_keys)
+                    replacements = self._cached_build(
+                        official,
+                        targets,
+                        pin,
+                        lambda: self._stage_adapted(official, targets, work / kind, log, pin),
+                        build_keys,
+                    )
                 else:
                     raise ServiceError("source_unsupported", source=source)
             mod_progress.entered(fraction, "restore" if source == "official" else "write")
@@ -6511,12 +7839,22 @@ class ModLibrary:
         bytes of its targets and the options. A game file written from it records this as its ``build``."""
         inputs = [(path.name, self._hashes.get(path).sha1) for path in sources]
         originals = [(path.name, self._hashes.get(self._official_for(path, pin)).sha1) for path in targets]
-        options = (sorted(self.settings.asset_types()), self.settings.save_options(self.settings.crc_needed(targets[0])),
-                   self.settings.spine_options(), self.settings.anim_check_key())
+        options = (
+            sorted(self.settings.asset_types()),
+            self.settings.save_options(self.settings.crc_needed(targets[0])),
+            self.settings.spine_options(),
+            self.settings.anim_check_key(),
+        )
         return hashlib.sha1(repr((1, version or _build_version(), inputs, originals, options)).encode()).hexdigest()
 
-    def _cached_build(self, sources: list[Path], targets: list[Path], pin: Pin,
-                      build: Callable[[], dict[Path, Path]], build_keys: dict[Path, str]) -> dict[Path, Path]:
+    def _cached_build(
+        self,
+        sources: list[Path],
+        targets: list[Path],
+        pin: Pin,
+        build: Callable[[], dict[Path, Path]],
+        build_keys: dict[Path, str],
+    ) -> dict[Path, Path]:
         """Reuse only a referenced instant-On copy with the same program, inputs, official targets and options.
         Prepared files otherwise live solely in the caller's temporary staging directory."""
         if len({path.name for path in targets}) != len(targets):
@@ -6562,8 +7900,9 @@ class ModLibrary:
         logger.debug("Built %s in %.3f s", signature, time.perf_counter() - start)
         return replacements
 
-    def _built_replacements(self, pin: Pin, core: str, source: str, targets: list[Path],
-                            build_keys: dict[Path, str] | None = None) -> dict[Path, Path] | None:
+    def _built_replacements(
+        self, pin: Pin, core: str, source: str, targets: list[Path], build_keys: dict[Path, str] | None = None
+    ) -> dict[Path, Path] | None:
         """The entry's built copy written back, when it still fits: built for this very source, every part's name and
         every input's name still in the install. The other parts take their official copies. A kept file whose bytes
         are not the recorded ones drops the key (the entry is rebuilt)."""
@@ -6573,8 +7912,12 @@ class ModLibrary:
             return None
         names = {path.name for paths in self._index(pin).values() for path in paths}
         parts = key.get("parts") or {}
-        fits = key.get("source") == source and parts and all(name in names for name in parts) and all(
-            name in names for name in key.get("inputs") or [])
+        fits = (
+            key.get("source") == source
+            and parts
+            and all(name in names for name in parts)
+            and all(name in names for name in key.get("inputs") or [])
+        )
         replacements: dict[Path, Path] = {}
         if fits:
             for target in targets:
@@ -6582,8 +7925,11 @@ class ModLibrary:
                 if part is None:
                     replacements[target] = self._official_or_current(target, pin)
                     continue
-                kept = (self.root / "mods" / source[4:] / part["mod_file"]) if part.get("mod_file") and \
-                    source.startswith("mod:") else self.root / "built" / f"{part.get('sha1')}.bundle"
+                kept = (
+                    (self.root / "mods" / source[4:] / part["mod_file"])
+                    if part.get("mod_file") and source.startswith("mod:")
+                    else self.root / "built" / f"{part.get('sha1')}.bundle"
+                )
                 try:
                     if self._hashes.get(kept).sha1 != part.get("sha1") or not self._kept_crc_fits(kept, target):
                         raise ValueError(kept)
@@ -6628,6 +7974,7 @@ class ModLibrary:
     def _current_builds(self, pin: Pin, core: str, record: dict[str, Any], targets: list[Path]) -> set[str]:
         """The builds a write of a mod over an entry's game files signs now, as apply and switch sign them
         (``_cached_build``); those that cannot be told are left out."""
+
         def sign(sources: Callable[[], list[Path]], group: Callable[[], list[Path]]) -> str | None:
             try:
                 files = group()
@@ -6639,8 +7986,10 @@ class ModLibrary:
 
         if record["kind"] == "other":
             # a switch signs one slot's files, an apply the files of the whole mod: either may have written a part
-            signatures = {sign(lambda: self._paths(record), lambda: targets),
-                          sign(lambda: self._paths(record), lambda: self._game_files(record["target"], "other", pin))}
+            signatures = {
+                sign(lambda: self._paths(record), lambda: targets),
+                sign(lambda: self._paths(record), lambda: self._game_files(record["target"], "other", pin)),
+            }
         elif record["kind"] == "model" or core_of(record["files"][0]) == core:
             signatures = {sign(lambda: self._paths(record), lambda: targets)}
         else:
@@ -6670,8 +8019,12 @@ class ModLibrary:
             if current is None:
                 current = self._current_builds(pin, entry.core, record, [part.path for part in entry.parts])
             if part.record.get("build") not in current:
-                logger.info("Not keeping the built copy of %s: %s was not written from the current %s", entry.core,
-                            part.path.name, source)
+                logger.info(
+                    "Not keeping the built copy of %s: %s was not written from the current %s",
+                    entry.core,
+                    part.path.name,
+                    source,
+                )
                 return
         for part in modded:
             sha1 = part.record["sha1"]
@@ -6732,8 +8085,9 @@ class ModLibrary:
             return sorted(path.name for path in index.get(other.lower(), [])) if other else []
         return []
 
-    def _drop_built(self, pin_or_key: Pin | str, cores: list[str] | None = None,
-                    when: Callable[[dict], bool] | None = None) -> None:
+    def _drop_built(
+        self, pin_or_key: Pin | str, cores: list[str] | None = None, when: Callable[[dict], bool] | None = None
+    ) -> None:
         """Drop built keys of an install (the given cores, or those ``when`` picks; with neither, all), deleting the
         built/ files no other key references."""
         target = pin_or_key.key if isinstance(pin_or_key, Pin) else pin_or_key
@@ -6756,9 +8110,13 @@ class ModLibrary:
         if not keys:
             return
         # a part kept as a file of its mod reads mods/<id>/, so only the others hold their built/ file
-        referenced = {part.get("sha1") for folder in ((data or {}).get("folders") or {}).values()
-                      for key in (folder.get("built") or {}).values()
-                      for part in (key.get("parts") or {}).values() if not part.get("mod_file")}
+        referenced = {
+            part.get("sha1")
+            for folder in ((data or {}).get("folders") or {}).values()
+            for key in (folder.get("built") or {}).values()
+            for part in (key.get("parts") or {}).values()
+            if not part.get("mod_file")
+        }
         for key in keys:
             for part in (key.get("parts") or {}).values():
                 sha1 = part.get("sha1")
@@ -6766,7 +8124,7 @@ class ModLibrary:
                     continue
                 path = self.root / "built" / f"{sha1}.bundle"
                 if path.resolve().is_relative_to(self.root) and path.parent == self.root / "built":
-                    deletion = getattr(self, '_asset_deletion', None)
+                    deletion = getattr(self, "_asset_deletion", None)
                     if deletion:
                         deletion.remember_built(path)
                         path.unlink(missing_ok=True)
@@ -6837,14 +8195,28 @@ class ModLibrary:
         folders = data["folders"]
         folder = folders.get(pin.key)
         if folder is None:
-            folder = folders[pin.key] = {"server": pin.server, "named_by": {}, "hidden": [], "configured": {},
-                                          "updated": {}, "built": {}, "dismissed": {}}
+            folder = folders[pin.key] = {
+                "server": pin.server,
+                "named_by": {},
+                "hidden": [],
+                "configured": {},
+                "updated": {},
+                "built": {},
+                "dismissed": {},
+            }
             if any(named.key == pin.key for named in self._named_pins()):
                 folder["named_by"][self.data_id] = now()
         return folder
 
-    def _configure(self, pin: Pin, variant_key: str, kinds: dict[str, str], source: str | None, *,
-                   dropped: list[dict] | None = None) -> None:
+    def _configure(
+        self,
+        pin: Pin,
+        variant_key: str,
+        kinds: dict[str, str],
+        source: str | None,
+        *,
+        dropped: list[dict] | None = None,
+    ) -> None:
         """Set (or, with None, drop) the configured source of an entry's cores. A changed or dropped configuration
         drops the entry's built copy and its updated marker. With ``dropped``, the dropped built keys go there and
         their files stay until the caller deletes them (``_ChoiceChange.close``), else they are deleted at once."""
@@ -6871,8 +8243,12 @@ class ModLibrary:
                 elif current and current.get("source") == source:
                     continue
                 else:
-                    folder["configured"][core] = {"variant": variant_key, "kind": kind, "source": source,
-                                                  "since": stamp}
+                    folder["configured"][core] = {
+                        "variant": variant_key,
+                        "kind": kind,
+                        "source": source,
+                        "since": stamp,
+                    }
                 changed = True
                 folder["updated"].pop(core, None)
                 if core in folder["built"]:
@@ -6897,10 +8273,14 @@ class ModLibrary:
     def _saved_choices(self, pin: Pin, kinds: dict[str, str]) -> dict[str, dict[str, Any]]:
         """The saved entries of an entry's cores (configured, updated marker, built key), as ``_put_back_choices``
         restores them."""
-        folder = (((self.profiles.read() or {}).get("folders") or {}).get(pin.key) or {})
+        folder = ((self.profiles.read() or {}).get("folders") or {}).get(pin.key) or {}
         cores = [self._core_map(pin).slot(core) if kind == "model" else core for kind, core in kinds.items()]
-        return {core: {part: copy.deepcopy((folder.get(part) or {}).get(core)) for part in ("configured", "updated", "built")}
-                for core in cores}
+        return {
+            core: {
+                part: copy.deepcopy((folder.get(part) or {}).get(core)) for part in ("configured", "updated", "built")
+            }
+            for core in cores
+        }
 
     def _put_back_choices(self, pin: Pin, saved: dict[str, dict[str, Any]]) -> None:
         def change(data: dict) -> bool:
@@ -6914,11 +8294,19 @@ class ModLibrary:
                     else:
                         folder.setdefault(part, {})[core] = copy.deepcopy(value)
             return True
+
         self._update_profiles(change)
 
     def _new_folder(self, data: dict, pin: Pin, named: bool) -> dict:
-        folder = data["folders"][pin.key] = {"server": pin.server, "named_by": {}, "hidden": [], "configured": {},
-                                             "updated": {}, "built": {}, "dismissed": {}}
+        folder = data["folders"][pin.key] = {
+            "server": pin.server,
+            "named_by": {},
+            "hidden": [],
+            "configured": {},
+            "updated": {},
+            "built": {},
+            "dismissed": {},
+        }
         if named:
             folder["named_by"][self.data_id] = now()
         return folder
@@ -6945,9 +8333,14 @@ class ModLibrary:
         for pin in named:
             if pin.key in folders:
                 continue
-            gone = [key for key, folder in folders.items() if key not in moves.values()
-                    and (folder.get("server") or "global") == pin.server and not Path(key).exists()
-                    and Path(key).parent.is_dir()]
+            gone = [
+                key
+                for key, folder in folders.items()
+                if key not in moves.values()
+                and (folder.get("server") or "global") == pin.server
+                and not Path(key).exists()
+                and Path(key).parent.is_dir()
+            ]
             if len(gone) == 1:
                 moves[pin.key] = gone[0]
                 continue
@@ -7039,28 +8432,49 @@ class ModLibrary:
                 if len(sources) == 1 and next(iter(sources)).startswith(LIBRARY_SOURCES):
                     source = next(iter(sources))
             else:
-                gone = [(path, record) for path, record in records
-                        if not path.exists() and path.parent.is_dir() and view.successor(pin, path)]
-                gone_sources = {record.get("source") for path, record in gone
-                                if view.says_nonofficial(path, record, present=False)}
-                if gone and len(gone_sources) == 1 and all(
-                        view.says_nonofficial(path, record, present=False) for path, record in gone):
+                gone = [
+                    (path, record)
+                    for path, record in records
+                    if not path.exists() and path.parent.is_dir() and view.successor(pin, path)
+                ]
+                gone_sources = {
+                    record.get("source") for path, record in gone if view.says_nonofficial(path, record, present=False)
+                }
+                if (
+                    gone
+                    and len(gone_sources) == 1
+                    and all(view.says_nonofficial(path, record, present=False) for path, record in gone)
+                ):
                     candidate = next(iter(gone_sources))
-                    if candidate and candidate.startswith(LIBRARY_SOURCES) and view.source_exists(
-                            candidate, pin.key, kind):
+                    if (
+                        candidate
+                        and candidate.startswith(LIBRARY_SOURCES)
+                        and view.source_exists(candidate, pin.key, kind)
+                    ):
                         source = candidate
             if source is None:
                 # Older state kept only applied records. Preserve that choice after an
                 # external reset too; selection() separately verifies installation.
-                remembered = {record.get("source") for path, record in records
-                              if view.says_nonofficial(path, record, present=path.exists())}
+                remembered = {
+                    record.get("source")
+                    for path, record in records
+                    if view.says_nonofficial(path, record, present=path.exists())
+                }
                 if len(remembered) == 1:
                     candidate = next(iter(remembered))
-                    if candidate and candidate.startswith(LIBRARY_SOURCES) and view.source_exists(candidate, pin.key, kind):
+                    if (
+                        candidate
+                        and candidate.startswith(LIBRARY_SOURCES)
+                        and view.source_exists(candidate, pin.key, kind)
+                    ):
                         source = candidate
             if source:
-                configured[core] = {"variant": view.maps[pin.key].key(core) or core, "kind": kind,
-                                    "source": source, "since": stamp}
+                configured[core] = {
+                    "variant": view.maps[pin.key].key(core) or core,
+                    "kind": kind,
+                    "source": source,
+                    "since": stamp,
+                }
         return configured
 
     # --- entries and the scan ---
@@ -7070,10 +8484,21 @@ class ModLibrary:
         if self.catalog.variant_for_core(entry.core) is None:
             names = view.maps[entry.pin.key].names.get(entry.variant)
         unknown = [part for part in entry.parts if part.carried == "unknown"]
-        return EntryState(entry.pin.key, entry.core, entry.variant, names, entry.kind, entry.carried,
-                          entry.configured, entry.state, entry.overwritten,
-                          any(part.trailing for part in unknown), sum(part.size for part in unknown),
-                          [self._file_state(view, entry, part) for part in entry.parts], entry.dismissed)
+        return EntryState(
+            entry.pin.key,
+            entry.core,
+            entry.variant,
+            names,
+            entry.kind,
+            entry.carried,
+            entry.configured,
+            entry.state,
+            entry.overwritten,
+            any(part.trailing for part in unknown),
+            sum(part.size for part in unknown),
+            [self._file_state(view, entry, part) for part in entry.parts],
+            entry.dismissed,
+        )
 
     def entries(self, pins: list[Pin] | None = None, include_dismissed: bool = False) -> list[EntryState]:
         """The entries of the pinned installs (default: every known one) that are configured, untracked, damaged,
@@ -7081,8 +8506,13 @@ class ModLibrary:
         the scan consent (``scan_off``)."""
         return self.scan(pins, include_dismissed=include_dismissed).entries
 
-    def scan(self, pins: list[Pin] | None = None, cancel: Callable[[], bool] | None = None,
-             include_dismissed: bool = False, cores: set[str] | None = None) -> ScanResult:
+    def scan(
+        self,
+        pins: list[Pin] | None = None,
+        cancel: Callable[[], bool] | None = None,
+        include_dismissed: bool = False,
+        cores: set[str] | None = None,
+    ) -> ScanResult:
         """The scan: the entries of every known install, judged cheaply (headers and the last bytes of recorded
         files; no file is read in full), with counts per install. Only with scan consent (``scan_off``). The records
         are copied under the library lock and the files read outside it; when the library wrote meanwhile, the
@@ -7120,8 +8550,12 @@ class ModLibrary:
         dates of files the library knows by their last bytes."""
         if self._writes_refused():
             return  # a recovery that has failed refuses changes: the next scan settles
-        restamps = {str(part.path.resolve()): part.restamp for entry in found for part in entry.parts
-                    if part.restamp is not None and part.record is not None}
+        restamps = {
+            str(part.path.resolve()): part.restamp
+            for entry in found
+            for part in entry.parts
+            if part.restamp is not None and part.record is not None
+        }
         if restamps:
             for path, mtime in restamps.items():
                 if path in self._applied:
@@ -7145,16 +8579,24 @@ class ModLibrary:
                 if current != expected:
                     continue
                 logger.info("Configured %s in %s with %s (taken over)", entry.core, entry.pin.key, entry.takeover)
-                folder["configured"][entry.core] = {"variant": entry.variant, "kind": entry.kind,
-                                                    "source": entry.takeover, "since": stamp}
+                folder["configured"][entry.core] = {
+                    "variant": entry.variant,
+                    "kind": entry.kind,
+                    "source": entry.takeover,
+                    "since": stamp,
+                }
                 if entry.core in folder["built"]:
                     dropped.append(folder["built"].pop(entry.core))
                 changed = True
             for entry in missing:
                 folder = data["folders"].get(entry.pin.key)
                 if folder and entry.core in folder["configured"]:
-                    logger.info("Dropped the configuration of %s in %s: %s is gone from the library", entry.core,
-                                entry.pin.key, entry.configured)
+                    logger.info(
+                        "Dropped the configuration of %s in %s: %s is gone from the library",
+                        entry.core,
+                        entry.pin.key,
+                        entry.configured,
+                    )
                     del folder["configured"][entry.core]
                     folder["updated"].pop(entry.core, None)
                     if entry.core in folder["built"]:
@@ -7166,8 +8608,14 @@ class ModLibrary:
 
     # --- adopting mods already in use ---
 
-    def adopt(self, entries: list[dict], pins: list[Pin] | None = None, log: LogFunc = no_log,
-              progress: ProgressCallback | None = None, cancel: Callable[[], bool] | None = None) -> AdoptResult:
+    def adopt(
+        self,
+        entries: list[dict],
+        pins: list[Pin] | None = None,
+        log: LogFunc = no_log,
+        progress: ProgressCallback | None = None,
+        cancel: Callable[[], bool] | None = None,
+    ) -> AdoptResult:
         """Add mods already in use to the library (a writer job of the library only): each given entry ({install,
         core}) that is still untracked or changed is stored as one mod of its non-official parts, every part is
         recorded, the entry configured with it and its built copy kept as the mod's own files. Official copies are
@@ -7176,16 +8624,22 @@ class ModLibrary:
             pins = list(pins) if pins is not None else self.installs()
             self._check_pins(pins)
             by_key = {pin.key: pin for pin in pins}
-            wanted = [(by_key[item["install"]], item["core"].lower()) for item in entries
-                      if isinstance(item, dict) and item.get("install") in by_key and isinstance(item.get("core"), str)]
+            wanted = [
+                (by_key[item["install"]], item["core"].lower())
+                for item in entries
+                if isinstance(item, dict) and item.get("install") in by_key and isinstance(item.get("core"), str)
+            ]
             view = self._view(pins, "family")
             need = 0
             for pin, core in wanted:
                 with contextlib.suppress(OSError, _Unread):
                     entry = view.entry(pin, core)
                     need += sum(part.size for part in entry.parts if part.carried == "unknown")
-                    need += sum(part.size for part in entry.parts if not part.official
-                                and entry.copies.get(str(part.path)) in ("backup", "elsewhere"))
+                    need += sum(
+                        part.size
+                        for part in entry.parts
+                        if not part.official and entry.copies.get(str(part.path)) in ("backup", "elsewhere")
+                    )
             self._check_space(need)
         added, failed, skipped, cores, kinds = [], [], [], set(), set()
         # the progress line: each entry as it starts, who it is, then its whole share once it is in the library
@@ -7204,8 +8658,13 @@ class ModLibrary:
                     if error.code == "entry_changed":
                         skipped.append({"install": pin.key, "core": core, "why": "entry_changed"})
                     else:
-                        failed.append({"entry": {"install": pin.key, "core": core}, "code": error.code,
-                                       "params": error.to_json()["params"]})
+                        failed.append(
+                            {
+                                "entry": {"install": pin.key, "core": core},
+                                "code": error.code,
+                                "params": error.to_json()["params"],
+                            }
+                        )
                     continue
                 added.append(self._entry(self._records[mod_id]))
                 cores.add(core)
@@ -7237,12 +8696,18 @@ class ModLibrary:
             raise ServiceError("entry_changed", core=core)
         old_applied = copy.deepcopy(self._applied)
         if mod_id is None:
-            mod_id = next((record["id"] for record in self._records.values()
-                           if self._matches_installed(self._identity({path.name: path for path in self._paths(record)}),
-                                                      entry)), None)
+            mod_id = next(
+                (
+                    record["id"]
+                    for record in self._records.values()
+                    if self._matches_installed(self._identity({path.name: path for path in self._paths(record)}), entry)
+                ),
+                None,
+            )
         if mod_id is None:
-            mod_id, created = self._add_group([part.path for part in nonofficial],
-                                              parse_filename(nonofficial[0].path.name).core, pin)
+            mod_id, created = self._add_group(
+                [part.path for part in nonofficial], parse_filename(nonofficial[0].path.name).core, pin
+            )
         else:
             record = self._record(mod_id)
             if not self._matches_installed(self._identity({path.name: path for path in self._paths(record)}), entry):
@@ -7258,23 +8723,34 @@ class ModLibrary:
                 fingerprint = self._hashes.get(part.path)
                 stat = part.path.stat()
                 self._applied[str(part.path.resolve())] = {
-                    "source": source, "sha1": fingerprint.sha1, "size": stat.st_size, "mtime": stat.st_mtime_ns,
-                    "official": part.official, "at": stamp,
-                    "tail": read_tail(part.path) if fingerprint.trailing else None}
+                    "source": source,
+                    "sha1": fingerprint.sha1,
+                    "size": stat.st_size,
+                    "mtime": stat.st_mtime_ns,
+                    "official": part.official,
+                    "at": stamp,
+                    "tail": read_tail(part.path) if fingerprint.trailing else None,
+                }
             self._save()
             files = {self._hashes.get(path).sha1: path.name for path in self._paths(self._records[mod_id])}
-            built = {"source": source, "inputs": [],
-                     "parts": {part.path.name: {"sha1": self._hashes.get(part.path).sha1,
-                                                "mod_file": files.get(self._hashes.get(part.path).sha1)}
-                               for part in nonofficial}}
+            built = {
+                "source": source,
+                "inputs": [],
+                "parts": {
+                    part.path.name: {
+                        "sha1": self._hashes.get(part.path).sha1,
+                        "mod_file": files.get(self._hashes.get(part.path).sha1),
+                    }
+                    for part in nonofficial
+                },
+            }
             variant = entry.variant
             named = any(other.key == pin.key for other in self._named_pins())
             replaced: list[dict] = []
 
             def change(data: dict) -> None:
                 folder = data["folders"].get(pin.key) or self._new_folder(data, pin, named)
-                folder["configured"][core] = {"variant": variant, "kind": entry.kind, "source": source,
-                                              "since": stamp}
+                folder["configured"][core] = {"variant": variant, "kind": entry.kind, "source": source, "since": stamp}
                 folder["updated"].pop(core, None)
                 if core in folder["built"]:
                     replaced.append(folder["built"][core])
@@ -7305,16 +8781,29 @@ class ModLibrary:
             if item["install"] in keys:
                 counts[item["why"]] += 1
                 if item["why"] == "held":
-                    entry = ((((config or {}).get("folders") or {}).get(item["install"]) or {}).get("configured")
-                             or {}).get(item["core"]) or {}
+                    entry = (
+                        (((config or {}).get("folders") or {}).get(item["install"]) or {}).get("configured") or {}
+                    ).get(item["core"]) or {}
                     source = entry.get("source")
-                    record = (self._records.get(source[4:])
-                              if isinstance(source, str) and source.startswith("mod:") else None)
-                    held.append({"install": item["install"], "core": item["core"], "variant": entry.get("variant"),
-                                 "kind": entry.get("kind"), "source": source,
-                                 **({"label": self._label(record)} if record else {})})
-        return {"enabled": profiles_mod.enabled(config), "toggled": (config or {}).get("toggled"),
-                "unfinished": counts, "held": held}
+                    record = (
+                        self._records.get(source[4:]) if isinstance(source, str) and source.startswith("mod:") else None
+                    )
+                    held.append(
+                        {
+                            "install": item["install"],
+                            "core": item["core"],
+                            "variant": entry.get("variant"),
+                            "kind": entry.get("kind"),
+                            "source": source,
+                            **({"label": self._label(record)} if record else {}),
+                        }
+                    )
+        return {
+            "enabled": profiles_mod.enabled(config),
+            "toggled": (config or {}).get("toggled"),
+            "unfinished": counts,
+            "held": held,
+        }
 
     def status(self) -> dict[str, Any]:
         """What the switch's snapshot needs from the library, from names and profiles.json only: the known
@@ -7333,8 +8822,17 @@ class ModLibrary:
             if len(roots) > 1:
                 distinct.update(distinguishing_folders(roots))
         out: dict[str, Any] = {
-            "installs": [{"id": pin.id, "key": pin.key, "server": pin.server, "folder": str(pin.root),
-                          "named": pin.key in named, "distinct": distinct.get(pin.key)} for pin in pins],
+            "installs": [
+                {
+                    "id": pin.id,
+                    "key": pin.key,
+                    "server": pin.server,
+                    "folder": str(pin.root),
+                    "named": pin.key in named,
+                    "distinct": distinct.get(pin.key),
+                }
+                for pin in pins
+            ],
             "current": current.key if current else None,
             "reason": None,
         }
@@ -7342,12 +8840,21 @@ class ModLibrary:
             config = self.profiles.read()
             out.update(self.intent())
         except ServiceError as error:
-            out.update(enabled=True, toggled=None, unfinished={why: 0 for why in profiles_mod.WHY}, held=[],
-                       reason=error.code, file=error.params.get("file"))
+            out.update(
+                enabled=True,
+                toggled=None,
+                unfinished={why: 0 for why in profiles_mod.WHY},
+                held=[],
+                reason=error.code,
+                file=error.params.get("file"),
+            )
             config = None
         keys = {pin.key for pin in pins}
-        out["configured"] = sum(len(folder.get("configured") or {}) for key, folder in
-                                ((config or {}).get("folders") or {}).items() if key in keys)
+        out["configured"] = sum(
+            len(folder.get("configured") or {})
+            for key, folder in ((config or {}).get("folders") or {}).items()
+            if key in keys
+        )
         return out
 
     def sizes(self, kind: str) -> dict[str, int]:
@@ -7356,8 +8863,9 @@ class ModLibrary:
             raise ServiceError("bad_params", key="kind")
         return {f"{kind}Size": _folder_size(self.root / kind)}
 
-    def _plan_toggle(self, enabled: bool, pins: list[Pin], config: dict | None,
-                     found: list[_Entry]) -> list[tuple[Pin, str]]:
+    def _plan_toggle(
+        self, enabled: bool, pins: list[Pin], config: dict | None, found: list[_Entry]
+    ) -> list[tuple[Pin, str]]:
         """The entries a toggle reaches, in every known install: for an Off with scan consent, every entry its own
         pass over the files found (``found``), and for any Off the configured entries and those with records. For an
         On, the configured entries, those with a record of a removed mod, and those the unfinished list holds."""
@@ -7397,8 +8905,11 @@ class ModLibrary:
                 continue
             cores = set(folder.get("configured") or {})
             root = Path(key)
-            cores.update(core_of(Path(path).name) for path in self._applied
-                         if Path(path).is_relative_to(root) and kind_of_file(Path(path).name))
+            cores.update(
+                core_of(Path(path).name)
+                for path in self._applied
+                if Path(path).is_relative_to(root) and kind_of_file(Path(path).name)
+            )
             pin = self._recorded_pin(key, folder)
             if pin is not None:
                 mapped = self._core_map(pin)
@@ -7406,8 +8917,15 @@ class ModLibrary:
             items.extend({"install": key, "core": core, "why": "pending"} for core in sorted(cores))
         return items
 
-    def toggle(self, enabled: bool, expect: bool, pins: list[Pin] | None = None, log: LogFunc = no_log,
-               progress: ProgressCallback | None = None, cancel: Callable[[], bool] | None = None) -> ToggleResult:
+    def toggle(
+        self,
+        enabled: bool,
+        expect: bool,
+        pins: list[Pin] | None = None,
+        log: LogFunc = no_log,
+        progress: ProgressCallback | None = None,
+        cancel: Callable[[], bool] | None = None,
+    ) -> ToggleResult:
         """The Enable Mods switch over every known install (a writer job of the game folders). An Off adopts the mods
         it finds first (with scan consent its own pass finds them; without, the changed files it meets), keeps the
         built copies, then switches every entry carrying a library source to official. An On switches every
@@ -7418,18 +8936,31 @@ class ModLibrary:
         equal to the current intent."""
         return self._run(enabled, expect, pins, log, progress, cancel, drift=None)
 
-    def restore_drift(self, entries: list[dict], pins: list[Pin] | None = None, log: LogFunc = no_log,
-                      progress: ProgressCallback | None = None,
-                      cancel: Callable[[], bool] | None = None) -> ToggleResult:
+    def restore_drift(
+        self,
+        entries: list[dict],
+        pins: list[Pin] | None = None,
+        log: LogFunc = no_log,
+        progress: ProgressCallback | None = None,
+        cancel: Callable[[], bool] | None = None,
+    ) -> ToggleResult:
         """Apply Mod Configuration: switch each given reset or updated entry ({install, core, state}) to its
         configured source again, the whole core, from its built copy when it still fits; its configuration stays.
         A changed entry is switched only when listed as changed (its outside change is kept as a mod first); one
         that turned changed since it was listed is skipped."""
         return self._run(None, None, pins, log, progress, cancel, drift=entries)
 
-    def _run(self, enabled: bool | None, expect: bool | None, pins: list[Pin] | None, log: LogFunc,
-             progress: ProgressCallback | None, cancel: Callable[[], bool] | None,
-             drift: list[dict] | None, retry: Sequence[str] | None = None) -> ToggleResult:
+    def _run(
+        self,
+        enabled: bool | None,
+        expect: bool | None,
+        pins: list[Pin] | None,
+        log: LogFunc,
+        progress: ProgressCallback | None,
+        cancel: Callable[[], bool] | None,
+        drift: list[dict] | None,
+        retry: Sequence[str] | None = None,
+    ) -> ToggleResult:
         """A toggle, Retry (``drift`` None), Apply Mod Configuration (``drift``, the listed entries) or the start's
         retry of failed writes (``retry``, cores of the one install ``pins``: an On's Retry of those entries alone,
         the intent unchanged)."""
@@ -7442,12 +8973,15 @@ class ModLibrary:
             if drift is None and retry is None:
                 from .portrait_edit import refresh_missing
                 from .lobby_camera import refresh
+
                 refresh_missing(self, pins, log)
                 refresh(self, pins, log)
                 config = self.profiles.read()
             allowed = drift is None and self._scan_allowed()  # asked once: the job keeps the answer it planned with
             # an Off with scan consent plans from the files as they are now: its own pass, read outside the lock
-            view = self._view(pins, "scan", config, snapshot=True) if drift is None and not enabled and allowed else None
+            view = (
+                self._view(pins, "scan", config, snapshot=True) if drift is None and not enabled and allowed else None
+            )
         if view is not None:
             # previews go first: one loads while the pass runs (which pauses itself while a model preview is exported)
             with _errors("toggle"):
@@ -7465,11 +8999,16 @@ class ModLibrary:
                     raise ServiceError("state_changed")
                 enabled = current
                 by_key = {pin.key: pin for pin in pins}
-                plan = [(by_key[item["install"]], item["core"].lower()) for item in drift
-                        if isinstance(item, dict) and item.get("install") in by_key
-                        and isinstance(item.get("core"), str)]
-                listed = {(item["install"], item["core"].lower()): item.get("state") for item in drift
-                          if isinstance(item, dict) and isinstance(item.get("core"), str)}
+                plan = [
+                    (by_key[item["install"]], item["core"].lower())
+                    for item in drift
+                    if isinstance(item, dict) and item.get("install") in by_key and isinstance(item.get("core"), str)
+                ]
+                listed = {
+                    (item["install"], item["core"].lower()): item.get("state")
+                    for item in drift
+                    if isinstance(item, dict) and isinstance(item.get("core"), str)
+                }
             else:
                 plan = self._plan_toggle(enabled, pins, config, found)
                 listed = {}
@@ -7480,6 +9019,7 @@ class ModLibrary:
                 self._untested_plan(plan, config, drift is not None)
         stamp = now()
         if drift is None and retry is None:
+
             def intent(data: dict) -> None:
                 data["enabled"], data["toggled"] = enabled, stamp
                 listed_keys = {(item["install"], item["core"]) for item in data["unfinished"]}
@@ -7495,8 +9035,16 @@ class ModLibrary:
             with _errors("toggle"):
                 self.profiles.update(intent)
             logger.info("Mods %s: %d entries to reach", "on" if enabled else "off", len(plan))
-        result = {"done": [], "adopted": [], "failed": [], "stuck": [], "left": [], "skipped": [], "dropped": [],
-                  "held": []}
+        result = {
+            "done": [],
+            "adopted": [],
+            "failed": [],
+            "stuck": [],
+            "left": [],
+            "skipped": [],
+            "dropped": [],
+            "held": [],
+        }
         outcomes: dict[tuple[str, str], str | None] = {}
         cores: set[str] = set()
         kinds: set[str] = set()
@@ -7516,15 +9064,28 @@ class ModLibrary:
                             self._check_pins(pins)
                             if progress:
                                 line.item(i, **self._entry_identity(pin, core, config), step=mod_progress.STEP_CHECK)
-                            outcome, why, entry = self._reach(pin, core, enabled, allowed, listed.get((pin.key, core)),
-                                                              drift is not None, log,
-                                                              fraction=line.part(0.0, 1.0, build=0.9))
+                            outcome, why, entry = self._reach(
+                                pin,
+                                core,
+                                enabled,
+                                allowed,
+                                listed.get((pin.key, core)),
+                                drift is not None,
+                                log,
+                                fraction=line.part(0.0, 1.0, build=0.9),
+                            )
                     except ServiceError as error:
-                        item = {"install": pin.key, "core": core, "kind": self._kind(core, pin) or "spr",
-                                "variant": self._core_map(pin).key(core) or core}
+                        item = {
+                            "install": pin.key,
+                            "core": core,
+                            "kind": self._kind(core, pin) or "spr",
+                            "variant": self._core_map(pin).key(core) or core,
+                        }
                         if error.code not in STOPPING:  # a refusal of the moment belongs to the switch, not the choice
                             self._selection_error(pin, [core], error.to_json())
-                        result["failed"].append({"entry": item, "code": error.code, "params": error.to_json()["params"]})
+                        result["failed"].append(
+                            {"entry": item, "code": error.code, "params": error.to_json()["params"]}
+                        )
                         outcomes[(pin.key, core)] = "pending"
                         if error.code in STOPPING:
                             stop = error
@@ -7552,9 +9113,19 @@ class ModLibrary:
             self._save_outcomes(outcomes)
         if stop is not None:
             raise stop
-        return ToggleResult(bool(enabled), result["done"], result["adopted"], result["failed"], result["stuck"],
-                            result["left"], result["skipped"], result["dropped"], sorted(cores), sorted(kinds),
-                            result["held"])
+        return ToggleResult(
+            bool(enabled),
+            result["done"],
+            result["adopted"],
+            result["failed"],
+            result["stuck"],
+            result["left"],
+            result["skipped"],
+            result["dropped"],
+            sorted(cores),
+            sorted(kinds),
+            result["held"],
+        )
 
     def _check_start(self, pins: list[Pin], intent: bool, expect: bool | None) -> None:
         """What a toggle, Retry or Apply Mod Configuration checks before it plans (``intent``: and that the stored
@@ -7576,13 +9147,18 @@ class ModLibrary:
                 continue
             entry = ((((config or {}).get("folders") or {}).get(pin.key) or {}).get("configured") or {}).get(core) or {}
             source = entry.get("source")
-            if not isinstance(source, str) or not source or source == "official" or (
-                    not drift and self._hold(pin, source)):
+            if (
+                not isinstance(source, str)
+                or not source
+                or source == "official"
+                or (not drift and self._hold(pin, source))
+            ):
                 continue
             targets = self._spine_parts(self._core_map(pin).slot(core), pin)
             if targets:
-                writes.append((pin, self._untested_entry(pin, core, targets, entry.get("variant"), entry.get("kind")),
-                               targets))
+                writes.append(
+                    (pin, self._untested_entry(pin, core, targets, entry.get("variant"), entry.get("kind")), targets)
+                )
         self._check_untested(writes)
 
     def _save_outcomes(self, outcomes: dict[tuple[str, str], str | None]) -> None:
@@ -7610,8 +9186,11 @@ class ModLibrary:
         for entry in found:
             if entry.state in ("untracked", "changed"):
                 need += sum(part.size for part in entry.parts if part.carried == "unknown")
-                need += sum(part.size for part in entry.parts if not part.official
-                            and entry.copies.get(str(part.path)) in ("backup", "elsewhere"))
+                need += sum(
+                    part.size
+                    for part in entry.parts
+                    if not part.official and entry.copies.get(str(part.path)) in ("backup", "elsewhere")
+                )
         folders = (config or {}).get("folders") or {}
         for pin, core in plan:
             configured = ((folders.get(pin.key) or {}).get("configured") or {}).get(core)
@@ -7631,9 +9210,17 @@ class ModLibrary:
                 need += record.get("size") or 0
         return need
 
-    def _reach(self, pin: Pin, core: str, enabled: bool, allowed: bool, listed_state: str | None, drift: bool,
-               log: LogFunc, fraction: Callable[[float], None] | None = None
-               ) -> tuple[dict[str, Any], str | None, dict | None]:
+    def _reach(
+        self,
+        pin: Pin,
+        core: str,
+        enabled: bool,
+        allowed: bool,
+        listed_state: str | None,
+        drift: bool,
+        log: LogFunc,
+        fraction: Callable[[float], None] | None = None,
+    ) -> tuple[dict[str, Any], str | None, dict | None]:
         """One entry of a toggle, Retry or Apply Mod Configuration, under the library lock: its configuration read
         again and its files judged at write strength (a part the library can show unchanged by stat carries its
         record's source; every other part is read in full). Returns (what happened, by result list; the entry's
@@ -7724,7 +9311,11 @@ class ModLibrary:
         outcome["done"] = item
         if len(self._records) > mod_count:
             outcome["done"] = {**outcome["done"], "kept_current": True}
-        if target.startswith("mod:") and target[4:] in self._records and self._incomplete(self._records[target[4:]], pin):
+        if (
+            target.startswith("mod:")
+            and target[4:] in self._records
+            and self._incomplete(self._records[target[4:]], pin)
+        ):
             outcome["done"] = {**outcome["done"], "incomplete": True}
         return outcome, None, item
 
@@ -7867,8 +9458,13 @@ class ModLibrary:
 
     # --- working on mods ---
 
-    def _remap_source_atlases(self, paths: list[Path], selected: dict[str, bytes],
-                             official: dict[str, bytes], available: list[Path] | None = None) -> dict[str, bytes]:
+    def _remap_source_atlases(
+        self,
+        paths: list[Path],
+        selected: dict[str, bytes],
+        official: dict[str, bytes],
+        available: list[Path] | None = None,
+    ) -> dict[str, bytes]:
         """Fill absent source atlases only from verified official copies of the mod's date."""
         missing = official.keys() - atlas_remap.pair_atlases(selected, official).keys()
         if not missing:
@@ -7891,12 +9487,14 @@ class ModLibrary:
         result = dict(selected)
         result.update({name: fallback[source] for name, source in pairs.items()})
         if not result:
-            raise atlas_remap.RemapError("atlas_remap_source_missing", file=", ".join(sorted(missing)),
-                                         date=", ".join(sorted(dates)) or "—")
+            raise atlas_remap.RemapError(
+                "atlas_remap_source_missing", file=", ".join(sorted(missing)), date=", ".join(sorted(dates)) or "—"
+            )
         return result
 
-    def _remap_view(self, record: dict, paths: list[Path], targets: list[Path], originals: dict[Path, Path],
-                    pin: Pin) -> dict:
+    def _remap_view(
+        self, record: dict, paths: list[Path], targets: list[Path], originals: dict[Path, Path], pin: Pin
+    ) -> dict:
         """What a remap starts from: the mod's own inputs (``mod``), the official ones (``official``, from
         ``originals``: per target its verified official copy), the official files with the mod's over them (``view``),
         the official atlases the mod paints without carrying them (``mixed``), and why a remap is wanted: those whose
@@ -7909,25 +9507,46 @@ class ModLibrary:
         replaced = self._replaced_parts({path.name: path for path in paths}, targets, pin)
         others = [original for target, original in originals.items() if target not in replaced]
         view = atlas_remap.read_inputs(others + paths)
-        mixed = {name: data for name, data in view.atlases.items() if name not in mod.atlases
-                 and any(atlas_remap.texture_key(page) in mod.textures
-                         for page in atlas_remap.parse_atlas(data, name).pages)}
+        mixed = {
+            name: data
+            for name, data in view.atlases.items()
+            if name not in mod.atlases
+            and any(atlas_remap.texture_key(page) in mod.textures for page in atlas_remap.parse_atlas(data, name).pages)
+        }
         sizes = {name: image.size for name, image in view.textures.items()}
         misfit = {name for name, data in mixed.items() if atlas_remap.page_size_mismatch({name: data}, sizes)}
         layout = fingerprint.changed_layouts(self._read_built_against(record), mixed)
         if kind_of_file(paths[0].name) == "spr":
             # the rig the archive keeps for textures no record covers, as compatibility finds it
-            unrecorded = {name: data for name, data in mixed.items()
-                          if not isinstance((layout.get(name) or {}).get("skeleton"), str)}
-            layout = {**layout, **self._archived_rigs(paths, unrecorded, lambda: {
-                key: rig_archive.alpha_mask(image) for key, image in official.textures.items()})}
+            unrecorded = {
+                name: data
+                for name, data in mixed.items()
+                if not isinstance((layout.get(name) or {}).get("skeleton"), str)
+            }
+            layout = {
+                **layout,
+                **self._archived_rigs(
+                    paths,
+                    unrecorded,
+                    lambda: {key: rig_archive.alpha_mask(image) for key, image in official.textures.items()},
+                ),
+            }
         gains = atlas_remap.rig_gains(mod.atlases, mod.skeletons, official.atlases, official.skeletons)
-        rerig = atlas_remap.rerigged(gains, mod.atlases, mod.skeletons, official.atlases, official.skeletons,
-                                     mod.textures)
+        rerig = atlas_remap.rerigged(
+            gains, mod.atlases, mod.skeletons, official.atlases, official.skeletons, mod.textures
+        )
         unrecorded = {name for name in misfit if not isinstance((layout.get(name) or {}).get("skeleton"), str)}
         dated = self._dated_rig(paths, unrecorded, official.atlases, originals.values())
-        return {"mod": mod, "official": official, "view": view, "mixed": mixed, "misfit": misfit, "layout": layout,
-                "rerig": rerig, "dated": dated}
+        return {
+            "mod": mod,
+            "official": official,
+            "view": view,
+            "mixed": mixed,
+            "misfit": misfit,
+            "layout": layout,
+            "rerig": rerig,
+            "dated": dated,
+        }
 
     @staticmethod
     def _rebake_plan(inputs: dict) -> dict[str, bytes]:
@@ -7960,17 +9579,23 @@ class ModLibrary:
         if not isinstance(posted, dict):
             raise atlas_remap.RemapError("bad_params", key="geometry")
         source_atlas, target_atlas = atlas_remap.parse_atlas(source, name), atlas_remap.parse_atlas(target, name)
-        return (rebake.rig(posted.get("source"), source_atlas), rebake.rig(posted.get("target"), target_atlas),
-                source_atlas, target_atlas)
+        return (
+            rebake.rig(posted.get("source"), source_atlas),
+            rebake.rig(posted.get("target"), target_atlas),
+            source_atlas,
+            target_atlas,
+        )
 
     @staticmethod
-    def _rebake_pages(inputs: dict, source: atlas_remap.Atlas, target: atlas_remap.Atlas,
-                      done: dict | None = None) -> tuple[dict, dict]:
+    def _rebake_pages(
+        inputs: dict, source: atlas_remap.Atlas, target: atlas_remap.Atlas, done: dict | None = None
+    ) -> tuple[dict, dict]:
         """The mod's pages of the source atlas and the official pages of the target one, keyed by texture key; a page
         an earlier atlas baked (``done``) is taken as it came out."""
         mod, official = inputs["mod"], inputs["official"]
-        source_pages = {key: mod.textures[key] for key in map(atlas_remap.texture_key, source.pages)
-                        if key in mod.textures}
+        source_pages = {
+            key: mod.textures[key] for key in map(atlas_remap.texture_key, source.pages) if key in mod.textures
+        }
         official_pages = {}
         for page in target.pages:
             key = atlas_remap.texture_key(page)
@@ -7987,14 +9612,18 @@ class ModLibrary:
         baked: dict[str, Any] = {}
         for name, source_text in plan.items():
             source, target, source_atlas, target_atlas = self._posted_rigs(
-                geometry, name, source_text, official.atlases[name])
+                geometry, name, source_text, official.atlases[name]
+            )
             source_pages, official_pages = self._rebake_pages(inputs, source_atlas, target_atlas, baked)
             pages, summary = rebake.bake(source, target, source_pages, official_pages)
             baked.update(pages)
             for key in ("moved", "official"):
                 report[key].extend(f"{name} - {region}" for region in summary[key])
-        patch = {official.keys[key]: baked.get(key, view.textures.get(key, image))
-                 for key, image in official.textures.items() if key in official.keys}
+        patch = {
+            official.keys[key]: baked.get(key, view.textures.get(key, image))
+            for key, image in official.textures.items()
+            if key in official.keys
+        }
         report["partial"], report["unchanged"] = bool(report["official"]), False
         return patch, report
 
@@ -8018,18 +9647,22 @@ class ModLibrary:
             inputs = self._remap_view(record, paths, targets, originals, pin)
             for name, source_text in self._rebake_plan(inputs).items():
                 source, target, source_atlas, target_atlas = self._posted_rigs(
-                    geometry, name, source_text, inputs["official"].atlases[name])
-                lowest = min(lowest, rebake.overlap(source, target, *self._rebake_pages(inputs, source_atlas,
-                                                                                         target_atlas)))
+                    geometry, name, source_text, inputs["official"].atlases[name]
+                )
+                lowest = min(
+                    lowest, rebake.overlap(source, target, *self._rebake_pages(inputs, source_atlas, target_atlas))
+                )
         except atlas_remap.RemapError as error:
             raise ServiceError(error.code, **error.params) from error
         except (ValueError, KeyError, EOFError, OSError) as error:
-            raise ServiceError("atlas_remap_invalid", file=", ".join(path.name for path in paths),
-                               reason=str(error)) from error
+            raise ServiceError(
+                "atlas_remap_invalid", file=", ".join(path.name for path in paths), reason=str(error)
+            ) from error
         return {"redrawn": lowest < rebake.REDRAWN_BELOW, "overlap": round(lowest, 4)}
 
-    def _dated_rig(self, paths: list[Path], names: Iterable[str], official: dict[str, bytes],
-                   available: Iterable[Path] = ()) -> dict[str, dict]:
+    def _dated_rig(
+        self, paths: list[Path], names: Iterable[str], official: dict[str, bytes], available: Iterable[Path] = ()
+    ) -> dict[str, dict]:
         """Of the official atlases ``names``, those a verified official copy of the mod's date holds (one the
         library kept, or one of ``available`` of that date), each as a ``fingerprint.painted`` entry: that copy's
         atlas ``text`` and, where it has one, the base64 ``skeleton`` of the same stem. The rig a texture-only mod's
@@ -8051,14 +9684,27 @@ class ModLibrary:
             skeletons.update(contents.skeletons)
         pairs = atlas_remap.pair_atlases(atlases, {name: official[name] for name in names if name in official})
         drawn_by = atlas_remap.pair_atlases(skeletons, dict.fromkeys(pairs))
-        return {name: {"text": atlases[source].decode("utf-8-sig"),
-                       **({"skeleton": base64.b64encode(skeletons[drawn_by[name]]).decode("ascii")}
-                          if name in drawn_by else {})}
-                for name, source in pairs.items()}
+        return {
+            name: {
+                "text": atlases[source].decode("utf-8-sig"),
+                **(
+                    {"skeleton": base64.b64encode(skeletons[drawn_by[name]]).decode("ascii")}
+                    if name in drawn_by
+                    else {}
+                ),
+            }
+            for name, source in pairs.items()
+        }
 
     @_serialized
-    def remap(self, mod_id: str, log: LogFunc = no_log,
-              progress: Callable[[dict], None] | None = None, pin: Pin | None = None, geometry: Any = None) -> dict:
+    def remap(
+        self,
+        mod_id: str,
+        log: LogFunc = no_log,
+        progress: Callable[[dict], None] | None = None,
+        pin: Pin | None = None,
+        geometry: Any = None,
+    ) -> dict:
         """Prepare a review in temporary storage; only accept_remap can add it to the library. A portrait's pages are
         baked through world space from ``geometry`` (``rig-geometry.js`` ``forRemap``, required); other kinds move
         regions by name onto a page size the texture does not fit."""
@@ -8066,8 +9712,11 @@ class ModLibrary:
         record = self._record(mod_id)
         if record.get("repaired_from") or self._repaired_id(record):
             raise ServiceError("entry_changed")
-        self._remap_previews = {token: preview for token, preview in self._remap_previews.items()
-                                if preview["expires"] > time.monotonic() and preview["source"] != mod_id}
+        self._remap_previews = {
+            token: preview
+            for token, preview in self._remap_previews.items()
+            if preview["expires"] > time.monotonic() and preview["source"] != mod_id
+        }
         paths = self._paths(record)
         portrait = kind_of_file(paths[0].name) == "spr"
         if portrait and not isinstance(geometry, dict):
@@ -8076,6 +9725,7 @@ class ModLibrary:
         targets = self._spine_parts(core_of(paths[0].name), pin)
         if not targets:
             raise ServiceError("game_file_not_found", variant=record["target"])
+
         def step(key: str, current: int = 1) -> None:
             if progress:
                 progress({"current": current, "total": len(targets), "step": f"import.step.{key}"})
@@ -8089,11 +9739,16 @@ class ModLibrary:
                 inputs = self._remap_view(record, paths, targets, originals, pin)
                 mod, official, original_view = inputs["mod"], inputs["official"], inputs["view"]
                 rerig = inputs["rerig"] if portrait else {}
-                given = {source: name for name, source in
-                         atlas_remap.pair_atlases(mod.atlases, official.atlases).items() if name in rerig}
-                given_skeletons = {source: name for name, source in
-                                   atlas_remap.pair_atlases(mod.skeletons, official.skeletons).items()
-                                   if name in rerig.values()}
+                given = {
+                    source: name
+                    for name, source in atlas_remap.pair_atlases(mod.atlases, official.atlases).items()
+                    if name in rerig
+                }
+                given_skeletons = {
+                    source: name
+                    for name, source in atlas_remap.pair_atlases(mod.skeletons, official.skeletons).items()
+                    if name in rerig.values()
+                }
                 if portrait:
                     plan = self._rebake_plan(inputs)
                     if not plan:
@@ -8107,10 +9762,11 @@ class ModLibrary:
                     mixed = inputs["mixed"]
                     if not inputs["misfit"]:
                         return {"unchanged": True}
-                    mod.atlases = {**mod.atlases,
-                                   **self._remap_source_atlases(paths, {}, mixed, list(originals.values()))}
-                    target_inputs = replace(official, atlases=original_view.atlases,
-                                            skeletons=original_view.skeletons)
+                    mod.atlases = {
+                        **mod.atlases,
+                        **self._remap_source_atlases(paths, {}, mixed, list(originals.values())),
+                    }
+                    target_inputs = replace(official, atlases=original_view.atlases, skeletons=original_view.skeletons)
                     patch, report = atlas_remap.prepare_patch(mod, target_inputs)
                 # Preserve the winning mod skeleton and atlas when porting the texture patch, but for the ones
                 # that give way to the official rig.
@@ -8118,26 +9774,40 @@ class ModLibrary:
                 for path in paths:
                     bundle = Bundle.load(path)
                     extracted, _ = bundle.extract_patch({"TextAsset"}, "cont_name_type")
-                    text_patch.update({key: value for key, value in extracted.items()
-                                       if key.name not in given and key.name not in given_skeletons})
-                target_keys = set().union(*(Bundle.load(path).get_asset_keys("cont_name_type") for path in originals.values()))
+                    text_patch.update(
+                        {
+                            key: value
+                            for key, value in extracted.items()
+                            if key.name not in given and key.name not in given_skeletons
+                        }
+                    )
+                target_keys = set().union(
+                    *(Bundle.load(path).get_asset_keys("cont_name_type") for path in originals.values())
+                )
                 if text_patch.keys() - target_keys:
-                    raise atlas_remap.RemapError("atlas_remap_target_mismatch", file=paths[0].name,
-                                                 matched=len(text_patch.keys() & target_keys), expected=len(text_patch))
+                    raise atlas_remap.RemapError(
+                        "atlas_remap_target_mismatch",
+                        file=paths[0].name,
+                        matched=len(text_patch.keys() & target_keys),
+                        expected=len(text_patch),
+                    )
                 patch.update(text_patch)
             except atlas_remap.RemapError as error:
                 raise ServiceError(error.code, **error.params) from error
             except (ValueError, KeyError, EOFError, OSError) as error:
-                raise ServiceError("atlas_remap_invalid", file=", ".join(path.name for path in paths),
-                                   reason=str(error)) from error
+                raise ServiceError(
+                    "atlas_remap_invalid", file=", ".join(path.name for path in paths), reason=str(error)
+                ) from error
             if report["unchanged"]:
                 return {"unchanged": True, "report": report}
-            return self._remap_review(mod_id, identity, paths, originals, official, original_view, output, patch,
-                                      report, pin, log, step)
+            return self._remap_review(
+                mod_id, identity, paths, originals, official, original_view, output, patch, report, pin, log, step
+            )
 
     @_serialized
-    def old_rig(self, mod_id: str, log: LogFunc = no_log, progress: Callable[[dict], None] | None = None,
-                pin: Pin | None = None) -> dict:
+    def old_rig(
+        self, mod_id: str, log: LogFunc = no_log, progress: Callable[[dict], None] | None = None, pin: Pin | None = None
+    ) -> dict:
         """Prepare the review of a texture-only portrait mod applied with the rig its textures were drawn for, as a
         whole (``atlas_remap.old_rig_plan`` over the recorded rig, ``_remap_view`` ``layout``, or the official copy
         of the mod's date, ``dated``): that atlas and skeleton with the mod's textures, ported into the current
@@ -8149,8 +9819,11 @@ class ModLibrary:
         record = self._record(mod_id)
         if record.get("repaired_from") or self._repaired_id(record):
             raise ServiceError("entry_changed")
-        self._remap_previews = {token: preview for token, preview in self._remap_previews.items()
-                                if preview["expires"] > time.monotonic() and preview["source"] != mod_id}
+        self._remap_previews = {
+            token: preview
+            for token, preview in self._remap_previews.items()
+            if preview["expires"] > time.monotonic() and preview["source"] != mod_id
+        }
         paths = self._paths(record)
         if kind_of_file(paths[0].name) != "spr":
             raise ServiceError("old_rig_unavailable")
@@ -8171,27 +9844,49 @@ class ModLibrary:
                 step("extract")
                 inputs = self._remap_view(record, paths, targets, originals, pin)
                 mod, official = inputs["mod"], inputs["official"]
-                plan = atlas_remap.old_rig_plan({**inputs["layout"], **inputs["dated"]}, official.atlases,
-                                                official.skeletons, mod.skeletons, mod.textures, official.keys)
+                plan = atlas_remap.old_rig_plan(
+                    {**inputs["layout"], **inputs["dated"]},
+                    official.atlases,
+                    official.skeletons,
+                    mod.skeletons,
+                    mod.textures,
+                    official.keys,
+                )
                 patch = self._old_rig_patch(paths, originals, official, mod, plan) if plan.available else {}
             except atlas_remap.RemapError as error:
                 raise ServiceError(error.code, **error.params) from error
             except (ValueError, KeyError, EOFError, OSError) as error:
-                raise ServiceError("atlas_remap_invalid", file=", ".join(path.name for path in paths),
-                                   reason=str(error)) from error
+                raise ServiceError(
+                    "atlas_remap_invalid", file=", ".join(path.name for path in paths), reason=str(error)
+                ) from error
             if plan.animations:
                 names = dict.fromkeys(name for missing in plan.animations.values() for name in missing)
                 raise ServiceError("old_rig_animations", names=", ".join(names))
             if not plan.available:
                 raise ServiceError("old_rig_unavailable")
-            report = {"moved": [], "added": [], "official": [], "dropped": [], "upscaled": [], "warnings": [],
-                      "rigs": sorted(Path(name).stem for name in plan.atlases), "partial": False, "unchanged": False}
-            return self._remap_review(mod_id, identity, paths, originals, official, inputs["view"], output, patch,
-                                      report, pin, log, step)
+            report = {
+                "moved": [],
+                "added": [],
+                "official": [],
+                "dropped": [],
+                "upscaled": [],
+                "warnings": [],
+                "rigs": sorted(Path(name).stem for name in plan.atlases),
+                "partial": False,
+                "unchanged": False,
+            }
+            return self._remap_review(
+                mod_id, identity, paths, originals, official, inputs["view"], output, patch, report, pin, log, step
+            )
 
     @staticmethod
-    def _old_rig_patch(paths: list[Path], originals: dict[Path, Path], official: atlas_remap.Inputs,
-                       mod: atlas_remap.Inputs, plan: atlas_remap.OldRig) -> dict:
+    def _old_rig_patch(
+        paths: list[Path],
+        originals: dict[Path, Path],
+        official: atlas_remap.Inputs,
+        mod: atlas_remap.Inputs,
+        plan: atlas_remap.OldRig,
+    ) -> dict:
         """The patch of an old-rig set (``old_rig``): the mod's own text assets, the plan's atlases and skeletons
         over the official ones of their names, and the mod's own textures, all by ``cont_name_type``."""
         patch: dict = {}
@@ -8210,8 +9905,12 @@ class ModLibrary:
             extracted, _ = bundle.extract_patch({"TextAsset"}, "cont_name_type")
             patch.update(extracted)
         if patch.keys() - set(texts.values()):
-            raise atlas_remap.RemapError("atlas_remap_target_mismatch", file=paths[0].name,
-                                         matched=len(patch.keys() & set(texts.values())), expected=len(patch))
+            raise atlas_remap.RemapError(
+                "atlas_remap_target_mismatch",
+                file=paths[0].name,
+                matched=len(patch.keys() & set(texts.values())),
+                expected=len(patch),
+            )
         for name, (atlas, skeleton, data) in plan.atlases.items():
             patch[texts[name]] = atlas
             patch[texts[skeleton]] = data
@@ -8220,8 +9919,9 @@ class ModLibrary:
 
     # --- the graft of new official animations into a mod's own rig (bmpt.graft) ---
 
-    def _graft_rigs(self, record: dict, paths: list[Path], inputs: dict,
-                    available: Iterable[Path], kind: str = "spr") -> dict[str, dict]:
+    def _graft_rigs(
+        self, record: dict, paths: list[Path], inputs: dict, available: Iterable[Path], kind: str = "spr"
+    ) -> dict[str, dict]:
         """The rigs a graft adds the official rig's new animations to, per official atlas name: the mod's own binary
         skeleton and atlas where it carries them and the official skeleton has animations it lacks (``kind`` "own";
         ``base``: the official rig the mod was made from, as the fingerprint recorded it or the official copy of the
@@ -8247,8 +9947,15 @@ class ModLibrary:
                 return
             if base is not None and not self._binary_42(base[1]):
                 base = None
-            rigs[name] = {"kind": kind, "skeleton": skeleton, "atlas": text, "data": data, "base": base,
-                          "animations": gains["animations"].get(skeleton, []), "pages": sorted(pages)}
+            rigs[name] = {
+                "kind": kind,
+                "skeleton": skeleton,
+                "atlas": text,
+                "data": data,
+                "base": base,
+                "animations": gains["animations"].get(skeleton, []),
+                "pages": sorted(pages),
+            }
 
         for name, skeleton in skeleton_of.items():
             if skeleton not in gains["animations"] or skeleton not in own_skeletons or name not in own_atlases:
@@ -8269,8 +9976,14 @@ class ModLibrary:
             rig("own", name, skeleton, text, mod.skeletons[own_skeletons[skeleton]], base)
         if rigs or kind != "spr":
             return rigs
-        plan = atlas_remap.old_rig_plan({**inputs["layout"], **inputs["dated"]}, official.atlases,
-                                        official.skeletons, mod.skeletons, mod.textures, official.keys)
+        plan = atlas_remap.old_rig_plan(
+            {**inputs["layout"], **inputs["dated"]},
+            official.atlases,
+            official.skeletons,
+            mod.skeletons,
+            mod.textures,
+            official.keys,
+        )
         if plan.complete:
             for name, (atlas, skeleton, data) in plan.atlases.items():
                 if skeleton in plan.animations:
@@ -8294,8 +10007,9 @@ class ModLibrary:
         return state
 
     @_serialized
-    def graft(self, mod_id: str, log: LogFunc = no_log, progress: Callable[[dict], None] | None = None,
-              pin: Pin | None = None) -> dict:
+    def graft(
+        self, mod_id: str, log: LogFunc = no_log, progress: Callable[[dict], None] | None = None, pin: Pin | None = None
+    ) -> dict:
         """The first step of a graft (``bmpt.graft``): the rigs to pose, per official atlas name the mod's rig, the
         official rig it was made from (``base``, or None) and the official rig, each as ``atlas`` text and base64
         ``skeleton``; kept under a ``token`` for ``graft_build`` and ``graft_check``. Refused with
@@ -8305,8 +10019,11 @@ class ModLibrary:
         if record.get("repaired_from") or self._repaired_id(record):
             raise ServiceError("entry_changed")
         now = time.monotonic()
-        self._grafts = {token: state for token, state in self._grafts.items()
-                        if state["expires"] > now and state["source"] != mod_id}
+        self._grafts = {
+            token: state
+            for token, state in self._grafts.items()
+            if state["expires"] > now and state["source"] != mod_id
+        }
         paths = self._paths(record)
         kind = kind_of_file(paths[0].name)
         if kind not in ("spr", "lobby"):
@@ -8326,8 +10043,9 @@ class ModLibrary:
             except atlas_remap.RemapError as error:
                 raise ServiceError(error.code, **error.params) from error
             except (ValueError, KeyError, EOFError, OSError) as error:
-                raise ServiceError("atlas_remap_invalid", file=", ".join(path.name for path in paths),
-                                   reason=str(error)) from error
+                raise ServiceError(
+                    "atlas_remap_invalid", file=", ".join(path.name for path in paths), reason=str(error)
+                ) from error
         if not rigs:
             raise ServiceError("graft_unavailable")
         official = inputs["official"]
@@ -8341,22 +10059,47 @@ class ModLibrary:
             built = self._graft_plain(rigs, inputs)
             if not built:
                 raise ServiceError("graft_unavailable")
-            self._grafts[token] = {"source": mod_id, "identity": identity, "pin": pin.key, "expires": now + 3600,
-                                   "rigs": rigs, "inputs": inputs, "prepared": built, "plain": True}
-            return {"token": token, "plain": True,
-                    "rigs": {name: {"skeleton": b64(one.skeleton), "atlas": one.atlas, "animations": list(one.results)}
-                             for name, one in built.items()}}
-        self._grafts[token] = {"source": mod_id, "identity": identity, "pin": pin.key, "expires": now + 3600,
-                               "rigs": rigs, "inputs": inputs, "prepared": None}
+            self._grafts[token] = {
+                "source": mod_id,
+                "identity": identity,
+                "pin": pin.key,
+                "expires": now + 3600,
+                "rigs": rigs,
+                "inputs": inputs,
+                "prepared": built,
+                "plain": True,
+            }
+            return {
+                "token": token,
+                "plain": True,
+                "rigs": {
+                    name: {"skeleton": b64(one.skeleton), "atlas": one.atlas, "animations": list(one.results)}
+                    for name, one in built.items()
+                },
+            }
+        self._grafts[token] = {
+            "source": mod_id,
+            "identity": identity,
+            "pin": pin.key,
+            "expires": now + 3600,
+            "rigs": rigs,
+            "inputs": inputs,
+            "prepared": None,
+        }
 
         posed = {}
         for name, rig in rigs.items():
             base = rig["base"]
-            posed[name] = {"kind": rig["kind"], "animations": rig["animations"],
-                           "mod": {"atlas": rig["atlas"], "skeleton": b64(rig["data"])},
-                           "base": {"atlas": base[0], "skeleton": b64(base[1])} if base else None,
-                           "official": {"atlas": official.atlases[name].decode("utf-8-sig"),
-                                        "skeleton": b64(official.skeletons[rig["skeleton"]])}}
+            posed[name] = {
+                "kind": rig["kind"],
+                "animations": rig["animations"],
+                "mod": {"atlas": rig["atlas"], "skeleton": b64(rig["data"])},
+                "base": {"atlas": base[0], "skeleton": b64(base[1])} if base else None,
+                "official": {
+                    "atlas": official.atlases[name].decode("utf-8-sig"),
+                    "skeleton": b64(official.skeletons[rig["skeleton"]]),
+                },
+            }
         return {"token": token, "rigs": posed}
 
     @_serialized
@@ -8381,14 +10124,27 @@ class ModLibrary:
                 official_setup = grafting.setup(posted.get("official"))
                 base_setup = grafting.setup(posted["base"]) if rig["base"] and posted.get("base") else None
                 mod_pages = {key: state["inputs"]["mod"].textures[key] for key in rig["pages"]}
-                one = grafting.prepare(rig["data"], rig["atlas"], mod_pages, official.skeletons[rig["skeleton"]],
-                                       official_text, official.textures, mod_setup, official_setup, base_setup)
+                one = grafting.prepare(
+                    rig["data"],
+                    rig["atlas"],
+                    mod_pages,
+                    official.skeletons[rig["skeleton"]],
+                    official_text,
+                    official.textures,
+                    mod_setup,
+                    official_setup,
+                    base_setup,
+                )
                 prepared[name] = one
                 refused.update(one.graft.refused)
                 check = {animation: slots for animation, slots in one.slots.items()}
                 check.update({test: one.slots[animation] for test, (animation, _c) in one.candidates.items()})
-                out[name] = {"skeleton": base64.b64encode(one.test_skeleton).decode("ascii"), "atlas": one.test_atlas,
-                             "check": check, "official": dict(one.slots)}
+                out[name] = {
+                    "skeleton": base64.b64encode(one.test_skeleton).decode("ascii"),
+                    "atlas": one.test_atlas,
+                    "check": check,
+                    "official": dict(one.slots),
+                }
         except grafting.GraftError as error:
             raise ServiceError(error.code, **error.params) from error
         except atlas_remap.RemapError as error:
@@ -8397,8 +10153,14 @@ class ModLibrary:
         return {"rigs": out, "refused": refused}
 
     @_serialized
-    def graft_check(self, token: str, geometry: Any, log: LogFunc = no_log,
-                    progress: Callable[[dict], None] | None = None, pin: Pin | None = None) -> dict:
+    def graft_check(
+        self,
+        token: str,
+        geometry: Any,
+        log: LogFunc = no_log,
+        progress: Callable[[dict], None] | None = None,
+        pin: Pin | None = None,
+    ) -> dict:
         """The last step: check every grafted expression against the official one from the posted poses of the test
         and the official rigs (``graft.choose``), and prepare the review of the repaired copy as a remap's
         (``_remap_review``; accepted with ``accept_remap``)."""
@@ -8423,8 +10185,11 @@ class ModLibrary:
                 posted = geometry.get(name)
                 if not isinstance(posted, dict):
                     raise ServiceError("bad_params", key="geometry")
-                test = rebake.rig(posted.get("test"), atlas_remap.parse_atlas(one.test_atlas, name),
-                                  max_poses=len(one.candidates) + len(one.slots) + 1)
+                test = rebake.rig(
+                    posted.get("test"),
+                    atlas_remap.parse_atlas(one.test_atlas, name),
+                    max_poses=len(one.candidates) + len(one.slots) + 1,
+                )
                 reference = rebake.rig(posted.get("official"), atlas_remap.parse_atlas(one.official_text, name))
                 pages = {**{key: mod.textures[key] for key in state["rigs"][name]["pages"]}, **one.pages.images}
                 checked[name] = grafting.choose(one, reference, test, official.textures, pages)
@@ -8441,9 +10206,21 @@ class ModLibrary:
             if progress:
                 progress({"current": current, "total": len(targets), "step": f"import.step.{key}"})
 
-        report = {"moved": [], "added": [], "official": [], "dropped": [], "upscaled": [], "warnings": [],
-                  "grafted": [], "refused": {}, "corrected": [], "unfixed": [], "grown": 0, "unanchored": False,
-                  "unchanged": False}
+        report = {
+            "moved": [],
+            "added": [],
+            "official": [],
+            "dropped": [],
+            "upscaled": [],
+            "warnings": [],
+            "grafted": [],
+            "refused": {},
+            "corrected": [],
+            "unfixed": [],
+            "grown": 0,
+            "unanchored": False,
+            "unchanged": False,
+        }
         marks: list[str] = []
         for name, one in state["prepared"].items():
             result = checked[name]
@@ -8459,8 +10236,11 @@ class ModLibrary:
                     report["corrected"].append(animation)
                 if not outcome["fixed"]:
                     report["unfixed"].append(animation)
-                    marks += [c.region for key in one.graft.shown.get(animation, [])
-                              if (c := one.graft.carried.get(key)) and c.region]
+                    marks += [
+                        c.region
+                        for key in one.graft.shown.get(animation, [])
+                        if (c := one.graft.carried.get(key)) and c.region
+                    ]
         report["marks"] = sorted(set(marks))
         report["partial"] = bool(report["unfixed"] or report["refused"] or report["unanchored"])
         with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX + "remap-") as temporary:
@@ -8471,8 +10251,20 @@ class ModLibrary:
                 patch = self._graft_patch(paths, originals, official, mod, state["rigs"], checked)
             except atlas_remap.RemapError as error:
                 raise ServiceError(error.code, **error.params) from error
-            return self._remap_review(mod_id, state["identity"], paths, originals, official, inputs["view"], output,
-                                      patch, report, pin, log, step)
+            return self._remap_review(
+                mod_id,
+                state["identity"],
+                paths,
+                originals,
+                official,
+                inputs["view"],
+                output,
+                patch,
+                report,
+                pin,
+                log,
+                step,
+            )
 
     # --- the converter route of a graft (bmpt.spine_converter): optional, after the user's consent -----------------
 
@@ -8485,9 +10277,11 @@ class ModLibrary:
 
     def converter_download(self, consented: bool, progress: Callable[[dict], None] | None = None) -> dict:
         """Fetch the pinned converter release after the user confirmed its licence (Windows)."""
+
         def step(done: int, total: int) -> None:
             if progress:
                 progress({"current": done, "total": total, "step": "import.step.check"})
+
         try:
             spine_converter.download(self.converter_root(), consented=consented, progress=step)
         except spine_converter.ConverterError as error:
@@ -8517,20 +10311,28 @@ class ModLibrary:
                     raise ServiceError("bad_params", key="geometry")
                 official_text = official.atlases[name].decode("utf-8-sig")
                 mod_json = spine_converter.to_json(exe, rig["data"])
-                own = {animation: [slot.get("name") for slot in mod_json.get("slots") or []]
-                       for animation in mod_json.get("animations") or {}}
-                result = spine_converter.graft_json(mod_json, spine_converter.to_json(exe, official.skeletons[rig["skeleton"]]))
+                own = {
+                    animation: [slot.get("name") for slot in mod_json.get("slots") or []]
+                    for animation in mod_json.get("animations") or {}
+                }
+                result = spine_converter.graft_json(
+                    mod_json, spine_converter.to_json(exe, official.skeletons[rig["skeleton"]])
+                )
                 refused.update(result.refused)
                 mod_atlas = atlas_remap.parse_atlas(rig["atlas"], name)
                 mod_setup = grafting.setup(posted.get("mod"), mod_atlas)
                 mod_pages = {key: state["inputs"]["mod"].textures[key] for key in rig["pages"]}
-                pages = grafting.pack(rig["atlas"], official_text, result.regions, mod_pages, official.textures, mod_setup)
+                pages = grafting.pack(
+                    rig["atlas"], official_text, result.regions, mod_pages, official.textures, mod_setup
+                )
                 atlas = grafting.atlas_text(rig["atlas"], pages)
                 skeleton = spine_converter.to_binary(exe, mod_json)
                 converted[name] = {"result": result, "pages": pages, "atlas": atlas, "skeleton": skeleton, "own": own}
-                out[name] = {"before": {"atlas": rig["atlas"], "skeleton": base64.b64encode(rig["data"]).decode("ascii")},
-                             "after": {"atlas": atlas, "skeleton": base64.b64encode(skeleton).decode("ascii")},
-                             "check": own}
+                out[name] = {
+                    "before": {"atlas": rig["atlas"], "skeleton": base64.b64encode(rig["data"]).decode("ascii")},
+                    "after": {"atlas": atlas, "skeleton": base64.b64encode(skeleton).decode("ascii")},
+                    "check": own,
+                }
         except spine_converter.ConverterError as error:
             raise ServiceError(error.code, **error.params) from error
         except grafting.GraftError as error:
@@ -8541,8 +10343,14 @@ class ModLibrary:
         return {"rigs": out, "refused": refused}
 
     @_serialized
-    def graft_convert_check(self, token: str, geometry: Any, log: LogFunc = no_log,
-                            progress: Callable[[dict], None] | None = None, pin: Pin | None = None) -> dict:
+    def graft_convert_check(
+        self,
+        token: str,
+        geometry: Any,
+        log: LogFunc = no_log,
+        progress: Callable[[dict], None] | None = None,
+        pin: Pin | None = None,
+    ) -> dict:
         """The converter route's last step: the mod's own animations posed before and after the rewrite (the
         converter rounds to two decimals) may move at most ``spine_converter.DRIFT``, else ``converter_drift``; then
         the review of the repaired copy as a graft's (``_remap_review``). The carried attachments keep the official
@@ -8559,9 +10367,22 @@ class ModLibrary:
         if state["identity"] != self._identity({path.name: path for path in paths}):
             raise ServiceError("entry_changed")
         inputs = state["inputs"]
-        report = {"moved": [], "added": [], "official": [], "dropped": [], "upscaled": [], "warnings": [],
-                  "grafted": [], "refused": {}, "corrected": [], "unfixed": [], "grown": 0, "unanchored": True,
-                  "unchanged": False, "converter": True}
+        report = {
+            "moved": [],
+            "added": [],
+            "official": [],
+            "dropped": [],
+            "upscaled": [],
+            "warnings": [],
+            "grafted": [],
+            "refused": {},
+            "corrected": [],
+            "unfixed": [],
+            "grown": 0,
+            "unanchored": True,
+            "unchanged": False,
+            "converter": True,
+        }
         marks: list[str] = []
         checked = {}
         try:
@@ -8570,12 +10391,20 @@ class ModLibrary:
                 if not isinstance(posted, dict):
                     raise ServiceError("bad_params", key="geometry")
                 limit = len(one["own"]) + 1
-                before = rebake.rig(posted.get("before"), atlas_remap.parse_atlas(state["rigs"][name]["atlas"], name),
-                                    max_poses=limit)
+                before = rebake.rig(
+                    posted.get("before"), atlas_remap.parse_atlas(state["rigs"][name]["atlas"], name), max_poses=limit
+                )
                 after = rebake.rig(posted.get("after"), atlas_remap.parse_atlas(one["atlas"], name), max_poses=limit)
-                moved = spine_converter.drift(*({f"{pose}|{d.slot}|{d.region}|{k}": d.vertices.ravel().tolist()
-                                                 for pose, drawn in rig.poses.items() for k, d in enumerate(drawn)}
-                                                for rig in (before, after)))
+                moved = spine_converter.drift(
+                    *(
+                        {
+                            f"{pose}|{d.slot}|{d.region}|{k}": d.vertices.ravel().tolist()
+                            for pose, drawn in rig.poses.items()
+                            for k, d in enumerate(drawn)
+                        }
+                        for rig in (before, after)
+                    )
+                )
                 if moved > spine_converter.DRIFT:
                     raise ServiceError("converter_drift", moved=f"{moved:.2f}", limit=spine_converter.DRIFT)
                 result = one["result"]
@@ -8605,12 +10434,25 @@ class ModLibrary:
                 patch = self._graft_patch(paths, originals, inputs["official"], inputs["mod"], state["rigs"], checked)
             except atlas_remap.RemapError as error:
                 raise ServiceError(error.code, **error.params) from error
-            return self._remap_review(mod_id, state["identity"], paths, originals, inputs["official"], inputs["view"],
-                                      output, patch, report, pin, log, step)
+            return self._remap_review(
+                mod_id,
+                state["identity"],
+                paths,
+                originals,
+                inputs["official"],
+                inputs["view"],
+                output,
+                patch,
+                report,
+                pin,
+                log,
+                step,
+            )
 
     @staticmethod
-    def _graft_plain(rigs: dict[str, dict], inputs: dict,
-                     only: Mapping[str, set[str]] | None = None) -> dict[str, grafting.Plain]:
+    def _graft_plain(
+        rigs: dict[str, dict], inputs: dict, only: Mapping[str, set[str]] | None = None
+    ) -> dict[str, grafting.Plain]:
         """The ``graft.plain`` of every rig (``only``: per atlas the animations to carry), the rigs with nothing to
         carry left out."""
         official, mod = inputs["official"], inputs["mod"]
@@ -8620,9 +10462,15 @@ class ModLibrary:
             if wanted is not None and not wanted:
                 continue
             try:
-                built[name] = grafting.plain(rig["data"], rig["atlas"], {key: mod.textures[key] for key in rig["pages"]},
-                                             official.skeletons[rig["skeleton"]],
-                                             official.atlases[name].decode("utf-8-sig"), official.textures, wanted)
+                built[name] = grafting.plain(
+                    rig["data"],
+                    rig["atlas"],
+                    {key: mod.textures[key] for key in rig["pages"]},
+                    official.skeletons[rig["skeleton"]],
+                    official.atlases[name].decode("utf-8-sig"),
+                    official.textures,
+                    wanted,
+                )
             except grafting.GraftError as error:
                 if error.code != "graft_refused":
                     raise ServiceError(error.code, **error.params) from error
@@ -8630,8 +10478,16 @@ class ModLibrary:
                 raise ServiceError(error.code, **error.params) from error
         return built
 
-    def _graft_check_plain(self, token: str, state: dict, geometry: Any, paths: list[Path], pin: Pin, log: LogFunc,
-                           progress: Callable[[dict], None] | None) -> dict:
+    def _graft_check_plain(
+        self,
+        token: str,
+        state: dict,
+        geometry: Any,
+        paths: list[Path],
+        pin: Pin,
+        log: LogFunc,
+        progress: Callable[[dict], None] | None,
+    ) -> dict:
         """graft_check of a ``graft.plain``: ``geometry`` per atlas ``failed``, the carried animations the page
         could not pose (``rig-geometry.js`` ``failedPoses``). Those are built out again and reported as refused
         (``pose:``); the review is prepared as a remap's."""
@@ -8649,8 +10505,11 @@ class ModLibrary:
         if any(failed.values()):
             for name in failed:
                 refused.update({animation: ["pose:"] for animation in sorted(failed[name])})
-            prepared = self._graft_plain(state["rigs"], state["inputs"],
-                                         {name: set(one.results) - failed[name] for name, one in prepared.items()})
+            prepared = self._graft_plain(
+                state["rigs"],
+                state["inputs"],
+                {name: set(one.results) - failed[name] for name, one in prepared.items()},
+            )
             if not prepared:
                 self._grafts.pop(token, None)
                 raise ServiceError("graft_refused", names=", ".join(sorted(refused)) or "—")
@@ -8665,10 +10524,23 @@ class ModLibrary:
                 progress({"current": current, "total": len(targets), "step": f"import.step.{key}"})
 
         grown = [rows for one in prepared.values() for rows in one.grown.values()]
-        report = {"moved": [], "added": [], "official": [], "dropped": [], "upscaled": [], "warnings": [],
-                  "grafted": [animation for one in prepared.values() for animation in one.results],
-                  "refused": refused, "corrected": [], "unfixed": [], "grown": max(grown, default=0),
-                  "unanchored": False, "unchanged": False, "marks": [], "animations": True}
+        report = {
+            "moved": [],
+            "added": [],
+            "official": [],
+            "dropped": [],
+            "upscaled": [],
+            "warnings": [],
+            "grafted": [animation for one in prepared.values() for animation in one.results],
+            "refused": refused,
+            "corrected": [],
+            "unfixed": [],
+            "grown": max(grown, default=0),
+            "unanchored": False,
+            "unchanged": False,
+            "marks": [],
+            "animations": True,
+        }
         report["partial"] = bool(refused)
         inputs = state["inputs"]
         with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX + "remap-") as temporary:
@@ -8676,12 +10548,30 @@ class ModLibrary:
             step("check")
             originals = self._stage_official(targets, output / "official", pin)
             try:
-                patch = self._graft_patch(paths, originals, inputs["official"], inputs["mod"],
-                                          {name: state["rigs"][name] for name in prepared}, prepared)
+                patch = self._graft_patch(
+                    paths,
+                    originals,
+                    inputs["official"],
+                    inputs["mod"],
+                    {name: state["rigs"][name] for name in prepared},
+                    prepared,
+                )
             except atlas_remap.RemapError as error:
                 raise ServiceError(error.code, **error.params) from error
-            return self._remap_review(state["source"], state["identity"], paths, originals, inputs["official"],
-                                      inputs["view"], output, patch, report, pin, log, step)
+            return self._remap_review(
+                state["source"],
+                state["identity"],
+                paths,
+                originals,
+                inputs["official"],
+                inputs["view"],
+                output,
+                patch,
+                report,
+                pin,
+                log,
+                step,
+            )
 
     @_serialized
     def discard_graft(self, token: str) -> None:
@@ -8690,8 +10580,14 @@ class ModLibrary:
             self._grafts.pop(token, None)
 
     @staticmethod
-    def _graft_patch(paths: list[Path], originals: dict[Path, Path], official: atlas_remap.Inputs,
-                     mod: atlas_remap.Inputs, rigs: dict[str, dict], checked: dict) -> dict:
+    def _graft_patch(
+        paths: list[Path],
+        originals: dict[Path, Path],
+        official: atlas_remap.Inputs,
+        mod: atlas_remap.Inputs,
+        rigs: dict[str, dict],
+        checked: dict,
+    ) -> dict:
         """The patch of a grafted copy: the mod's own text assets, every grafted skeleton and atlas over the official
         ones of their names, the mod's own textures and the grafted pages, all by ``cont_name_type``."""
         patch: dict = {}
@@ -8710,14 +10606,17 @@ class ModLibrary:
             extracted, _ = bundle.extract_patch({"TextAsset"}, "cont_name_type")
             patch.update(extracted)
         if patch.keys() - set(texts.values()):
-            raise atlas_remap.RemapError("atlas_remap_target_mismatch", file=paths[0].name,
-                                         matched=len(patch.keys() & set(texts.values())), expected=len(patch))
+            raise atlas_remap.RemapError(
+                "atlas_remap_target_mismatch",
+                file=paths[0].name,
+                matched=len(patch.keys() & set(texts.values())),
+                expected=len(patch),
+            )
         patch.update({official.keys[key]: image for key, image in mod.textures.items() if key in official.keys})
         for name, rig in rigs.items():
             result = checked[name]
             if name not in texts or rig["skeleton"] not in texts:
-                raise atlas_remap.RemapError("atlas_remap_target_mismatch", file=paths[0].name,
-                                             matched=0, expected=2)
+                raise atlas_remap.RemapError("atlas_remap_target_mismatch", file=paths[0].name, matched=0, expected=2)
             patch[texts[name]] = result.atlas.encode("utf-8")
             patch[texts[rig["skeleton"]]] = result.skeleton
             for key, image in result.pages.items():
@@ -8726,9 +10625,21 @@ class ModLibrary:
                 patch[official.keys[key]] = image
         return patch
 
-    def _remap_review(self, mod_id: str, identity: Any, paths: list[Path], originals: dict[Path, Path],
-                      official: atlas_remap.Inputs, original_view: atlas_remap.Inputs, output: Path, patch: dict,
-                      report: dict, pin: Pin, log: LogFunc, step: Callable[..., None]) -> dict:
+    def _remap_review(
+        self,
+        mod_id: str,
+        identity: Any,
+        paths: list[Path],
+        originals: dict[Path, Path],
+        official: atlas_remap.Inputs,
+        original_view: atlas_remap.Inputs,
+        output: Path,
+        patch: dict,
+        report: dict,
+        pin: Pin,
+        log: LogFunc,
+        step: Callable[..., None],
+    ) -> dict:
         """The review of a prepared repair: the official parts (``originals``) with ``patch`` ported in by
         ``cont_name_type`` and CRC fixed as the settings ask, in ``output``; kept in temporary storage under a token
         that only accept_remap can add to the library. Every Texture2D of a part takes the patch's image of its
@@ -8742,14 +10653,25 @@ class ModLibrary:
                 raise ServiceError("bundle_invalid", file=original.name)
             keys = bundle.get_asset_keys("cont_name_type")
             local_patch = {key: value for key, value in patch.items() if key in keys}
-            local_patch.update({key: patch[official.keys[atlas_remap.texture_key(key.name)]]
-                                for key in keys if key.type == "Texture2D"
-                                and official.keys.get(atlas_remap.texture_key(key.name)) in patch})
+            local_patch.update(
+                {
+                    key: patch[official.keys[atlas_remap.texture_key(key.name)]]
+                    for key in keys
+                    if key.type == "Texture2D" and official.keys.get(atlas_remap.texture_key(key.name)) in patch
+                }
+            )
             if local_patch:
-                result = rebuild([], [original], output, {"Texture2D"},
+                result = rebuild(
+                    [],
+                    [original],
+                    output,
+                    {"Texture2D"},
                     self.settings.save_options(self.settings.crc_needed(target)),
-                    match_strategy="cont_name_type", log=log, prepared_patch=local_patch,
-                    on_step=lambda key: step(key, i))
+                    match_strategy="cont_name_type",
+                    log=log,
+                    prepared_patch=local_patch,
+                    on_step=lambda key: step(key, i),
+                )
                 if not result.success or len(result.file_pairs) != 1:
                     raise ServiceError("mod_update_failed", id=mod_id)
             else:
@@ -8768,9 +10690,14 @@ class ModLibrary:
             image.save(stream, format="PNG")
             return "data:image/png;base64," + base64.b64encode(stream.getvalue()).decode("ascii")
 
-        pages = [{"name": name, "original": png(original_view.textures.get(name)),
-                  "repaired": png(repaired.textures.get(name))}
-                 for name in sorted(original_view.textures.keys() | repaired.textures.keys())]
+        pages = [
+            {
+                "name": name,
+                "original": png(original_view.textures.get(name)),
+                "repaired": png(repaired.textures.get(name)),
+            }
+            for name in sorted(original_view.textures.keys() | repaired.textures.keys())
+        ]
 
         def scenes(inputs) -> list[dict]:
             atlas_by_stem = {Path(name).stem.lower(): data for name, data in inputs.atlases.items()}
@@ -8780,21 +10707,34 @@ class ModLibrary:
                 if atlas is None and len(inputs.atlases) == 1:
                     atlas = next(iter(inputs.atlases.values()))
                 if atlas is not None:
-                    result.append({"name": name, "json": data.decode("utf-8-sig", errors="replace").lstrip().startswith("{"),
-                                   "skeleton": base64.b64encode(data).decode("ascii"),
-                                   "atlas": atlas.decode("utf-8-sig")})
+                    result.append(
+                        {
+                            "name": name,
+                            "json": data.decode("utf-8-sig", errors="replace").lstrip().startswith("{"),
+                            "skeleton": base64.b64encode(data).decode("ascii"),
+                            "atlas": atlas.decode("utf-8-sig"),
+                        }
+                    )
             return result
 
         drawings = {"original": scenes(original_view), "repaired": scenes(repaired)}
         token = uuid.uuid4().hex
         self._remap_previews[token] = {
-            "source": mod_id, "identity": identity,
+            "source": mod_id,
+            "identity": identity,
             "files": {name: path.read_bytes() for name, path in generated.items()},
-            "report": report, "compare": comparison, "expires": time.monotonic() + 3600,
+            "report": report,
+            "compare": comparison,
+            "expires": time.monotonic() + 3600,
             "built_against": built_against,
         }
-        return {"preview": token, "report": report, "compare": comparison.to_json(),
-                "pages": pages, "drawings": drawings}
+        return {
+            "preview": token,
+            "report": report,
+            "compare": comparison.to_json(),
+            "pages": pages,
+            "drawings": drawings,
+        }
 
     @_serialized
     @_mod_writer
@@ -8805,8 +10745,11 @@ class ModLibrary:
             self._remap_previews.pop(preview, None)
             raise ServiceError("entry_changed")
         record = self._record(prepared["source"])
-        if record.get("repaired_from") or self._repaired_id(record) or prepared["identity"] != self._identity(
-                {path.name: path for path in self._paths(record)}):
+        if (
+            record.get("repaired_from")
+            or self._repaired_id(record)
+            or prepared["identity"] != self._identity({path.name: path for path in self._paths(record)})
+        ):
             raise ServiceError("entry_changed")
         with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX + "accept-") as temporary:
             files = {}
@@ -8814,11 +10757,16 @@ class ModLibrary:
                 path = Path(temporary) / name
                 path.write_bytes(data)
                 files[name] = path
-            stored = self._store(files, self._label(record), record["target"], record["kind"],
-                                 repaired_from=record["id"], built_against=prepared.get("built_against"))
+            stored = self._store(
+                files,
+                self._label(record),
+                record["target"],
+                record["kind"],
+                repaired_from=record["id"],
+                built_against=prepared.get("built_against"),
+            )
         self._remap_previews.pop(preview, None)
-        return RemapResult(self._entry(stored), prepared["report"],
-                           replace(prepared["compare"], mod_id=stored["id"]))
+        return RemapResult(self._entry(stored), prepared["report"], replace(prepared["compare"], mod_id=stored["id"]))
 
     @_serialized
     def discard_remap(self, preview: str) -> None:
@@ -8826,9 +10774,15 @@ class ModLibrary:
         self._remap_previews.pop(preview, None)
 
     @_serialized
-    def update(self, mod_id: str, log: LogFunc = no_log,
-               progress: Callable[[dict], None] | None = None, pin: Pin | None = None, *,
-               fraction: Callable[[float], None] | None = None) -> UpdateResult:
+    def update(
+        self,
+        mod_id: str,
+        log: LogFunc = no_log,
+        progress: Callable[[dict], None] | None = None,
+        pin: Pin | None = None,
+        *,
+        fraction: Callable[[float], None] | None = None,
+    ) -> UpdateResult:
         """Rebuild a mod against current official bundles and retain its old files (``_publish_update``, atomic per
         mod). Its built copies go: they hold the old build. The entries configured with it are marked updated (a game
         file still holds the old build); an update that changed nothing marks none. ``fraction``: told how far an
@@ -8850,16 +10804,25 @@ class ModLibrary:
             no_match: RebuildResult | None = None  # a part's rebuild that took nothing, while no part took any
             matched = False
             for i, target in enumerate(targets, 1):
+
                 def step(key: str) -> None:
                     if progress:
                         progress({"current": i, "total": len(targets), "step": f"import.step.{key}"})
 
                 step("check")
                 result = rebuild(
-                    paths, [self._official_for(target, pin)], output, self.settings.asset_types(),
-                    self.settings.save_options(self.settings.crc_needed(target)), self.settings.spine_options(),
-                    skip_unchanged=True, match_strategy="cont_name_type",
-                    anim_check=self.settings.anim_check_options(), log=log, on_step=step)
+                    paths,
+                    [self._official_for(target, pin)],
+                    output,
+                    self.settings.asset_types(),
+                    self.settings.save_options(self.settings.crc_needed(target)),
+                    self.settings.spine_options(),
+                    skip_unchanged=True,
+                    match_strategy="cont_name_type",
+                    anim_check=self.settings.anim_check_options(),
+                    log=log,
+                    on_step=step,
+                )
                 if result.no_match:
                     # A part that takes nothing from the mod (one of materials only, or one the mod carries none
                     # of) keeps the official file: the copy below.
@@ -8875,32 +10838,42 @@ class ModLibrary:
             if no_match and not matched:  # no part took anything from the mod
                 log(f"❌ {no_match.message}")
                 raise ServiceError("mod_update_failed", id=mod_id, reason=no_match.message)
-            if all_unchanged or (len(generated) == len(paths) and all(
+            if all_unchanged or (
+                len(generated) == len(paths)
+                and all(
                     new.name == old.name and self._hashes.get(new).sha1 == self._hashes.get(old).sha1
-                    for new, old in zip(sorted(generated), sorted(paths)))):
+                    for new, old in zip(sorted(generated), sorted(paths))
+                )
+            ):
                 # the mod is what a rebuild on these official parts gives: they are its baseline, also in place of
                 # one of earlier parts whose change held it (an update ends the hold)
                 if self._read_built_against(record) is None or self._impact(record, pin) != fingerprint.UNCHANGED:
-                    self._write_built_against(record, self._built_against(
-                        {path.name: path for path in paths}, pin, "update", painted=painted))
-                return UpdateResult(self._entry(record), paths, [], unchanged=True,
-                                    rig=self._rig_gains({path.name: path for path in paths}, pin))
+                    self._write_built_against(
+                        record, self._built_against({path.name: path for path in paths}, pin, "update", painted=painted)
+                    )
+                return UpdateResult(
+                    self._entry(record),
+                    paths,
+                    [],
+                    unchanged=True,
+                    rig=self._rig_gains({path.name: path for path in paths}, pin),
+                )
             # Include unchanged parts when a rebuild splits a mod across bundles.
             names = {path.name for path in generated}
             for target in targets:
                 if target.name not in names:
                     atomic_copy(self._official_for(target, pin), output / target.name)
                     generated.append(output / target.name)
-            built_against = self._built_against({path.name: path for path in generated}, pin, "update",
-                                                painted=painted)
+            built_against = self._built_against({path.name: path for path in generated}, pin, "update", painted=painted)
             rig = self._rig_gains({path.name: path for path in generated}, pin)
             record, previous = self._publish_update(mod_id, built_from, generated)
             # after the commit: a fingerprint of the files before stays theirs if the update is rolled back
             self._write_built_against(record, built_against)
         return UpdateResult(self._entry(record), self._paths(record), previous, rig=rig)
 
-    def _rebuild_optimized(self, record: dict[str, Any], log: LogFunc, pin: Pin,
-                           fraction: Callable[[float], None] | None = None) -> UpdateResult:
+    def _rebuild_optimized(
+        self, record: dict[str, Any], log: LogFunc, pin: Pin, fraction: Callable[[float], None] | None = None
+    ) -> UpdateResult:
         """Update of an Optimize Physics copy: its costume built again with the physics rules under the current
         costume rule, published in place of its files (``_publish_update``: its id, name and links stay), the rule
         recorded after. Refused like Optimize Physics when the pair's verdict refuses it; ``mod_update_failed`` when
@@ -8917,8 +10890,9 @@ class ModLibrary:
         built_from = {path.name: self._hashes.get(path).sha1 for path in paths}
         report: dict[str, Any] = {}
         with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX + "update-") as temporary:
-            replacements = self._stage_costume(source[8:], targets, Path(temporary) / "model", log, pin,
-                                               report=report, physics=True, fraction=fraction)
+            replacements = self._stage_costume(
+                source[8:], targets, Path(temporary) / "model", log, pin, report=report, physics=True, fraction=fraction
+            )
             if not report.get("physics"):
                 raise ServiceError("mod_update_failed", id=record["id"])
             generated = [path for path in replacements.values() if path.parent.name == "output"]
@@ -8934,8 +10908,9 @@ class ModLibrary:
         return UpdateResult(self._entry(record), self._paths(record), previous, unchanged=not previous)
 
     @_mod_writer
-    def _publish_update(self, mod_id: str, built_from: dict[str, str],
-                        generated: list[Path]) -> tuple[dict[str, Any], list[Path]]:
+    def _publish_update(
+        self, mod_id: str, built_from: dict[str, str], generated: list[Path]
+    ) -> tuple[dict[str, Any], list[Path]]:
         """Replace a mod's files with its rebuild, atomically per mod. A journal (``import-transactions/<id>``,
         ``operation`` ``update``) names the old and the new files with their hashes and the ``previous/<uuid>`` copy of
         the old ones before any file changes; the record's new file list is the commit point. A failure or an
@@ -8952,8 +10927,15 @@ class ModLibrary:
         if transaction.parent.is_symlink() or transaction.exists() or (directory / "previous").is_symlink():
             raise ServiceError("library_io_error", file=transaction)
         new = {path.name: self._hashes.get(path).sha1 for path in generated}
-        data = {"version": 1, "operation": "update", "id": mod_id, "phase": "copying", "old": built_from,
-                "new": new, "previous": uuid.uuid4().hex}
+        data = {
+            "version": 1,
+            "operation": "update",
+            "id": mod_id,
+            "phase": "copying",
+            "old": built_from,
+            "new": new,
+            "previous": uuid.uuid4().hex,
+        }
         previous_dir = directory / "previous" / data["previous"]
         atomic_json(journal, data)
         try:
@@ -9030,13 +11012,20 @@ class ModLibrary:
             except FileNotFoundError:
                 state = None
             if state is not None:
-                if isinstance(state, dict) and isinstance(state.get("version"), (int, float)) \
-                        and not isinstance(state["version"], bool) and state["version"] > 1:
+                if (
+                    isinstance(state, dict)
+                    and isinstance(state.get("version"), (int, float))
+                    and not isinstance(state["version"], bool)
+                    and state["version"] > 1
+                ):
                     raise ServiceError("library_state_unreadable", file=path)
                 if not isinstance(state, dict) or state.get("version") != 1 or not isinstance(state.get("mods"), list):
                     raise ServiceError("library_io_error", file=path)
-                stored = [item for item in state["mods"] if isinstance(item, dict) and item.get("id") == mod_id
-                          and item.get("files") != names]
+                stored = [
+                    item
+                    for item in state["mods"]
+                    if isinstance(item, dict) and item.get("id") == mod_id and item.get("files") != names
+                ]
                 if stored:
                     for item in stored:
                         item["files"] = names
@@ -9060,19 +11049,38 @@ class ModLibrary:
         mod_id, old, new = data["id"], data["old"], data["new"]
 
         def names_valid(files: Any) -> bool:
-            return isinstance(files, dict) and bool(files) and all(
-                isinstance(name, str) and Path(name).name == name and name.endswith(".bundle")
-                and isinstance(value, str) and re.fullmatch(r"[0-9a-f]{40}", value) is not None
-                for name, value in files.items())
+            return (
+                isinstance(files, dict)
+                and bool(files)
+                and all(
+                    isinstance(name, str)
+                    and Path(name).name == name
+                    and name.endswith(".bundle")
+                    and isinstance(value, str)
+                    and re.fullmatch(r"[0-9a-f]{40}", value) is not None
+                    for name, value in files.items()
+                )
+            )
 
-        if (not isinstance(mod_id, str) or re.fullmatch(r"[0-9a-f]{32}", mod_id) is None
-                or journal != root / mod_id / "journal.json" or data["version"] != 1
-                or data["phase"] not in ("copying", "replacing") or not names_valid(old) or not names_valid(new)
-                or not isinstance(data["previous"], str) or re.fullmatch(r"[0-9a-f]{32}", data["previous"]) is None):
+        if (
+            not isinstance(mod_id, str)
+            or re.fullmatch(r"[0-9a-f]{32}", mod_id) is None
+            or journal != root / mod_id / "journal.json"
+            or data["version"] != 1
+            or data["phase"] not in ("copying", "replacing")
+            or not names_valid(old)
+            or not names_valid(new)
+            or not isinstance(data["previous"], str)
+            or re.fullmatch(r"[0-9a-f]{32}", data["previous"]) is None
+        ):
             raise ValueError("Invalid update journal")
         directory = self.root / "mods" / mod_id
-        if (directory.parent.is_symlink() or directory.is_symlink() or (directory / "previous").is_symlink()
-                or not directory.resolve().is_relative_to(self.root)):
+        if (
+            directory.parent.is_symlink()
+            or directory.is_symlink()
+            or (directory / "previous").is_symlink()
+            or not directory.resolve().is_relative_to(self.root)
+        ):
             raise ValueError("Invalid update directory")
         record = self._records.get(mod_id)
 
@@ -9080,8 +11088,12 @@ class ModLibrary:
             path = directory / name
             return path.is_file() and not path.is_symlink() and self._hashes.get(path).sha1 == digest
 
-        if (data["phase"] == "replacing" and record is not None and record.get("files") == sorted(new)
-                and all(holds(name, digest) for name, digest in new.items())):
+        if (
+            data["phase"] == "replacing"
+            and record is not None
+            and record.get("files") == sorted(new)
+            and all(holds(name, digest) for name, digest in new.items())
+        ):
             self._finish_update(journal, data)
         else:
             self._rollback_update(journal, data)
@@ -9111,8 +11123,14 @@ class ModLibrary:
             self._update_profiles(change, after=lambda data: self._delete_built_files(dropped, data))
 
     @_serialized
-    def extract(self, target: str, out_dir: Path, log: LogFunc = no_log, pin: Pin | None = None,
-                progress: Callable[[dict], None] | None = None) -> Path:
+    def extract(
+        self,
+        target: str,
+        out_dir: Path,
+        log: LogFunc = no_log,
+        pin: Pin | None = None,
+        progress: Callable[[dict], None] | None = None,
+    ) -> Path:
         """Extract game or mod bundles into a folder named after their core."""
         if target.startswith("mod:"):
             paths = self._paths(self._record(target[4:]))
@@ -9128,10 +11146,18 @@ class ModLibrary:
             raise ServiceError("mod_unsupported", file=paths[0])
         folder = Path(out_dir).resolve() / name
         folder.mkdir(parents=True, exist_ok=True)
-        report = (lambda current, total, _name: progress({"current": current, "total": total,
-                                                        "step": "import.step.extract"})) if progress else None
-        success, _ = core.process_asset_extraction(paths, folder, spine_options=self.settings.spine_options(False),
-                                                  log=log, progress_callback=report)
+        report = (
+            (
+                lambda current, total, _name: progress(
+                    {"current": current, "total": total, "step": "import.step.extract"}
+                )
+            )
+            if progress
+            else None
+        )
+        success, _ = core.process_asset_extraction(
+            paths, folder, spine_options=self.settings.spine_options(False), log=log, progress_callback=report
+        )
         if not success:
             raise ServiceError("asset_extraction_failed", target=target)
         return folder
@@ -9183,10 +11209,16 @@ class ModLibrary:
         differences = []
         for key in sorted(mod.keys() | official.keys()):
             left, right = mod.get(key), official.get(key)
-            status = "removed" if left is None else "added" if right is None else (
-                "same" if left[0] == right[0] else "changed")
-            differences.append(AssetDifference(key[0], key[1], status, left[1] if left else None,
-                                               right[1] if right else None))
+            status = (
+                "removed"
+                if left is None
+                else "added"
+                if right is None
+                else ("same" if left[0] == right[0] else "changed")
+            )
+            differences.append(
+                AssetDifference(key[0], key[1], status, left[1] if left else None, right[1] if right else None)
+            )
         return CompareResult(mod_id, differences)
 
 
@@ -9214,8 +11246,12 @@ def _combine(kind: str, base: tuple, mine: tuple, disk: tuple) -> tuple[dict, se
         for key in base[2].keys() - mine[2].keys():
             applied.pop(key, None)
         return records, (set(disk[1]) | mine[1]) - (base[1] - mine[1]), applied, mine[3] | disk[3]
-    return (_merge(base[0], mine[0], disk[0]), (set(disk[1]) | (mine[1] - base[1])) - (base[1] - mine[1]),
-            _merge(base[2], mine[2], disk[2]), mine[3] | disk[3])
+    return (
+        _merge(base[0], mine[0], disk[0]),
+        (set(disk[1]) | (mine[1] - base[1])) - (base[1] - mine[1]),
+        _merge(base[2], mine[2], disk[2]),
+        mine[3] | disk[3],
+    )
 
 
 def _drop_source(data: dict, source: str, keys: list[dict]) -> list[tuple[str, str]]:
@@ -9269,8 +11305,9 @@ class _ChoiceChange:
             return
         dropped, self.dropped = self.dropped, []
         try:
-            self.library._update_profiles(lambda data: False,
-                                          after=lambda data: self.library._delete_built_files(dropped, data))
+            self.library._update_profiles(
+                lambda data: False, after=lambda data: self.library._delete_built_files(dropped, data)
+            )
         except Exception as error:  # the next prune deletes what is left
             log_failure(logger, logging.WARNING, "Could not delete replaced built copies", error)
 

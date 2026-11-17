@@ -29,11 +29,16 @@ const WIDE_STACK = "Wide Test Sans";
 export const context = {
   font: "",
   measureText(text) {
-    const px = parseFloat(/([\d.]+)px/.exec(this.font)[1]), stretch = this.font.includes(WIDE_STACK) ? 1.6 : 1;
-    return { width: [...String(text)].reduce((sum, char) => sum + advance(char) * px * stretch, 0),
+    const px = parseFloat(/([\d.]+)px/.exec(this.font)[1]),
+      stretch = this.font.includes(WIDE_STACK) ? 1.6 : 1;
+    return {
+      width: [...String(text)].reduce((sum, char) => sum + advance(char) * px * stretch, 0),
       // ink above and below the baseline, and the font's box (inkShift, inkBand)
-      actualBoundingBoxAscent: 0.72 * px, actualBoundingBoxDescent: /[gjpqy]/.test(text) ? 0.2 * px : 0,
-      fontBoundingBoxAscent: 1.16 * px, fontBoundingBoxDescent: 0.29 * px };
+      actualBoundingBoxAscent: 0.72 * px,
+      actualBoundingBoxDescent: /[gjpqy]/.test(text) ? 0.2 * px : 0,
+      fontBoundingBoxAscent: 1.16 * px,
+      fontBoundingBoxDescent: 0.29 * px,
+    };
   },
 };
 
@@ -41,11 +46,14 @@ export const context = {
 export function installFitPage() {
   const root = { lang: "en-US", appendChild() {} };
   globalThis.document = { createElement: () => ({ getContext: () => context, remove() {} }), documentElement: root };
-  globalThis.getComputedStyle = (probe) => ({ getPropertyValue: () => (probe.lang === "sv" ? `"${WIDE_STACK}", sans-serif` : "") });
+  globalThis.getComputedStyle = (probe) => ({
+    getPropertyValue: () => (probe.lang === "sv" ? `"${WIDE_STACK}", sans-serif` : ""),
+  });
   return root;
 }
 
-const read = (locale) => JSON.parse(readFileSync(new URL(`../../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
+const read = (locale) =>
+  JSON.parse(readFileSync(new URL(`../../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
 const cache = new Map();
 // the locale's web UI strings, flat ("import.filterCount") or nested
 export function webui(locale) {

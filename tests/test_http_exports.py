@@ -1,4 +1,5 @@
 """Export cache validators apply to every light asset and survive schema changes."""
+
 from bmpt.webui import server
 from bmpt.webui.events import EventBus
 from bmpt.webui.rpc import RpcRegistry
@@ -15,16 +16,31 @@ def get(app, path, etag=None):
     return response["status"], response["headers"], body
 
 
-@pytest.mark.parametrize("path", ["ui/layout/UICharacterDetail.json", "ui/atlases.json", "ui/textures.json", "ui/sprite/Common/Frame.png", "ui/texture/Frame.png"])
+@pytest.mark.parametrize(
+    "path",
+    [
+        "ui/layout/UICharacterDetail.json",
+        "ui/atlases.json",
+        "ui/textures.json",
+        "ui/sprite/Common/Frame.png",
+        "ui/texture/Frame.png",
+    ],
+)
 def test_cached_exports_revalidate_changed_bodies_and_schema(monkeypatch, path):
-    body = [b'old export']
-    app = WebApp(RpcRegistry(), EventBus(), assets=lambda *args: AssetResponse(body[0], "application/json", True), token="tok", consent=lambda: True)
+    body = [b"old export"]
+    app = WebApp(
+        RpcRegistry(),
+        EventBus(),
+        assets=lambda *args: AssetResponse(body[0], "application/json", True),
+        token="tok",
+        consent=lambda: True,
+    )
     status, headers, data = get(app, "/asset/" + path)
     assert status == "200 OK" and data == body[0]
     assert headers["Cache-Control"] == "private, no-cache"
     old = headers["ETag"]
     assert get(app, "/asset/" + path, old)[::2] == ("304 Not Modified", b"")
-    body[0] = b'new export with effectDistance and gradient'
+    body[0] = b"new export with effectDistance and gradient"
     status, changed, data = get(app, "/asset/" + path, old)
     assert status == "200 OK" and data == body[0] and changed["ETag"] != old
     monkeypatch.setattr(server, "HTTP_EXPORT_SCHEMA", "next-schema")
@@ -33,7 +49,13 @@ def test_cached_exports_revalidate_changed_bodies_and_schema(monkeypatch, path):
 
 def test_heavy_assets_and_unconsented_exports_remain_no_store():
     for light, consent in [(False, True), (True, False)]:
-        app = WebApp(RpcRegistry(), EventBus(), assets=lambda *args: AssetResponse(b'bytes', "image/png", light), token="tok", consent=lambda: consent)
+        app = WebApp(
+            RpcRegistry(),
+            EventBus(),
+            assets=lambda *args: AssetResponse(b"bytes", "image/png", light),
+            token="tok",
+            consent=lambda: consent,
+        )
         status, headers, data = get(app, "/asset/ui/textures.json")
         assert headers["Cache-Control"] == "no-store" and "ETag" not in headers
 

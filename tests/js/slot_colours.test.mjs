@@ -6,40 +6,81 @@ import { test } from "node:test";
 // a WebGL2 context that answers every call (linear.js only needs one to attach)
 class FakeGL {}
 globalThis.WebGL2RenderingContext = FakeGL;
-const fakeGL = () => new Proxy(new FakeGL(), {
-  get(t, name) {
-    if (name in t || typeof name !== "string") return t[name];
-    if (/^[A-Z0-9_]+$/.test(name)) return name;
-    return (...args) => (name.startsWith("create") ? {} : /Parameter$/.test(name) ? true
-      : name === "checkFramebufferStatus" ? "FRAMEBUFFER_COMPLETE" : name === "isContextLost" ? false : null);
+const fakeGL = () =>
+  new Proxy(new FakeGL(), {
+    get(t, name) {
+      if (name in t || typeof name !== "string") return t[name];
+      if (/^[A-Z0-9_]+$/.test(name)) return name;
+      return (...args) =>
+        name.startsWith("create")
+          ? {}
+          : /Parameter$/.test(name)
+            ? true
+            : name === "checkFramebufferStatus"
+              ? "FRAMEBUFFER_COMPLETE"
+              : name === "isContextLost"
+                ? false
+                : null;
+    },
+  });
+class Batcher {
+  setBlendMode() {}
+}
+globalThis.spine = {
+  BlendMode: { Normal: 0, Additive: 1 },
+  PolygonBatcher: {
+    blendModesGL: [
+      { srcRgb: 1, srcRgbPma: 1, dstRgb: 2, srcAlpha: 1 },
+      { srcRgb: 1, srcRgbPma: 1, dstRgb: 1, srcAlpha: 1 },
+    ],
   },
-});
-class Batcher { setBlendMode() {} }
-globalThis.spine = { BlendMode: { Normal: 0, Additive: 1 },
-  PolygonBatcher: { blendModesGL: [{ srcRgb: 1, srcRgbPma: 1, dstRgb: 2, srcAlpha: 1 }, { srcRgb: 1, srcRgbPma: 1, dstRgb: 1, srcAlpha: 1 }] } };
+};
 
 const Linear = await import("../../src/bmpt/web/js/linear.js");
 const SlotColours = await import("../../src/bmpt/web/js/slot-colours.js");
 
 const dec = (c) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
-const close = (got, want, msg) => got.forEach((v, i) => assert.ok(Math.abs(v - want[i]) < 1e-9, `${msg}: ${got} != ${want}`));
+const close = (got, want, msg) =>
+  got.forEach((v, i) => assert.ok(Math.abs(v - want[i]) < 1e-9, `${msg}: ${got} != ${want}`));
 
 class Color {
-  constructor(r = 1, g = 1, b = 1, a = 1) { this.set(r, g, b, a); }
-  set(r, g, b, a) { Object.assign(this, { r, g, b, a }); return this; }
-  get rgba() { return [this.r, this.g, this.b, this.a]; }
+  constructor(r = 1, g = 1, b = 1, a = 1) {
+    this.set(r, g, b, a);
+  }
+  set(r, g, b, a) {
+    Object.assign(this, { r, g, b, a });
+    return this;
+  }
+  get rgba() {
+    return [this.r, this.g, this.b, this.a];
+  }
 }
 const texture = () => ({ texture: {}, useMipMaps: false, update() {}, getImage: () => ({}) });
-const attachment = (page, color = new Color()) => ({ color, region: { page: { name: `${page}.png` }, texture: texture() } });
+const attachment = (page, color = new Color()) => ({
+  color,
+  region: { page: { name: `${page}.png` }, texture: texture() },
+});
 const slot = (att, color, blendMode = 0) => ({ color, data: { blendMode }, getAttachment: () => att });
 
 // Takane's skeleton: every page on Spine/Skeleton MX Standard; a page drawn with spine-unity's own shader beside it
-const LAYER = { name: "CH0229_home", shaders: { CH0229_home: "Spine/Skeleton MX Standard", CH0229_home_2: "Spine/Skeleton MX Standard",
-  Other_home: "Spine/Skeleton" } };
+const LAYER = {
+  name: "CH0229_home",
+  shaders: {
+    CH0229_home: "Spine/Skeleton MX Standard",
+    CH0229_home_2: "Spine/Skeleton MX Standard",
+    Other_home: "Spine/Skeleton",
+  },
+};
 
 function player(slots) {
-  return { context: { gl: fakeGL() }, sceneRenderer: { batcher: new Batcher() },
-    skeleton: { drawOrder: slots, data: { skins: [{ getAttachments: () => slots.map((s) => ({ attachment: s.getAttachment() })) }] } } };
+  return {
+    context: { gl: fakeGL() },
+    sceneRenderer: { batcher: new Batcher() },
+    skeleton: {
+      drawOrder: slots,
+      data: { skins: [{ getAttachments: () => slots.map((s) => ({ attachment: s.getAttachment() })) }] },
+    },
+  };
 }
 
 test("MX Standard and its noise flow variant take the colour as it is; spine-unity's shaders decode it with UnityCG's cubic", () => {
@@ -48,7 +89,8 @@ test("MX Standard and its noise flow variant take the colour as it is; spine-uni
   assert.equal(curveOf("Spine/Skeleton MX Standard - NoiseFlowAnimation"), CURVES.asIs);
   assert.equal(curveOf("Spine/Skeleton"), CURVES.cubic);
   assert.equal(curveOf("Spine/Blend Modes/Skeleton PMA Multiply"), CURVES.cubic);
-  for (const shader of ["Spine/Skeleton MX Portrait", "Unknown", undefined]) assert.equal(curveOf(shader), CURVES.exact);
+  for (const shader of ["Spine/Skeleton MX Portrait", "Unknown", undefined])
+    assert.equal(curveOf(shader), CURVES.exact);
   // MX Portrait Noise reads only the alpha: its tints never show
   assert.equal(curveOf("Spine/Skeleton MX Portrait Noise"), CURVES.unread);
   assert.equal(CURVES.unread(0.2), 1);
@@ -62,7 +104,8 @@ test("MX Standard and its noise flow variant take the colour as it is; spine-uni
 });
 
 test("a layer's curve follows the page each attachment lies on", () => {
-  const curves = SlotColours.curvesOf(LAYER), { CURVES } = SlotColours;
+  const curves = SlotColours.curvesOf(LAYER),
+    { CURVES } = SlotColours;
   assert.equal(curves(attachment("CH0229_home")), CURVES.asIs);
   assert.equal(curves(attachment("CH0229_home_2")), CURVES.asIs);
   assert.equal(curves(attachment("Other_home")), CURVES.cubic);

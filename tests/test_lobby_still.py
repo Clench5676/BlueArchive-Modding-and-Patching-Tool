@@ -1,11 +1,14 @@
 """Optional verified-asset check for the memorial lobby still camera."""
+
 import os
 
 import pytest
 
 
-@pytest.mark.skipif(not os.environ.get("BAMT_TEST_GAME_DIR"),
-                    reason="Optional verified-asset check: set BAMT_TEST_GAME_DIR to an isolated verified copy")
+@pytest.mark.skipif(
+    not os.environ.get("BAMT_TEST_GAME_DIR"),
+    reason="Optional verified-asset check: set BAMT_TEST_GAME_DIR to an isolated verified copy",
+)
 def test_verified_ui_lobby_camera_matches_still_coordinates(tmp_path):
     from pathlib import Path
     from bmpt.gameassets import AssetCache, GameAssets
@@ -18,6 +21,6 @@ def test_verified_ui_lobby_camera_matches_still_coordinates(tmp_path):
     info = game.lobby_info("ch0169_home")
     assert info["main"] == "CH0169_home"
     assert info["view"] == {"x": -1480, "y": -832.5, "w": 2960, "h": 1665}
-    layer, = [layer for layer in info["layers"] if layer["name"] == info["main"]]
+    (layer,) = [layer for layer in info["layers"] if layer["name"] == info["main"]]
     # the game's UIManualScaleByAspect at 16:9 (x 1.15 towards 4:3 by 5/13) scales the standard place about the centre
     assert {k: layer[k] for k in ("x", "y", "scale")} == {"x": 0, "y": -1017.5, "scale": 1.05769}

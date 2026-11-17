@@ -17,4 +17,5 @@ def test_the_costume_rule_sources_are_pinned_to_its_version():
     pinned = json.loads(PINNED.read_text())
     assert (COSTUME_RULE, digest.hexdigest()) == (pinned["rule"], pinned["sha256"]), (
         "the costume build changed: bump COSTUME_RULE in bmpt/gameassets/costume_rule.py and pin the sources in "
-        f"tests/fixtures/costume_rule.json (rule {COSTUME_RULE}, sha256 {digest.hexdigest()})")
+        f"tests/fixtures/costume_rule.json (rule {COSTUME_RULE}, sha256 {digest.hexdigest()})"
+    )

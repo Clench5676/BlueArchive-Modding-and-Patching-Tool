@@ -1,0 +1,27 @@
+name: Lint
+
+# Formatting and lint of the App code (ruff for Python, Biome for JavaScript and CSS), the same checks the commit
+# hook runs. Biome comes through npx at the version pinned in biome.jsonc; the runner's Node is enough.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
+        with:
+          version: "0.13.1"
+
+      - name: Check formatting and lint
+        run: ./scripts/check_style.sh

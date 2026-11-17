@@ -32,11 +32,20 @@ MAX_PHOTOGRAPH_BODY = 49 * 1024 * 1024
 HTTP_EXPORT_SCHEMA = "http-exports-v1"
 
 MIME = {
-    ".js": "text/javascript; charset=utf-8", ".mjs": "text/javascript; charset=utf-8",
-    ".css": "text/css; charset=utf-8", ".html": "text/html; charset=utf-8", ".json": "application/json",
-    ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp",
-    ".woff2": "font/woff2", ".ttf": "font/ttf", ".atlas": "text/plain; charset=utf-8",
-    ".skel": "application/octet-stream", ".glb": "model/gltf-binary",
+    ".js": "text/javascript; charset=utf-8",
+    ".mjs": "text/javascript; charset=utf-8",
+    ".css": "text/css; charset=utf-8",
+    ".html": "text/html; charset=utf-8",
+    ".json": "application/json",
+    ".svg": "image/svg+xml",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".webp": "image/webp",
+    ".woff2": "font/woff2",
+    ".ttf": "font/ttf",
+    ".atlas": "text/plain; charset=utf-8",
+    ".skel": "application/octet-stream",
+    ".glb": "model/gltf-binary",
 }
 
 
@@ -55,13 +64,21 @@ class WebApp:
     window's channel (``/api/classic/*``, the child's own one-time token) and a second start's raise
     (``/api/instance/raise``, the raise token of ``instance.json``)."""
 
-    def __init__(self, rpc: RpcRegistry, events: EventBus, assets: AssetHandler | None = None,
-                 static_dir: Path = WEB_DIR, token: str | None = None,
-                 consent: Callable[[], bool | None] = lambda: None,
-                 classic: Callable[[dict, Callable], Iterable[bytes]] | None = None,
-                 raise_window: Callable[[], Any] | None = None, raise_token: str | None = None,
-                 ui_cached: Callable[[], bool] = lambda: False, recovery: Callable[[], dict] = lambda: {},
-                 on_exception: Callable | None = None):
+    def __init__(
+        self,
+        rpc: RpcRegistry,
+        events: EventBus,
+        assets: AssetHandler | None = None,
+        static_dir: Path = WEB_DIR,
+        token: str | None = None,
+        consent: Callable[[], bool | None] = lambda: None,
+        classic: Callable[[dict, Callable], Iterable[bytes]] | None = None,
+        raise_window: Callable[[], Any] | None = None,
+        raise_token: str | None = None,
+        ui_cached: Callable[[], bool] = lambda: False,
+        recovery: Callable[[], dict] = lambda: {},
+        on_exception: Callable | None = None,
+    ):
         self.rpc = rpc
         self.events = events
         self.assets = assets
@@ -94,8 +111,13 @@ class WebApp:
         if path == "/" and self._same(query.get("t", "")):
             # first load: remember the token in a cookie and drop it from the address (the rest of the query stays)
             rest = urllib.parse.urlencode({k: v for k, v in query.items() if k != "t"})
-            return self._respond(start_response, "303 See Other", b"", "text/plain",
-                                 [("Location", "/" + ("?" + rest if rest else "")), ("Set-Cookie", self._cookie())])
+            return self._respond(
+                start_response,
+                "303 See Other",
+                b"",
+                "text/plain",
+                [("Location", "/" + ("?" + rest if rest else "")), ("Set-Cookie", self._cookie())],
+            )
         if not self._token_ok(environ):
             return self._text(start_response, "403 Forbidden", "forbidden")
 
@@ -152,8 +174,9 @@ class WebApp:
         if method != "POST":
             return self._text(start_response, "405 Method Not Allowed", "method not allowed")
         given = environ.get("HTTP_" + RAISE_HEADER.upper().replace("-", "_"), "")
-        if not given or not hmac.compare_digest(given.encode("utf-8", "surrogateescape"),
-                                                self.raise_token.encode("utf-8")):
+        if not given or not hmac.compare_digest(
+            given.encode("utf-8", "surrogateescape"), self.raise_token.encode("utf-8")
+        ):
             return self._text(start_response, "403 Forbidden", "forbidden")
         if self.raise_window is not None:
             try:
@@ -172,27 +195,43 @@ class WebApp:
         try:
             body = json.loads(environ["wsgi.input"].read(length))
             name, params = body["method"], body.get("params") or {}
-            if length > MAX_BODY and name not in ("photography.save", "photography.apply", "photography.restore", "photography.export",
-                                                    "actions.remap", "actions.redrawn"):
+            if length > MAX_BODY and name not in (
+                "photography.save",
+                "photography.apply",
+                "photography.restore",
+                "photography.export",
+                "actions.remap",
+                "actions.redrawn",
+            ):
                 raise ValueError("Oversized RPC body")
         except (ValueError, KeyError, TypeError):
             return self._json(start_response, {"error": {"code": "bad_request", "params": {}}}, "400 Bad Request")
         return self._json(start_response, self.rpc.call(name, params))
 
     def _sse(self, start_response: Callable) -> Iterable[bytes]:
-        start_response("200 OK", [("Content-Type", "text/event-stream; charset=utf-8"),
-                                  ("Cache-Control", "no-store"), ("X-Accel-Buffering", "no")])
+        start_response(
+            "200 OK",
+            [
+                ("Content-Type", "text/event-stream; charset=utf-8"),
+                ("Cache-Control", "no-store"),
+                ("X-Accel-Buffering", "no"),
+            ],
+        )
         return self.events.stream()
 
-    def _asset(self, path: str, query: dict[str, str], start_response: Callable, validator: str = "") -> Iterable[bytes]:
+    def _asset(
+        self, path: str, query: dict[str, str], start_response: Callable, validator: str = ""
+    ) -> Iterable[bytes]:
         if self.assets is None:
             return self._text(start_response, "404 Not Found", "not found")
         try:
-            res = self.assets(path[len("/asset/"):], query)
+            res = self.assets(path[len("/asset/") :], query)
         except (KeyError, FileNotFoundError, ServiceError) as e:
             logger.warning("asset %s not found: %r", path, e, exc_info=isinstance(e, OSError))
             # The refusal's code (never its parameters, which can hold paths) lets the page explain it.
-            code = [("X-BAMT-Error", e.code)] if isinstance(e, ServiceError) and re.fullmatch(r"[a-z_]+", e.code) else []
+            code = (
+                [("X-BAMT-Error", e.code)] if isinstance(e, ServiceError) and re.fullmatch(r"[a-z_]+", e.code) else []
+            )
             return self._respond(start_response, "404 Not Found", b"not found", "text/plain; charset=utf-8", code)
         headers = [("Cache-Control", "no-store")]
         if res.light and self.consent():
@@ -222,22 +261,32 @@ class WebApp:
             config = json.dumps(recovery_config, ensure_ascii=True).replace("<", "\\u003c")
             recovery = (WEB_DIR / "js" / "recovery.js").read_bytes()
             fallback = (WEB_DIR / "css" / "fallback.css").read_bytes()
-            body = body.replace(b"<!-- recovery -->", b"<script>window.BAMT_CONFIG=" + config.encode() +
-                                b";</script><style>" + fallback + b"</style><script>" + recovery + b"</script>")
-            body = body.replace(b"</head>", f'<meta name="bamt-ui-exports" content="{HTTP_EXPORT_SCHEMA}"></head>'.encode())
+            body = body.replace(
+                b"<!-- recovery -->",
+                b"<script>window.BAMT_CONFIG="
+                + config.encode()
+                + b";</script><style>"
+                + fallback
+                + b"</style><script>"
+                + recovery
+                + b"</script>",
+            )
+            body = body.replace(
+                b"</head>", f'<meta name="bamt-ui-exports" content="{HTTP_EXPORT_SCHEMA}"></head>'.encode()
+            )
         if file.suffix.lower() == ".css":
             body = re.sub(rb'(/asset/ui/[^"\s)]+)', lambda m: m[1] + b"?export=" + HTTP_EXPORT_SCHEMA.encode(), body)
         if rel == "index.html" and self.ui_cached():
             body = body.replace(b'class="loading full on neutral"', b'class="loading full on"')
-            body = body.replace(b'<div class="loading-plain"><span></span></div>',
-                                b'')
+            body = body.replace(b'<div class="loading-plain"><span></span></div>', b"")
         return self._respond(start_response, "200 OK", body, mime, [("Cache-Control", "no-cache")])
 
     # --- responses ---
 
     @staticmethod
-    def _respond(start_response: Callable, status: str, body: bytes, mime: str,
-                 headers: list[tuple[str, str]] | None = None) -> list[bytes]:
+    def _respond(
+        start_response: Callable, status: str, body: bytes, mime: str, headers: list[tuple[str, str]] | None = None
+    ) -> list[bytes]:
         base = [("Content-Type", mime), ("Content-Length", str(len(body))), ("X-Content-Type-Options", "nosniff")]
         start_response(status, base + (headers or []))
         return [body]

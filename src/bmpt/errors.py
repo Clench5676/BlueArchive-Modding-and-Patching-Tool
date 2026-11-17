@@ -37,8 +37,9 @@ def log_service_error(logger: logging.Logger, error: ServiceError) -> None:
     level = logging.INFO if level_of(error.code) == "notice" else logging.WARNING
     payload = error.to_json()
     if ref := payload.get("ref"):
-        logger.log(level, "%s %s %s", ref, error.code,
-                   json.dumps(payload["params"], ensure_ascii=False, separators=(",", ":")))
+        logger.log(
+            level, "%s %s %s", ref, error.code, json.dumps(payload["params"], ensure_ascii=False, separators=(",", ":"))
+        )
     else:
         logger.log(level, "%s", error.code)
 

@@ -45,9 +45,43 @@ PROGRAMS = {
     "Mobile/Particles/Additive": "particleAdd",
 }
 # ParticleSystemVertexStream -> component count, for packing custom vertex streams into TEXCOORD0..n as Unity does
-_STREAM_SIZE = {4: 2, 5: 2, 6: 2, 7: 2, 8: 1, 9: 1, 10: 3, 11: 1, 12: 1, 13: 2, 14: 3, 15: 1, 16: 3, 17: 1, 18: 3,
-                19: 3, 20: 1, 21: 1, 22: 1, 23: 1, 24: 2, 25: 3, 26: 4, 27: 1, 28: 2, 29: 3, 30: 4,
-                31: 1, 32: 2, 33: 3, 34: 4, 35: 1, 36: 2, 37: 3, 38: 4}
+_STREAM_SIZE = {
+    4: 2,
+    5: 2,
+    6: 2,
+    7: 2,
+    8: 1,
+    9: 1,
+    10: 3,
+    11: 1,
+    12: 1,
+    13: 2,
+    14: 3,
+    15: 1,
+    16: 3,
+    17: 1,
+    18: 3,
+    19: 3,
+    20: 1,
+    21: 1,
+    22: 1,
+    23: 1,
+    24: 2,
+    25: 3,
+    26: 4,
+    27: 1,
+    28: 2,
+    29: 3,
+    30: 4,
+    31: 1,
+    32: 2,
+    33: 3,
+    34: 4,
+    35: 1,
+    36: 2,
+    37: 3,
+    38: 4,
+}
 # the streams the player fills: UV, UV2 (the texture sheet's next frame, here the same frame) and the custom data
 _STREAM_NAME = {4: "uv", 5: "uv2", 31: "c1", 32: "c1", 33: "c1", 34: "c1", 35: "c2", 36: "c2", 37: "c2", 38: "c2"}
 IDENTITY = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
@@ -60,26 +94,46 @@ def _r(value: float, digits: int = 5) -> float:
 
 # --- matrices -------------------------------------------------------------------------------------------------------
 
+
 def trs(t: Mapping[str, Any]) -> list[float]:
     """A Transform's local matrix (3 x 4, row-major): translation, rotation (quaternion), scale."""
     p, q, s = t["m_LocalPosition"], t["m_LocalRotation"], t["m_LocalScale"]
     x, y, z, w = q.get("x", 0.0), q.get("y", 0.0), q.get("z", 0.0), q.get("w", 1.0)
     n = math.sqrt(x * x + y * y + z * z + w * w) or 1.0
     x, y, z, w = x / n, y / n, z / n, w / n
-    r = [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w),
-         2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w),
-         2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]
+    r = [
+        1 - 2 * (y * y + z * z),
+        2 * (x * y - z * w),
+        2 * (x * z + y * w),
+        2 * (x * y + z * w),
+        1 - 2 * (x * x + z * z),
+        2 * (y * z - x * w),
+        2 * (x * z - y * w),
+        2 * (y * z + x * w),
+        1 - 2 * (x * x + y * y),
+    ]
     sx, sy, sz = s.get("x", 1.0), s.get("y", 1.0), s.get("z", 1.0)
-    return [r[0] * sx, r[1] * sy, r[2] * sz, p.get("x", 0.0),
-            r[3] * sx, r[4] * sy, r[5] * sz, p.get("y", 0.0),
-            r[6] * sx, r[7] * sy, r[8] * sz, p.get("z", 0.0)]
+    return [
+        r[0] * sx,
+        r[1] * sy,
+        r[2] * sz,
+        p.get("x", 0.0),
+        r[3] * sx,
+        r[4] * sy,
+        r[5] * sz,
+        p.get("y", 0.0),
+        r[6] * sx,
+        r[7] * sy,
+        r[8] * sz,
+        p.get("z", 0.0),
+    ]
 
 
 def mul(a: list[float], b: list[float]) -> list[float]:
     """a * b for 3 x 4 affine matrices."""
     out = []
     for i in range(3):
-        row = a[i * 4:i * 4 + 4]
+        row = a[i * 4 : i * 4 + 4]
         for j in range(4):
             v = row[0] * b[j] + row[1] * b[4 + j] + row[2] * b[8 + j]
             out.append(v + (row[3] if j == 3 else 0.0))
@@ -91,6 +145,7 @@ def rounded(m: list[float]) -> list[float]:
 
 
 # --- curves and gradients -------------------------------------------------------------------------------------------
+
 
 def _slope(v: float) -> float | None:
     # an infinite tangent (Constant: the curve is stepped) is None: its segment holds the left key's value
@@ -130,7 +185,11 @@ def _gradient(g: Mapping[str, Any]) -> dict:
     nc, na = g.get("m_NumColorKeys", 2), g.get("m_NumAlphaKeys", 2)
     colors = [[_r(g[f"ctime{i}"] / 65535)] + _rgba(g[f"key{i}"])[:3] for i in range(nc)]
     alphas = [[_r(g[f"atime{i}"] / 65535), _r(g[f"key{i}"]["a"])] for i in range(na)]
-    return {"c": colors or [[0.0, 1.0, 1.0, 1.0]], "a": alphas or [[0.0, 1.0]], "fixed": 1 if g.get("m_Mode") == 1 else 0}
+    return {
+        "c": colors or [[0.0, 1.0, 1.0, 1.0]],
+        "a": alphas or [[0.0, 1.0]],
+        "fixed": 1 if g.get("m_Mode") == 1 else 0,
+    }
 
 
 def gradient(c: Mapping[str, Any] | None) -> dict:
@@ -156,14 +215,19 @@ def _vec(v: Mapping[str, float] | None, default: float = 0.0) -> list[float]:
 
 # --- modules --------------------------------------------------------------------------------------------------------
 
+
 def _shape(m: Mapping[str, Any]) -> dict | None:
     if not m.get("enabled"):
         return None
     radius, arc = m.get("radius") or {}, m.get("arc") or {}
     rad = radius.get("value", 1.0) if isinstance(radius, Mapping) else radius
     out = {
-        "type": m.get("type", 4), "angle": _r(m.get("angle", 25.0)), "length": _r(m.get("length", 5.0)),
-        "radius": _r(rad), "thickness": _r(m.get("radiusThickness", 1.0)), "box": _vec(m.get("boxThickness")),
+        "type": m.get("type", 4),
+        "angle": _r(m.get("angle", 25.0)),
+        "length": _r(m.get("length", 5.0)),
+        "radius": _r(rad),
+        "thickness": _r(m.get("radiusThickness", 1.0)),
+        "box": _vec(m.get("boxThickness")),
         "donut": _r(m.get("donutRadius", 0.2)),
         "arc": _r(arc.get("value", 360.0) if isinstance(arc, Mapping) else arc),
         "arcMode": arc.get("mode", 0) if isinstance(arc, Mapping) else 0,
@@ -174,9 +238,13 @@ def _shape(m: Mapping[str, Any]) -> dict | None:
         "radiusMode": radius.get("mode", 0) if isinstance(radius, Mapping) else 0,
         "radiusSpread": _r(radius.get("spread", 0.0)) if isinstance(radius, Mapping) else 0.0,
         "radiusSpeed": curve(radius.get("speed"), 1.0) if isinstance(radius, Mapping) else 1.0,
-        "pos": _vec(m.get("m_Position")), "rot": _vec(m.get("m_Rotation")), "scale": _vec(m.get("m_Scale"), 1.0),
-        "randomDir": _r(m.get("randomDirectionAmount", 0.0)), "spherical": _r(m.get("sphericalDirectionAmount", 0.0)),
-        "randomPos": _r(m.get("randomPositionAmount", 0.0)), "align": 1 if m.get("alignToDirection") else 0,
+        "pos": _vec(m.get("m_Position")),
+        "rot": _vec(m.get("m_Rotation")),
+        "scale": _vec(m.get("m_Scale"), 1.0),
+        "randomDir": _r(m.get("randomDirectionAmount", 0.0)),
+        "spherical": _r(m.get("sphericalDirectionAmount", 0.0)),
+        "randomPos": _r(m.get("randomPositionAmount", 0.0)),
+        "align": 1 if m.get("alignToDirection") else 0,
     }
     if m.get("type") in (6, 13, 14, 19, 20):  # mesh, renderer and sprite shapes: emitted from the shape origin
         out["unsupported"] = 1
@@ -188,9 +256,15 @@ def _emission(m: Mapping[str, Any]) -> dict:
         return {"rate": 0.0, "dist": 0.0, "bursts": []}
     bursts = []
     for b in m.get("m_Bursts", [])[: max(0, int(m.get("m_BurstCount", len(m.get("m_Bursts", [])))))]:
-        bursts.append({"t": _r(b.get("time", 0.0)), "n": curve(b.get("countCurve"), 0.0),
-                       "cycles": int(b.get("cycleCount", 1)), "interval": _r(max(0.01, b.get("repeatInterval", 0.01))),
-                       "p": _r(b.get("probability", 1.0))})
+        bursts.append(
+            {
+                "t": _r(b.get("time", 0.0)),
+                "n": curve(b.get("countCurve"), 0.0),
+                "cycles": int(b.get("cycleCount", 1)),
+                "interval": _r(max(0.01, b.get("repeatInterval", 0.01))),
+                "p": _r(b.get("probability", 1.0)),
+            }
+        )
     return {"rate": curve(m.get("rateOverTime")), "dist": curve(m.get("rateOverDistance")), "bursts": bursts}
 
 
@@ -214,13 +288,27 @@ def _modules(ps: Mapping[str, Any]) -> dict:
         # the gradient over the particle's speed between range x and y (CH0318's dust fades out towards 7 and 8 units
         # a second)
         rng = m.get("range") or {}
-        out["colorBySpeed"] = {"color": gradient(m.get("gradient")),
-                               "range": [_r(rng.get("x", 0.0)), _r(rng.get("y", 1.0))]}
+        out["colorBySpeed"] = {
+            "color": gradient(m.get("gradient")),
+            "range": [_r(rng.get("x", 0.0)), _r(rng.get("y", 1.0))],
+        }
     m = ps.get("VelocityModule") or {}
     if m.get("enabled"):
-        out["velocity"] = {k: curve(m.get(k)) for k in ("x", "y", "z", "orbitalX", "orbitalY", "orbitalZ",
-                                                         "orbitalOffsetX", "orbitalOffsetY", "orbitalOffsetZ",
-                                                         "radial")}
+        out["velocity"] = {
+            k: curve(m.get(k))
+            for k in (
+                "x",
+                "y",
+                "z",
+                "orbitalX",
+                "orbitalY",
+                "orbitalZ",
+                "orbitalOffsetX",
+                "orbitalOffsetY",
+                "orbitalOffsetZ",
+                "radial",
+            )
+        }
         out["velocity"]["speed"] = curve(m.get("speedModifier"), 1.0)
         out["velocity"]["world"] = 1 if m.get("inWorldSpace") else 0
     m = ps.get("ForceModule") or {}
@@ -229,18 +317,29 @@ def _modules(ps: Mapping[str, Any]) -> dict:
         out["force"]["world"] = 1 if m.get("inWorldSpace") else 0
     m = ps.get("ClampVelocityModule") or {}
     if m.get("enabled"):
-        out["limit"] = {"speed": curve(m.get("magnitude"), 1.0), "dampen": _r(m.get("dampen", 1.0)),
-                        "drag": curve(m.get("drag")), "sep": 1 if m.get("separateAxis") else 0,
-                        "world": 1 if m.get("inWorldSpace") else 0}
+        out["limit"] = {
+            "speed": curve(m.get("magnitude"), 1.0),
+            "dampen": _r(m.get("dampen", 1.0)),
+            "drag": curve(m.get("drag")),
+            "sep": 1 if m.get("separateAxis") else 0,
+            "world": 1 if m.get("inWorldSpace") else 0,
+        }
         if m.get("separateAxis"):
             out["limit"].update(x=curve(m.get("x"), 1.0), y=curve(m.get("y"), 1.0), z=curve(m.get("z"), 1.0))
     m = ps.get("UVModule") or {}
     if m.get("enabled") and m.get("mode", 0) == 0:
-        out["sheet"] = {"x": max(1, int(m.get("tilesX", 1))), "y": max(1, int(m.get("tilesY", 1))),
-                        "type": m.get("animationType", 0), "rowMode": m.get("rowMode", 1),
-                        "row": m.get("rowIndex", 0), "frame": curve(m.get("frameOverTime")),
-                        "start": curve(m.get("startFrame")), "cycles": _r(m.get("cycles", 1.0)),
-                        "time": m.get("timeMode", 0), "fps": _r(m.get("fps", 30.0))}
+        out["sheet"] = {
+            "x": max(1, int(m.get("tilesX", 1))),
+            "y": max(1, int(m.get("tilesY", 1))),
+            "type": m.get("animationType", 0),
+            "rowMode": m.get("rowMode", 1),
+            "row": m.get("rowIndex", 0),
+            "frame": curve(m.get("frameOverTime")),
+            "start": curve(m.get("startFrame")),
+            "cycles": _r(m.get("cycles", 1.0)),
+            "time": m.get("timeMode", 0),
+            "fps": _r(m.get("fps", 30.0)),
+        }
     m = ps.get("CustomDataModule") or {}
     if m.get("enabled"):
         custom = []
@@ -259,13 +358,17 @@ def _modules(ps: Mapping[str, Any]) -> dict:
         # a trail behind each particle (Particles mode; Ribbon mode is used by no lobby): the points it leaves every
         # minVertexDistance, each living lifetime x its particle's lifetime, drawn with the renderer's second material
         out["trail"] = {
-            "ratio": _r(m.get("ratio", 1.0)), "life": curve(m.get("lifetime"), 1.0),
-            "minDist": _r(m.get("minVertexDistance", 0.2)), "texMode": m.get("textureMode", 0),
-            "world": 1 if m.get("worldSpace") else 0, "die": 1 if m.get("dieWithParticles", True) else 0,
+            "ratio": _r(m.get("ratio", 1.0)),
+            "life": curve(m.get("lifetime"), 1.0),
+            "minDist": _r(m.get("minVertexDistance", 0.2)),
+            "texMode": m.get("textureMode", 0),
+            "world": 1 if m.get("worldSpace") else 0,
+            "die": 1 if m.get("dieWithParticles", True) else 0,
             "sizeWidth": 1 if m.get("sizeAffectsWidth", True) else 0,
             "sizeLife": 1 if m.get("sizeAffectsLifetime") else 0,
             "inherit": 1 if m.get("inheritParticleColor", True) else 0,
-            "color": gradient(m.get("colorOverLifetime")), "width": curve(m.get("widthOverTrail"), 1.0),
+            "color": gradient(m.get("colorOverLifetime")),
+            "width": curve(m.get("widthOverTrail"), 1.0),
             "colorTrail": gradient(m.get("colorOverTrail")),
         }
     return out
@@ -276,17 +379,22 @@ def _main(ps: Mapping[str, Any]) -> dict:
     size3 = bool(im.get("size3D"))
     rot3 = bool(im.get("rotation3D"))
     out = {
-        "duration": _r(max(0.05, ps.get("lengthInSec", 5.0))), "loop": 1 if ps.get("looping") else 0,
-        "prewarm": 1 if ps.get("prewarm") else 0, "delay": curve(ps.get("startDelay")),
-        "speedScale": _r(ps.get("simulationSpeed", 1.0)), "space": ps.get("moveWithTransform", 0),
+        "duration": _r(max(0.05, ps.get("lengthInSec", 5.0))),
+        "loop": 1 if ps.get("looping") else 0,
+        "prewarm": 1 if ps.get("prewarm") else 0,
+        "delay": curve(ps.get("startDelay")),
+        "speedScale": _r(ps.get("simulationSpeed", 1.0)),
+        "space": ps.get("moveWithTransform", 0),
         "scaling": ps.get("scalingMode", 1),
-        "life": curve(im.get("startLifetime"), 5.0), "speed": curve(im.get("startSpeed"), 5.0),
-        "size": [curve(im.get("startSize"), 1.0)] + ([curve(im.get("startSizeY"), 1.0),
-                                                       curve(im.get("startSizeZ"), 1.0)] if size3 else []),
+        "life": curve(im.get("startLifetime"), 5.0),
+        "speed": curve(im.get("startSpeed"), 5.0),
+        "size": [curve(im.get("startSize"), 1.0)]
+        + ([curve(im.get("startSizeY"), 1.0), curve(im.get("startSizeZ"), 1.0)] if size3 else []),
         "rotation": ([curve(im.get("startRotationX")), curve(im.get("startRotationY"))] if rot3 else [])
         + [curve(im.get("startRotation"))],
         "flipRotation": _r(im.get("randomizeRotationDirection", 0.0)),
-        "color": gradient(im.get("startColor")), "gravity": curve(im.get("gravityModifier")),
+        "color": gradient(im.get("startColor")),
+        "gravity": curve(im.get("gravityModifier")),
         "max": int(im.get("maxNumParticles", 1000)),
     }
     # the ring buffer keeps particles past their lifetime until max particles needs their place: 1 holds them at
@@ -317,10 +425,16 @@ def _streams(renderer: Mapping[str, Any]) -> dict[str, list[int]]:
 
 def _renderer(r: Mapping[str, Any]) -> dict:
     return {
-        "mode": r.get("m_RenderMode", 0), "align": r.get("m_RenderAlignment", 0), "sort": r.get("m_SortMode", 0),
-        "minSize": _r(r.get("m_MinParticleSize", 0.0)), "maxSize": _r(r.get("m_MaxParticleSize", 0.5)),
-        "lengthScale": _r(r.get("m_LengthScale", 2.0)), "velocityScale": _r(r.get("m_VelocityScale", 0.0)),
-        "pivot": _vec(r.get("m_Pivot")), "flip": _vec(r.get("m_Flip")), "streams": _streams(r),
+        "mode": r.get("m_RenderMode", 0),
+        "align": r.get("m_RenderAlignment", 0),
+        "sort": r.get("m_SortMode", 0),
+        "minSize": _r(r.get("m_MinParticleSize", 0.0)),
+        "maxSize": _r(r.get("m_MaxParticleSize", 0.5)),
+        "lengthScale": _r(r.get("m_LengthScale", 2.0)),
+        "velocityScale": _r(r.get("m_VelocityScale", 0.0)),
+        "pivot": _vec(r.get("m_Pivot")),
+        "flip": _vec(r.get("m_Flip")),
+        "streams": _streams(r),
         "rotateWithStretch": 1 if r.get("m_RotateWithStretchDirection", True) else 0,
         # Apply Active Color Space: in the game's linear colour space Unity converts the particle colours from gamma
         # to linear before they reach the vertex stream; with it off (116 systems in 30 lobbies: Michiru's, Nodoka's)
@@ -332,9 +446,14 @@ def _renderer(r: Mapping[str, Any]) -> dict:
 def system(ps: Mapping[str, Any], renderer: Mapping[str, Any] | None) -> dict:
     """One ParticleSystem with its renderer, without its place, material or sub-emitters (see lobby.read_prefab)."""
     renderer = renderer or {}
-    return {"main": _main(ps), "emission": _emission(ps.get("EmissionModule") or {}),
-            "shape": _shape(ps.get("ShapeModule") or {}), "modules": _modules(ps), "renderer": _renderer(renderer),
-            "playOnAwake": 1 if ps.get("playOnAwake", True) else 0}
+    return {
+        "main": _main(ps),
+        "emission": _emission(ps.get("EmissionModule") or {}),
+        "shape": _shape(ps.get("ShapeModule") or {}),
+        "modules": _modules(ps),
+        "renderer": _renderer(renderer),
+        "playOnAwake": 1 if ps.get("playOnAwake", True) else 0,
+    }
 
 
 def sub_emitters(ps: Mapping[str, Any]) -> list[tuple[int, int, int, float]]:
@@ -355,8 +474,13 @@ def program(shader: str | None) -> str | None:
     return PROGRAMS.get(shader or "")
 
 
-def material(shader: str | None, tree: Mapping[str, Any], state: Mapping[str, Any], shader_props: Iterable[Mapping],
-             textures: Mapping[str, dict]) -> dict:
+def material(
+    shader: str | None,
+    tree: Mapping[str, Any],
+    state: Mapping[str, Any],
+    shader_props: Iterable[Mapping],
+    textures: Mapping[str, dict],
+) -> dict:
     """A particle material: its program, blend and queue, the textures by property (id, size, sampler, sRGB, tiling;
     an empty slot names the shader's default texture, "white", "black" ...) and its Float, Color and Vector properties
     as stored, the shader's defaults filling what the material lacks. Colors are converted to linear light by the
@@ -380,12 +504,22 @@ def material(shader: str | None, tree: Mapping[str, Any], state: Mapping[str, An
     for name, env in saved.get("m_TexEnvs", []):
         s, o = env.get("m_Scale", {}), env.get("m_Offset", {})
         st = [_r(s.get("x", 1.0)), _r(s.get("y", 1.0)), _r(o.get("x", 0.0)), _r(o.get("y", 0.0))]
-        tex[name] = {**textures[name], "st": st} if name in textures else {"default": defaults.get(name, "white"), "st": st}
+        tex[name] = (
+            {**textures[name], "st": st} if name in textures else {"default": defaults.get(name, "white"), "st": st}
+        )
     for name, default in defaults.items():
         tex.setdefault(name, {"default": default, "st": [1.0, 1.0, 0.0, 0.0]})
-    return {"shader": shader, "program": program(shader), "src": state.get("src", 1), "dst": state.get("dst", 0),
-            "queue": state.get("queue", 3000), "tex": tex, "floats": floats, "colors": colors,
-            "vectors": sorted(v for v in vectors if v in colors)}
+    return {
+        "shader": shader,
+        "program": program(shader),
+        "src": state.get("src", 1),
+        "dst": state.get("dst", 0),
+        "queue": state.get("queue", 3000),
+        "tex": tex,
+        "floats": floats,
+        "colors": colors,
+        "vectors": sorted(v for v in vectors if v in colors),
+    }
 
 
 def texture(tree: Mapping[str, Any], tex_id: str) -> dict:
@@ -393,13 +527,25 @@ def texture(tree: Mapping[str, Any], tex_id: str) -> dict:
     axis (0 repeat, 1 clamp, 2 mirror, 3 mirror once) and whether it is sRGB (m_ColorSpace 1)."""
     s = tree.get("m_TextureSettings") or {}
     wrap = s.get("m_WrapMode", 0)
-    return {"id": tex_id, "name": tree.get("m_Name", ""), "w": tree.get("m_Width", 0), "h": tree.get("m_Height", 0),
-            "filter": s.get("m_FilterMode", 1), "mips": 1 if (tree.get("m_MipCount") or 1) > 1 else 0,
-            "wrap": [s.get("m_WrapU", wrap), s.get("m_WrapV", wrap)], "srgb": 0 if tree.get("m_ColorSpace", 1) == 0 else 1}
+    return {
+        "id": tex_id,
+        "name": tree.get("m_Name", ""),
+        "w": tree.get("m_Width", 0),
+        "h": tree.get("m_Height", 0),
+        "filter": s.get("m_FilterMode", 1),
+        "mips": 1 if (tree.get("m_MipCount") or 1) > 1 else 0,
+        "wrap": [s.get("m_WrapU", wrap), s.get("m_WrapV", wrap)],
+        "srgb": 0 if tree.get("m_ColorSpace", 1) == 0 else 1,
+    }
 
 
-def mesh(vertices: list, uv: list | None, normals: list | None, triangles: Iterable[tuple[int, int, int]],
-         colors: list | None = None) -> dict:
+def mesh(
+    vertices: list,
+    uv: list | None,
+    normals: list | None,
+    triangles: Iterable[tuple[int, int, int]],
+    colors: list | None = None,
+) -> dict:
     """A particle mesh: positions, UVs, normals and colours flattened, triangles as indices."""
     flat = lambda rows, n: [_r(x) for row in rows for x in list(row)[:n]]  # noqa: E731
     out = {"v": flat(vertices, 3), "i": [int(i) for tri in triangles for i in tri]}
@@ -413,8 +559,12 @@ def mesh(vertices: list, uv: list | None, normals: list | None, triangles: Itera
 
 
 # a mesh renderer's meshes and their weights
-_MESH_SLOTS = (("m_Mesh", "m_MeshWeighting"), ("m_Mesh1", "m_MeshWeighting1"), ("m_Mesh2", "m_MeshWeighting2"),
-               ("m_Mesh3", "m_MeshWeighting3"))
+_MESH_SLOTS = (
+    ("m_Mesh", "m_MeshWeighting"),
+    ("m_Mesh1", "m_MeshWeighting1"),
+    ("m_Mesh2", "m_MeshWeighting2"),
+    ("m_Mesh3", "m_MeshWeighting3"),
+)
 
 
 def _mesh_choice(ids: list[tuple[str, float]], distribution: int) -> dict:
@@ -429,8 +579,9 @@ def _mesh_choice(ids: list[tuple[str, float]], distribution: int) -> dict:
     return out
 
 
-def anchor_of(n: dict, by_go: Mapping[int, dict], skeleton_of_go: Callable[[int], str | None],
-              data_scale: Callable[[str], float]) -> tuple[dict | None, list[dict]]:
+def anchor_of(
+    n: dict, by_go: Mapping[int, dict], skeleton_of_go: Callable[[int], str | None], data_scale: Callable[[str], float]
+) -> tuple[dict | None, list[dict]]:
     """Where a prefab node (lobby.read_prefab) is placed: the nearest SkeletonUtilityBone above (or on) it, when it
     follows its bone (Follow), as {"skeleton", "bone", "go" (the skeleton GameObject's matrix), "ds" (its data
     scale)}, else None; and the nodes below that bone down to the node itself, top first (with no bone: up to the
@@ -444,8 +595,12 @@ def anchor_of(n: dict, by_go: Mapping[int, dict], skeleton_of_go: Callable[[int]
                 skel_go = by_go.get(skel_go["parent"])
             skeleton = skeleton_of_go(skel_go["go"]) if skel_go else None
             if skeleton and utility.get("mode", 0) == 0:
-                anchor = {"skeleton": skeleton, "bone": utility.get("boneName") or cur["name"],
-                          "go": rounded(skel_go["m3"]), "ds": _r(data_scale(skeleton), 6)}
+                anchor = {
+                    "skeleton": skeleton,
+                    "bone": utility.get("boneName") or cur["name"],
+                    "go": rounded(skel_go["m3"]),
+                    "ds": _r(data_scale(skeleton), 6),
+                }
             break
         chain.append(cur)
         cur = by_go.get(cur["parent"])
@@ -457,8 +612,9 @@ def anchor_of(n: dict, by_go: Mapping[int, dict], skeleton_of_go: Callable[[int]
 TOGGLE_SCRIPT = "SpineEventToggleObjects"
 
 
-def toggle_groups(nodes: list[dict], skeleton_of_go: Callable[[int], str | None]
-                  ) -> tuple[list[dict], dict[int, list[list[int]]]]:
+def toggle_groups(
+    nodes: list[dict], skeleton_of_go: Callable[[int], str | None]
+) -> tuple[list[dict], dict[int, list[list[int]]]]:
     """The prefab's SpineEventToggleObjects components: each one listens to the Spine events of the skeleton on its
     GameObject (or the nearest one above) and sets toggleObjects[event int] active on "EnableObject", inactive on
     "DisableObject". CH0217_home's Idle_01 switches fish 0 on at 5 s and off at 13.3 s, fish 1 at 23.3 to 30 s and
@@ -486,8 +642,13 @@ def toggle_groups(nodes: list[dict], skeleton_of_go: Callable[[int], str | None]
     return groups, listed
 
 
-def build(nodes: list[dict], skeleton_of_go: Callable[[int], str | None], data_scale: Callable[[str], float],
-          resolve: Callable[[str, int, dict], Any] | None, gates: Iterable[int] = ()) -> dict:
+def build(
+    nodes: list[dict],
+    skeleton_of_go: Callable[[int], str | None],
+    data_scale: Callable[[str], float],
+    resolve: Callable[[str, int, dict], Any] | None,
+    gates: Iterable[int] = (),
+) -> dict:
     """The particle systems of a prefab walk (lobby.read_prefab nodes, in hierarchy order), with their place: under a
     SkeletonUtilityBone (Follow) the bone GameObject moves with the bone, so a system there is anchored on that bone
     of its skeleton ("anchor") and placed by the transforms below it ("rel", Unity units of the bone GameObject);
@@ -539,6 +700,7 @@ def build(nodes: list[dict], skeleton_of_go: Callable[[int], str | None], data_s
                 if "id" in tex:
                     textures[tex["id"]] = {k: v for k, v in tex.items() if k != "st"}
             return found[0]
+
         mat_id = trail_id = None
         pointers = (rend.get("m_Materials") or []) if resolve is not None and rend and rend.get("m_Enabled", 0) else []
         if pointers and item["renderer"]["mode"] != 5:
@@ -577,8 +739,16 @@ def build(nodes: list[dict], skeleton_of_go: Callable[[int], str | None], data_s
         rel = IDENTITY
         for c in chain:
             rel = mul(rel, c["local3"])
-        item.update(name=n["name"], path=n["path"], anchor=anchor, rel=rounded(rel), static=rounded(n["m3"]),
-                    ls=_vec(n["t"].get("m_LocalScale"), 1.0), z=_r(n["m3"][11]), _go=n["go"])
+        item.update(
+            name=n["name"],
+            path=n["path"],
+            anchor=anchor,
+            rel=rounded(rel),
+            static=rounded(n["m3"]),
+            ls=_vec(n["t"].get("m_LocalScale"), 1.0),
+            z=_r(n["m3"][11]),
+            _go=n["go"],
+        )
         if switched:
             item["toggle"] = switched
         if gated:
@@ -612,6 +782,10 @@ def build(nodes: list[dict], skeleton_of_go: Callable[[int], str | None], data_s
         if "subs" in s:
             s["subs"] = [{**e, "system": remap[e["system"]]} for e in s["subs"] if e["system"] in remap]
     used_meshes = {m for s in out for m in s["renderer"].get("meshes", [s["renderer"].get("mesh")])}
-    return {"systems": out, "materials": materials, "textures": textures,
-            "meshes": {k: v for k, v in meshes.items() if k in used_meshes},
-            "toggles": groups if any("toggle" in s for s in out) else []}
+    return {
+        "systems": out,
+        "materials": materials,
+        "textures": textures,
+        "meshes": {k: v for k, v in meshes.items() if k in used_meshes},
+        "toggles": groups if any("toggle" in s for s in out) else [],
+    }

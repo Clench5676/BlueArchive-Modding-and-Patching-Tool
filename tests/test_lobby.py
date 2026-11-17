@@ -22,9 +22,17 @@ GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-
 
 SA, CHARACTER, DRAG, BODY, WIDGET, CHAT, UTILITY, CONTAINER = range(5001, 5009)
 ASPECT = 5010  # 5009 is TOGGLE, below
-SCRIPTS = {SA: "SkeletonAnimation", CHARACTER: "SpineCharacter", DRAG: "SpineDragIK", BODY: "SpineCharacterBodyTouch",
-           WIDGET: "UIWidget", CHAT: "ChatDialog", UTILITY: "SkeletonUtilityBone", CONTAINER: "UILobbyContainer",
-           ASPECT: "UIManualScaleByAspect"}
+SCRIPTS = {
+    SA: "SkeletonAnimation",
+    CHARACTER: "SpineCharacter",
+    DRAG: "SpineDragIK",
+    BODY: "SpineCharacterBodyTouch",
+    WIDGET: "UIWidget",
+    CHAT: "ChatDialog",
+    UTILITY: "SkeletonUtilityBone",
+    CONTAINER: "UILobbyContainer",
+    ASPECT: "UIManualScaleByAspect",
+}
 
 
 def ref(pid: int, fid: int = 0) -> dict:
@@ -41,16 +49,34 @@ class Prefab:
     def __init__(self):
         self.objects: dict[int, tuple[str, dict]] = {}
 
-    def node(self, go: int, name: str, father: int = 0, pos=(0.0, 0.0), scale=(1.0, 1.0), rot: float = 0.0,
-             active: int = 1, layer: int = 0) -> int:
+    def node(
+        self,
+        go: int,
+        name: str,
+        father: int = 0,
+        pos=(0.0, 0.0),
+        scale=(1.0, 1.0),
+        rot: float = 0.0,
+        active: int = 1,
+        layer: int = 0,
+    ) -> int:
         tf = go + 100000
         half = math.radians(rot) / 2
-        self.objects[go] = ("GameObject", {"m_Name": name, "m_IsActive": active, "m_Layer": layer,
-                                           "m_Component": [{"component": ref(tf)}]})
-        self.objects[tf] = ("Transform", {
-            "m_GameObject": ref(go), "m_Father": ref(father + 100000 if father else 0), "m_Children": [],
-            "m_LocalPosition": vec(*pos), "m_LocalScale": {"x": scale[0], "y": scale[1], "z": 1.0},
-            "m_LocalRotation": {"x": 0.0, "y": 0.0, "z": math.sin(half), "w": math.cos(half)}})
+        self.objects[go] = (
+            "GameObject",
+            {"m_Name": name, "m_IsActive": active, "m_Layer": layer, "m_Component": [{"component": ref(tf)}]},
+        )
+        self.objects[tf] = (
+            "Transform",
+            {
+                "m_GameObject": ref(go),
+                "m_Father": ref(father + 100000 if father else 0),
+                "m_Children": [],
+                "m_LocalPosition": vec(*pos),
+                "m_LocalScale": {"x": scale[0], "y": scale[1], "z": 1.0},
+                "m_LocalRotation": {"x": 0.0, "y": 0.0, "z": math.sin(half), "w": math.cos(half)},
+            },
+        )
         if father:
             self.objects[father + 100000][1]["m_Children"].append(ref(tf))
         return go
@@ -65,15 +91,33 @@ class Prefab:
 
     def read(self, root: str, skeletons, clips, resolve=None):
         kinds = {pid: kind for pid, (kind, _) in self.objects.items()}
-        return lobby.read_prefab(kinds, lambda pid: self.objects[pid][1], SCRIPTS, root, skeletons, clips, resolve=resolve)
+        return lobby.read_prefab(
+            kinds, lambda pid: self.objects[pid][1], SCRIPTS, root, skeletons, clips, resolve=resolve
+        )
 
 
 def clip(name: str, track: int, loop: int = 0, **fields) -> dict:
-    return {"m_Name": name, "ClipName": name.split("-", 1)[1], "Track": track, "Loop": loop, "PlayMode": 1,
-            "FinishMode": 2, "UseDefaultIntroMix": 1, "IntroMix": 0.0, "UseDefaultOutroMix": 1, "OutroMix": 0.0,
-            "NextClipObject": ref(0), "SyncPlayClipObjects": [], "BlockInteractionOnPlay": 0,
-            "RandomTimingIntroDelayMode": 0, "RandomDelayMin": 3.0, "RandomDelayMax": 4.0,
-            "AddRandomLoopMin": 0, "AddRandomLoopMax": 0, **fields}
+    return {
+        "m_Name": name,
+        "ClipName": name.split("-", 1)[1],
+        "Track": track,
+        "Loop": loop,
+        "PlayMode": 1,
+        "FinishMode": 2,
+        "UseDefaultIntroMix": 1,
+        "IntroMix": 0.0,
+        "UseDefaultOutroMix": 1,
+        "OutroMix": 0.0,
+        "NextClipObject": ref(0),
+        "SyncPlayClipObjects": [],
+        "BlockInteractionOnPlay": 0,
+        "RandomTimingIntroDelayMode": 0,
+        "RandomDelayMin": 3.0,
+        "RandomDelayMax": 4.0,
+        "AddRandomLoopMin": 0,
+        "AddRandomLoopMax": 0,
+        **fields,
+    }
 
 
 def skeleton_data(name: str, mix: float) -> dict:
@@ -84,18 +128,34 @@ SKELETONS = ["Test_home", "Test_bg", "Test_scene"]
 
 
 def core_clips() -> lobby.Clips:
-    return lobby.Clips([
-        (9001, skeleton_data("Test_home", 0.4)), (9002, skeleton_data("Test_bg", 0.2)), (9003, skeleton_data("Test_scene", 0.2)),
-        # clip assets name their skeleton in any case; the core's own spelling wins
-        (8001, clip("test_home-Pat_01_M", 1, loop=1, SyncPlayClipObjects=[ref(8003)])),
-        (8003, clip("Test_home-Pat_01_A", 2, loop=1, UseDefaultIntroMix=0, IntroMix=0.0)),
-        (8002, clip("Test_home-PatEnd_01_M", 1, UseDefaultOutroMix=0, OutroMix=0.3)),
-        (8004, clip("Test_home-Pat_02_M", 1, FinishMode=3, NextClipObject=ref(8001))),
-        (8005, clip("Test_home-Eye_Close_01", 4, PlayMode=3, RandomTimingIntroDelayMode=1, RandomDelayMin=8.0,
-                    RandomDelayMax=15.0, AddRandomLoopMax=1, BlockInteractionOnPlay=0)),
-        (8006, clip("Test_home-Idle_01", 0, loop=1, PlayMode=0, FinishMode=0)),
-        (7000, {"m_Name": "PPPV_Lobby_Test", "components": []}),
-    ], SKELETONS)
+    return lobby.Clips(
+        [
+            (9001, skeleton_data("Test_home", 0.4)),
+            (9002, skeleton_data("Test_bg", 0.2)),
+            (9003, skeleton_data("Test_scene", 0.2)),
+            # clip assets name their skeleton in any case; the core's own spelling wins
+            (8001, clip("test_home-Pat_01_M", 1, loop=1, SyncPlayClipObjects=[ref(8003)])),
+            (8003, clip("Test_home-Pat_01_A", 2, loop=1, UseDefaultIntroMix=0, IntroMix=0.0)),
+            (8002, clip("Test_home-PatEnd_01_M", 1, UseDefaultOutroMix=0, OutroMix=0.3)),
+            (8004, clip("Test_home-Pat_02_M", 1, FinishMode=3, NextClipObject=ref(8001))),
+            (
+                8005,
+                clip(
+                    "Test_home-Eye_Close_01",
+                    4,
+                    PlayMode=3,
+                    RandomTimingIntroDelayMode=1,
+                    RandomDelayMin=8.0,
+                    RandomDelayMax=15.0,
+                    AddRandomLoopMax=1,
+                    BlockInteractionOnPlay=0,
+                ),
+            ),
+            (8006, clip("Test_home-Idle_01", 0, loop=1, PlayMode=0, FinishMode=0)),
+            (7000, {"m_Name": "PPPV_Lobby_Test", "components": []}),
+        ],
+        SKELETONS,
+    )
 
 
 def build_prefab(spine_y: float = -962.0, spine_scale: float = 100.0) -> Prefab:
@@ -107,7 +167,14 @@ def build_prefab(spine_y: float = -962.0, spine_scale: float = 100.0) -> Prefab:
     p.node(3, "Test_home", father=2)
     p.mb(3, 301, SA, skeletonDataAsset=ref(9001, 3), initialSkinName="", _animationName="")
     p.add(3, 302, "MeshRenderer", {"m_Enabled": True, "m_SortingOrder": 0})
-    p.mb(3, 303, CHARACTER, SkeletonAnimation=ref(301), idleBaseRandomClipPool=[ref(8005, 3)], idleClipPool=[ref(8006, 3)])
+    p.mb(
+        3,
+        303,
+        CHARACTER,
+        SkeletonAnimation=ref(301),
+        idleBaseRandomClipPool=[ref(8005, 3)],
+        idleClipPool=[ref(8006, 3)],
+    )
     p.node(9, "Touch_Point", father=3, pos=(1.1745, 0.5559))
     p.mb(9, 901, UTILITY, boneName="Touch_Point")
     # the background, drawn first (lower sorting order) and with its own start animation
@@ -121,19 +188,53 @@ def build_prefab(spine_y: float = -962.0, spine_scale: float = 100.0) -> Prefab:
     p.node(5, "HairPatIK", father=1, pos=(191.0, 331.0))
     p.add(5, 501, "BoxCollider", {"m_Enabled": True, "m_Size": vec(600.0, 400.0), "m_Center": vec(0.0, 0.0)})
     p.mb(5, 502, WIDGET, mDepth=-89)
-    p.mb(5, 503, DRAG, SpineController=ref(303), IngClip=ref(8001, 3), EndClip=ref(8002, 3), Bone=ref(9 + 100000),
-         OrigLocalPos=vec(1.1745, 0.5559), MinLocalPos=vec(1.0847, 0.1002), MaxLocalPos=vec(1.2618, 0.9298),
-         BoneCenterOffset=vec(0.0, 0.0), FollowDragSpeed01=0.21, FollowReleaseSpeed01=0.15, TriggerDelay=0.1)
+    p.mb(
+        5,
+        503,
+        DRAG,
+        SpineController=ref(303),
+        IngClip=ref(8001, 3),
+        EndClip=ref(8002, 3),
+        Bone=ref(9 + 100000),
+        OrigLocalPos=vec(1.1745, 0.5559),
+        MinLocalPos=vec(1.0847, 0.1002),
+        MaxLocalPos=vec(1.2618, 0.9298),
+        BoneCenterOffset=vec(0.0, 0.0),
+        FollowDragSpeed01=0.21,
+        FollowReleaseSpeed01=0.15,
+        TriggerDelay=0.1,
+    )
     # the eye follow box is switched off by its collider
     p.node(7, "EyeIK", father=1)
     p.add(7, 701, "BoxCollider", {"m_Enabled": False, "m_Size": vec(3500.0, 2400.0), "m_Center": vec(0.0, 0.0)})
-    p.mb(7, 703, DRAG, SpineController=ref(303), IngClip=ref(0), EndClip=ref(0), Bone=ref(0),
-         OrigLocalPos=vec(0, 0), MinLocalPos=vec(0, 0), MaxLocalPos=vec(0, 0), BoneCenterOffset=vec(0, 0),
-         FollowDragSpeed01=0.16, FollowReleaseSpeed01=0.07, TriggerDelay=0.1)
+    p.mb(
+        7,
+        703,
+        DRAG,
+        SpineController=ref(303),
+        IngClip=ref(0),
+        EndClip=ref(0),
+        Bone=ref(0),
+        OrigLocalPos=vec(0, 0),
+        MinLocalPos=vec(0, 0),
+        MaxLocalPos=vec(0, 0),
+        BoneCenterOffset=vec(0, 0),
+        FollowDragSpeed01=0.16,
+        FollowReleaseSpeed01=0.07,
+        TriggerDelay=0.1,
+    )
     # the body box, turned by 10 degrees, its collider centre off the GameObject
     p.node(6, "BodyTouch", father=1, pos=(193.0, -600.0), rot=10.0)
-    p.add(6, 601, "BoxCollider", {"m_Enabled": True, "m_Size": vec(1000.0, 1000.0),
-                                  "m_Center": vec(-39.0 * math.sin(math.radians(10)), -39.0 * math.cos(math.radians(10)))})
+    p.add(
+        6,
+        601,
+        "BoxCollider",
+        {
+            "m_Enabled": True,
+            "m_Size": vec(1000.0, 1000.0),
+            "m_Center": vec(-39.0 * math.sin(math.radians(10)), -39.0 * math.cos(math.radians(10))),
+        },
+    )
     p.mb(6, 602, WIDGET, mDepth=-90)
     p.mb(6, 603, BODY, SpineCharacter=ref(303))
     # the dialogue bubble anchors
@@ -160,8 +261,19 @@ def test_clips_resolve_mixes_chains_and_random():
     home = clips.clips["Test_home"]
     assert set(clips.clips) == {"Test_home"}
     # the default intro is the skeleton's defaultMix, not a fixed value
-    assert home["Pat_01_M"] == {"track": 1, "loop": True, "mode": 1, "finish": 2, "intro": 0.4, "outro": 0.4,
-                                "outroAt": None, "next": None, "sync": ["Pat_01_A"], "block": False, "random": None}
+    assert home["Pat_01_M"] == {
+        "track": 1,
+        "loop": True,
+        "mode": 1,
+        "finish": 2,
+        "intro": 0.4,
+        "outro": 0.4,
+        "outroAt": None,
+        "next": None,
+        "sync": ["Pat_01_A"],
+        "block": False,
+        "random": None,
+    }
     assert home["Pat_01_A"]["intro"] == 0.0 and home["PatEnd_01_M"]["outro"] == 0.3
     # its own outro: from the clip's end plus its OutroStartOffset; the default one ends with the clip
     assert home["PatEnd_01_M"]["outroAt"] == 0.0
@@ -180,14 +292,31 @@ def test_idle_sync_clips_and_sound_keys():
     def sound(owner, pointer):
         asked.append(owner)
         return events.get((owner, pointer["m_FileID"], pointer["m_PathID"]))
-    clips = lobby.Clips([
-        (9001, skeleton_data("Test_home", 0.4)),
-        (-1, clip("Test_home-Idle_01", 0, loop=1, PlayMode=0, FinishMode=0, SyncPlayClipObjects=[ref(-2), ref(0)])),
-        (-2, clip("Test_home-Train_00_R", 3, loop=1, PlayMode=2, UseDefaultIntroMix=0, RandomTimingIntroDelayMode=2,
-                  IntroDelayDuration=3.0, RandomDelayMin=10.0, RandomDelayMax=15.0,
-                  SoundKeys=[{"Time": 3.0999999046325684, "Event": ref(-900, 1)}, {"Time": 4.0, "Event": ref(0)}])),
-        (-3, clip("Test_home-Snow_00_R", 4, loop=1, PlayMode=2, SoundKeys=[{"Time": 0.5, "Event": ref(-901, 1)}])),
-    ], ["Test_home"], sound=sound)
+
+    clips = lobby.Clips(
+        [
+            (9001, skeleton_data("Test_home", 0.4)),
+            (-1, clip("Test_home-Idle_01", 0, loop=1, PlayMode=0, FinishMode=0, SyncPlayClipObjects=[ref(-2), ref(0)])),
+            (
+                -2,
+                clip(
+                    "Test_home-Train_00_R",
+                    3,
+                    loop=1,
+                    PlayMode=2,
+                    UseDefaultIntroMix=0,
+                    RandomTimingIntroDelayMode=2,
+                    IntroDelayDuration=3.0,
+                    RandomDelayMin=10.0,
+                    RandomDelayMax=15.0,
+                    SoundKeys=[{"Time": 3.0999999046325684, "Event": ref(-900, 1)}, {"Time": 4.0, "Event": ref(0)}],
+                ),
+            ),
+            (-3, clip("Test_home-Snow_00_R", 4, loop=1, PlayMode=2, SoundKeys=[{"Time": 0.5, "Event": ref(-901, 1)}])),
+        ],
+        ["Test_home"],
+        sound=sound,
+    )
     home = clips.clips["Test_home"]
     assert home["Idle_01"]["sync"] == ["Train_00_R"]  # an empty pointer is left out
     train = home["Train_00_R"]
@@ -206,12 +335,22 @@ def test_idle_sync_clips_and_sound_keys():
 def test_sound_events_as_the_game_plays_them():
     def clip_id(pointer):
         return f"cab-sfx_{pointer['m_PathID']}" if pointer.get("m_PathID") else None
-    subway = {"m_Name": "SFX_Spine_Subway", "AudioData": {"Volume": 0.699999988079071, "Pitch": 1.0,
-                                                          "AudioClips": [ref(655, 5), ref(0)]}}
-    assert lobby.sound_event(subway, clip_id) == {"name": "SFX_Spine_Subway", "volume": 0.7, "pitch": 1.0,
-                                                  "clips": ["cab-sfx_655"]}
+
+    subway = {
+        "m_Name": "SFX_Spine_Subway",
+        "AudioData": {"Volume": 0.699999988079071, "Pitch": 1.0, "AudioClips": [ref(655, 5), ref(0)]},
+    }
+    assert lobby.sound_event(subway, clip_id) == {
+        "name": "SFX_Spine_Subway",
+        "volume": 0.7,
+        "pitch": 1.0,
+        "clips": ["cab-sfx_655"],
+    }
     # a pitch of 0 or below is not set on the source (it keeps 1), one above is the playback rate
-    cloth = {"m_Name": "SpineSFX_Cloth", "AudioData": {"Volume": 0.08, "Pitch": -3.0, "AudioClips": [ref(1, 5), ref(2, 5)]}}
+    cloth = {
+        "m_Name": "SpineSFX_Cloth",
+        "AudioData": {"Volume": 0.08, "Pitch": -3.0, "AudioClips": [ref(1, 5), ref(2, 5)]},
+    }
     assert lobby.sound_event(cloth, clip_id)["pitch"] == 1.0 and len(lobby.sound_event(cloth, clip_id)["clips"]) == 2
     assert lobby.sound_event({**cloth, "AudioData": {**cloth["AudioData"], "Pitch": 3.0}}, clip_id)["pitch"] == 3.0
     # an ambient event, or one without clips, is not a sound key's
@@ -223,18 +362,46 @@ def test_prefab_layout_drags_touches_and_anchors():
     info = build_prefab().read("LobbyTest", SKELETONS, core_clips())
     assert info["prefab"] == "LobbyTest" and info["main"] == "Test_home"
     layers = {l["name"]: l for l in info["layers"]}
-    assert layers["Test_home"] == {"name": "Test_home", "x": 0.0, "y": -962.0, "scale": 1.0, "active": True,
-                                   "sortingLayer": 0, "order": 0, "queue": 3000, "pages": {}, "shaders": {}, "z": 0.0,
-                                   "index": 0, "skin": None, "animation": None,
-                                   # without its data asset: no page of its own, no blend materials, no dark colour
-                                   "materials": {"pages": {}, "blend": {}, "scale": 0.01, "tintBlack": False}}
+    assert layers["Test_home"] == {
+        "name": "Test_home",
+        "x": 0.0,
+        "y": -962.0,
+        "scale": 1.0,
+        "active": True,
+        "sortingLayer": 0,
+        "order": 0,
+        "queue": 3000,
+        "pages": {},
+        "shaders": {},
+        "z": 0.0,
+        "index": 0,
+        "skin": None,
+        "animation": None,
+        # without its data asset: no page of its own, no blend materials, no dark colour
+        "materials": {"pages": {}, "blend": {}, "scale": 0.01, "tintBlack": False},
+    }
     assert layers["Test_bg"]["order"] == -1 and layers["Test_bg"]["animation"] == "Idle_01"
     assert layers["Test_scene"]["active"] is False  # an inactive GameObject on the path
     pat, eye = info["drags"]
-    assert pat == {"kind": "pat", "name": "HairPatIK", "skeleton": "Test_home", "bone": "Touch_Point",
-                   "rect": [-109.0, 131.0, 491.0, 531.0], "rot": 0.0, "depth": -89, "enabled": True,
-                   "orig": [117.45, 55.59], "min": [108.47, 10.02], "max": [126.18, 92.98], "offset": [0.0, 0.0],
-                   "drag": 0.21, "release": 0.15, "delay": 0.1, "ing": "Pat_01_M", "end": "PatEnd_01_M"}
+    assert pat == {
+        "kind": "pat",
+        "name": "HairPatIK",
+        "skeleton": "Test_home",
+        "bone": "Touch_Point",
+        "rect": [-109.0, 131.0, 491.0, 531.0],
+        "rot": 0.0,
+        "depth": -89,
+        "enabled": True,
+        "orig": [117.45, 55.59],
+        "min": [108.47, 10.02],
+        "max": [126.18, 92.98],
+        "offset": [0.0, 0.0],
+        "drag": 0.21,
+        "release": 0.15,
+        "delay": 0.1,
+        "ing": "Pat_01_M",
+        "end": "PatEnd_01_M",
+    }
     assert eye["enabled"] is False and eye["bone"] is None and eye["ing"] is None
     (body,) = info["touches"]
     assert body["rect"] == [-307.0, -1139.0, 693.0, -139.0] and body["rot"] == 10.0 and body["depth"] == -90
@@ -256,11 +423,18 @@ def test_enlarged_lobby_scale_and_unknown_skeletons():
 def aspect_component(narrow: float = 1.15, wide: float = 1.3, scale=(2, 4), offsets=()) -> dict:
     """A UIManualScaleByAspect typetree: scale targets and (node, wide add, narrow add) offset settings by GameObject
     id (a node's Transform has the id + 100000)."""
+
     def v(x, y, z):
         return {"x": float(x), "y": float(y), "z": float(z)}
-    return {"mostWideScale": wide, "mostNarrowScale": narrow, "scaleTransforms": [ref(go + 100000) for go in scale],
-            "offsetSettings": [{"Transform": ref(go + 100000), "MostWideAdd": v(*w), "MostNarrowAdd": v(*n)}
-                               for go, w, n in offsets]}
+
+    return {
+        "mostWideScale": wide,
+        "mostNarrowScale": narrow,
+        "scaleTransforms": [ref(go + 100000) for go in scale],
+        "offsetSettings": [
+            {"Transform": ref(go + 100000), "MostWideAdd": v(*w), "MostNarrowAdd": v(*n)} for go, w, n in offsets
+        ],
+    }
 
 
 def test_aspect_rule_blends_towards_the_narrow_and_wide_ends():
@@ -279,7 +453,11 @@ def test_aspect_rule_blends_towards_the_narrow_and_wide_ends():
     factor, offsets = lobby.aspect_rule(comp, mid)
     assert factor == pytest.approx(1 + 0.3 * 0.25) and offsets[100002] == (6, 6, 6) and offsets[100008] == (0, 0, 0)
     assert lobby.aspect_rule(comp, lobby.ASPECT_WIDE) == lobby.aspect_rule(comp, 21 / 9)
-    assert lobby.aspect_rule(comp, 21 / 9)[0] == pytest.approx(1.3) and lobby.aspect_rule(comp, 21 / 9)[1][100002] == (24, 24, 24)
+    assert lobby.aspect_rule(comp, 21 / 9)[0] == pytest.approx(1.3) and lobby.aspect_rule(comp, 21 / 9)[1][100002] == (
+        24,
+        24,
+        24,
+    )
     # the standard aspect itself: nothing moves
     assert lobby.aspect_rule(comp, lobby.ASPECT_STANDARD) == (1.0, {100002: (0, 0, 0), 100008: (0, 0, 0)})
     assert lobby.aspect_targets(comp) == [100002, 100004]
@@ -290,12 +468,21 @@ def test_prefab_follows_the_aspect_scale_at_16_9():
     base = plain.read("LobbyTest", SKELETONS, core_clips())
     p = build_prefab()
     # LobbySpine and the background (a child of it) scale; LobbySpine moves by (5, 10, 15) and the dialogue by (5, 10)
-    p.mb(1, 1002, ASPECT, **aspect_component(scale=(2, 4), offsets=[(2, (0, 0, 0), (13, 26, 39)), (8, (0, 0, 0), (13, 26, 0))]))
+    p.mb(
+        1,
+        1002,
+        ASPECT,
+        **aspect_component(scale=(2, 4), offsets=[(2, (0, 0, 0), (13, 26, 39)), (8, (0, 0, 0), (13, 26, 0))]),
+    )
     info = p.read("LobbyTest", SKELETONS, core_clips())
     s = 1 + 0.15 * 5 / 13
     layers, old = {l["name"]: l for l in info["layers"]}, {l["name"]: l for l in base["layers"]}
-    assert (layers["Test_home"]["scale"], layers["Test_home"]["x"], layers["Test_home"]["y"], layers["Test_home"]["z"]) == (
-        round(s, 5), 5.0, -952.0, 15.0)
+    assert (
+        layers["Test_home"]["scale"],
+        layers["Test_home"]["x"],
+        layers["Test_home"]["y"],
+        layers["Test_home"]["z"],
+    ) == (round(s, 5), 5.0, -952.0, 15.0)
     assert layers["Test_bg"]["scale"] == round(s * s, 5)  # both the LobbySpine and its child are scale targets
     # the 3D matrix agrees (a particle system or pin below follows): z moved by the offset
     assert old["Test_home"]["z"] == 0.0
@@ -303,7 +490,10 @@ def test_prefab_follows_the_aspect_scale_at_16_9():
     # transforms that are no target keep their place: the touch boxes hang under the root, not the LobbySpine
     assert info["touches"] == base["touches"] and info["drags"] == base["drags"]
     # the prefab's own trees are left as they are
-    assert p.objects[2 + 100000][1]["m_LocalScale"]["x"] == 100.0 and p.objects[2 + 100000][1]["m_LocalPosition"]["y"] == -962.0
+    assert (
+        p.objects[2 + 100000][1]["m_LocalScale"]["x"] == 100.0
+        and p.objects[2 + 100000][1]["m_LocalPosition"]["y"] == -962.0
+    )
     # an enlarged lobby ends at its own scale times the factor
     big = build_prefab(-1106.3, 115.0)
     big.mb(1, 1002, ASPECT, **aspect_component(scale=(2,)))
@@ -340,8 +530,12 @@ def component(name: str, active: int = 1, **params) -> dict:
 def test_post_processing_blends_the_volumes_like_urp():
     ppv = [
         component("ChromaticAberration", intensity=param(0.075)),
-        component("LiftGammaGain", lift=param([1.0, 1.0, 1.0, 0.0]), gain=param([0.98568, 1.0, 0.94948, 0.0]),
-                  gamma=param([0.5, 0.5, 0.5, 0.3], override=0)),  # not overridden: stays at its default
+        component(
+            "LiftGammaGain",
+            lift=param([1.0, 1.0, 1.0, 0.0]),
+            gain=param([0.98568, 1.0, 0.94948, 0.0]),
+            gamma=param([0.5, 0.5, 0.5, 0.3], override=0),
+        ),  # not overridden: stays at its default
         component("PaniniProjection", active=0, distance=param(1.0), cropToFit=param(1.0)),  # switched off
         component("DepthOfField", mode=param(1)),  # not drawn: ignored
     ]
@@ -351,31 +545,56 @@ def test_post_processing_blends_the_volumes_like_urp():
         # the prefab keeps the flash volume a little on: 1.5 % of it
         {"weight": 0.015, "priority": 0.0, "global": True, "active": True, "components": flash},
         {"weight": 0.0, "priority": 0.0, "global": True, "active": True, "components": [component("DepthOfField")]},
-        {"weight": 1.0, "priority": 0.0, "global": True, "active": False, "components": [
-            component("ChromaticAberration", intensity=param(1.0))]},
+        {
+            "weight": 1.0,
+            "priority": 0.0,
+            "global": True,
+            "active": False,
+            "components": [component("ChromaticAberration", intensity=param(1.0))],
+        },
     ]
     post = lobby.post_processing(volumes)
     assert post == {
         "chromaticAberration": 0.075,
-        "liftGammaGain": {"lift": [1.0, 1.0, 1.0, 0.0], "gamma": [1.0, 1.0, 1.0, 0.0], "gain": [0.98568, 1.0, 0.94948, 0.0]},
-        "colorAdjustments": {"postExposure": 0.0825, "contrast": 0.0, "colorFilter": [1.0, 0.99723, 0.99611],
-                             "hueShift": 0.0, "saturation": 0.0},
+        "liftGammaGain": {
+            "lift": [1.0, 1.0, 1.0, 0.0],
+            "gamma": [1.0, 1.0, 1.0, 0.0],
+            "gain": [0.98568, 1.0, 0.94948, 0.0],
+        },
+        "colorAdjustments": {
+            "postExposure": 0.0825,
+            "contrast": 0.0,
+            "colorFilter": [1.0, 0.99723, 0.99611],
+            "hueShift": 0.0,
+            "saturation": 0.0,
+        },
     }
     assert json.loads(json.dumps(post)) == post
 
 
 def test_post_processing_priority_weight_and_defaults():
     def ca(value: float, weight: float = 1.0, priority: float = 0.0) -> dict:
-        return {"weight": weight, "priority": priority, "global": True, "active": True,
-                "components": [component("ChromaticAberration", intensity=param(value))]}
+        return {
+            "weight": weight,
+            "priority": priority,
+            "global": True,
+            "active": True,
+            "components": [component("ChromaticAberration", intensity=param(value))],
+        }
+
     # the higher priority goes last whatever the hierarchy order; a partial weight lerps from what is below
     assert lobby.post_processing([ca(0.2, priority=1.0), ca(0.1)]) == {"chromaticAberration": 0.2}
     assert lobby.post_processing([ca(0.1), ca(0.3, weight=0.5)]) == {"chromaticAberration": 0.2}
     # effects that end up doing nothing are left out, as are local volumes and a Panini projection at distance 0
     assert lobby.post_processing([ca(0.0)]) == {}
     assert lobby.post_processing([{**ca(0.1), "global": False}]) == {}
-    panini = {"weight": 0.368, "priority": 0.0, "global": True, "active": True,
-              "components": [component("PaniniProjection", distance=param(1.0), cropToFit=param(1.0))]}
+    panini = {
+        "weight": 0.368,
+        "priority": 0.0,
+        "global": True,
+        "active": True,
+        "components": [component("PaniniProjection", distance=param(1.0), cropToFit=param(1.0))],
+    }
     assert lobby.post_processing([panini]) == {"panini": {"distance": 0.368, "cropToFit": 1.0}}
     assert lobby.post_processing([]) == {}
 
@@ -390,15 +609,20 @@ def test_prefab_volumes_follow_only_the_volumes_that_count():
     # a volume on the UI layer, which the lobby's camera never blends (Yoshimi's, Shimiko's)
     p.node(14, "PPV_UI", father=1, layer=5)
     p.mb(14, 1401, 7777, weight=1.0, sharedProfile=ref(-503, 4), **fields)
-    profiles = {-501: [component("ChromaticAberration", intensity=param(0.1))],
-                -503: [component("PaniniProjection", distance=param(1.0), cropToFit=param(1.0))]}
+    profiles = {
+        -501: [component("ChromaticAberration", intensity=param(0.1))],
+        -503: [component("PaniniProjection", distance=param(1.0), cropToFit=param(1.0))],
+    }
     asked = []
 
     def profile(pid, pointer):
         asked.append((pid, pointer["m_PathID"]))
         return profiles.get(pointer["m_PathID"])
+
     kinds = {pid: kind for pid, (kind, _) in p.objects.items()}
-    info = lobby.read_prefab(kinds, lambda pid: p.objects[pid][1], SCRIPTS, "LobbyTest", SKELETONS, core_clips(), profile=profile)
+    info = lobby.read_prefab(
+        kinds, lambda pid: p.objects[pid][1], SCRIPTS, "LobbyTest", SKELETONS, core_clips(), profile=profile
+    )
     assert info["post"] == {"chromaticAberration": 0.1}
     assert asked == [(1201, -501)]  # the flash volume at weight 0 and the one on the UI layer are never followed
     # without a resolver (or without volumes) there is nothing to apply
@@ -407,21 +631,42 @@ def test_prefab_volumes_follow_only_the_volumes_that_count():
 
 def particle_system(rate: float = 5.0, subs=()) -> dict:
     const = lambda v: {"minMaxState": 0, "scalar": v, "minScalar": v}  # noqa: E731
-    return {"lengthInSec": 1.0, "looping": 1, "prewarm": 0, "playOnAwake": 1, "moveWithTransform": 0, "scalingMode": 0,
-            "InitialModule": {"startLifetime": const(1.0), "startSpeed": const(0.0), "startSize": const(0.5),
-                              "startColor": {"minMaxState": 0, "maxColor": {"r": 1.0, "g": 1.0, "b": 1.0, "a": 1.0}},
-                              "maxNumParticles": 100},
-            "EmissionModule": {"enabled": 1, "rateOverTime": const(rate), "m_Bursts": []},
-            "SubModule": {"enabled": 1 if subs else 0,
-                          "subEmitters": [{"emitter": ref(pid), "type": kind, "properties": 0, "emitProbability": 1.0}
-                                          for kind, pid in subs]}}
+    return {
+        "lengthInSec": 1.0,
+        "looping": 1,
+        "prewarm": 0,
+        "playOnAwake": 1,
+        "moveWithTransform": 0,
+        "scalingMode": 0,
+        "InitialModule": {
+            "startLifetime": const(1.0),
+            "startSpeed": const(0.0),
+            "startSize": const(0.5),
+            "startColor": {"minMaxState": 0, "maxColor": {"r": 1.0, "g": 1.0, "b": 1.0, "a": 1.0}},
+            "maxNumParticles": 100,
+        },
+        "EmissionModule": {"enabled": 1, "rateOverTime": const(rate), "m_Bursts": []},
+        "SubModule": {
+            "enabled": 1 if subs else 0,
+            "subEmitters": [
+                {"emitter": ref(pid), "type": kind, "properties": 0, "emitProbability": 1.0} for kind, pid in subs
+            ],
+        },
+    }
 
 
 def particle_renderer(material: int, order: int = 0, mode: int = 0, fudge: float = 0.0, layer: int = 0) -> dict:
     # layer: the sorting layer's value (the game's one other layer than Default has id 896108637 and value 2)
-    return {"m_Enabled": 1, "m_RenderMode": mode, "m_SortingOrder": order, "m_SortingLayerID": 896108637 if layer else 0,
-            "m_SortingLayer": layer, "m_Materials": [ref(material, 2)] if material else [], "m_Mesh": ref(0),
-            "m_SortingFudge": fudge}
+    return {
+        "m_Enabled": 1,
+        "m_RenderMode": mode,
+        "m_SortingOrder": order,
+        "m_SortingLayerID": 896108637 if layer else 0,
+        "m_SortingLayer": layer,
+        "m_Materials": [ref(material, 2)] if material else [],
+        "m_Mesh": ref(0),
+        "m_SortingFudge": fudge,
+    }
 
 
 def test_prefab_particle_systems():
@@ -453,14 +698,21 @@ def test_prefab_particle_systems():
     p.add(26, 2601, "ParticleSystem", particle_system())
     p.add(26, 2602, "ParticleSystemRenderer", particle_renderer(63))
     tex = {"id": "cab-fx_9", "name": "FX_Glow", "w": 8, "h": 8, "filter": 1, "mips": 0, "wrap": [0, 0], "srgb": 1}
-    materials = {60: ("cab-sk_60", {"queue": 2900}),
-                 61: ("cab-fx_61", {"program": "additive", "queue": 3100, "tex": {"_Texture": {**tex, "st": [1, 1, 0, 0]}}}),
-                 62: ("cab-fx_62", {"program": "step", "queue": 3100, "tex": {"_Tex_Main": {"default": "white", "st": [1, 1, 0, 0]}}}),
-                 63: ("cab-fx_63", {"program": None, "queue": 3000, "tex": {}})}
+    materials = {
+        60: ("cab-sk_60", {"queue": 2900}),
+        61: ("cab-fx_61", {"program": "additive", "queue": 3100, "tex": {"_Texture": {**tex, "st": [1, 1, 0, 0]}}}),
+        62: (
+            "cab-fx_62",
+            {"program": "step", "queue": 3100, "tex": {"_Tex_Main": {"default": "white", "st": [1, 1, 0, 0]}}},
+        ),
+        63: ("cab-fx_63", {"program": None, "queue": 3000, "tex": {}}),
+    }
     asked = []
 
-    pages = {(301, 9001): ("cab-core_9001", {"Test_home": 3050, "Test_home2": 2900}),
-             (402, 64): ("cab-sk_64", {"Test_bg": 2950})}
+    pages = {
+        (301, 9001): ("cab-core_9001", {"Test_home": 3050, "Test_home2": 2900}),
+        (402, 64): ("cab-sk_64", {"Test_bg": 2950}),
+    }
 
     def resolve(kind, owner, pointer):
         asked.append((kind, owner, pointer["m_PathID"]))
@@ -480,8 +732,12 @@ def test_prefab_particle_systems():
     # the dust's material has no ported program, the group has none and the inactive system is not read
     assert [s["name"] for s in fx["systems"]] == ["FX_Loop", "Spark"]
     loop, spark = fx["systems"]
-    assert loop["anchor"] == {"skeleton": "Test_home", "bone": "FX_Hand", "go": [100.0, 0.0, 0.0, 0.0, 0.0, 100.0, 0.0, -962.0,
-                                                                              0.0, 0.0, 1.0, 0.0], "ds": 0.01}
+    assert loop["anchor"] == {
+        "skeleton": "Test_home",
+        "bone": "FX_Hand",
+        "go": [100.0, 0.0, 0.0, 0.0, 0.0, 100.0, 0.0, -962.0, 0.0, 0.0, 1.0, 0.0],
+        "ds": 0.01,
+    }
     # placed below the bone by the transforms under it (Unity units of the bone GameObject)
     assert [round(v, 6) for v in loop["rel"]] == [0.0, -1.0, 0.0, 0.5, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
     # and in the prefab's pose: (1 + 0.5, 2) Unity units on the skeleton, x 100 and 962 down
@@ -505,8 +761,10 @@ def test_prefab_page_shaders():
     # queues: from the skeleton data's atlas assets, else from the materials the renderer keeps
     p = build_prefab()
     p.objects[402][1]["m_Materials"] = [ref(64, 2)]
-    shaders = {(301, 9001): ("cab-core_9001", {"Test_home": "Spine/Skeleton MX Standard", "Test_home2": "Spine/Skeleton"}),
-               (402, 64): ("cab-sk_64", {"Test_bg": "Spine/Skeleton MX Standard"})}
+    shaders = {
+        (301, 9001): ("cab-core_9001", {"Test_home": "Spine/Skeleton MX Standard", "Test_home2": "Spine/Skeleton"}),
+        (402, 64): ("cab-sk_64", {"Test_bg": "Spine/Skeleton MX Standard"}),
+    }
     asked = []
 
     def resolve(kind, owner, pointer):
@@ -555,12 +813,16 @@ def test_prefab_systems_switched_by_spine_events():
     fx = p.read("LobbyTest", SKELETONS, core_clips(), resolve)["fx"]
     assert fx["toggles"] == [{"skeleton": "Test_home", "on": [0, 1, 1]}]
     assert [(s["path"].split("/", 2)[-1], s.get("toggle")) for s in fx["systems"]] == [
-        ("Test_home/FX_Fish_0/bubble", [[0, 0]]), ("Test_home/FX_Fish_1/bubble", [[0, 1]])]
+        ("Test_home/FX_Fish_0/bubble", [[0, 0]]),
+        ("Test_home/FX_Fish_1/bubble", [[0, 1]]),
+    ]
     # without a toggle component an inactive GameObject keeps its systems out
     del p.objects[304]
     p.objects[3][1]["m_Component"] = [c for c in p.objects[3][1]["m_Component"] if c["component"]["m_PathID"] != 304]
     fx = p.read("LobbyTest", SKELETONS, core_clips(), resolve)["fx"]
-    assert [s["path"].split("/", 2)[-1] for s in fx["systems"]] == ["Test_home/FX_Fish_1/bubble"] and fx["toggles"] == []
+    assert [s["path"].split("/", 2)[-1] for s in fx["systems"]] == ["Test_home/FX_Fish_1/bubble"] and fx[
+        "toggles"
+    ] == []
 
 
 def test_lobby_info_with_and_without_prefab():
@@ -576,7 +838,9 @@ def test_lobby_info_with_and_without_prefab():
     assert lobby.lobby_info(SKELETONS, clips, None, sounds)["sounds"] == sounds
     assert bare["fx"] == {"systems": [], "materials": {}, "textures": {}, "meshes": {}, "toggles": []}
     assert [(l["name"], l["x"], l["y"], l["scale"], l["active"]) for l in bare["layers"]] == [
-        ("A_home", 0.0, -962.0, 1.0, True), ("A_bg", 0.0, -962.0, 1.0, True)]
+        ("A_home", 0.0, -962.0, 1.0, True),
+        ("A_bg", 0.0, -962.0, 1.0, True),
+    ]
 
 
 class _Game:
@@ -596,8 +860,15 @@ class _Game:
 def test_lobby_json_route_is_memory_only(tmp_path):
     game = _Game()
     # the library only says no lobby camera holds the prefab
-    services = Services(Settings(tmp_path / "config.toml"), tmp_path, state=UiState(tmp_path / "webui.json"),
-                        cache=object(), game=game, catalog=object(), library=_Library())
+    services = Services(
+        Settings(tmp_path / "config.toml"),
+        tmp_path,
+        state=UiState(tmp_path / "webui.json"),
+        cache=object(),
+        game=game,
+        catalog=object(),
+        library=_Library(),
+    )
     try:
         response = services.asset("spine/lobby/hoshino_home/lobby.json", {})
         assert json.loads(response.body) == {"prefab": "LobbyTest", "core": "hoshino_home"}
@@ -610,6 +881,7 @@ def test_lobby_json_route_is_memory_only(tmp_path):
 class _FxGame(_Game):
     def lobby_fx_texture(self, core, tex_id):
         from bmpt.gameassets import AssetNotFound
+
         self.calls.append((core, tex_id))
         if tex_id != "cab-ab_-12":
             raise AssetNotFound(tex_id)
@@ -629,8 +901,15 @@ class _Library:
 
 def test_lobby_fx_texture_route(tmp_path):
     game = _FxGame()
-    services = Services(Settings(tmp_path / "config.toml"), tmp_path, state=UiState(tmp_path / "webui.json"),
-                        cache=object(), game=game, catalog=object(), library=_Library())
+    services = Services(
+        Settings(tmp_path / "config.toml"),
+        tmp_path,
+        state=UiState(tmp_path / "webui.json"),
+        cache=object(),
+        game=game,
+        catalog=object(),
+        library=_Library(),
+    )
     try:
         response = services.asset("spine/lobby/ch0113_home/fx_cab-ab_-12.png", {})
         assert (response.body, response.mime, response.light) == (b"png", "image/png", False)
@@ -644,6 +923,7 @@ def test_lobby_fx_texture_route(tmp_path):
 class _SoundGame(_Game):
     def lobby_sound(self, core, clip_id):
         from bmpt.gameassets import AssetNotFound
+
         self.calls.append((core, clip_id))
         if clip_id != "cab-sfx_655":
             raise AssetNotFound(clip_id)
@@ -655,8 +935,15 @@ class _SoundGame(_Game):
 
 def test_lobby_sound_route(tmp_path):
     game = _SoundGame()
-    services = Services(Settings(tmp_path / "config.toml"), tmp_path, state=UiState(tmp_path / "webui.json"),
-                        cache=object(), game=game, catalog=object(), library=_Library())
+    services = Services(
+        Settings(tmp_path / "config.toml"),
+        tmp_path,
+        state=UiState(tmp_path / "webui.json"),
+        cache=object(),
+        game=game,
+        catalog=object(),
+        library=_Library(),
+    )
     try:
         response = services.asset("spine/lobby/shigure_home/sfx_cab-sfx_655.wav", {})
         assert (response.body, response.mime, response.light) == (b"RIFF....WAVE", "audio/wav", False)
@@ -673,6 +960,7 @@ def real_game(tmp_path_factory):
         pytest.skip("No local game install")
     from bmpt.gameassets import AssetCache, GameAssets
     from ba_modding_toolkit.searching import get_search_dirs
+
     root = tmp_path_factory.mktemp("lobby") / "cache"
     return GameAssets(get_search_dirs(GAME_DIR), AssetCache(root=root, allowed=True))
 
@@ -680,6 +968,7 @@ def real_game(tmp_path_factory):
 @pytest.mark.skipif(not GAME_DIR.is_dir(), reason="No local game install")
 def test_real_lobbies(real_game, monkeypatch):
     from bmpt.gameassets.service import _SCHEMA
+
     cache, puts = real_game.cache, []
     put = cache.put
 
@@ -699,15 +988,26 @@ def test_real_lobbies(real_game, monkeypatch):
     assert aru["Aru_home"] is True and False in aru.values()
     # the camera's post-processing from the prefab's volumes (PPV at weight 1; the flash and depth of field at 0)
     assert hoshino["post"] == {
-        "chromaticAberration": 0.12, "panini": {"distance": 1.0, "cropToFit": 1.0},
-        "liftGammaGain": {"lift": [1.0, 1.0, 1.0, 0.0], "gamma": [1.0, 1.0, 1.0, 0.0], "gain": [1.0, 0.9116, 0.96201, 0.0]}}
+        "chromaticAberration": 0.12,
+        "panini": {"distance": 1.0, "cropToFit": 1.0},
+        "liftGammaGain": {
+            "lift": [1.0, 1.0, 1.0, 0.0],
+            "gamma": [1.0, 1.0, 1.0, 0.0],
+            "gain": [1.0, 0.9116, 0.96201, 0.0],
+        },
+    }
     # Yoshimi's volumes sit on the UI layer, outside the lobby camera's volume mask: no post-processing in the game
     assert real_game.lobby_info("yoshimi_home")["post"] == {}
     # Erika's sat there too until the 2026-11 update moved them onto the camera's volume layer
     assert real_game.lobby_info("erika_home")["post"] == {
-        "chromaticAberration": 0.1, "panini": {"distance": 1.0, "cropToFit": 1.0},
-        "liftGammaGain": {"lift": [1.0, 1.0, 1.0, 0.0], "gamma": [1.0, 0.99644, 0.98578, 0.0],
-                          "gain": [0.99832, 1.0, 0.99665, 0.0]}}
+        "chromaticAberration": 0.1,
+        "panini": {"distance": 1.0, "cropToFit": 1.0},
+        "liftGammaGain": {
+            "lift": [1.0, 1.0, 1.0, 0.0],
+            "gamma": [1.0, 0.99644, 0.98578, 0.0],
+            "gain": [0.99832, 1.0, 0.99665, 0.0],
+        },
+    }
     # lobby data is derived from character bundles: kept in memory, and nothing but the prefab name index reaches the
     # disk cache (consent is on)
     assert sum(key.startswith(_SCHEMA + "lobby/") and not disk for key, disk in puts) == 5
@@ -720,6 +1020,7 @@ def test_real_lobbies(real_game, monkeypatch):
 @pytest.mark.skipif(not GAME_DIR.is_dir(), reason="No local game install")
 def test_real_lobby_particles(real_game, monkeypatch):
     from bmpt.gameassets import AssetNotFound
+
     puts, put = [], real_game.cache.put
 
     def record(key, value, **kwargs):
@@ -731,7 +1032,9 @@ def test_real_lobby_particles(real_game, monkeypatch):
     names = {s["name"] for s in michiru["systems"]}
     assert {"glow", "Particle", "Fireworks_1", "boke_1", "dust_1"} <= names
     sparkler = [s for s in michiru["systems"] if "/FX_Hanabi/" in s["path"]]
-    assert sparkler and all(s["anchor"]["bone"] == "FX_Hanabi" and s["material"] in michiru["materials"] for s in sparkler)
+    assert sparkler and all(
+        s["anchor"]["bone"] == "FX_Hanabi" and s["material"] in michiru["materials"] for s in sparkler
+    )
     programs = {m["program"] for m in michiru["materials"].values()}
     assert {"additive", "alphaBlendAdd", "step", "stepDistort", "mask"} <= programs
     # the firework sparks are meshes, spawned by their parents
@@ -753,7 +1056,11 @@ def test_real_lobby_particle_colour_space_layers_and_toggles(real_game):
     assert len(nodoka) == 10 and sum(s["renderer"]["colorSpace"] == 0 for s in nodoka) == 9
     # Aru's dust is on the game's other sorting layer (value 2): over her skeletons, which are on Default
     aru = real_game.lobby_info("aru_home")
-    assert sorted(s["name"] for s in aru["fx"]["systems"] if s["sortingLayer"] == 2) == ["dust_00", "dust_01", "dust_02"]
+    assert sorted(s["name"] for s in aru["fx"]["systems"] if s["sortingLayer"] == 2) == [
+        "dust_00",
+        "dust_01",
+        "dust_02",
+    ]
     # dust_01 shows only during the intro
     assert [s["name"] for s in aru["fx"]["systems"] if s.get("rest") == 0] == ["dust_01"]
     assert {layer["sortingLayer"] for layer in aru["layers"]} == {0}
@@ -779,7 +1086,9 @@ def test_real_lobby_particle_modules(real_game):
     # spread of 0.12 (placed at random: how the two go together is not known)
     hibiki = real_game.lobby_info("hibiki_home")["fx"]["systems"]
     assert sum(s["shape"]["type"] == 12 and s["shape"]["radiusMode"] == 3 for s in hibiki if s["shape"]) == 10
-    halo = next(s for s in real_game.lobby_info("ch0069_home")["fx"]["systems"] if (s["shape"] or {}).get("arcMode") == 3)
+    halo = next(
+        s for s in real_game.lobby_info("ch0069_home")["fx"]["systems"] if (s["shape"] or {}).get("arcMode") == 3
+    )
     assert halo["emission"]["bursts"][0]["n"] == 5.0 and halo["shape"]["arcSpread"] == 0.12
     assert halo["renderer"]["sort"] == 1
 
@@ -789,12 +1098,12 @@ def test_real_lobby_page_queues(real_game):
     # Hibiki's background page draws at 2900 and her own at 3050: the river surface (3000, pushed back by its sorting
     # fudge among the other effects of that queue) draws over the river, under her
     hibiki = real_game.lobby_info("hibiki_home")
-    layer, = hibiki["layers"]
+    (layer,) = hibiki["layers"]
     assert layer["pages"] == {"Hibiki_home": 3050, "Hibiki_home2": 2900} and layer["queue"] == 2900
     river = next(s for s in hibiki["fx"]["systems"] if s["name"] == "River_surface")
     assert (river["order"], river["queue"], river["fudge"]) == (0, 3000, 50.0)
     # Kisaki (Swimsuit): the scenery at 2900, her at 3100, the mist in front of her at 3200
-    kisaki, = real_game.lobby_info("ch0356_home")["layers"]
+    (kisaki,) = real_game.lobby_info("ch0356_home")["layers"]
     assert kisaki["pages"] == {"CH0356_home": 3100, "CH0356_home_2": 3200, "CH0356_home_3": 2900, "CH0356_home_4": 2900}
     # every page of the atlas the web UI loads has its queue (the page's file name without its extension)
     for core, layer in (("hibiki_home", layer), ("ch0356_home", kisaki)):
@@ -806,6 +1115,7 @@ def test_real_lobby_page_queues(real_game):
 @pytest.mark.skipif(not GAME_DIR.is_dir(), reason="No local game install")
 def test_real_lobby_idle_clips_and_sounds(real_game, monkeypatch):
     from bmpt.gameassets import AssetNotFound
+
     puts, put = [], real_game.cache.put
 
     def record(key, value, **kwargs):
@@ -820,23 +1130,30 @@ def test_real_lobby_idle_clips_and_sounds(real_game, monkeypatch):
     train = shigure["clips"]["Shigure_home"]["Train_00_R"]
     assert (train["track"], train["mode"], train["loop"]) == (3, 2, True)
     assert train["random"] == {"min": 10.0, "max": 15.0, "loops": [0, 0], "pre": 2, "preDelay": 3.0}
-    (time, event), = train["sounds"]
+    ((time, event),) = train["sounds"]
     assert time == 3.1 and shigure["sounds"][event]["name"] == "SFX_Spine_Subway"
     assert shigure["sounds"][event]["volume"] == 0.7 and len(shigure["sounds"][event]["clips"]) == 1
     # Yuzu's idle pool plays two background clips besides the idle
-    assert real_game.lobby_info("ch0336_home")["idles"]["CH0336_home"] == ["Idle_01", "Idle_BG_B_01_R", "Idle_Cloud_01_R"]
+    assert real_game.lobby_info("ch0336_home")["idles"]["CH0336_home"] == [
+        "Idle_01",
+        "Idle_BG_B_01_R",
+        "Idle_Cloud_01_R",
+    ]
     # the sound, decoded in memory (WAV), and only for clips the lobby lists
     clip_id = shigure["sounds"][event]["clips"][0]
     wav = real_game.lobby_sound("shigure_home", clip_id)
     assert wav[:4] == b"RIFF" and wav[8:12] == b"WAVE" and len(wav) > 10000
     with pytest.raises(AssetNotFound):
         real_game.lobby_sound("aru_home", clip_id)
-    assert any("lobby-sound/" in key for key, _ in puts) and not any(disk for key, disk in puts if "lobby-sound/" in key)
+    assert any("lobby-sound/" in key for key, _ in puts) and not any(
+        disk for key, disk in puts if "lobby-sound/" in key
+    )
 
 
 @pytest.mark.skipif(not GAME_DIR.is_dir(), reason="No local game install")
 def test_real_lobby_aspect_scale(real_game, monkeypatch):
     from bmpt.gameassets import particles
+
     s = 1 + (1.149999976158142 - 1) * 5 / 13  # the 16:9 factor of a mostNarrowScale 1.15 lobby
     nodes = {}
     build = particles.build
@@ -847,25 +1164,36 @@ def test_real_lobby_aspect_scale(real_game, monkeypatch):
 
     monkeypatch.setattr(particles, "build", spy)
     # Azusa's LobbySpine is serialized at 1: the skeleton ends at the factor, the standard place scaled about the centre
-    azusa, = real_game.lobby_info("azusa_home")["layers"]
+    (azusa,) = real_game.lobby_info("azusa_home")["layers"]
     assert (azusa["scale"], azusa["x"], azusa["y"]) == (round(s, 5), 0.0, round(-962 * s, 2))
     # a lobby serialized at 1.15 ends at 1.15 times the factor, and CH0242 (mostNarrowScale 1.0) does not change
-    ch0205, = real_game.lobby_info("ch0205_home")["layers"]
+    (ch0205,) = real_game.lobby_info("ch0205_home")["layers"]
     assert (ch0205["scale"], ch0205["y"]) == (round(1.15 * s, 5), round(-1106.3 * s, 2))
-    ch0242, = real_game.lobby_info("ch0242_home")["layers"]
+    (ch0242,) = real_game.lobby_info("ch0242_home")["layers"]
     assert (ch0242["scale"], ch0242["x"], ch0242["y"]) == (1.0, 0.0, -962.0)
     # Hina has two scale targets: her background and the LobbySpine both scale
     real_game.lobby_info("hina_home")
     with open_bundle(real_game._bundle_path(real_game._lobby_prefabs()["lobbyhina"])) as env:
-        raw = {o.path_id: o.read_typetree() for o in env.objects if o.type.name in
-               ("GameObject", "Transform", "RectTransform", "MonoBehaviour")}
+        raw = {
+            o.path_id: o.read_typetree()
+            for o in env.objects
+            if o.type.name in ("GameObject", "Transform", "RectTransform", "MonoBehaviour")
+        }
     comp = next(t for t in raw.values() if "mostNarrowScale" in t)
     assert comp["mostNarrowScale"] == pytest.approx(1.15) and len(comp["scaleTransforms"]) == 2
-    names = {raw[p["m_PathID"]]["m_GameObject"]["m_PathID"]: raw[raw[p["m_PathID"]]["m_GameObject"]["m_PathID"]]["m_Name"]
-             for p in comp["scaleTransforms"]}
+    names = {
+        raw[p["m_PathID"]]["m_GameObject"]["m_PathID"]: raw[raw[p["m_PathID"]]["m_GameObject"]["m_PathID"]]["m_Name"]
+        for p in comp["scaleTransforms"]
+    }
     assert any(n.endswith("_BG") for n in names.values()) and any(n.endswith("LobbySpine") for n in names.values())
     walked = {n["go"]: n for n in nodes["LobbyHina"].values()}
     for go in names:
-        before, after = next(raw[p["m_PathID"]] for p in comp["scaleTransforms"]
-                             if raw[p["m_PathID"]]["m_GameObject"]["m_PathID"] == go)["m_LocalScale"], walked[go]["t"]["m_LocalScale"]
+        before, after = (
+            next(
+                raw[p["m_PathID"]]
+                for p in comp["scaleTransforms"]
+                if raw[p["m_PathID"]]["m_GameObject"]["m_PathID"] == go
+            )["m_LocalScale"],
+            walked[go]["t"]["m_LocalScale"],
+        )
         assert after["x"] == pytest.approx(before["x"] * s) and after["y"] == pytest.approx(before["y"] * s)

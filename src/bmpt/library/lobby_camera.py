@@ -64,8 +64,12 @@ def check_params(scale: Any, offset: Any) -> tuple[float, tuple[float, float]]:
     """A camera's scale and offset as numbers, or ``bad_params``."""
     if not _number(scale) or not SCALE_RANGE[0] <= scale <= SCALE_RANGE[1]:
         raise ServiceError("bad_params", key="scale")
-    if (not isinstance(offset, (list, tuple)) or len(offset) != 2 or not all(_number(v) for v in offset)
-            or any(abs(v) > OFFSET_LIMIT for v in offset)):
+    if (
+        not isinstance(offset, (list, tuple))
+        or len(offset) != 2
+        or not all(_number(v) for v in offset)
+        or any(abs(v) > OFFSET_LIMIT for v in offset)
+    ):
         raise ServiceError("bad_params", key="offset")
     return float(scale), (float(offset[0]), float(offset[1]))
 
@@ -78,6 +82,7 @@ class CameraEdit:
     """What a camera changes in a lobby prefab: ``trees`` the new typetrees by path id, of changed objects and of the
     ``added`` ones (path id -> class); ``node`` the camera node's Transform, ``animator`` the root's new Animator and
     ``director`` the intro's PlayableDirector (to give the intro track to), each None when not made or not found."""
+
     trees: dict[int, dict]
     added: dict[int, str] = field(default_factory=dict)
     node: int | None = None
@@ -85,8 +90,15 @@ class CameraEdit:
     director: int | None = None
 
 
-def camera_edit(kinds: dict[int, str], tree: Callable[[int], dict], scripts: dict[int, str], root: str,
-                scale: float, offset: tuple[float, float], fresh: Callable[[], int] | None = None) -> CameraEdit:
+def camera_edit(
+    kinds: dict[int, str],
+    tree: Callable[[int], dict],
+    scripts: dict[int, str],
+    root: str,
+    scale: float,
+    offset: tuple[float, float],
+    fresh: Callable[[], int] | None = None,
+) -> CameraEdit:
     """The objects a camera changes or adds in one lobby prefab. kinds, tree and scripts as ``lobby.read_prefab``
     takes them; ``fresh`` gives path ids for new objects.
 
@@ -101,8 +113,16 @@ def camera_edit(kinds: dict[int, str], tree: Callable[[int], dict], scripts: dic
     that is no plain Transform of this file, a parent between it and the root that is scaled or turned), is refused
     (``lobby_camera_unsupported``): nothing is guessed."""
     scale, (ox, oy) = check_params(scale, offset)
-    top = next((pid for pid, kind in kinds.items() if kind == _TRANSFORM and not tree(pid)["m_Father"]["m_PathID"]
-                and tree(tree(pid)["m_GameObject"]["m_PathID"])["m_Name"].lower() == root.lower()), None)
+    top = next(
+        (
+            pid
+            for pid, kind in kinds.items()
+            if kind == _TRANSFORM
+            and not tree(pid)["m_Father"]["m_PathID"]
+            and tree(tree(pid)["m_GameObject"]["m_PathID"])["m_Name"].lower() == root.lower()
+        ),
+        None,
+    )
     if top is None:
         raise _refuse(root)
     root_go = tree(top)["m_GameObject"]["m_PathID"]
@@ -118,8 +138,13 @@ def camera_edit(kinds: dict[int, str], tree: Callable[[int], dict], scripts: dic
     component_id = found[0]
     component = copy.deepcopy(tree(component_id))
     scaled, settings = component.get("scaleTransforms"), component.get("offsetSettings")
-    if (not _number(component.get("mostWideScale")) or not _number(component.get("mostNarrowScale"))
-            or not isinstance(scaled, list) or not scaled or not isinstance(settings, list)):
+    if (
+        not _number(component.get("mostWideScale"))
+        or not _number(component.get("mostNarrowScale"))
+        or not isinstance(scaled, list)
+        or not scaled
+        or not isinstance(settings, list)
+    ):
         raise _refuse(root)
 
     def target(pointer: Any) -> int:
@@ -139,8 +164,11 @@ def camera_edit(kinds: dict[int, str], tree: Callable[[int], dict], scripts: dic
             seen.add(father)
             t = tree(father)
             rotation, size, position = t["m_LocalRotation"], t["m_LocalScale"], t["m_LocalPosition"]
-            if (any(rotation.get(axis, 0.0) != 0.0 for axis in _AXES) or rotation.get("w", 1.0) != 1.0
-                    or any(size.get(axis, 1.0) != 1.0 for axis in _AXES)):
+            if (
+                any(rotation.get(axis, 0.0) != 0.0 for axis in _AXES)
+                or rotation.get("w", 1.0) != 1.0
+                or any(size.get(axis, 1.0) != 1.0 for axis in _AXES)
+            ):
                 raise _refuse(root)
             x, y = x + position["x"], y + position["y"]
             father = t["m_Father"]["m_PathID"]
@@ -149,18 +177,24 @@ def camera_edit(kinds: dict[int, str], tree: Callable[[int], dict], scripts: dic
     scale_ids = list(dict.fromkeys(target(pointer) for pointer in scaled))
     move_ids = list(scale_ids)
     for setting in settings:
-        if not isinstance(setting, dict) or not all(_vector(setting.get(key)) for key in ("MostWideAdd", "MostNarrowAdd")):
+        if not isinstance(setting, dict) or not all(
+            _vector(setting.get(key)) for key in ("MostWideAdd", "MostNarrowAdd")
+        ):
             raise _refuse(root)
         move_ids.append(target(setting.get("Transform")))
         for key in ("MostWideAdd", "MostNarrowAdd"):
             setting[key] = {**setting[key], **{axis: setting[key][axis] * scale for axis in _AXES}}
     if top in move_ids:
         raise _refuse(root)
-    root_animated = any(kinds.get(item["component"]["m_PathID"]) == "Animator"
-                        for item in tree(root_go).get("m_Component", []))
-    node = (fresh is not None and not root_animated
-            and all(tree(pid)["m_Father"]["m_PathID"] == top for pid in scale_ids)
-            and not set(scale_ids) & set(move_ids[len(scale_ids):]))
+    root_animated = any(
+        kinds.get(item["component"]["m_PathID"]) == "Animator" for item in tree(root_go).get("m_Component", [])
+    )
+    node = (
+        fresh is not None
+        and not root_animated
+        and all(tree(pid)["m_Father"]["m_PathID"] == top for pid in scale_ids)
+        and not set(scale_ids) & set(move_ids[len(scale_ids) :])
+    )
     edit = CameraEdit({component_id: component})
     for pid in dict.fromkeys(move_ids):
         t = copy.deepcopy(tree(pid))
@@ -183,11 +217,14 @@ def camera_edit(kinds: dict[int, str], tree: Callable[[int], dict], scripts: dic
     go = copy.deepcopy(tree(first["m_GameObject"]["m_PathID"]))
     go.update(m_Name=NODE, m_IsActive=1, m_Component=[{"component": {"m_FileID": 0, "m_PathID": tf_id}}])
     tf = copy.deepcopy(first)
-    tf.update(m_GameObject={"m_FileID": 0, "m_PathID": go_id}, m_Father={"m_FileID": 0, "m_PathID": top},
-              m_Children=[{"m_FileID": 0, "m_PathID": pid} for pid in scale_ids],
-              m_LocalPosition={"x": ox, "y": oy, "z": 0.0},
-              m_LocalRotation={"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
-              m_LocalScale={"x": scale, "y": scale, "z": scale})
+    tf.update(
+        m_GameObject={"m_FileID": 0, "m_PathID": go_id},
+        m_Father={"m_FileID": 0, "m_PathID": top},
+        m_Children=[{"m_FileID": 0, "m_PathID": pid} for pid in scale_ids],
+        m_LocalPosition={"x": ox, "y": oy, "z": 0.0},
+        m_LocalRotation={"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
+        m_LocalScale={"x": scale, "y": scale, "z": scale},
+    )
     if "m_LocalEulerAnglesHint" in tf:
         tf["m_LocalEulerAnglesHint"] = {"x": 0.0, "y": 0.0, "z": 0.0}
     edit.trees.update({go_id: go, tf_id: tf})
@@ -212,8 +249,14 @@ def camera_edit(kinds: dict[int, str], tree: Callable[[int], dict], scripts: dic
     animators = [pid for pid, kind in kinds.items() if kind == "Animator"]
     if len(directors) == 1 and animators:
         animator = copy.deepcopy(tree(animators[0]))
-        animator.update(m_GameObject={"m_FileID": 0, "m_PathID": root_go}, m_Controller={"m_FileID": 0, "m_PathID": 0},
-                        m_Avatar={"m_FileID": 0, "m_PathID": 0}, m_Enabled=1, m_CullingMode=0, m_ApplyRootMotion=0)
+        animator.update(
+            m_GameObject={"m_FileID": 0, "m_PathID": root_go},
+            m_Controller={"m_FileID": 0, "m_PathID": 0},
+            m_Avatar={"m_FileID": 0, "m_PathID": 0},
+            m_Enabled=1,
+            m_CullingMode=0,
+            m_ApplyRootMotion=0,
+        )
         animator_id = fresh()
         root_tree = copy.deepcopy(tree(root_go))
         root_tree["m_Component"] = [*root_tree["m_Component"], {"component": {"m_FileID": 0, "m_PathID": animator_id}}]
@@ -223,8 +266,14 @@ def camera_edit(kinds: dict[int, str], tree: Callable[[int], dict], scripts: dic
     return edit
 
 
-def camera_trees(kinds: dict[int, str], tree: Callable[[int], dict], scripts: dict[int, str], root: str,
-                 scale: float, offset: tuple[float, float]) -> dict[int, dict]:
+def camera_trees(
+    kinds: dict[int, str],
+    tree: Callable[[int], dict],
+    scripts: dict[int, str],
+    root: str,
+    scale: float,
+    offset: tuple[float, float],
+) -> dict[int, dict]:
     """The new typetrees of a camera that scales and moves the scale targets themselves (``camera_edit`` without a
     camera node): the root's UIManualScaleByAspect and its target Transforms, by path id."""
     return camera_edit(kinds, tree, scripts, root, scale, offset).trees
@@ -232,6 +281,7 @@ def camera_trees(kinds: dict[int, str], tree: Callable[[int], dict], scripts: di
 
 def _f32(value: float) -> float:
     import struct
+
     return struct.unpack("<f", struct.pack("<f", value))[0]
 
 
@@ -255,8 +305,11 @@ def _prefab_objects(bundle: Bundle) -> dict[int, Any]:
 
 
 def _streams(bundle: Bundle) -> dict[str, str]:
-    return {name: hashlib.sha256(file.bytes).hexdigest() for name, file in bundle.env.file.files.items()
-            if not hasattr(file, "objects")}
+    return {
+        name: hashlib.sha256(file.bytes).hexdigest()
+        for name, file in bundle.env.file.files.items()
+        if not hasattr(file, "objects")
+    }
 
 
 def read_trees(objects: dict[int, Any]) -> tuple[dict[int, str], Callable[[int], dict], dict[int, str]]:
@@ -300,6 +353,7 @@ def _fresh(sf: Any, seed: str) -> Callable[[], int]:
             if pid and pid not in sf.objects and pid not in taken:
                 taken.add(pid)
                 return pid
+
     return fresh
 
 
@@ -321,15 +375,30 @@ def _preload(objects: dict[int, Any], added: list[int]) -> int | None:
     for pid, obj in objects.items():
         if obj.type.name == "AssetBundle":
             tree = obj.read_typetree()
-            _extend_preload(tree, {entry: [{"m_FileID": 0, "m_PathID": p} for p in added]
-                                   for entry, (_, info) in enumerate(tree["m_Container"]) if info["preloadSize"]})
+            _extend_preload(
+                tree,
+                {
+                    entry: [{"m_FileID": 0, "m_PathID": p} for p in added]
+                    for entry, (_, info) in enumerate(tree["m_Container"])
+                    if info["preloadSize"]
+                },
+            )
             obj.save_typetree(tree)
             return pid
     return None
 
 
-def patch_prefab(base: Path, output: Path, root: str, scale: float, offset: tuple[float, float],
-                 *, timeline: Path | None = None, compression: str = "lz4", crc: bool = True) -> bool:
+def patch_prefab(
+    base: Path,
+    output: Path,
+    root: str,
+    scale: float,
+    offset: tuple[float, float],
+    *,
+    timeline: Path | None = None,
+    compression: str = "lz4",
+    crc: bool = True,
+) -> bool:
     """Write ``base`` with the camera to ``output`` (its name gives the CRC to fix to), then check that only the
     camera's objects changed or were added, and to what they should be (``lobby_camera_failed`` otherwise).
     ``timeline``: the bundle holding the lobby's intro timeline (``timeline_cab``), as the camera's art has it; with it
@@ -368,15 +437,27 @@ def patch_prefab(base: Path, output: Path, root: str, scale: float, offset: tupl
         raise ServiceError("lobby_camera_failed")
     after = _prefab_objects(checked)
     unchanged = {pid: digest for pid, digest in before.items() if pid not in expected and pid != preload}
-    if (set(after) != set(before) | set(added) or _streams(checked) != streams
-            or any(hashlib.sha256(after[pid].get_raw_data()).hexdigest() != digest for pid, digest in unchanged.items())
-            or any(not _same(after[pid].read_typetree(), new) for pid, new in expected.items())):
+    if (
+        set(after) != set(before) | set(added)
+        or _streams(checked) != streams
+        or any(hashlib.sha256(after[pid].get_raw_data()).hexdigest() != digest for pid, digest in unchanged.items())
+        or any(not _same(after[pid].read_typetree(), new) for pid, new in expected.items())
+    ):
         raise ServiceError("lobby_camera_failed")
     return held
 
 
-def _intro(intro: Any, sf: Any, edit: CameraEdit, tree: Callable[[int], dict], timeline: Path,
-           fresh: Callable[[], int], scale: float, offset: tuple[float, float], added: list[int]) -> bool:
+def _intro(
+    intro: Any,
+    sf: Any,
+    edit: CameraEdit,
+    tree: Callable[[int], dict],
+    timeline: Path,
+    fresh: Callable[[], int],
+    scale: float,
+    offset: tuple[float, float],
+    added: list[int],
+) -> bool:
     """Give the prefab its own intro timeline with the camera track (``lobby_camera_intro``); False, and nothing
     added, when the timeline file does not hold the director's timeline or it has no rest pose to switch at."""
     director = copy.deepcopy(edit.trees.get(edit.director) or tree(edit.director))
@@ -400,15 +481,17 @@ def _intro(intro: Any, sf: Any, edit: CameraEdit, tree: Callable[[int], dict], t
     if data.cls(asset["m_PathID"]) != "TimelineAsset":
         return False
     (ox, oy) = offset
-    made = intro.add_intro_track(writer, data, asset["m_PathID"], NODE,
-                                 ((0.0, 0.0, 0.0, 1.0, 1.0, 1.0), (ox, oy, 0.0, scale, scale, scale)))
+    made = intro.add_intro_track(
+        writer, data, asset["m_PathID"], NODE, ((0.0, 0.0, 0.0, 1.0, 1.0, 1.0), (ox, oy, 0.0, scale, scale, scale))
+    )
     if made is None:
         return False
     asset_id, track_id, new = made
     director["m_PlayableAsset"] = {"m_FileID": 0, "m_PathID": asset_id}
-    director["m_SceneBindings"] = [*director["m_SceneBindings"],
-                                   {"key": {"m_FileID": 0, "m_PathID": track_id},
-                                    "value": {"m_FileID": 0, "m_PathID": edit.animator}}]
+    director["m_SceneBindings"] = [
+        *director["m_SceneBindings"],
+        {"key": {"m_FileID": 0, "m_PathID": track_id}, "value": {"m_FileID": 0, "m_PathID": edit.animator}},
+    ]
     sf.objects[edit.director].save_typetree(director)
     edit.trees[edit.director] = director
     for pid in new:
@@ -417,7 +500,9 @@ def _intro(intro: Any, sf: Any, edit: CameraEdit, tree: Callable[[int], dict], t
     return True
 
 
-def compose(first: tuple[float, tuple[float, float]], then: tuple[float, tuple[float, float]]) -> tuple[float, list[float]]:
+def compose(
+    first: tuple[float, tuple[float, float]], then: tuple[float, tuple[float, float]]
+) -> tuple[float, list[float]]:
     """A camera framed on a lobby that already has one: ``p -> k2 (k1 p + o1) + o2``."""
     (k1, (x1, y1)), (k2, (x2, y2)) = first, then
     return k1 * k2, [k2 * x1 + x2, k2 * y1 + y2]
@@ -438,8 +523,11 @@ def meta_of(record: dict | None) -> dict | None:
 
 
 def cameras(library: ModLibrary, variant: str | None = None) -> list[dict]:
-    return [record for record in library._records.values()
-            if (meta := meta_of(record)) is not None and (variant is None or meta["variant"] == variant)]
+    return [
+        record
+        for record in library._records.values()
+        if (meta := meta_of(record)) is not None and (variant is None or meta["variant"] == variant)
+    ]
 
 
 def camera_of(library: ModLibrary, source: Any) -> dict | None:
@@ -490,8 +578,9 @@ def timeline_file(library: ModLibrary, variant: str, source: str, prefab: Path, 
     return None
 
 
-def save(library: ModLibrary, variant: str, source: str, scale: float, offset: Any, prefab: str, root: str,
-         pin: Pin, log) -> dict:
+def save(
+    library: ModLibrary, variant: str, source: str, scale: float, offset: Any, prefab: str, root: str, pin: Pin, log
+) -> dict:
     """Keep a new camera choice of a variant's memorial lobby: ``source`` is what the lobby showed ("official",
     ``mod:<id>`` of one of its lobby mods, or one of its cameras, composed), ``prefab`` / ``root`` its prefab bundle's
     file name and root GameObject. Returns the stored record."""
@@ -510,8 +599,12 @@ def save(library: ModLibrary, variant: str, source: str, scale: float, offset: A
         source = meta["source"]
     if source != "official":
         record = library._record(source[4:]) if source.startswith("mod:") else None
-        if (record is None or record["kind"] != "lobby" or library._target_of(record) != variant
-                or core_of(record["files"][0]) != core):
+        if (
+            record is None
+            or record["kind"] != "lobby"
+            or library._target_of(record) != variant
+            or core_of(record["files"][0]) != core
+        ):
             raise ServiceError("source_unsupported", source=source)
     if not prefab.startswith("ui-uilobbyelement-") or Path(prefab).name != prefab:
         raise ServiceError("lobby_camera_unsupported", name=prefab)
@@ -531,9 +624,19 @@ def save(library: ModLibrary, variant: str, source: str, scale: float, offset: A
         timeline = timeline_file(library, variant, source, base, pin)
         held = patch_prefab(base, output, root, k, (ox, oy), timeline=timeline, crc=library.settings.crc_needed(live))
         number = 1 + max((meta_of(r).get("number", 0) for r in cameras(library, variant)), default=0)
-        meta = {"variant": variant, "core": core, "source": source, "scale": k, "offset": [ox, oy], "root": root,
-                "prefab": live.name, "slot": slot, "base": base_source, "number": number,
-                "timeline": timeline.name if held and timeline is not None else None}
+        meta = {
+            "variant": variant,
+            "core": core,
+            "source": source,
+            "scale": k,
+            "offset": [ox, oy],
+            "root": root,
+            "prefab": live.name,
+            "slot": slot,
+            "base": base_source,
+            "number": number,
+            "timeline": timeline.name if held and timeline is not None else None,
+        }
         files = {live.name: output}
         return library._store(files, "Lobby camera", other_target(files), "other", metadata={TAG: meta})
 
@@ -551,9 +654,15 @@ def apply(library: ModLibrary, variant: str, record: dict, log, progress, pin: P
     art = library._apply_choice(variant, meta["source"], log, progress, "lobby", pin, create_backup=create_backup)
     prefab = library._apply_other(record["target"], f"mod:{record['id']}", log, progress, pin, create_backup)
     # the art's own result: incomplete or kept as it is
-    return ApplyResult(variant, f"mod:{record['id']}", [*art.files, *prefab.files], art.unchanged and prefab.unchanged,
-                       deferred=art.deferred or prefab.deferred, kept_current=art.kept_current or prefab.kept_current,
-                       incomplete=art.incomplete)
+    return ApplyResult(
+        variant,
+        f"mod:{record['id']}",
+        [*art.files, *prefab.files],
+        art.unchanged and prefab.unchanged,
+        deferred=art.deferred or prefab.deferred,
+        kept_current=art.kept_current or prefab.kept_current,
+        incomplete=art.incomplete,
+    )
 
 
 def release(library: ModLibrary, variant: str, pin: Pin, log, progress) -> None:
@@ -607,8 +716,15 @@ def refresh(library: ModLibrary, pins: list[Pin], log, only: set[str] | None = N
                     output = Path(temporary) / live.name
                     base = library._official_for(live, pin)
                     timeline = timeline_file(library, meta["variant"], meta["source"], base, pin)
-                    held = patch_prefab(base, output, meta["root"], meta["scale"], tuple(meta["offset"]),
-                                        timeline=timeline, crc=library.settings.crc_needed(live))
+                    held = patch_prefab(
+                        base,
+                        output,
+                        meta["root"],
+                        meta["scale"],
+                        tuple(meta["offset"]),
+                        timeline=timeline,
+                        crc=library.settings.crc_needed(live),
+                    )
                     old = library._paths(record)[0]
                     target = old.parent / live.name
                     digest = library._hashes.get(output).sha1
@@ -674,8 +790,9 @@ def overlay(records: list[dict], folder: dict, sources: dict) -> dict:
     return sources
 
 
-def overlay_selection(library: ModLibrary, variant: str, pin: Pin, config: dict | None, folder: dict,
-                      result: dict) -> dict:
+def overlay_selection(
+    library: ModLibrary, variant: str, pin: Pin, config: dict | None, folder: dict, result: dict
+) -> dict:
     """A variant's saved choices (``ModLibrary.selection``) with its camera choice as its lobby's: installed when both
     its art and its prefab are."""
     records = cameras(library, variant)
@@ -687,6 +804,10 @@ def overlay_selection(library: ModLibrary, variant: str, pin: Pin, config: dict 
     prefab = library._selection_of(pin, config, meta["slot"], folder[meta["slot"]])
     installed = prefab["installed"] and (art["installed"] if art else profiles.enabled(config))
     error = None if installed else ((art or {}).get("error") or prefab.get("error"))
-    result["lobby"] = {"source": f"mod:{record['id']}", "installed": installed, "error": error,
-                       **({"incomplete": True} if (art or {}).get("incomplete") else {})}
+    result["lobby"] = {
+        "source": f"mod:{record['id']}",
+        "installed": installed,
+        "error": error,
+        **({"incomplete": True} if (art or {}).get("incomplete") else {}),
+    }
     return result

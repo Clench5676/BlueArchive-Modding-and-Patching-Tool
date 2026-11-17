@@ -15,9 +15,13 @@ def _rotation(axis, angle):
     axis = np.asarray(axis, float) / np.linalg.norm(axis)
     x, y, z = axis
     c, s, t = np.cos(angle), np.sin(angle), 1 - np.cos(angle)
-    return np.array([[t * x * x + c, t * x * y - s * z, t * x * z + s * y],
-                     [t * x * y + s * z, t * y * y + c, t * y * z - s * x],
-                     [t * x * z - s * y, t * y * z + s * x, t * z * z + c]])
+    return np.array(
+        [
+            [t * x * x + c, t * x * y - s * z, t * x * z + s * y],
+            [t * x * y + s * z, t * y * y + c, t * y * z - s * x],
+            [t * x * z - s * y, t * y * z + s * x, t * z * z + c],
+        ]
+    )
 
 
 def _matrix(rotation, translation):
@@ -29,17 +33,23 @@ def _matrix(rotation, translation):
 
 # --- weights -------------------------------------------------------------------------------------------------------
 
+
 def test_fit_recovers_known_weights_and_single_bones():
     rng = np.random.default_rng(7)
     points = rng.normal(size=(3, 3)) * 0.2
-    truth = np.array([[0.2, 0.5, 0.3, 0.0, 0.0],   # a blend of three bones
-                      [0.0, 0.0, 1.0, 0.0, 0.0],   # follows one bone only
-                      [0.6, 0.0, 0.0, 0.0, 0.4]])
+    truth = np.array(
+        [
+            [0.2, 0.5, 0.3, 0.0, 0.0],  # a blend of three bones
+            [0.0, 0.0, 1.0, 0.0, 0.0],  # follows one bone only
+            [0.6, 0.0, 0.0, 0.0, 0.4],
+        ]
+    )
     normal = hm.Normal(len(points), 5)
     homogeneous = np.c_[points, np.ones(len(points))]
     for _ in range(40):
-        bones = np.array([_matrix(_rotation(rng.normal(size=3), rng.uniform(-1, 1)), rng.normal(size=3) * 0.1)
-                          for _ in range(5)])
+        bones = np.array(
+            [_matrix(_rotation(rng.normal(size=3), rng.uniform(-1, 1)), rng.normal(size=3) * 0.1) for _ in range(5)]
+        )
         basis = np.stack([(homogeneous @ m.T)[:, :3] for m in bones], axis=2)
         normal.add(basis, np.einsum("nrb,nb->nr", basis, truth))
     weights, residual = hm.fit_simplex(normal)
@@ -98,6 +108,7 @@ def test_ramp_moves_nothing_at_zero_or_without_rigid_weight():
 
 # --- measures ------------------------------------------------------------------------------------------------------
 
+
 def _skirt(radius=0.1, low=-0.3, high=0.0, sides=24, rings=6):
     """A cylinder of triangles around the vertical (+Y) axis through the origin."""
     points, triangles = [], []
@@ -116,11 +127,15 @@ def _skirt(radius=0.1, low=-0.3, high=0.0, sides=24, rings=6):
 
 def test_cover_tells_legs_inside_outside_and_below_the_cloth():
     cloth, triangles = _skirt()
-    legs = np.array([[0.05, -0.1, 0.0],    # inside
-                     [0.13, -0.1, 0.0],    # 3 cm outside
-                     [0.105, -0.2, 0.0],   # 5 mm outside: not deep
-                     [0.05, -0.5, 0.0],    # below the hem
-                     [0.0, -0.1, 0.0]])    # on the axis
+    legs = np.array(
+        [
+            [0.05, -0.1, 0.0],  # inside
+            [0.13, -0.1, 0.0],  # 3 cm outside
+            [0.105, -0.2, 0.0],  # 5 mm outside: not deep
+            [0.05, -0.5, 0.0],  # below the hem
+            [0.0, -0.1, 0.0],
+        ]
+    )  # on the axis
     points = np.vstack([cloth, legs])
     index = np.arange(len(cloth), len(points))
     state, depth = hm.cover(points, index, triangles, np.zeros(3), np.array([0.0, 1.0, 0.0]))
@@ -133,8 +148,13 @@ def test_cover_follows_a_tilted_axis():
     cloth, triangles = _skirt()
     rotation = _rotation((0, 0, 1), 0.6)
     points = np.vstack([cloth, [[0.05, -0.1, 0.0], [0.13, -0.1, 0.0]]]) @ rotation.T + np.array([1.0, 2.0, 3.0])
-    state, _ = hm.cover(points, np.array([len(cloth), len(cloth) + 1]), triangles, np.array([1.0, 2.0, 3.0]),
-                        rotation @ np.array([0.0, 1.0, 0.0]))
+    state, _ = hm.cover(
+        points,
+        np.array([len(cloth), len(cloth) + 1]),
+        triangles,
+        np.array([1.0, 2.0, 3.0]),
+        rotation @ np.array([0.0, 1.0, 0.0]),
+    )
     assert state.tolist() == [1, -1]
 
 
@@ -166,8 +186,10 @@ def test_skipping_losing_candidates_keeps_the_full_choice():
     clips = ["a", "b", "c", "d"]
     stopped = []
     for _ in range(80):
-        complete = [hm.Score(str(k), dict(zip(clips, rng.uniform(0, 30, len(clips)))),
-                             float(rng.uniform(1, 3))) for k in range(8)]
+        complete = [
+            hm.Score(str(k), dict(zip(clips, rng.uniform(0, 30, len(clips)))), float(rng.uniform(1, 3)))
+            for k in range(8)
+        ]
         measured = [complete[0]]
         for candidate in complete[1:]:
             for count in range(1, len(clips) + 1):
@@ -196,6 +218,7 @@ def test_pruning_preserves_rounded_ties_stretch_and_candidate_order():
 
 # --- vertex data ---------------------------------------------------------------------------------------------------
 
+
 def _channel(stream=0, offset=0, fmt=0, dimension=0):
     return {"stream": stream, "offset": offset, "format": fmt, "dimension": dimension}
 
@@ -216,9 +239,11 @@ def _vertex_mesh(count=5, seed=3):
     for v in range(count):
         struct.pack_into("<4f", raw, start2 + v * 32, 0.5, 0.5, 0.0, 0.0)
         struct.pack_into("<4I", raw, start2 + v * 32 + 16, v, v + 1, 0, 0)
-    return {"m_VertexData": {"m_VertexCount": count, "m_Channels": channels, "m_DataSize": bytes(raw)},
-            "m_CompressedMesh": {"m_Weights": {"m_NumItems": 0, "m_Data": [], "m_BitSize": 0}},
-            "m_StreamData": {"offset": 0, "size": 0, "path": ""}}
+    return {
+        "m_VertexData": {"m_VertexCount": count, "m_Channels": channels, "m_DataSize": bytes(raw)},
+        "m_CompressedMesh": {"m_Weights": {"m_NumItems": 0, "m_Data": [], "m_BitSize": 0}},
+        "m_StreamData": {"offset": 0, "size": 0, "path": ""},
+    }
 
 
 def test_vertex_skin_round_trip_leaves_every_other_byte():
@@ -257,13 +282,16 @@ def test_vertex_skin_past_the_index_format_is_not_writable_and_changes_nothing()
     assert joints[1].tolist() == [255, 254, 0, 0]
 
 
-@pytest.mark.parametrize("change", [
-    lambda m: m["m_CompressedMesh"]["m_Weights"].update(m_NumItems=4),
-    lambda m: m["m_StreamData"].update(size=100),
-    lambda m: m["m_VertexData"]["m_Channels"][12].update(dimension=2),
-    lambda m: m["m_VertexData"]["m_Channels"][12].update(format=2),
-    lambda m: m["m_VertexData"].update(m_DataSize=m["m_VertexData"]["m_DataSize"][:-32]),
-])
+@pytest.mark.parametrize(
+    "change",
+    [
+        lambda m: m["m_CompressedMesh"]["m_Weights"].update(m_NumItems=4),
+        lambda m: m["m_StreamData"].update(size=100),
+        lambda m: m["m_VertexData"]["m_Channels"][12].update(dimension=2),
+        lambda m: m["m_VertexData"]["m_Channels"][12].update(format=2),
+        lambda m: m["m_VertexData"].update(m_DataSize=m["m_VertexData"]["m_DataSize"][:-32]),
+    ],
+)
 def test_vertex_skin_refuses_what_it_cannot_write(change):
     mesh = _vertex_mesh()
     change(mesh)
@@ -286,17 +314,24 @@ def _compressed_mesh(rows):
     """A compressed mesh typetree whose skin stores ``rows`` (per vertex: weight items, bone items)."""
     w_items = [w for items, _ in rows for w in items]
     b_items = [b for _, items in rows for b in items]
-    return {"m_CompressedMesh": {"m_Vertices": {"m_NumItems": 3 * len(rows)},
-                                 "m_Weights": _packed(w_items, 5), "m_BoneIndices": _packed(b_items, 6)},
-            "m_VertexData": {"m_VertexCount": 0, "m_Channels": [], "m_DataSize": b""},
-            "m_StreamData": {"offset": 0, "size": 0, "path": ""}}
+    return {
+        "m_CompressedMesh": {
+            "m_Vertices": {"m_NumItems": 3 * len(rows)},
+            "m_Weights": _packed(w_items, 5),
+            "m_BoneIndices": _packed(b_items, 6),
+        },
+        "m_VertexData": {"m_VertexCount": 0, "m_Channels": [], "m_DataSize": b""},
+        "m_StreamData": {"offset": 0, "size": 0, "path": ""},
+    }
 
 
 def _decode(mesh):
     compressed = mesh["m_CompressedMesh"]
-    weights, joints = compressed_skin(hm.unpack_bits(compressed["m_Weights"]),
-                                      hm.unpack_bits(compressed["m_BoneIndices"]),
-                                      compressed["m_Vertices"]["m_NumItems"] // 3)
+    weights, joints = compressed_skin(
+        hm.unpack_bits(compressed["m_Weights"]),
+        hm.unpack_bits(compressed["m_BoneIndices"]),
+        compressed["m_Vertices"]["m_NumItems"] // 3,
+    )
     return np.array(joints), np.array(weights)
 
 

@@ -2,6 +2,7 @@
 
 from io import BytesIO
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -39,7 +40,10 @@ def _uniform_runs(image):
 @pytest.mark.parametrize("sprite", ["Common_Icon_Mulligan_1", "Common_Icon_Mulligan_2"])
 def test_official_badge_horizontal_slices(official_badge_assets, sprite):
     _, game = official_badge_assets
-    shipped = json.loads(SOURCE.read_text().split("export const SELECTION_BADGE_SLICES = ", 1)[1].split(";", 1)[0])[sprite]
+    literal = SOURCE.read_text().split("export const SELECTION_BADGE_SLICES = ", 1)[1].split(";", 1)[0]
+    # The JavaScript object literal as JSON: bare keys quoted, trailing commas dropped.
+    literal = re.sub(r",(\s*[}\]])", r"\1", re.sub(r"([{,]\s*)([A-Za-z_]\w*)\s*:", r'\1"\2":', literal))
+    shipped = json.loads(literal)[sprite]
     meta = game.atlases()["Common"][sprite]
     assert (meta["width"], meta["height"]) == (shipped["width"], shipped["height"]) == (64, 69)
     assert [meta.get("border" + side, 0) for side in ("Left", "Right", "Top", "Bottom")] == [0, 0, 0, 0]

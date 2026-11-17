@@ -106,6 +106,7 @@ def iter_lines(lines: Iterable[Any]) -> Iterator[tuple]:
 @dataclass(frozen=True)
 class Rect:
     """A rectangle with its origin at the top left (Tk's and Win32's coordinates), unless a caller says otherwise."""
+
     x: float
     y: float
     w: float
@@ -152,8 +153,12 @@ def cocoa_to_tk(rect: Rect, primary_height: float) -> Rect:
     return Rect(rect.x, primary_height - (rect.y + rect.h), rect.w, rect.h)
 
 
-def mac_placement(window: Rect, screens: Sequence[tuple[Rect, Rect]], size: tuple[int, int] = CLASSIC_SIZE,
-                  title_bar: int = MAC_TITLE_BAR) -> Rect:
+def mac_placement(
+    window: Rect,
+    screens: Sequence[tuple[Rect, Rect]],
+    size: tuple[int, int] = CLASSIC_SIZE,
+    title_bar: int = MAC_TITLE_BAR,
+) -> Rect:
     """Where the classic window goes on macOS, in Tk's coordinates: ``window`` is the BAMT window's frame and
     ``screens`` each screen's frame and visible frame, all in Cocoa coordinates, the primary screen first. The result's
     position is the frame's top left and its size the content's (``wm geometry``); the title bar fits on the screen."""
@@ -179,6 +184,7 @@ def win_placement(window: Rect, work: Rect, dpi: int, size: tuple[int, int] = CL
 class ClassicProcess:
     """A classic window as ``classic.json`` names it. ``created`` is the creation time the system reports, as an
     integer (Windows: FILETIME in 100 ns units; macOS: whole seconds since the epoch; Linux: clock ticks since boot)."""
+
     pid: int
     exe: str
     hwnd: int
@@ -202,8 +208,9 @@ class ClassicProcess:
 
 
 _DAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
-_MONTHS = {m: i for i, m in enumerate(("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov",
-                                        "Dec"), 1)}
+_MONTHS = {
+    m: i for i, m in enumerate(("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"), 1)
+}
 
 
 def parse_lstart(text: str) -> int | None:
@@ -245,14 +252,29 @@ def ps_created(pid: int, *, run: Callable[..., Any] = subprocess.run) -> int | N
 
 class _BsdInfo(ctypes.Structure):
     """``struct proc_bsdinfo`` (``sys/proc_info.h``)."""
+
     _fields_ = [
-        ("pbi_flags", ctypes.c_uint32), ("pbi_status", ctypes.c_uint32), ("pbi_xstatus", ctypes.c_uint32),
-        ("pbi_pid", ctypes.c_uint32), ("pbi_ppid", ctypes.c_uint32), ("pbi_uid", ctypes.c_uint32),
-        ("pbi_gid", ctypes.c_uint32), ("pbi_ruid", ctypes.c_uint32), ("pbi_rgid", ctypes.c_uint32),
-        ("pbi_svuid", ctypes.c_uint32), ("pbi_svgid", ctypes.c_uint32), ("rfu_1", ctypes.c_uint32),
-        ("pbi_comm", ctypes.c_char * 16), ("pbi_name", ctypes.c_char * 32), ("pbi_nfiles", ctypes.c_uint32),
-        ("pbi_pgid", ctypes.c_uint32), ("pbi_pjobc", ctypes.c_uint32), ("e_tdev", ctypes.c_uint32),
-        ("e_tpgid", ctypes.c_uint32), ("pbi_nice", ctypes.c_int32), ("pbi_start_tvsec", ctypes.c_uint64),
+        ("pbi_flags", ctypes.c_uint32),
+        ("pbi_status", ctypes.c_uint32),
+        ("pbi_xstatus", ctypes.c_uint32),
+        ("pbi_pid", ctypes.c_uint32),
+        ("pbi_ppid", ctypes.c_uint32),
+        ("pbi_uid", ctypes.c_uint32),
+        ("pbi_gid", ctypes.c_uint32),
+        ("pbi_ruid", ctypes.c_uint32),
+        ("pbi_rgid", ctypes.c_uint32),
+        ("pbi_svuid", ctypes.c_uint32),
+        ("pbi_svgid", ctypes.c_uint32),
+        ("rfu_1", ctypes.c_uint32),
+        ("pbi_comm", ctypes.c_char * 16),
+        ("pbi_name", ctypes.c_char * 32),
+        ("pbi_nfiles", ctypes.c_uint32),
+        ("pbi_pgid", ctypes.c_uint32),
+        ("pbi_pjobc", ctypes.c_uint32),
+        ("e_tdev", ctypes.c_uint32),
+        ("e_tpgid", ctypes.c_uint32),
+        ("pbi_nice", ctypes.c_int32),
+        ("pbi_start_tvsec", ctypes.c_uint64),
         ("pbi_start_tvusec", ctypes.c_uint64),
     ]
 
@@ -269,8 +291,9 @@ def _libproc_pidinfo() -> Callable[..., int]:
     return fn
 
 
-def mac_created(pid: int, *, pidinfo: Callable[..., int] | None = None,
-                run: Callable[..., Any] = subprocess.run) -> int | None:
+def mac_created(
+    pid: int, *, pidinfo: Callable[..., int] | None = None, run: Callable[..., Any] = subprocess.run
+) -> int | None:
     """A process's start in whole seconds since the epoch: ``proc_pidinfo``'s ``pbi_start_tvsec``, else ``ps`` in the C
     locale and UTC, which gives the same number."""
     try:
@@ -345,11 +368,18 @@ def win_exe_name(pid: int) -> str | None:
     from ctypes import wintypes
 
     class ProcessEntry(ctypes.Structure):
-        _fields_ = [("dwSize", wintypes.DWORD), ("cntUsage", wintypes.DWORD), ("th32ProcessID", wintypes.DWORD),
-                    ("th32DefaultHeapID", ctypes.c_size_t), ("th32ModuleID", wintypes.DWORD),
-                    ("cntThreads", wintypes.DWORD), ("th32ParentProcessID", wintypes.DWORD),
-                    ("pcPriClassBase", wintypes.LONG), ("dwFlags", wintypes.DWORD),
-                    ("szExeFile", wintypes.WCHAR * 260)]
+        _fields_ = [
+            ("dwSize", wintypes.DWORD),
+            ("cntUsage", wintypes.DWORD),
+            ("th32ProcessID", wintypes.DWORD),
+            ("th32DefaultHeapID", ctypes.c_size_t),
+            ("th32ModuleID", wintypes.DWORD),
+            ("cntThreads", wintypes.DWORD),
+            ("th32ParentProcessID", wintypes.DWORD),
+            ("pcPriClassBase", wintypes.LONG),
+            ("dwFlags", wintypes.DWORD),
+            ("szExeFile", wintypes.WCHAR * 260),
+        ]
 
     k32 = _kernel32()
     k32.Process32FirstW.argtypes = k32.Process32NextW.argtypes = [wintypes.HANDLE, ctypes.POINTER(ProcessEntry)]
@@ -384,7 +414,7 @@ def _posix_alive(pid: int) -> bool:
 def _linux_created(pid: int) -> int | None:
     try:
         stat = Path(f"/proc/{pid}/stat").read_text()
-        return int(stat[stat.rindex(")") + 2:].split()[19])  # field 22, starttime
+        return int(stat[stat.rindex(")") + 2 :].split()[19])  # field 22, starttime
     except (OSError, ValueError, IndexError):
         return None
 
@@ -588,8 +618,9 @@ class CocoaOps(NativeOps):
             me.yieldActivationToApplication_(target)  # the classic child also activates itself on raise
             target.activateWithOptions_(AppKit.NSApplicationActivateAllWindows)
         else:
-            target.activateWithOptions_(AppKit.NSApplicationActivateAllWindows
-                                        | AppKit.NSApplicationActivateIgnoringOtherApps)
+            target.activateWithOptions_(
+                AppKit.NSApplicationActivateAllWindows | AppKit.NSApplicationActivateIgnoringOtherApps
+            )
 
     def before_raise(self, pid: int | None) -> None:
         if pid:
@@ -624,8 +655,15 @@ class WinOps(NativeOps):
         u32.MonitorFromRect.argtypes = [ctypes.POINTER(_RECT), wintypes.DWORD]
         u32.GetMonitorInfoW.argtypes = [wintypes.HANDLE, ctypes.POINTER(_MONITORINFO)]
         u32.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(_RECT)]
-        u32.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int,
-                                     ctypes.c_int, wintypes.UINT]
+        u32.SetWindowPos.argtypes = [
+            wintypes.HWND,
+            wintypes.HWND,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            wintypes.UINT,
+        ]
         u32.SetForegroundWindow.argtypes = [wintypes.HWND]
         u32.IsIconic.argtypes = [wintypes.HWND]
         u32.ShowWindow.argtypes = [wintypes.HWND, ctypes.c_int]
@@ -676,8 +714,7 @@ class WinOps(NativeOps):
             return None
         w = info.rcWork
         rect = win_placement(bounds, Rect(w.left, w.top, w.right - w.left, w.bottom - w.top), self._dpi(monitor), size)
-        u32.SetWindowPos(hwnd, None, int(rect.x), int(rect.y), int(rect.w), int(rect.h),
-                         SWP_NOZORDER | SWP_NOACTIVATE)
+        u32.SetWindowPos(hwnd, None, int(rect.x), int(rect.y), int(rect.w), int(rect.h), SWP_NOZORDER | SWP_NOACTIVATE)
         return None
 
     def before_raise(self, pid: int | None) -> None:
@@ -738,12 +775,23 @@ class ClassicWindow:
     and ``on_closed(code)`` after ``classic.closed``, outside the state lock.
     """
 
-    def __init__(self, data_dir: Path, *, origin: str | Callable[[], str],
-                 publish: Callable[[str, Any], None] | None = None, native: NativeOps | None = None,
-                 command: Callable[[str | None], list[str]] | None = None, popen: Callable[..., Any] = subprocess.Popen,
-                 processes: Processes | None = None, on_change: Callable[[], None] | None = None,
-                 on_closed: Callable[[int | None], None] | None = None, ready_timeout: float = READY_TIMEOUT,
-                 poll_timeout: float = CONTROL_POLL, silent_exit: float = SILENT_EXIT, watch_interval: float = 1.0):
+    def __init__(
+        self,
+        data_dir: Path,
+        *,
+        origin: str | Callable[[], str],
+        publish: Callable[[str, Any], None] | None = None,
+        native: NativeOps | None = None,
+        command: Callable[[str | None], list[str]] | None = None,
+        popen: Callable[..., Any] = subprocess.Popen,
+        processes: Processes | None = None,
+        on_change: Callable[[], None] | None = None,
+        on_closed: Callable[[int | None], None] | None = None,
+        ready_timeout: float = READY_TIMEOUT,
+        poll_timeout: float = CONTROL_POLL,
+        silent_exit: float = SILENT_EXIT,
+        watch_interval: float = 1.0,
+    ):
         self.data_dir = Path(data_dir)
         self._origin = origin if callable(origin) else (lambda: origin)
         self._publish = publish or (lambda event, data=None: None)
@@ -784,8 +832,13 @@ class ClassicWindow:
         child = self._live()
         if child is not None:
             with self._cond:
-                return {"open": True, "ready": child.ready, "busy": child.busy > 0,
-                        "pid": child.pid or _popen_pid(child), "orphan": False}
+                return {
+                    "open": True,
+                    "ready": child.ready,
+                    "busy": child.busy > 0,
+                    "pid": child.pid or _popen_pid(child),
+                    "orphan": False,
+                }
         orphan = self.orphan()
         if orphan is not None:
             return {"open": True, "ready": True, "busy": False, "pid": orphan.pid, "orphan": True}
@@ -864,8 +917,14 @@ class ClassicWindow:
         with self._cond:
             self._child = child
         try:
-            popen = self._popen(cmd, stdin=subprocess.DEVNULL, stdout=log or subprocess.DEVNULL,
-                                stderr=subprocess.STDOUT, env=env, creationflags=CREATE_NO_WINDOW)
+            popen = self._popen(
+                cmd,
+                stdin=subprocess.DEVNULL,
+                stdout=log or subprocess.DEVNULL,
+                stderr=subprocess.STDOUT,
+                env=env,
+                creationflags=CREATE_NO_WINDOW,
+            )
         except OSError as e:
             with self._cond:
                 child.exited = True
@@ -1122,8 +1181,15 @@ def _int(value: Any) -> int | None:
 
 def _reply(start_response: Callable, status: str, data: Any) -> list[bytes]:
     body = json.dumps(data, separators=(",", ":")).encode("utf-8")
-    start_response(status, [("Content-Type", "application/json"), ("Content-Length", str(len(body))),
-                            ("Cache-Control", "no-store"), ("X-Content-Type-Options", "nosniff")])
+    start_response(
+        status,
+        [
+            ("Content-Type", "application/json"),
+            ("Content-Length", str(len(body))),
+            ("Cache-Control", "no-store"),
+            ("X-Content-Type-Options", "nosniff"),
+        ],
+    )
     return [body]
 
 
@@ -1158,6 +1224,7 @@ class QueuedCall:
     - ``files``: per entry, ``stat_files`` of its game files when it was queued.
     - ``current``: it works on the current install (``actions.apply``, ``actions.restore``).
     """
+
     method: str
     params: Mapping[str, Any]
     entries: tuple[EntryKey, ...] = ()
@@ -1182,9 +1249,13 @@ class QueuedCall:
         if isinstance(listed, list) and len(listed) == len(self.entries):
             params["entries"] = [p for e, p in zip(self.entries, listed) if e in keep]
         installs = {e[0] for e in keep}
-        return replace(self, params=params, entries=tuple(keep),
-                       pins={k: v for k, v in self.pins.items() if k in installs},
-                       files={e: f for e, f in self.files.items() if e in keep})
+        return replace(
+            self,
+            params=params,
+            entries=tuple(keep),
+            pins={k: v for k, v in self.pins.items() if k in installs},
+            files={e: f for e, f in self.files.items() if e in keep},
+        )
 
     def to_json(self) -> dict[str, Any]:
         return {"method": self.method, "params": dict(self.params), "entries": [list(e) for e in self.entries]}
@@ -1206,8 +1277,10 @@ class QueueRun:
     dropped: list[Dropped] = field(default_factory=list)
 
     def to_json(self) -> dict[str, Any]:
-        return {"submitted": [{**c.to_json(), "job": j} for c, j in self.submitted],
-                "dropped": [d.to_json() for d in self.dropped]}
+        return {
+            "submitted": [{**c.to_json(), "job": j} for c, j in self.submitted],
+            "dropped": [d.to_json() for d in self.dropped],
+        }
 
 
 class QueueHost(Protocol):
@@ -1308,8 +1381,11 @@ class ClassicQueue:
         for entry in call.entries:
             install = entry[0]
             one = call.narrowed([entry])
-            if install not in pins or pins.get(install) != call.pins.get(install) or \
-                    (call.current and current != install):
+            if (
+                install not in pins
+                or pins.get(install) != call.pins.get(install)
+                or (call.current and current != install)
+            ):
                 out.dropped.append(Dropped(one, "folder_changed"))
                 continue
             files = call.files.get(entry, {})
@@ -1327,4 +1403,3 @@ class ClassicQueue:
             out.submitted.append((call, host.submit(call.method, dict(call.params))))
         except ServiceError as e:
             out.dropped.append(Dropped(call, e.code, e.params))
-

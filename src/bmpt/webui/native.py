@@ -11,13 +11,18 @@ logger = logging.getLogger(__name__)
 WEBVIEW2_URL = "https://developer.microsoft.com/microsoft-edge/webview2/"
 
 
-def pick_files(window: Any, file_types: Iterable[str] = (), multiple: bool = True, *,
-               directory: str | None = None) -> list[Path]:
+def pick_files(
+    window: Any, file_types: Iterable[str] = (), multiple: bool = True, *, directory: str | None = None
+) -> list[Path]:
     """The native open-file dialog. ``file_types`` entries look like ``"Bundle (*.bundle;*.backup)"``."""
     import webview
 
-    result = window.create_file_dialog(webview.FileDialog.OPEN, allow_multiple=multiple, file_types=tuple(file_types),
-                                       **({"directory": directory} if directory else {}))
+    result = window.create_file_dialog(
+        webview.FileDialog.OPEN,
+        allow_multiple=multiple,
+        file_types=tuple(file_types),
+        **({"directory": directory} if directory else {}),
+    )
     return [Path(p) for p in result or ()]
 
 
@@ -29,8 +34,9 @@ def pick_folder(window: Any, multiple: bool = True) -> list[Path]:
     return [Path(p) for p in result or ()]
 
 
-def watch_drops(window: Any, on_paths: Callable[[list[str]], None], *,
-                stopped: Callable[[], bool] = lambda: False) -> bool:
+def watch_drops(
+    window: Any, on_paths: Callable[[list[str]], None], *, stopped: Callable[[], bool] = lambda: False
+) -> bool:
     """Report the full paths of files dropped on the page. pywebview only adds the paths when the drop handler is
     registered from Python. Return False if shutdown abandons registration."""
     from webview.dom import DOMEventHandler
@@ -52,8 +58,9 @@ def watch_drops(window: Any, on_paths: Callable[[list[str]], None], *,
             return False
         logger.info("Native drop registration: begin event=%s", name)
         event = getattr(window.dom.document.events, name)
-        event += DOMEventHandler(on_drop if name == "drop" else noop, True, True,
-                                 debounce=500 if name == "dragover" else 0)
+        event += DOMEventHandler(
+            on_drop if name == "drop" else noop, True, True, debounce=500 if name == "dragover" else 0
+        )
     if stopped():
         logger.info("Native drop registration: abandoned after=drop")
         return False
@@ -98,10 +105,12 @@ def webview2_supported(version: str | None) -> bool:
 
 def engine_info() -> dict:
     import sys
+
     if sys.platform == "win32":
         return {"engine": "WebView2", "version": webview2_version()}
     if sys.platform == "darwin":
         import plistlib
+
         try:
             with Path("/System/Library/Frameworks/WebKit.framework/Resources/Info.plist").open("rb") as stream:
                 info = plistlib.load(stream)
@@ -115,8 +124,10 @@ def engine_info() -> dict:
 def report_folders() -> list[Path]:
     """Use OS folder locations, including redirected Windows Desktop/Downloads."""
     import sys
+
     if sys.platform == "win32":
         import winreg
+
         key_path = r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders"
         result = []
         for key, fallback in (("Desktop", "Desktop"), ("{374DE290-123F-4565-9164-39C4925E467B}", "Downloads")):
@@ -133,11 +144,13 @@ def report_folders() -> list[Path]:
 def copy_text(text: str) -> None:
     import subprocess
     import sys
+
     if sys.platform == "darwin":
         subprocess.run(["pbcopy"], input=text.encode("utf-8"), check=True, timeout=5)
     elif sys.platform == "win32":
         import ctypes
         from ctypes import wintypes
+
         # Private libraries: prototypes set on ctypes.windll would change pywebview's calls as well.
         user, kernel = ctypes.WinDLL("user32", use_last_error=True), ctypes.WinDLL("kernel32", use_last_error=True)
         kernel.GlobalAlloc.restype = wintypes.HGLOBAL
@@ -176,15 +189,19 @@ def copy_text(text: str) -> None:
 def message_box(title: str, message: str) -> None:
     """No dependency on pywebview, its renderer or the HTTP server."""
     import sys
+
     if sys.platform == "win32":
         import ctypes
+
         ctypes.windll.user32.MessageBoxW(None, message, title, 0x10)
     elif sys.platform == "darwin":
         import subprocess
-        script = 'on run argv\ndisplay alert (item 1 of argv) message (item 2 of argv) as critical\nend run'
+
+        script = "on run argv\ndisplay alert (item 1 of argv) message (item 2 of argv) as critical\nend run"
         subprocess.run(["osascript", "-e", script, title, message], check=True)
     else:
         from tkinter import Tk, messagebox
+
         root = Tk()
         root.withdraw()
         try:
@@ -195,6 +212,7 @@ def message_box(title: str, message: str) -> None:
 
 def startup_failure(reports, error: BaseException, *, runtime: bool = False) -> dict | None:
     from bmpt.engine import t
+
     result, report_path = None, None
     try:
         reports.frontend_event({"kind": "native", "message": str(error), "phase": "native.initialize"})
@@ -224,8 +242,12 @@ def _install_edit_menu(api, main):
     item = api.NSMenuItem.alloc().init()
     item.setTitle_(title)
     item.setSubmenu_(menu)
-    for key, selector, shortcut in [("cut", "cut:", "x"), ("copy", "copy:", "c"),
-                                    ("paste", "paste:", "v"), ("selectAll", "selectAll:", "a")]:
+    for key, selector, shortcut in [
+        ("cut", "cut:", "x"),
+        ("copy", "copy:", "c"),
+        ("paste", "paste:", "v"),
+        ("selectAll", "selectAll:", "a"),
+    ]:
         menu.addItemWithTitle_action_keyEquivalent_(t("webui.window." + key), selector, shortcut)
     main.addItem_(item)
 
@@ -233,7 +255,8 @@ def _install_edit_menu(api, main):
 def install_edit_menu() -> None:
     """Restore standard responder editing shortcuts without pywebview's default application menus."""
     import sys
-    if sys.platform != 'darwin':
+
+    if sys.platform != "darwin":
         return
     import AppKit
     from PyObjCTools import AppHelper
@@ -242,6 +265,7 @@ def install_edit_menu() -> None:
         main = AppKit.NSApplication.sharedApplication().mainMenu()
         if main is not None:
             _install_edit_menu(AppKit, main)
+
     AppHelper.callAfter(install)
 
 
@@ -324,8 +348,8 @@ def install_window_commands(services, chrome):
     # and guarded Quit, regardless of notification observer ordering.
     centre = AppKit.NSNotificationCenter.defaultCenter()
     observer = centre.addObserverForName_object_queue_usingBlock_(
-        AppKit.NSWindowDidBecomeKeyNotification, window, None,
-        lambda notification: AppHelper.callAfter(refresh))
+        AppKit.NSWindowDidBecomeKeyNotification, window, None, lambda notification: AppHelper.callAfter(refresh)
+    )
     refresh()
     AppHelper.callAfter(refresh)
 

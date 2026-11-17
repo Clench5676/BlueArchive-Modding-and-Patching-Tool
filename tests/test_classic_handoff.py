@@ -59,8 +59,12 @@ class WsgiOpener:
 
     def open(self, req, timeout=None):
         body = req.data or b""
-        environ = {"REQUEST_METHOD": req.get_method(), "PATH_INFO": urlparse(req.full_url).path,
-                   "CONTENT_LENGTH": str(len(body)), "wsgi.input": io.BytesIO(body)}
+        environ = {
+            "REQUEST_METHOD": req.get_method(),
+            "PATH_INFO": urlparse(req.full_url).path,
+            "CONTENT_LENGTH": str(len(body)),
+            "wsgi.input": io.BytesIO(body),
+        }
         for key, value in req.header_items():
             environ["HTTP_" + key.upper().replace("-", "_")] = value
         status = {}
@@ -137,10 +141,16 @@ class Harness:
         self.ready, self.child_pid, self.exit_code = ready, child_pid, exit_code
         self.processes = processes or FakeProcesses({4242: (5242, True), 5555: (6555, True)})
         self.window = cl.ClassicWindow(
-            tmp_path, origin="http://127.0.0.1:9", publish=lambda e, d=None: self.events.append((e, d)),
-            native=FakeNative(self.log), command=lambda tab: system.classic_command(tab, control=True),
-            popen=self.popen, processes=self.processes, on_closed=self.closed.append,
-            **{"ready_timeout": 5.0, "poll_timeout": 0.2, **kw})
+            tmp_path,
+            origin="http://127.0.0.1:9",
+            publish=lambda e, d=None: self.events.append((e, d)),
+            native=FakeNative(self.log),
+            command=lambda tab: system.classic_command(tab, control=True),
+            popen=self.popen,
+            processes=self.processes,
+            on_closed=self.closed.append,
+            **{"ready_timeout": 5.0, "poll_timeout": 0.2, **kw},
+        )
 
     def popen(self, cmd, **kw):
         p = FakePopen(cmd, **kw)
@@ -148,8 +158,9 @@ class Harness:
         if self.exit_code is not None:
             p.exit(self.exit_code)
             return p
-        client = ctl.ControlClient(kw["env"][cl.ENV_URL], kw["env"][cl.ENV_TOKEN],
-                                   opener=WsgiOpener(self.window.wsgi), poll_timeout=5)
+        client = ctl.ControlClient(
+            kw["env"][cl.ENV_URL], kw["env"][cl.ENV_TOKEN], opener=WsgiOpener(self.window.wsgi), poll_timeout=5
+        )
         self.clients.append(client)
         client.start()
         if self.ready:
@@ -160,6 +171,7 @@ class Harness:
         def got():
             self.received.extend(self.clients[-1].lines())
             return last in self.received
+
         assert wait_for(got, timeout), self.received
         out, self.received = list(self.received), []
         return out
@@ -186,8 +198,22 @@ def test_the_control_line_parser():
     assert cl.parse_control("settings") == ("settings",)
     assert cl.parse_control("place -1600 24 800 976") == ("place", -1600, 24, 800, 976)
     assert cl.parse_control("  raise ") == ("raise",)
-    for junk in ("", "tab", "tab ../x", "tab Crc", "tab a b", "place 1 2 3", "place 1 2 0 5", "place a b c d",
-                 "place 1.5 2 3 4", "raise now", "quit", None, 12, ["raise"]):
+    for junk in (
+        "",
+        "tab",
+        "tab ../x",
+        "tab Crc",
+        "tab a b",
+        "place 1 2 3",
+        "place 1 2 0 5",
+        "place a b c d",
+        "place 1.5 2 3 4",
+        "raise now",
+        "quit",
+        None,
+        12,
+        ["raise"],
+    ):
         assert cl.parse_control(junk) is None, junk
     assert list(cl.iter_lines(["raise", "junk", "tab tools"])) == [("raise",), ("tab", "tools")]
     assert cl.tab_line("settings") == "settings" and cl.tab_line("tools") == "tab tools"
@@ -287,7 +313,7 @@ def test_the_control_thread_and_queue_on_a_fake_root(monkeypatch):
     assert client.reports == []
     root.binds["<Map>"](SimpleNamespace(widget=root))
     root.binds["<Map>"](SimpleNamespace(widget=root))
-    assert client.reports == [("ready", {"pid": os.getpid(), "hwnd": 0x1a2b, "exe": sys.executable})]
+    assert client.reports == [("ready", {"pid": os.getpid(), "hwnd": 0x1A2B, "exe": sys.executable})]
     # lines are applied on the Tk thread, by the pump, in order; junk is ignored
     client.pending = ["place 5 6 700 800", "junk", "tab crc_tool", "raise"]
     root.run_after(ctl.PUMP_MS)
@@ -499,17 +525,20 @@ def test_find_classic_takes_a_live_classic_window(tmp_path):
     assert (tmp_path / cl.CLASSIC_JSON).exists()
 
 
-@pytest.mark.parametrize("data, table, own", [
-    ({"pid": 700, "exe": "t", "hwnd": 0, "created": 1}, {}, ()),  # dead
-    ({"pid": 700, "exe": "t", "hwnd": 0, "created": 1}, {700: (2, True)}, ()),  # a reused pid: a later start
-    ({"pid": 700, "exe": "t", "hwnd": 0, "created": 1}, {700: (1, False)}, ()),  # another program
-    ({"pid": 700, "exe": "t", "hwnd": 0, "created": 1}, {700: (1, True)}, (700,)),  # this process
-    ({"pid": 700, "exe": "t", "hwnd": 0, "created": 1}, {700: (1, True)}, (1, 700)),  # its parent
-    ({"pid": 700, "exe": "t", "hwnd": 0, "created": "1"}, {700: (1, True)}, ()),  # created as text
-    ({"pid": 700, "exe": "t", "hwnd": 0, "created": True}, {700: (1, True)}, ()),
-    ({"pid": 0, "exe": "t", "hwnd": 0, "created": 1}, {0: (1, True)}, ()),
-    ("not json", {}, ()),
-])
+@pytest.mark.parametrize(
+    "data, table, own",
+    [
+        ({"pid": 700, "exe": "t", "hwnd": 0, "created": 1}, {}, ()),  # dead
+        ({"pid": 700, "exe": "t", "hwnd": 0, "created": 1}, {700: (2, True)}, ()),  # a reused pid: a later start
+        ({"pid": 700, "exe": "t", "hwnd": 0, "created": 1}, {700: (1, False)}, ()),  # another program
+        ({"pid": 700, "exe": "t", "hwnd": 0, "created": 1}, {700: (1, True)}, (700,)),  # this process
+        ({"pid": 700, "exe": "t", "hwnd": 0, "created": 1}, {700: (1, True)}, (1, 700)),  # its parent
+        ({"pid": 700, "exe": "t", "hwnd": 0, "created": "1"}, {700: (1, True)}, ()),  # created as text
+        ({"pid": 700, "exe": "t", "hwnd": 0, "created": True}, {700: (1, True)}, ()),
+        ({"pid": 0, "exe": "t", "hwnd": 0, "created": 1}, {0: (1, True)}, ()),
+        ("not json", {}, ()),
+    ],
+)
 def test_a_stale_classic_json_is_removed_and_refuses_nothing(tmp_path, data, table, own):
     if isinstance(data, str):
         (tmp_path / cl.CLASSIC_JSON).write_text(data)
@@ -561,6 +590,7 @@ def ps_runner(seen):
     def run(cmd, **kw):
         seen.append((cmd, kw["env"]))
         return SimpleNamespace(returncode=0, stdout=LSTART)
+
     return run
 
 
@@ -570,15 +600,21 @@ def test_the_ps_fallback_runs_in_the_c_locale_and_utc(monkeypatch):
     monkeypatch.setenv("TZ", "Asia/Tokyo")
     seen = []
     assert cl.mac_created(77, pidinfo=failing_pidinfo, run=ps_runner(seen)) == STARTED
-    (cmd, env), = seen
+    ((cmd, env),) = seen
     assert cmd == ["ps", "-o", "lstart=", "-p", "77"]
     assert env["LC_ALL"] == "C" and env["TZ"] == "UTC0"
     assert os.environ["TZ"] == "Asia/Tokyo"  # the caller's own environment is left alone
     # a call that fails or prints nothing usable gives no time
-    assert cl.mac_created(77, pidinfo=failing_pidinfo,
-                          run=lambda *a, **k: SimpleNamespace(returncode=1, stdout="")) is None
-    assert cl.mac_created(77, pidinfo=lambda *a: 0,
-                          run=lambda *a, **k: SimpleNamespace(returncode=0, stdout="19 Okt 2026\n")) is None
+    assert (
+        cl.mac_created(77, pidinfo=failing_pidinfo, run=lambda *a, **k: SimpleNamespace(returncode=1, stdout=""))
+        is None
+    )
+    assert (
+        cl.mac_created(
+            77, pidinfo=lambda *a: 0, run=lambda *a, **k: SimpleNamespace(returncode=0, stdout="19 Okt 2026\n")
+        )
+        is None
+    )
 
 
 def test_a_classic_json_written_under_one_locale_is_read_under_another(tmp_path, monkeypatch):
@@ -622,8 +658,13 @@ def test_the_lstart_parse_never_reads_the_locale(monkeypatch):
             assert cl.parse_lstart(LSTART) == STARTED, name
     finally:
         locale.setlocale(locale.LC_TIME, saved)
-    for junk in ("", "Lun Oct 19 10:23:45 2026", "Mon Okt 19 10:23:45 2026", "Mon Oct 19 10:23 2026",
-                 "Mon Oct 19 10:23:45"):
+    for junk in (
+        "",
+        "Lun Oct 19 10:23:45 2026",
+        "Mon Okt 19 10:23:45 2026",
+        "Mon Oct 19 10:23 2026",
+        "Mon Oct 19 10:23:45",
+    ):
         assert cl.parse_lstart(junk) is None, junk
 
 
@@ -758,8 +799,13 @@ def test_the_channel_takes_only_the_childs_token(tmp_path, system_tabs):
         status = {}
 
         def call(path, method="GET", token="wrong", body=b""):
-            environ = {"PATH_INFO": path, "REQUEST_METHOD": method, "HTTP_X_BAMT_CLASSIC": token,
-                       "CONTENT_LENGTH": str(len(body)), "wsgi.input": io.BytesIO(body)}
+            environ = {
+                "PATH_INFO": path,
+                "REQUEST_METHOD": method,
+                "HTTP_X_BAMT_CLASSIC": token,
+                "CONTENT_LENGTH": str(len(body)),
+                "wsgi.input": io.BytesIO(body),
+            }
             out = b"".join(h.window.wsgi(environ, lambda s, hd: status.update(s=s)))
             return status["s"], json.loads(out)
 
@@ -848,29 +894,36 @@ def test_a_real_child_that_prints_during_import_keeps_the_channel(tmp_path, monk
         def log_message(self, *args):
             pass
 
-    script = "\n".join([
-        "import os, sys, time",
-        "print('noise ' * 5000)",
-        "print('\\u5df2\\u542f\\u52a8', flush=True)",
-        "from bmpt.gui.control import ControlClient, take_channel",
-        "url, token = take_channel()",
-        "assert 'BAMT_CLASSIC_TOKEN' not in os.environ",
-        "c = ControlClient(url, token).start()",
-        "c.report('ready', pid=os.getpid(), hwnd=0, exe=sys.executable)",
-        "got = []",
-        "deadline = time.time() + 20",
-        "while time.time() < deadline and 'tab tools' not in got:",
-        "    got += c.lines()",
-        "    time.sleep(0.02)",
-        "print('lines', got, flush=True)",
-        "sys.exit(0 if got[:3] == ['place 10 20 800 1000', 'raise', 'tab tools'] else 5)",
-    ])
+    script = "\n".join(
+        [
+            "import os, sys, time",
+            "print('noise ' * 5000)",
+            "print('\\u5df2\\u542f\\u52a8', flush=True)",
+            "from bmpt.gui.control import ControlClient, take_channel",
+            "url, token = take_channel()",
+            "assert 'BAMT_CLASSIC_TOKEN' not in os.environ",
+            "c = ControlClient(url, token).start()",
+            "c.report('ready', pid=os.getpid(), hwnd=0, exe=sys.executable)",
+            "got = []",
+            "deadline = time.time() + 20",
+            "while time.time() < deadline and 'tab tools' not in got:",
+            "    got += c.lines()",
+            "    time.sleep(0.02)",
+            "print('lines', got, flush=True)",
+            "sys.exit(0 if got[:3] == ['place 10 20 800 1000', 'raise', 'tab tools'] else 5)",
+        ]
+    )
     events, closed = [], []
     holder = {}
     window = cl.ClassicWindow(
-        tmp_path, origin=lambda: f"http://127.0.0.1:{holder['port']}", publish=lambda e, d=None: events.append(e),
-        native=FakeNative([]), command=lambda tab: [sys.executable, "-c", script, "--classic"],
-        on_closed=closed.append, poll_timeout=2)
+        tmp_path,
+        origin=lambda: f"http://127.0.0.1:{holder['port']}",
+        publish=lambda e, d=None: events.append(e),
+        native=FakeNative([]),
+        command=lambda tab: [sys.executable, "-c", script, "--classic"],
+        on_closed=closed.append,
+        poll_timeout=2,
+    )
     httpd = make_server("127.0.0.1", 0, window.wsgi, server_class=Server, handler_class=Quiet)
     holder["port"] = httpd.server_port
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
@@ -940,8 +993,14 @@ def files_of(*paths):
 
 
 def apply_call(entry, path, source="mod:1"):
-    return cl.QueuedCall("actions.apply", {"variant": entry[1], "source": source, "kind": "spr"}, entries=(entry,),
-                         pins={entry[0]: PINS[entry[0]]}, files={entry: files_of(path)}, current=True)
+    return cl.QueuedCall(
+        "actions.apply",
+        {"variant": entry[1], "source": source, "kind": "spr"},
+        entries=(entry,),
+        pins={entry[0]: PINS[entry[0]]},
+        files={entry: files_of(path)},
+        current=True,
+    )
 
 
 def test_one_toggle_queued_at_most():
@@ -985,8 +1044,14 @@ def test_the_latest_action_for_an_entry_wins(tmp_path):
     entry = (A, "hoshino_spr")
     q.add(apply_call(entry, f, "mod:1"))
     q.add(toggle(False, True), intent=True)
-    restore = cl.QueuedCall("actions.restore", {"variant": "hoshino", "kind": "spr"}, entries=(entry,),
-                            pins={A: PINS[A]}, files={entry: files_of(f)}, current=True)
+    restore = cl.QueuedCall(
+        "actions.restore",
+        {"variant": "hoshino", "kind": "spr"},
+        entries=(entry,),
+        pins={A: PINS[A]},
+        files={entry: files_of(f)},
+        current=True,
+    )
     assert q.add(restore) == 2
     assert [i.method for i in q.items()] == ["mods.toggle", "actions.restore"]  # in order
     host = Host()
@@ -999,9 +1064,13 @@ def test_a_drift_action_is_narrowed_by_a_later_action_on_one_of_its_entries(tmp_
     f1.write_bytes(b"1")
     f2.write_bytes(b"2")
     e1, e2 = (A, "a_home"), (B, "b_home")
-    drift = cl.QueuedCall("mods.restoreDrift", {"entries": [{"install": A, "core": "a_home"},
-                                                            {"install": B, "core": "b_home"}]},
-                          entries=(e1, e2), pins=dict(PINS), files={e1: files_of(f1), e2: files_of(f2)})
+    drift = cl.QueuedCall(
+        "mods.restoreDrift",
+        {"entries": [{"install": A, "core": "a_home"}, {"install": B, "core": "b_home"}]},
+        entries=(e1, e2),
+        pins=dict(PINS),
+        files={e1: files_of(f1), e2: files_of(f2)},
+    )
     q = cl.ClassicQueue()
     q.add(drift)
     q.add(apply_call(e1, f1))
@@ -1009,8 +1078,18 @@ def test_a_drift_action_is_narrowed_by_a_later_action_on_one_of_its_entries(tmp_
     assert [i.method for i in items] == ["mods.restoreDrift", "actions.apply"]
     assert items[0].entries == (e2,) and items[0].params["entries"] == [{"install": B, "core": "b_home"}]
     assert list(items[0].pins) == [B]
-    assert q.add(cl.QueuedCall("actions.restore", {"variant": "b", "kind": "lobby"}, entries=(e2,),
-                               pins={B: PINS[B]}, files={e2: files_of(f2)})) == 2
+    assert (
+        q.add(
+            cl.QueuedCall(
+                "actions.restore",
+                {"variant": "b", "kind": "lobby"},
+                entries=(e2,),
+                pins={B: PINS[B]},
+                files={e2: files_of(f2)},
+            )
+        )
+        == 2
+    )
     assert [i.method for i in q.items()] == ["actions.apply", "actions.restore"]
 
 
@@ -1019,8 +1098,13 @@ def test_an_entry_whose_files_changed_is_dropped(tmp_path):
     f1.write_bytes(b"1")
     f2.write_bytes(b"2")
     e1, e2 = (A, "a_home"), (A, "c_home")
-    drift = cl.QueuedCall("mods.restoreDrift", {"entries": ["e1", "e2"]}, entries=(e1, e2), pins={A: PINS[A]},
-                          files={e1: files_of(f1), e2: files_of(f2)})
+    drift = cl.QueuedCall(
+        "mods.restoreDrift",
+        {"entries": ["e1", "e2"]},
+        entries=(e1, e2),
+        pins={A: PINS[A]},
+        files={e1: files_of(f1), e2: files_of(f2)},
+    )
     q = cl.ClassicQueue()
     q.add(drift)
     f2.write_bytes(b"changed by the classic window")
@@ -1066,8 +1150,9 @@ def test_an_unreadable_intent_drops_the_toggle_with_its_error_and_runs_the_rest(
     host = Unreadable()
     run = q.run(host)
     assert [m for m, _ in host.submitted] == ["actions.apply"] and len(q) == 0
-    assert [d.to_json()["error"] for d in run.dropped] == [{"code": "profiles_unreadable", "ref": "E1016",
-                                                            "params": {"file": "profiles.json"}}]
+    assert [d.to_json()["error"] for d in run.dropped] == [
+        {"code": "profiles_unreadable", "ref": "E1016", "params": {"file": "profiles.json"}}
+    ]
     assert run.dropped[0].call.toggle
 
 

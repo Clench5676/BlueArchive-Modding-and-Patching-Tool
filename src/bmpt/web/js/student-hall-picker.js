@@ -11,134 +11,401 @@ import { spineBase } from "./api.js";
 import { L, T, language } from "./i18n.js";
 
 const titleOf = (choice) => [L(choice.names)?.full || choice.variant, choice.label].filter(Boolean).join(" - ");
-export function openPicker({ kind, choices, draft, onPreview, onChange, onSave, onCancel, onDone, onError, onViewed, onReplace, isSaving = () => false }) {
-  const memorial = kind === "lobby", work = thumbnailScope({ priority: "popup" }), pictures = new Map(), headsPictures = new Map(), viewed = {}, positions = new Map();
-  let view = normalizeView({ sort: memorial ? "recent" : "name", order: memorial ? "desc" : "asc" }), query = "", searching = false, student = null;
-  let debounce, displayOwned = false;
-  const close = () => memorial ? onCancel() : onDone();
-  const modal = UI.createModal(T(onReplace ? "hall.changePortrait" : memorial ? "hall.adjust" : "hall.addPortraits"), close);
-  const safe = (action) => (...args) => isSaving() ? null : Promise.resolve(action(...args)).catch((error) => { if (modal.live()) onError(error); });
+export function openPicker({
+  kind,
+  choices,
+  draft,
+  onPreview,
+  onChange,
+  onSave,
+  onCancel,
+  onDone,
+  onError,
+  onViewed,
+  onReplace,
+  isSaving = () => false,
+}) {
+  const memorial = kind === "lobby",
+    work = thumbnailScope({ priority: "popup" }),
+    pictures = new Map(),
+    headsPictures = new Map(),
+    viewed = {},
+    positions = new Map();
+  let view = normalizeView({ sort: memorial ? "recent" : "name", order: memorial ? "desc" : "asc" }),
+    query = "",
+    searching = false,
+    student = null;
+  let debounce,
+    displayOwned = false;
+  const close = () => (memorial ? onCancel() : onDone());
+  const modal = UI.createModal(
+    T(onReplace ? "hall.changePortrait" : memorial ? "hall.adjust" : "hall.addPortraits"),
+    close,
+  );
+  const safe =
+    (action) =>
+    (...args) =>
+      isSaving()
+        ? null
+        : Promise.resolve(action(...args)).catch((error) => {
+            if (modal.live()) onError(error);
+          });
   const picture = (choice) => {
     const key = sourceKey(choice);
     if (!pictures.has(key)) {
-      const base = spineBase(choice.source.startsWith("mod:") ? "mod" : `official-${choice.kind}`, choice.source.startsWith("mod:") ? choice.source.slice(4) : choice.core);
-      pictures.set(key, lazyThumbnail(() => work.thumb(base, choice.kind === "spr" ? "portrait" : "landscape", null, choice.kind === "lobby"), work.signal));
+      const base = spineBase(
+        choice.source.startsWith("mod:") ? "mod" : `official-${choice.kind}`,
+        choice.source.startsWith("mod:") ? choice.source.slice(4) : choice.core,
+      );
+      pictures.set(
+        key,
+        lazyThumbnail(
+          () => work.thumb(base, choice.kind === "spr" ? "portrait" : "landscape", null, choice.kind === "lobby"),
+          work.signal,
+        ),
+      );
     }
     return pictures.get(key);
   };
-  const item = (choice, key = sourceKey(choice)) => ({ key, full: titleOf(choice), label: choice.label || L(choice.names)?.full || choice.variant, thumb: picture(choice) });
-  const canAdd = (choice) => !(choice.kind === "spr" ? draft.current().portraits : draft.current().memorials).some((entry) => sourceKey(entry) === sourceKey(choice));
+  const item = (choice, key = sourceKey(choice)) => ({
+    key,
+    full: titleOf(choice),
+    label: choice.label || L(choice.names)?.full || choice.variant,
+    thumb: picture(choice),
+  });
+  const canAdd = (choice) =>
+    !(choice.kind === "spr" ? draft.current().portraits : draft.current().memorials).some(
+      (entry) => sourceKey(entry) === sourceKey(choice),
+    );
   const addLabel = (choice) => T(onReplace ? "import.select" : canAdd(choice) ? "hall.add" : "hall.added");
   const add = async (choice, hit) => {
     if (isSaving()) return false;
     if (onReplace) {
       if (!canAdd(choice)) return false;
       if (hit) hit.disabled = true;
-      await onReplace(choice); return true;
+      await onReplace(choice);
+      return true;
     }
-    const entry = draft.add(choice); if (!entry) return false;
+    const entry = draft.add(choice);
+    if (!entry) return false;
     if (hit) hit.disabled = true;
-    onChange?.(); if (modal.live()) await draw(); return true;
+    onChange?.();
+    if (modal.live()) await draw();
+    return true;
   };
   const rows = () => portraitRows(choices, view, query, L, language());
   const students = () => studentChoices(choices, view, query, L, language(), "lobby").filter((s) => s.lobby);
-  const changed = () => { clearTimeout(debounce); debounce = setTimeout(() => { if (modal.live()) draw().catch(onError); }, 100); };
+  const changed = () => {
+    clearTimeout(debounce);
+    debounce = setTimeout(() => {
+      if (modal.live()) draw().catch(onError);
+    }, 100);
+  };
   async function toolbar(layer) {
     const openDisplay = async (settings) => {
-      const focus = document.activeElement; modal.host.inert = true;
-      await Display.warm(); if (!modal.live()) return; displayOwned = true;
-      try { await Display.open({ ...settings, onDone: (next) => { displayOwned = false; if (!modal.live()) return; modal.host.inert = false; focus?.focus?.(); settings.onDone(next); } }); }
-      catch (error) { if (modal.live()) modal.host.inert = false; throw error; }
+      const focus = document.activeElement;
+      modal.host.inert = true;
+      await Display.warm();
+      if (!modal.live()) return;
+      displayOwned = true;
+      try {
+        await Display.open({
+          ...settings,
+          onDone: (next) => {
+            displayOwned = false;
+            if (!modal.live()) return;
+            modal.host.inert = false;
+            focus?.focus?.();
+            settings.onDone(next);
+          },
+        });
+      } catch (error) {
+        if (modal.live()) modal.host.inert = false;
+        throw error;
+      }
     };
-    const display = () => openDisplay({ view, sorts: ["recent", "name", "added", "mods", "default"],
-      count: (next) => studentChoices(choices, next, query, L, language(), memorial ? "lobby" : "spr").length,
-      onDone: (next) => { if (next && modal.live()) { view = normalizeView({ ...view, ...next }); positions.clear(); draw().catch(onError); } } });
+    const display = () =>
+      openDisplay({
+        view,
+        sorts: ["recent", "name", "added", "mods", "default"],
+        count: (next) => studentChoices(choices, next, query, L, language(), memorial ? "lobby" : "spr").length,
+        onDone: (next) => {
+          if (next && modal.live()) {
+            view = normalizeView({ ...view, ...next });
+            positions.clear();
+            draw().catch(onError);
+          }
+        },
+      });
     const toggleSearch = () => {
-      searching = !searching; if (!searching) query = ""; positions.clear();
-      draw().then(() => { if (searching && modal.live()) modal.host.querySelector('[data-focus-key="hall-search"]')?.focus(); }).catch(onError);
+      searching = !searching;
+      if (!searching) query = "";
+      positions.clear();
+      draw()
+        .then(() => {
+          if (searching && modal.live()) modal.host.querySelector('[data-focus-key="hall-search"]')?.focus();
+        })
+        .catch(onError);
     };
-    await UI.rosterToolbar(layer, view, searching, {
-      change: (next) => { if (isSaving()) return; view = normalizeView({ ...view, ...next }); student = null; positions.clear(); draw().catch(onError); },
-      search: toggleSearch,
-      display: safe(display),
-    }, memorial ? { x: UI.WIDE.left, width: UI.WIDE.width, scale: UI.MEMORIAL.toolbar } : UI.portraitPickerLayout(view, searching).toolbar);
-    if (searching) await UI.search(layer, query, (value) => { query = value; positions.clear(); changed(); }, memorial ? [UI.WIDE.left + 15, 252, UI.WIDE.width - 30] : UI.portraitPickerLayout(view, searching).search,
-      { onEscape: toggleSearch });
+    await UI.rosterToolbar(
+      layer,
+      view,
+      searching,
+      {
+        change: (next) => {
+          if (isSaving()) return;
+          view = normalizeView({ ...view, ...next });
+          student = null;
+          positions.clear();
+          draw().catch(onError);
+        },
+        search: toggleSearch,
+        display: safe(display),
+      },
+      memorial
+        ? { x: UI.WIDE.left, width: UI.WIDE.width, scale: UI.MEMORIAL.toolbar }
+        : UI.portraitPickerLayout(view, searching).toolbar,
+    );
+    if (searching)
+      await UI.search(
+        layer,
+        query,
+        (value) => {
+          query = value;
+          positions.clear();
+          changed();
+        },
+        memorial ? [UI.WIDE.left + 15, 252, UI.WIDE.width - 30] : UI.portraitPickerLayout(view, searching).search,
+        { onEscape: toggleSearch },
+      );
   }
   async function drawPortraits(layer, alive, signal) {
     const groups = rows();
     if (!groups.length) return UI.caption(layer, T("hall.noCandidates"), [320, 390, 1200]);
     const rowLayout = UI.portraitRowLayout();
-    const addSize = UI.compactButtonSize((onReplace ? ["import.select"] : ["hall.add", "hall.added"]).map((key) => T(key)), (320 - 22) * .46);
-    const list = UI.virtualArea(layer, UI.portraitPickerLayout(view, searching).list, groups.length, rowLayout.pitch, async (rowHost, rowIndex, rowSignal) => {
-      const row = groups[rowIndex];
-      await UI.rowPlate(rowHost, [rowLayout.width, rowLayout.height]);
-      await UI.caption(rowHost, row.student.name, rowLayout.name, { size: 44 });
-      if (rowSignal.aborted) return;
-      const strip = UI.virtualArea(rowHost, [rowLayout.stripX, 0, rowLayout.stripW, rowLayout.height], row.choices.length, 220, (cell, i) => UI.card(cell, item(row.choices[i]), {
-        x: rowLayout.cardX, y: rowLayout.cardY, kind: "spr", scale: .46, onAdd: safe((event) => add(row.choices[i], event?.currentTarget)), addLabel: addLabel(row.choices[i]), addEnabled: canAdd(row.choices[i]), addSize, fitAdd: !!onReplace }),
-        { key: `portrait-${row.key}`, horizontal: true, signal: rowSignal, positions, onError });
-      await strip.ready;
-    }, { key: "portrait-rows", signal, positions, onError });
+    const addSize = UI.compactButtonSize(
+      (onReplace ? ["import.select"] : ["hall.add", "hall.added"]).map((key) => T(key)),
+      (320 - 22) * 0.46,
+    );
+    const list = UI.virtualArea(
+      layer,
+      UI.portraitPickerLayout(view, searching).list,
+      groups.length,
+      rowLayout.pitch,
+      async (rowHost, rowIndex, rowSignal) => {
+        const row = groups[rowIndex];
+        await UI.rowPlate(rowHost, [rowLayout.width, rowLayout.height]);
+        await UI.caption(rowHost, row.student.name, rowLayout.name, { size: 44 });
+        if (rowSignal.aborted) return;
+        const strip = UI.virtualArea(
+          rowHost,
+          [rowLayout.stripX, 0, rowLayout.stripW, rowLayout.height],
+          row.choices.length,
+          220,
+          (cell, i) =>
+            UI.card(cell, item(row.choices[i]), {
+              x: rowLayout.cardX,
+              y: rowLayout.cardY,
+              kind: "spr",
+              scale: 0.46,
+              onAdd: safe((event) => add(row.choices[i], event?.currentTarget)),
+              addLabel: addLabel(row.choices[i]),
+              addEnabled: canAdd(row.choices[i]),
+              addSize,
+              fitAdd: !!onReplace,
+            }),
+          { key: `portrait-${row.key}`, horizontal: true, signal: rowSignal, positions, onError },
+        );
+        await strip.ready;
+      },
+      { key: "portrait-rows", signal, positions, onError },
+    );
     await list.ready;
   }
   async function drawMemorials(layer, alive, signal) {
-    const shown = students(); if (student && !shown.some((s) => s.key === student)) student = null;
+    const shown = students();
+    if (student && !shown.some((s) => s.key === student)) student = null;
     // the candidates of the chosen student only; none chosen: the panel asks for one
     const candidates = student ? memorialChoices(choices, shown, student, view, query, viewed, L, language()) : [];
-    const top = searching ? 330 : 250, height = searching ? 370 : 450;
+    const top = searching ? 330 : 250,
+      height = searching ? 370 : 450;
     // the L class: the students and the candidates side by side within WIDE, the queue across under them
-    const M = UI.MEMORIAL, { left: wideLeft, width: wideW } = UI.WIDE, candX = wideLeft + M.students + M.gap, candW = wideW - M.students - M.gap;
+    const M = UI.MEMORIAL,
+      { left: wideLeft, width: wideW } = UI.WIDE,
+      candX = wideLeft + M.students + M.gap,
+      candW = wideW - M.students - M.gap;
     await Promise.all([
       UI.panel(layer, "StudentsPanel", [wideLeft, top, M.students, height], T("top.students")),
-      UI.panel(layer, "CandidatesPanel", [candX, top, candW, height], student ? shown.find((s) => s.key === student)?.name || T("hall.memorial") : T("hall.memorial")),
+      UI.panel(
+        layer,
+        "CandidatesPanel",
+        [candX, top, candW, height],
+        student ? shown.find((s) => s.key === student)?.name || T("hall.memorial") : T("hall.memorial"),
+      ),
     ]);
-    const heads = UI.virtualArea(layer, [wideLeft + 15, top + 58, M.students - 35, height - 73], Math.ceil(shown.length / M.heads), 195, (cell, row) => Promise.all(shown.slice(row * M.heads, row * M.heads + M.heads).map((entry, i) => {
-      if (!headsPictures.has(entry.key)) headsPictures.set(entry.key, lazyThumbnail(() => entry.portrait, work.signal));
-      return UI.studentCard(cell, { ...entry, thumb: headsPictures.get(entry.key) }, [M.headX + i * M.headPitch, 4], student === entry.key,
-        () => { student = student === entry.key ? null : entry.key; if (!student) { view.sort = "recent"; view.order = "desc"; } positions.delete("memorial-candidates"); draw().catch(onError); });
-    })), { key: "memorial-students", signal, positions, onError });
-    const cards = UI.virtualArea(layer, [candX + 15, top + 58, candW - 35, height - 73], Math.ceil(candidates.length / 2), 275,
-      (cell, row) => Promise.all(candidates.slice(row * 2, row * 2 + 2).map((choice, i) => UI.card(cell, item(choice), {
-        x: M.cardX + i * M.cardPitch, y: 93, scale: M.cardScale, onAdd: safe((event) => add(choice, event?.currentTarget)), addLabel: addLabel(choice), addEnabled: canAdd(choice) }))),
-      { key: "memorial-candidates", signal, positions, onError });
-    await Promise.all([heads.ready, cards.ready]); if (!alive()) return;
-    if (!candidates.length) await UI.caption(cards.inner, T(student ? "hall.noCandidates" : "hall.selectStudent"), [0, (height - 73) / 2 - 20, candW - 35], { align: 2 });
+    const heads = UI.virtualArea(
+      layer,
+      [wideLeft + 15, top + 58, M.students - 35, height - 73],
+      Math.ceil(shown.length / M.heads),
+      195,
+      (cell, row) =>
+        Promise.all(
+          shown.slice(row * M.heads, row * M.heads + M.heads).map((entry, i) => {
+            if (!headsPictures.has(entry.key))
+              headsPictures.set(
+                entry.key,
+                lazyThumbnail(() => entry.portrait, work.signal),
+              );
+            return UI.studentCard(
+              cell,
+              { ...entry, thumb: headsPictures.get(entry.key) },
+              [M.headX + i * M.headPitch, 4],
+              student === entry.key,
+              () => {
+                student = student === entry.key ? null : entry.key;
+                if (!student) {
+                  view.sort = "recent";
+                  view.order = "desc";
+                }
+                positions.delete("memorial-candidates");
+                draw().catch(onError);
+              },
+            );
+          }),
+        ),
+      { key: "memorial-students", signal, positions, onError },
+    );
+    const cards = UI.virtualArea(
+      layer,
+      [candX + 15, top + 58, candW - 35, height - 73],
+      Math.ceil(candidates.length / 2),
+      275,
+      (cell, row) =>
+        Promise.all(
+          candidates.slice(row * 2, row * 2 + 2).map((choice, i) =>
+            UI.card(cell, item(choice), {
+              x: M.cardX + i * M.cardPitch,
+              y: 93,
+              scale: M.cardScale,
+              onAdd: safe((event) => add(choice, event?.currentTarget)),
+              addLabel: addLabel(choice),
+              addEnabled: canAdd(choice),
+            }),
+          ),
+        ),
+      { key: "memorial-candidates", signal, positions, onError },
+    );
+    await Promise.all([heads.ready, cards.ready]);
+    if (!alive()) return;
+    if (!candidates.length)
+      await UI.caption(
+        cards.inner,
+        T(student ? "hall.noCandidates" : "hall.selectStudent"),
+        [0, (height - 73) / 2 - 20, candW - 35],
+        { align: 2 },
+      );
     const list = draft.current().memorials;
     await UI.queuePanel(layer, [wideLeft, 720, wideW, 195]);
     const pitch = UI.MEMORIAL_QUEUE_PITCH;
-    const reorder = (id, index) => { const target = list[index]; if (target && !isSaving() && draft.move(id, target.id)) { onChange?.(); draw().catch(onError); } };
+    const reorder = (id, index) => {
+      const target = list[index];
+      if (target && !isSaving() && draft.move(id, target.id)) {
+        onChange?.();
+        draw().catch(onError);
+      }
+    };
     let marker;
-    const queue = UI.virtualArea(layer, [wideLeft + 15, 735, wideW - 30, 175], list.length, pitch, async (cell, index, rowSignal) => {
-      const entry = list[index];
-      const choice = choices.find((c) => c.kind === "lobby" && sourceKey(c) === sourceKey(entry));
-      const box = document.createElement("div"); Object.assign(box.style, { position: "absolute", left: "0", top: "0", width: `${pitch}px`, height: "175px" });
-      box.dataset.queue = entry.id; cell.append(box);
-      // no Remove button: the card larger, a trash button at its top right while the pointer is
-      // over it (grey, red under the pointer) asks before it removes
-      if (choice) {
-        const drawn = await UI.card(box, item(choice, entry.id), { x: pitch / 2, y: UI.QUEUE.y, scale: UI.QUEUE.scale, label: false });
-        // The entire card is a grab target, including the slanted artwork's transparent edges.
-        Object.assign(drawn.hit.style, { left: "0", top: "0", width: `${pitch}px`, height: "175px" });
-        bindReorder(drawn.hit, { id: entry.id, index, count: list.length, scroll: cell.parentElement.parentElement, pitch,
-          move: reorder, enabled: () => !isSaving(), signal: rowSignal, feedback: dragFeedback(drawn.visual, () => marker, pitch, list.length) });
-      } else await UI.caption(box, T("hall.missing"), [5, 60, 240], { size: 28 });
-      if (list.length > 1) await UI.trashButton(box, `Remove${entry.id}`, T("hall.remove"), UI.queueTrashBox(pitch), async () => {
-        if (isSaving()) return;
-        const answer = await Popup.message({ title: T("hall.remove"), lines: [T("hall.removeConfirm")], cancel: T("popup.cancel"), ok: T("hall.remove") });
-        if (answer?.button === "ok" && !isSaving() && draft.remove(entry.id)) { onChange?.(); draw().catch(onError); }
-      });
-    }, { key: "memorial-playlist", horizontal: true, signal, positions, onError });
+    const queue = UI.virtualArea(
+      layer,
+      [wideLeft + 15, 735, wideW - 30, 175],
+      list.length,
+      pitch,
+      async (cell, index, rowSignal) => {
+        const entry = list[index];
+        const choice = choices.find((c) => c.kind === "lobby" && sourceKey(c) === sourceKey(entry));
+        const box = document.createElement("div");
+        Object.assign(box.style, { position: "absolute", left: "0", top: "0", width: `${pitch}px`, height: "175px" });
+        box.dataset.queue = entry.id;
+        cell.append(box);
+        // no Remove button: the card larger, a trash button at its top right while the pointer is
+        // over it (grey, red under the pointer) asks before it removes
+        if (choice) {
+          const drawn = await UI.card(box, item(choice, entry.id), {
+            x: pitch / 2,
+            y: UI.QUEUE.y,
+            scale: UI.QUEUE.scale,
+            label: false,
+          });
+          // The entire card is a grab target, including the slanted artwork's transparent edges.
+          Object.assign(drawn.hit.style, { left: "0", top: "0", width: `${pitch}px`, height: "175px" });
+          bindReorder(drawn.hit, {
+            id: entry.id,
+            index,
+            count: list.length,
+            scroll: cell.parentElement.parentElement,
+            pitch,
+            move: reorder,
+            enabled: () => !isSaving(),
+            signal: rowSignal,
+            feedback: dragFeedback(drawn.visual, () => marker, pitch, list.length),
+          });
+        } else await UI.caption(box, T("hall.missing"), [5, 60, 240], { size: 28 });
+        if (list.length > 1)
+          await UI.trashButton(box, `Remove${entry.id}`, T("hall.remove"), UI.queueTrashBox(pitch), async () => {
+            if (isSaving()) return;
+            const answer = await Popup.message({
+              title: T("hall.remove"),
+              lines: [T("hall.removeConfirm")],
+              cancel: T("popup.cancel"),
+              ok: T("hall.remove"),
+            });
+            if (answer?.button === "ok" && !isSaving() && draft.remove(entry.id)) {
+              onChange?.();
+              draw().catch(onError);
+            }
+          });
+      },
+      { key: "memorial-playlist", horizontal: true, signal, positions, onError },
+    );
     marker = await UI.queueMarker(queue.inner, pitch);
     await queue.ready;
   }
 
   async function draw() {
-    await modal.draw(async (layer, alive, signal) => { await toolbar(layer); if (!alive()) return; await (memorial ? drawMemorials(layer, alive, signal) : drawPortraits(layer, alive, signal)); },
-      memorial ? [{ label: T("popup.cancel"), fn: safe(onCancel) }, { label: T("popup.save"), fn: safe(onSave), semantic: "save", enabled: draft.current().memorials.length > 0 }]
-        : [{ label: T(onReplace ? "popup.cancel" : "hall.doneAdding"), fn: safe(onDone) }], memorial ? { retainedFooter: true } : UI.PORTRAIT_FRAME);
+    await modal.draw(
+      async (layer, alive, signal) => {
+        await toolbar(layer);
+        if (!alive()) return;
+        await (memorial ? drawMemorials(layer, alive, signal) : drawPortraits(layer, alive, signal));
+      },
+      memorial
+        ? [
+            { label: T("popup.cancel"), fn: safe(onCancel) },
+            {
+              label: T("popup.save"),
+              fn: safe(onSave),
+              semantic: "save",
+              enabled: draft.current().memorials.length > 0,
+            },
+          ]
+        : [{ label: T(onReplace ? "popup.cancel" : "hall.doneAdding"), fn: safe(onDone) }],
+      memorial ? { retainedFooter: true } : UI.PORTRAIT_FRAME,
+    );
   }
   draw().catch(onError);
-  const closeNested = () => { if (displayOwned && Popup.top()?.host?.id === "display") Popup.top().close?.("navigation"); displayOwned = false; };
-  return { modal, redraw: draw, closeNested, close() { closeNested(); clearTimeout(debounce); work.cancel(); modal.close(); } };
+  const closeNested = () => {
+    if (displayOwned && Popup.top()?.host?.id === "display") Popup.top().close?.("navigation");
+    displayOwned = false;
+  };
+  return {
+    modal,
+    redraw: draw,
+    closeNested,
+    close() {
+      closeNested();
+      clearTimeout(debounce);
+      work.cancel();
+      modal.close();
+    },
+  };
 }

@@ -37,8 +37,9 @@ REAL_SHARING_KEYS = resolver.sharing_keys
 def env(setup_library, monkeypatch):
     env = setup_library
     env.settings.set("output_dir", str(env.tmp / "exports"))
-    env.services = Services(env.settings, env.tmp / "app", cache=object(), game=object(),
-                            catalog=env.catalog, library=env.library)
+    env.services = Services(
+        env.settings, env.tmp / "app", cache=object(), game=object(), catalog=env.catalog, library=env.library
+    )
     env.rpc = build_api(env.services)
     monkeypatch.setattr(resolver, "sharing_keys", lambda sources, candidates, keys: list(candidates))
     yield env
@@ -49,8 +50,9 @@ def env(setup_library, monkeypatch):
 def batch_model_env(model_env, monkeypatch):
     env = model_env
     env.settings.set("output_dir", str(env.tmp / "exports"))
-    env.services = Services(env.settings, env.tmp / "app", cache=object(), game=object(),
-                            catalog=env.catalog, library=env.library)
+    env.services = Services(
+        env.settings, env.tmp / "app", cache=object(), game=object(), catalog=env.catalog, library=env.library
+    )
     env.rpc = build_api(env.services)
     monkeypatch.setattr(resolver, "sharing_keys", lambda sources, candidates, keys: list(candidates))
     yield env
@@ -77,8 +79,16 @@ def analyze(env, paths, recursive=False):
 
 def run(env, entries, **options):
     options = {**rpc(env, "import.options"), "output": None, **options}
-    return finish(env, rpc(env, "import.run", ids=[e["id"] for e in entries], options=options,
-                           revision=env.services.batch_import._revision))["results"]
+    return finish(
+        env,
+        rpc(
+            env,
+            "import.run",
+            ids=[e["id"] for e in entries],
+            options=options,
+            revision=env.services.batch_import._revision,
+        ),
+    )["results"]
 
 
 def test_entry_shapes_grouping_stable_ids_and_recursive_scan(env):
@@ -89,10 +99,23 @@ def test_entry_shapes_grouping_stable_ids_and_recursive_scan(env):
     lobby = make_mod(lobby_target, texture.parent / "nested", payload=b"lobby mod")
     (texture.parent / "readme.txt").write_text("not a bundle")
     shallow = analyze(env, [texture.parent])
-    entry, = shallow["entries"]
+    (entry,) = shallow["entries"]
     assert shallow["skipped"] == 1
-    assert set(entry) == {"id", "paths", "variant", "core", "kind", "files", "size", "state", "reason", "libraryId",
-                          "preview", "source", "target"}
+    assert set(entry) == {
+        "id",
+        "paths",
+        "variant",
+        "core",
+        "kind",
+        "files",
+        "size",
+        "state",
+        "reason",
+        "libraryId",
+        "preview",
+        "source",
+        "target",
+    }
     assert entry["paths"] == sorted(map(str, [texture, text]))
     assert (entry["variant"], entry["core"], entry["kind"], entry["state"]) == ("test", "test_spr", "spr", "ready")
     assert entry["reason"] is None and entry["libraryId"] is None
@@ -119,18 +142,20 @@ def test_duplicate_uploads_skipped_by_complete_library_identity(env):
 
 
 def test_batch_identity_keeps_hashes_bound_to_their_parts(env):
-    second_target = game_bundle(env.game_dir, part='004')
-    first = make_mod(env.original, env.tmp / 'first', payload=b'first part')
-    second = make_mod(second_target, first.parent, payload=b'second part')
-    swapped = [make_mod(env.original, env.tmp / 'swapped', payload=b'second part'),
-               make_mod(second_target, env.tmp / 'swapped', payload=b'first part')]
+    second_target = game_bundle(env.game_dir, part="004")
+    first = make_mod(env.original, env.tmp / "first", payload=b"first part")
+    second = make_mod(second_target, first.parent, payload=b"second part")
+    swapped = [
+        make_mod(env.original, env.tmp / "swapped", payload=b"second part"),
+        make_mod(second_target, env.tmp / "swapped", payload=b"first part"),
+    ]
     result = analyze(env, [first, second, *swapped])
-    assert result['skipped'] == 0
-    assert len(result['entries']) == 2
-    assert {entry['state'] for entry in result['entries']} == {'ready'}
-    results = run(env, result['entries'], enableAfterImport=False)
-    assert [item['outcome'] for item in results] == ['imported', 'imported']
-    assert len({item['libraryId'] for item in results}) == 2
+    assert result["skipped"] == 0
+    assert len(result["entries"]) == 2
+    assert {entry["state"] for entry in result["entries"]} == {"ready"}
+    results = run(env, result["entries"], enableAfterImport=False)
+    assert [item["outcome"] for item in results] == ["imported", "imported"]
+    assert len({item["libraryId"] for item in results}) == 2
 
 
 @pytest.mark.parametrize("same", [False, True])
@@ -139,7 +164,7 @@ def test_backup_and_bundle_of_the_same_part_conflict_or_deduplicate(env, same):
     backup = source.with_name(source.name + ".backup")
     backup.write_bytes(source.read_bytes() if same else source.read_bytes() + b"different")
     result = analyze(env, [source, backup])
-    entry, = result["entries"]
+    (entry,) = result["entries"]
     if same:
         assert entry["state"] == "ready" and entry["paths"] == [str(source)]
         assert result["skipped"] == 1
@@ -158,15 +183,15 @@ def test_unknown_bundle_duplicates_are_also_silently_skipped(env):
 
 def test_existing_library_and_untracked_installed_states_are_read_only(env):
     source = make_mod(env.original, env.tmp / "input")
-    stored, = env.library.add([source])
-    entry, = analyze(env, [source])["entries"]
+    (stored,) = env.library.add([source])
+    (entry,) = analyze(env, [source])["entries"]
     assert (entry["state"], entry["libraryId"]) == ("library", stored.id)
     assert run(env, [entry])[0]["outcome"] == "unchanged"
     other = game_bundle(env.game_dir, "other_spr")
     untracked = make_mod(other, env.tmp / "untracked")
     other.write_bytes(untracked.read_bytes())
     before = sorted(env.root.rglob("*.bundle"))
-    entry, = analyze(env, [untracked])["entries"]
+    (entry,) = analyze(env, [untracked])["entries"]
     assert (entry["state"], entry["reason"], entry["libraryId"]) == ("installed", None, None)
     assert sorted(env.root.rglob("*.bundle")) == before
     assert len(env.library.mods()) == 1
@@ -176,7 +201,7 @@ def test_tracked_installed_with_different_source_bytes_is_ready(env):
     first = make_mod(env.original, env.tmp / "first")
     env.library.add_and_apply([first])
     second = make_mod(env.original, env.tmp / "second", payload=b"another mod")
-    entry, = analyze(env, [second])["entries"]
+    (entry,) = analyze(env, [second])["entries"]
     assert entry["state"] == "ready"
     assert env.original.read_bytes() == first.read_bytes()
 
@@ -184,20 +209,27 @@ def test_tracked_installed_with_different_source_bytes_is_ready(env):
 def test_backup_upload_and_content_alias_use_library_normalization(env, monkeypatch):
     source = make_mod(env.original, env.tmp / "input")
     source = source.rename(source.with_name(source.name + ".backup"))
-    entry, = analyze(env, [source])["entries"]
+    (entry,) = analyze(env, [source])["entries"]
     assert entry["state"] == "ready" and entry["files"][0]["target"] == env.original.name
     assert run(env, [entry], enableAfterImport=False)[0]["outcome"] == "imported"
     target = game_bundle(env.game_dir, "test_home_gl")
     renamed = game_bundle(env.tmp / "wrong-name", date="2025-01-01", payload=b"lobby data")
     monkeypatch.setattr("bmpt.library.identity.content_cores", lambda path: {"test_home_gl"})
-    entry, = analyze(env, [renamed])["entries"]
+    (entry,) = analyze(env, [renamed])["entries"]
     assert (entry["kind"], entry["core"], entry["files"][0]["target"]) == ("lobby", "test_home_gl", target.name)
     assert entry["state"] == "update"
     assert entry["paths"] == [str(renamed)]
 
 
-@pytest.mark.parametrize("problem,reason", [("unreadable", "unreadable"), ("missing", "no_target"),
-    ("ambiguous", "mod_target_ambiguous"), ("other", "no_target")])
+@pytest.mark.parametrize(
+    "problem,reason",
+    [
+        ("unreadable", "unreadable"),
+        ("missing", "no_target"),
+        ("ambiguous", "mod_target_ambiguous"),
+        ("other", "no_target"),
+    ],
+)
 def test_blocked_reasons_are_codes_and_failures_do_not_hide_other_entries(env, monkeypatch, problem, reason):
     source = make_mod(env.original, env.tmp / "bad")
     expected_kind = "spr"
@@ -207,8 +239,9 @@ def test_blocked_reasons_are_codes_and_failures_do_not_hide_other_entries(env, m
         source = game_bundle(env.tmp / "bad", "other_spr")
     elif problem == "ambiguous":
         source = game_bundle(env.tmp / "bad", date="2025-01-01", payload=b"ambiguous")
-        monkeypatch.setattr("bmpt.library.identity.content_cores",
-                            lambda path: {"test_spr", "other_spr"} if path == source else set())
+        monkeypatch.setattr(
+            "bmpt.library.identity.content_cores", lambda path: {"test_spr", "other_spr"} if path == source else set()
+        )
     elif problem == "other":
         source = game_bundle(env.tmp / "bad", "shared", category="shaders")
         expected_kind = "other"
@@ -226,7 +259,7 @@ def test_library_capability_api_rejects_an_unsupported_kind(env, monkeypatch):
     seen = []
     monkeypatch.setattr(env.library, "supports_kind", lambda kind: seen.append(kind) or False, raising=False)
     source = game_bundle(env.tmp / "input", "ch0242", category="characters")
-    entry, = analyze(env, [source])["entries"]
+    (entry,) = analyze(env, [source])["entries"]
     assert (entry["kind"], entry["reason"]) == ("model", "unsupported")
     assert seen == ["model"]
 
@@ -235,27 +268,35 @@ def test_library_capability_api_rejects_an_unsupported_kind(env, monkeypatch):
 def test_model_prefab_and_dependencies_analyze_update_add_and_apply(batch_model_env, monkeypatch, outdated):
     env = batch_model_env
     if outdated:
-        sources = [model_bundle(env.tmp / "input", prefab=True, part="000", date="2025-01-01", payload=b"mod prefab"),
-                   model_bundle(env.tmp / "input", part="meshes", date="2025-01-01", payload=b"mod mesh")]
+        sources = [
+            model_bundle(env.tmp / "input", prefab=True, part="000", date="2025-01-01", payload=b"mod prefab"),
+            model_bundle(env.tmp / "input", part="meshes", date="2025-01-01", payload=b"mod mesh"),
+        ]
     else:
-        sources = [make_mod(path, env.tmp / "input", payload=f"mod {i}".encode())
-                   for i, path in enumerate(env.parts[:2])]
-    entry, = analyze(env, sources)["entries"]
+        sources = [
+            make_mod(path, env.tmp / "input", payload=f"mod {i}".encode()) for i, path in enumerate(env.parts[:2])
+        ]
+    (entry,) = analyze(env, sources)["entries"]
     assert (entry["kind"], entry["variant"], entry["core"], entry["state"], entry["reason"]) == (
-        "model", "hoshino", "hoshino_original", "update" if outdated else "ready", None)
+        "model",
+        "hoshino",
+        "hoshino_original",
+        "update" if outdated else "ready",
+        None,
+    )
     assert entry["paths"] == sorted(map(str, sources))
     calls = []
     updater(monkeypatch, calls)
-    result, = run(env, [entry], backup=False)
+    (result,) = run(env, [entry], backup=False)
     assert result["outcome"] == ("updated" if outdated else "imported")
     assert result["applied"] and len(calls) == int(outdated)
-    mod, = env.library.mods()
+    (mod,) = env.library.mods()
     assert (mod.kind, mod.target, result["libraryId"]) == ("model", "hoshino", mod.id)
     assert env.library.configured("hoshino")["model"] == f"mod:{mod.id}"
     assert all(path.read_bytes() != env.official[path] for path in env.parts[:2])
     if not outdated:
         assert env.parts[2].read_bytes() == env.official[env.parts[2]]
-    completed, = analyze(env, sources)["entries"]
+    (completed,) = analyze(env, sources)["entries"]
     assert (completed["state"], completed["libraryId"]) == ("library" if outdated else "done", mod.id)
     env.library.restore("hoshino", kind="model")
     assert all(path.read_bytes() == original for path, original in env.official.items())
@@ -269,17 +310,22 @@ def test_old_model_mesh_updates_when_prefab_has_a_newer_release(batch_model_env,
     mesh, texture = env.parts[1:]
     source = model_bundle(env.tmp / "input", part="meshes", date="2025-01-01", payload=b"old mod mesh")
     monkeypatch.setattr(resolver, "sharing_keys", REAL_SHARING_KEYS)
-    monkeypatch.setattr(Bundle, "load", lambda path, *args: SimpleNamespace(
-        get_asset_keys=lambda *args: {"body-mesh"} if path in (source, mesh) else set()))
-    entry, = analyze(env, [source])["entries"]
+    monkeypatch.setattr(
+        Bundle,
+        "load",
+        lambda path, *args: SimpleNamespace(
+            get_asset_keys=lambda *args: {"body-mesh"} if path in (source, mesh) else set()
+        ),
+    )
+    (entry,) = analyze(env, [source])["entries"]
     assert (entry["state"], entry["reason"], entry["files"][0]["target"]) == ("update", None, mesh.name)
     calls = []
     updater(monkeypatch, calls)
-    result, = run(env, [entry], backup=False)
+    (result,) = run(env, [entry], backup=False)
     assert result["outcome"] == "updated" and result["applied"]
     assert len(calls) == 1 and calls[0][1]["source_paths"] == [source]
     assert [path.name for path in calls[0][1]["target_paths"]] == [mesh.name]
-    mod, = env.library.mods()
+    (mod,) = env.library.mods()
     assert (mod.kind, mod.target) == ("model", "hoshino")
     assert mesh.read_bytes() == mod.file.read_bytes()
     assert newer_prefab.read_bytes() == env.official[prefab]
@@ -292,11 +338,19 @@ def mock_spine_contents(monkeypatch, inspect):
     def load(path, *args):
         contents = inspect(path)
         objects = []
-        for kind, names in ((AssetType.TextAsset, [*contents.skeletons, *contents.atlases]),
-                            (AssetType.Texture2D, contents.textures)):
+        for kind, names in (
+            (AssetType.TextAsset, [*contents.skeletons, *contents.atlases]),
+            (AssetType.Texture2D, contents.textures),
+        ):
             for name in names:
-                objects.append(SimpleNamespace(type=kind, container=f"Assets/{name}",
-                    path_id=len(objects) + 1, peek_name=lambda name=name: name))
+                objects.append(
+                    SimpleNamespace(
+                        type=kind,
+                        container=f"Assets/{name}",
+                        path_id=len(objects) + 1,
+                        peek_name=lambda name=name: name,
+                    )
+                )
         return Bundle(path, SimpleNamespace(objects=objects))
 
     monkeypatch.setattr(integrity, "inspect", inspect)
@@ -310,17 +364,22 @@ def test_removed_skeleton_does_not_block_a_matching_texture_update(env, monkeypa
 
     def inspect(path, **kwargs):
         name, data = ("removed", version) if path == source else ("current", b"4.2.33")
-        return integrity.Contents(platforms={"StandaloneWindows64"}, files={"cab-test"},
-            skeletons={f"{name}.skel": data}, atlases={f"{name}.atlas": b""}, textures={"page": (8, 8)})
+        return integrity.Contents(
+            platforms={"StandaloneWindows64"},
+            files={"cab-test"},
+            skeletons={f"{name}.skel": data},
+            atlases={f"{name}.atlas": b""},
+            textures={"page": (8, 8)},
+        )
 
     mock_spine_contents(monkeypatch, inspect)
     rpc(env, "import.setOptions", **{**rpc(env, "import.options"), "types": types})
     assert not env.settings.spine_options().is_valid()
-    entry, = analyze(env, [source])["entries"]
+    (entry,) = analyze(env, [source])["entries"]
     assert (entry["state"], entry["reason"]) == ("update", None)
     calls = []
     updater(monkeypatch, calls)
-    result, = run(env, [entry], enableAfterImport=False)
+    (result,) = run(env, [entry], enableAfterImport=False)
     assert result["outcome"] == "updated"
     assert calls[0][1]["asset_types_to_replace"] == set(types)
 
@@ -329,13 +388,17 @@ def test_texture_only_update_ignores_a_matching_incompatible_skeleton(env, monke
     source = game_bundle(env.tmp / "old", date="2025-01-01", payload=b"old mod")
 
     def inspect(path, **kwargs):
-        return integrity.Contents(platforms={"StandaloneWindows64"}, files={"cab-test"},
+        return integrity.Contents(
+            platforms={"StandaloneWindows64"},
+            files={"cab-test"},
             skeletons={"test.skel": b"3.8.75" if path == source else b"4.2.33"},
-            atlases={"test.atlas": b""}, textures={"page": (8, 8)})
+            atlases={"test.atlas": b""},
+            textures={"page": (8, 8)},
+        )
 
     mock_spine_contents(monkeypatch, inspect)
     rpc(env, "import.setOptions", **{**rpc(env, "import.options"), "types": ["Texture2D"]})
-    entry, = analyze(env, [source])["entries"]
+    (entry,) = analyze(env, [source])["entries"]
     assert (entry["state"], entry["reason"]) == ("update", None)
 
 
@@ -345,9 +408,13 @@ def test_direct_copy_checks_skeletons_outside_the_update_filter(env, monkeypatch
     source = make_mod(env.original, env.tmp / "input")
 
     def inspect(path, **kwargs):
-        return integrity.Contents(platforms={"StandaloneWindows64"}, files={"cab-test"},
+        return integrity.Contents(
+            platforms={"StandaloneWindows64"},
+            files={"cab-test"},
             skeletons={"test.skel": version if path == source else b"4.2.33"},
-            atlases={"test.atlas": b""}, textures={"page": (8, 8)})
+            atlases={"test.atlas": b""},
+            textures={"page": (8, 8)},
+        )
 
     mock_spine_contents(monkeypatch, inspect)
     load = Bundle.load
@@ -362,9 +429,9 @@ def test_direct_copy_checks_skeletons_outside_the_update_filter(env, monkeypatch
     monkeypatch.setattr(Bundle, "load", with_changed_keys)
     rpc(env, "import.setOptions", **{**rpc(env, "import.options"), "types": ["Texture2D"], "strategy": strategy})
     before = env.original.read_bytes()
-    entry, = analyze(env, [source])["entries"]
+    (entry,) = analyze(env, [source])["entries"]
     assert (entry["state"], entry["reason"]) == ("blocked", "spine_version")
-    result, = run(env, [entry])
+    (result,) = run(env, [entry])
     assert (result["outcome"], result["reason"]) == ("skipped", "spine_version")
     assert env.original.read_bytes() == before
     assert not env.library.mods()
@@ -374,8 +441,11 @@ def test_direct_copy_checks_skeletons_outside_the_update_filter(env, monkeypatch
 @pytest.mark.parametrize("size", [(8, 4), (8, 8), (4, 4)])
 def test_texture_import_checks_retained_official_atlas(env, monkeypatch, outdated, size):
     text = game_bundle(env.game_dir, part="textassets", payload=b"official text")
-    source = (game_bundle(env.tmp / "input", date="2025-01-01", payload=b"old texture") if outdated
-              else make_mod(env.original, env.tmp / "input"))
+    source = (
+        game_bundle(env.tmp / "input", date="2025-01-01", payload=b"old texture")
+        if outdated
+        else make_mod(env.original, env.tmp / "input")
+    )
 
     def inspect(path, **kwargs):
         contents = integrity.Contents(platforms={"StandaloneWindows64"}, files={"cab-test"})
@@ -388,14 +458,17 @@ def test_texture_import_checks_retained_official_atlas(env, monkeypatch, outdate
 
     mock_spine_contents(monkeypatch, inspect)
     # The updater selects only the texture bundle; the text bundle stays official.
-    monkeypatch.setattr(resolver, "sharing_keys", lambda sources, candidates, keys: [
-        path for path in candidates if path.name == env.original.name])
+    monkeypatch.setattr(
+        resolver,
+        "sharing_keys",
+        lambda sources, candidates, keys: [path for path in candidates if path.name == env.original.name],
+    )
     rpc(env, "import.setOptions", **{**rpc(env, "import.options"), "types": ["Texture2D"]})
     before = {path: path.read_bytes() for path in (env.original, text)}
-    entry, = analyze(env, [source])["entries"]
+    (entry,) = analyze(env, [source])["entries"]
     if size == (8, 4):
         assert (entry["state"], entry["reason"]) == ("blocked", "conflict")
-        result, = run(env, [entry])
+        (result,) = run(env, [entry])
         assert (result["outcome"], result["reason"]) == ("skipped", "conflict")
     else:
         assert (entry["state"], entry["reason"]) == ("update" if outdated else "ready", None)
@@ -408,9 +481,13 @@ def test_spine_checks_use_the_transfer_matching_strategy(env, monkeypatch, strat
     source = game_bundle(env.tmp / "old", date="2025-01-01", payload=b"old mod")
 
     def inspect(path, **kwargs):
-        return integrity.Contents(platforms={"StandaloneWindows64"}, files={"cab-test"},
+        return integrity.Contents(
+            platforms={"StandaloneWindows64"},
+            files={"cab-test"},
             skeletons={"test.skel": b"3.8.75" if path == source else b"4.2.33"},
-            atlases={"test.atlas": b""}, textures={"page": (8, 8)})
+            atlases={"test.atlas": b""},
+            textures={"page": (8, 8)},
+        )
 
     mock_spine_contents(monkeypatch, inspect)
     load = Bundle.load
@@ -424,14 +501,14 @@ def test_spine_checks_use_the_transfer_matching_strategy(env, monkeypatch, strat
 
     monkeypatch.setattr(Bundle, "load", with_removed_skeleton)
     rpc(env, "import.setOptions", **{**rpc(env, "import.options"), "strategy": strategy})
-    entry, = analyze(env, [source])["entries"]
+    (entry,) = analyze(env, [source])["entries"]
     assert (entry["state"], entry["reason"]) == ("update", None)
     calls = []
     updater(monkeypatch, calls)
     # Run-time options must also scope the recheck, even if the saved options differ.
     assert run(env, [entry], strategy="name_type", enableAfterImport=False)[0]["reason"] == "spine_version"
     assert run(env, [entry], enableAfterImport=False)[0]["outcome"] == "skipped"
-    entry, = analyze(env, [source])["entries"]
+    (entry,) = analyze(env, [source])["entries"]
     assert run(env, [entry], enableAfterImport=False)[0]["outcome"] == "updated"
 
 
@@ -439,17 +516,22 @@ def test_unselected_official_skeleton_does_not_change_the_conversion_version(env
     source = game_bundle(env.tmp / "old", date="2025-01-01", payload=b"old mod")
 
     def inspect(path, **kwargs):
-        skeletons = {"test.skel": b"3.8.75"} if path == source else {
-            "test.skel": b"4.2.33", "unrelated.skel": b"4.1.24"}
-        return integrity.Contents(platforms={"StandaloneWindows64"}, files={"cab-test"}, skeletons=skeletons,
-            atlases={name.replace(".skel", ".atlas"): b"" for name in skeletons})
+        skeletons = (
+            {"test.skel": b"3.8.75"} if path == source else {"test.skel": b"4.2.33", "unrelated.skel": b"4.1.24"}
+        )
+        return integrity.Contents(
+            platforms={"StandaloneWindows64"},
+            files={"cab-test"},
+            skeletons=skeletons,
+            atlases={name.replace(".skel", ".atlas"): b"" for name in skeletons},
+        )
 
     mock_spine_contents(monkeypatch, inspect)
     converter = env.tmp / "converter"
     converter.touch()
     env.settings.set("enable_spine_conversion", True)
     env.settings.set("spine_converter_path", str(converter))
-    entry, = analyze(env, [source])["entries"]
+    (entry,) = analyze(env, [source])["entries"]
     assert (entry["state"], entry["reason"]) == ("update", None)
     calls = []
     updater(monkeypatch, calls)
@@ -462,17 +544,21 @@ def test_spine_version_blocks_without_converter_and_requests_update_with_one(env
 
     def inspect(path, **kwargs):
         version = b"3.8.75" if path == source else b"4.2.33"
-        return integrity.Contents(platforms={"StandaloneWindows64"}, files={"cab-test"}, skeletons={"test.skel": version},
-                                  atlases={"test.atlas": b""})
+        return integrity.Contents(
+            platforms={"StandaloneWindows64"},
+            files={"cab-test"},
+            skeletons={"test.skel": version},
+            atlases={"test.atlas": b""},
+        )
 
     mock_spine_contents(monkeypatch, inspect)
-    entry, = analyze(env, [source])["entries"]
+    (entry,) = analyze(env, [source])["entries"]
     assert (entry["state"], entry["reason"]) == ("blocked", "spine_version")
     converter = env.tmp / "converter"
     converter.touch()
     env.settings.set("enable_spine_conversion", True)
     env.settings.set("spine_converter_path", str(converter))
-    entry, = analyze(env, [source])["entries"]
+    (entry,) = analyze(env, [source])["entries"]
     assert (entry["state"], entry["reason"]) == ("update", None)
 
 
@@ -481,20 +567,27 @@ def test_multiple_official_spine_patch_versions_keep_the_major_minor_check(env, 
     source = make_mod(env.original, env.tmp / "input")
 
     def inspect(path, **kwargs):
-        skeletons = {"first.skel": version, "second.skel": version, "third.skel": version} if path == source else {
-            "first.skel": b"4.2.33", "second.skel": b"4.2.40", "third.skel": b"4.2.9"}
-        return integrity.Contents(platforms={"StandaloneWindows64"}, files={"cab-test"}, skeletons=skeletons,
-                                  atlases={"first.atlas": b"", "second.atlas": b"", "third.atlas": b""})
+        skeletons = (
+            {"first.skel": version, "second.skel": version, "third.skel": version}
+            if path == source
+            else {"first.skel": b"4.2.33", "second.skel": b"4.2.40", "third.skel": b"4.2.9"}
+        )
+        return integrity.Contents(
+            platforms={"StandaloneWindows64"},
+            files={"cab-test"},
+            skeletons=skeletons,
+            atlases={"first.atlas": b"", "second.atlas": b"", "third.atlas": b""},
+        )
 
     mock_spine_contents(monkeypatch, inspect)
-    entry, = analyze(env, [source])["entries"]
+    (entry,) = analyze(env, [source])["entries"]
     assert (entry["state"], entry["reason"]) == (state, "spine_version" if state == "blocked" else None)
     if state == "blocked":
         converter = env.tmp / "converter"
         converter.touch()
         env.settings.set("enable_spine_conversion", True)
         env.settings.set("spine_converter_path", str(converter))
-        entry, = analyze(env, [source])["entries"]
+        (entry,) = analyze(env, [source])["entries"]
         assert (entry["state"], entry["reason"]) == ("update", None)
         calls = []
         updater(monkeypatch, calls)
@@ -506,26 +599,38 @@ def test_incompatible_mixed_official_spine_series_do_not_convert_to_a_default_ve
     source = make_mod(env.original, env.tmp / "input")
 
     def inspect(path, **kwargs):
-        skeletons = {"first.skel": b"3.8.75", "second.skel": b"3.8.75"} if path == source else {
-            "first.skel": b"4.1.24", "second.skel": b"4.2.40"}
-        return integrity.Contents(platforms={"StandaloneWindows64"}, files={"cab-test"}, skeletons=skeletons,
-                                  atlases={"first.atlas": b"", "second.atlas": b""})
+        skeletons = (
+            {"first.skel": b"3.8.75", "second.skel": b"3.8.75"}
+            if path == source
+            else {"first.skel": b"4.1.24", "second.skel": b"4.2.40"}
+        )
+        return integrity.Contents(
+            platforms={"StandaloneWindows64"},
+            files={"cab-test"},
+            skeletons=skeletons,
+            atlases={"first.atlas": b"", "second.atlas": b""},
+        )
 
     mock_spine_contents(monkeypatch, inspect)
     converter = env.tmp / "converter"
     converter.touch()
     env.settings.set("enable_spine_conversion", True)
     env.settings.set("spine_converter_path", str(converter))
-    entry, = analyze(env, [source])["entries"]
+    (entry,) = analyze(env, [source])["entries"]
     assert (entry["state"], entry["reason"]) == ("blocked", "spine_version")
 
 
 def test_classic_asset_matching_finds_repacked_targets(env, monkeypatch):
     source = game_bundle(env.tmp / "old", date="2025-01-01", payload=b"old mod")
     monkeypatch.setattr(resolver, "sharing_keys", REAL_SHARING_KEYS)
-    monkeypatch.setattr(Bundle, "load", lambda path, *args: SimpleNamespace(
-        get_asset_keys=lambda *args: {"page"} if path in (source, env.original) else set()))
-    entry, = analyze(env, [source])["entries"]
+    monkeypatch.setattr(
+        Bundle,
+        "load",
+        lambda path, *args: SimpleNamespace(
+            get_asset_keys=lambda *args: {"page"} if path in (source, env.original) else set()
+        ),
+    )
+    (entry,) = analyze(env, [source])["entries"]
     assert entry["state"] == "update"
     assert entry["files"][0]["target"] == env.original.name
 
@@ -537,6 +642,7 @@ def updater(monkeypatch, calls, payload=b"updated mod"):
         for target in kwargs["target_paths"]:
             output = kwargs["output_dir"] / target.name
             from test_library import header_bundle
+
             data = header_bundle(payload)
             if kwargs["save_options"].perform_crc:  # as the real rebuild: the CRC of the target's name
                 data = CRCUtils.apply_crc_fix(data, int(parse_filename(target.name).crc))
@@ -562,7 +668,7 @@ def windows_length(path, root):
 def test_staging_paths_fit_the_windows_limit_with_the_longest_bundle_names(env, monkeypatch):
     assert len(WINDOWS_LIBRARY) == 73
     source = game_bundle(env.tmp / "old", date="2025-01-01", payload=b"old mod")
-    entry, = analyze(env, [source])["entries"]
+    (entry,) = analyze(env, [source])["entries"]
     assert entry["state"] == "update" and len(entry["id"]) == 64
     calls = []
     updater(monkeypatch, calls)
@@ -590,7 +696,8 @@ def test_staging_paths_fit_the_windows_limit_with_the_longest_bundle_names(env, 
     work = {path.parent.parent.name for path in staged if path.parent.name in ("targets", "output")}
     assert work == {entry["id"][:16]}
     assert {path.parent.name for path in staged if path.parent.parent.name == "originals"} == {
-        env.services.batch_import._hashes.get(env.original).sha1[:16]}
+        env.services.batch_import._hashes.get(env.original).sha1[:16]
+    }
 
 
 def test_staging_names_keep_the_first_sixteen_digits():
@@ -603,7 +710,7 @@ def test_omitted_assets_are_available_in_the_settings_app_log(env, monkeypatch):
     from bmpt.webui.session_log import RedactingFormatter
 
     source = game_bundle(env.tmp / "old", date="2025-01-01", payload=b"old mod")
-    entry, = analyze(env, [source])["entries"]
+    (entry,) = analyze(env, [source])["entries"]
     updater(monkeypatch, [])
     update = batch_import.rebuild
     omitted = [f"[Texture2D] removed_page_{i}" for i in range(50)]
@@ -619,7 +726,7 @@ def test_omitted_assets_are_available_in_the_settings_app_log(env, monkeypatch):
     handler.setFormatter(RedactingFormatter(env.services.log_secrets))
     logging.getLogger().addHandler(handler)
     try:
-        result, = run(env, [entry], enableAfterImport=False)
+        (result,) = run(env, [entry], enableAfterImport=False)
         assert result["outcome"] == "updated" and result["notTransferred"] == sorted(omitted)
         text = rpc(env, "app.log")["text"]
         assert source.name in text
@@ -632,7 +739,7 @@ def test_omitted_assets_are_available_in_the_settings_app_log(env, monkeypatch):
 @pytest.mark.parametrize("phase", ["prepare", "add", "apply", "recheck"])
 def test_entry_errors_keep_json_parameters_through_job_results(env, monkeypatch, phase):
     source = make_mod(env.original, env.tmp / "input")
-    entry, = analyze(env, [source])["entries"]
+    (entry,) = analyze(env, [source])["entries"]
     params = {"path": env.tmp / "refused.bundle", "files": [Path("first.bundle"), Path("second.bundle")]}
 
     def refuse(*args, **kwargs):
@@ -644,7 +751,7 @@ def test_entry_errors_keep_json_parameters_through_job_results(env, monkeypatch,
         monkeypatch.setattr(env.services.batch_import, "_prepare", refuse)
     else:
         monkeypatch.setattr(env.library, "add_files" if phase == "add" else "apply_import", refuse)
-    result, = run(env, [entry])
+    (result,) = run(env, [entry])
     assert result["outcome"] == "failed"
     assert result["params"] == {"path": str(params["path"]), "files": ["first.bundle", "second.bundle"]}
     assert result["reason"] == ("conversion_names" if phase == "recheck" else "dev_path_outside")
@@ -657,16 +764,16 @@ def test_rechecked_blocked_entry_keeps_error_parameters_in_skipped_result(env, m
         raise ServiceError("conversion_names", path=source)
 
     monkeypatch.setattr(env.library, "inspect_import", refuse)
-    entry, = analyze(env, [source])["entries"]
+    (entry,) = analyze(env, [source])["entries"]
     assert entry["params"] == {"path": str(source)}
-    result, = run(env, [entry])
+    (result,) = run(env, [entry])
     assert result["outcome"] == "skipped"
     assert result["params"] == entry["params"]
 
 
 def test_update_then_add_then_apply_forwards_every_classic_option_and_reports_events(env, monkeypatch):
     source = game_bundle(env.tmp / "old", date="2025-01-01", payload=b"old mod")
-    entry, = analyze(env, [source])["entries"]
+    (entry,) = analyze(env, [source])["entries"]
     assert entry["state"] == "update"
     calls = []
     updater(monkeypatch, calls)
@@ -683,13 +790,21 @@ def test_update_then_add_then_apply_forwards_every_classic_option_and_reports_ev
     monkeypatch.setattr(env.library, "add", adding)
     monkeypatch.setattr(env.library, "apply_import", applying)
     events = env.services.events.subscribe()
-    options = dict(strategy="name_type", types=["Texture2D", "Mesh"], skipUnchanged=False, crc="on",
-                   compression="lz4", extraBytes="0xaabb", backup=True, workers=2,
-                   output=str(env.tmp / "exports"))
+    options = dict(
+        strategy="name_type",
+        types=["Texture2D", "Mesh"],
+        skipUnchanged=False,
+        crc="on",
+        compression="lz4",
+        extraBytes="0xaabb",
+        backup=True,
+        workers=2,
+        output=str(env.tmp / "exports"),
+    )
     # Avoid a second CRC-only rebuild in the real apply flow; the option is checked on the update call below.
     monkeypatch.setattr(env.library, "_needs_crc_fix", lambda *args: False)
     before = env.original.read_bytes()
-    result, = run(env, [entry], **options)
+    (result,) = run(env, [entry], **options)
     assert [phase for phase, _ in calls] == ["update", "add", "apply"]
     args = calls[0][1]
     assert args["source_paths"] == [source]
@@ -701,8 +816,14 @@ def test_update_then_add_then_apply_forwards_every_classic_option_and_reports_ev
     assert args["spine_options"] == env.settings.spine_options()
     assert args["anim_check"] == env.settings.anim_check_options()
     assert calls[2][1]["backup"] is True
-    assert result == {"id": entry["id"], "outcome": "updated", "reason": None,
-                      "libraryId": env.library.mods()[0].id, "applied": True, "configured": True}
+    assert result == {
+        "id": entry["id"],
+        "outcome": "updated",
+        "reason": None,
+        "libraryId": env.library.mods()[0].id,
+        "applied": True,
+        "configured": True,
+    }
     assert not env.original.with_name(env.original.name + ".backup").exists()  # the kept original is the baseline
     assert env.library.official_bundles("test_spr")[0].read_bytes() == before
     assert env.library.settings is env.settings
@@ -713,8 +834,10 @@ def test_update_then_add_then_apply_forwards_every_classic_option_and_reports_ev
         seen.append(events.get_nowait())
     progress = [data for event, data in seen if event == "job.progress"]
     assert {p["phase"] for p in progress} == {"update", "add", "apply"}
-    assert all({"id", "done", "completed", "remaining", "total", "current", "phase", "index", "step"} <= set(p)
-               for p in progress)
+    assert all(
+        {"id", "done", "completed", "remaining", "total", "current", "phase", "index", "step"} <= set(p)
+        for p in progress
+    )
     assert progress[-1]["done"] == progress[-1]["total"] == 1
     assert all(p["index"] == 1 and p["step"].startswith("import.step.") for p in progress)
     changed = next(data for event, data in seen if event == "library.changed")
@@ -730,8 +853,9 @@ def import_targets(env, kind):
     return env.parts
 
 
-@pytest.mark.parametrize("fixture,kind", [("env", "spr"), ("env", "lobby"),
-                                         ("batch_model_env", "model"), ("batch_other_env", "other")])
+@pytest.mark.parametrize(
+    "fixture,kind", [("env", "spr"), ("env", "lobby"), ("batch_model_env", "model"), ("batch_other_env", "other")]
+)
 @pytest.mark.parametrize("switch", [False, True])
 @pytest.mark.parametrize("enable", [False, True])
 def test_enable_after_import_configures_every_kind_and_defers_game_writes(request, fixture, kind, switch, enable):
@@ -741,11 +865,11 @@ def test_enable_after_import_configures_every_kind_and_defers_game_writes(reques
     targets = import_targets(env, kind)
     sources = [make_mod(target, env.tmp / "input", payload=f"mod {i}".encode()) for i, target in enumerate(targets)]
     before = {target: target.read_bytes() for target in targets}
-    entry, = analyze(env, sources)["entries"]
-    result, = run(env, [entry], enableAfterImport=enable, backup=False)
+    (entry,) = analyze(env, sources)["entries"]
+    (result,) = run(env, [entry], enableAfterImport=enable, backup=False)
     assert result["outcome"] == "imported" and result["applied"] is (enable and switch)
     assert result.get("configured", False) is enable
-    mod, = env.library.mods()
+    (mod,) = env.library.mods()
     if kind == "other":
         assert rpc(env, "mods.other")[0]["selected"] is enable
     else:
@@ -758,28 +882,35 @@ def test_enable_after_import_configures_every_kind_and_defers_game_writes(reques
         for target, source in zip(targets, sources):
             assert target.read_bytes() == (source.read_bytes() if enable else before[target])
     assert env.services.batch_import._latest[entry["id"]].entry["state"] == "done"
-    completed, = analyze(env, sources)["entries"]
+    (completed,) = analyze(env, sources)["entries"]
     assert (completed["state"], completed["libraryId"], completed["reason"]) == ("done", mod.id, None)
 
 
-@pytest.mark.parametrize("fixture,kind", [("env", "spr"), ("env", "lobby"),
-                                         ("batch_model_env", "model"), ("batch_other_env", "other")])
+@pytest.mark.parametrize(
+    "fixture,kind", [("env", "spr"), ("env", "lobby"), ("batch_model_env", "model"), ("batch_other_env", "other")]
+)
 @pytest.mark.parametrize("switch", [False, True])
 def test_several_mods_for_one_variant_configure_in_request_order_last_wins_and_reenter_done(
-        request, fixture, kind, switch, monkeypatch):
+    request, fixture, kind, switch, monkeypatch
+):
     env = request.getfixturevalue(fixture)
     if not switch:
         assert not env.library.toggle(False, True).failed
     targets = import_targets(env, kind)
     before = {target: target.read_bytes() for target in targets}
-    sources = [make_mod(target, env.tmp / name, payload=f"{name} {i}".encode())
-               for name in ("first", "second", "third") for i, target in enumerate(targets)]
+    sources = [
+        make_mod(target, env.tmp / name, payload=f"{name} {i}".encode())
+        for name in ("first", "second", "third")
+        for i, target in enumerate(targets)
+    ]
     jid = rpc(env, "import.analyze", paths=list(map(str, sources)))
     entries = finish(env, jid)["entries"]
     chosen = list(reversed(entries))
     results = run(env, chosen, workers=3)
     assert [result["id"] for result in results] == [entry["id"] for entry in chosen]
-    assert all(result["outcome"] == "imported" and result["applied"] is switch and result["configured"] for result in results)
+    assert all(
+        result["outcome"] == "imported" and result["applied"] is switch and result["configured"] for result in results
+    )
     last = next(mod for mod in env.library.mods() if mod.id == results[-1]["libraryId"])
     if kind == "other":
         assert [row["id"] for row in rpc(env, "mods.other") if row["selected"]] == [last.id]
@@ -808,14 +939,17 @@ def test_several_mods_for_one_variant_configure_in_request_order_last_wins_and_r
 def test_import_skips_a_duplicate_created_since_analysis(env, monkeypatch, duplicate_phase, switch):
     if not switch:
         assert not env.library.toggle(False, True).failed
-    source = (game_bundle(env.tmp / "input", date="2025-01-01", payload=b"old mod") if duplicate_phase == "update"
-              else make_mod(env.original, env.tmp / "input"))
-    entry, = analyze(env, [source])["entries"]
+    source = (
+        game_bundle(env.tmp / "input", date="2025-01-01", payload=b"old mod")
+        if duplicate_phase == "update"
+        else make_mod(env.original, env.tmp / "input")
+    )
+    (entry,) = analyze(env, [source])["entries"]
     if duplicate_phase == "update":
         updater(monkeypatch, [], payload=b"converted mod")
-        stored, = env.library.add([make_mod(env.original, env.tmp / "stored", payload=b"converted mod")])
+        (stored,) = env.library.add([make_mod(env.original, env.tmp / "stored", payload=b"converted mod")])
     elif duplicate_phase == "preflight":
-        stored, = env.library.add([source])
+        (stored,) = env.library.add([source])
     else:
         add = env.library.add_files
         stored = []
@@ -826,22 +960,25 @@ def test_import_skips_a_duplicate_created_since_analysis(env, monkeypatch, dupli
 
         monkeypatch.setattr(env.library, "add_files", add_duplicate)
     before = env.original.read_bytes()
-    result, = run(env, [entry])
+    (result,) = run(env, [entry])
     if duplicate_phase == "add":
-        stored, = stored
+        (stored,) = stored
     assert result["outcome"] == "unchanged" and not result["applied"] and not result["configured"]
     assert result["libraryId"] == stored.id and len(env.library.mods()) == 1
     assert env.library.configured("test").get("spr") != f"mod:{stored.id}"
     assert env.original.read_bytes() == before
-    completed, = analyze(env, [source])["entries"]
-    assert (completed["state"], completed["libraryId"]) == ("done" if duplicate_phase == "add" else "library", stored.id)
+    (completed,) = analyze(env, [source])["entries"]
+    assert (completed["state"], completed["libraryId"]) == (
+        "done" if duplicate_phase == "add" else "library",
+        stored.id,
+    )
 
 
 @pytest.mark.parametrize("change", ["bytes", "remove", "library", "folder"])
 def test_completed_rows_are_scoped_to_unchanged_inputs_and_the_library_install(env, change):
     source = make_mod(env.original, env.tmp / "input")
-    entry, = analyze(env, [source])["entries"]
-    result, = run(env, [entry], enableAfterImport=False)
+    (entry,) = analyze(env, [source])["entries"]
+    (result,) = run(env, [entry], enableAfterImport=False)
     assert analyze(env, [source])["entries"][0]["state"] == "done"
     if change == "bytes":
         make_mod(env.original, source.parent, payload=b"changed mod")
@@ -849,11 +986,12 @@ def test_completed_rows_are_scoped_to_unchanged_inputs_and_the_library_install(e
         assert not env.library.remove(result["libraryId"]).failed
     elif change == "library":
         from bmpt.library import ModLibrary
+
         env.services._library = ModLibrary(env.tmp / "another-library", env.catalog, object(), env.settings)
     else:
         game_bundle(env.tmp / "another-game")
         env.settings.set("game_resource_dir", str(env.tmp / "another-game"))
-    reentered, = analyze(env, [source])["entries"]
+    (reentered,) = analyze(env, [source])["entries"]
     assert reentered["state"] == ("library" if change == "folder" else "ready")
 
 
@@ -864,7 +1002,7 @@ def test_enable_after_import_applies_to_the_pinned_install_when_already_installe
     other.write_bytes(source.read_bytes())
     other.with_name(other.name + ".backup").write_bytes(env.original.read_bytes())
     env.settings.set("game_resource_dir_japan", str(other.parent))
-    entry, = analyze(env, [source])["entries"]
+    (entry,) = analyze(env, [source])["entries"]
     assert entry["state"] == "ready"
     add = env.library.add_files
     recognized = []
@@ -875,7 +1013,7 @@ def test_enable_after_import_applies_to_the_pinned_install_when_already_installe
         return added
 
     monkeypatch.setattr(env.library, "add_files", adding)
-    result, = run(env, [entry], backup=False)
+    (result,) = run(env, [entry], backup=False)
     assert recognized and recognized[0].id == result["libraryId"]
     assert result["outcome"] == "imported" and result["applied"]
     assert env.original.read_bytes() == source.read_bytes()
@@ -887,8 +1025,11 @@ def test_enable_after_import_applies_to_the_pinned_install_when_already_installe
 def test_per_entry_failures_keep_successful_imports_and_error_codes(env, monkeypatch, phase):
     other_target = game_bundle(env.game_dir, "other_spr")
     good = make_mod(other_target, env.tmp / "good", payload=b"good")
-    bad = game_bundle(env.tmp / "bad", date="2025-01-01", payload=b"bad") if phase == "update" else make_mod(
-        env.original, env.tmp / "bad", payload=b"bad")
+    bad = (
+        game_bundle(env.tmp / "bad", date="2025-01-01", payload=b"bad")
+        if phase == "update"
+        else make_mod(env.original, env.tmp / "bad", payload=b"bad")
+    )
     entries = analyze(env, [bad, good])["entries"]
     if phase == "update":
         monkeypatch.setattr(batch_import, "rebuild", lambda **kwargs: RebuildResult(False, "message", []))
@@ -923,26 +1064,31 @@ def test_per_entry_failures_keep_successful_imports_and_error_codes(env, monkeyp
 
 def test_skip_unchanged_update_and_modified_source_are_safe(env, monkeypatch):
     old = game_bundle(env.tmp / "old", date="2025-01-01", payload=b"mod")
-    entry, = analyze(env, [old])["entries"]
-    monkeypatch.setattr(batch_import, "rebuild", lambda **kwargs:
-                        RebuildResult(True, "", [], all_unchanged=True))
-    result, = run(env, [entry])
+    (entry,) = analyze(env, [old])["entries"]
+    monkeypatch.setattr(batch_import, "rebuild", lambda **kwargs: RebuildResult(True, "", [], all_unchanged=True))
+    (result,) = run(env, [entry])
     assert result["outcome"] == "unchanged" and not env.library.mods()
     assert env.services.batch_import._latest[entry["id"]].entry["state"] != "done"
     old.write_bytes(old.read_bytes() + b"changed")
-    result, = run(env, [entry])
+    (result,) = run(env, [entry])
     assert result["outcome"] == "failed" and result["reason"] == "entry_changed"
 
 
 def test_new_analysis_invalidates_previous_ids_at_submission(env):
     first = make_mod(env.original, env.tmp / "first")
-    old, = analyze(env, [first])["entries"]
+    (old,) = analyze(env, [first])["entries"]
     gate = threading.Event()
     wait = env.services.jobs.submit("wait", lambda log, progress: gate.wait(5))
     try:
         new = rpc(env, "import.analyze", paths=[])
-        answer = env.rpc.call("import.run", {"ids": [old["id"]], "options": rpc(env, "import.options"),
-                                            "revision": env.services.batch_import._revision})
+        answer = env.rpc.call(
+            "import.run",
+            {
+                "ids": [old["id"]],
+                "options": rpc(env, "import.options"),
+                "revision": env.services.batch_import._revision,
+            },
+        )
         assert answer["error"]["code"] == "bad_params"
     finally:
         gate.set()
@@ -954,22 +1100,24 @@ def test_a_replaced_library_invalidates_analyzed_sources(env):
     from bmpt.library import ModLibrary
 
     source = make_mod(env.original, env.tmp / "input")
-    entry, = analyze(env, [source])["entries"]
+    (entry,) = analyze(env, [source])["entries"]
     env.services._library = ModLibrary(env.tmp / "another-library", env.catalog, object(), env.settings)
-    answer = env.rpc.call("import.run", {"ids": [entry["id"]], "options": rpc(env, "import.options"),
-                                        "revision": env.services.batch_import._revision})
+    answer = env.rpc.call(
+        "import.run",
+        {"ids": [entry["id"]], "options": rpc(env, "import.options"), "revision": env.services.batch_import._revision},
+    )
     assert answer["error"]["code"] == "folder_changed"
     assert not env.library.mods() and not env.services.library.mods()
 
 
 def test_rechecks_official_names_between_analyze_and_run(env, monkeypatch):
     source = make_mod(env.original, env.tmp / "incoming")
-    entry, = analyze(env, [source])["entries"]
+    (entry,) = analyze(env, [source])["entries"]
     replacement = game_bundle(env.game_dir, date="2026-09-01", payload=b"new official")
     env.original.unlink()
     calls = []
     updater(monkeypatch, calls)
-    result, = run(env, [entry], enableAfterImport=False)
+    (result,) = run(env, [entry], enableAfterImport=False)
     assert result["outcome"] == "updated"
     assert calls[0][1]["target_paths"][0].name == replacement.name
 
@@ -979,7 +1127,7 @@ def test_update_reads_kept_official_bytes_instead_of_the_installed_mod(env, monk
     current_mod = make_mod(env.original, env.tmp / "installed", payload=b"current mod")
     env.library.add_and_apply([current_mod])
     source = game_bundle(env.tmp / "older", date="2025-01-01", payload=b"old mod")
-    entry, = analyze(env, [source])["entries"]
+    (entry,) = analyze(env, [source])["entries"]
     assert entry["state"] == "update"
     calls = []
     updater(monkeypatch, calls)
@@ -997,9 +1145,12 @@ def test_update_reads_kept_official_bytes_instead_of_the_installed_mod(env, monk
 @pytest.mark.parametrize("failure", ["source", "target", "save"])
 def test_classic_update_read_and_save_failures_cannot_be_reported_as_unchanged(env, monkeypatch, failure):
     source = game_bundle(env.tmp / "older", date="2025-01-01", payload=b"old mod")
-    entry, = analyze(env, [source])["entries"]
-    bundle = SimpleNamespace(extract_patch=lambda *args: ({1: b"patch"}, []),
-        apply_patch=lambda *args: PatchResult(1, 0, [], [], [1]), save=lambda *args: (False, "cannot save"))
+    (entry,) = analyze(env, [source])["entries"]
+    bundle = SimpleNamespace(
+        extract_patch=lambda *args: ({1: b"patch"}, []),
+        apply_patch=lambda *args: PatchResult(1, 0, [], [], [1]),
+        save=lambda *args: (False, "cannot save"),
+    )
 
     def load(path, *args):
         if (failure == "source" and path == source) or (failure == "target" and path != source):
@@ -1007,7 +1158,7 @@ def test_classic_update_read_and_save_failures_cannot_be_reported_as_unchanged(e
         return bundle
 
     monkeypatch.setattr(Bundle, "load", load)
-    result, = run(env, [entry])
+    (result,) = run(env, [entry])
     assert (result["outcome"], result["reason"]) == ("failed", "mod_update_failed")
     assert not env.library.mods()
 
@@ -1035,9 +1186,9 @@ def test_workers_parallelize_updates_while_library_adds_remain_serial(env, monke
 
 
 def test_parallel_progress_separates_completed_count_from_active_input_order(env, monkeypatch):
-    sources = [make_mod(env.original, env.tmp / f'input-{i}', payload=f'mod-{i}'.encode()) for i in range(3)]
-    entries = analyze(env, sources)['entries']
-    positions = {entry['id']: i for i, entry in enumerate(entries)}
+    sources = [make_mod(env.original, env.tmp / f"input-{i}", payload=f"mod-{i}".encode()) for i in range(3)]
+    entries = analyze(env, sources)["entries"]
+    positions = {entry["id"]: i for i, entry in enumerate(entries)}
     turns = [threading.Event() for _ in entries]
     turns[2].set()
     following = {2: 0, 0: 1}
@@ -1045,33 +1196,33 @@ def test_parallel_progress_separates_completed_count_from_active_input_order(env
     prepare = env.services.batch_import._prepare
 
     def reordered(candidate, settings, temporary, log, progress):
-        index = positions[candidate.entry['id']]
+        index = positions[candidate.entry["id"]]
         barrier.wait(timeout=5)
         assert turns[index].wait(5)
-        progress(candidate, 'update', 'save')
+        progress(candidate, "update", "save")
         if index in following:
             turns[following[index]].set()
         return prepare(candidate, settings, temporary, log, progress)
 
-    monkeypatch.setattr(env.services.batch_import, '_prepare', reordered)
+    monkeypatch.setattr(env.services.batch_import, "_prepare", reordered)
     events = env.services.events.subscribe()
     results = run(env, entries, workers=3, enableAfterImport=False)
     updates = []
     while not events.empty():
         event, data = events.get_nowait()
-        if event == 'job.progress':
+        if event == "job.progress":
             updates.append(data)
-    assert [p['index'] for p in updates if p['step'] == 'import.step.save'] == [3, 1, 2]
-    assert [p['completed'] for p in updates] == sorted(p['completed'] for p in updates)
-    assert all(p['done'] == p['completed'] and p['remaining'] == len(entries) - p['completed'] for p in updates)
-    assert updates[-1]['completed'] == len(results) == 3 and updates[-1]['remaining'] == 0
-    assert [result['id'] for result in results] == [entry['id'] for entry in entries]
+    assert [p["index"] for p in updates if p["step"] == "import.step.save"] == [3, 1, 2]
+    assert [p["completed"] for p in updates] == sorted(p["completed"] for p in updates)
+    assert all(p["done"] == p["completed"] and p["remaining"] == len(entries) - p["completed"] for p in updates)
+    assert updates[-1]["completed"] == len(results) == 3 and updates[-1]["remaining"] == 0
+    assert [result["id"] for result in results] == [entry["id"] for entry in entries]
 
 
-@pytest.mark.parametrize('fail', [False, True])
+@pytest.mark.parametrize("fail", [False, True])
 def test_batch_application_prunes_globally_once_even_after_failure(env, monkeypatch, fail):
-    sources = [make_mod(env.original, env.tmp / f'input-{i}', payload=f'mod-{i}'.encode()) for i in range(3)]
-    entries = analyze(env, sources)['entries']
+    sources = [make_mod(env.original, env.tmp / f"input-{i}", payload=f"mod-{i}".encode()) for i in range(3)]
+    entries = analyze(env, sources)["entries"]
     prune = env.library._prune
     calls = []
 
@@ -1079,41 +1230,43 @@ def test_batch_application_prunes_globally_once_even_after_failure(env, monkeypa
         calls.append(1)
         return prune()
 
-    monkeypatch.setattr(env.library, '_prune', counted)
+    monkeypatch.setattr(env.library, "_prune", counted)
     if fail:
-        monkeypatch.setattr(env.library, '_commit', lambda *args, **kwargs: (_ for _ in ()).throw(
-            ServiceError('game_file_locked')))
+        monkeypatch.setattr(
+            env.library, "_commit", lambda *args, **kwargs: (_ for _ in ()).throw(ServiceError("game_file_locked"))
+        )
     results = run(env, entries)
     assert len(calls) == 1
-    assert all(result['outcome'] == ('failed' if fail else 'imported') for result in results)
+    assert all(result["outcome"] == ("failed" if fail else "imported") for result in results)
     assert env.library._deferred_prunes == 0 and not env.library._prune_pending
 
 
-@pytest.mark.parametrize('source, needed', [('windows_global', True), ('windows_japan', True),
-                                             ('adb_global', False), ('adb_japan', False)])
+@pytest.mark.parametrize(
+    "source, needed", [("windows_global", True), ("windows_japan", True), ("adb_global", False), ("adb_japan", False)]
+)
 def test_auto_crc_follows_the_install_without_loading_the_target(env, monkeypatch, source, needed):
-    env.settings.set('file_source', source)
-    settings = batch_import.ImportSettings(env.settings, {**env.services.batch_import.options(), 'crc': 'auto'})
-    monkeypatch.setattr(Bundle, 'load', lambda *args, **kwargs: pytest.fail('the target was loaded'))
-    unreadable = env.tmp / 'unreadable.bundle'
-    unreadable.write_bytes(b'not a bundle')
+    env.settings.set("file_source", source)
+    settings = batch_import.ImportSettings(env.settings, {**env.services.batch_import.options(), "crc": "auto"})
+    monkeypatch.setattr(Bundle, "load", lambda *args, **kwargs: pytest.fail("the target was loaded"))
+    unreadable = env.tmp / "unreadable.bundle"
+    unreadable.write_bytes(b"not a bundle")
     assert settings.crc_needed(env.original) is needed
     assert settings.crc_needed(unreadable) is needed
     assert settings.crc_needed(None) is needed
 
 
-@pytest.mark.parametrize('option, needed', [('on', True), ('off', False)])
+@pytest.mark.parametrize("option, needed", [("on", True), ("off", False)])
 def test_explicit_import_crc_option_wins_over_the_install(env, option, needed):
-    for source in ('windows_global', 'adb_global'):
-        env.settings.set('file_source', source)
-        settings = batch_import.ImportSettings(env.settings, {**env.services.batch_import.options(), 'crc': option})
+    for source in ("windows_global", "adb_global"):
+        env.settings.set("file_source", source)
+        settings = batch_import.ImportSettings(env.settings, {**env.services.batch_import.options(), "crc": option})
         assert settings.crc_needed(env.original) is needed
 
 
 def test_later_worker_uses_frozen_official_bytes_after_an_earlier_apply(env, monkeypatch):
     original = env.original.read_bytes()
-    sources = [game_bundle(env.tmp / f'input-{i}', date='2025-01-01', payload=f'mod-{i}'.encode()) for i in range(2)]
-    entries = analyze(env, sources)['entries']
+    sources = [game_bundle(env.tmp / f"input-{i}", date="2025-01-01", payload=f"mod-{i}".encode()) for i in range(2)]
+    entries = analyze(env, sources)["entries"]
     applied = threading.Event()
     prepare, apply = env.services.batch_import._prepare, env.library.apply_import
     baselines, copies = [], []
@@ -1125,7 +1278,7 @@ def test_later_worker_uses_frozen_official_bytes_after_an_earlier_apply(env, mon
         return clone(source, target)
 
     def delayed(candidate, *args):
-        if candidate.entry['id'] == entries[1]['id']:
+        if candidate.entry["id"] == entries[1]["id"]:
             assert applied.wait(5)
         return prepare(candidate, *args)
 
@@ -1136,39 +1289,39 @@ def test_later_worker_uses_frozen_official_bytes_after_an_earlier_apply(env, mon
 
     def update(**kwargs):
         pairs = []
-        for target in kwargs['target_paths']:
+        for target in kwargs["target_paths"]:
             baselines.append(target.read_bytes())
-            output = kwargs['output_dir'] / target.name
-            output.write_bytes(kwargs['source_paths'][0].read_bytes())
+            output = kwargs["output_dir"] / target.name
+            output.write_bytes(kwargs["source_paths"][0].read_bytes())
             pairs.append(FilePair(output, target))
-        return RebuildResult(True, 'ok', pairs)
+        return RebuildResult(True, "ok", pairs)
 
-    monkeypatch.setattr(batch_import, 'atomic_clone', tracked_clone)
-    monkeypatch.setattr(env.services.batch_import, '_prepare', delayed)
-    monkeypatch.setattr(env.library, 'apply_import', applying)
-    monkeypatch.setattr(batch_import, 'rebuild', update)
+    monkeypatch.setattr(batch_import, "atomic_clone", tracked_clone)
+    monkeypatch.setattr(env.services.batch_import, "_prepare", delayed)
+    monkeypatch.setattr(env.library, "apply_import", applying)
+    monkeypatch.setattr(batch_import, "rebuild", update)
     results = run(env, entries, workers=2)
-    assert all(result['outcome'] == 'updated' and result['applied'] for result in results)
+    assert all(result["outcome"] == "updated" and result["applied"] for result in results)
     assert baselines == [original, original]
     assert copies == [env.original]
     assert env.original.read_bytes() == sources[1].read_bytes()
-    env.library.restore('test')
+    env.library.restore("test")
     assert env.original.read_bytes() == original
 
 
 def test_changing_original_during_snapshot_never_reaches_preparation(env, monkeypatch):
-    source = game_bundle(env.tmp / 'old', date='2025-01-01', payload=b'old mod')
-    entry, = analyze(env, [source])['entries']
+    source = game_bundle(env.tmp / "old", date="2025-01-01", payload=b"old mod")
+    (entry,) = analyze(env, [source])["entries"]
 
     def changed(original, copied):
         shutil.copy2(original, copied)
-        original.write_bytes(original.read_bytes() + b'changed')
+        original.write_bytes(original.read_bytes() + b"changed")
         return True
 
-    monkeypatch.setattr(batch_import, 'atomic_clone', changed)
-    monkeypatch.setattr(env.services.batch_import, '_prepare', forbid)
-    result, = run(env, [entry], enableAfterImport=False)
-    assert (result['outcome'], result['reason']) == ('failed', 'entry_changed')
+    monkeypatch.setattr(batch_import, "atomic_clone", changed)
+    monkeypatch.setattr(env.services.batch_import, "_prepare", forbid)
+    (result,) = run(env, [entry], enableAfterImport=False)
+    assert (result["outcome"], result["reason"]) == ("failed", "entry_changed")
     assert not env.library.mods()
 
 
@@ -1176,9 +1329,9 @@ def test_unavailable_official_baseline_allows_direct_import_with_live_targets(en
     outside_mod = make_mod(env.original, env.tmp / "outside", payload=b"outside mod")
     env.original.write_bytes(outside_mod.read_bytes())
     incoming = make_mod(env.original, env.tmp / "incoming", payload=b"incoming mod")
-    entry, = analyze(env, [incoming])["entries"]
+    (entry,) = analyze(env, [incoming])["entries"]
     assert (entry["state"], entry["reason"]) == ("ready", None)
-    result, = run(env, [entry])
+    (result,) = run(env, [entry])
     assert result["outcome"] == "imported" and result["applied"] and result["kept_current"]
     assert env.original.read_bytes() == incoming.read_bytes()
     assert any(mod.file.read_bytes() == outside_mod.read_bytes() for mod in env.library.mods())
@@ -1192,9 +1345,9 @@ def test_import_backup_preserves_an_official_baseline_from_a_classic_backup(env)
     outside = make_mod(env.original, env.tmp / "outside", payload=b"outside mod")
     env.original.write_bytes(outside.read_bytes())
     incoming = make_mod(env.original, env.tmp / "incoming", payload=b"new mod")
-    entry, = analyze(env, [incoming])["entries"]
+    (entry,) = analyze(env, [incoming])["entries"]
     assert entry["state"] == "ready"
-    result, = run(env, [entry], backup=True)
+    (result,) = run(env, [entry], backup=True)
     assert result["outcome"] == "imported" and result["applied"]
     assert env.original.read_bytes() == incoming.read_bytes()
     assert backup.read_bytes() == official  # an existing .backup is left alone, never overwritten
@@ -1206,14 +1359,18 @@ def test_import_backup_preserves_an_official_baseline_from_a_classic_backup(env)
 @pytest.mark.parametrize("rebuild", [False, True])
 def test_missing_official_still_blocks_asset_transfer_with_the_specific_reason(env, monkeypatch, rebuild):
     env.original.write_bytes(make_mod(env.original, env.tmp / "outside").read_bytes())
-    source = (make_mod(env.original, env.tmp / "input", payload=b"incoming rebuild") if rebuild else
-              game_bundle(env.tmp / "old", date="2025-01-01", payload=b"old mod"))
+    source = (
+        make_mod(env.original, env.tmp / "input", payload=b"incoming rebuild")
+        if rebuild
+        else game_bundle(env.tmp / "old", date="2025-01-01", payload=b"old mod")
+    )
     if rebuild:
+
         def incompatible(*args, **kwargs):
             raise ServiceError("mod_release_mismatch")
 
         monkeypatch.setattr(env.library, "direct_import", incompatible)
-    entry, = analyze(env, [source])["entries"]
+    (entry,) = analyze(env, [source])["entries"]
     assert (entry["state"], entry["reason"]) == ("blocked", "original_unavailable")
     assert entry["error"]["code"] == "original_unavailable"
     assert not env.library.mods()
@@ -1223,24 +1380,41 @@ def test_partial_batch_without_official_imports_and_reports_incomplete(env):
     env.original.write_bytes(make_mod(env.original, env.tmp / "outside").read_bytes())
     texture = game_bundle(env.game_dir, part="textures")
     incoming = make_mod(texture, env.tmp / "incoming")
-    entry, = analyze(env, [incoming])["entries"]
+    (entry,) = analyze(env, [incoming])["entries"]
     assert entry["state"] == "ready"
     core, bundles = env.services.batch_import.preview(entry["preview"]["key"])
     assert core == "test_spr" and bundles == [env.original, incoming]
-    result, = run(env, [entry])
+    (result,) = run(env, [entry])
     assert result["applied"] and result["incomplete"] and result["kept_current"]
     assert env.library.preview_incomplete(result["libraryId"])
 
 
 def test_options_persist_in_app_prefs_and_default_to_classic_settings(env):
     defaults = rpc(env, "import.options")
-    assert set(defaults) == {"strategy", "types", "skipUnchanged", "crc", "compression", "extraBytes", "backup",
-                             "workers", "output", "enableAfterImport", "previewAfterImport"}
+    assert set(defaults) == {
+        "strategy",
+        "types",
+        "skipUnchanged",
+        "crc",
+        "compression",
+        "extraBytes",
+        "backup",
+        "workers",
+        "output",
+        "enableAfterImport",
+        "previewAfterImport",
+    }
     assert defaults["compression"] == "none" and defaults["crc"] == "off"
     assert defaults["workers"] == env.settings.get("max_workers")
     assert set(defaults["types"]) == env.settings.asset_types()
-    changed = {**defaults, "strategy": "path_id", "types": ["ALL"], "enableAfterImport": False,
-               "workers": 3, "output": None}
+    changed = {
+        **defaults,
+        "strategy": "path_id",
+        "types": ["ALL"],
+        "enableAfterImport": False,
+        "workers": 3,
+        "output": None,
+    }
     assert rpc(env, "import.setOptions", **changed) == changed
     state = UiState(env.services.state.path)
     assert state.get(batch_import.PREF) == changed
@@ -1250,10 +1424,25 @@ def test_options_persist_in_app_prefs_and_default_to_classic_settings(env):
     assert "prefs" in json.loads(state.path.read_text())
 
 
-@pytest.mark.parametrize("field,value", [("strategy", "guess"), ("types", []), ("types", ["unknown"]),
-    ("skipUnchanged", 1), ("crc", True), ("crc", "true"), ("compression", "zip"), ("extraBytes", "0x0"),
-    ("backup", "yes"), ("workers", True), ("workers", 0), ("workers", 65), ("output", ""),
-    ("enableAfterImport", None)])
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("strategy", "guess"),
+        ("types", []),
+        ("types", ["unknown"]),
+        ("skipUnchanged", 1),
+        ("crc", True),
+        ("crc", "true"),
+        ("compression", "zip"),
+        ("extraBytes", "0x0"),
+        ("backup", "yes"),
+        ("workers", True),
+        ("workers", 0),
+        ("workers", 65),
+        ("output", ""),
+        ("enableAfterImport", None),
+    ],
+)
 def test_invalid_options_are_rejected_without_persisting(env, field, value):
     options = {**rpc(env, "import.options"), field: value}
     result = env.rpc.call("import.setOptions", options)
@@ -1276,7 +1465,9 @@ def test_native_folder_uses_webview_dialog(monkeypatch, tmp_path):
     marker = object()
     monkeypatch.setitem(sys.modules, "webview", SimpleNamespace(FileDialog=SimpleNamespace(FOLDER=marker)))
     calls = []
-    window = SimpleNamespace(create_file_dialog=lambda *args, **kwargs: calls.append((args, kwargs)) or (str(tmp_path),))
+    window = SimpleNamespace(
+        create_file_dialog=lambda *args, **kwargs: calls.append((args, kwargs)) or (str(tmp_path),)
+    )
     assert native.pick_folder(window) == [tmp_path]
     assert calls == [((marker,), {"allow_multiple": True})]
 
@@ -1293,14 +1484,19 @@ def test_integration_official_bundle_preflight_uses_only_copies(tmp_path, monkey
     from test_library import FakeCatalog
 
     resources = get_search_dirs(GAME_DIR)
-    candidates = [p for directory in resources for p in directory.glob("assets-_mx-spinecharacters-*.bundle")
-                  if parse_filename(p.name).core.endswith("_spr")]
+    candidates = [
+        p
+        for directory in resources
+        for p in directory.glob("assets-_mx-spinecharacters-*.bundle")
+        if parse_filename(p.name).core.endswith("_spr")
+    ]
     if not candidates:
         pytest.skip("No portrait bundles available")
     chosen = min(candidates, key=lambda p: p.stat().st_size)
     core_name = parse_filename(chosen.name).core
-    siblings = [p for directory in resources for p in directory.glob("*.bundle")
-                if parse_filename(p.name).core == core_name]
+    siblings = [
+        p for directory in resources for p in directory.glob("*.bundle") if parse_filename(p.name).core == core_name
+    ]
     game = tmp_path / "game"
     game.mkdir()
     for path in siblings:
@@ -1326,9 +1522,10 @@ def test_integration_official_bundle_preflight_uses_only_copies(tmp_path, monkey
 @pytest.fixture
 def batch_other_env(other_env, monkeypatch):
     env = other_env
-    env.settings.set('output_dir', str(env.tmp / 'exports'))
-    env.services = Services(env.settings, env.tmp / 'app', cache=object(), game=object(),
-                            catalog=env.catalog, library=env.library)
+    env.settings.set("output_dir", str(env.tmp / "exports"))
+    env.services = Services(
+        env.settings, env.tmp / "app", cache=object(), game=object(), catalog=env.catalog, library=env.library
+    )
     env.rpc = build_api(env.services)
     yield env
     env.services.close()
@@ -1336,98 +1533,105 @@ def batch_other_env(other_env, monkeypatch):
 
 def test_generic_batch_multi_target_import_apply_library_and_settings_rpc(batch_other_env):
     env = batch_other_env
-    sources = [make_mod(p, env.tmp / 'incoming', payload=f'mod {i}'.encode()) for i, p in enumerate(env.parts)]
-    entry, = analyze(env, [sources[0].parent])['entries']
-    assert entry['kind'] == 'other' and entry['variant'] is None
-    assert entry['state'] == 'ready' and entry['reason'] is None
-    assert {f['target'] for f in entry['files']} == {p.name for p in env.parts}
-    result, = run(env, [entry], backup=True)
-    assert result['outcome'] == 'imported' and result['applied']
-    mod, = env.library.mods()
-    assert mod.id == result['libraryId']
+    sources = [make_mod(p, env.tmp / "incoming", payload=f"mod {i}".encode()) for i, p in enumerate(env.parts)]
+    (entry,) = analyze(env, [sources[0].parent])["entries"]
+    assert entry["kind"] == "other" and entry["variant"] is None
+    assert entry["state"] == "ready" and entry["reason"] is None
+    assert {f["target"] for f in entry["files"]} == {p.name for p in env.parts}
+    (result,) = run(env, [entry], backup=True)
+    assert result["outcome"] == "imported" and result["applied"]
+    (mod,) = env.library.mods()
+    assert mod.id == result["libraryId"]
     assert all(p.read_bytes() == (mod.file.parent / p.name).read_bytes() for p in env.parts)
-    row, = rpc(env, 'mods.other')
-    assert row['id'] == mod.id and row['selected'] and row['state'] == 'active'
-    duplicate, = analyze(env, sources)['entries']
-    assert duplicate['state'] == 'done' and duplicate['libraryId'] == mod.id
-    finish(env, rpc(env, 'actions.restore', variant=mod.target, kind='other'))
-    assert rpc(env, 'mods.other')[0]['state'] == 'official'
+    (row,) = rpc(env, "mods.other")
+    assert row["id"] == mod.id and row["selected"] and row["state"] == "active"
+    (duplicate,) = analyze(env, sources)["entries"]
+    assert duplicate["state"] == "done" and duplicate["libraryId"] == mod.id
+    finish(env, rpc(env, "actions.restore", variant=mod.target, kind="other"))
+    assert rpc(env, "mods.other")[0]["state"] == "official"
     assert all(p.read_bytes() == data for p, data in env.official.items())
-    finish(env, rpc(env, 'actions.apply', variant=mod.target, source=f'mod:{mod.id}', kind='other'))
-    finish(env, rpc(env, 'mods.remove', id=mod.id, confirm=True))
-    assert rpc(env, 'mods.other') == []
+    finish(env, rpc(env, "actions.apply", variant=mod.target, source=f"mod:{mod.id}", kind="other"))
+    finish(env, rpc(env, "mods.remove", id=mod.id, confirm=True))
+    assert rpc(env, "mods.other") == []
     assert all(p.read_bytes() == data for p, data in env.official.items())
 
 
 def test_generic_old_batch_uses_classic_update_then_add_and_deferred_apply(batch_other_env, monkeypatch):
     env = batch_other_env
-    old = game_bundle(env.tmp / 'old', 'common', category='ui', part='textures', date='2025-01-01', payload=b'old mod')
-    key = ('Assets/UI/title', 'title', 'Texture2D')
-    monkeypatch.setattr(Bundle, 'load', lambda path, *args: SimpleNamespace(get_asset_keys=lambda strategy: {key}))
-    entry, = analyze(env, [old])['entries']
-    assert entry['state'] == 'update' and entry['files'][0]['target'] == env.parts[0].name
+    old = game_bundle(env.tmp / "old", "common", category="ui", part="textures", date="2025-01-01", payload=b"old mod")
+    key = ("Assets/UI/title", "title", "Texture2D")
+    monkeypatch.setattr(Bundle, "load", lambda path, *args: SimpleNamespace(get_asset_keys=lambda strategy: {key}))
+    (entry,) = analyze(env, [old])["entries"]
+    assert entry["state"] == "update" and entry["files"][0]["target"] == env.parts[0].name
     calls = []
     updater(monkeypatch, calls)
     assert not env.library.toggle(False, True).failed
-    result, = run(env, [entry], strategy='cont_name_type')
-    assert result['outcome'] == 'updated' and not result['applied'] and result['configured']
-    assert calls[0][1]['source_paths'] == [old]
-    assert [p.name for p in calls[0][1]['target_paths']] == [env.parts[0].name]
-    assert rpc(env, 'mods.other')[0]['state'] == 'set'
-    completed, = analyze(env, [old])['entries']
-    assert (completed['state'], completed['libraryId']) == ('library', result['libraryId'])
+    (result,) = run(env, [entry], strategy="cont_name_type")
+    assert result["outcome"] == "updated" and not result["applied"] and result["configured"]
+    assert calls[0][1]["source_paths"] == [old]
+    assert [p.name for p in calls[0][1]["target_paths"]] == [env.parts[0].name]
+    assert rpc(env, "mods.other")[0]["state"] == "set"
+    (completed,) = analyze(env, [old])["entries"]
+    assert (completed["state"], completed["libraryId"]) == ("library", result["libraryId"])
     assert not env.library.toggle(True, False).failed
     assert env.parts[0].read_bytes() == env.library.mods()[0].file.read_bytes()
 
 
 def test_generic_installed_untracked_multi_file_batch_is_recognized(batch_other_env):
     env = batch_other_env
-    uploads = [make_mod(p, env.tmp / 'incoming') for p in env.parts]
+    uploads = [make_mod(p, env.tmp / "incoming") for p in env.parts]
     for target, source in zip(env.parts, uploads):
-        Path(str(target) + '.backup').write_bytes(env.official[target])
+        Path(str(target) + ".backup").write_bytes(env.official[target])
         target.write_bytes(source.read_bytes())
-    entry, = analyze(env, uploads)['entries']
-    assert entry['state'] == 'installed'
+    (entry,) = analyze(env, uploads)["entries"]
+    assert entry["state"] == "installed"
     assert not env.library.mods()
-    result = env.library.add_files('other', uploads)
+    result = env.library.add_files("other", uploads)
     assert result.installed == result.added
-    assert env.library.other_mods()[0]['selected']
+    assert env.library.other_mods()[0]["selected"]
 
 
 def test_generic_multi_prefix_updates_keep_each_patch_with_its_official_targets(batch_other_env, monkeypatch):
     env = batch_other_env
-    sources = [game_bundle(env.tmp / 'old', 'common', category=category, part=part, date='2025-01-01', payload=b'old')
-               for category, part in [('ui', 'textures'), ('music', 'audio')]]
-    monkeypatch.setattr(Bundle, 'load', lambda path, *args: SimpleNamespace(get_asset_keys=lambda strategy: {'shared-name'}))
-    entry, = analyze(env, sources)['entries']
-    assert entry['state'] == 'update'
+    sources = [
+        game_bundle(env.tmp / "old", "common", category=category, part=part, date="2025-01-01", payload=b"old")
+        for category, part in [("ui", "textures"), ("music", "audio")]
+    ]
+    monkeypatch.setattr(
+        Bundle, "load", lambda path, *args: SimpleNamespace(get_asset_keys=lambda strategy: {"shared-name"})
+    )
+    (entry,) = analyze(env, sources)["entries"]
+    assert entry["state"] == "update"
     calls = []
     updater(monkeypatch, calls)
-    result, = run(env, [entry], enableAfterImport=False, types=['ALL'])
-    assert result['outcome'] == 'updated'
+    (result,) = run(env, [entry], enableAfterImport=False, types=["ALL"])
+    assert result["outcome"] == "updated"
     assert len(calls) == 2
     for _, call in calls:
-        assert len(call['source_paths']) == len(call['target_paths']) == 1
-        assert call['asset_types_to_replace'] == {'ALL'}
-        source, target = call['source_paths'][0], call['target_paths'][0]
+        assert len(call["source_paths"]) == len(call["target_paths"]) == 1
+        assert call["asset_types_to_replace"] == {"ALL"}
+        source, target = call["source_paths"][0], call["target_paths"][0]
         from ba_modding_toolkit.naming import parse_filename
+
         assert parse_filename(source.name).prefix == parse_filename(target.name).prefix
 
 
 def test_generic_old_bundle_can_split_into_multiple_current_official_files(batch_other_env, monkeypatch):
     env = batch_other_env
-    split = game_bundle(env.game_dir, 'common', category='ui', part='materials')
-    old = game_bundle(env.tmp / 'old', 'common', category='ui', part='003', date='2025-01-01', payload=b'old')
-    monkeypatch.setattr(Bundle, 'load', lambda path, *args: SimpleNamespace(get_asset_keys=lambda strategy: {'shared-name'}))
-    entry, = analyze(env, [old])['entries']
-    assert entry['state'] == 'update'
+    split = game_bundle(env.game_dir, "common", category="ui", part="materials")
+    old = game_bundle(env.tmp / "old", "common", category="ui", part="003", date="2025-01-01", payload=b"old")
+    monkeypatch.setattr(
+        Bundle, "load", lambda path, *args: SimpleNamespace(get_asset_keys=lambda strategy: {"shared-name"})
+    )
+    (entry,) = analyze(env, [old])["entries"]
+    assert entry["state"] == "update"
     calls = []
     updater(monkeypatch, calls)
-    result, = run(env, [entry])
-    assert result['outcome'] == 'updated' and result['applied']
-    mod, = env.library.mods()
-    assert len(list(mod.file.parent.glob('*.bundle'))) == 2
-    assert set(rpc(env, 'mods.other')[0]['files']) == {env.parts[0].name, split.name}
+    (result,) = run(env, [entry])
+    assert result["outcome"] == "updated" and result["applied"]
+    (mod,) = env.library.mods()
+    assert len(list(mod.file.parent.glob("*.bundle"))) == 2
+    assert set(rpc(env, "mods.other")[0]["files"]) == {env.parts[0].name, split.name}
     assert not env.library.toggle(False, True).failed
     assert not env.library.toggle(True, False).failed
     assert env.parts[0].read_bytes() == (mod.file.parent / env.parts[0].name).read_bytes()
@@ -1438,10 +1642,12 @@ def test_generic_classic_queue_pins_every_target_slot(batch_other_env):
     from bmpt.library.judge import core_of
 
     env = batch_other_env
-    mod, = env.library.add_files('other', [make_mod(p, env.tmp / 'incoming') for p in env.parts])
-    count = env.services.queue_call('actions.apply', {'variant': mod.target, 'kind': 'other', 'source': f'mod:{mod.id}'})
+    (mod,) = env.library.add_files("other", [make_mod(p, env.tmp / "incoming") for p in env.parts])
+    count = env.services.queue_call(
+        "actions.apply", {"variant": mod.target, "kind": "other", "source": f"mod:{mod.id}"}
+    )
     assert count == 1
-    call, = env.services.queue.items()
+    (call,) = env.services.queue.items()
     assert {core for _, core in call.entries} == {core_of(p.name) for p in env.parts}
     assert len(call.files) == len(env.parts)
 
@@ -1465,17 +1671,26 @@ def test_same_name_upload_converts_only_uploaded_skeletons(env, monkeypatch):
     retained_bytes = untouched.read_bytes()
 
     def inspect(path, **kwargs):
-        skeletons = ({"a.skel": b"3.8.75"} if path == source else
-                     {"b.skel": b"4.1.24"} if path.name == untouched.name else {"a.skel": b"4.2.33"})
-        return integrity.Contents(platforms={"StandaloneWindows64"}, files={"cab-test"}, skeletons=skeletons,
-                                  atlases={name.replace(".skel", ".atlas"): b"" for name in skeletons})
+        skeletons = (
+            {"a.skel": b"3.8.75"}
+            if path == source
+            else {"b.skel": b"4.1.24"}
+            if path.name == untouched.name
+            else {"a.skel": b"4.2.33"}
+        )
+        return integrity.Contents(
+            platforms={"StandaloneWindows64"},
+            files={"cab-test"},
+            skeletons=skeletons,
+            atlases={name.replace(".skel", ".atlas"): b"" for name in skeletons},
+        )
 
     mock_spine_contents(monkeypatch, inspect)
     converter = env.tmp / "converter"
     converter.touch()
     env.settings.set("enable_spine_conversion", True)
     env.settings.set("spine_converter_path", str(converter))
-    entry, = analyze(env, [source])["entries"]
+    (entry,) = analyze(env, [source])["entries"]
     assert (entry["state"], entry["reason"]) == ("update", None)
     calls = []
     updater(monkeypatch, calls)
@@ -1486,22 +1701,30 @@ def test_same_name_upload_converts_only_uploaded_skeletons(env, monkeypatch):
 
 def test_copy_compatibility_keeps_retained_atlas_validation(monkeypatch):
     monkeypatch.setattr(batch_import, "get_skel_version", lambda data: data.decode())
-    report = {"official": {"skeletons": {"a.skel": {"version": "4.2.33"}, "b.skel": {"version": "4.1.24"}}},
-              "mod": {"skeletons": {"a.skel": {"version": "3.8.75"}, "b.skel": {"version": "4.1.24"}}},
-              "remappable": True, "misfit": True}
+    report = {
+        "official": {"skeletons": {"a.skel": {"version": "4.2.33"}, "b.skel": {"version": "4.1.24"}}},
+        "mod": {"skeletons": {"a.skel": {"version": "3.8.75"}, "b.skel": {"version": "4.1.24"}}},
+        "remappable": True,
+        "misfit": True,
+    }
     assert batch_import.copy_compatibility(report, integrity.Contents(skeletons={"a.skel": b"3.8.75"})) == (
-        {"a.skel": {"4.2.33"}}, {"a.skel": "3.8.75"}, True)
+        {"a.skel": {"4.2.33"}},
+        {"a.skel": "3.8.75"},
+        True,
+    )
     # what the official rig changed under a mod never refuses the copy: only a page size the texture does not fit
     assert batch_import.copy_compatibility({**report, "misfit": False}, integrity.Contents())[2] is False
 
 
 def test_failed_install_result_keeps_set_note_and_error(env, monkeypatch):
     source = make_mod(env.original, env.tmp / "input")
-    entry, = analyze(env, [source])["entries"]
+    (entry,) = analyze(env, [source])["entries"]
+
     def fail(*args, **kwargs):
         raise ServiceError("game_file_locked", file=env.original)
+
     monkeypatch.setattr(env.library, "_commit", fail)
-    result, = run(env, [entry])
+    (result,) = run(env, [entry])
     assert result["outcome"] == "failed" and result["reason"] == "game_file_locked"
     assert result["configured"] and not result["applied"]
     assert env.library.configured("test")["spr"] == f"mod:{result['libraryId']}"
@@ -1516,13 +1739,13 @@ def forbid(*args, **kwargs):
 def test_non_importable_selection_never_builds_adds_or_applies(batch_model_env, monkeypatch, state):
     env = batch_model_env
     source = make_mod(env.parts[1], env.tmp / "input")
-    entry, = analyze(env, [source])["entries"]
+    (entry,) = analyze(env, [source])["entries"]
     cached = env.services.batch_import._latest[entry["id"]]
     cached.entry.update(state=state, reason="required_assets_unmatched")
     monkeypatch.setattr(env.services.batch_import, "_prepare", forbid)
     monkeypatch.setattr(env.library, "add_files", forbid)
     monkeypatch.setattr(env.library, "apply_import", forbid)
-    result, = run(env, [entry, entry])
+    (result,) = run(env, [entry, entry])
     assert result["outcome"] in ("skipped", "unchanged") and not result["applied"]
     assert not env.library.mods()
     assert all(path.read_bytes() == data for path, data in env.official.items())
@@ -1531,7 +1754,7 @@ def test_non_importable_selection_never_builds_adds_or_applies(batch_model_env, 
 def test_execution_recheck_refusal_never_reaches_prepare(batch_model_env, monkeypatch):
     env = batch_model_env
     source = make_mod(env.parts[1], env.tmp / "input")
-    entry, = analyze(env, [source])["entries"]
+    (entry,) = analyze(env, [source])["entries"]
 
     def refuse(*args, **kwargs):
         raise ServiceError("required_assets_unmatched", file=source, names="Body")
@@ -1540,7 +1763,7 @@ def test_execution_recheck_refusal_never_reaches_prepare(batch_model_env, monkey
     monkeypatch.setattr(env.services.batch_import, "_prepare", forbid)
     monkeypatch.setattr(env.library, "add_files", forbid)
     monkeypatch.setattr(env.library, "apply_import", forbid)
-    result, = run(env, [entry])
+    (result,) = run(env, [entry])
     assert result["outcome"] == "failed" and result["state"] == "blocked"
     assert result["error"] == ServiceError("required_assets_unmatched", file=source, names="Body").to_json()
     assert env.services.batch_import._latest[entry["id"]].entry["state"] == "blocked"
@@ -1554,12 +1777,12 @@ def test_collection_failure_survives_a_stale_importable_state(env, monkeypatch):
     source = make_mod(env.original, env.tmp / "input")
     duplicate = source.with_name(source.name + ".backup")
     duplicate.write_bytes(source.read_bytes() + b"conflict")
-    entry, = analyze(env, [source, duplicate])["entries"]
+    (entry,) = analyze(env, [source, duplicate])["entries"]
     assert entry["state"] == "blocked"
     env.services.batch_import._latest[entry["id"]].entry["state"] = "ready"
     monkeypatch.setattr(env.services.batch_import, "_prepare", forbid)
     monkeypatch.setattr(env.library, "add_files", forbid)
-    result, = run(env, [entry])
+    (result,) = run(env, [entry])
     assert result["outcome"] == "failed" and result["reason"] == "conflict"
     assert not env.library.mods()
 
@@ -1568,7 +1791,7 @@ def test_collection_failure_survives_a_stale_importable_state(env, monkeypatch):
 def test_prepared_work_cannot_bypass_a_changed_verdict_or_input(env, monkeypatch, change):
     source = make_mod(env.original, env.tmp / "input")
     before = env.original.read_bytes()
-    entry, = analyze(env, [source])["entries"]
+    (entry,) = analyze(env, [source])["entries"]
     batch = env.services.batch_import
     prepare = batch._prepare
 
@@ -1585,7 +1808,7 @@ def test_prepared_work_cannot_bypass_a_changed_verdict_or_input(env, monkeypatch
     monkeypatch.setattr(batch, "_prepare", changed)
     monkeypatch.setattr(env.library, "add_files", forbid)
     monkeypatch.setattr(env.library, "apply_import", forbid)
-    result, = run(env, [entry])
+    (result,) = run(env, [entry])
     assert result["outcome"] == "failed"
     assert result["reason"] == ("mod_platform_mismatch" if change == "verdict" else "entry_changed")
     assert not env.library.mods() and env.original.read_bytes() == before
@@ -1593,14 +1816,14 @@ def test_prepared_work_cannot_bypass_a_changed_verdict_or_input(env, monkeypatch
 
 def test_completion_never_masks_a_new_blocked_verdict(env, monkeypatch):
     source = make_mod(env.original, env.tmp / "input")
-    entry, = analyze(env, [source])["entries"]
+    (entry,) = analyze(env, [source])["entries"]
     run(env, [entry], enableAfterImport=False)
 
     def refuse(*args, **kwargs):
         raise ServiceError("mod_platform_mismatch", file=source)
 
     monkeypatch.setattr(env.library, "inspect_import", refuse)
-    blocked, = analyze(env, [source])["entries"]
+    (blocked,) = analyze(env, [source])["entries"]
     assert blocked["state"] == "blocked" and blocked["reason"] == "mod_platform_mismatch"
     monkeypatch.setattr(env.library, "apply_import", forbid)
     assert run(env, [blocked])[0]["outcome"] == "skipped"
@@ -1611,8 +1834,10 @@ def test_reanalysis_of_identical_paths_invalidates_an_old_request(env):
     first = analyze(env, [source])
     second = analyze(env, [source])
     assert first["entries"][0]["id"] == second["entries"][0]["id"]
-    result = env.rpc.call("import.run", {"ids": [first["entries"][0]["id"]],
-        "options": rpc(env, "import.options"), "revision": first["revision"]})
+    result = env.rpc.call(
+        "import.run",
+        {"ids": [first["entries"][0]["id"]], "options": rpc(env, "import.options"), "revision": first["revision"]},
+    )
     assert result["error"]["code"] == "entry_changed"
     assert not env.library.mods()
 
@@ -1620,7 +1845,7 @@ def test_reanalysis_of_identical_paths_invalidates_an_old_request(env):
 @pytest.mark.parametrize("revision", [None, True, "1"])
 def test_import_cannot_omit_or_forge_the_analysis_revision(env, revision):
     source = make_mod(env.original, env.tmp / "input")
-    entry, = analyze(env, [source])["entries"]
+    (entry,) = analyze(env, [source])["entries"]
     params = {"ids": [entry["id"]], "options": rpc(env, "import.options")}
     if revision is not None:
         params["revision"] = revision
@@ -1631,12 +1856,17 @@ def test_import_cannot_omit_or_forge_the_analysis_revision(env, revision):
 
 def test_queued_import_cannot_execute_after_new_analysis(env, monkeypatch):
     source = make_mod(env.original, env.tmp / "input")
-    entry, = analyze(env, [source])["entries"]
+    (entry,) = analyze(env, [source])["entries"]
     gate = threading.Event()
     waiting = env.services.jobs.submit("wait", lambda log, progress: gate.wait(5))
     try:
-        job = rpc(env, "import.run", ids=[entry["id"]], options=rpc(env, "import.options"),
-                  revision=env.services.batch_import._revision)
+        job = rpc(
+            env,
+            "import.run",
+            ids=[entry["id"]],
+            options=rpc(env, "import.options"),
+            revision=env.services.batch_import._revision,
+        )
         new = rpc(env, "import.analyze", paths=[str(source)])
         monkeypatch.setattr(env.library, "add_files", forbid)
     finally:
@@ -1675,10 +1905,10 @@ def test_every_analysis_logs_a_redacted_verdict_at_info(env, monkeypatch, caplog
     assert {row["id"] for row in rows} == {entry["id"] for entry in entries}
 
 
-@pytest.mark.parametrize('method', ['import.analyze', 'import.setSource'])
+@pytest.mark.parametrize("method", ["import.analyze", "import.setSource"])
 def test_analysis_writers_hold_move_and_quit_guards(env, monkeypatch, method):
-    source = make_mod(env.original, env.tmp / 'input')
-    entry, = analyze(env, [source])['entries']
+    source = make_mod(env.original, env.tmp / "input")
+    (entry,) = analyze(env, [source])["entries"]
     entered, release = threading.Event(), threading.Event()
     judge = env.services.batch_import._judge
 
@@ -1687,13 +1917,16 @@ def test_analysis_writers_hold_move_and_quit_guards(env, monkeypatch, method):
         assert release.wait(5)
         return judge(*args, **kwargs)
 
-    monkeypatch.setattr(env.services.batch_import, '_judge', waiting)
-    params = {'paths': [str(source)]} if method == 'import.analyze' else {
-        'id': entry['id'], 'server': 'global', 'platform': 'windows'}
+    monkeypatch.setattr(env.services.batch_import, "_judge", waiting)
+    params = (
+        {"paths": [str(source)]}
+        if method == "import.analyze"
+        else {"id": entry["id"], "server": "global", "platform": "windows"}
+    )
     jid = rpc(env, method, **params)
     try:
         assert entered.wait(5)
-        assert env.services.jobs._jobs[jid].writes == 'library'
+        assert env.services.jobs._jobs[jid].writes == "library"
         assert env.services.jobs.busy()
         with pytest.raises(ServiceError, match="busy"):
             env.services.move_library(env.tmp / "moved-library")
@@ -1706,28 +1939,28 @@ def test_analysis_writers_hold_move_and_quit_guards(env, monkeypatch, method):
 
 def test_direct_auto_crc_does_not_read_the_target_or_its_official_copy(env, monkeypatch):
     # Auto follows the install, so neither the live target (another row may replace it) nor a copy is read.
-    incoming = make_mod(env.original, env.tmp / 'incoming')
-    entry, = analyze(env, [incoming])['entries']
-    assert entry['state'] == 'ready'
-    monkeypatch.setattr(Bundle, 'check_need_crc', lambda *args, **kwargs: pytest.fail('platform read from a file'))
-    result, = run(env, [entry], crc='auto', enableAfterImport=False)
-    assert result['outcome'] == 'imported'
+    incoming = make_mod(env.original, env.tmp / "incoming")
+    (entry,) = analyze(env, [incoming])["entries"]
+    assert entry["state"] == "ready"
+    monkeypatch.setattr(Bundle, "check_need_crc", lambda *args, **kwargs: pytest.fail("platform read from a file"))
+    (result,) = run(env, [entry], crc="auto", enableAfterImport=False)
+    assert result["outcome"] == "imported"
 
 
 def test_a_stored_mod_whose_install_fails_stays_in_the_library_row(env, monkeypatch):
     # The row must say the mod is in the library, with its id, when only the install after the import failed.
     source = make_mod(env.original, env.tmp / "input")
-    entry, = analyze(env, [source])["entries"]
+    (entry,) = analyze(env, [source])["entries"]
 
     def refuse(*args, **kwargs):
         raise ServiceError("mod_target_mismatch", id="x", variant="test")
 
     monkeypatch.setattr(env.library, "apply_import", refuse)
-    result, = run(env, [entry])
-    mod, = env.library.mods()
+    (result,) = run(env, [entry])
+    (mod,) = env.library.mods()
     assert result["outcome"] == "failed" and result["reason"] == "mod_target_mismatch"
     assert result["libraryId"] == mod.id
-    row, = env.services.batch_import.diagnostic_snapshot()["rows"]
+    (row,) = env.services.batch_import.diagnostic_snapshot()["rows"]
     assert row["state"] == "library" and row["libraryId"] == mod.id
 
 
@@ -1739,9 +1972,9 @@ def test_an_import_whose_workspace_cannot_be_removed_still_reports_its_rows(env,
         raise PermissionError(32, "The process cannot access the file because it is being used by another process")
 
     source = make_mod(env.original, env.tmp / "input")
-    entry, = analyze(env, [source])["entries"]
+    (entry,) = analyze(env, [source])["entries"]
     monkeypatch.setattr(openfiles, "remove_tree", refuse)
-    result, = run(env, [entry], enableAfterImport=False)
+    (result,) = run(env, [entry], enableAfterImport=False)
     assert result["outcome"] == "imported" and result["libraryId"] == env.library.mods()[0].id
 
 
@@ -1755,8 +1988,13 @@ def missing_bundles(env, monkeypatch):
     def create(target, folder, cab, refs=()):
         folder.mkdir(parents=True, exist_ok=True)
         path = cab_bundle(folder, target.name, cab)
-        contents[path] = integrity.Contents(platforms={"StandaloneWindows64"}, versions={"2021.3"},
-                                           files={cab.lower()}, references=set(refs), names={"com.nexon.bluearchive"})
+        contents[path] = integrity.Contents(
+            platforms={"StandaloneWindows64"},
+            versions={"2021.3"},
+            files={cab.lower()},
+            references=set(refs),
+            names={"com.nexon.bluearchive"},
+        )
         return path
 
     original_inspect = integrity.inspect
@@ -1776,18 +2014,19 @@ def test_missing_files_references_and_unselected_slot_files(env, monkeypatch, re
     other = game_bundle(env.game_dir, part="004")
     selected = create(env.original, env.tmp / "incoming", "cab-test", ["cab-omitted"] if referenced else [])
     omitted = create(other, selected.parent, "cab-omitted") if sibling else None
-    entry, = analyze(env, [selected])["entries"]
+    (entry,) = analyze(env, [selected])["entries"]
     assert entry["state"] == "incomplete" and entry["reason"] is None
     assert entry["missing"]["unresolved"] == int(referenced)
-    assert entry["missing"]["found"] == ([{"path": str(omitted), "name": omitted.name, "size": omitted.stat().st_size}]
-                                           if sibling else [])
+    assert entry["missing"]["found"] == (
+        [{"path": str(omitted), "name": omitted.name, "size": omitted.stat().st_size}] if sibling else []
+    )
     assert omitted not in reads, "Discovery reads the unselected file's directory, never its assets"
     assert run(env, [entry])[0]["outcome"] == "skipped"
     assert not env.library.mods()
-    again, = analyze(env, [selected])["entries"]
+    (again,) = analyze(env, [selected])["entries"]
     assert again["missing"] == entry["missing"]
     if sibling:
-        complete, = analyze(env, [selected, omitted])["entries"]
+        (complete,) = analyze(env, [selected, omitted])["entries"]
         assert complete["state"] == "ready" and "missing" not in complete
         assert set(complete["paths"]) == {str(selected), str(omitted)}
 
@@ -1800,11 +2039,18 @@ def test_an_incomplete_entry_names_its_unresolved_cabs_and_what_was_read_of_its_
 
     create, _, _ = missing_bundles(env, monkeypatch)
     selected = create(env.original, env.tmp / "incoming", OWN_CAB, [OMITTED_CAB])
-    entry, = analyze(env, [selected])["entries"]
+    (entry,) = analyze(env, [selected])["entries"]
     assert entry["state"] == "incomplete"
     assert entry["missing"] == {"unresolved": 1, "cabs": [OMITTED_CAB], "found": []}
-    assert entry["bundles"] == [{"file": selected.name, "platforms": ["StandaloneWindows64"], "unity": ["2021.3"],
-                                 "cabs": [OWN_CAB], "references": 1}]
+    assert entry["bundles"] == [
+        {
+            "file": selected.name,
+            "platforms": ["StandaloneWindows64"],
+            "unity": ["2021.3"],
+            "cabs": [OWN_CAB],
+            "references": 1,
+        }
+    ]
     # the error report and the log keep CAB ids and the game's own file names
     row = import_row(entry, set())
     assert row["missing"]["cabs"] == [OMITTED_CAB] and row["bundles"] == entry["bundles"]
@@ -1818,20 +2064,24 @@ def test_a_refused_entry_carries_the_build_target_its_files_were_read_with(env, 
 
     def refuse(files, *, inspection=None, **kwargs):
         inspection.inspect(next(iter(files.values())))  # what a check reads before it refuses
-        raise ServiceError("mod_platform_mismatch", file=source.name, platform="Android", expected="StandaloneWindows64")
+        raise ServiceError(
+            "mod_platform_mismatch", file=source.name, platform="Android", expected="StandaloneWindows64"
+        )
 
     monkeypatch.setattr(env.library, "inspect_import", refuse)
-    entry, = analyze(env, [source])["entries"]
+    (entry,) = analyze(env, [source])["entries"]
     assert (entry["state"], entry["reason"]) == ("blocked", "mod_platform_mismatch")
     (bundle,) = entry["bundles"]
     assert bundle["file"] == source.name and bundle["platforms"] == ["StandaloneWindows64"]
-    assert isinstance(bundle["unity"], list) and bundle["cabs"] and all(cab.startswith("cab-") for cab in bundle["cabs"])
+    assert (
+        isinstance(bundle["unity"], list) and bundle["cabs"] and all(cab.startswith("cab-") for cab in bundle["cabs"])
+    )
     assert isinstance(bundle["references"], int)
     # a file name not in the game's own form is redacted; what was read stays
     (row,) = import_row({**entry, "bundles": [{**bundle, "file": "My Private Mod.bundle"}]}, set())["bundles"]
     assert row == {**bundle, "file": "[asset].bundle"}
     monkeypatch.setattr(env.library, "inspect_import", inspect_import)
-    again, = analyze(env, [source])["entries"]  # a new check starts from what it reads again
+    (again,) = analyze(env, [source])["entries"]  # a new check starts from what it reads again
     assert again["state"] != "blocked" and "bundles" not in again
 
 
@@ -1874,14 +2124,19 @@ def test_official_3d_slot_with_one_file_omitted_then_completed_on_clones(tmp_pat
     if not root:
         pytest.skip("Set BAMT_TEST_GAME_DIR to a verified official development view")
     directories = get_search_dirs(Path(root))
-    official = sorted(path for directory in directories for path in directory.glob("*.bundle")
-                      if kind_of_file(path.name) == "model" and core_of(path.name) in {"ch0258_02", "ch0258"})
+    official = sorted(
+        path
+        for directory in directories
+        for path in directory.glob("*.bundle")
+        if kind_of_file(path.name) == "model" and core_of(path.name) in {"ch0258_02", "ch0258"}
+    )
     assert len(official) >= 12
     inspection = integrity.Inspection()
     references = set().union(*(inspection.inspect(path).references for path in official))
     suppliers = CabIndex(directories).resolve(references, official[0])
-    portraits = {path for directory in directories for path in directory.glob("*.bundle")
-                 if core_of(path.name) == "ch0258_spr"}
+    portraits = {
+        path for directory in directories for path in directory.glob("*.bundle") if core_of(path.name) == "ch0258_spr"
+    }
     clones = tmp_path / "game"
     clones.mkdir()
     for path in set(official) | portraits | {Path(path) for path in suppliers.values()}:
@@ -1910,15 +2165,17 @@ def test_official_3d_slot_with_one_file_omitted_then_completed_on_clones(tmp_pat
     environment = SimpleNamespace(services=services, rpc=build_api(services))
     try:
         original_inspect = integrity.Inspection.inspect
+
         def selected_only(self, path, **kwargs):
             assert path != omitted, "Sibling discovery must never inspect omitted assets"
             return original_inspect(self, path, **kwargs)
+
         with monkeypatch.context() as patch:
             patch.setattr(integrity.Inspection, "inspect", selected_only)
-            row, = analyze(environment, uploads[:-1])["entries"]
+            (row,) = analyze(environment, uploads[:-1])["entries"]
         assert (row["state"], row["kind"], row["variant"]) == ("incomplete", "model", "ch0258")
         assert row["missing"]["found"] == [{"path": str(omitted), "name": omitted.name, "size": omitted.stat().st_size}]
-        completed, = analyze(environment, uploads)["entries"]
+        (completed,) = analyze(environment, uploads)["entries"]
         assert completed["state"] == "ready" and "missing" not in completed
         assert len(completed["paths"]) == len(official)
         assert not library.mods()
@@ -1938,8 +2195,9 @@ def test_fill_all_keeps_two_incomplete_alternatives_of_one_slot_separate(env, mo
     assert len(partial) == 2 and {row["state"] for row in partial} == {"incomplete"}
     completed = analyze(env, [first, second, first_missing, second_missing])["entries"]
     assert len(completed) == 2 and {row["state"] for row in completed} == {"ready"}
-    assert sorted(row["paths"] for row in completed) == sorted([
-        sorted(map(str, [first, first_missing])), sorted(map(str, [second, second_missing]))])
+    assert sorted(row["paths"] for row in completed) == sorted(
+        [sorted(map(str, [first, first_missing])), sorted(map(str, [second, second_missing]))]
+    )
 
 
 def test_a_backup_or_another_release_of_a_selected_part_is_not_a_missing_file(env, monkeypatch):
@@ -1947,5 +2205,5 @@ def test_a_backup_or_another_release_of_a_selected_part_is_not_a_missing_file(en
     folder = env.tmp / "with-backup"
     selected = create(env.original, folder, "cab-test")
     create(Path(env.original.name + ".backup"), folder, "cab-backup")
-    entry, = analyze(env, [selected])["entries"]
+    (entry,) = analyze(env, [selected])["entries"]
     assert entry["state"] == "ready" and "missing" not in entry

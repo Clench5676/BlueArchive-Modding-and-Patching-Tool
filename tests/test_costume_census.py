@@ -51,8 +51,11 @@ def _jobs() -> list[tuple[str, str, str | None]]:
         jobs += [("own", v.key, None) for v in models]
         for target in models:
             if target.model:
-                jobs += [("pair", target.key, source.key) for source in models if source.key != target.key
-                         and (source.model or "").lower() != target.model.lower()]
+                jobs += [
+                    ("pair", target.key, source.key)
+                    for source in models
+                    if source.key != target.key and (source.model or "").lower() != target.model.lower()
+                ]
     return jobs
 
 
@@ -64,10 +67,19 @@ def _outcome(fn) -> dict:
         fn()
         return {"ok": True}
     except ServiceError as error:
-        return {"ok": False, "code": error.code, "check": error.params.get("source"), "s": time.perf_counter() - started}
+        return {
+            "ok": False,
+            "code": error.code,
+            "check": error.params.get("source"),
+            "s": time.perf_counter() - started,
+        }
     except Exception as error:  # a program error: the census names it
-        return {"ok": False, "code": "exception", "error": f"{type(error).__name__}: {error}",
-                "trace": traceback.format_exc()[-800:]}
+        return {
+            "ok": False,
+            "code": "exception",
+            "error": f"{type(error).__name__}: {error}",
+            "trace": traceback.format_exc()[-800:],
+        }
 
 
 def _run(job: tuple[str, str, str | None]) -> dict:
@@ -77,16 +89,20 @@ def _run(job: tuple[str, str, str | None]) -> dict:
     if kind == "own":
         core = variant.model or variant.field_model
         if variant.model:
-            fn = lambda: game.model_glb(core, overrides=library.official_bundles(core, current_fallback=True),
-                                        reads=library.preview_reads("official"))
+            fn = lambda: game.model_glb(
+                core,
+                overrides=library.official_bundles(core, current_fallback=True),
+                reads=library.preview_reads("official"),
+            )
         else:
             fn = lambda: game.model_glb(core)
         return {"job": job, **_outcome(fn)}
     built = {}
     row = {"job": job, "build": _outcome(lambda: built.update(parts=library.costume_preview(key, other)))}
     if row["build"]["ok"]:
-        row["export"] = _outcome(lambda: game.model_glb(variant.model, overrides=built["parts"],
-                                                        reads=library.preview_reads("official")))
+        row["export"] = _outcome(
+            lambda: game.model_glb(variant.model, overrides=built["parts"], reads=library.preview_reads("official"))
+        )
         verdict = library.costume_verdict(key, other)
         row["past_limit"] = bool(verdict and verdict.get("preview"))
     return row
@@ -105,16 +121,32 @@ def test_official_every_costume_pair_builds_or_is_refused_by_the_rule(tmp_path, 
     own = [r for r in rows if r["job"][0] == "own"]
     pairs = [r for r in rows if r["job"][0] == "pair"]
     failed_own = [(r["job"][1], r.get("code"), r.get("error")) for r in own if not r["ok"]]
-    errors = [(r["job"], r["build"].get("error") or r["build"].get("code"), r["build"].get("trace"))
-              for r in pairs if not r["build"]["ok"] and r["build"]["code"] != "source_unsupported"]
-    unknown = [(r["job"], r["build"]["check"]) for r in pairs
-               if r["build"].get("code") == "source_unsupported" and r["build"]["check"] not in RULE_REFUSALS]
+    errors = [
+        (r["job"], r["build"].get("error") or r["build"].get("code"), r["build"].get("trace"))
+        for r in pairs
+        if not r["build"]["ok"] and r["build"]["code"] != "source_unsupported"
+    ]
+    unknown = [
+        (r["job"], r["build"]["check"])
+        for r in pairs
+        if r["build"].get("code") == "source_unsupported" and r["build"]["check"] not in RULE_REFUSALS
+    ]
     unexported = [(r["job"], r["export"]) for r in pairs if r["build"]["ok"] and not r["export"]["ok"]]
     offered = sum(1 for r in pairs if r["build"]["ok"] and r["export"]["ok"])
     past_limit = sum(1 for r in pairs if r["build"]["ok"] and r["export"]["ok"] and r["past_limit"])
     checks = Counter(r["build"]["check"] for r in pairs if r["build"].get("code") == "source_unsupported")
-    record_property("costume_census", json.dumps({"models": len(own), "pairs": len(pairs), "offered": offered,
-                                                  "past_limit": past_limit, "refused": dict(checks)}))
+    record_property(
+        "costume_census",
+        json.dumps(
+            {
+                "models": len(own),
+                "pairs": len(pairs),
+                "offered": offered,
+                "past_limit": past_limit,
+                "refused": dict(checks),
+            }
+        ),
+    )
     assert not failed_own, failed_own
     assert not errors, errors
     assert not unknown, unknown
@@ -135,11 +167,14 @@ def _open_models(view: str) -> None:
     paths = list(Path(view).rglob("*.bundle"))
     index, models = {}, defaultdict(list)
     for path in paths:
-        if re.search(r"characters|-_mx-npcs-|^character-|-_mx-shaders-|-_mx-program-animators-|^field-|animatorbase|"
-                     r"prolog|-_mx-effectsfreezed-", path.name):
+        if re.search(
+            r"characters|-_mx-npcs-|^character-|-_mx-shaders-|-_mx-program-animators-|^field-|animatorbase|"
+            r"prolog|-_mx-effectsfreezed-",
+            path.name,
+        ):
             for cab in cab_names(path):
                 index[cab] = path
-        if (match := re.match(r"character-(.+?)-_mx", path.name)):
+        if match := re.match(r"character-(.+?)-_mx", path.name):
             models[match.group(1)].append(path)
     _state.update(index=index, models=models)
 
@@ -161,8 +196,9 @@ def _worn(dev: str) -> tuple[str, list[str] | None]:
         clips = ma.prefab_clips(graph, s, ma.own_prefabs(ma._model_prefabs(graph, files), dev))
         idle = next(iter(s.poses(ma.pick(clips, ma.IDLE_CLIPS)[:1], frames=1)), None)
         worn = mp.worn_items(s, ma.roles(s, idle), clips, idle)
-        return dev, sorted(f"{s.nodes[i.part.node].name}/{s.nodes[i.top].name}{'' if i.carry else ' (packed)'}"
-                           for i in worn.items)
+        return dev, sorted(
+            f"{s.nodes[i.part.node].name}/{s.nodes[i.top].name}{'' if i.carry else ' (packed)'}" for i in worn.items
+        )
 
 
 @official
@@ -178,4 +214,5 @@ def test_official_the_worn_items_of_every_student_model_are_pinned(tmp_path):
     gained = {dev: sorted(set(found.get(dev, [])) - set(pinned.get(dev, []))) for dev in devs}
     lost = {dev: sorted(set(pinned.get(dev, [])) - set(found.get(dev, []))) for dev in devs}
     assert ({k: v for k, v in gained.items() if v}, {k: v for k, v in lost.items() if v}) == ({}, {}), (
-        "worn items changed: check them, then pin the new list in tests/fixtures/worn_items.json")
+        "worn items changed: check them, then pin the new list in tests/fixtures/worn_items.json"
+    )

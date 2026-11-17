@@ -74,8 +74,22 @@ from . import model_skirts as ms
 from .errors import AssetNotFound
 from .costume_cache import PoseStore, clip_digest, decode_clip, memoize_pose
 from .unity import load_bundle
-from .model import (BundleGraph, NPC_PREFAB, PREFAB_KINDS, _external_cab, _key, _prefabs, bind_tracks,
-                    euler_orders, euler_to_quat, ex_only_renderers, model_root, read_mesh, shader_kind, UNITY_ORDER)
+from .model import (
+    BundleGraph,
+    NPC_PREFAB,
+    PREFAB_KINDS,
+    _external_cab,
+    _key,
+    _prefabs,
+    bind_tracks,
+    euler_orders,
+    euler_to_quat,
+    ex_only_renderers,
+    model_root,
+    read_mesh,
+    shader_kind,
+    UNITY_ORDER,
+)
 
 if TYPE_CHECKING:
     from .model_props import WornStore
@@ -87,11 +101,13 @@ CHARACTER_KINDS = {"body", "face", "hair", "eyemouth", "eyebrow"}
 BIPED_CORE = re.compile(r"^Bip001 (Pelvis|Spine\d*|Neck|Head|[LR] (Thigh|Calf|UpperArm|Forearm|Clavicle))$")
 # the Biped's body chain, hands and feet with their fingers and toes: the bones a costume bone may be carried by
 # (never a weapon, prop or eye bone a vendor named Bip001 too)
-BIPED_CHAIN = re.compile(r"^Bip001 (Pelvis|Spine\d*|Neck\d*|Head|[LR] (Clavicle|UpperArm|Forearm|Hand|Thigh|Calf|Foot|"
-                         r"Finger\d+|Toe\d+))$")
+BIPED_CHAIN = re.compile(
+    r"^Bip001 (Pelvis|Spine\d*|Neck\d*|Head|[LR] (Clavicle|UpperArm|Forearm|Hand|Thigh|Calf|Foot|"
+    r"Finger\d+|Toe\d+))$"
+)
 BIPED_ROOT = "Bip001"
-NEAR = 0.05           # a secondary bone maps onto a slot bone at most this far from it (prefab units, metres)
-STRETCH_FLOOR = 1.5   # a group may always stretch this much
+NEAR = 0.05  # a secondary bone maps onto a slot bone at most this far from it (prefab units, metres)
+STRETCH_FLOOR = 1.5  # a group may always stretch this much
 # how far a costume may stretch under the slot's clips past the slot's own costume (max(1.5 x own, own + 1)), with a
 # tenth more allowed (pairs up to 1.1 times the limit, such as Momoi <- Momoi (Battle) at 1.01)
 STRETCH_TOLERANCE = 1.1
@@ -106,7 +122,7 @@ def stretch_limit(own: float) -> float:
 SHAPES = ("stored", "drawn", "moved", "refitted")
 SHAPE_MARGIN = 0.02  # a later shape is taken when it stretches this share less
 CARRIER_SAMPLES = 200  # vertices measured, about, per unmatched bone
-CARRIER_SHARE = 0.5    # a carrier moves an unmatched bone's vertices at most this much as far off as its parent does
+CARRIER_SHARE = 0.5  # a carrier moves an unmatched bone's vertices at most this much as far off as its parent does
 HIDDEN = 1e-6  # a bone a pose scales to this share of its rest volume or less is hidden
 
 # clips whose poses judge the mapping, by name suffix; the idle comes first
@@ -115,10 +131,10 @@ IDLE_CLIPS = ("Formation_Idle", "Normal_Idle", "Cafe_Idle", "Stand_Idle", "Idle"
 FIELD_KINDS = ("Field_Player_{}", "Field_Player_{}_NonWeapon")
 PROBE_SCAN = 24  # clips looked at, at most, for the probes
 # the sanity pass over what a run writes
-CONDITION_LIMIT = 1e8      # a rest matrix whose linear part is worse conditioned than this is singular
-BINDPOSE_LIMIT = 1e3       # a bindpose entry larger than this (in magnitude) is out of range
-VERTEX_LIMIT = 50.0        # a written vertex farther than this from the prefab's root bone (metres) is out of range
-WEIGHT_TOLERANCE = 1e-3    # a vertex's skin weights add up to 1 within this
+CONDITION_LIMIT = 1e8  # a rest matrix whose linear part is worse conditioned than this is singular
+BINDPOSE_LIMIT = 1e3  # a bindpose entry larger than this (in magnitude) is out of range
+VERTEX_LIMIT = 50.0  # a written vertex farther than this from the prefab's root bone (metres) is out of range
+WEIGHT_TOLERANCE = 1e-3  # a vertex's skin weights add up to 1 within this
 
 
 def refuse(reason: str, **params: Any) -> ServiceError:
@@ -167,20 +183,25 @@ def loaded_with(graph: BundleGraph, prefab_files: Iterable[Path], slot: Mapping[
             continue
         seen.add(cab)
         sf = files.get(cab)
-        for entry in (getattr(sf, "externals", None) or []):
+        for entry in getattr(sf, "externals", None) or []:
             todo.append(entry.path.replace("\\", "/").rsplit("/", 1)[-1].lower())
     return seen
 
 
 # --- skeleton ------------------------------------------------------------------------------------------------------
 
+
 def trs(p: Iterable[float], r: Iterable[float], s: Iterable[float]) -> np.ndarray:
     x, y, z, w = r
     n = math.sqrt(x * x + y * y + z * z + w * w) or 1.0
     x, y, z, w = x / n, y / n, z / n, w / n
-    rot = np.array([[1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
-                    [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
-                    [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]])
+    rot = np.array(
+        [
+            [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+            [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+            [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+        ]
+    )
     m = np.eye(4)
     m[:3, :3] = rot * np.array(list(s))
     m[:3, 3] = list(p)
@@ -237,8 +258,17 @@ class Skeleton:
         p, r, s = t["m_LocalPosition"], t["m_LocalRotation"], t["m_LocalScale"]
         here = active and bool(go["m_IsActive"])
         index = len(self.nodes)
-        self.nodes.append(Node(go["m_Name"], path, parent, ((p["x"], p["y"], p["z"]), (r["x"], r["y"], r["z"], r["w"]),
-                                                             (s["x"], s["y"], s["z"])), go_obj, transform, here))
+        self.nodes.append(
+            Node(
+                go["m_Name"],
+                path,
+                parent,
+                ((p["x"], p["y"], p["z"]), (r["x"], r["y"], r["z"], r["w"]), (s["x"], s["y"], s["z"])),
+                go_obj,
+                transform,
+                here,
+            )
+        )
         self.by_transform[_key(transform)] = index
         for obj in components:
             if obj.type.name == "SkinnedMeshRenderer":
@@ -348,8 +378,9 @@ class Skeleton:
             self.pose_store.put(self.dev, token, np.asarray(poses), np.array(sorted(animated), dtype=np.int64))
         return poses, animated
 
-    def clip_frames(self, tree: Mapping[str, Any], nodes: Iterable[int] | None = None, *, cache: bool = False
-                    ) -> tuple[list[float], Callable[[int], list[np.ndarray]], set[int]]:
+    def clip_frames(
+        self, tree: Mapping[str, Any], nodes: Iterable[int] | None = None, *, cache: bool = False
+    ) -> tuple[list[float], Callable[[int], list[np.ndarray]], set[int]]:
         """Frame times, world matrices by frame, and animated nodes. With ``nodes``, only their ancestors are posed;
         other entries are None. This keeps a face-only pass from posing the body, props and new costume bones.
         ``cache`` shares numerical frames in the bounded pose memory, keyed by revision and all pose inputs."""
@@ -395,14 +426,18 @@ class Skeleton:
         if cache:
             indices = tuple(sorted(needed)) if nodes is not None else None
             revision = self.pose_store.revisions.get(self.dev) if self.pose_store is not None else None
-            digest = hashlib.sha256(repr((self.dev, revision, [(n.path, n.parent, n.local) for n in self.nodes],
-                                         bindings, indices)).encode())
+            digest = hashlib.sha256(
+                repr(
+                    (self.dev, revision, [(n.path, n.parent, n.local) for n in self.nodes], bindings, indices)
+                ).encode()
+            )
             digest.update(clip_digest(tree).encode())
             pose = memoize_pose(pose, digest.hexdigest(), indices, len(self.nodes))
         return decoded.times, pose, set(tracks)
 
 
 # --- renderer roles ------------------------------------------------------------------------------------------------
+
 
 @dataclass
 class Part:
@@ -441,19 +476,26 @@ def roles(skeleton: Skeleton, idle: list[np.ndarray] | None) -> list[Part]:
         materials = [g.deref(renderer, m) for m in tree["m_Materials"]]
         subs = g.tree(mesh).get("m_SubMeshes", []) if mesh is not None else []
         kinds = [_shader_kind(g, m) for m in materials]
-        bones = [skeleton.by_transform.get(_key(t)) if t is not None else None
-                 for t in (g.deref(renderer, b) for b in tree["m_Bones"])]
+        bones = [
+            skeleton.by_transform.get(_key(t)) if t is not None else None
+            for t in (g.deref(renderer, b) for b in tree["m_Bones"])
+        ]
         counts = [int(s.get("indexCount", 0)) for s in subs]
         parts.append(Part(node, renderer, mesh, materials, kinds, bones, sum(counts), list(zip(kinds, counts))))
-    visible = [p for p in parts if p.mesh is not None and skeleton.nodes[p.node].active
-               and g.tree(p.renderer)["m_Enabled"]]
+    visible = [
+        p for p in parts if p.mesh is not None and skeleton.nodes[p.node].active and g.tree(p.renderer)["m_Enabled"]
+    ]
     shown = {id(p) for p in visible}
     aside = ex_only_renderers((p.node, skeleton.nodes[p.node].path, p.subparts) for p in visible)
     for p in parts:
         kinds = set(p.kinds)
         bones = [b for b in p.bones if b is not None]
-        in_main = sum(1 for b in bones if main_path is not None and (
-            skeleton.nodes[b].path == main_path or skeleton.nodes[b].path.startswith(main_path + "/")))
+        in_main = sum(
+            1
+            for b in bones
+            if main_path is not None
+            and (skeleton.nodes[b].path == main_path or skeleton.nodes[b].path.startswith(main_path + "/"))
+        )
         biped = any(BIPED_CORE.match(skeleton.nodes[b].name) for b in bones)
         away = bool(idle) and bool(bones) and all(abs(np.linalg.det(idle[b][:3, :3])) < 1e-9 for b in bones)
         if "weapon" in kinds:
@@ -480,13 +522,17 @@ def roles(skeleton: Skeleton, idle: list[np.ndarray] | None) -> list[Part]:
 
 # --- clips ---------------------------------------------------------------------------------------------------------
 
+
 def prefab_clips(graph: BundleGraph, skeleton: Skeleton, prefabs: Mapping[str, Any]) -> list[Any]:
     """The clips a prefab plays: those its FieldAnimancerController lists (field prefabs), else every clip of the
     animator controllers of ``prefabs`` (one model's prefabs)."""
     for behaviour in skeleton.behaviours:
         if graph.script(behaviour) == "FieldAnimancerController":
-            return [c for c in (graph.deref(behaviour, p) for p in graph.tree(behaviour).get("animationClips", []))
-                    if c is not None]
+            return [
+                c
+                for c in (graph.deref(behaviour, p) for p in graph.tree(behaviour).get("animationClips", []))
+                if c is not None
+            ]
     clips, seen = [], set()
     for pointer in prefabs.values():
         animator = graph.component(pointer.deref(), "Animator")
@@ -495,8 +541,10 @@ def prefab_clips(graph: BundleGraph, skeleton: Skeleton, prefabs: Mapping[str, A
             continue
         tree = graph.tree(controller)
         if controller.type.name == "AnimatorOverrideController":
-            pointers = [c["m_OverrideClip"] if c["m_OverrideClip"].get("m_PathID") else c["m_OriginalClip"]
-                        for c in tree["m_Clips"]]
+            pointers = [
+                c["m_OverrideClip"] if c["m_OverrideClip"].get("m_PathID") else c["m_OriginalClip"]
+                for c in tree["m_Clips"]
+            ]
         else:
             pointers = tree.get("m_AnimationClips", [])
         for pointer_ in pointers:
@@ -549,6 +597,7 @@ def _moving(skeleton: Skeleton, clips: list[Any], count: int) -> list[list[np.nd
 
 # --- meshes --------------------------------------------------------------------------------------------------------
 
+
 @dataclass
 class Skin:
     vertices: np.ndarray  # in the renderer's mesh space
@@ -576,7 +625,7 @@ def deform(skin: Skin, matrices: np.ndarray) -> np.ndarray:
     homogeneous = np.c_[skin.vertices, np.ones(len(skin.vertices))]
     out = np.zeros((len(skin.vertices), 3))
     for k in range(skin.joints.shape[1]):
-        out += skin.weights[:, k:k + 1] * np.einsum("nij,nj->ni", matrices[skin.joints[:, k]], homogeneous)[:, :3]
+        out += skin.weights[:, k : k + 1] * np.einsum("nij,nj->ni", matrices[skin.joints[:, k]], homogeneous)[:, :3]
     return out
 
 
@@ -595,6 +644,7 @@ def stretch(rest: np.ndarray, posed: np.ndarray, edges: np.ndarray, mask: np.nda
 
 
 # --- bone mapping --------------------------------------------------------------------------------------------------
+
 
 @dataclass
 class Costume:
@@ -617,7 +667,11 @@ def unmatched(target: Skeleton, source: Skeleton, flat: Flat) -> list[int]:
         if not source.nodes[n].name.startswith("Bip001") and anchor is None and source.nodes[n].parent is not None:
             out.add(n)
         for b in (n, anchor):
-            if b is not None and source.nodes[b].name.startswith("Bip001") and target.first(source.nodes[b].name) is None:
+            if (
+                b is not None
+                and source.nodes[b].name.startswith("Bip001")
+                and target.first(source.nodes[b].name) is None
+            ):
                 out.add(b)
     return sorted(out)
 
@@ -636,8 +690,9 @@ def carriers(target: Skeleton, source: Skeleton, flat: Flat, poses: list[list[np
     if not missing or not poses:
         return {}
     rest = source.world()
-    present = [i for i, node in enumerate(source.nodes) if BIPED_CHAIN.match(node.name)
-               and target.first(node.name) is not None]
+    present = [
+        i for i, node in enumerate(source.nodes) if BIPED_CHAIN.match(node.name) and target.first(node.name) is not None
+    ]
     if not present:
         return {}
     dominant = flat.joints[np.arange(len(flat.vertices)), np.argmax(flat.weights, axis=1)]
@@ -648,18 +703,22 @@ def carriers(target: Skeleton, source: Skeleton, flat: Flat, poses: list[list[np
         return n if source.nodes[n].name.startswith("Bip001") else _branch_top(target, source, n)
 
     groups = sorted({group(m) for m in missing})
-    anchor = {n: (group(n) if n in missing else n if source.nodes[n].name.startswith("Bip001")
-                  else source.biped_ancestor(n)) for n in set(dominant.tolist()) - {-1}}
+    anchor = {
+        n: (group(n) if n in missing else n if source.nodes[n].name.startswith("Bip001") else source.biped_ancestor(n))
+        for n in set(dominant.tolist()) - {-1}
+    }
     # a Biped bone against its parent (a finger's last joint bends with the one before); a prop's branch against
     # where the mapping would leave it, the nearest ancestor the slot has
-    parents = {m: source.nodes[m].parent if source.nodes[m].name.startswith("Bip001")
-               else _kept_ancestor(target, source, m) for m in groups}
+    parents = {
+        m: source.nodes[m].parent if source.nodes[m].name.startswith("Bip001") else _kept_ancestor(target, source, m)
+        for m in groups
+    }
     inverse = {i: np.linalg.inv(rest[i]) for i in {*present, *groups, *(p for p in parents.values() if p is not None)}}
     out = {}
     for m in groups:
         rows = np.where(np.isin(dominant, [n for n, a in anchor.items() if a == m]))[0]
         if len(rows):
-            rows = rows[::max(1, len(rows) // CARRIER_SAMPLES)]
+            rows = rows[:: max(1, len(rows) // CARRIER_SAMPLES)]
             points, own = flat.vertices[rows], dominant[rows]
         else:  # its frame: the joint and a point along each axis
             points = rest[m][:3, 3] + np.vstack([np.zeros(3), 0.05 * rest[m][:3, :3].T])
@@ -686,8 +745,10 @@ def carriers(target: Skeleton, source: Skeleton, flat: Flat, poses: list[list[np
         if (shoulder := _shoulder_mount(target, source, m, dominant)) is not None:
             out[m] = shoulder
     if out:
-        logger.debug("Costume bones the slot lacks, carried by: %s",
-                     {source.nodes[m].name: source.nodes[c].name for m, c in out.items()})
+        logger.debug(
+            "Costume bones the slot lacks, carried by: %s",
+            {source.nodes[m].name: source.nodes[c].name for m, c in out.items()},
+        )
     return out
 
 
@@ -710,8 +771,9 @@ def _shoulder_mount(target: Skeleton, source: Skeleton, node: int, dominant: np.
     return clavicle if clavicle is not None and target.first(source.nodes[clavicle].name) is not None else None
 
 
-def stowed(target: Skeleton, source: Skeleton, flat: Flat, poses: list[list[np.ndarray]],
-           carried: Mapping[int, int]) -> dict[int, tuple[int, np.ndarray, np.ndarray]]:
+def stowed(
+    target: Skeleton, source: Skeleton, flat: Flat, poses: list[list[np.ndarray]], carried: Mapping[int, int]
+) -> dict[int, tuple[int, np.ndarray, np.ndarray]]:
     """Props the costume's rest pose lays out away from the body and the source's own clips key onto it: Aoba's pipe
     wrench, skinned in her body mesh below a ``Prop_root`` the slot lacks, rests 40 cm beside her, and every clip of
     hers keys it to her hip. ``carriers`` measures from the rest and finds no bone that explains it, so the slot's
@@ -725,8 +787,9 @@ def stowed(target: Skeleton, source: Skeleton, flat: Flat, poses: list[list[np.n
         return {}
     rest = source.world()
     ref = poses[0]
-    present = [i for i, node in enumerate(source.nodes) if BIPED_CHAIN.match(node.name)
-               and target.first(node.name) is not None]
+    present = [
+        i for i, node in enumerate(source.nodes) if BIPED_CHAIN.match(node.name) and target.first(node.name) is not None
+    ]
     weighted = flat.weights > 0
     out = {}
     for n in unmatched(target, source, flat):
@@ -738,13 +801,15 @@ def stowed(target: Skeleton, source: Skeleton, flat: Flat, poses: list[list[np.n
         if not len(rows) or (inside[rows] != weighted[rows]).any():  # skinned to the body too: not a loose prop
             continue
         bones = sorted(set(flat.joints[rows][weighted[rows]].tolist()))
-        if any(not 0.9 < abs(np.linalg.det(ref[b][:3, :3])) / max(abs(np.linalg.det(rest[b][:3, :3])), 1e-12) < 1.1
-               for b in bones):
+        if any(
+            not 0.9 < abs(np.linalg.det(ref[b][:3, :3])) / max(abs(np.linalg.det(rest[b][:3, :3])), 1e-12) < 1.1
+            for b in bones
+        ):
             continue  # the idle hides or scales it: a prop the clips show and hide, not one they carry
         parent = _kept_ancestor(target, source, m)
         moves = {b: ref[b] @ np.linalg.inv(rest[b]) for b in bones}
         dominant = flat.joints[rows, np.argmax(flat.weights[rows], axis=1)]
-        sample = np.arange(len(rows))[::max(1, len(rows) // CARRIER_SAMPLES)]
+        sample = np.arange(len(rows))[:: max(1, len(rows) // CARRIER_SAMPLES)]
         points = np.c_[flat.vertices[rows[sample]], np.ones(len(sample))]
         at_rest = points @ (ref[parent] @ np.linalg.inv(rest[parent])).T if parent is not None else points
         held = np.einsum("nij,nj->ni", np.array([moves[b] for b in dominant[sample]]), points)
@@ -753,8 +818,9 @@ def stowed(target: Skeleton, source: Skeleton, flat: Flat, poses: list[list[np.n
         errors = np.zeros(len(present))
         stay = 0.0
         for pose in poses:
-            here = np.einsum("nij,nj->ni", np.array([pose[b] @ np.linalg.inv(rest[b]) for b in dominant[sample]]),
-                             points)
+            here = np.einsum(
+                "nij,nj->ni", np.array([pose[b] @ np.linalg.inv(rest[b]) for b in dominant[sample]]), points
+            )
             kept = held @ (pose[parent] @ np.linalg.inv(ref[parent])).T if parent is not None else held
             stay += float(np.linalg.norm(kept - here, axis=1).mean())
             stack = np.array([pose[c] @ np.linalg.inv(ref[c]) for c in present])
@@ -764,13 +830,22 @@ def stowed(target: Skeleton, source: Skeleton, flat: Flat, poses: list[list[np.n
             continue
         c = present[best]
         back = rest[c] @ np.linalg.inv(ref[c])  # from where the idle holds the carrier to its rest
-        row_moves = drawn(Skin(flat.vertices[rows], np.searchsorted(bones, np.where(
-            weighted[rows], flat.joints[rows], bones[0])), flat.weights[rows], np.zeros((0, 2), int)),
-            np.array([back @ moves[b] for b in bones]), np.eye(4))
+        row_moves = drawn(
+            Skin(
+                flat.vertices[rows],
+                np.searchsorted(bones, np.where(weighted[rows], flat.joints[rows], bones[0])),
+                flat.weights[rows],
+                np.zeros((0, 2), int),
+            ),
+            np.array([back @ moves[b] for b in bones]),
+            np.eye(4),
+        )
         out[m] = (c, rows, row_moves)
     if out:
-        logger.debug("Costume props stowed by the source's clips, carried by: %s",
-                     {source.nodes[m].name: source.nodes[c].name for m, (c, _, _) in out.items()})
+        logger.debug(
+            "Costume props stowed by the source's clips, carried by: %s",
+            {source.nodes[m].name: source.nodes[c].name for m, (c, _, _) in out.items()},
+        )
     return out
 
 
@@ -790,8 +865,11 @@ def _branch_top(target: Skeleton, source: Skeleton, n: int) -> int:
     """A bone outside the Biped stands for its branch: the node right under the nearest ancestor the slot has by name
     (``carriers``'s groups)."""
     kept = _kept_ancestor(target, source, n)
-    while source.nodes[n].parent is not None and source.nodes[n].parent != kept \
-            and source.nodes[source.nodes[n].parent].parent is not None:
+    while (
+        source.nodes[n].parent is not None
+        and source.nodes[n].parent != kept
+        and source.nodes[source.nodes[n].parent].parent is not None
+    ):
         n = source.nodes[n].parent
     return n
 
@@ -862,8 +940,13 @@ def scaled_away(skeleton: Skeleton, clips: Iterable[Any]) -> set[int]:
     return out
 
 
-def map_bones(target: Skeleton, source: Skeleton, bones: Iterable[int],
-              carried: Mapping[int, int] | None = None, hidden: set[int] | None = None) -> dict[int, int]:
+def map_bones(
+    target: Skeleton,
+    source: Skeleton,
+    bones: Iterable[int],
+    carried: Mapping[int, int] | None = None,
+    hidden: set[int] | None = None,
+) -> dict[int, int]:
     """Source node -> target node for every source bone and its ancestors, before the per-group choice. An unmatched
     bone the slot has no bone near goes to the slot's bone of its carrier's name (``carriers``); no secondary bone goes
     to one the slot's clips hide (``hidden``)."""
@@ -935,8 +1018,8 @@ class Fit:
         """Part ``k``'s vertices and linear parts in the mesh space ``world`` (prefab root's space) defines."""
         end = self.starts[k + 1] if k + 1 < len(self.starts) else len(self.vertices)
         inverse = np.linalg.inv(world)
-        points = (np.c_[self.vertices[self.starts[k]:end], np.ones(end - self.starts[k])] @ inverse.T)[:, :3]
-        return points, inverse[:3, :3] @ self.linear[self.starts[k]:end]
+        points = (np.c_[self.vertices[self.starts[k] : end], np.ones(end - self.starts[k])] @ inverse.T)[:, :3]
+        return points, inverse[:3, :3] @ self.linear[self.starts[k] : end]
 
 
 @dataclass
@@ -996,20 +1079,31 @@ def flatten(costume: Costume, rest: list[np.ndarray]) -> Flat:
             if h in head and head[h] < len(bp):
                 carry[j] = rest[h] @ bp[head[h]]
         carry = np.array(carry or [node])
-        blended = drawn(Skin(skin.vertices, np.minimum(skin.joints, len(carry) - 1), skin.weights, skin.edges),
-                        carry, node)
+        blended = drawn(
+            Skin(skin.vertices, np.minimum(skin.joints, len(carry) - 1), skin.weights, skin.edges), carry, node
+        )
         vertices.append(np.einsum("nij,nj->ni", blended, np.c_[skin.vertices, np.ones(len(skin.vertices))])[:, :3])
         linear.append(blended[:, :3, :3])
-        joints.append(np.array([[part.bones[j] if part.bones[j] is not None else -1 for j in row]
-                                for row in skin.joints]).reshape(-1, skin.joints.shape[1]))
+        joints.append(
+            np.array(
+                [[part.bones[j] if part.bones[j] is not None else -1 for j in row] for row in skin.joints]
+            ).reshape(-1, skin.joints.shape[1])
+        )
         weights.append(skin.weights)
         edges.append(skin.edges + offset)
         tris = skin.triangles if skin.triangles is not None else np.zeros((0, 3), int)
         triangles.append(tris + offset)
         starts.append(offset)
         offset += len(skin.vertices)
-    return Flat(np.vstack(vertices), np.vstack(joints), np.vstack(weights), np.vstack(edges), np.vstack(triangles),
-                starts, np.concatenate(linear))
+    return Flat(
+        np.vstack(vertices),
+        np.vstack(joints),
+        np.vstack(weights),
+        np.vstack(edges),
+        np.vstack(triangles),
+        starts,
+        np.concatenate(linear),
+    )
 
 
 @dataclass
@@ -1049,8 +1143,9 @@ def face_bone(skeleton: Skeleton, node: int) -> bool:
     return h is not None and skeleton.nodes[h].name == "Bip001 Head"
 
 
-def fit_anchor(target: Skeleton, source: Skeleton, node: int,
-               carried: Mapping[int, int] | None = None) -> tuple[int, int] | None:
+def fit_anchor(
+    target: Skeleton, source: Skeleton, node: int, carried: Mapping[int, int] | None = None
+) -> tuple[int, int] | None:
     """The Biped bone a source node is refitted by, with the slot's bone of its name: the node itself or its nearest
     ancestor the slot has by name (a secondary bone's Biped anchor), an unmatched bone standing for its carrier
     (``carriers``). None when there is none. Only the body chain, hands, feet and their twist bones anchor
@@ -1061,8 +1156,9 @@ def fit_anchor(target: Skeleton, source: Skeleton, node: int,
     n: int | None = node
     while n is not None:
         name = source.nodes[n].name
-        if (BIPED_CHAIN.match(name) or name == BIPED_ROOT or (name.startswith("Bip001") and "Twist" in name)) \
-                and (same := target.first(name)) is not None:
+        if (BIPED_CHAIN.match(name) or name == BIPED_ROOT or (name.startswith("Bip001") and "Twist" in name)) and (
+            same := target.first(name)
+        ) is not None:
             return n, same
         if n in carried and (same := target.first(source.nodes[carried[n]].name)) is not None:
             return carried[n], same
@@ -1080,8 +1176,16 @@ def stored(costume: Costume, rest: list[np.ndarray], flat: Flat) -> Fit:
     return Fit(np.vstack(vertices), np.concatenate(linear), 0.0, 0.0, 0.0, list(flat.starts), "stored")
 
 
-def _anchor_move(target: Skeleton, source: Skeleton, a: int, t: int, shape: str, t_rest: list[np.ndarray],
-                 s_rest: list[np.ndarray], carried: Mapping[int, int] | None = None) -> np.ndarray:
+def _anchor_move(
+    target: Skeleton,
+    source: Skeleton,
+    a: int,
+    t: int,
+    shape: str,
+    t_rest: list[np.ndarray],
+    s_rest: list[np.ndarray],
+    carried: Mapping[int, int] | None = None,
+) -> np.ndarray:
     """How a refit carries what anchors on the source's ``a`` to the slot's ``t`` (``refit``): "moved", the joint's
     move alone; "refitted", its move and turn. The head goes with the neck: it keeps its own turn, but its joint goes
     where the neck's move takes it, not onto the slot's Head joint. Two rigs put the Head joint at different heights
@@ -1093,15 +1197,20 @@ def _anchor_move(target: Skeleton, source: Skeleton, a: int, t: int, shape: str,
         m = np.eye(4)
         m[:3, 3] = t_rest[t][:3, 3] - s_rest[a][:3, 3]
     parent = source.nodes[a].parent
-    if source.nodes[a].name == HEAD and parent is not None \
-            and (hit := fit_anchor(target, source, parent, carried)) is not None and hit[0] != a:
+    if (
+        source.nodes[a].name == HEAD
+        and parent is not None
+        and (hit := fit_anchor(target, source, parent, carried)) is not None
+        and hit[0] != a
+    ):
         joint = s_rest[a][:, 3]
         m[:3, 3] += (_anchor_move(target, source, *hit, shape, t_rest, s_rest, carried) @ joint - m @ joint)[:3]
     return m
 
 
-def refit(target: Skeleton, source: Skeleton, flat: Flat, carried: Mapping[int, int] | None = None,
-          shape: str = "refitted") -> Fit:
+def refit(
+    target: Skeleton, source: Skeleton, flat: Flat, carried: Mapping[int, int] | None = None, shape: str = "refitted"
+) -> Fit:
     """The costume carried from the source's rest skeleton to the slot's: each vertex follows its bones by
     their anchors' transforms (``fit_anchor``, ``_anchor_move``), so the Biped's proportions change and hair, skirts
     and props move rigidly with their anchor; the skin weights stay. ``shape`` "moved": each anchor's joint move
@@ -1137,12 +1246,27 @@ def refit(target: Skeleton, source: Skeleton, flat: Flat, carried: Mapping[int, 
     changed = np.linalg.norm(delta - np.median(delta, axis=0), axis=1) if len(delta) else np.zeros(0)
     size = float(np.ptp(flat.vertices, axis=0).max()) if len(flat.vertices) else 0.0
     linear = blended[:, :3, :3] @ flat.linear if flat.linear is not None else blended[:, :3, :3]
-    return Fit(vertices, linear, float(np.percentile(changed, 99)) if len(changed) else 0.0,
-               float(changed.max()) if len(changed) else 0.0, size, list(flat.starts), shape, head)
+    return Fit(
+        vertices,
+        linear,
+        float(np.percentile(changed, 99)) if len(changed) else 0.0,
+        float(changed.max()) if len(changed) else 0.0,
+        size,
+        list(flat.starts),
+        shape,
+        head,
+    )
 
 
-def plan(target: Costume, source: Costume, probes: list[list[np.ndarray]], *, fit: bool = True,
-         own_probes: list[list[np.ndarray]] | None = None, clips: Iterable[Any] = ()) -> Plan:
+def plan(
+    target: Costume,
+    source: Costume,
+    probes: list[list[np.ndarray]],
+    *,
+    fit: bool = True,
+    own_probes: list[list[np.ndarray]] | None = None,
+    clips: Iterable[Any] = (),
+) -> Plan:
     """The bone mapping with each group's choice, the shape the costume is bound in, and the checks of the rest pose
     and the stretch. The mapping (``map_bones``) takes the carriers of the unmatched bones from the source's own clips
     (``own_probes``, see ``carriers``) and leaves out the slot's hidden bones: those the probes hide, and those any of
@@ -1168,18 +1292,24 @@ def plan(target: Costume, source: Costume, probes: list[list[np.ndarray]], *, fi
     own = max((stretch(own_mesh.rest, posed, own_mesh.edges) for posed in posed_targets), default=1.0)
     shapes = [stow(stored(source, s_rest, flat_source), flat_source, props)]
     if fit:
-        drawn_ = stow(Fit(flat_source.vertices, flat_source.linear, 0.0, 0.0, 0.0, list(flat_source.starts), "drawn"),
-                      flat_source, props)
+        drawn_ = stow(
+            Fit(flat_source.vertices, flat_source.linear, 0.0, 0.0, 0.0, list(flat_source.starts), "drawn"),
+            flat_source,
+            props,
+        )
         flat_source = dataclasses.replace(flat_source, vertices=drawn_.vertices, linear=drawn_.linear)
         shapes.append(drawn_)
-        shapes += [refit(target.skeleton, source.skeleton, flat_source, carried, shape) for shape in ("moved", "refitted")]
+        shapes += [
+            refit(target.skeleton, source.skeleton, flat_source, carried, shape) for shape in ("moved", "refitted")
+        ]
     best: Plan | None = None
     judged = []
     for shape in shapes:
         # a refit's own change of the costume counts: measured from the shape the source draws
         reference = shape.vertices if shape.shape == "stored" else flat_source.vertices
-        candidate = _judge(target, source, probes, flat_source, shape, reference, dict(mapping), carried, own_mesh,
-                           posed_targets, own)
+        candidate = _judge(
+            target, source, probes, flat_source, shape, reference, dict(mapping), carried, own_mesh, posed_targets, own
+        )
         judged.append(f"{shape.shape} {candidate.stretch:.2f}")
         if best is None or candidate.stretch < best.stretch * (1 - SHAPE_MARGIN):
             best = candidate
@@ -1188,9 +1318,19 @@ def plan(target: Costume, source: Costume, probes: list[list[np.ndarray]], *, fi
     return best
 
 
-def _judge(target: Costume, source: Costume, probes: list[list[np.ndarray]], flat_source: Flat, shape: Fit,
-           reference: np.ndarray, mapping: dict[int, int], carried: Mapping[int, int], own_mesh: OwnMesh,
-           posed_targets: list[np.ndarray], own: float) -> Plan:
+def _judge(
+    target: Costume,
+    source: Costume,
+    probes: list[list[np.ndarray]],
+    flat_source: Flat,
+    shape: Fit,
+    reference: np.ndarray,
+    mapping: dict[int, int],
+    carried: Mapping[int, int],
+    own_mesh: OwnMesh,
+    posed_targets: list[np.ndarray],
+    own: float,
+) -> Plan:
     """One shape's plan: each group's choice (``mapping`` is changed in place), the rest pose, the stretch from
     ``reference`` (the costume's shape before the refit)."""
     t_rest = target.skeleton.world()
@@ -1227,13 +1367,18 @@ def _judge(target: Costume, source: Costume, probes: list[list[np.ndarray]], fla
         if not probes or not mask.any():
             follow = False
         else:
-            t_members = [j for j in set(tdom.tolist()) if not target.skeleton.nodes[j].name.startswith("Bip001")
-                         and target.skeleton.biped_ancestor(j) is not None
-                         and target.skeleton.nodes[target.skeleton.biped_ancestor(j)].name == slot_name]
+            t_members = [
+                j
+                for j in set(tdom.tolist())
+                if not target.skeleton.nodes[j].name.startswith("Bip001")
+                and target.skeleton.biped_ancestor(j) is not None
+                and target.skeleton.nodes[target.skeleton.biped_ancestor(j)].name == slot_name
+            ]
             t_mask = np.isin(tdom, t_members)
             t_mask = t_mask[te[:, 0]] & t_mask[te[:, 1]]
-            group_own = max((stretch(tv, posed, te, t_mask) for posed in posed_targets), default=1.0) \
-                if t_mask.any() else 1.0
+            group_own = (
+                max((stretch(tv, posed, te, t_mask) for posed in posed_targets), default=1.0) if t_mask.any() else 1.0
+            )
             mine = max(stretch(reference, deform(flat, matrices(p, mapping)), se, mask) for p in probes)
             follow = mine <= max(STRETCH_FLOOR, group_own)
         choices[anchor] = "follow" if follow else "rigid"
@@ -1251,8 +1396,8 @@ def _judge(target: Costume, source: Costume, probes: list[list[np.ndarray]], fla
 # --- skirts and hems (see model_hems) ------------------------------------------------------------------------
 
 HEM_CLIPS = ("Formation_Idle", "Formation_Pickup", "Normal_Attack_Ing", "Exs", "Move_Ing", "Cafe_Walk", "Vital_Death")
-HEM_FRAMES = 6     # frames measured per check clip
-FIT_FRAMES = 12    # frames per clip of the costume's own clips, for the fit
+HEM_FRAMES = 6  # frames measured per check clip
+FIT_FRAMES = 12  # frames per clip of the costume's own clips, for the fit
 LEG_SAMPLES = 700  # leg vertices measured, about
 HEM_RULES = (("blend", 0.5), ("short", 0.5), ("short", 0.7), ("short", 1.0), ("fit", 0.5), ("fit", 0.7), ("fit", 1.0))
 RAMPS = {"blend": (1.0, (1.0, 2.0)), "short": (0.3, (0.9, 1.3))}  # rise in thigh lengths, thigh -> calf change
@@ -1287,8 +1432,11 @@ def lower_anchors(skeleton: Skeleton, legs: Mapping[str, int]) -> set[int]:
 def followed_groups(plan_: Plan, skeleton: Skeleton, anchors: set[int]) -> dict[int, list[int]]:
     """The leg-anchor groups (``anchors``: :func:`lower_anchors`) that the group choice set to ``follow``, with their
     secondary bones: Optimize Physics judges them again by pass-through (:func:`hems`)."""
-    return {anchor: members for anchor, members in plan_.groups.items() if members and anchor in anchors
-            and plan_.choices.get(anchor) == "follow"}
+    return {
+        anchor: members
+        for anchor, members in plan_.groups.items()
+        if members and anchor in anchors and plan_.choices.get(anchor) == "follow"
+    }
 
 
 def chain_root(skeleton: Skeleton, node: int) -> int:
@@ -1298,8 +1446,9 @@ def chain_root(skeleton: Skeleton, node: int) -> int:
     return node
 
 
-def cloth_mask(skeleton: Skeleton, dominant: np.ndarray, anchors: set[int], axis_distance: np.ndarray,
-               hip_width: float) -> np.ndarray:
+def cloth_mask(
+    skeleton: Skeleton, dominant: np.ndarray, anchors: set[int], axis_distance: np.ndarray, hip_width: float
+) -> np.ndarray:
     """Vertices of the cloth around the legs: dominated by a secondary bone below one of ``anchors``, in a chain whose
     vertices lie within 1.5 hip widths of the leg axes (median), which keeps wings and tails out."""
     chains = np.full(len(dominant), -1)
@@ -1316,8 +1465,9 @@ def cloth_mask(skeleton: Skeleton, dominant: np.ndarray, anchors: set[int], axis
     return out
 
 
-def fit_own(skeleton: Skeleton, flat: Flat, on_rigid: np.ndarray, share: np.ndarray, legs: Mapping[str, int],
-            clips: list[Any]) -> np.ndarray | None:
+def fit_own(
+    skeleton: Skeleton, flat: Flat, on_rigid: np.ndarray, share: np.ndarray, legs: Mapping[str, int], clips: list[Any]
+) -> np.ndarray | None:
     """Per vertex, the weights on the pelvis, thighs and calves (``FIT_KEYS``) that best reproduce where the costume's
     own clips put its rigid part (the vendor's keyed skirt bones): least squares over the sampled frames of every clip
     with Biped curves. None without such clips."""
@@ -1345,8 +1495,12 @@ def fit_own(skeleton: Skeleton, flat: Flat, on_rigid: np.ndarray, share: np.ndar
     if not normal.frames:
         return None
     fitted, residual = hm.fit_simplex(normal)
-    logger.debug("Hem fit: %d vertices over %d frames, rms residual %.1f mm", len(rows), normal.frames,
-                 1000 * float(residual.mean()) if len(residual) else 0.0)
+    logger.debug(
+        "Hem fit: %d vertices over %d frames, rms residual %.1f mm",
+        len(rows),
+        normal.frames,
+        1000 * float(residual.mean()) if len(residual) else 0.0,
+    )
     out = np.zeros((len(flat.vertices), len(bones)))
     out[rows] = fitted
     return out
@@ -1407,13 +1561,18 @@ class Hems:
         rigid, chosen = self.scores[0], self.score(self.rule) or self.scores[0]
         extra = f", {len(self.skirt.solver.roots)} chains in {self.skirt.clips} clips" if self.skirt else ""
         if self.springs:
-            extra += f", {sum(len(s.solver.roots) for s in self.springs)} swinging chains in " + "/".join(
-                str(s.clips) for s in self.springs) + " clips"
+            extra += (
+                f", {sum(len(s.solver.roots) for s in self.springs)} swinging chains in "
+                + "/".join(str(s.clips) for s in self.springs)
+                + " clips"
+            )
         if self.thin is not None and self.thin_score is not None:
             extra += f", {len(self.thin[0])} leg vertices thinned under the cloth ({self.thin_score.mean:.1f}%)"
-        return (f"{self.rule}: deep pass-through {rigid.mean:.1f}% -> {chosen.mean:.1f}%, stretch {rigid.stretch:.2f} -> "
-                f"{chosen.stretch:.2f} (limit {self.limit:.2f}){extra}; per clip " + ", ".join(
-                    f"{clip} {rigid.deep[clip]:.0f}->{chosen.deep[clip]:.0f}" for clip in rigid.deep))
+        return (
+            f"{self.rule}: deep pass-through {rigid.mean:.1f}% -> {chosen.mean:.1f}%, stretch {rigid.stretch:.2f} -> "
+            f"{chosen.stretch:.2f} (limit {self.limit:.2f}){extra}; per clip "
+            + ", ".join(f"{clip} {rigid.deep[clip]:.0f}->{chosen.deep[clip]:.0f}" for clip in rigid.deep)
+        )
 
 
 @dataclass
@@ -1427,10 +1586,22 @@ class _SkirtCandidate:
     skirt: Skirt
 
 
-def _skirt_candidates(ts: Skeleton, ss: Skeleton, plan_: Plan, flat: Flat, sv: np.ndarray, dominant: np.ndarray,
-                      cloth: np.ndarray, legs: np.ndarray, t_legs: Mapping[str, int], s_legs: Mapping[str, int],
-                      mapped: np.ndarray, columns: list[int], writable_rows: np.ndarray,
-                      anchors: Iterable[int] | None = None) -> list[_SkirtCandidate]:
+def _skirt_candidates(
+    ts: Skeleton,
+    ss: Skeleton,
+    plan_: Plan,
+    flat: Flat,
+    sv: np.ndarray,
+    dominant: np.ndarray,
+    cloth: np.ndarray,
+    legs: np.ndarray,
+    t_legs: Mapping[str, int],
+    s_legs: Mapping[str, int],
+    mapped: np.ndarray,
+    columns: list[int],
+    writable_rows: np.ndarray,
+    anchors: Iterable[int] | None = None,
+) -> list[_SkirtCandidate]:
     """Rule B's candidates ("skirt": the costume's weights, "skirt smooth": blended across the chains' seams) and
     their new bones, for the skirt chains of the cloth around the legs that the group choice left rigid, hanging off
     the pelvis or another of ``anchors`` (source Biped bones; the pelvis alone by default): each chain's first bone
@@ -1438,14 +1609,18 @@ def _skirt_candidates(ts: Skeleton, ss: Skeleton, plan_: Plan, flat: Flat, sv: n
     costume in the source's space; ``sv``: its vertices in the shape bound on the slot, where each chain's
     bones go along with its cloth."""
     pelvis = s_legs["pelvis"]
-    anchors = [a for a in dict.fromkeys(anchors if anchors is not None else [pelvis])
-               if plan_.choices.get(a) == "rigid"]
+    anchors = [
+        a for a in dict.fromkeys(anchors if anchors is not None else [pelvis]) if plan_.choices.get(a) == "rigid"
+    ]
     if not anchors:
         return []
     members = {n for a in anchors for n in plan_.groups.get(a, [])}
     roots = {chain_root(ss, int(n)) for n in np.unique(dominant[cloth]).tolist() if int(n) in members}
-    skinned = {int(n) for n in np.unique(flat.joints[flat.weights > 0]).tolist()
-               if int(n) in members and chain_root(ss, int(n)) in roots}
+    skinned = {
+        int(n)
+        for n in np.unique(flat.joints[flat.weights > 0]).tolist()
+        if int(n) in members and chain_root(ss, int(n)) in roots
+    }
     wanted: set[int] = set()
     for n in skinned:
         while n not in wanted:
@@ -1466,8 +1641,10 @@ def _skirt_candidates(ts: Skeleton, ss: Skeleton, plan_: Plan, flat: Flat, sv: n
     carry = {}
     for k, n in enumerate(sources):
         if parents[k] < 0:
-            share = (flat.weights * np.isin(flat.joints, [sources[j] for j in range(len(sources))
-                                                         if chain_root(ss, sources[j]) == n])).sum(axis=1)
+            share = (
+                flat.weights
+                * np.isin(flat.joints, [sources[j] for j in range(len(sources)) if chain_root(ss, sources[j]) == n])
+            ).sum(axis=1)
             rows = np.where(share > 0.5)[0]
             carry[n] = ms.rigid_fit(flat.vertices[rows], sv[rows], share[rows]) if len(rows) >= 3 else np.eye(4)
     rest = np.array([carry[chain_root(ss, n)] @ s_rest[n] for n in sources])
@@ -1495,12 +1672,13 @@ def _skirt_candidates(ts: Skeleton, ss: Skeleton, plan_: Plan, flat: Flat, sv: n
     index = {c: k for k, c in enumerate(columns)}
     chain = np.vectorize(lambda n: new.get(int(n), -1), otypes=[int])(flat.joints)
     on = (chain >= 0) & (flat.weights > 0)
-    cols = np.where(on, len(columns) + np.maximum(chain, 0),
-                    np.vectorize(lambda n: index.get(int(n), 0), otypes=[int])(mapped))
+    cols = np.where(
+        on, len(columns) + np.maximum(chain, 0), np.vectorize(lambda n: index.get(int(n), 0), otypes=[int])(mapped)
+    )
     cols = np.where(flat.weights > 0, cols, 0)
     plain = hm.densify(cols, flat.weights, width)
     smooth = plain.copy()
-    smooth[:, len(columns):] = ms.smooth_weights(plain[:, len(columns):], flat.edges)
+    smooth[:, len(columns) :] = ms.smooth_weights(plain[:, len(columns) :], flat.edges)
     smooth[~writable_rows] = plain[~writable_rows]
     leg_joints = np.where(flat.weights[legs] > 0, mapped[legs], anchor)
     leg_set = ms.Legs(sv[legs], leg_joints, flat.weights[legs])
@@ -1509,7 +1687,7 @@ def _skirt_candidates(ts: Skeleton, ss: Skeleton, plan_: Plan, flat: Flat, sv: n
     for rule, dense in (("skirt", plain), ("skirt smooth", smooth)):
         if rule == "skirt smooth" and np.abs(smooth - plain).max() < 1e-9:
             continue
-        on_chains = dense[:, len(columns):].sum(axis=1) > 1e-9
+        on_chains = dense[:, len(columns) :].sum(axis=1) > 1e-9
         # with the ring of cloth around them that the chains do not carry, so that the edges across the seam keep
         # their length too (a chain's head may move)
         ring = np.zeros(len(on_chains), bool)
@@ -1519,8 +1697,9 @@ def _skirt_candidates(ts: Skeleton, ss: Skeleton, plan_: Plan, flat: Flat, sv: n
         joints4, weights4 = hm.keep_four(dense[rows])
         fixed = sorted({columns[c] for c in joints4[weights4 > 0].ravel().tolist() if c < len(columns)} | {anchor})
         slot = {c: fixed.index(columns[c]) + len(sources) for c in range(len(columns)) if columns[c] in fixed}
-        joints = np.vectorize(lambda c: c - len(columns) if c >= len(columns) else slot.get(c, slot[index[anchor]]),
-                              otypes=[int])(joints4)
+        joints = np.vectorize(
+            lambda c: c - len(columns) if c >= len(columns) else slot.get(c, slot[index[anchor]]), otypes=[int]
+        )(joints4)
         position = np.full(len(flat.vertices), -1)
         position[rows] = np.arange(len(rows))
         edges = position[flat.edges]
@@ -1540,9 +1719,18 @@ def _skirt_candidates(ts: Skeleton, ss: Skeleton, plan_: Plan, flat: Flat, sv: n
 HEM_UNITS = (20, 1, 24, 12)
 
 
-def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_clips: list[Any],
-         writable: list[bool], physics: bool = False, shapes_writable: bool = False, meter: Meter = QUIET,
-         step: Callable[[], None] = lambda: None) -> Hems:
+def hems(
+    target: Costume,
+    source: Costume,
+    plan_: Plan,
+    t_clips: list[Any],
+    s_clips: list[Any],
+    writable: list[bool],
+    physics: bool = False,
+    shapes_writable: bool = False,
+    meter: Meter = QUIET,
+    step: Callable[[], None] = lambda: None,
+) -> Hems:
     """Rule A: new skin weights for the cloth the group choice left rigid around the legs, and, with
     ``physics`` (Optimize Physics), Rule B: the skirt chains as new bones turned by the legs in every
     frame; picked by measurement under the slot's own clips (see ``model_hems`` and ``model_skirts``). ``writable``:
@@ -1563,15 +1751,25 @@ def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_cl
     if t_legs is None or s_legs is None:
         return Hems(note="no Biped legs")
     s_anchors = lower_anchors(ss, s_legs)
-    rigid = sorted({n for anchor, members in plan_.groups.items() if anchor in s_anchors
-                    and plan_.choices.get(anchor) == "rigid" for n in members})
+    rigid = sorted(
+        {
+            n
+            for anchor, members in plan_.groups.items()
+            if anchor in s_anchors and plan_.choices.get(anchor) == "rigid"
+            for n in members
+        }
+    )
     followed = followed_groups(plan_, ss, s_anchors) if physics else {}
     flat = flatten(source, ss.world())  # the source's space, for the fit to its own clips
     on_rigid = np.isin(flat.joints, rigid) & (flat.weights > 0)
     share = (flat.weights * on_rigid).sum(axis=1)
     # Optimize Physics: the same cloth with the followed groups rigid as well
-    on_regroup = np.isin(flat.joints, sorted({*rigid, *(n for members in followed.values() for n in members)})) \
-        & (flat.weights > 0) if followed else None
+    on_regroup = (
+        np.isin(flat.joints, sorted({*rigid, *(n for members in followed.values() for n in members)}))
+        & (flat.weights > 0)
+        if followed
+        else None
+    )
     share_regroup = (flat.weights * on_regroup).sum(axis=1) if followed else share
     if not (share > 1e-6).any() and not (share_regroup > 1e-6).any():
         return Hems(note="no rigid cloth")
@@ -1601,7 +1799,7 @@ def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_cl
     # the costume's legs and the cloth around them; the slot's own cloth
     dominant = flat.joints[np.arange(len(sv)), np.argmax(flat.weights, axis=1)]
     all_legs = np.where(np.isin(dominant, sorted(s_anchors - {s_legs["pelvis"]})))[0]
-    legs = all_legs[::max(1, len(all_legs) // LEG_SAMPLES)]
+    legs = all_legs[:: max(1, len(all_legs) // LEG_SAMPLES)]
     cloth = cloth_mask(ss, dominant, s_anchors, axis, hip_width)
     chain_anchors = [s_legs["pelvis"]]
     if physics:  # Optimize Physics: also the chains off the spine whose cloth reaches below the hips (a coat's tails)
@@ -1619,13 +1817,21 @@ def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_cl
         return Hems(note="no cloth around the legs")
     state, _ = hm.cover(sv, legs, triangles, at["pelvis"], up)
     covered = legs[state == 1]
-    logger.debug("Hem: %d cloth vertices (%d triangles), %d rigid-weighted, %d of %d sampled leg vertices covered",
-                 int(cloth.sum()), len(triangles), int((share > 1e-6).sum()), len(covered), len(legs))
+    logger.debug(
+        "Hem: %d cloth vertices (%d triangles), %d rigid-weighted, %d of %d sampled leg vertices covered",
+        int(cloth.sum()),
+        len(triangles),
+        int((share > 1e-6).sum()),
+        len(covered),
+        len(legs),
+    )
     if not len(covered):
         return Hems(note="no leg under the cloth")
     own = OwnMesh.of(target)
-    t_axis = np.minimum(hm.leg_distance(own.rest, at["thigh L"], at["calf L"], at["foot L"]),
-                        hm.leg_distance(own.rest, at["thigh R"], at["calf R"], at["foot R"]))
+    t_axis = np.minimum(
+        hm.leg_distance(own.rest, at["thigh L"], at["calf L"], at["foot L"]),
+        hm.leg_distance(own.rest, at["thigh R"], at["calf R"], at["foot R"]),
+    )
     t_cloth = cloth_mask(ts, own.dominant, lower_anchors(ts, t_legs), t_axis, hip_width)
     t_edges = own.edges[t_cloth[own.edges].all(axis=1)]
 
@@ -1633,7 +1839,10 @@ def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_cl
     mapped = np.vectorize(lambda n: plan_.mapping.get(int(n), 0), otypes=[int])(flat.joints)
     used = set(mapped[flat.weights > 0].tolist())
     if followed:  # the followed groups' secondary bones on the anchor's slot node, as a rigid group is mapped
-        regroup = {**plan_.mapping, **{n: plan_.mapping[anchor] for anchor, members in followed.items() for n in members}}
+        regroup = {
+            **plan_.mapping,
+            **{n: plan_.mapping[anchor] for anchor, members in followed.items() for n in members},
+        }
         mapped_regroup = np.vectorize(lambda n: regroup.get(int(n), 0), otypes=[int])(flat.joints)
         used |= set(mapped_regroup[flat.weights > 0].tolist())
     columns = sorted(used | {t_legs[k] for k in FIT_KEYS})
@@ -1649,7 +1858,7 @@ def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_cl
         height = (hip - (sv - at["pelvis"]) @ up) / (hip - knee)
         near = 1 - hm.smoothstep(hip_width, 2 * hip_width, axis)
         sigma = hip_width / 2
-        close_l, close_r = np.exp(-(left / sigma) ** 2), np.exp(-(right / sigma) ** 2)
+        close_l, close_r = np.exp(-((left / sigma) ** 2)), np.exp(-((right / sigma) ** 2))
         ramp_columns = [index[t_legs[k]] for k in ("thigh L", "thigh R", "calf L", "calf R")]
         fit_columns = [index[t_legs[k]] for k in FIT_KEYS]
 
@@ -1670,8 +1879,13 @@ def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_cl
 
         if (share > 1e-6).any():
             rules += rule_a(dense, rigid_part, share, on_rigid, "")
-    skirt_rules = _skirt_candidates(ts, ss, plan_, flat, sv, dominant, cloth, all_legs, t_legs, s_legs,
-                                    mapped, columns, rows_ok, chain_anchors) if physics else []
+    skirt_rules = (
+        _skirt_candidates(
+            ts, ss, plan_, flat, sv, dominant, cloth, all_legs, t_legs, s_legs, mapped, columns, rows_ok, chain_anchors
+        )
+        if physics
+        else []
+    )
     rules += [(c.rule, c.weights, c.solver) for c in skirt_rules]
     if followed:
         # the same rules with the followed groups rigid: the pelvis group's chains only where it was followed
@@ -1681,11 +1895,26 @@ def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_cl
         if (share_regroup > 1e-6).any():
             rules += rule_a(dense_regroup, part_regroup, share_regroup, on_regroup, REGROUP)
         if s_legs["pelvis"] in followed:
-            lowered = dataclasses.replace(plan_, mapping=regroup, choices={
-                **plan_.choices, **dict.fromkeys(followed, "rigid")})
+            lowered = dataclasses.replace(
+                plan_, mapping=regroup, choices={**plan_.choices, **dict.fromkeys(followed, "rigid")}
+            )
             # their own new bones: the chains of the groups made rigid join the default build's
-            again = _skirt_candidates(ts, ss, lowered, flat, sv, dominant, cloth, all_legs, t_legs, s_legs,
-                                      mapped_regroup, columns, rows_ok, chain_anchors)
+            again = _skirt_candidates(
+                ts,
+                ss,
+                lowered,
+                flat,
+                sv,
+                dominant,
+                cloth,
+                all_legs,
+                t_legs,
+                s_legs,
+                mapped_regroup,
+                columns,
+                rows_ok,
+                chain_anchors,
+            )
             again = [dataclasses.replace(c, rule=REGROUP + c.rule) for c in again]
             skirt_rules += again
             rules += [(c.rule, c.weights, c.solver) for c in again]
@@ -1706,17 +1935,32 @@ def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_cl
             frames = []
             for frame in measured_frames(len(times)):
                 pose = pose_at(frame)
-                frames.append((frame, np.array([pose[c] for c in columns]) @ inverse, pose[t_legs["pelvis"]][:3, 3],
-                               pose[t_legs["pelvis"]][:3, :3] @ rest_rotation @ up, pose))
+                frames.append(
+                    (
+                        frame,
+                        np.array([pose[c] for c in columns]) @ inverse,
+                        pose[t_legs["pelvis"]][:3, 3],
+                        pose[t_legs["pelvis"]][:3, :3] @ rest_rotation @ up,
+                        pose,
+                    )
+                )
             checks.append((suffix, clip, tree, prepared, frames))
     if not checks:
         return Hems(note="no check clips")
-    limit = max(hm.STRETCH_FLOOR, max(hm.stretch_p99(own.rest, own.posed(pose), t_edges)
-                                      for *_, frames in checks for *_, pose in frames))
+    limit = max(
+        hm.STRETCH_FLOOR,
+        max(hm.stretch_p99(own.rest, own.posed(pose), t_edges) for *_, frames in checks for *_, pose in frames),
+    )
     scores, four, solved = [], {}, {}
 
-    def judged(rule: str, joints4: np.ndarray, weights4: np.ndarray, solver: ms.Solver | None,
-               points: np.ndarray, prune: bool = False) -> hm.Score:
+    def judged(
+        rule: str,
+        joints4: np.ndarray,
+        weights4: np.ndarray,
+        solver: ms.Solver | None,
+        points: np.ndarray,
+        prune: bool = False,
+    ) -> hm.Score:
         deep, worst = {}, 1.0
         for suffix, clip, tree, prepared, frames in checks:
             step()
@@ -1757,8 +2001,18 @@ def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_cl
             tried.append(1)
             return judged(*args)
 
-        _thin_legs(result, best, judged_thin, four[best.rule],
-                   next(solver for rule, _, solver in rules if rule == best.rule), sv, all_legs, triangles, at, up)
+        _thin_legs(
+            result,
+            best,
+            judged_thin,
+            four[best.rule],
+            next(solver for rule, _, solver in rules if rule == best.rule),
+            sv,
+            all_legs,
+            triangles,
+            at,
+            up,
+        )
     if best.rule == "rigid":
         return result
     joints4, weights4 = four[best.rule]
@@ -1781,18 +2035,19 @@ def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_cl
         nodes = np.array(columns)
         changed = np.abs(chosen - dense).max(axis=1) > 1e-9
     for k in range(len(source.parts)):
-        rows = np.where(changed[bounds[k]:bounds[k + 1]])[0]
+        rows = np.where(changed[bounds[k] : bounds[k + 1]])[0]
         result.parts.append((rows, nodes[joints4[bounds[k] + rows]], weights4[bounds[k] + rows]) if len(rows) else None)
     return result
 
 
-RIGID_ROUNDS = 8           # stiffening rounds at most
-RIGID_STEPS = (0.5, 1.0)   # how far a round moves the worst vertices' weights toward their anchor
-RIGID_SHARE = 99.5         # the edges past this percentile of stretch (and past the limit) are the worst
+RIGID_ROUNDS = 8  # stiffening rounds at most
+RIGID_STEPS = (0.5, 1.0)  # how far a round moves the worst vertices' weights toward their anchor
+RIGID_SHARE = 99.5  # the edges past this percentile of stretch (and past the limit) are the worst
 
 
-def rigidify(target: Costume, source: Costume, plan_: Plan, probes: list[list[np.ndarray]], hem: Hems,
-             writable: list[bool]) -> None:
+def rigidify(
+    target: Costume, source: Costume, plan_: Plan, probes: list[list[np.ndarray]], hem: Hems, writable: list[bool]
+) -> None:
     """A costume past the stretch limit (``plan.unfit``): the vertices of its worst stretched edges under the slot's
     probes get their weights blended toward the slot bone their anchor maps to (as a rigid group is mapped), round by
     round while the stretch falls, until it is within the limit or nothing improves; kept only when it is better than
@@ -1816,9 +2071,13 @@ def rigidify(target: Costume, source: Costume, plan_: Plan, probes: list[list[np
         anchors[n] = plan_.mapping.get(a if a is not None else n, 0)
     anchor = np.array([anchors.get(int(n), 0) for n in dominant])
     hem_rows: list[tuple[np.ndarray, np.ndarray, np.ndarray] | None] = list(hem.parts) + [None] * (
-        len(source.parts) - len(hem.parts))
-    columns = sorted(set(mapped[flat.weights > 0].tolist()) | set(anchor.tolist()) | {
-        int(n) for change in hem_rows if change is not None for n in change[1].ravel().tolist()})
+        len(source.parts) - len(hem.parts)
+    )
+    columns = sorted(
+        set(mapped[flat.weights > 0].tolist())
+        | set(anchor.tolist())
+        | {int(n) for change in hem_rows if change is not None for n in change[1].ravel().tolist()}
+    )
     index = {c: k for k, c in enumerate(columns)}
     cols = np.vectorize(lambda n: index.get(int(n), 0), otypes=[int])(np.where(flat.weights > 0, mapped, columns[0]))
     dense = hm.densify(cols, flat.weights, len(columns))
@@ -1827,8 +2086,10 @@ def rigidify(target: Costume, source: Costume, plan_: Plan, probes: list[list[np
             rows, nodes, weights = change
             dense[bounds[k] + rows] = hm.densify(np.vectorize(index.get, otypes=[int])(nodes), weights, len(columns))
     start = dense.copy()
-    matrices = [np.array([pose[c] for c in columns]) @ np.array([_inverse(t_rest[c], ts.nodes[c].name)
-                                                                 for c in columns]) for pose in [t_rest, *probes]]
+    matrices = [
+        np.array([pose[c] for c in columns]) @ np.array([_inverse(t_rest[c], ts.nodes[c].name) for c in columns])
+        for pose in [t_rest, *probes]
+    ]
     edges = flat.edges
     weighted = flat.weights.sum(axis=1) > 1e-9
 
@@ -1875,7 +2136,7 @@ def rigidify(target: Costume, source: Costume, plan_: Plan, probes: list[list[np
     joints4, weights4 = hm.keep_four(dense)
     parts: list[tuple[np.ndarray, np.ndarray, np.ndarray] | None] = []
     for k in range(len(source.parts)):
-        mine = changed[bounds[k]:bounds[k + 1]]
+        mine = changed[bounds[k] : bounds[k + 1]]
         if hem_rows[k] is not None:  # the hem's rows stay written, now with the stiffened weights
             mine = mine.copy()
             mine[hem_rows[k][0]] = True
@@ -1886,14 +2147,23 @@ def rigidify(target: Costume, source: Costume, plan_: Plan, probes: list[list[np
     plan_.stretch, plan_.unfit = now, now > limit
 
 
-THIN_DEPTH = 0.01         # a leg vertex this far inside the cloth at rest (metres) or more may be thinned
+THIN_DEPTH = 0.01  # a leg vertex this far inside the cloth at rest (metres) or more may be thinned
 THIN_FACTORS = (0.85, 0.7)  # how much of its distance to the leg's axis a thinned vertex keeps, tried in order
-THIN_GAIN = 1.0           # the deep pass-through, in points, thinning must take off to be kept
+THIN_GAIN = 1.0  # the deep pass-through, in points, thinning must take off to be kept
 
 
-def _thin_legs(result: Hems, best: hm.Score, judged: Callable, four: tuple[np.ndarray, np.ndarray],
-               solver: ms.Solver | None, sv: np.ndarray, legs: np.ndarray, triangles: np.ndarray,
-               at: Mapping[str, np.ndarray], up: np.ndarray) -> None:
+def _thin_legs(
+    result: Hems,
+    best: hm.Score,
+    judged: Callable,
+    four: tuple[np.ndarray, np.ndarray],
+    solver: ms.Solver | None,
+    sv: np.ndarray,
+    legs: np.ndarray,
+    triangles: np.ndarray,
+    at: Mapping[str, np.ndarray],
+    up: np.ndarray,
+) -> None:
     """Optimize Physics: the costume's leg vertices deep inside the cloth at rest (``THIN_DEPTH``) moved toward their
     leg's axis, so that knees and shins stay under a skirt or gown; judged with the chosen rule's weights by the same
     pass-through measure, kept when it takes ``THIN_GAIN`` points off and leaves no clip worse than the rule alone
@@ -1905,7 +2175,9 @@ def _thin_legs(result: Hems, best: hm.Score, judged: Callable, four: tuple[np.nd
         return
     points = sv[rows]
     # each vertex toward the nearer leg's axis
-    left, right = (_nearest_on_legs(points, at[f"thigh {side}"], at[f"calf {side}"], at[f"foot {side}"]) for side in "LR")
+    left, right = (
+        _nearest_on_legs(points, at[f"thigh {side}"], at[f"calf {side}"], at[f"foot {side}"]) for side in "LR"
+    )
     nearer = np.linalg.norm(points - left, axis=1) <= np.linalg.norm(points - right, axis=1)
     closest = np.where(nearer[:, None], left, right)
     chosen = best
@@ -1931,7 +2203,7 @@ def _nearest_on_legs(points: np.ndarray, hip: np.ndarray, knee: np.ndarray, ankl
     return out
 
 
-SWING_MIN = math.radians(2)     # a chain the source's own clips turn less than this stays rigid (the artist kept it so)
+SWING_MIN = math.radians(2)  # a chain the source's own clips turn less than this stays rigid (the artist kept it so)
 SWING_LIMITS = (math.radians(10), math.radians(30))  # how far a chain may swing: 1.5 times the source's own, in these
 
 
@@ -1949,8 +2221,9 @@ def swing_of(skeleton: Skeleton, clips: Iterable[Any], nodes: Iterable[int]) -> 
         for node, attributes in bind_tracks(bindings, decode_clip(tree).curves, by_hash).items():
             if 2 not in attributes:
                 continue
-            q = np.array([np.resize(np.asarray(part, float), max(len(p) for p in attributes[2]))
-                          for part in attributes[2]]).T
+            q = np.array(
+                [np.resize(np.asarray(part, float), max(len(p) for p in attributes[2])) for part in attributes[2]]
+            ).T
             q /= np.maximum(np.linalg.norm(q, axis=1, keepdims=True), 1e-12)
             rest = np.asarray(skeleton.nodes[node].local[1], float)
             rest /= max(float(np.linalg.norm(rest)), 1e-12)
@@ -2044,13 +2317,19 @@ def springs(target: Costume, source: Costume, plan_: Plan, s_clips: list[Any], f
         carry = {}
         for k, n in enumerate(sources):
             if parents[k] < 0:
-                share = (flat.weights * np.isin(flat.joints, [j for j in sources if chain_root(ss, j) == n])).sum(axis=1)
+                share = (flat.weights * np.isin(flat.joints, [j for j in sources if chain_root(ss, j) == n])).sum(
+                    axis=1
+                )
                 rows = np.where(share > 0.5)[0]
-                carry[n] = ms.rigid_fit(flat.vertices[rows], sv[rows], share[rows]) if len(rows) >= 3 else (
-                    t_rest[slot_anchor] @ _inverse(s_rest[anchor], ss.nodes[anchor].name))
+                carry[n] = (
+                    ms.rigid_fit(flat.vertices[rows], sv[rows], share[rows])
+                    if len(rows) >= 3
+                    else (t_rest[slot_anchor] @ _inverse(s_rest[anchor], ss.nodes[anchor].name))
+                )
         rest = np.array([carry[chain_root(ss, n)] @ s_rest[n] for n in sources])
-        local = np.array([np.linalg.inv(rest[p] if p >= 0 else t_rest[slot_anchor]) @ rest[k]
-                          for k, p in enumerate(parents)])
+        local = np.array(
+            [np.linalg.inv(rest[p] if p >= 0 else t_rest[slot_anchor]) @ rest[k] for k, p in enumerate(parents)]
+        )
         chains = ms.Chains(slot_anchor, parents, local, rest)
         taken = {node.path for node in ts.nodes}
         names, paths, locals_ = [], [], []
@@ -2080,9 +2359,12 @@ def springs(target: Costume, source: Costume, plan_: Plan, s_clips: list[Any], f
         if not spring.roots or not (spring.lengths >= ms.MIN_LENGTH).any():
             continue
         # a slot clip the source has by name plays the source's own keys of these chains
-        spring = ms.Spring(chains, {new[r]: limits[r] for r in limits
-                                    if spring.lengths[spring.roots.index(new[r])] >= ms.MIN_LENGTH},
-                           own_keys(ss, s_clips, sources), np.array([trs(*ss.nodes[n].local) for n in sources]))
+        spring = ms.Spring(
+            chains,
+            {new[r]: limits[r] for r in limits if spring.lengths[spring.roots.index(new[r])] >= ms.MIN_LENGTH},
+            own_keys(ss, s_clips, sources),
+            np.array([trs(*ss.nodes[n].local) for n in sources]),
+        )
         out.append(Skirt(sources, names, parents, locals_, slot_anchor, spring, -1))
     return out
 
@@ -2100,11 +2382,12 @@ class FaceRetarget:
         self.chains, self.head, self.slots = chains, head, slots
         self.roots = list(range(len(slots)))
         inverse = np.linalg.inv(t_rest[head])
-        self.rel0 = [inverse @ t_rest[m] for m in slots]       # the slot bones against the head at rest
-        self.new0 = [inverse @ m for m in chains.rest]          # the new bones likewise
+        self.rel0 = [inverse @ t_rest[m] for m in slots]  # the slot bones against the head at rest
+        self.new0 = [inverse @ m for m in chains.rest]  # the new bones likewise
 
-    def follow(self, skeleton: Skeleton, tree: Mapping[str, Any], frames: list[int], *, prepared=None, step=lambda: None
-               ) -> list[dict[int, np.ndarray]]:
+    def follow(
+        self, skeleton: Skeleton, tree: Mapping[str, Any], frames: list[int], *, prepared=None, step=lambda: None
+    ) -> list[dict[int, np.ndarray]]:
         """The new bones' local transforms (4x4, without the bone's scale) at ``frames`` of a slot clip, for the bones
         whose slot bone moves against the head in it; the others stay at rest (no curve)."""
         _, pose, _ = prepared if prepared is not None else skeleton.clip_frames(tree, [self.head, *self.slots])
@@ -2128,8 +2411,12 @@ class FaceRetarget:
                 local[:3, :3] = local[:3, :3] @ np.linalg.inv(ms.scale_of(local))
                 turns[k] = local
             out.append(turns)
-        moving = {k for k in self.roots if any(not np.allclose(t[k], out[0][k], atol=1e-6) for t in out)
-                  or not np.allclose(out[0][k], ch.hanging(k), atol=1e-6)}
+        moving = {
+            k
+            for k in self.roots
+            if any(not np.allclose(t[k], out[0][k], atol=1e-6) for t in out)
+            or not np.allclose(out[0][k], ch.hanging(k), atol=1e-6)
+        }
         return [{k: t[k] for k in sorted(moving)} for t in out]
 
     def posed(self, pose: Sequence[np.ndarray], turns: Mapping[int, np.ndarray]) -> np.ndarray:
@@ -2152,15 +2439,24 @@ def face_retarget(target: Costume, source: Costume, plan_: Plan, fit: Fit) -> Sk
     flat = flatten(source, ss.world())
     t_rest, s_rest = ts.world(), ss.world()
     used = set(flat.joints[flat.weights > 0].tolist())
-    face = [n for n in sorted(used) if n >= 0 and face_bone(ss, n) and n in plan_.mapping
-            and ts.nodes[plan_.mapping[n]].name == ss.nodes[n].name]
+    face = [
+        n
+        for n in sorted(used)
+        if n >= 0 and face_bone(ss, n) and n in plan_.mapping and ts.nodes[plan_.mapping[n]].name == ss.nodes[n].name
+    ]
     if not face:
         return None
     rows = np.where(np.isin(flat.joints, face).any(axis=1))[0]
-    carry = ms.rigid_fit(flat.vertices[rows], fit.vertices[rows], np.ones(len(rows))) if len(rows) >= 3 else (
-        t_rest[t_head] @ _inverse(s_rest[s_head], HEAD))
-    apart = {n for n in face if float(np.linalg.norm((carry @ s_rest[n])[:3, 3] - t_rest[plan_.mapping[n]][:3, 3]))
-             >= FACE_OFFSET}
+    carry = (
+        ms.rigid_fit(flat.vertices[rows], fit.vertices[rows], np.ones(len(rows)))
+        if len(rows) >= 3
+        else (t_rest[t_head] @ _inverse(s_rest[s_head], HEAD))
+    )
+    apart = {
+        n
+        for n in face
+        if float(np.linalg.norm((carry @ s_rest[n])[:3, 3] - t_rest[plan_.mapping[n]][:3, 3])) >= FACE_OFFSET
+    }
     if not apart:
         return None
     wanted: set[int] = set()
@@ -2219,8 +2515,14 @@ def measured_frames(count: int) -> list[int]:
     return sorted({min(count - 1, round(k * (count - 1) / max(1, HEM_FRAMES - 1))) for k in range(HEM_FRAMES)})
 
 
-def skirt_sequence(skeleton: Skeleton, solver: ms.Solver, tree: Mapping[str, Any], *, prepared=None,
-                   step: Callable[[], None] = lambda: None) -> tuple[list[int], list[dict]]:
+def skirt_sequence(
+    skeleton: Skeleton,
+    solver: ms.Solver,
+    tree: Mapping[str, Any],
+    *,
+    prepared=None,
+    step: Callable[[], None] = lambda: None,
+) -> tuple[list[int], list[dict]]:
     """Rule B's solved frames of a clip (every ``SOLVE_EVERY``-th, the last and the measured ones) and the chains'
     turns there, in time (``Solver.sequence``)."""
     from .model_arm_clips import clip_times
@@ -2238,8 +2540,13 @@ def skirt_sequence(skeleton: Skeleton, solver: ms.Solver, tree: Mapping[str, Any
             step()
             poses.append(pose(f))
         keyed = solver.keyed(str(tree.get("m_Name") or ""), [times[f] for f in frames])
-        turns = keyed if keyed is not None else solver.sequence(
-            [times[f] for f in frames], lambda k: poses[k], bool(tree["m_MuscleClip"].get("m_LoopTime")))
+        turns = (
+            keyed
+            if keyed is not None
+            else solver.sequence(
+                [times[f] for f in frames], lambda k: poses[k], bool(tree["m_MuscleClip"].get("m_LoopTime"))
+            )
+        )
         return frames, solver.settle(turns, [np.asarray(p[solver.chains.anchor]) for p in poses])
     loop = bool(tree["m_MuscleClip"].get("m_LoopTime"))
     return frames, solver.sequence([times[f] for f in frames], lambda k: pose(frames[k]), loop, step=step)
@@ -2264,8 +2571,15 @@ def curve_frames(skeleton: Skeleton, skirts: Sequence[Skirt], tree: Mapping[str,
     return skeleton.clip_frames(tree, nodes, cache=True)
 
 
-def skirt_curves(skeleton: Skeleton, skirt: Skirt, tree: dict, key: tuple[str, int] | None = None, *,
-                 prepared=None, step: Callable[[], None] = lambda: None) -> int | None:
+def skirt_curves(
+    skeleton: Skeleton,
+    skirt: Skirt,
+    tree: dict,
+    key: tuple[str, int] | None = None,
+    *,
+    prepared=None,
+    step: Callable[[], None] = lambda: None,
+) -> int | None:
     """Rule B's rotation and position curves for the chains' first bones added to a clip typetree of the slot: the
     turns and shifts of
     :func:`skirt_sequence` (or those measured for the clip ``key``), interpolated onto its dense grid; for a clip that
@@ -2307,13 +2621,17 @@ def skirt_curves(skeleton: Skeleton, skirt: Skirt, tree: dict, key: tuple[str, i
 class ClipBefore:
     """A clip as it reads before Rule B edits it (:func:`clip_snapshot`), to compare the edited clip against."""
 
-    decoded: Any                  # model.DecodedClip
+    decoded: Any  # model.DecodedClip
     layout: tuple[int, int, int]  # streamed, dense and constant curve counts
 
 
 def _clip_layout(tree: Mapping[str, Any]) -> tuple[int, int, int]:
     clip = tree["m_MuscleClip"]["m_Clip"]["data"]
-    return clip["m_StreamedClip"]["curveCount"], clip["m_DenseClip"]["m_CurveCount"], len(clip["m_ConstantClip"]["data"])
+    return (
+        clip["m_StreamedClip"]["curveCount"],
+        clip["m_DenseClip"]["m_CurveCount"],
+        len(clip["m_ConstantClip"]["data"]),
+    )
 
 
 def saved_tree(obj: Any) -> dict:
@@ -2323,8 +2641,9 @@ def saved_tree(obj: Any) -> dict:
     from UnityPy.streams import EndianBinaryReader
 
     reader = EndianBinaryReader(obj.data, endian=obj.reader.endian)
-    return TypeTreeHelper.read_typetree(obj._get_typetree_node(), reader, as_dict=True, byte_size=len(obj.data),
-                                        assetsfile=obj.assets_file)
+    return TypeTreeHelper.read_typetree(
+        obj._get_typetree_node(), reader, as_dict=True, byte_size=len(obj.data), assetsfile=obj.assets_file
+    )
 
 
 def clip_snapshot(tree: Mapping[str, Any]) -> ClipBefore:
@@ -2368,6 +2687,7 @@ def clip_edit_error(before: ClipBefore, tree: Mapping[str, Any], added: int) -> 
 
 # --- the halo ---------------------------------------------------------------------------------------------
 
+
 @dataclass
 class Halo:
     """A prefab's halo. ``shape`` "single": the node its ``FxFollower`` keeps beside the head (HaloRoot) and the one
@@ -2377,14 +2697,14 @@ class Halo:
     the nodes and components that draw the halo, which hiding it turns off."""
 
     shape: str
-    root: int | None = None      # the followed node
-    follower: Any = None         # its FxFollower
-    node: int | None = None      # the renderer's node, below the followed one
-    renderer: Any = None         # the MeshRenderer (SkinnedMeshRenderer for "skinned")
-    mesh: Any = None             # its MeshFilter's mesh (the skinned renderer's)
+    root: int | None = None  # the followed node
+    follower: Any = None  # its FxFollower
+    node: int | None = None  # the renderer's node, below the followed one
+    renderer: Any = None  # the MeshRenderer (SkinnedMeshRenderer for "skinned")
+    mesh: Any = None  # its MeshFilter's mesh (the skinned renderer's)
     materials: list[Any] = field(default_factory=list)
-    bone: int | None = None      # "skinned": the bone it is bound to
-    head: int | None = None      # "skinned": the head bone
+    bone: int | None = None  # "skinned": the bone it is bound to
+    head: int | None = None  # "skinned": the head bone
     drawn: list[tuple[int, Any]] = field(default_factory=list)  # (node, renderer or particle system)
 
 
@@ -2437,8 +2757,12 @@ def halo_of(skeleton: Skeleton) -> Halo:
     renderers with halo shading are."""
     g = skeleton.graph
     # (Rule B's new bones have no objects yet)
-    components = [[o for c in g.tree(node.go)["m_Component"] if (o := g.deref(node.go, c["component"])) is not None]
-                  if node.go is not None else [] for node in skeleton.nodes]
+    components = [
+        [o for c in g.tree(node.go)["m_Component"] if (o := g.deref(node.go, c["component"])) is not None]
+        if node.go is not None
+        else []
+        for node in skeleton.nodes
+    ]
 
     def follower(i: int) -> Any:
         return next((o for o in components[i] if o.type.name == "MonoBehaviour" and g.script(o) == "FxFollower"), None)
@@ -2451,9 +2775,13 @@ def halo_of(skeleton: Skeleton) -> Halo:
 
     roots = [i for i in range(len(skeleton.nodes)) if follower(i) is not None and any(drawn(j) for j in below(i))]
     if not roots:
-        shaded = [(i, o) for i, objs in enumerate(components) for o in objs
-                  if o.type.name in ("MeshRenderer", "SkinnedMeshRenderer") and "halo" in (
-                      _shader_kind(g, g.deref(o, m)) for m in g.tree(o)["m_Materials"])]
+        shaded = [
+            (i, o)
+            for i, objs in enumerate(components)
+            for o in objs
+            if o.type.name in ("MeshRenderer", "SkinnedMeshRenderer")
+            and "halo" in (_shader_kind(g, g.deref(o, m)) for m in g.tree(o)["m_Materials"])
+        ]
         if not shaded:
             return Halo("none")
         return _skinned_halo(skeleton, shaded) or Halo("halo without a follower", drawn=shaded)
@@ -2487,8 +2815,10 @@ def _skinned_halo(skeleton: Skeleton, shaded: list[tuple[int, Any]]) -> Halo | N
         return None
     node, renderer = shaded[0]
     tree = g.tree(renderer)
-    bones = [skeleton.by_transform.get(_key(t)) if t is not None else None
-             for t in (g.deref(renderer, b) for b in tree["m_Bones"])]
+    bones = [
+        skeleton.by_transform.get(_key(t)) if t is not None else None
+        for t in (g.deref(renderer, b) for b in tree["m_Bones"])
+    ]
     if len(bones) != 1 or bones[0] is None:
         return None
     bone = bones[0]
@@ -2497,7 +2827,12 @@ def _skinned_halo(skeleton: Skeleton, shaded: list[tuple[int, Any]]) -> Halo | N
         return None
     mesh = g.deref(renderer, tree["m_Mesh"])
     materials = [g.deref(renderer, m) for m in tree["m_Materials"]]
-    if mesh is None or len(g.tree(mesh).get("m_BindPose") or []) != 1 or not materials or any(m is None for m in materials):
+    if (
+        mesh is None
+        or len(g.tree(mesh).get("m_BindPose") or []) != 1
+        or not materials
+        or any(m is None for m in materials)
+    ):
         return None
     return Halo("skinned", None, None, node, renderer, mesh, materials, bone, head, drawn=list(shaded))
 
@@ -2523,9 +2858,14 @@ def _mesh_tree(mesh: Any) -> dict:
     return tree
 
 
-def _halo_change(t_skeleton: Skeleton, s_skeleton: Skeleton, carry_mesh: Callable[[Any], int],
-                 carry_material: Callable[[Any], int], names: tuple[str, str],
-                 head: np.ndarray | None = None) -> HaloChange | None:
+def _halo_change(
+    t_skeleton: Skeleton,
+    s_skeleton: Skeleton,
+    carry_mesh: Callable[[Any], int],
+    carry_material: Callable[[Any], int],
+    names: tuple[str, str],
+    head: np.ndarray | None = None,
+) -> HaloChange | None:
     """The slot's halo after the swap: the source's carried (its mesh and materials added by
     ``carry_mesh`` and ``carry_material``) and drawn by the slot's halo renderer where the source draws its own, or
     else the slot's hidden; never the slot's own. None when the slot has no halo. ``head``: where the bound costume's
@@ -2549,8 +2889,13 @@ def _halo_shift(t_skeleton: Skeleton, follower: dict[str, Any], head: np.ndarray
             follower[name] = {**box, **{k: float(box[k]) + float(local[i]) for i, k in enumerate("xyz")}}
 
 
-def _halo_carried(t_skeleton: Skeleton, s_skeleton: Skeleton, carry_mesh: Callable[[Any], int],
-                  carry_material: Callable[[Any], int], names: tuple[str, str]) -> HaloChange | None:
+def _halo_carried(
+    t_skeleton: Skeleton,
+    s_skeleton: Skeleton,
+    carry_mesh: Callable[[Any], int],
+    carry_material: Callable[[Any], int],
+    names: tuple[str, str],
+) -> HaloChange | None:
     """:func:`_halo_change` before the head's move."""
     t, s = halo_of(t_skeleton), halo_of(s_skeleton)
     s_name, t_name = names
@@ -2559,21 +2904,38 @@ def _halo_carried(t_skeleton: Skeleton, s_skeleton: Skeleton, carry_mesh: Callab
     placed = _halo_place(t_skeleton, s_skeleton, t, s) if t.shape == "single" else None
     if placed is None:
         hidden = sorted({t_skeleton.nodes[node].path for node, _ in t.drawn})
-        transplant = _halo_transplant(s_skeleton, s, carry_mesh, carry_material,
-                                      t_skeleton.nodes[t.root].transform.assets_file) if (
-            t.root is not None and t.follower is not None and s.root is not None and s.follower is not None) else None
+        transplant = (
+            _halo_transplant(s_skeleton, s, carry_mesh, carry_material, t_skeleton.nodes[t.root].transform.assets_file)
+            if (t.root is not None and t.follower is not None and s.root is not None and s.follower is not None)
+            else None
+        )
         if transplant is not None:
             follower = s_skeleton.graph.tree(s.follower)
-            logger.info("Costume of %s on %s: halo carried with its nodes (slot: %s, source: %s)", s_name, t_name,
-                        t.shape, s.shape)
-            return HaloChange(None, t_skeleton.nodes[t.root].path, None, hide=hidden, transplant=transplant,
-                              follower={name: copy.deepcopy(follower[name]) for name in FOLLOWER_OFFSETS
-                                        if name in follower})
+            logger.info(
+                "Costume of %s on %s: halo carried with its nodes (slot: %s, source: %s)",
+                s_name,
+                t_name,
+                t.shape,
+                s.shape,
+            )
+            return HaloChange(
+                None,
+                t_skeleton.nodes[t.root].path,
+                None,
+                hide=hidden,
+                transplant=transplant,
+                follower={name: copy.deepcopy(follower[name]) for name in FOLLOWER_OFFSETS if name in follower},
+            )
         if s.shape == "none":
             logger.info("Costume of %s on %s: the source has no halo, the slot's is hidden", s_name, t_name)
         else:
-            logger.info("Costume of %s on %s: the source's halo cannot be carried, the slot's is hidden (slot: %s, "
-                        "source: %s)", s_name, t_name, t.shape, s.shape)
+            logger.info(
+                "Costume of %s on %s: the source's halo cannot be carried, the slot's is hidden (slot: %s, source: %s)",
+                s_name,
+                t_name,
+                t.shape,
+                s.shape,
+            )
         return HaloChange(None, None, None, hide=hidden)
     local, follower = placed
     change = HaloChange(t_skeleton.nodes[t.node].path, t_skeleton.nodes[t.root].path, _key(t.mesh))
@@ -2603,8 +2965,9 @@ def _pointers(value: Any) -> Iterable[dict]:
             yield from _pointers(item)
 
 
-def _halo_transplant(s_skeleton: Skeleton, s: Halo, carry_mesh: Callable[[Any], int],
-                     carry_material: Callable[[Any], int], into: Any) -> Transplant | None:
+def _halo_transplant(
+    s_skeleton: Skeleton, s: Halo, carry_mesh: Callable[[Any], int], carry_material: Callable[[Any], int], into: Any
+) -> Transplant | None:
     """The source's halo as new nodes (:class:`Transplant`): everything below its followed node, with the
     meshes and materials its renderers and particle systems draw carried into the slot's files. None (nothing
     carried) when something there points elsewhere (another node of the model, a script, a sprite) or cannot be
@@ -2663,8 +3026,11 @@ def _halo_transplant(s_skeleton: Skeleton, s: Halo, carry_mesh: Callable[[Any], 
         for obj in objects:
             tree = copy.deepcopy(g.tree(obj))
             if obj.type.name == "GameObject":
-                tree["m_Component"] = [c for c in tree["m_Component"]
-                                       if (_external_cab(obj, c["component"]["m_FileID"]), c["component"]["m_PathID"]) in index]
+                tree["m_Component"] = [
+                    c
+                    for c in tree["m_Component"]
+                    if (_external_cab(obj, c["component"]["m_FileID"]), c["component"]["m_PathID"]) in index
+                ]
             for pointer in _pointers(tree):
                 if not pointer["m_PathID"]:
                     pointer["m_FileID"] = 0
@@ -2694,7 +3060,8 @@ def _halo_place(t_skeleton: Skeleton, s_skeleton: Skeleton, t: Halo, s: Halo) ->
         placed = np.linalg.inv(s_world[s.root]) @ s_world[s.node]
         follower = s_skeleton.graph.tree(s.follower)
         return np.linalg.inv(between) @ placed, {
-            name: copy.deepcopy(follower[name]) for name in FOLLOWER_OFFSETS if name in follower}
+            name: copy.deepcopy(follower[name]) for name in FOLLOWER_OFFSETS if name in follower
+        }
     if s.shape != "skinned":
         return None
     g = t_skeleton.graph
@@ -2703,8 +3070,11 @@ def _halo_place(t_skeleton: Skeleton, s_skeleton: Skeleton, t: Halo, s: Halo) ->
         return None
     target = t_follower.get("FollowTarget")
     target = g.deref(t.follower, target) if isinstance(target, dict) else None
-    anchor = s_skeleton.first(t_skeleton.nodes[t_skeleton.by_transform[_key(target)]].name) \
-        if target is not None and _key(target) in t_skeleton.by_transform else None
+    anchor = (
+        s_skeleton.first(t_skeleton.nodes[t_skeleton.by_transform[_key(target)]].name)
+        if target is not None and _key(target) in t_skeleton.by_transform
+        else None
+    )
     if anchor is None:
         return None
 
@@ -2721,8 +3091,10 @@ def _halo_place(t_skeleton: Skeleton, s_skeleton: Skeleton, t: Halo, s: Halo) ->
     resize = np.diag(list(np.linalg.norm(bone[:3, :3], axis=0) / np.linalg.norm(t_world[t.root][:3, :3], axis=0)) + [1])
     x, y, z, w = (float(v) for v in ms.quaternion(turn))
     position = relative[:3, 3]
-    offsets = {"TargetRelativePosition": {"x": float(position[0]), "y": float(position[1]), "z": float(position[2])},
-               "TargetRelativeRotation": {"x": x, "y": y, "z": z, "w": w}}
+    offsets = {
+        "TargetRelativePosition": {"x": float(position[0]), "y": float(position[1]), "z": float(position[2])},
+        "TargetRelativeRotation": {"x": x, "y": y, "z": z, "w": w},
+    }
     # the follower clamps the followed node to a box in the head's space around its offset: the box moves with it
     old = t_follower["TargetRelativePosition"]
     for name in FOLLOWER_CLAMPS:
@@ -2734,12 +3106,20 @@ def _halo_place(t_skeleton: Skeleton, s_skeleton: Skeleton, t: Halo, s: Halo) ->
 
 # --- writing -------------------------------------------------------------------------------------------------------
 
+
 def _type_index(sf: Any, source: Any) -> int | None:
     """The index of ``source``'s type among ``sf``'s types, None when ``sf`` has none of it."""
     src_type = source.serialized_type
-    return next((i for i, typ in enumerate(sf.types) if typ.class_id == source.class_id
-                 and typ.old_type_hash == src_type.old_type_hash and typ.script_type_index == src_type.script_type_index),
-                None)
+    return next(
+        (
+            i
+            for i, typ in enumerate(sf.types)
+            if typ.class_id == source.class_id
+            and typ.old_type_hash == src_type.old_type_hash
+            and typ.script_type_index == src_type.script_type_index
+        ),
+        None,
+    )
 
 
 class _Writer:
@@ -2777,8 +3157,13 @@ class _Writer:
     def addable(sf: Any, source: Any) -> str | None:
         """Why an object of ``source``'s type cannot be added to ``sf`` by :meth:`add_like` (None when it can)."""
         src_type, src_file = source.serialized_type, source.assets_file
-        if (src_type is None or sf.header.version != src_file.header.version or sf.unity_version != src_file.unity_version
-                or sf._enable_type_tree != src_file._enable_type_tree or sf.header.version < 16):
+        if (
+            src_type is None
+            or sf.header.version != src_file.header.version
+            or sf.unity_version != src_file.unity_version
+            or sf._enable_type_tree != src_file._enable_type_tree
+            or sf.header.version < 16
+        ):
             return "object type of another build"
         if _type_index(sf, source) is None and src_type.type_dependencies:
             return "object type with dependencies"
@@ -2845,16 +3230,18 @@ class Written:
     """What a run wrote for one new costume mesh, as arrays in memory (:func:`_sanity`)."""
 
     name: str
-    vertices: np.ndarray                 # (n, 3), mesh space, as written
-    linear: np.ndarray | None            # (n, 3, 3), what turned the normals and tangents
-    joints: np.ndarray                   # (n, 4), indices into the mesh's bone list
-    weights: np.ndarray                  # (n, 4)
-    bindposes: np.ndarray                # (bones, 4, 4)
-    bones: list[str]                     # the bones' names, as bindposes
+    vertices: np.ndarray  # (n, 3), mesh space, as written
+    linear: np.ndarray | None  # (n, 3, 3), what turned the normals and tangents
+    joints: np.ndarray  # (n, 4), indices into the mesh's bone list
+    weights: np.ndarray  # (n, 4)
+    bindposes: np.ndarray  # (bones, 4, 4)
+    bones: list[str]  # the bones' names, as bindposes
     submeshes: int
-    source_totals: np.ndarray | None = None  # per vertex, the source's weight sum (no weight is allowed where it had none)
+    source_totals: np.ndarray | None = (
+        None  # per vertex, the source's weight sum (no weight is allowed where it had none)
+    )
     source_materials: list[int] = field(default_factory=list)  # the source renderer's materials, 0 for none
-    streamed: bool = False               # the written tree still names stream data (its vertices are not inlined)
+    streamed: bool = False  # the written tree still names stream data (its vertices are not inlined)
 
 
 @dataclass
@@ -2864,7 +3251,7 @@ class Rendered:
     part: int
     bones: int
     materials: list[int]  # path ids, 0 for none
-    bounds: dict          # m_AABB
+    bounds: dict  # m_AABB
 
 
 def _sanity(meshes: list[Written], renderers: list[Rendered]) -> None:
@@ -2885,15 +3272,21 @@ def _sanity(meshes: list[Written], renderers: list[Rendered]) -> None:
         if (mesh.joints[used] >= count).any() or (mesh.joints[used] < 0).any():
             raise refuse("skin inconsistent", part=mesh.name, what="bone index past the bindposes")
         totals = mesh.weights.sum(axis=1)
-        none = np.zeros(len(totals), bool) if mesh.source_totals is None else \
-            (totals <= 1e-9) & (mesh.source_totals <= 1e-9)
+        none = (
+            np.zeros(len(totals), bool)
+            if mesh.source_totals is None
+            else (totals <= 1e-9) & (mesh.source_totals <= 1e-9)
+        )
         if not (none | (np.abs(totals - 1.0) <= WEIGHT_TOLERANCE)).all():
             raise refuse("skin inconsistent", part=mesh.name, what="weights do not add up to 1")
     for renderer in renderers:
         mesh = meshes[renderer.part]
         if renderer.bones != len(mesh.bindposes):
-            raise refuse("skin inconsistent", part=mesh.name,
-                         what=f"{renderer.bones} renderer bones for {len(mesh.bindposes)} bindposes")
+            raise refuse(
+                "skin inconsistent",
+                part=mesh.name,
+                what=f"{renderer.bones} renderer bones for {len(mesh.bindposes)} bindposes",
+            )
         centre = np.array([renderer.bounds["m_Center"][axis] for axis in "xyz"], float)
         extent = np.array([renderer.bounds["m_Extent"][axis] for axis in "xyz"], float)
         if not (np.isfinite(centre).all() and np.isfinite(extent).all()):
@@ -2901,11 +3294,17 @@ def _sanity(meshes: list[Written], renderers: list[Rendered]) -> None:
         if float(np.max(np.abs(centre) + np.abs(extent))) > VERTEX_LIMIT:
             raise refuse("vertices out of range", part=mesh.name)
         if len(renderer.materials) > mesh.submeshes:
-            raise refuse("materials inconsistent", part=mesh.name,
-                         what=f"{len(renderer.materials)} materials for {mesh.submeshes} submeshes")
+            raise refuse(
+                "materials inconsistent",
+                part=mesh.name,
+                what=f"{len(renderer.materials)} materials for {mesh.submeshes} submeshes",
+            )
         if len(renderer.materials) != len(mesh.source_materials):  # a null kept in place, never dropped
-            raise refuse("materials inconsistent", part=mesh.name,
-                         what=f"{len(renderer.materials)} materials for the source's {len(mesh.source_materials)}")
+            raise refuse(
+                "materials inconsistent",
+                part=mesh.name,
+                what=f"{len(renderer.materials)} materials for the source's {len(mesh.source_materials)}",
+            )
 
 
 @dataclass
@@ -2940,8 +3339,8 @@ def mouth_of(skeleton: Skeleton, costume: list[Part]) -> Mouth | None:
     return None
 
 
-MOUTH_ATLAS = "_MouthTileTex"                       # the eye-mouth material's mouth atlas
-MOUTH_GRID = ("_MouthTileCols", "_MouthTileRows")   # its cells across and up
+MOUTH_ATLAS = "_MouthTileTex"  # the eye-mouth material's mouth atlas
+MOUTH_GRID = ("_MouthTileCols", "_MouthTileRows")  # its cells across and up
 
 
 @dataclass
@@ -2958,8 +3357,11 @@ class MouthAtlas:
 
     def same(self, other: "MouthAtlas") -> bool:
         """Whether a cell number draws the same here and on ``other``: one texture, one scale, one grid."""
-        return (self.texture == other.texture and self.env.get("m_Scale") == other.env.get("m_Scale")
-                and self.grid == other.grid)
+        return (
+            self.texture == other.texture
+            and self.env.get("m_Scale") == other.env.get("m_Scale")
+            and self.grid == other.grid
+        )
 
 
 def mouth_atlas(graph: BundleGraph, material: Any) -> MouthAtlas | None:
@@ -2975,8 +3377,9 @@ def mouth_atlas(graph: BundleGraph, material: Any) -> MouthAtlas | None:
     return MouthAtlas(material, copy.deepcopy(env), grid, _key(texture) if texture is not None else None)
 
 
-def retiled_mouths(graph: BundleGraph, t_skeleton: Skeleton, t_costume: list[Part], s_costume: list[Part],
-                   mouth: Mouth | None) -> tuple[MouthAtlas | None, set[tuple[str, int]], Mouth | None]:
+def retiled_mouths(
+    graph: BundleGraph, t_skeleton: Skeleton, t_costume: list[Part], s_costume: list[Part], mouth: Mouth | None
+) -> tuple[MouthAtlas | None, set[tuple[str, int]], Mouth | None]:
     """The source's eye-mouth materials that draw another atlas than the slot's mouth (:class:`MouthAtlas`): the
     slot's clips keep their ``SetMouthTile`` events, which name cells of the slot's atlas, so these materials take
     the slot's atlas, scale, offset and grid, and the receivers keep the slot's default tile. Returns the slot's
@@ -2998,7 +3401,7 @@ def retiled_mouths(graph: BundleGraph, t_skeleton: Skeleton, t_costume: list[Par
 
 
 # what a build cannot show in the preview and the game may draw differently (the switch's cautions)
-EX_PARTS = "ex_parts"              # the slot's EX-only parts (a cut-in body, alternative faces) now draw nothing
+EX_PARTS = "ex_parts"  # the slot's EX-only parts (a cut-in body, alternative faces) now draw nothing
 CARRIED_SHADER = "carried_shader"  # a shader carried with the costume: the game holds two of its name
 
 
@@ -3022,8 +3425,12 @@ def own_prefabs(prefabs: Mapping[str, Any], dev: str) -> dict[str, Any]:
     """``dev``'s own prefabs among ``prefabs`` (lower-case stems): the kinds of :data:`PREFAB_KINDS` and its field
     NPC prefabs; never another model's whose name holds ``dev`` (``ch0336_carrier`` beside ``ch0336``)."""
     names = {pattern.format(dev).lower() for pattern in PREFAB_KINDS.values()}
-    return {name: pointer for name, pointer in prefabs.items() if name in names or (
-        (match := NPC_PREFAB.fullmatch(name)) is not None and match.group(1).lower() == dev.lower())}
+    return {
+        name: pointer
+        for name, pointer in prefabs.items()
+        if name in names
+        or ((match := NPC_PREFAB.fullmatch(name)) is not None and match.group(1).lower() == dev.lower())
+    }
 
 
 def choose_prefab(prefabs: Mapping[str, Any], dev: str) -> str:
@@ -3077,10 +3484,22 @@ def costume_weights(physics: bool) -> list[tuple[str, float]]:
     return [(name, with_physics if physics else plain) for name, plain, with_physics in COSTUME_PHASES]
 
 
-def adapt(*, index: Mapping[str, Path], resolver: Callable | None, target_files: list[Path], target_dev: str,
-          source_files: list[Path], source_dev: str, open_writable: Callable[[Path], Any],
-          physics: bool = False, halo: bool = False, step: Callable[[], None] | None = None,
-          worn: WornStore | None = None, meter: Meter | None = None, poses: PoseStore | None = None) -> Result:
+def adapt(
+    *,
+    index: Mapping[str, Path],
+    resolver: Callable | None,
+    target_files: list[Path],
+    target_dev: str,
+    source_files: list[Path],
+    source_dev: str,
+    open_writable: Callable[[Path], Any],
+    physics: bool = False,
+    halo: bool = False,
+    step: Callable[[], None] | None = None,
+    worn: WornStore | None = None,
+    meter: Meter | None = None,
+    poses: PoseStore | None = None,
+) -> Result:
     """The changed bundles of ``target_files`` (the slot, official copies) carrying the costume of ``source_dev``'s
     model, whose prefab sits in ``source_files``. ``index`` maps CABs to files to read (the slot's own CABs to
     ``target_files``); ``resolver`` finds any other CAB. ``open_writable`` opens a slot file as an engine Bundle.
@@ -3096,14 +3515,38 @@ def adapt(*, index: Mapping[str, Path], resolver: Callable | None, target_files:
     the caller's job yields there (``preview_gate.step``) or stops by raising. ``meter`` is told the build's phases
     (``COSTUME_PHASES``), for the progress line's percentage."""
     with BundleGraph(index, resolver=resolver, opener=load_bundle) as graph:
-        return _adapt(graph, index, target_files, target_dev, source_files, source_dev, open_writable, physics,
-                      halo, step or (lambda: None), worn, meter or QUIET, poses)
+        return _adapt(
+            graph,
+            index,
+            target_files,
+            target_dev,
+            source_files,
+            source_dev,
+            open_writable,
+            physics,
+            halo,
+            step or (lambda: None),
+            worn,
+            meter or QUIET,
+            poses,
+        )
 
 
-def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Path], target_dev: str,
-           source_files: list[Path], source_dev: str, open_writable: Callable[[Path], Any],
-           physics: bool = False, halo: bool = False, step: Callable[[], None] = lambda: None,
-           worn: WornStore | None = None, meter: Meter = QUIET, poses: PoseStore | None = None) -> Result:
+def _adapt(
+    graph: BundleGraph,
+    index: Mapping[str, Path],
+    target_files: list[Path],
+    target_dev: str,
+    source_files: list[Path],
+    source_dev: str,
+    open_writable: Callable[[Path], Any],
+    physics: bool = False,
+    halo: bool = False,
+    step: Callable[[], None] = lambda: None,
+    worn: WornStore | None = None,
+    meter: Meter = QUIET,
+    poses: PoseStore | None = None,
+) -> Result:
     from . import model_props as mp
 
     phase = meter.phase
@@ -3162,12 +3605,24 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     layouts = [mg.geometry_of(tree) for tree in mesh_trees]
     step()
     phase("plan")
-    result = plan(target, source, probes, fit=all(layout is not None for layout in layouts),
-                  own_probes=probe_poses(s_skeleton, s_clips), clips=t_clips)
+    result = plan(
+        target,
+        source,
+        probes,
+        fit=all(layout is not None for layout in layouts),
+        own_probes=probe_poses(s_skeleton, s_clips),
+        clips=t_clips,
+    )
     from . import model_arms, model_arm_clips
+
     # Optimize Physics only: the arms pushed out of a bulkier costume cost seconds on an affected pair
-    arm_clips = model_arms.retarget(target, source, result, t_clips, t_parts, step=step,
-                                    progress=lambda done, count: phase("arms", done, count)) if physics else {}
+    arm_clips = (
+        model_arms.retarget(
+            target, source, result, t_clips, t_parts, step=step, progress=lambda done, count: phase("arms", done, count)
+        )
+        if physics
+        else {}
+    )
     t_rest, s_rest = t_skeleton.world(), s_skeleton.world()
     # each part's vertices in its renderer's space at the source's rest, as they are bound (the costume's shape)
     shapes = [result.fit.part(k, s_rest[part.node]) for k, part in enumerate(s_costume)]
@@ -3177,8 +3632,18 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     step()
     phase("hems")
     stores = [hm.store_of(tree) for tree in mesh_trees]
-    hem = hems(target, source, result, t_clips, s_clips, [store is not None for store in stores], physics,
-               shapes_writable=all(layout is not None for layout in layouts), meter=meter, step=step)
+    hem = hems(
+        target,
+        source,
+        result,
+        t_clips,
+        s_clips,
+        [store is not None for store in stores],
+        physics,
+        shapes_writable=all(layout is not None for layout in layouts),
+        meter=meter,
+        step=step,
+    )
     if hem.thin is not None:  # Optimize Physics thinned the legs under the cloth: the bound shape changes there
         rows, moved = hem.thin
         vertices = result.fit.vertices.copy()
@@ -3192,7 +3657,8 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     # the slot's clips that move their anchor
     phase("springs")
     chained = ([hem.skirt] if hem.skirt is not None else []) + (
-        springs(target, source, result, s_clips, result.fit) if physics and result.fit is not None else [])
+        springs(target, source, result, s_clips, result.fit) if physics and result.fit is not None else []
+    )
     step()
     phase("face")
     face = face_retarget(target, source, result, result.fit) if result.fit is not None else None
@@ -3225,10 +3691,14 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     # the slot files the new objects go to: the primary's mesh, materials and textures, and the prefab files
     primary = t_costume[0]
     mesh_cab = primary.mesh.assets_file.name.lower()
-    material_cab = primary.materials[0].assets_file.name.lower() if primary.materials and primary.materials[0] is not None else None
+    material_cab = (
+        primary.materials[0].assets_file.name.lower()
+        if primary.materials and primary.materials[0] is not None
+        else None
+    )
     texture_cab = None
     for material in primary.materials:
-        for _, value in (graph.tree(material)["m_SavedProperties"]["m_TexEnvs"] if material is not None else []):
+        for _, value in graph.tree(material)["m_SavedProperties"]["m_TexEnvs"] if material is not None else []:
             texture = graph.deref(material, value["m_Texture"])
             if texture is not None:
                 texture_cab = texture.assets_file.name.lower()
@@ -3251,17 +3721,28 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
         for candidate in sorted(loaded & set(slot), key=lambda c: (c not in prefab_cabs, Path(slot[c]).name, c)):
             if type_name in kinds_in.get(candidate, ()):
                 return candidate
-        raise refuse("costume outside the slot", part=type_name, file=Path(str(graph.locations.get(cab or "", "?"))).name)
+        raise refuse(
+            "costume outside the slot", part=type_name, file=Path(str(graph.locations.get(cab or "", "?"))).name
+        )
 
-    mesh_cab, material_cab, texture_cab = home(mesh_cab, "Mesh"), home(material_cab, "Material"), home(texture_cab, "Texture2D")
+    mesh_cab, material_cab, texture_cab = (
+        home(mesh_cab, "Mesh"),
+        home(material_cab, "Material"),
+        home(texture_cab, "Texture2D"),
+    )
     # Rule B's curves go into the slot's own clips, where they are: a clip in another file stays as it is
     skirt_clips = [c for c in skirt_clips if c.assets_file.name.lower() in slot]
     arm_holders = model_arm_clips.receivers(graph, t_skeleton, own) if arm_clips else []
     if any(h.assets_file.name.lower() not in slot for h in arm_holders):
         raise refuse("arm controller outside the slot")
     arm_destinations = {k: home(k[0], "AnimationClip") for k in arm_clips}
-    needed = ({mesh_cab, material_cab, texture_cab} | prefab_cabs | {c.assets_file.name.lower() for c in skirt_clips}
-              | set(arm_destinations.values()) | {h.assets_file.name.lower() for h in arm_holders})
+    needed = (
+        {mesh_cab, material_cab, texture_cab}
+        | prefab_cabs
+        | {c.assets_file.name.lower() for c in skirt_clips}
+        | set(arm_destinations.values())
+        | {h.assets_file.name.lower() for h in arm_holders}
+    )
     opened: dict[Path, Any] = {}
     files: dict[str, Any] = {}
     for cab in needed:
@@ -3292,8 +3773,10 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
         if _key(shader) in shaders:
             return shaders[_key(shader)]
         s_tree = shader.read_typetree()
-        fixed = [pair[1] if isinstance(pair, (list, tuple)) else pair.get("second", {})
-                 for pair in s_tree.get("m_NonModifiableTextures", [])]
+        fixed = [
+            pair[1] if isinstance(pair, (list, tuple)) else pair.get("second", {})
+            for pair in s_tree.get("m_NonModifiableTextures", [])
+        ]
         if any(isinstance(texture, dict) and texture.get("m_PathID") for texture in fixed):
             raise refuse("shader with fixed textures", shader=_shader_name(shader))
         for dependency in s_tree.get("m_Dependencies", []):
@@ -3318,8 +3801,9 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     mouth = mouth_of(s_skeleton, s_costume)
     slot_atlas, retiled, mouth = retiled_mouths(graph, t_skeleton, t_costume, s_costume, mouth)
     if retiled:
-        logger.info("Costume of %s on %s: %d eye-mouth material(s) take the slot's mouth atlas", s_name, t_name,
-                    len(retiled))
+        logger.info(
+            "Costume of %s on %s: %d eye-mouth material(s) take the slot's mouth atlas", s_name, t_name, len(retiled)
+        )
 
     def carry_material(material: Any) -> int:
         """A source material added to the slot's material file, with its textures (and its shader where the game does
@@ -3344,9 +3828,15 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
             shader_cab = _external_cab(material, tree["m_Shader"]["m_FileID"])
             if tree["m_Shader"]["m_PathID"] and not shared(shader_cab):
                 # a shader the game does not load with the slot's prefab: a copy of it goes into the material's file
-                tree["m_Shader"] = {"m_FileID": 0, "m_PathID": carried(graph.deref(material, tree["m_Shader"]), shader_cab)}
+                tree["m_Shader"] = {
+                    "m_FileID": 0,
+                    "m_PathID": carried(graph.deref(material, tree["m_Shader"]), shader_cab),
+                }
             else:
-                tree["m_Shader"] = {"m_FileID": writer.external(material_sf, shader_cab), "m_PathID": tree["m_Shader"]["m_PathID"]}
+                tree["m_Shader"] = {
+                    "m_FileID": writer.external(material_sf, shader_cab),
+                    "m_PathID": tree["m_Shader"]["m_PathID"],
+                }
             for env_name, value in tree["m_SavedProperties"]["m_TexEnvs"]:
                 pointer = value["m_Texture"]
                 if not pointer["m_PathID"]:
@@ -3354,7 +3844,10 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
                 owner = owners.get(env_name, material)
                 cab = _external_cab(owner, pointer["m_FileID"])
                 if shared(cab):
-                    value["m_Texture"] = {"m_FileID": writer.external(material_sf, cab), "m_PathID": pointer["m_PathID"]}
+                    value["m_Texture"] = {
+                        "m_FileID": writer.external(material_sf, cab),
+                        "m_PathID": pointer["m_PathID"],
+                    }
                     continue
                 texture = graph.deref(owner, pointer)
                 if texture is None:
@@ -3364,8 +3857,10 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
                     t_tree["image data"] = texture.read().get_image_data()
                     t_tree["m_StreamData"] = {"offset": 0, "size": 0, "path": ""}
                     textures[_key(texture)] = writer.add(texture_sf, "Texture2D", t_tree)
-                value["m_Texture"] = {"m_FileID": writer.external(material_sf, texture_cab),
-                                      "m_PathID": textures[_key(texture)]}
+                value["m_Texture"] = {
+                    "m_FileID": writer.external(material_sf, texture_cab),
+                    "m_PathID": textures[_key(texture)],
+                }
             materials[_key(material)] = writer.add(material_sf, "Material", tree)
         return materials[_key(material)]
 
@@ -3410,7 +3905,9 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
             try:
                 hm.write_weights(tree, stores[k], rows, new_joints, new_weights)
             except hm.SkinNotWritable as error:  # more bones than the mesh's index format holds: its skin stays
-                logger.info("Costume of %s on %s: hem skipped on part %s: %s", s_name, t_name, part.mesh.peek_name(), error)
+                logger.info(
+                    "Costume of %s on %s: hem skipped on part %s: %s", s_name, t_name, part.mesh.peek_name(), error
+                )
                 hem.parts[k] = None
             else:
                 nodes = grown
@@ -3421,17 +3918,30 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
         tree["m_BoneNameHashes"] = [zlib.crc32(t_skeleton.nodes[n].path.encode()) for n in nodes]
         tree["m_RootBoneNameHash"] = graph.tree(primary.mesh)["m_RootBoneNameHash"]
         if aabbs:
-            tree["m_BonesAABB"] += [{"m_Min": _vector((0, 0, 0)), "m_Max": _vector((0, 0, 0))}
-                                    for _ in range(len(nodes) - len(tree["m_BonesAABB"]))]
+            tree["m_BonesAABB"] += [
+                {"m_Min": _vector((0, 0, 0)), "m_Max": _vector((0, 0, 0))}
+                for _ in range(len(nodes) - len(tree["m_BonesAABB"]))
+            ]
         for i, pose in enumerate(poses):
             hit = ((joints == i) & (weights > 0)).any(axis=1)
             if hit.any() and i < len(tree["m_BonesAABB"]):
                 local = (np.c_[skin.vertices[hit], np.ones(hit.sum())] @ pose.T)[:, :3]
                 tree["m_BonesAABB"][i] = {"m_Min": _vector(local.min(axis=0)), "m_Max": _vector(local.max(axis=0))}
-        written.append(Written(
-            part.mesh.peek_name(), points, linear, joints, weights, np.array(poses), [t_skeleton.nodes[n].name for n in nodes],
-            len(tree["m_SubMeshes"]), source.skins[k].weights.sum(axis=1),
-            [0 if m is None else 1 for m in part.materials], bool((tree.get("m_StreamData") or {}).get("size"))))
+        written.append(
+            Written(
+                part.mesh.peek_name(),
+                points,
+                linear,
+                joints,
+                weights,
+                np.array(poses),
+                [t_skeleton.nodes[n].name for n in nodes],
+                len(tree["m_SubMeshes"]),
+                source.skins[k].weights.sum(axis=1),
+                [0 if m is None else 1 for m in part.materials],
+                bool((tree.get("m_StreamData") or {}).get("size")),
+            )
+        )
         new_meshes.append((writer.add(mesh_sf, "Mesh", tree), nodes))
     step()
     phase("carried")
@@ -3453,10 +3963,21 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
                 if hit.any():
                     local = (np.c_[c.vertices[hit], np.ones(hit.sum())] @ pose.T)[:, :3]
                     tree["m_BonesAABB"][i] = {"m_Min": _vector(local.min(axis=0)), "m_Max": _vector(local.max(axis=0))}
-        written.append(Written(
-            c.part.mesh.peek_name(), c.vertices, c.linear, c.joints, c.weights, c.bindposes,
-            [t_skeleton.nodes[n].name for n in c.nodes], len(tree["m_SubMeshes"]), c.weights.sum(axis=1),
-            [0 if m is None else 1 for m in c.part.materials], False))
+        written.append(
+            Written(
+                c.part.mesh.peek_name(),
+                c.vertices,
+                c.linear,
+                c.joints,
+                c.weights,
+                c.bindposes,
+                [t_skeleton.nodes[n].name for n in c.nodes],
+                len(tree["m_SubMeshes"]),
+                c.weights.sum(axis=1),
+                [0 if m is None else 1 for m in c.part.materials],
+                False,
+            )
+        )
         new_meshes.append((writer.add(mesh_sf, "Mesh", tree), c.nodes))
     # the slot's worn items: a renderer drawing nothing else the clips show draws nothing, another a copy of its mesh
     # without them
@@ -3464,9 +3985,18 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     step()
     phase("halo")
     # the source's halo: its mesh added as it is (a skinned one is drawn unskinned), or the slot's hidden
-    halo_change = _halo_change(t_skeleton, s_skeleton, lambda mesh: writer.add(mesh_sf, "Mesh", _mesh_tree(mesh)),
-                               carry_material, (s_name, t_name),
-                               result.fit.head if result.fit is not None else None) if halo else None
+    halo_change = (
+        _halo_change(
+            t_skeleton,
+            s_skeleton,
+            lambda mesh: writer.add(mesh_sf, "Mesh", _mesh_tree(mesh)),
+            carry_material,
+            (s_name, t_name),
+            result.fit.head if result.fit is not None else None,
+        )
+        if halo
+        else None
+    )
 
     # prefabs: the primary takes the source primary, further parts get renderers of their own, the rest draws nothing
     rank = {"primary": 0, "costume": 1, "alternate": 2, "copy": 3}
@@ -3479,11 +4009,16 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     # the renderers' culling boxes hold each part at rest and in every probe pose, so parts that move far from their
     # rest place do not vanish at the screen's edge
     arm_probes = model_arms.bounds_poses(t_skeleton, arm_clips)
-    bounds = [_bounds(w, nodes, t_skeleton, root_node, [t_rest, *probes, *arm_probes])
-              for w, (_, nodes) in zip(written, new_meshes)]
+    bounds = [
+        _bounds(w, nodes, t_skeleton, root_node, [t_rest, *probes, *arm_probes])
+        for w, (_, nodes) in zip(written, new_meshes)
+    ]
     if mouth is None:
-        logger.info("Costume of %s on %s: the source has no mouth receiver on its costume, the slot's stays as it is",
-                    s_name, t_name)
+        logger.info(
+            "Costume of %s on %s: the source has no mouth receiver on its costume, the slot's stays as it is",
+            s_name,
+            t_name,
+        )
     for i, prefab_path in enumerate(prefab_files):
         step()
         phase("prefabs", i, len(prefab_files))
@@ -3491,10 +4026,25 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
         for name, sf in bundle.env.file.files.items():
             if hasattr(sf, "objects") and name.lower() in files:
                 drawn_parts = [*s_costume, *(c.part for c in carried_parts)]
-                _edit_prefabs(writer, sf, graph, t_meshes, t_primary_materials, mesh_cab, material_cab, new_meshes,
-                              [[materials[_key(m)] if m is not None else 0 for m in p.materials] for p in drawn_parts],
-                              [s_skeleton.nodes[p.node].name for p in drawn_parts], root_node, t_skeleton, bounds,
-                              halo_change, rendered, mouth, worn_meshes)
+                _edit_prefabs(
+                    writer,
+                    sf,
+                    graph,
+                    t_meshes,
+                    t_primary_materials,
+                    mesh_cab,
+                    material_cab,
+                    new_meshes,
+                    [[materials[_key(m)] if m is not None else 0 for m in p.materials] for p in drawn_parts],
+                    [s_skeleton.nodes[p.node].name for p in drawn_parts],
+                    root_node,
+                    t_skeleton,
+                    bounds,
+                    halo_change,
+                    rendered,
+                    mouth,
+                    worn_meshes,
+                )
     step()
     # the "curves" phase: the arms' clip copies first (each clip they change counts as one), then the clips edited
     # in place
@@ -3511,8 +4061,11 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
         before = clip_snapshot(tree) if ms.dense_grid(tree) is not None else None
         edited = [skirt for skirt in clip_skirts[_key(clip)] if skirt.solver.roots]
         prepared = curve_frames(t_skeleton, edited, tree) if before is not None and edited else None
-        bones = [skirt_curves(t_skeleton, skirt, tree, _key(clip), prepared=prepared, step=step)
-                 for skirt in edited] if before is not None else [None]
+        bones = (
+            [skirt_curves(t_skeleton, skirt, tree, _key(clip), prepared=prepared, step=step) for skirt in edited]
+            if before is not None
+            else [None]
+        )
         if edited and None not in bones and sum(bones):
             obj.save_typetree(tree)
             # each bone with curves got a rotation (4 curves) and a position (3): read the saved clip back
@@ -3522,8 +4075,9 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
             for skirt in edited:
                 skirt.clips += 1
         else:
-            logger.info("Costume of %s on %s: clip %s left without skirt curves (layout)", s_name, t_name,
-                        clip.peek_name())
+            logger.info(
+                "Costume of %s on %s: clip %s left without skirt curves (layout)", s_name, t_name, clip.peek_name()
+            )
     phase("check")
     _sanity(written, rendered)
     cautions = []
@@ -3534,26 +4088,55 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     if shaders:  # death dissolve and hit flash look shaders up by name: untested on a carried copy
         cautions.append(CARRIED_SHADER)
         logger.info("Costume of %s on %s: %d shader(s) carried with the costume", s_name, t_name, len(shaders))
-    logger.info("Costume of %s on %s: %d part(s), groups %s, stretch %.2f (own %.2f), shape %s (changed %.3f, 99th "
-                "percentile %.3f); hem %s%s", s_name, t_name, len(s_costume),
-                {s_skeleton.nodes[n].name: c for n, c in result.choices.items()}, result.stretch, result.own,
-                result.fit.shape, result.fit.largest, result.fit.shift, hem.summary(),
-                f"; {result.repair}" if result.repair else "")
-    dropped = sorted(t_skeleton.nodes[n].name for n, items in t_worn.by_renderer().items()
-                     if _key(items[0].part.mesh) in worn_meshes)
+    logger.info(
+        "Costume of %s on %s: %d part(s), groups %s, stretch %.2f (own %.2f), shape %s (changed %.3f, 99th "
+        "percentile %.3f); hem %s%s",
+        s_name,
+        t_name,
+        len(s_costume),
+        {s_skeleton.nodes[n].name: c for n, c in result.choices.items()},
+        result.stretch,
+        result.own,
+        result.fit.shape,
+        result.fit.largest,
+        result.fit.shift,
+        hem.summary(),
+        f"; {result.repair}" if result.repair else "",
+    )
+    dropped = sorted(
+        t_skeleton.nodes[n].name for n, items in t_worn.by_renderer().items() if _key(items[0].part.mesh) in worn_meshes
+    )
     carried_names = [s_skeleton.nodes[c.part.node].name for c in carried_parts]
     if dropped or carried_names:
-        logger.info("Costume of %s on %s: worn items of %s draw nothing, of %s are carried", s_name, t_name,
-                    ", ".join(dropped) or "none", ", ".join(carried_names) or "none")
+        logger.info(
+            "Costume of %s on %s: worn items of %s draw nothing, of %s are carried",
+            s_name,
+            t_name,
+            ", ".join(dropped) or "none",
+            ", ".join(carried_names) or "none",
+        )
     return Result(opened, result, len(s_costume), hem, cautions, dropped, carried_names, len(arm_clips))
 
 
-def _edit_prefabs(writer: _Writer, sf: Any, graph: BundleGraph, t_meshes: Mapping[tuple[str, int], str],
-                  primary_materials: list[tuple[str, int]], mesh_cab: str, material_cab: str,
-                  new_meshes: list[tuple[int, list[int]]], new_materials: list[list[int]], names: list[str],
-                  root_node: int, t_skeleton: Skeleton, bounds: list[dict], halo: HaloChange | None = None,
-                  rendered: list[Rendered] | None = None, mouth: Mouth | None = None,
-                  worn: Mapping[tuple[str, int], int | None] | None = None) -> None:
+def _edit_prefabs(
+    writer: _Writer,
+    sf: Any,
+    graph: BundleGraph,
+    t_meshes: Mapping[tuple[str, int], str],
+    primary_materials: list[tuple[str, int]],
+    mesh_cab: str,
+    material_cab: str,
+    new_meshes: list[tuple[int, list[int]]],
+    new_materials: list[list[int]],
+    names: list[str],
+    root_node: int,
+    t_skeleton: Skeleton,
+    bounds: list[dict],
+    halo: HaloChange | None = None,
+    rendered: list[Rendered] | None = None,
+    mouth: Mouth | None = None,
+    worn: Mapping[tuple[str, int], int | None] | None = None,
+) -> None:
     """One prefab file's renderers draw the new costume; ``worn``: the slot's meshes of worn items and what their
     renderers draw instead (None for nothing, else a new mesh in the mesh file)."""
     objects = sf.objects
@@ -3624,13 +4207,22 @@ def _edit_prefabs(writer: _Writer, sf: Any, graph: BundleGraph, t_meshes: Mappin
             while tf_pid == go_pid:
                 tf_pid = writer.fresh(sf)
             (px, py, pz), (rx, ry, rz, rw), (sx, sy, sz) = node.local
-            t = {**tree(father), "m_GameObject": {"m_FileID": 0, "m_PathID": go_pid},
-                 "m_LocalRotation": {"x": float(rx), "y": float(ry), "z": float(rz), "w": float(rw)},
-                 "m_LocalPosition": _vector((px, py, pz)), "m_LocalScale": _vector((sx, sy, sz)),
-                 "m_Children": [], "m_Father": {"m_FileID": 0, "m_PathID": father}}
+            t = {
+                **tree(father),
+                "m_GameObject": {"m_FileID": 0, "m_PathID": go_pid},
+                "m_LocalRotation": {"x": float(rx), "y": float(ry), "z": float(rz), "w": float(rw)},
+                "m_LocalPosition": _vector((px, py, pz)),
+                "m_LocalScale": _vector((sx, sy, sz)),
+                "m_Children": [],
+                "m_Father": {"m_FileID": 0, "m_PathID": father},
+            }
             _add_with_id(writer, sf, "Transform", t, tf_pid)
-            g = {**tree(father_go), "m_Name": node.name, "m_IsActive": True,
-                 "m_Component": [{"component": {"m_FileID": 0, "m_PathID": tf_pid}}]}
+            g = {
+                **tree(father_go),
+                "m_Name": node.name,
+                "m_IsActive": True,
+                "m_Component": [{"component": {"m_FileID": 0, "m_PathID": tf_pid}}],
+            }
             _add_with_id(writer, sf, "GameObject", g, go_pid)
             # a new object reads back as its template until the bundle is saved: its tree is kept here instead
             trees[tf_pid], trees[go_pid] = t, g
@@ -3686,8 +4278,11 @@ def _edit_prefabs(writer: _Writer, sf: Any, graph: BundleGraph, t_meshes: Mappin
         template = tree(main)
         go_pid = template["m_GameObject"]["m_PathID"]
         go_tree = tree(go_pid)
-        tf_pid = next(c["component"]["m_PathID"] for c in go_tree["m_Component"]
-                      if objects[c["component"]["m_PathID"]].type.name == "Transform")
+        tf_pid = next(
+            c["component"]["m_PathID"]
+            for c in go_tree["m_Component"]
+            if objects[c["component"]["m_PathID"]].type.name == "Transform"
+        )
         for k in range(1, len(new_meshes)):
             mesh_pid, nodes = new_meshes[k]
             new_go, new_tf, new_r = writer.fresh(sf), None, None
@@ -3704,14 +4299,26 @@ def _edit_prefabs(writer: _Writer, sf: Any, graph: BundleGraph, t_meshes: Mappin
             seen.append(Rendered(k, len(r["m_Bones"]), [m["m_PathID"] for m in r["m_Materials"]], r["m_AABB"]))
             new_r = _add_with_id(writer, sf, "SkinnedMeshRenderer", r)
             drawing[k] = new_r
-            g = {**go_tree, "m_Name": names[k], "m_IsActive": True,
-                 "m_Component": [{"component": {"m_FileID": 0, "m_PathID": new_tf}},
-                                 {"component": {"m_FileID": 0, "m_PathID": new_r}}]}
+            g = {
+                **go_tree,
+                "m_Name": names[k],
+                "m_IsActive": True,
+                "m_Component": [
+                    {"component": {"m_FileID": 0, "m_PathID": new_tf}},
+                    {"component": {"m_FileID": 0, "m_PathID": new_r}},
+                ],
+            }
             _add_with_id(writer, sf, "GameObject", g, new_go)
             # below the primary, where it stands: a clip or timeline that hides the primary hides it too
-            t = {**tree(tf_pid), "m_GameObject": {"m_FileID": 0, "m_PathID": new_go}, "m_Children": [],
-                 "m_Father": {"m_FileID": 0, "m_PathID": tf_pid}, "m_LocalPosition": _vector((0, 0, 0)),
-                 "m_LocalRotation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0}, "m_LocalScale": _vector((1, 1, 1))}
+            t = {
+                **tree(tf_pid),
+                "m_GameObject": {"m_FileID": 0, "m_PathID": new_go},
+                "m_Children": [],
+                "m_Father": {"m_FileID": 0, "m_PathID": tf_pid},
+                "m_LocalPosition": _vector((0, 0, 0)),
+                "m_LocalRotation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
+                "m_LocalScale": _vector((1, 1, 1)),
+            }
             _add_with_id(writer, sf, "Transform", t, new_tf)
             tree(tf_pid)["m_Children"].append({"m_FileID": 0, "m_PathID": new_tf})
             save(tf_pid)
@@ -3722,14 +4329,24 @@ def _edit_prefabs(writer: _Writer, sf: Any, graph: BundleGraph, t_meshes: Mappin
                     save(b)
         if mouth is not None and mouth.part in drawing:
             _edit_mouth(behaviours, tree, save, costume_renderers, drawing[mouth.part], mouth)
-        additions[entry] = added + [{"m_FileID": mesh_fid, "m_PathID": m} for m, _ in new_meshes] + [
-            {"m_FileID": material_fid, "m_PathID": m} for ms in new_materials for m in ms if m] + halo_added
+        additions[entry] = (
+            added
+            + [{"m_FileID": mesh_fid, "m_PathID": m} for m, _ in new_meshes]
+            + [{"m_FileID": material_fid, "m_PathID": m} for ms in new_materials for m in ms if m]
+            + halo_added
+        )
     _extend_preload(asset_bundle, additions)
     bundle_object.save_typetree(asset_bundle)
 
 
-def _edit_mouth(behaviours: list[int], tree: Callable[[int], dict], save: Callable[[int], None],
-                costume_renderers: set[int], renderer: int, mouth: Mouth) -> None:
+def _edit_mouth(
+    behaviours: list[int],
+    tree: Callable[[int], dict],
+    save: Callable[[int], None],
+    costume_renderers: set[int],
+    renderer: int,
+    mouth: Mouth,
+) -> None:
     """The prefab's mouth receivers that point at one of the slot's costume renderers draw the source's mouth: on
     ``renderer`` (the primary, or the part added for the source's mouth), with the source's material index and
     ``mouth``'s default tile (the source's, or the slot's where the mouth takes the slot's atlas). The receiver indexes
@@ -3737,8 +4354,12 @@ def _edit_mouth(behaviours: list[int], tree: Callable[[int], dict], save: Callab
     for pid in behaviours:
         t = tree(pid)
         pointer = t.get("MouthRenderer")
-        if not all(name in t for name in MOUTH_FIELDS) or not isinstance(pointer, dict) \
-                or pointer.get("m_FileID") != 0 or pointer.get("m_PathID") not in costume_renderers:
+        if (
+            not all(name in t for name in MOUTH_FIELDS)
+            or not isinstance(pointer, dict)
+            or pointer.get("m_FileID") != 0
+            or pointer.get("m_PathID") not in costume_renderers
+        ):
             continue
         t["MouthRenderer"] = {"m_FileID": 0, "m_PathID": renderer}
         t["MouthMaterialIndex"] = type(t["MouthMaterialIndex"])(mouth.index)
@@ -3746,8 +4367,17 @@ def _edit_mouth(behaviours: list[int], tree: Callable[[int], dict], save: Callab
         save(pid)
 
 
-def _edit_halo(halo: HaloChange, by_path: Mapping[str, int], objects: Mapping[int, Any], tree: Callable[[int], dict],
-               save: Callable[[int], None], mesh_fid: int, material_fid: int, sf: Any, writer: _Writer) -> list[dict]:
+def _edit_halo(
+    halo: HaloChange,
+    by_path: Mapping[str, int],
+    objects: Mapping[int, Any],
+    tree: Callable[[int], dict],
+    save: Callable[[int], None],
+    mesh_fid: int,
+    material_fid: int,
+    sf: Any,
+    writer: _Writer,
+) -> list[dict]:
     """One prefab's halo changed (:class:`HaloChange`): its renderer that draws the slot's halo mesh, and the follower
     of its followed node; or, hiding it, everything drawn at the hidden paths, then the source's halo nodes added
     below the followed node (a transplant). The slot's nodes stay, so the clips that move or toggle them still do.
@@ -3758,8 +4388,11 @@ def _edit_halo(halo: HaloChange, by_path: Mapping[str, int], objects: Mapping[in
         if transform is None:
             return []
         go = tree(transform)["m_GameObject"]["m_PathID"]
-        return [c["component"]["m_PathID"] for c in tree(go)["m_Component"]
-                if c["component"]["m_FileID"] == 0 and c["component"]["m_PathID"] in objects]
+        return [
+            c["component"]["m_PathID"]
+            for c in tree(go)["m_Component"]
+            if c["component"]["m_FileID"] == 0 and c["component"]["m_PathID"] in objects
+        ]
 
     if halo.new_mesh is None:  # hidden: nothing draws, even where a clip turns a renderer or its node on
         for path in halo.hide:
@@ -3787,8 +4420,9 @@ def _edit_halo(halo: HaloChange, by_path: Mapping[str, int], objects: Mapping[in
                 save(pid)
         if halo.transplant is None or by_path.get(halo.root) is None:
             return []
-        return _transplant(halo, by_path[halo.root], components(halo.root), objects, tree, save, mesh_fid,
-                           material_fid, sf, writer)
+        return _transplant(
+            halo, by_path[halo.root], components(halo.root), objects, tree, save, mesh_fid, material_fid, sf, writer
+        )
     here = components(halo.path)
     filt = next((pid for pid in here if objects[pid].type.name == "MeshFilter"), None)
     renderer = next((pid for pid in here if objects[pid].type.name == "MeshRenderer"), None)
@@ -3802,21 +4436,38 @@ def _edit_halo(halo: HaloChange, by_path: Mapping[str, int], objects: Mapping[in
     r["m_Materials"] = [{"m_FileID": material_fid, "m_PathID": m} for m in halo.materials]
     position, rotation, scale = halo.local
     transform = by_path[halo.path]
-    tree(transform).update(m_LocalPosition=_vector(position), m_LocalScale=_vector(scale),
-                           m_LocalRotation=dict(zip("xyzw", (float(x) for x in rotation))))
+    tree(transform).update(
+        m_LocalPosition=_vector(position),
+        m_LocalScale=_vector(scale),
+        m_LocalRotation=dict(zip("xyzw", (float(x) for x in rotation))),
+    )
     for pid in (filt, renderer, transform):
         save(pid)
     for pid in components(halo.root):  # the FxFollower: the one behaviour there with its offsets
-        if halo.follower and objects[pid].type.name == "MonoBehaviour" and all(name in tree(pid) for name in halo.follower):
+        if (
+            halo.follower
+            and objects[pid].type.name == "MonoBehaviour"
+            and all(name in tree(pid) for name in halo.follower)
+        ):
             tree(pid).update(copy.deepcopy(halo.follower))
             save(pid)
     return [{"m_FileID": mesh_fid, "m_PathID": halo.new_mesh}] + [
-        {"m_FileID": material_fid, "m_PathID": m} for m in halo.materials]
+        {"m_FileID": material_fid, "m_PathID": m} for m in halo.materials
+    ]
 
 
-def _transplant(halo: HaloChange, root: int, root_components: list[int], objects: Mapping[int, Any],
-                tree: Callable[[int], dict], save: Callable[[int], None], mesh_fid: int, material_fid: int, sf: Any,
-                writer: _Writer) -> list[dict]:
+def _transplant(
+    halo: HaloChange,
+    root: int,
+    root_components: list[int],
+    objects: Mapping[int, Any],
+    tree: Callable[[int], dict],
+    save: Callable[[int], None],
+    mesh_fid: int,
+    material_fid: int,
+    sf: Any,
+    writer: _Writer,
+) -> list[dict]:
     """The source's halo nodes (:class:`Transplant`) added to one prefab below its followed node ``root`` (a
     Transform), which keeps the source's follower offsets. Returns the new objects the prefab loads."""
     plan = halo.transplant
@@ -3848,11 +4499,16 @@ def _transplant(halo: HaloChange, root: int, root_components: list[int], objects
     tree(root)["m_Children"].extend({"m_FileID": 0, "m_PathID": ids[k]} for k in plan.top)
     save(root)
     for pid in root_components:  # the FxFollower: the source's offsets
-        if halo.follower and objects[pid].type.name == "MonoBehaviour" and all(name in tree(pid) for name in halo.follower):
+        if (
+            halo.follower
+            and objects[pid].type.name == "MonoBehaviour"
+            and all(name in tree(pid) for name in halo.follower)
+        ):
             tree(pid).update(copy.deepcopy(halo.follower))
             save(pid)
     return [{"m_FileID": 0, "m_PathID": pid} for pid in ids] + [
-        {"m_FileID": files[marker], "m_PathID": pid} for marker, pid in plan.carried]
+        {"m_FileID": files[marker], "m_PathID": pid} for marker, pid in plan.carried
+    ]
 
 
 def _material(file_id: int, path_id: int) -> dict:
@@ -3913,8 +4569,9 @@ def _bounds(mesh: Written, nodes: list[int], t_skeleton: Skeleton, root: int, po
         world = deform(skin, matrices)
         points = world[weighted] if k else world
         if not k and (~weighted).any():  # without weight: where the rest draws it, by the first bone
-            points = np.where(weighted[:, None], world,
-                              (np.c_[mesh.vertices, np.ones(len(mesh.vertices))] @ matrices[0].T)[:, :3])
+            points = np.where(
+                weighted[:, None], world, (np.c_[mesh.vertices, np.ones(len(mesh.vertices))] @ matrices[0].T)[:, :3]
+            )
         if not len(points):
             continue
         local = (np.c_[points, np.ones(len(points))] @ np.linalg.inv(at(pose, root)).T)[:, :3]
@@ -3931,26 +4588,31 @@ def _extend_preload(asset_bundle: dict, additions: Mapping[int, list[dict]]) -> 
     table = asset_bundle["m_PreloadTable"]
     containers = asset_bundle["m_Container"]
     ranges = sorted({(i["preloadIndex"], i["preloadSize"]) for _, i in containers if i["preloadSize"]})
-    contiguous = sum(n for _, n in ranges) == len(table) and all(
-        ranges[k][0] + ranges[k][1] == ranges[k + 1][0] for k in range(len(ranges) - 1)) and (not ranges or ranges[0][0] == 0)
+    contiguous = (
+        sum(n for _, n in ranges) == len(table)
+        and all(ranges[k][0] + ranges[k][1] == ranges[k + 1][0] for k in range(len(ranges) - 1))
+        and (not ranges or ranges[0][0] == 0)
+    )
     if not contiguous:  # ranges that overlap or leave gaps: each edited entry gets a copy of its range at the end
         for entry, extra in sorted(additions.items()):
             info = containers[entry][1]
             i, n = info["preloadIndex"], info["preloadSize"]
             info["preloadIndex"], info["preloadSize"] = len(table), n + len(extra)
-            table.extend(table[i:i + n] + extra)
+            table.extend(table[i : i + n] + extra)
         return
     grown: dict[tuple[int, int], list[dict]] = {}
     for entry, extra in sorted(additions.items()):
         info = containers[entry][1]
-        merged = grown.setdefault((info["preloadIndex"], info["preloadSize"]) if info["preloadSize"] else ("end", entry), [])
+        merged = grown.setdefault(
+            (info["preloadIndex"], info["preloadSize"]) if info["preloadSize"] else ("end", entry), []
+        )
         merged += [pointer for pointer in extra if pointer not in merged]
     moved: dict[tuple, tuple[int, int]] = {}
     rebuilt: list[dict] = []
     for i, n in ranges:
         extra = grown.get((i, n), [])
         moved[(i, n)] = (len(rebuilt), n + len(extra))
-        rebuilt.extend(table[i:i + n] + extra)
+        rebuilt.extend(table[i : i + n] + extra)
     for key, extra in grown.items():  # an entry that loaded nothing before: a range of its own at the end
         if key[0] == "end":
             moved[key] = (len(rebuilt), len(extra))
@@ -3967,7 +4629,7 @@ def field_models(graph: BundleGraph, files: Iterable[Path]) -> dict[str, list[Pa
     out: dict[str, list[Path]] = {}
     for path in files:
         env = graph.add(path)
-        for name in (env.container.keys() if env is not None else ()):
+        for name in env.container.keys() if env is not None else ():
             stem = name.rsplit("/", 1)[-1]
             match = re.fullmatch(r"Field_Player_(.+?)(_NonWeapon)?\.prefab", stem, re.IGNORECASE)
             if match and "/character/" in name.lower():

@@ -11,7 +11,14 @@ function page({ roster = true, open = [] } = {}) {
   for (const id of HOSTS) els[id] = { hidden: !open.includes(id) };
   return (id) => els[id] || null;
 }
-const esc = (extra = {}) => ({ key: "Escape", defaultPrevented: false, isComposing: false, keyCode: 27, repeat: false, ...extra });
+const esc = (extra = {}) => ({
+  key: "Escape",
+  defaultPrevented: false,
+  isComposing: false,
+  keyCode: 27,
+  repeat: false,
+  ...extra,
+});
 
 test("Escape on the student list opens the quit prompt", () => {
   assert.equal(quitKey(esc(), { byId: page() }), true);
@@ -23,7 +30,8 @@ test("Escape is left alone when another handler took it, an input method compose
   assert.equal(quitKey(esc({ isComposing: true }), { byId }), false);
   assert.equal(quitKey(esc({ keyCode: 229 }), { byId }), false, "WebKit's key that ends a conversion");
   assert.equal(quitKey(esc({ repeat: true }), { byId }), false, "a held key");
-  for (const mod of ["altKey", "ctrlKey", "metaKey", "shiftKey"]) assert.equal(quitKey(esc({ [mod]: true }), { byId }), false, mod);
+  for (const mod of ["altKey", "ctrlKey", "metaKey", "shiftKey"])
+    assert.equal(quitKey(esc({ [mod]: true }), { byId }), false, mod);
   assert.equal(quitKey(esc({ key: "Enter" }), { byId }), false);
   assert.equal(quitKey(null, { byId }), false);
 });
@@ -42,8 +50,20 @@ function deps({ button = "ok", refuse = null, native = false } = {}) {
   const log = [];
   return {
     log,
-    message: async (opts) => { log.push(["message", opts]); return { button, checked: null }; },
-    rpc: async (method) => { log.push(["rpc", method]); if (refuse) { const err = new Error(refuse); err.code = refuse; err.params = {}; throw err; } return null; },
+    message: async (opts) => {
+      log.push(["message", opts]);
+      return { button, checked: null };
+    },
+    rpc: async (method) => {
+      log.push(["rpc", method]);
+      if (refuse) {
+        const err = new Error(refuse);
+        err.code = refuse;
+        err.params = {};
+        throw err;
+      }
+      return null;
+    },
     T: (key) => `<${key}>`,
     notify: (text, opts) => log.push(["notify", text, opts?.kind]),
     native,
@@ -79,25 +99,39 @@ test("Confirm quits: the window closes itself, browser mode says Closed, a refus
 
   const busy = deps({ refuse: "busy", native: true });
   assert.equal(await confirmQuit(busy), "busy");
-  assert.deepEqual(busy.log.slice(1), [["rpc", "app.quit"], ["notify", "<error.busy>", "error"]]);
+  assert.deepEqual(busy.log.slice(1), [
+    ["rpc", "app.quit"],
+    ["notify", "<error.busy>", "error"],
+  ]);
 
   const serve = deps({ refuse: "native_unavailable" });
   assert.equal(await confirmQuit(serve), "native_unavailable");
   assert.deepEqual(serve.log.at(-1), ["notify", "<error.native_unavailable>", "error"]);
-  assert.equal(serve.log.some(([k]) => k === "closed"), false);
+  assert.equal(
+    serve.log.some(([k]) => k === "closed"),
+    false,
+  );
 });
 
 test("one quit prompt at a time", async () => {
   let release;
   const d = deps();
-  d.message = (opts) => { d.log.push(["message", opts]); return new Promise((resolve) => { release = () => resolve({ button: "cancel", checked: null }); }); };
+  d.message = (opts) => {
+    d.log.push(["message", opts]);
+    return new Promise((resolve) => {
+      release = () => resolve({ button: "cancel", checked: null });
+    });
+  };
   const first = confirmQuit(d);
   assert.equal(await confirmQuit(d), "cancel", "a second Escape while the prompt is up opens no other");
   assert.equal(d.log.filter(([k]) => k === "message").length, 1);
   release();
   assert.equal(await first, "cancel");
   // and once it is closed, the next one opens
-  d.message = async (opts) => { d.log.push(["message", opts]); return { button: "cancel" }; };
+  d.message = async (opts) => {
+    d.log.push(["message", opts]);
+    return { button: "cancel" };
+  };
   await confirmQuit(d);
   assert.equal(d.log.filter(([k]) => k === "message").length, 2);
 });

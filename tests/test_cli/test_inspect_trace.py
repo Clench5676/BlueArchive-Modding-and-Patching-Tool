@@ -52,15 +52,26 @@ def test_missing_input_terminates_gracefully() -> None:
 def synthetic_bundle(tmp_path, monkeypatch):
     path = tmp_path / "dependency.bundle"
     path.write_bytes(b"synthetic bundle")
-    sf = SimpleNamespace(name="CAB-local", externals=[SimpleNamespace(path="archive:/CAB-first"),
-                                                     SimpleNamespace(path="archive:/CAB-second")])
-    obj = SimpleNamespace(assets_file=sf, path_id=1, type=SimpleNamespace(name="AssetBundle"),
-                          peek_name=lambda: "Synthetic", read_typetree=lambda: {
-                              "local": {"m_FileID": 0, "m_PathID": 1},
-                              "external": {"m_FileID": 2, "m_PathID": 2},
-                              "null": {"m_FileID": 0, "m_PathID": 0}})
-    bundle = SimpleNamespace(path=path, env=SimpleNamespace(assets=[sf], objects=[obj], container={}),
-                             platform_info=("StandaloneWindows64", "2022.3.55f1"))
+    sf = SimpleNamespace(
+        name="CAB-local",
+        externals=[SimpleNamespace(path="archive:/CAB-first"), SimpleNamespace(path="archive:/CAB-second")],
+    )
+    obj = SimpleNamespace(
+        assets_file=sf,
+        path_id=1,
+        type=SimpleNamespace(name="AssetBundle"),
+        peek_name=lambda: "Synthetic",
+        read_typetree=lambda: {
+            "local": {"m_FileID": 0, "m_PathID": 1},
+            "external": {"m_FileID": 2, "m_PathID": 2},
+            "null": {"m_FileID": 0, "m_PathID": 0},
+        },
+    )
+    bundle = SimpleNamespace(
+        path=path,
+        env=SimpleNamespace(assets=[sf], objects=[obj], container={}),
+        platform_info=("StandaloneWindows64", "2022.3.55f1"),
+    )
     monkeypatch.setattr(Bundle, "load", lambda *args: bundle)
     return bundle
 
@@ -74,8 +85,19 @@ def test_local_only_never_detects_scans_or_opens_cache(synthetic_bundle, tmp_pat
     monkeypatch.setattr(introspect, "_resolve_game_dirs", forbidden)
     monkeypatch.setattr(introspect, "managed_cab_index", forbidden)
     logger = LogCapture()
-    handler(parser().parse_args([str(synthetic_bundle.path), "--local-only", "--resource-dir", str(tmp_path),
-                                 "--cab-cache", str(tmp_path / "unused.json")]), logger)
+    handler(
+        parser().parse_args(
+            [
+                str(synthetic_bundle.path),
+                "--local-only",
+                "--resource-dir",
+                str(tmp_path),
+                "--cab-cache",
+                str(tmp_path / "unused.json"),
+            ]
+        ),
+        logger,
+    )
     assert "Self CAB: CAB-local" in logger.lines
     assert "Local-only mode: cross-bundle resolution disabled." in logger.lines
     if parser is TraceTap:
@@ -87,14 +109,20 @@ def test_local_only_never_detects_scans_or_opens_cache(synthetic_bundle, tmp_pat
     assert not (tmp_path / "unused.json").exists()
 
 
-@pytest.mark.parametrize("parser, handler, operation", [
-    (InspectTap, handle_inspect, "inspect_bundles"), (TraceTap, handle_trace, "trace_bundle")])
+@pytest.mark.parametrize(
+    "parser, handler, operation",
+    [(InspectTap, handle_inspect, "inspect_bundles"), (TraceTap, handle_trace, "trace_bundle")],
+)
 def test_cache_flags_reach_introspection(synthetic_bundle, tmp_path, monkeypatch, parser, handler, operation):
     calls = []
     monkeypatch.setattr(handlers, operation, lambda *args, **kwargs: calls.append(kwargs))
     selected = tmp_path / "namespace.json"
-    handler(parser().parse_args([str(synthetic_bundle.path), "--resource-dir", str(tmp_path),
-                                 "--cab-cache", str(selected), "--no-cache"]), LogCapture())
+    handler(
+        parser().parse_args(
+            [str(synthetic_bundle.path), "--resource-dir", str(tmp_path), "--cab-cache", str(selected), "--no-cache"]
+        ),
+        LogCapture(),
+    )
     assert calls[0]["cache_path"] == selected
     assert calls[0]["use_cache"] is False
     assert calls[0]["local_only"] is False

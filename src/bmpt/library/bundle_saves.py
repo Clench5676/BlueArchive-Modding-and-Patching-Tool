@@ -28,7 +28,7 @@ from ..errors import ServiceError
 
 MAX_WORKERS = 4
 LZMA_DICT = 0x800000  # UnityPy's dictionary size, written in the header
-LZMA_PROPS = 0x5D     # lc 3, lp 0, pb 2, UnityPy's
+LZMA_PROPS = 0x5D  # lc 3, lp 0, pb 2, UnityPy's
 
 _fast = threading.local()
 _install = threading.Lock()
@@ -38,9 +38,21 @@ def _fast_lzma(original: Callable[..., bytes]) -> Callable[..., bytes]:
     def compress_lzma(data, write_decompressed_size: bool = False) -> bytes:
         if not getattr(_fast, "on", False):
             return original(data, write_decompressed_size)
-        compressor = lzma.LZMACompressor(format=lzma.FORMAT_RAW, filters=[{
-            "id": lzma.FILTER_LZMA1, "dict_size": LZMA_DICT, "lc": 3, "lp": 0, "pb": 2,
-            "mode": lzma.MODE_FAST, "mf": lzma.MF_HC4, "nice_len": 32}])
+        compressor = lzma.LZMACompressor(
+            format=lzma.FORMAT_RAW,
+            filters=[
+                {
+                    "id": lzma.FILTER_LZMA1,
+                    "dict_size": LZMA_DICT,
+                    "lc": 3,
+                    "lp": 0,
+                    "pb": 2,
+                    "mode": lzma.MODE_FAST,
+                    "mf": lzma.MF_HC4,
+                    "nice_len": 32,
+                }
+            ],
+        )
         body = compressor.compress(data) + compressor.flush()
         if write_decompressed_size:
             return struct.pack("<BIQ", LZMA_PROPS, LZMA_DICT, len(data)) + body
@@ -91,9 +103,14 @@ def _payload(bundle: Any) -> int:
         return 0
 
 
-def save_bundles(jobs: Sequence[tuple[Path, Any, Path, Any]], *, step: Callable[[], None] = lambda: None,
-                 progress: Callable[[int, int], None] = lambda done, count: None,
-                 workers: int | None = None, fast: bool = False) -> None:
+def save_bundles(
+    jobs: Sequence[tuple[Path, Any, Path, Any]],
+    *,
+    step: Callable[[], None] = lambda: None,
+    progress: Callable[[int, int], None] = lambda done, count: None,
+    workers: int | None = None,
+    fast: bool = False,
+) -> None:
     """Save each ``(target, bundle, output, options)`` with ``bundle.save(output, options)``; ``fast``: LZMA in
     the fast mode (module docstring).
 

@@ -5,13 +5,34 @@ import { test } from "node:test";
 import vm from "node:vm";
 import { failedPoses, forRemap, poses, restOnly } from "../../src/bmpt/web/js/rig-geometry.js";
 
-const context = vm.createContext({ console, TextDecoder, TextEncoder, Float32Array, Float64Array, Uint8Array, Uint16Array,
-  Int8Array, Int16Array, Int32Array, Uint32Array, ArrayBuffer, DataView, Math, Map, Set, JSON });
-vm.runInContext(readFileSync(new URL("../../src/bmpt/web/vendor/spine-player-4.2.120/spine-player.min.js", import.meta.url), "utf8"), context);
+const context = vm.createContext({
+  console,
+  TextDecoder,
+  TextEncoder,
+  Float32Array,
+  Float64Array,
+  Uint8Array,
+  Uint16Array,
+  Int8Array,
+  Int16Array,
+  Int32Array,
+  Uint32Array,
+  ArrayBuffer,
+  DataView,
+  Math,
+  Map,
+  Set,
+  JSON,
+});
+vm.runInContext(
+  readFileSync(new URL("../../src/bmpt/web/vendor/spine-player-4.2.120/spine-player.min.js", import.meta.url), "utf8"),
+  context,
+);
 const S = context.spine;
 
-const ATLAS = "page.png\nsize: 64,64\nfilter: Linear,Linear\npma: false\nbody\n bounds: 0,0,8,8\nface_a\n bounds: 10,0,4,4\n"
-  + "face_b\n bounds: 20,0,4,4\nglow\n bounds: 30,0,2,2\n";
+const ATLAS =
+  "page.png\nsize: 64,64\nfilter: Linear,Linear\npma: false\nbody\n bounds: 0,0,8,8\nface_a\n bounds: 10,0,4,4\n" +
+  "face_b\n bounds: 20,0,4,4\nglow\n bounds: 30,0,2,2\n";
 
 function skeleton({ idle = "Idle_01", rest = true, extra = {} } = {}) {
   const animations = { "01": { slots: { face: { attachment: [{ name: "face_b" }] } } }, ...extra };
@@ -25,11 +46,16 @@ function skeleton({ idle = "Idle_01", rest = true, extra = {} } = {}) {
       { name: "face", bone: "root", attachment: "face_a" },
       { name: "glow", bone: "root", attachment: "glow", blend: "additive", color: "ffffff80" },
     ],
-    skins: [{ name: "default", attachments: {
-      body: { body: { width: 8, height: 8 } },
-      face: { face_a: { width: 4, height: 4 }, face_b: { width: 4, height: 4 } },
-      glow: { glow: { width: 2, height: 2 } },
-    } }],
+    skins: [
+      {
+        name: "default",
+        attachments: {
+          body: { body: { width: 8, height: 8 } },
+          face: { face_a: { width: 4, height: 4 }, face_b: { width: 4, height: 4 } },
+          glow: { glow: { width: 2, height: 2 } },
+        },
+      },
+    ],
     animations,
   });
 }
@@ -40,9 +66,15 @@ test("the rest pose draws the idle at time 0 with every slot in draw order", () 
   const rig = poses(S, ATLAS, skeleton());
   assert.deepEqual(rig.slots, ["body", "face", "glow"]);
   const rest = rig.poses[""];
-  assert.deepEqual(rest.map((d) => [d.slot, d.region, d.page, d.blend]),
-    [["body", "body", "page.png", 0], ["face", "face_a", "page.png", 0], ["glow", "glow", "page.png", 1]]);
-  assert.deepEqual([Math.min(...xs(rest[0])), Math.max(...xs(rest[0]))], [6, 14]);  // the idle moved the root by 10
+  assert.deepEqual(
+    rest.map((d) => [d.slot, d.region, d.page, d.blend]),
+    [
+      ["body", "body", "page.png", 0],
+      ["face", "face_a", "page.png", 0],
+      ["glow", "glow", "page.png", 1],
+    ],
+  );
+  assert.deepEqual([Math.min(...xs(rest[0])), Math.max(...xs(rest[0]))], [6, 14]); // the idle moved the root by 10
   assert.equal(rest[2].alpha, 0.502);
   for (const item of rest) {
     assert.equal(item.vertices.length, 8);
@@ -72,20 +104,28 @@ test("a skeleton without an idle rests in its setup pose, and one without 00 res
 
 test("an attachment whose region the atlas lacks draws nothing", () => {
   const rig = poses(S, ATLAS.replace("glow\n bounds: 30,0,2,2\n", ""), skeleton());
-  assert.deepEqual(rig.poses[""].map((d) => d.slot), ["body", "face"]);
+  assert.deepEqual(
+    rig.poses[""].map((d) => d.slot),
+    ["body", "face"],
+  );
 });
 
 test("the remap pairs each official atlas with its skeleton and takes the mod's rig, else the recorded one", () => {
   const official = { skeletons: { "a.skel": encoded(skeleton()) }, atlases: { "a.atlas": ATLAS }, textures: {} };
   const moved = ATLAS.replace("body\n bounds: 0,0,8,8", "body\n bounds: 40,40,8,8");
-  const report = { kind: "spr", official, mod: official, source: { skeletons: { "a.skel": encoded(skeleton()) }, atlases: { "a.atlas": moved } } };
+  const report = {
+    kind: "spr",
+    official,
+    mod: official,
+    source: { skeletons: { "a.skel": encoded(skeleton()) }, atlases: { "a.atlas": moved } },
+  };
   const u = (geometry, side) => Math.min(...geometry["a.atlas"][side].poses[""][0].uvs);
   let geometry = forRemap(report, S);
   assert.deepEqual(Object.keys(geometry), ["a.atlas"]);
-  assert.equal(u(geometry, "source"), 40 / 64);  // the layout the textures were drawn on
+  assert.equal(u(geometry, "source"), 40 / 64); // the layout the textures were drawn on
   assert.equal(u(geometry, "target"), 0);
   geometry = forRemap({ ...report, mod: { ...official, atlases: { "A.atlas": moved.replace("40,40", "48,48") } } }, S);
-  assert.equal(u(geometry, "source"), 48 / 64);  // the mod's own atlas comes first
+  assert.equal(u(geometry, "source"), 48 / 64); // the mod's own atlas comes first
   geometry = forRemap({ ...report, source: undefined }, S);
   assert.equal(u(geometry, "source"), 0);
   assert.deepEqual(forRemap({ ...report, kind: "lobby" }, S), {});
@@ -105,22 +145,30 @@ test("the graft's setup pose gives each bone's world matrix, each slot's bone an
   assert.equal(faceB.world.length, 8);
   assert.deepEqual(faceB.tris, [0, 1, 2, 2, 3, 0]);
   // the idle does not move the setup pose
-  assert.deepEqual([Math.min(...faceB.world.filter((_, i) => i % 2 === 0)), Math.max(...faceB.world.filter((_, i) => i % 2 === 0))], [-2, 2]);
+  assert.deepEqual(
+    [Math.min(...faceB.world.filter((_, i) => i % 2 === 0)), Math.max(...faceB.world.filter((_, i) => i % 2 === 0))],
+    [-2, 2],
+  );
   assert.ok(Math.min(...faceB.uvs.filter((_, i) => i % 2 === 0)) >= 20 / 64 - 1e-6);
 
   // the check's poses: only the animations asked for, only their slots, the rest pose empty
   const parts = partPoses(S, ATLAS, skeleton(), { "01": ["face"], missing: ["face"] });
   assert.deepEqual(Object.keys(parts.poses).sort(), ["", "01"]);
   assert.deepEqual(parts.poses[""], []);
-  assert.deepEqual(parts.poses["01"].map((d) => [d.slot, d.region]), [["face", "face_b"]]);
+  assert.deepEqual(
+    parts.poses["01"].map((d) => [d.slot, d.region]),
+    [["face", "face_b"]],
+  );
   assert.deepEqual(parts.slots, ["body", "face", "glow"]);
 });
 
 test("the plain graft's check poses each animation and names the ones the rig lacks or cannot pose", () => {
-  const rig = skeleton({ extra: { Talk_01: { bones: { root: { rotate: [{ value: 10 }, { time: 1, value: 40 }] } } } } });
+  const rig = skeleton({
+    extra: { Talk_01: { bones: { root: { rotate: [{ value: 10 }, { time: 1, value: 40 }] } } } },
+  });
   assert.deepEqual(failedPoses(S, ATLAS, encoded(rig), ["Talk_01", "01", "Gone_01"]), ["Gone_01"]);
   // a rig the runtime cannot read fails every animation
-  assert.deepEqual(failedPoses(S, ATLAS, encoded("{\"bones\": 3}"), ["Talk_01"]), ["Talk_01"]);
+  assert.deepEqual(failedPoses(S, ATLAS, encoded('{"bones": 3}'), ["Talk_01"]), ["Talk_01"]);
   const broken = JSON.parse(rig);
   broken.animations.Talk_01 = { bones: { root: { scale: [{ x: 1e39, y: 1 }] } } };
   assert.deepEqual(failedPoses(S, ATLAS, encoded(JSON.stringify(broken)), ["Talk_01"]), ["Talk_01"]);

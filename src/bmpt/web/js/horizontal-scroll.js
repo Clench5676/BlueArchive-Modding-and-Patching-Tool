@@ -4,17 +4,24 @@ import { wheelStep } from "./lobby-touch.js";
 // Native overflow keeps keyboard focus and touch scrolling inside the same clipped viewport.
 export function horizontalScroll(area, width, contentWidth) {
   const limit = Math.max(0, contentWidth - width);
-  const moveTo = (left) => { area.scrollLeft = Math.max(0, Math.min(limit, left)); };
-  const scale = () => (area.getBoundingClientRect().width / width) || 1;
+  const moveTo = (left) => {
+    area.scrollLeft = Math.max(0, Math.min(limit, left));
+  };
+  const scale = () => area.getBoundingClientRect().width / width || 1;
   area.style.touchAction = "pan-x";
-  area.addEventListener("wheel", (event) => {
-    if (event.ctrlKey || !limit) return;
-    const delta = Math.abs(event.deltaX || 0) >= Math.abs(event.deltaY || 0) ? event.deltaX : event.deltaY;
-    const unit = event.deltaMode === 1 ? 40 : event.deltaMode === 2 ? width : 1 / scale();
-    moveTo((area.scrollLeft || 0) + delta * unit);
-    event.preventDefault();
-  }, { passive: false });
-  let drag = null, dragged = false;
+  area.addEventListener(
+    "wheel",
+    (event) => {
+      if (event.ctrlKey || !limit) return;
+      const delta = Math.abs(event.deltaX || 0) >= Math.abs(event.deltaY || 0) ? event.deltaX : event.deltaY;
+      const unit = event.deltaMode === 1 ? 40 : event.deltaMode === 2 ? width : 1 / scale();
+      moveTo((area.scrollLeft || 0) + delta * unit);
+      event.preventDefault();
+    },
+    { passive: false },
+  );
+  let drag = null,
+    dragged = false;
   area.addEventListener("pointerdown", (event) => {
     if (event.button !== 0) return;
     dragged = false;
@@ -30,14 +37,23 @@ export function horizontalScroll(area, width, contentWidth) {
     moveTo(drag.left - dx);
     event.preventDefault();
   });
-  const end = () => { drag = null; };
+  const end = () => {
+    drag = null;
+  };
   for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) area.addEventListener(type, end);
-  area.addEventListener("pointerleave", () => { if (!dragged) end(); });
-  area.addEventListener("click", (event) => {
-    if (!dragged || event.detail === 0) return; // Keyboard activation still selects the focused card.
-    dragged = false;
-    event.preventDefault(); event.stopImmediatePropagation();
-  }, true);
+  area.addEventListener("pointerleave", () => {
+    if (!dragged) end();
+  });
+  area.addEventListener(
+    "click",
+    (event) => {
+      if (!dragged || event.detail === 0) return; // Keyboard activation still selects the focused card.
+      dragged = false;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    },
+    true,
+  );
   area.addEventListener("dragstart", (event) => event.preventDefault());
 }
 
@@ -54,13 +70,26 @@ export function easeScroll(from, to, elapsed, duration = DURATION) {
 }
 
 export function windowsWheel(event, platform) {
-  return /^Win/i.test(platform) && !event.ctrlKey && !event.shiftKey && !event.defaultPrevented
-    && event.cancelable !== false && !!event.deltaY && !(event.deltaX || 0) && wheelStep(event) === "notch";
+  return (
+    /^Win/i.test(platform) &&
+    !event.ctrlKey &&
+    !event.shiftKey &&
+    !event.defaultPrevented &&
+    event.cancelable !== false &&
+    !!event.deltaY &&
+    !(event.deltaX || 0) &&
+    wheelStep(event) === "notch"
+  );
 }
 
 // read/write use the list's logical pixels; scale converts viewport wheel pixels after the stage transform.
 export function wheelScroller({ read, write, max, page, scale = () => 1, alive = () => true }, env = globalThis) {
-  let frame = null, from = 0, target = 0, began = 0, last = 0, direction = 0;
+  let frame = null,
+    from = 0,
+    target = 0,
+    began = 0,
+    last = 0,
+    direction = 0;
   const stop = () => {
     if (frame !== null) env.cancelAnimationFrame(frame);
     frame = null;
@@ -69,7 +98,10 @@ export function wheelScroller({ read, write, max, page, scale = () => 1, alive =
   const reduced = () => env.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
   const draw = (at) => {
     frame = null;
-    if (!alive() || reduced() || Math.abs(read() - last) > 1) { stop(); return; }
+    if (!alive() || reduced() || Math.abs(read() - last) > 1) {
+      stop();
+      return;
+    }
     target = clamp(target, max());
     write(clamp(easeScroll(from, target, at - began), max()));
     last = read();
@@ -78,15 +110,25 @@ export function wheelScroller({ read, write, max, page, scale = () => 1, alive =
   };
   const wheel = (event) => {
     const platform = env.navigator?.userAgentData?.platform || env.navigator?.platform || "";
-    if (!windowsWheel(event, platform) || reduced()) { stop(); return false; }
+    if (!windowsWheel(event, platform) || reduced()) {
+      stop();
+      return false;
+    }
     const current = clamp(read(), max());
     const unit = event.deltaMode === 1 ? 40 : event.deltaMode === 2 ? page() : 1 / (scale() || 1);
     const delta = event.deltaY * unit;
     const continuing = frame !== null && Math.abs(read() - last) <= 1 && direction === Math.sign(delta);
     const next = clamp((continuing ? target : current) + delta, max());
-    if (next === current) { stop(); return false; }
+    if (next === current) {
+      stop();
+      return false;
+    }
     stop();
-    from = current; target = next; last = read(); direction = Math.sign(delta); began = env.performance.now();
+    from = current;
+    target = next;
+    last = read();
+    direction = Math.sign(delta);
+    began = env.performance.now();
     event.preventDefault();
     moving.add(stop);
     frame = env.requestAnimationFrame(draw);
@@ -107,20 +149,34 @@ export function installVerticalWheel(root = document, env = globalThis) {
       if (!["auto", "scroll"].includes(style.overflowY)) continue;
       let controller = controllers.get(area);
       if (!controller) {
-        controller = wheelScroller({ read: () => area.scrollTop || 0, write: top => { area.scrollTop = top; },
-          max: () => area.scrollHeight - area.clientHeight, page: () => area.clientHeight,
-          scale: () => area.getBoundingClientRect().height / area.clientHeight,
-          alive: () => area.isConnected && !!area.getClientRects().length }, env);
+        controller = wheelScroller(
+          {
+            read: () => area.scrollTop || 0,
+            write: (top) => {
+              area.scrollTop = top;
+            },
+            max: () => area.scrollHeight - area.clientHeight,
+            page: () => area.clientHeight,
+            scale: () => area.getBoundingClientRect().height / area.clientHeight,
+            alive: () => area.isConnected && !!area.getClientRects().length,
+          },
+          env,
+        );
         controllers.set(area, controller);
       }
       if (controller.wheel(event)) return;
       // Native trackpad/reduced-motion input stays with the browser's nearest scrollable ancestor.
-      if (!windowsWheel(event, env.navigator?.userAgentData?.platform || env.navigator?.platform || "")
-        || env.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+      if (
+        !windowsWheel(event, env.navigator?.userAgentData?.platform || env.navigator?.platform || "") ||
+        env.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+      )
+        return;
       if (["contain", "none"].includes(style.overscrollBehaviorY)) return;
     }
   };
-  const stop = () => { for (const cancel of moving) cancel(); };
+  const stop = () => {
+    for (const cancel of moving) cancel();
+  };
   root.addEventListener("wheel", wheel, { passive: false });
   root.addEventListener("pointerdown", stop, true);
   root.addEventListener("keydown", stop, true);

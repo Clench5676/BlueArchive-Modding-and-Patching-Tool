@@ -38,8 +38,11 @@ def _plain(mesh: Mapping[str, Any]) -> Plain | None:
         return None
     starts, strides, offset = [], [], 0
     for stream in range(1 + max(c["stream"] for c in channels)):
-        stride = sum((c["dimension"] & 0xF) * FORMAT_SIZE.get(c["format"], 0)
-                     for c in channels if c["stream"] == stream and c["dimension"])
+        stride = sum(
+            (c["dimension"] & 0xF) * FORMAT_SIZE.get(c["format"], 0)
+            for c in channels
+            if c["stream"] == stream and c["dimension"]
+        )
         starts.append(offset)
         strides.append(stride)
         offset = (offset + count * stride + 15) & ~15
@@ -56,7 +59,9 @@ def _plain(mesh: Mapping[str, Any]) -> Plain | None:
         if code is None or dimension != wanted:
             return None
         s = info["stream"]
-        if info["offset"] + dimension * FORMAT_SIZE[info["format"]] > strides[s] or starts[s] + count * strides[s] > len(raw):
+        if info["offset"] + dimension * FORMAT_SIZE[info["format"]] > strides[s] or starts[s] + count * strides[
+            s
+        ] > len(raw):
             return None
         out[channel] = (starts[s] + info["offset"], strides[s], code, dimension)
     return Plain(count, out) if POSITION in out else None
@@ -77,7 +82,10 @@ def _packed(mesh: Mapping[str, Any]) -> Packed | None:
     if int((compressed.get("m_Normals") or {}).get("m_NumItems") or 0) and int(signs.get("m_NumItems") or 0) != count:
         return None
     signs = compressed.get("m_TangentSigns") or {}
-    if int((compressed.get("m_Tangents") or {}).get("m_NumItems") or 0) and int(signs.get("m_NumItems") or 0) != 2 * count:
+    if (
+        int((compressed.get("m_Tangents") or {}).get("m_NumItems") or 0)
+        and int(signs.get("m_NumItems") or 0) != 2 * count
+    ):
         return None
     return Packed(count)
 
@@ -94,6 +102,7 @@ def geometry_of(mesh: Mapping[str, Any]) -> Plain | Packed | None:
 
 # --- plain vertex data ---------------------------------------------------------------------------------------------
 
+
 def _read_plain(raw: bytes, place: tuple[int, int, str, int], count: int) -> np.ndarray:
     first, stride, code, dimension = place
     return np.array([struct.unpack_from(f"<{dimension}{code}", raw, first + v * stride) for v in range(count)], float)
@@ -106,6 +115,7 @@ def _write_plain(raw: bytearray, place: tuple[int, int, str, int], values: np.nd
 
 
 # --- packed floats -------------------------------------------------------------------------------------------------
+
 
 def _unpack_floats(packed: Mapping[str, Any]) -> np.ndarray:
     bits = int(packed["m_BitSize"])
@@ -124,8 +134,11 @@ def _pack_floats(packed: dict, values: np.ndarray, *, keep_range: bool) -> None:
         start = float(values.min()) if len(values) else 0.0
         span = float(values.max()) - start if len(values) else 0.0
         packed["m_Start"], packed["m_Range"] = start, span
-    steps = np.zeros(len(values), np.int64) if span <= 0 else np.clip(
-        np.rint((values - start) / span * top), 0, top).astype(np.int64)
+    steps = (
+        np.zeros(len(values), np.int64)
+        if span <= 0
+        else np.clip(np.rint((values - start) / span * top), 0, top).astype(np.int64)
+    )
     data = pack_bits(steps.tolist(), bits)
     packed["m_NumItems"] = len(values)
     packed["m_Data"] = data if isinstance(packed.get("m_Data"), (bytes, bytearray)) else list(data)
@@ -139,7 +152,7 @@ def _write_signs(packed: dict, signs: np.ndarray) -> None:
 
 def _unit_z(xy: np.ndarray, positive: np.ndarray) -> np.ndarray:
     """The third component of unit vectors from two (UnityPy's reading: normalised when x² + y² > 1)."""
-    zsqr = 1.0 - (xy ** 2).sum(axis=1)
+    zsqr = 1.0 - (xy**2).sum(axis=1)
     out = np.c_[xy, np.sqrt(np.maximum(zsqr, 0.0))]
     over = zsqr < 0
     out[over] /= np.maximum(np.linalg.norm(out[over], axis=1, keepdims=True), 1e-12)
@@ -148,6 +161,7 @@ def _unit_z(xy: np.ndarray, positive: np.ndarray) -> np.ndarray:
 
 
 # --- the rewrite ---------------------------------------------------------------------------------------------------
+
 
 def _turned(vectors: np.ndarray, linear: np.ndarray) -> np.ndarray:
     out = np.einsum("nij,nj->ni", linear, vectors)

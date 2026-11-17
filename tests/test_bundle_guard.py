@@ -28,7 +28,9 @@ def unity_fs(path, blocks=((100, 50, 2),), *, count=None, directory_size=None, n
     prefix = b"UnityFS\0" + struct.pack(">I", 7) + b"5.x.x\0" + b"2022.3.55f1\0"
     head_size = (len(prefix) + 20 + 15) & ~15
     length = head_size + len(packed) + padding
-    head = prefix + struct.pack(">qIII", length, len(packed), len(table) if directory_size is None else directory_size, 2)
+    head = prefix + struct.pack(
+        ">qIII", length, len(packed), len(table) if directory_size is None else directory_size, 2
+    )
     path.write_bytes(head.ljust(head_size, b"\0") + packed + bytes(padding))
     return path
 
@@ -53,11 +55,15 @@ def test_ceilings_are_far_above_ordinary_bundles():
     assert bundle_guard.MAX_BUNDLE_BYTES >= 1 << 30
 
 
-@pytest.mark.parametrize("blocks", [
-    [(bundle_guard.MAX_BLOCK_BYTES + 1, 10, 2)],
-    [(1, 1, 0), (bundle_guard.MAX_BLOCK_BYTES + 1, 10, 2)],
-    [(bundle_guard.MAX_BLOCK_BYTES, 10, 2)] * (bundle_guard.MAX_TOTAL_BYTES // bundle_guard.MAX_BLOCK_BYTES + 1),
-], ids=["one block", "second block", "total"])
+@pytest.mark.parametrize(
+    "blocks",
+    [
+        [(bundle_guard.MAX_BLOCK_BYTES + 1, 10, 2)],
+        [(1, 1, 0), (bundle_guard.MAX_BLOCK_BYTES + 1, 10, 2)],
+        [(bundle_guard.MAX_BLOCK_BYTES, 10, 2)] * (bundle_guard.MAX_TOTAL_BYTES // bundle_guard.MAX_BLOCK_BYTES + 1),
+    ],
+    ids=["one block", "second block", "total"],
+)
 def test_oversized_declarations_are_refused_before_loading(tmp_path, monkeypatch, blocks):
     path = unity_fs(tmp_path / "crafted.bundle", blocks)
     assert path.stat().st_size < 4096
@@ -125,7 +131,7 @@ def test_reading_a_block_table_over_the_ceiling_never_allocates_it(tmp_path):
 def test_corrupt_unityfs_files_are_refused(tmp_path):
     good = unity_fs(tmp_path / "good.bundle", padding=40)
     data = good.read_bytes()
-    for name, content in {"short": data[:30], "no directory": data[:48], "cut": data[:len(data) - 60]}.items():
+    for name, content in {"short": data[:30], "no directory": data[:48], "cut": data[: len(data) - 60]}.items():
         path = tmp_path / f"{name}.bundle"
         path.write_bytes(content)
         with pytest.raises(ServiceError):

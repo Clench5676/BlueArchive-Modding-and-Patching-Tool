@@ -14,7 +14,12 @@ const ctx = {
   font: "",
   measureText(s) {
     const fs = parseFloat(/([\d.]+)px/.exec(this.font)[1]);
-    return { width: [...s].reduce((w, c) => w + (CJK.test(c) ? fs : THAI_MARK.test(c) ? 0 : THAI.test(c) ? fs * 0.6 : fs / 2), 0) };
+    return {
+      width: [...s].reduce(
+        (w, c) => w + (CJK.test(c) ? fs : THAI_MARK.test(c) ? 0 : THAI.test(c) ? fs * 0.6 : fs / 2),
+        0,
+      ),
+    };
   },
 };
 globalThis.document = {
@@ -30,12 +35,17 @@ globalThis.removeEventListener = () => {};
 const { controls } = await import("./control_prefabs.mjs");
 const prefabs = controls();
 globalThis.fetch = async (url) => {
-  const body = String(url).includes("UIPopup_Option_PC") ? prefabs.option : String(url).includes("UIPopup_FilterSort") ? prefabs.filter : null;
+  const body = String(url).includes("UIPopup_Option_PC")
+    ? prefabs.option
+    : String(url).includes("UIPopup_FilterSort")
+      ? prefabs.filter
+      : null;
   return { ok: !!body, status: body ? 200 : 404, json: async () => body };
 };
 // detail.js keeps detailsBody private: this loader hook exposes it to this test only
 const DETAIL = new URL("../../src/bmpt/web/js/detail.js", import.meta.url).href;
-register(`data:text/javascript,${encodeURIComponent(`
+register(
+  `data:text/javascript,${encodeURIComponent(`
 export async function load(url, ctx, next) {
   const result = await next(url, ctx);
   if (url === ${JSON.stringify(DETAIL)}) {
@@ -43,7 +53,8 @@ export async function load(url, ctx, next) {
     return { ...result, source: source + "\\nexport { detailsBody, switchTextLayout, nameplateRow };" };
   }
   return result;
-}`)}`);
+}`)}`,
+);
 const JS = "../../src/bmpt/web/js/";
 const NGUI = await import(`${JS}ngui.js`);
 const Tokens = await import(`${JS}ui-tokens.js`);
@@ -59,10 +70,14 @@ const { STATS_BOX: B, POPUP } = Tokens;
 
 // longest first
 const LOCALES = ["en-US", "th-TH", "ja-JP", "ko-KR", "zh-TW", "zh-CN"];
-const webui = (locale) => JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
-const flat = (value, prefix = "webui") => Object.entries(value).flatMap(([key, text]) => typeof text === "object" ? flat(text, `${prefix}.${key}`) : [[`${prefix}.${key}`, text]]);
+const webui = (locale) =>
+  JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
+const flat = (value, prefix = "webui") =>
+  Object.entries(value).flatMap(([key, text]) =>
+    typeof text === "object" ? flat(text, `${prefix}.${key}`) : [[`${prefix}.${key}`, text]],
+  );
 const fill = (text, params) => text.replace(/\{(\w+)\}/g, (_, key) => params[key] ?? "");
-const leaves = (value) => typeof value === "string" ? [value] : Object.values(value).flatMap(leaves);
+const leaves = (value) => (typeof value === "string" ? [value] : Object.values(value).flatMap(leaves));
 function use(locale) {
   const web = webui(locale);
   setStrings(locale, Object.fromEntries(flat(web)));
@@ -83,96 +98,174 @@ const rectOf = (n, w = n.widgets.find((x) => "w_" in x)) => {
 const child = (nodes, name) => nodes.find((n) => n.name === name);
 
 // Job E's table and switch texts: pure prefab units, rendered at the default stage scale, for all six languages.
-for (const locale of LOCALES) test(`detail table columns stay in the L content box and wrap their rows in ${locale}`, () => {
-  const { text } = use(locale), { SPACE, TYPE } = Tokens;
-  const W = DETAILS.r - DETAILS.l;
-  const rows = [
-    ["ibuki_dress_spr_with_a_long_bundle_name.bundle", "18.5 MB", "2026-11-07", [text("crc.fixed"), "#0a6f2d"], text("status.original")],
-    ["ibuki_".repeat(25) + ".bundle", "123.4 MB", "2026-10-01", [text("crc.needed"), "#f14f00"], text("status.replaced").repeat(3)],
-  ];
-  for (const status of [true, false]) {
-    const result = Detail.detailsBody({ fields: [[text("field.folder"), "C:/synthetic/files"]], rows: rows.map(r => [...r.slice(0, 4), status ? r[4] : null]) });
-    const nodes = result.tree.children, head = child(nodes, "Head"), hr = rectOf(head);
-    const weights = status ? [1040, 220, 270, 290, 260] : [1300, 220, 270, 290];
-    assert.equal(W, 2018); assert.equal(DETAILS.w, 2098);
-    assert.equal((DETAILS.w - W) / 2, SPACE.xl);
-    assert.deepEqual([hr.left, hr.right], [0, W]);
-    assert.equal(child(nodes, `H_${weights.length}`), undefined);
-    for (let i = 0; i < weights.length; i++) {
-      const header = child(nodes, `H_${i}`), hw = header.widgets[0];
-      const expected = W * weights[i] / 2080;
-      assert.ok(Math.abs(hw.w_ + 2 * SPACE.s - expected) < 1e-9, "the existing column proportions are retained");
-      assert.ok(hw.fontSize <= TYPE.caption.fs && hw.fontSize >= TYPE.caption.min);
-      for (const line of hw.text.split("\n")) assert.ok(NGUI.glyphWidth(line, hw.fontSize) <= hw.w_ + 1e-9);
-      for (const [ri] of rows.entries()) {
-        const cell = child(nodes, `R_${ri}_${i}`), cw = cell.widgets[0], cr = rectOf(cell);
-        assert.ok(cw.fontSize <= TYPE.caption.fs && cw.fontSize >= TYPE.caption.min, `cell ${cw.fontSize}`);
-        assert.ok(cr.left >= 0 && cr.right <= W + 1e-9);
-        assert.equal(cr.left, rectOf(header).left);
-        const original = i === 3 ? rows[ri][3][0] : rows[ri][i];
-        assert.equal(cw.text.replace(/\s/g, ""), String(original).replace(/\s/g, ""), "wrapping keeps every non-space character");
-        for (const line of cw.text.split("\n")) assert.ok(NGUI.glyphWidth(line, cw.fontSize) <= cw.w_ + 1e-9, `${locale}: ${line}`);
-        assert.ok(cw.text.split("\n").length * NGUI.fontSizeFor(cw.text, cw.fontSize) * NGUI.LINE_PITCH <= cw.h_ + 1e-9);
+for (const locale of LOCALES)
+  test(`detail table columns stay in the L content box and wrap their rows in ${locale}`, () => {
+    const { text } = use(locale),
+      { SPACE, TYPE } = Tokens;
+    const W = DETAILS.r - DETAILS.l;
+    const rows = [
+      [
+        "ibuki_dress_spr_with_a_long_bundle_name.bundle",
+        "18.5 MB",
+        "2026-11-07",
+        [text("crc.fixed"), "#0a6f2d"],
+        text("status.original"),
+      ],
+      [
+        "ibuki_".repeat(25) + ".bundle",
+        "123.4 MB",
+        "2026-10-01",
+        [text("crc.needed"), "#f14f00"],
+        text("status.replaced").repeat(3),
+      ],
+    ];
+    for (const status of [true, false]) {
+      const result = Detail.detailsBody({
+        fields: [[text("field.folder"), "C:/synthetic/files"]],
+        rows: rows.map((r) => [...r.slice(0, 4), status ? r[4] : null]),
+      });
+      const nodes = result.tree.children,
+        head = child(nodes, "Head"),
+        hr = rectOf(head);
+      const weights = status ? [1040, 220, 270, 290, 260] : [1300, 220, 270, 290];
+      assert.equal(W, 2018);
+      assert.equal(DETAILS.w, 2098);
+      assert.equal((DETAILS.w - W) / 2, SPACE.xl);
+      assert.deepEqual([hr.left, hr.right], [0, W]);
+      assert.equal(child(nodes, `H_${weights.length}`), undefined);
+      for (let i = 0; i < weights.length; i++) {
+        const header = child(nodes, `H_${i}`),
+          hw = header.widgets[0];
+        const expected = (W * weights[i]) / 2080;
+        assert.ok(Math.abs(hw.w_ + 2 * SPACE.s - expected) < 1e-9, "the existing column proportions are retained");
+        assert.ok(hw.fontSize <= TYPE.caption.fs && hw.fontSize >= TYPE.caption.min);
+        for (const line of hw.text.split("\n")) assert.ok(NGUI.glyphWidth(line, hw.fontSize) <= hw.w_ + 1e-9);
+        for (const [ri] of rows.entries()) {
+          const cell = child(nodes, `R_${ri}_${i}`),
+            cw = cell.widgets[0],
+            cr = rectOf(cell);
+          assert.ok(cw.fontSize <= TYPE.caption.fs && cw.fontSize >= TYPE.caption.min, `cell ${cw.fontSize}`);
+          assert.ok(cr.left >= 0 && cr.right <= W + 1e-9);
+          assert.equal(cr.left, rectOf(header).left);
+          const original = i === 3 ? rows[ri][3][0] : rows[ri][i];
+          assert.equal(
+            cw.text.replace(/\s/g, ""),
+            String(original).replace(/\s/g, ""),
+            "wrapping keeps every non-space character",
+          );
+          for (const line of cw.text.split("\n"))
+            assert.ok(NGUI.glyphWidth(line, cw.fontSize) <= cw.w_ + 1e-9, `${locale}: ${line}`);
+          assert.ok(
+            cw.text.split("\n").length * NGUI.fontSizeFor(cw.text, cw.fontSize) * NGUI.LINE_PITCH <= cw.h_ + 1e-9,
+          );
+        }
       }
+      const line0 = child(nodes, "RL_0"),
+        line1 = child(nodes, "RL_1");
+      const row1Top = Math.max(...weights.map((_, i) => rectOf(child(nodes, `R_1_${i}`)).top));
+      assert.ok(Math.abs(line0.pos[1] - row1Top - SPACE.s * 2) < 1e-9, "12 between rows, then 12 inside the next row");
+      assert.ok(-line1.pos[1] < result.height, "the final divider stays in the scrollable body");
     }
-    const line0 = child(nodes, "RL_0"), line1 = child(nodes, "RL_1");
-    const row1Top = Math.max(...weights.map((_, i) => rectOf(child(nodes, `R_1_${i}`)).top));
-    assert.ok(Math.abs(line0.pos[1] - row1Top - SPACE.s * 2) < 1e-9, "12 between rows, then 12 inside the next row");
-    assert.ok(-line1.pos[1] < result.height, "the final divider stays in the scrollable body");
-  }
-});
+  });
 
-for (const locale of LOCALES) test(`detail switch texts fit their half of the prefab card in ${locale}`, () => {
-  const { text } = use(locale), { SPACE, TYPE, CONTROL } = Tokens;
-  for (const tab of ["portrait", "lobby", "model"]) for (const arrow of [true, false]) {
-    const title = text(`row.switch.${tab}`), sub = `Ibuki - ${text("status.applied")}`;
-    const layout = Detail.switchTextLayout(778, 209, title, sub, arrow);
-    const [a, b] = layout.texts, content = layout.content;
-    assert.ok(b.y - a.y - a.h >= SPACE.xs - 1e-9);
-    for (const [i, item] of layout.texts.entries()) {
-      const type = i ? TYPE.caption : TYPE.body;
-      assert.ok(item.fs <= type.fs && item.fs >= type.min);
-      assert.ok(item.lines <= 2);
-      assert.ok(item.x >= 778 / 2 + SPACE.s && item.x + item.w <= content.x + content.w + 1e-9);
-      assert.ok(item.y >= content.y - 1e-9 && item.y + item.h <= content.y + content.h + 1e-9);
-      for (const line of item.text.split("\n")) assert.ok(NGUI.glyphWidth(line, item.fs) <= item.w + 1e-9);
-    }
-    if (arrow) {
-      assert.equal(layout.arrow.h, CONTROL.icon.h);
-      assert.equal(layout.arrow.w, CONTROL.icon.h);
-      assert.ok(b.x + b.w + SPACE.xs <= layout.arrow.x + 1e-9);
-    }
-  }
-});
+for (const locale of LOCALES)
+  test(`detail switch texts fit their half of the prefab card in ${locale}`, () => {
+    const { text } = use(locale),
+      { SPACE, TYPE, CONTROL } = Tokens;
+    for (const tab of ["portrait", "lobby", "model"])
+      for (const arrow of [true, false]) {
+        const title = text(`row.switch.${tab}`),
+          sub = `Ibuki - ${text("status.applied")}`;
+        const layout = Detail.switchTextLayout(778, 209, title, sub, arrow);
+        const [a, b] = layout.texts,
+          content = layout.content;
+        assert.ok(b.y - a.y - a.h >= SPACE.xs - 1e-9);
+        for (const [i, item] of layout.texts.entries()) {
+          const type = i ? TYPE.caption : TYPE.body;
+          assert.ok(item.fs <= type.fs && item.fs >= type.min);
+          assert.ok(item.lines <= 2);
+          assert.ok(item.x >= 778 / 2 + SPACE.s && item.x + item.w <= content.x + content.w + 1e-9);
+          assert.ok(item.y >= content.y - 1e-9 && item.y + item.h <= content.y + content.h + 1e-9);
+          for (const line of item.text.split("\n")) assert.ok(NGUI.glyphWidth(line, item.fs) <= item.w + 1e-9);
+        }
+        if (arrow) {
+          assert.equal(layout.arrow.h, CONTROL.icon.h);
+          assert.equal(layout.arrow.w, CONTROL.icon.h);
+          assert.ok(b.x + b.w + SPACE.xs <= layout.arrow.x + 1e-9);
+        }
+      }
+  });
 
 // the checks every box shares: nodes = the flat list the site appended (the box first)
-function assertRows({ nodes, what, value = "V", caption = "F", divider = "L", count, slot = () => null, lines = B.value.lines, size = B }) {
-  const box = nodes[0], fill = box.widgets[0], line = box.children[0].widgets[0];
+function assertRows({
+  nodes,
+  what,
+  value = "V",
+  caption = "F",
+  divider = "L",
+  count,
+  slot = () => null,
+  lines = B.value.lines,
+  size = B,
+}) {
+  const box = nodes[0],
+    fill = box.widgets[0],
+    line = box.children[0].widgets[0];
   const boxRect = rectOf(box);
   // drawn through the component: the tokens' fill, a line 5 larger across and down, dotted dividers of the divider colour
-  assert.deepEqual([fill.sprite, fill.color, line.sprite, line.color], ["Common_Bg_Raius10px", `${B.fill}/1.00`, "Common_Line_Raius10px", `${B.line}/1.00`], `${what}: the box`);
+  assert.deepEqual(
+    [fill.sprite, fill.color, line.sprite, line.color],
+    ["Common_Bg_Raius10px", `${B.fill}/1.00`, "Common_Line_Raius10px", `${B.line}/1.00`],
+    `${what}: the box`,
+  );
   assert.deepEqual([line.w_ - fill.w_, line.h_ - fill.h_], [B.lineOutset, B.lineOutset], `${what}: the line's outset`);
   assert.equal(B.lineOutset, 5);
   const dividers = Array.from({ length: count - 1 }, (_, i) => child(nodes, `${divider}_${i}`));
   assert.ok(dividers.every(Boolean), `${what}: a divider between every two rows`);
-  for (const d of dividers) assert.deepEqual([d.widgets[0].sprite, d.widgets[0].color, d.widgets[0].w_], ["Common_Line_Dot", `${B.divider}/1.00`, fill.w_ - 2 * B.dividerInset], `${what}: a divider`);
+  for (const d of dividers)
+    assert.deepEqual(
+      [d.widgets[0].sprite, d.widgets[0].color, d.widgets[0].w_],
+      ["Common_Line_Dot", `${B.divider}/1.00`, fill.w_ - 2 * B.dividerInset],
+      `${what}: a divider`,
+    );
   assert.equal(child(nodes, `${divider}_${count - 1}`), undefined, `${what}: none under the last row`);
   const edges = [boxRect.top - B.padY, ...dividers.map((d) => d.pos[1]), boxRect.bottom + B.padY];
   const placed = [];
   for (let i = 0; i < count; i++) {
     const row = { top: edges[i], bottom: edges[i + 1] };
-    const v = child(nodes, `${value}_${i}`), vw = v.widgets[0], vr = rectOf(v);
+    const v = child(nodes, `${value}_${i}`),
+      vw = v.widgets[0],
+      vr = rectOf(v);
     const name = `${what} row ${i}`;
     assert.ok(row.top - row.bottom >= size.rowMin - 1e-9, `${name}: at least ${size.rowMin} high`);
     // the value inside its row and its box, 30 short of both sides
-    assert.ok(vr.top <= row.top + 1e-9 && vr.bottom >= row.bottom - 1e-9, `${name}: ${JSON.stringify(vw.text)} inside its row (${vr.bottom}..${vr.top} in ${row.bottom}..${row.top})`);
-    assert.ok(vr.left >= boxRect.left + B.padX - 1e-9 && vr.right <= boxRect.right - B.padX + 1e-9, `${name}: inside the box's sides`);
+    assert.ok(
+      vr.top <= row.top + 1e-9 && vr.bottom >= row.bottom - 1e-9,
+      `${name}: ${JSON.stringify(vw.text)} inside its row (${vr.bottom}..${vr.top} in ${row.bottom}..${row.top})`,
+    );
+    assert.ok(
+      vr.left >= boxRect.left + B.padX - 1e-9 && vr.right <= boxRect.right - B.padX + 1e-9,
+      `${name}: inside the box's sides`,
+    );
     // its text inside its label, within the size range, the lines kept to three, every character kept
     const shown = vw.text.split("\n");
-    assert.ok(vw.fontSize <= size.value.fs && vw.fontSize >= size.value.fsMin, `${name}: ${vw.fontSize} is outside ${size.value.fsMin} to ${size.value.fs}`);
-    assert.ok(shown.length <= lines, `${name}: ${JSON.stringify(vw.text)} takes ${shown.length} lines at ${vw.fontSize}`);
-    for (const line of shown) assert.ok(NGUI.glyphWidth(line, vw.fontSize) <= vw.w_ - B.slack + 1e-9, `${name}: ${JSON.stringify(line)} wider than its room`);
-    assert.ok(shown.length * NGUI.fontSizeFor(vw.text, vw.fontSize) * NGUI.LINE_PITCH <= vw.h_ + 1e-9, `${name}: the lines taller than their label ${JSON.stringify(vw.text)} ${vw.fontSize} ${vw.h_}`);
+    assert.ok(
+      vw.fontSize <= size.value.fs && vw.fontSize >= size.value.fsMin,
+      `${name}: ${vw.fontSize} is outside ${size.value.fsMin} to ${size.value.fs}`,
+    );
+    assert.ok(
+      shown.length <= lines,
+      `${name}: ${JSON.stringify(vw.text)} takes ${shown.length} lines at ${vw.fontSize}`,
+    );
+    for (const line of shown)
+      assert.ok(
+        NGUI.glyphWidth(line, vw.fontSize) <= vw.w_ - B.slack + 1e-9,
+        `${name}: ${JSON.stringify(line)} wider than its room`,
+      );
+    assert.ok(
+      shown.length * NGUI.fontSizeFor(vw.text, vw.fontSize) * NGUI.LINE_PITCH <= vw.h_ + 1e-9,
+      `${name}: the lines taller than their label ${JSON.stringify(vw.text)} ${vw.fontSize} ${vw.h_}`,
+    );
     // the caption, when the row has one, stands left of the value and inside the row
     const c = child(nodes, `${caption}_${i}`);
     if (c) {
@@ -180,7 +273,10 @@ function assertRows({ nodes, what, value = "V", caption = "F", divider = "L", co
       assert.ok(cr.right <= vr.left + 1e-9, `${name}: the caption ends before the value`);
       assert.ok(cr.top <= row.top + 1e-9 && cr.bottom >= row.bottom - 1e-9, `${name}: the caption inside its row`);
       const cw = c.widgets[0];
-      assert.ok(NGUI.glyphWidth(cw.text, cw.fontSize) <= cw.w_ - B.captionGap + 1e-9, `${name}: ${cw.text} inside its column`);
+      assert.ok(
+        NGUI.glyphWidth(cw.text, cw.fontSize) <= cw.w_ - B.captionGap + 1e-9,
+        `${name}: ${cw.text} inside its column`,
+      );
     }
     // what the caller put in the row stays inside it and clear of the value
     const extra = slot(i);
@@ -192,166 +288,299 @@ function assertRows({ nodes, what, value = "V", caption = "F", divider = "L", co
     placed.push({ vr, row });
   }
   // nothing overlaps the next row's value
-  for (let i = 1; i < placed.length; i++) assert.ok(placed[i].vr.top <= placed[i - 1].vr.bottom + 1e-9, `${what}: rows ${i - 1} and ${i} overlap`);
+  for (let i = 1; i < placed.length; i++)
+    assert.ok(placed[i].vr.top <= placed[i - 1].vr.bottom + 1e-9, `${what}: rows ${i - 1} and ${i} overlap`);
   return { fill, boxRect };
 }
 
 // the strings the details panels show
-const errorLongest = (web) => leaves(web.error).reduce((a, b) => (NGUI.glyphWidth(b, 38) > NGUI.glyphWidth(a, 38) ? b : a));
+const errorLongest = (web) =>
+  leaves(web.error).reduce((a, b) => (NGUI.glyphWidth(b, 38) > NGUI.glyphWidth(a, 38) ? b : a));
 const FILE = "ibuki_dress_spr_with_a_very_long_name_for_the_panel.bundle";
 
-for (const locale of LOCALES) test(`the details panel's light box holds its captions and values in ${locale}`, () => {
-  const { web, text } = use(locale);
-  const it = { key: "a", full: "Hoshino", big: null, chips: [text("type.noRecruit")] };
-  const sets = [
-    // the Switch popups: file, size, status (with an error under it), CRC
-    [[text("field.file"), FILE], [text("field.size"), "123.4 MB"], [text("field.status"), `${text("status.applied")}\n${errorLongest(web)}`], [text("field.crc"), text("crc.needed")]],
-    [[text("field.file"), FILE], [text("field.size"), "123.4 MB"], [text("field.status"), text("import.reason.no_target")], [text("field.crc"), text("crc.fixed"), "#0a6f2d/1.00"]],
-    // the source cards
-    [[text("field.file"), FILE], [text("info.gameFile"), "2026-10-30"], [text("info.status"), text("status.replaced")], [text("tab.lobby"), text("model.has")]],
-    [[text("field.file"), FILE], [text("info.gameFile"), "2026-10-30"], [text("info.status"), text("status.original")], [text("special.background"), text("model.none")]],
-    // the Add to Library prompts
-    [[text("field.file"), `${FILE} +2`], [text("field.size"), "-"], [text("field.crc"), text("crc.original")], [text("field.copy"), text("mods.copy.none")]],
-  ];
-  for (const [n, fields] of sets.entries()) {
-    const tree = Popup.detailsTree(it, "Title", fields, []);
-    const what = `${locale} details panel, set ${n}`;
-    const nodes = tree.children.filter((c) => c.name === "Fields" || /^(F|V|L)_\d+$/.test(c.name));
-    assert.equal(nodes[0].name, "Fields");
-    // where the captions leave a value no room for its lines (the L class's narrower panel), each caption stands
-    // bold over its value: every value within three lines and its room, inside the box
-    const f0 = nodes.find((c) => c.name === "F_0"), v0 = nodes.find((c) => c.name === "V_0");
-    if (f0 && v0 && f0.pos[0] === v0.pos[0]) {
-      const box = rectOf(nodes[0]);
-      fields.forEach((_, k) => {
-        const cap = nodes.find((c) => c.name === `F_${k}`).widgets[0], v = nodes.find((c) => c.name === `V_${k}`), vw = v.widgets[0];
-        assert.equal(cap.bold, true, `${what}: caption ${k} bold`);
-        assert.ok(vw.text.split("\n").length <= Box.STATS_BOX_S.value.lines, `${what}: value ${k} ${JSON.stringify(vw.text)}`);
-        for (const line of vw.text.split("\n")) assert.ok(NGUI.glyphWidth(line, vw.fontSize) <= vw.w_ + 1e-9, `${what}: ${line}`);
-        const r = rectOf(v);
-        assert.ok(r.left >= box.left - 1e-9 && r.right <= box.right + 1e-9, `${what}: value ${k} inside the box`);
-      });
-      continue;
+for (const locale of LOCALES)
+  test(`the details panel's light box holds its captions and values in ${locale}`, () => {
+    const { web, text } = use(locale);
+    const it = { key: "a", full: "Hoshino", big: null, chips: [text("type.noRecruit")] };
+    const sets = [
+      // the Switch popups: file, size, status (with an error under it), CRC
+      [
+        [text("field.file"), FILE],
+        [text("field.size"), "123.4 MB"],
+        [text("field.status"), `${text("status.applied")}\n${errorLongest(web)}`],
+        [text("field.crc"), text("crc.needed")],
+      ],
+      [
+        [text("field.file"), FILE],
+        [text("field.size"), "123.4 MB"],
+        [text("field.status"), text("import.reason.no_target")],
+        [text("field.crc"), text("crc.fixed"), "#0a6f2d/1.00"],
+      ],
+      // the source cards
+      [
+        [text("field.file"), FILE],
+        [text("info.gameFile"), "2026-10-30"],
+        [text("info.status"), text("status.replaced")],
+        [text("tab.lobby"), text("model.has")],
+      ],
+      [
+        [text("field.file"), FILE],
+        [text("info.gameFile"), "2026-10-30"],
+        [text("info.status"), text("status.original")],
+        [text("special.background"), text("model.none")],
+      ],
+      // the Add to Library prompts
+      [
+        [text("field.file"), `${FILE} +2`],
+        [text("field.size"), "-"],
+        [text("field.crc"), text("crc.original")],
+        [text("field.copy"), text("mods.copy.none")],
+      ],
+    ];
+    for (const [n, fields] of sets.entries()) {
+      const tree = Popup.detailsTree(it, "Title", fields, []);
+      const what = `${locale} details panel, set ${n}`;
+      const nodes = tree.children.filter((c) => c.name === "Fields" || /^(F|V|L)_\d+$/.test(c.name));
+      assert.equal(nodes[0].name, "Fields");
+      // where the captions leave a value no room for its lines (the L class's narrower panel), each caption stands
+      // bold over its value: every value within three lines and its room, inside the box
+      const f0 = nodes.find((c) => c.name === "F_0"),
+        v0 = nodes.find((c) => c.name === "V_0");
+      if (f0 && v0 && f0.pos[0] === v0.pos[0]) {
+        const box = rectOf(nodes[0]);
+        fields.forEach((_, k) => {
+          const cap = nodes.find((c) => c.name === `F_${k}`).widgets[0],
+            v = nodes.find((c) => c.name === `V_${k}`),
+            vw = v.widgets[0];
+          assert.equal(cap.bold, true, `${what}: caption ${k} bold`);
+          assert.ok(
+            vw.text.split("\n").length <= Box.STATS_BOX_S.value.lines,
+            `${what}: value ${k} ${JSON.stringify(vw.text)}`,
+          );
+          for (const line of vw.text.split("\n"))
+            assert.ok(NGUI.glyphWidth(line, vw.fontSize) <= vw.w_ + 1e-9, `${what}: ${line}`);
+          const r = rectOf(v);
+          assert.ok(r.left >= box.left - 1e-9 && r.right <= box.right + 1e-9, `${what}: value ${k} inside the box`);
+        });
+        continue;
+      }
+      const { fill, boxRect } = assertRows({ nodes, what, count: fields.length, size: Box.STATS_BOX_S });
+      // The stats box keeps its own inset inside the new four-column details panel.
+      const bounds = Popup.listLayout().left,
+        panel = bounds.r - bounds.l;
+      assert.equal(fill.w_, panel - 40, what);
+      assert.equal(rectOf(nodes[0]).right - rectOf(nodes[0]).left, panel - 40);
+      // the third value keeps two lines and an ellipsis at most, its whole text as the accessible label
+      const third = child(nodes, "V_2").widgets[0];
+      assert.ok(third.text.split("\n").length <= 2, `${what}: the third value`);
+      assert.equal(third.ariaLabel, String(fields[2][1]));
+      assert.ok(boxRect.right - boxRect.left > 0);
     }
-    const { fill, boxRect } = assertRows({ nodes, what, count: fields.length, size: Box.STATS_BOX_S });
-    // The stats box keeps its own inset inside the new four-column details panel.
-    const bounds = Popup.listLayout().left, panel = bounds.r - bounds.l;
-    assert.equal(fill.w_, panel - 40, what);
-    assert.equal(rectOf(nodes[0]).right - rectOf(nodes[0]).left, panel - 40);
-    // the third value keeps two lines and an ellipsis at most, its whole text as the accessible label
-    const third = child(nodes, "V_2").widgets[0];
-    assert.ok(third.text.split("\n").length <= 2, `${what}: the third value`);
-    assert.equal(third.ariaLabel, String(fields[2][1]));
-    assert.ok(boxRect.right - boxRect.left > 0);
-  }
-});
+  });
 
-for (const locale of LOCALES) test(`the file details' light box holds its captions, values and edit icon in ${locale}`, () => {
-  const { text } = use(locale);
-  const folder = `/Users/someone/Library/Application Support/Game/${"folder/".repeat(12)}`;
-  const mods = [{ alias: "My paint", core: "ibuki_spr" }, { alias: "A rather long alias for a modded portrait of a student", file: "C:\\mods\\ibuki_spr_v2.bundle" }];
-  for (const mod of mods) {
-    const fields = [[text("field.folder"), folder], [text("info.current"), mod.alias, mod], [text("field.modFile"), mod.file || "ibuki_spr_mod.bundle"],
-      [text("field.source"), "Hoshino (Swimsuit)"]];
-    const { tree } = Detail.detailsBody({ fields, rows: [] });
-    const what = `${locale} file details, ${mod.alias.length} character alias`;
-    const nodes = tree.children.filter((c) => c.name === "Summary" || /^(F|V|L|Original|Edit)_\d+$/.test(c.name));
-    const W = DETAILS.r - DETAILS.l;
-    const { boxRect } = assertRows({ nodes, what, count: fields.length, slot: (i) => {
-      const edit = child(nodes, `Edit_${i}`);
-      return edit ? rectOf(edit) : null;
-    } });
-    // as wide as the file table under it (2080): the box's line, outside the fill, ends at the table's edges
-    assert.equal(boxRect.right - boxRect.left, W - B.lineOutset, what);
-    assert.equal(child(nodes, "Summary").children[0].widgets[0].w_, W, `${what}: the line's outer edges are the table's`);
-    // the edit icon follows the text, the original name sits under it (the value rises), both inside the row
-    const edit = child(nodes, "Edit_1"), original = child(nodes, "Original_1"), value = child(nodes, "V_1");
-    assert.ok(edit && original, `${what}: the edit icon and the original name`);
-    const er = rectOf(edit), vr = rectOf(value), orr = rectOf(original);
-    assert.ok(er.left >= vr.left, `${what}: the icon after the text starts`);
-    assert.ok(orr.top <= vr.bottom + 1e-9 || orr.bottom < vr.bottom, `${what}: the original name under the value`);
-    const second = original.widgets[0];
-    assert.ok(second.fontSize <= 28 && second.fontSize >= 24 - 8, what);
-    assert.ok(NGUI.glyphWidth(second.text, second.fontSize) <= second.w_ + 1e-9 || second.ellipsis, `${what}: the original name inside its label or cut with an ellipsis`);
-    assert.equal(original.widgets[0].ariaLabel, mod.core || "ibuki_spr_v2.bundle");
-    // the file table starts under the box
-    const head = child(tree.children, "Head");
-    assert.ok(head.pos[1] + head.widgets[0].h_ / 2 < boxRect.bottom, `${what}: the table under the box`);
-  }
-});
+for (const locale of LOCALES)
+  test(`the file details' light box holds its captions, values and edit icon in ${locale}`, () => {
+    const { text } = use(locale);
+    const folder = `/Users/someone/Library/Application Support/Game/${"folder/".repeat(12)}`;
+    const mods = [
+      { alias: "My paint", core: "ibuki_spr" },
+      { alias: "A rather long alias for a modded portrait of a student", file: "C:\\mods\\ibuki_spr_v2.bundle" },
+    ];
+    for (const mod of mods) {
+      const fields = [
+        [text("field.folder"), folder],
+        [text("info.current"), mod.alias, mod],
+        [text("field.modFile"), mod.file || "ibuki_spr_mod.bundle"],
+        [text("field.source"), "Hoshino (Swimsuit)"],
+      ];
+      const { tree } = Detail.detailsBody({ fields, rows: [] });
+      const what = `${locale} file details, ${mod.alias.length} character alias`;
+      const nodes = tree.children.filter((c) => c.name === "Summary" || /^(F|V|L|Original|Edit)_\d+$/.test(c.name));
+      const W = DETAILS.r - DETAILS.l;
+      const { boxRect } = assertRows({
+        nodes,
+        what,
+        count: fields.length,
+        slot: (i) => {
+          const edit = child(nodes, `Edit_${i}`);
+          return edit ? rectOf(edit) : null;
+        },
+      });
+      // as wide as the file table under it (2080): the box's line, outside the fill, ends at the table's edges
+      assert.equal(boxRect.right - boxRect.left, W - B.lineOutset, what);
+      assert.equal(
+        child(nodes, "Summary").children[0].widgets[0].w_,
+        W,
+        `${what}: the line's outer edges are the table's`,
+      );
+      // the edit icon follows the text, the original name sits under it (the value rises), both inside the row
+      const edit = child(nodes, "Edit_1"),
+        original = child(nodes, "Original_1"),
+        value = child(nodes, "V_1");
+      assert.ok(edit && original, `${what}: the edit icon and the original name`);
+      const er = rectOf(edit),
+        vr = rectOf(value),
+        orr = rectOf(original);
+      assert.ok(er.left >= vr.left, `${what}: the icon after the text starts`);
+      assert.ok(orr.top <= vr.bottom + 1e-9 || orr.bottom < vr.bottom, `${what}: the original name under the value`);
+      const second = original.widgets[0];
+      assert.ok(second.fontSize <= 28 && second.fontSize >= 24 - 8, what);
+      assert.ok(
+        NGUI.glyphWidth(second.text, second.fontSize) <= second.w_ + 1e-9 || second.ellipsis,
+        `${what}: the original name inside its label or cut with an ellipsis`,
+      );
+      assert.equal(original.widgets[0].ariaLabel, mod.core || "ibuki_spr_v2.bundle");
+      // the file table starts under the box
+      const head = child(tree.children, "Head");
+      assert.ok(head.pos[1] + head.widgets[0].h_ / 2 < boxRect.bottom, `${what}: the table under the box`);
+    }
+  });
 
 // the boxed messages: the compatibility findings, with their buttons
-const PARAMS = { name: "CH0261_home.skel", mod: "4.2.33", official: "4.2.40", missing: "idle, walk, run", added: "dance, wave", names: "Intro_Shoulder_L, Intro_Shoulder_R, Face_Eye_L",
-  atlas: "2048 x 2048", texture: "1024 x 1024", version: "4.2.33", runtime: "4.2.120", n: "3", reason: "The target file is in use by another program", kind: "Portrait" };
-for (const locale of LOCALES) for (const width of [1700, 2100, 2458]) test(`boxed message rows hold their text and button in ${locale}, ${width} wide`, () => {
-  const { web, text } = use(locale);
-  const compat = leaves(web.compatibility).map((s) => fill(s, PARAMS));
-  const buttons = [text("info.details"), text("add.go"), text("tour.open"), text("recovery.report")];
-  for (const [n, texts] of [[0, compat]]) {
-    const lines = texts.map((line, i) => (i % 2 === 0 ? { text: line, button: { label: buttons[(i / 2) % buttons.length], fn() {} } } : line));
-    const what = `${locale} ${width} ${n ? "Add result" : "findings"}`;
-    const layout = Popup.messageLayout({ lines, width, ok: "OK", cancel: "Cancel", scroll: true });
-    const tree = layout.body.tree, nodes = tree.children;
-    assert.equal(nodes[0].name, "Box", what);
-    const slot = (i) => {
-      const button = child(nodes, `Btn_${i}`);
-      if (!button) return null;
-      const bg = button.children.flatMap((c) => c.widgets).find((x) => x.sprite === "Common_Btn_BG") || button.widgets.find((x) => x.sprite === "Common_Btn_BG");
-      return { left: button.pos[0] - bg.w_ / 2, right: button.pos[0] + bg.w_ / 2, top: button.pos[1] + bg.h_ / 2, bottom: button.pos[1] - bg.h_ / 2 };
-    };
-    const { fill: shape, boxRect } = assertRows({ nodes, what, value: "Row", divider: "Dot", count: lines.length, lines: Infinity, slot });
-    assert.equal(shape.w_, layout.width - 200, `${what}: the frame less 200`);
-    assert.equal(boxRect.right - boxRect.left, layout.width - 200);
-    // rows with a button are 156 high at least and keep SPACE.m between text and button; rows without are 64 at least
-    lines.forEach((line, i) => {
-      const row = child(nodes, `Row_${i}`).widgets[0], button = slot(i), r = rectOf(child(nodes, `Row_${i}`));
-      if (typeof line !== "string") assert.ok(button && r.right + Tokens.SPACE.m <= button.left + 1e-9, `${what} row ${i}: 20 between text and button`);
-      else assert.equal(button, null);
-      assert.ok(row.fontSize >= B.value.fsMin && row.fontSize <= B.value.fs, `${what} row ${i}: ${row.fontSize}`);
+const PARAMS = {
+  name: "CH0261_home.skel",
+  mod: "4.2.33",
+  official: "4.2.40",
+  missing: "idle, walk, run",
+  added: "dance, wave",
+  names: "Intro_Shoulder_L, Intro_Shoulder_R, Face_Eye_L",
+  atlas: "2048 x 2048",
+  texture: "1024 x 1024",
+  version: "4.2.33",
+  runtime: "4.2.120",
+  n: "3",
+  reason: "The target file is in use by another program",
+  kind: "Portrait",
+};
+for (const locale of LOCALES)
+  for (const width of [1700, 2100, 2458])
+    test(`boxed message rows hold their text and button in ${locale}, ${width} wide`, () => {
+      const { web, text } = use(locale);
+      const compat = leaves(web.compatibility).map((s) => fill(s, PARAMS));
+      const buttons = [text("info.details"), text("add.go"), text("tour.open"), text("recovery.report")];
+      for (const [n, texts] of [[0, compat]]) {
+        const lines = texts.map((line, i) =>
+          i % 2 === 0 ? { text: line, button: { label: buttons[(i / 2) % buttons.length], fn() {} } } : line,
+        );
+        const what = `${locale} ${width} ${n ? "Add result" : "findings"}`;
+        const layout = Popup.messageLayout({ lines, width, ok: "OK", cancel: "Cancel", scroll: true });
+        const tree = layout.body.tree,
+          nodes = tree.children;
+        assert.equal(nodes[0].name, "Box", what);
+        const slot = (i) => {
+          const button = child(nodes, `Btn_${i}`);
+          if (!button) return null;
+          const bg =
+            button.children.flatMap((c) => c.widgets).find((x) => x.sprite === "Common_Btn_BG") ||
+            button.widgets.find((x) => x.sprite === "Common_Btn_BG");
+          return {
+            left: button.pos[0] - bg.w_ / 2,
+            right: button.pos[0] + bg.w_ / 2,
+            top: button.pos[1] + bg.h_ / 2,
+            bottom: button.pos[1] - bg.h_ / 2,
+          };
+        };
+        const { fill: shape, boxRect } = assertRows({
+          nodes,
+          what,
+          value: "Row",
+          divider: "Dot",
+          count: lines.length,
+          lines: Infinity,
+          slot,
+        });
+        assert.equal(shape.w_, layout.width - 200, `${what}: the frame less 200`);
+        assert.equal(boxRect.right - boxRect.left, layout.width - 200);
+        // rows with a button are 156 high at least and keep SPACE.m between text and button; rows without are 64 at least
+        lines.forEach((line, i) => {
+          const row = child(nodes, `Row_${i}`).widgets[0],
+            button = slot(i),
+            r = rectOf(child(nodes, `Row_${i}`));
+          if (typeof line !== "string")
+            assert.ok(
+              button && r.right + Tokens.SPACE.m <= button.left + 1e-9,
+              `${what} row ${i}: 20 between text and button`,
+            );
+          else assert.equal(button, null);
+          assert.ok(row.fontSize >= B.value.fsMin && row.fontSize <= B.value.fs, `${what} row ${i}: ${row.fontSize}`);
+        });
+        // every string fits in three lines at 26 or more in these languages, or the report says which one does not
+        for (const [i] of lines.entries()) {
+          const lineCount = child(nodes, `Row_${i}`).widgets[0].text.split("\n").length;
+          assert.ok(
+            lineCount <= 3,
+            `${what} row ${i}: ${lineCount} lines for ${JSON.stringify(typeof lines[i] === "string" ? lines[i] : lines[i].text)}`,
+          );
+        }
+      }
     });
-    // every string fits in three lines at 26 or more in these languages, or the report says which one does not
-    for (const [i] of lines.entries()) {
-      const lineCount = child(nodes, `Row_${i}`).widgets[0].text.split("\n").length;
-      assert.ok(lineCount <= 3, `${what} row ${i}: ${lineCount} lines for ${JSON.stringify(typeof lines[i] === "string" ? lines[i] : lines[i].text)}`);
-    }
-  }
-});
 
 // the update dialog: two version rows, the frame as high as its content needs
-for (const locale of LOCALES) test(`the update dialog's version rows and frame hold in ${locale}`, () => {
-  const { text } = use(locale);
-  for (const info of [{ current: "0.6.0-alpha.12-dev", version: "0.10.0-beta.12" }, { current: "0.6.0", version: "1.12.3-rc.12+20261103" }]) {
-    const rows = Update.versionRows(info);
-    assert.deepEqual(rows.map((row) => row.caption), [text("update.current"), text("update.latest")]);
-    assert.deepEqual(rows.map((row) => row.colour), [undefined, `${Tokens.COLOUR.success}/1.00`], "the latest keeps the success colour, the current its black");
-    const box = Box.statsBox({ holder: "frame", width: 1700, at: [0, 0], rows });
-    const what = `${locale} update ${info.version}`;
-    assert.equal(box.height, Update.FRAME_BOX_HEIGHT ?? 2 * B.rowMin + 2 * B.padY, what);
-    const { fill } = assertRows({ nodes: box.nodes, what, count: 2, lines: 1 });
-    assert.equal(fill.w_, 1500, `${what}: the frame (1700) less 200`);
-    const frame = Update.frameFor(box.height);
-    assert.equal(frame.h, Update.FRAME.h, `${what}: the frame is the same height`);
-    // The progress bar keeps SPACE.m above the three button bodies in the classified frame.
-    const drawn = frameGeometry(frame.w, frame.h);
-    assert.ok(frame.contentBottom - Popup.footerTop(drawn.h, 3) >= Tokens.SPACE.m - 1e-9,
-      `${what}: ${frame.contentBottom - Popup.footerTop(drawn.h, 3)} clear of the buttons after width/height classification`);
-    assert.ok(frame.h <= POPUP.maxH && frame.h > 0);
-    // from the top: the box where a message's lines start, Status under it, the progress bar under that
-    assert.equal(POPUP.frameY + frame.h / 2 - frame.boxTop, Tokens.POPUP_FRAME.contentTop);
-    assert.ok(frame.boxTop - box.height > frame.status + 48 && frame.status - 48 > frame.progress + 10, `${what}: the order under the box`);
-  }
-});
+for (const locale of LOCALES)
+  test(`the update dialog's version rows and frame hold in ${locale}`, () => {
+    const { text } = use(locale);
+    for (const info of [
+      { current: "0.6.0-alpha.12-dev", version: "0.10.0-beta.12" },
+      { current: "0.6.0", version: "1.12.3-rc.12+20261103" },
+    ]) {
+      const rows = Update.versionRows(info);
+      assert.deepEqual(
+        rows.map((row) => row.caption),
+        [text("update.current"), text("update.latest")],
+      );
+      assert.deepEqual(
+        rows.map((row) => row.colour),
+        [undefined, `${Tokens.COLOUR.success}/1.00`],
+        "the latest keeps the success colour, the current its black",
+      );
+      const box = Box.statsBox({ holder: "frame", width: 1700, at: [0, 0], rows });
+      const what = `${locale} update ${info.version}`;
+      assert.equal(box.height, Update.FRAME_BOX_HEIGHT ?? 2 * B.rowMin + 2 * B.padY, what);
+      const { fill } = assertRows({ nodes: box.nodes, what, count: 2, lines: 1 });
+      assert.equal(fill.w_, 1500, `${what}: the frame (1700) less 200`);
+      const frame = Update.frameFor(box.height);
+      assert.equal(frame.h, Update.FRAME.h, `${what}: the frame is the same height`);
+      // The progress bar keeps SPACE.m above the three button bodies in the classified frame.
+      const drawn = frameGeometry(frame.w, frame.h);
+      assert.ok(
+        frame.contentBottom - Popup.footerTop(drawn.h, 3) >= Tokens.SPACE.m - 1e-9,
+        `${what}: ${frame.contentBottom - Popup.footerTop(drawn.h, 3)} clear of the buttons after width/height classification`,
+      );
+      assert.ok(frame.h <= POPUP.maxH && frame.h > 0);
+      // from the top: the box where a message's lines start, Status under it, the progress bar under that
+      assert.equal(POPUP.frameY + frame.h / 2 - frame.boxTop, Tokens.POPUP_FRAME.contentTop);
+      assert.ok(
+        frame.boxTop - box.height > frame.status + 48 && frame.status - 48 > frame.progress + 10,
+        `${what}: the order under the box`,
+      );
+    }
+  });
 
 // the portrait panel re-lays the details panel's box by its node names: it keeps the line's outset on the token
 test("the Switch Portrait panel keeps the line 5 larger than its box", () => {
   use("en-US");
   const texture = NGUI.node("Texture", [0, 0], [{ texture: "portrait", w_: 10, h_: 10, pivot: 4 }]);
-  const fields = [["File", "ibuki_dress_spr.bundle"], ["Size", "12 MB"], ["Status", "Applied"], ["CRC", "Fixed"]];
-  const tree = Popup.detailsTree({ key: "a", full: "Hoshino", big: null, chips: ["Added"] }, "Title", fields, [], texture, "spr");
-  const box = child(tree.children, "Fields"), fill = box.widgets[0], line = child(box.children, "Line").widgets[0];
+  const fields = [
+    ["File", "ibuki_dress_spr.bundle"],
+    ["Size", "12 MB"],
+    ["Status", "Applied"],
+    ["CRC", "Fixed"],
+  ];
+  const tree = Popup.detailsTree(
+    { key: "a", full: "Hoshino", big: null, chips: ["Added"] },
+    "Title",
+    fields,
+    [],
+    texture,
+    "spr",
+  );
+  const box = child(tree.children, "Fields"),
+    fill = box.widgets[0],
+    line = child(box.children, "Line").widgets[0];
   assert.deepEqual([line.w_ - fill.w_, line.h_ - fill.h_], [B.lineOutset, B.lineOutset]);
-  const bounds = Popup.listLayout().left, panel = bounds.r - bounds.l;
-  const infoColumn = (panel + Tokens.SPACE.xl) / 12 * 7 - Tokens.SPACE.xl;
+  const bounds = Popup.listLayout().left,
+    panel = bounds.r - bounds.l;
+  const infoColumn = ((panel + Tokens.SPACE.xl) / 12) * 7 - Tokens.SPACE.xl;
   assert.equal(fill.w_, infoColumn - B.inset.panel, "the seven-column portrait info box keeps its native padding");
 });
 
@@ -365,11 +594,17 @@ test("a message with a line button sets its rows 38 down to 26 and shares one si
   assert.equal(size(boxed, "Row_0"), 38);
   assert.ok(size(boxed, "Row_1") < 38 && size(boxed, "Row_1") >= 26);
   assert.equal(size(boxed, "Row_2"), 38);
-  const grouped = Popup.messageLayout({ lines: [shortRow, long, "Third row"], width: 1700, ok: "OK", fitTogether: [0, 1, 2] }).body.tree.children;
+  const grouped = Popup.messageLayout({
+    lines: [shortRow, long, "Third row"],
+    width: 1700,
+    ok: "OK",
+    fitTogether: [0, 1, 2],
+  }).body.tree.children;
   assert.equal(new Set([0, 1, 2].map((i) => size(grouped, `Row_${i}`))).size, 1, "one size across the group");
   assert.ok(size(grouped, "Row_0") >= 26 && size(grouped, "Row_0") <= 38);
   // rows without a button: the box's 64; with one: the XS body and the shared gap, 124
-  const rows = Popup.messageLayout({ lines: [shortRow, "Plain row", "Plain row two"], width: 1700, ok: "OK" }).body.tree.children;
+  const rows = Popup.messageLayout({ lines: [shortRow, "Plain row", "Plain row two"], width: 1700, ok: "OK" }).body.tree
+    .children;
   assert.equal(rows.find((n) => n.name === "Dot_0").pos[1] - rows.find((n) => n.name === "Dot_1").pos[1], 64);
   assert.equal(-12 - rows.find((n) => n.name === "Dot_0").pos[1], Popup.MSG.rowButton);
   assert.equal(Popup.MSG.rowButton, 124);
@@ -377,5 +612,8 @@ test("a message with a line button sets its rows 38 down to 26 and shares one si
   const plain = Popup.messageLayout({ lines: ["Short row", long], width: 1700, ok: "OK" }).body.tree.children;
   assert.equal(size(plain, "Line_0"), 48);
   assert.ok(size(plain, "Line_1") <= 48 && size(plain, "Line_1") >= 40 - 8);
-  assert.equal(plain.some((n) => n.name === "Box"), false);
+  assert.equal(
+    plain.some((n) => n.name === "Box"),
+    false,
+  );
 });

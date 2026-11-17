@@ -45,8 +45,9 @@ def alias_text(value: Any) -> str:
     trimmed; '' for anything but text."""
     if not isinstance(value, str):
         return ""
-    text = "".join(ch for ch in unicodedata.normalize("NFC", value)
-                   if ch.isspace() or not unicodedata.category(ch).startswith("C"))
+    text = "".join(
+        ch for ch in unicodedata.normalize("NFC", value) if ch.isspace() or not unicodedata.category(ch).startswith("C")
+    )
     return " ".join(text.split())
 
 
@@ -66,6 +67,7 @@ def custom_aliases(value: Any) -> list[str]:
             seen.add(alias_key(text))
             out.append(text)
     return out[:ALIAS_MAX]
+
 
 # The student list's view (web/js/roster-order.js keeps the same rules): merge toggle, the two segment filters, the
 # display settings' sort, order and filter groups.
@@ -135,6 +137,7 @@ class UiState:
         # A stored Spine "No" stays as it is: the start shows the licence notice again until it is acknowledged.
         # Manual scan consent did not authorize automatic checks. Migrate it to Off without opting the user in.
         if isinstance(prefs, dict) and any(key in prefs for key in ("startup_checks", "mod_switch_shown")):
+
             def migrate(data: dict[str, Any]) -> None:
                 prefs = data.get("prefs", {})
                 if prefs.pop("startup_checks", None) is False and prefs.get("scan_consent") is True:
@@ -190,8 +193,9 @@ class UiState:
             return None, state
         except (OSError, ValueError) as error:
             if state == "bad":
-                log_failure(logger, logging.ERROR, "Cannot read previous UI state either, starting from defaults",
-                            error)
+                log_failure(
+                    logger, logging.ERROR, "Cannot read previous UI state either, starting from defaults", error
+                )
             return None, state
         if state == "missing":
             logger.warning("UI state missing, reading previous copy")
@@ -273,9 +277,14 @@ class UiState:
             scan = prefs.get("scan_consent")
             if scan is True and prefs.get("scan_consent_scope") != SCAN_CONSENT_SCOPE:
                 scan = None  # as scan_consent: an Allow from before the popup covered Steam's records is asked again
-            return {"consent": {"uiAssets": self._data.get("consent"), "spine": prefs.get("spine_consent"),
-                                "scan": scan if isinstance(scan, bool) else None},
-                    "libraryDir": prefs.get("library_dir")}
+            return {
+                "consent": {
+                    "uiAssets": self._data.get("consent"),
+                    "spine": prefs.get("spine_consent"),
+                    "scan": scan if isinstance(scan, bool) else None,
+                },
+                "libraryDir": prefs.get("library_dir"),
+            }
         finally:
             self._lock.release()
 
@@ -300,28 +309,47 @@ class UiState:
         data = self._current().get("asset_previews", {})
         folder = data.get(install, {}) if isinstance(data, dict) else {}
         sources = folder.get(variant, {}) if isinstance(folder, dict) else {}
-        return {kind: source for kind, source in sources.items()
-                if kind in ("spr", "lobby", "model") and isinstance(source, str)} if isinstance(sources, dict) else {}
+        return (
+            {
+                kind: source
+                for kind, source in sources.items()
+                if kind in ("spr", "lobby", "model") and isinstance(source, str)
+            }
+            if isinstance(sources, dict)
+            else {}
+        )
 
     def preview_snapshot(self, install: str) -> dict[str, dict[str, str]]:
         """Read all saved view choices of one install once, detached from mutable state."""
         data = self._current().get("asset_previews", {})
         folder = data.get(install, {}) if isinstance(data, dict) else {}
-        return {variant: {kind: source for kind, source in sources.items()
-                          if kind in ("spr", "lobby", "model") and isinstance(source, str)}
-                for variant, sources in folder.items() if isinstance(variant, str) and isinstance(sources, dict)
-                } if isinstance(folder, dict) else {}
+        return (
+            {
+                variant: {
+                    kind: source
+                    for kind, source in sources.items()
+                    if kind in ("spr", "lobby", "model") and isinstance(source, str)
+                }
+                for variant, sources in folder.items()
+                if isinstance(variant, str) and isinstance(sources, dict)
+            }
+            if isinstance(folder, dict)
+            else {}
+        )
 
     def set_preview_source(self, install: str, variant: str, kind: str, source: str) -> None:
         """Remember a view choice independently of the library's game configuration."""
+
         def change(data: dict[str, Any]) -> None:
             data.setdefault("asset_previews", {}).setdefault(install, {}).setdefault(variant, {})[kind] = source
+
         self._update(change)
 
     def reconcile_deleted_source(self, source: str, fallback) -> None:
         """Clear a removed preview everywhere; retain Hall placement when another source exists."""
+
         def change(data):
-            for folder in data.get('asset_previews', {}).values():
+            for folder in data.get("asset_previews", {}).values():
                 for variant, choices in folder.items():
                     for kind, selected in list(choices.items()):
                         if selected == source:
@@ -330,33 +358,37 @@ class UiState:
                                 choices[kind] = replacement
                             else:
                                 del choices[kind]
-            hall = data.get('prefs', {}).get('student_hall')
+            hall = data.get("prefs", {}).get("student_hall")
             if hall:
                 changed = False
                 replacements = {}
-                for group, kind in [('portraits', 'spr'), ('memorials', 'lobby')]:
+                for group, kind in [("portraits", "spr"), ("memorials", "lobby")]:
                     kept = []
-                    existing = {(entry['variant'], entry['source']): entry['id'] for entry in hall.get(group, [])
-                                if entry.get('source') != source}
+                    existing = {
+                        (entry["variant"], entry["source"]): entry["id"]
+                        for entry in hall.get(group, [])
+                        if entry.get("source") != source
+                    }
                     for entry in hall.get(group, []):
-                        if entry.get('source') == source:
+                        if entry.get("source") == source:
                             changed = True
-                            replacement = fallback(entry['variant'], kind)
+                            replacement = fallback(entry["variant"], kind)
                             if not replacement:
                                 continue
-                            identity = (entry['variant'], replacement)
+                            identity = (entry["variant"], replacement)
                             if identity in existing:
-                                replacements[entry['id']] = existing[identity]
+                                replacements[entry["id"]] = existing[identity]
                                 continue
-                            entry['source'] = replacement
-                            existing[identity] = entry['id']
+                            entry["source"] = replacement
+                            existing[identity] = entry["id"]
                         kept.append(entry)
                     hall[group] = kept
                 if changed:
-                    hall['active'] = replacements.get(hall.get('active'), hall.get('active'))
-                    if not any(entry['id'] == hall.get('active') for entry in hall.get('memorials', [])):
-                        hall['active'] = next((entry['id'] for entry in hall.get('memorials', [])), None)
-                    hall['revision'] = hall.get('revision', 0) + 1
+                    hall["active"] = replacements.get(hall.get("active"), hall.get("active"))
+                    if not any(entry["id"] == hall.get("active") for entry in hall.get("memorials", [])):
+                        hall["active"] = next((entry["id"] for entry in hall.get("memorials", [])), None)
+                    hall["revision"] = hall.get("revision", 0) + 1
+
         self._update(change)
 
     def visit(self, variant_key: str) -> None:
@@ -388,6 +420,7 @@ class UiState:
 
     def mark_mods_seen(self, ids: list[str]) -> None:
         """Remember opened mods without changing the shared mod library."""
+
         def change(data: dict[str, Any]) -> None:
             value = data.get("seen_mods")
             seen = {v for v in value if isinstance(v, str) and v} if isinstance(value, list) else set()
@@ -403,6 +436,7 @@ class UiState:
         move those entries once under the shared lock, preserving any explicitly saved variant aliases."""
         table = self._current().get("aliases")
         if isinstance(table, dict) and legacy_targets and any(key in table for key in legacy_targets):
+
             def migrate(data: dict[str, Any]) -> None:
                 aliases = data.get("aliases")
                 if not isinstance(aliases, dict):
@@ -443,6 +477,7 @@ class UiState:
 
     def update_tours(self, change: Callable[[dict[str, Any]], None]) -> None:
         """Merge presentation history under the existing profile lock, apart from library and preview state."""
+
         def update(data: dict[str, Any]) -> None:
             if not isinstance(data.get("tours"), dict):
                 data["tours"] = {}
@@ -479,6 +514,7 @@ class UiState:
 
     def set_scan_consent(self, granted: bool) -> None:
         """Save an answer to the scan consent popup, for what the popup covers now."""
+
         def change(data: dict[str, Any]) -> None:
             prefs = data.get("prefs")
             if not isinstance(prefs, dict):
@@ -535,8 +571,7 @@ class UiState:
 # lists), for finding the game folder, the Steam watch and the official files
 SCAN_CONSENT_SCOPE = 2
 
-FLAGS = {"tray": False, "classic_prompt": True, "mods_explained": False,
-         "startup_update": True}
+FLAGS = {"tray": False, "classic_prompt": True, "mods_explained": False, "startup_update": True}
 DATA_ID_LENGTH = 12  # hex digits
 
 
