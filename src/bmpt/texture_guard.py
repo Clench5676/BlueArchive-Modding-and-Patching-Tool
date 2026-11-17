@@ -16,7 +16,7 @@ from UnityPy.enums import BuildTarget, TextureFormat
 from UnityPy.export import Texture2DConverter
 from UnityPy.helpers import TextureSwizzler
 
-from .errors import ServiceError
+from .core.errors import ServiceError
 
 # Largest width or height accepted for a texture.
 MAX_TEXTURE_SIDE = 16384

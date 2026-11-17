@@ -154,7 +154,7 @@ def test_every_required_key_must_be_applied_across_targets(tmp_path, monkeypatch
 
 
 def test_extraction_rejects_a_truncated_mesh_stream(tmp_path):
-    from bmpt.errors import ServiceError
+    from bmpt.core.errors import ServiceError
 
     obj = asset("required_mesh", AssetType.Mesh)
     obj.read = lambda: SimpleNamespace(

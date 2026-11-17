@@ -14,9 +14,10 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
-from .. import atlas_remap, devmode, mod_origin
-from ..errors import ServiceError
-from ..openfiles import temporary_directory
+from .. import atlas_remap, mod_origin
+from ..core import devmode
+from ..core.errors import ServiceError
+from ..core.openfiles import temporary_directory
 from ..library import ba_mod, integrity, mod_progress
 from ..library.judge import core_of, kind_of_file
 from ..library.storage import sync_directory

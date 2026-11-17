@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from ba_modding_toolkit.i18n import i18n_manager
 from bmpt.webui import tray as tray_module
 from bmpt.webui.events import EventBus

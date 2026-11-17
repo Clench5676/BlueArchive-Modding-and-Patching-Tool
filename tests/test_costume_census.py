@@ -60,7 +60,7 @@ def _jobs() -> list[tuple[str, str, str | None]]:
 
 
 def _outcome(fn) -> dict:
-    from bmpt.errors import ServiceError
+    from bmpt.core.errors import ServiceError
 
     started = time.perf_counter()
     try:

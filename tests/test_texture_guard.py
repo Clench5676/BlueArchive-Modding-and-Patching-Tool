@@ -17,7 +17,7 @@ from UnityPy.helpers import ResourceReader, TextureSwizzler
 from bmpt import atlas_remap as remap, refine_assembly, texture_guard as guard
 from ba_modding_toolkit.bundle import Bundle
 from ba_modding_toolkit.core import extraction
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.gameassets import AssetCache, GameAssets, model, service
 from bmpt.gameassets.spine import extract_spine
 from bmpt.library import portrait_edit

@@ -22,7 +22,7 @@ from ba_modding_toolkit.core import mod_install
 from ba_modding_toolkit.bundle import Bundle
 from bmpt.catalog.models import CoreMap
 from bmpt.config import Settings
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from ba_modding_toolkit.i18n import I18n
 from bmpt.library import ModLibrary
 from bmpt.library import safety, service, storage
@@ -2134,7 +2134,7 @@ def test_a_mod_whose_changed_part_is_official_again_can_be_removed(setup_library
 
 @pytest.mark.parametrize("language", ["en-US", "zh-CN"])
 def test_the_in_use_refusals_have_their_messages(language):
-    from bmpt.localization import LOCALES
+    from bmpt.core.localization import LOCALES
 
     errors = json.loads((LOCALES / f"{language}.json").read_text(encoding="utf-8"))["webui"]["error"]
     assert errors["mod_in_use"] and "{folder}" in errors["mod_in_use_elsewhere"]

@@ -9,7 +9,7 @@ import threading
 from pathlib import Path
 from typing import Iterable, Protocol
 
-from ..errors import ServiceError
+from ..core.errors import ServiceError
 from bmpt.engine import parse_filename
 from ._data import base_rank, csv_entry, read_character_map
 from ._names import (

@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from bmpt.catalog import Catalog
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.library import ModLibrary, supports_kind
 from bmpt.library.identity import content_cores, identify
 from bmpt.library.integrity import Contents
@@ -1050,7 +1050,7 @@ def test_official_roster_partial_and_complete_mod_preflight(tmp_path, monkeypatc
     from bmpt.gameassets import AssetCache, GameAssets
     from bmpt.library import integrity
     from bmpt.library.storage import atomic_clone
-    from bmpt.openfiles import temporary_directory
+    from bmpt.core.openfiles import temporary_directory
     from ba_modding_toolkit.searching import get_search_dirs
 
     started = time.perf_counter()

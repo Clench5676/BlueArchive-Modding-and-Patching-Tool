@@ -3,7 +3,7 @@
 import pytest
 
 from bmpt import kivo
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 
 PAGE = {
     "voice": [

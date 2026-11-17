@@ -4,7 +4,7 @@ from pathlib import Path
 
 from bmpt.engine import register_locale_dir
 
-LOCALES = Path(__file__).resolve().parent / "locales"
+LOCALES = Path(__file__).resolve().parents[1] / "locales"
 
 
 def register_locales() -> None:

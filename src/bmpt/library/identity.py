@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 
 from bmpt.engine import Bundle, parse_filename
-from ..errors import ServiceError
+from ..core.errors import ServiceError
 from .judge import MODEL_CATEGORIES, kind_of, kind_of_file, other_target
 
 # Match complete Spine core names, including asset names followed by a page or role.

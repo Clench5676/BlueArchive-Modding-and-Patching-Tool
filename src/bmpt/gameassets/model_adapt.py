@@ -66,8 +66,8 @@ from typing import TYPE_CHECKING, Any, Callable, Iterable, Mapping, Sequence
 
 import numpy as np
 
-from ..errors import ServiceError
-from ..progress_meter import QUIET, Meter
+from ..core.errors import ServiceError
+from ..core.progress_meter import QUIET, Meter
 from . import model_geometry as mg
 from . import model_hems as hm
 from . import model_skirts as ms

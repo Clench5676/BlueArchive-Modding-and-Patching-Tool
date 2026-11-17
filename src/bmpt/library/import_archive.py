@@ -18,11 +18,11 @@ import zipfile
 import zlib
 from pathlib import Path, PurePosixPath
 
-from .. import devmode
+from ..core import devmode
 from ..engine import is_safe_relative_name
-from ..errors import ServiceError
-from ..filelock import file_lock
-from ..openfiles import remove_tree
+from ..core.errors import ServiceError
+from ..core.filelock import file_lock
+from ..core.openfiles import remove_tree
 from .ba_mod import FILE_NAME as MANIFEST
 
 logger = logging.getLogger(__name__)

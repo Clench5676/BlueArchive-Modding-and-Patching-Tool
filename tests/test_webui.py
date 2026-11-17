@@ -14,7 +14,7 @@ from types import SimpleNamespace
 import pytest
 
 from bmpt.config import Settings
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from ba_modding_toolkit.i18n import I18n, offered_languages
 from bmpt.webui.api import build_api, ui_strings
 from bmpt.webui.events import EventBus

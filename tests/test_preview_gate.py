@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from bmpt import preview_gate
+from bmpt.core import preview_gate
 from bmpt.library.service import _View
 from bmpt.webui.services import Services
 

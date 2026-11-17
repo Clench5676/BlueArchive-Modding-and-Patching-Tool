@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from ba_modding_toolkit import i18n
-from bmpt.localization import LOCALES
+from bmpt.core.localization import LOCALES
 
 CLASSIC_LOCALES = Path(i18n.__file__).parent / "locales"
 REFERENCE = "en-US"

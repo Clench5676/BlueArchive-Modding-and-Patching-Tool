@@ -19,7 +19,7 @@ from ba_modding_toolkit import core
 from ba_modding_toolkit.core import mod_install
 from ba_modding_toolkit.bundle import Bundle
 from bmpt.config import Settings
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from ba_modding_toolkit.i18n import I18n
 from bmpt.library import ModLibrary, safety, service, storage
 from bmpt.library import profiles as profiles_module
@@ -120,7 +120,7 @@ def test_a_failed_write_keeps_the_file_as_it_was(tmp_path, monkeypatch):
     profiles = Profiles(tmp_path)
     profiles.update(lambda data: data.update(enabled=False))
     before = (tmp_path / "profiles.json").read_bytes()
-    from bmpt import filelock
+    from bmpt.core import filelock
 
     real = filelock.os.replace
 
@@ -2899,7 +2899,7 @@ def test_entries_of_cores_the_current_catalog_does_not_map_carry_shipped_names(w
 def test_the_lock_order_is_kept_across_threads(world, monkeypatch):
     """The library lock, transactions.lock, mods.lock, state.json.lock and profiles.json.lock stay in order;
     no thread holds profiles.json.lock while it asks the scan consent."""
-    from bmpt import filelock
+    from bmpt.core import filelock
     from bmpt.library import profiles as profiles_module
 
     order = {"transactions.lock": 1.25, "mods.lock": 1.5, "state.json.lock": 2, "profiles.json.lock": 3}

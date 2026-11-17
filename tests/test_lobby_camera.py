@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.gameassets import lobby
 from bmpt.library import lobby_camera
 from test_lobby import ASPECT, BODY, CHARACTER, CHAT, SCRIPTS, SKELETONS, Prefab, SA, aspect_component, core_clips, vec

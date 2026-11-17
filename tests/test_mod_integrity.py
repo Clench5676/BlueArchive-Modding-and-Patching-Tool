@@ -11,7 +11,7 @@ from types import SimpleNamespace
 import pytest
 
 from ba_modding_toolkit.bundle import Bundle
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.library import integrity, service
 from bmpt.gameassets.cabs import CabIndex
 from bmpt.library.identity import identify

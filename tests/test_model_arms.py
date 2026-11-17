@@ -326,7 +326,7 @@ def _census_init(files, index):
 
 
 def _census_pair(pair):
-    from bmpt.errors import ServiceError
+    from bmpt.core.errors import ServiceError
 
     host, costume = pair
     row = {"pair": pair}

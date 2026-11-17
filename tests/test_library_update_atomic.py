@@ -7,7 +7,7 @@ import json
 
 import pytest
 
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.library import service
 from ba_modding_toolkit.models import FilePair
 from bmpt.library.rebuild import RebuildResult

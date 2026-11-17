@@ -23,8 +23,9 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote
 
-from .. import devmode, spans, steam_records, updater
-from ..error_codes import code_of
+from .. import steam_records, updater
+from ..core import devmode, spans
+from ..core.error_codes import code_of
 from bmpt.engine import UI_LANGUAGES, i18n_manager
 from . import native, system
 from .session_log import redact

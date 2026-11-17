@@ -1,4 +1,4 @@
-"""The environment hooks for isolated development runs (bmpt.devmode): inert without their variables,
+"""The environment hooks for isolated development runs (bmpt.core.devmode): inert without their variables,
 and what each does when set."""
 
 import fnmatch
@@ -14,7 +14,8 @@ import pytest
 
 import ba_modding_toolkit
 from ba_modding_toolkit.utils import paths as utils_paths
-from bmpt import config, devmode
+from bmpt import config
+from bmpt.core import devmode
 from ba_modding_toolkit import utils
 
 DEV_VARIABLES = (
@@ -180,7 +181,7 @@ def dev(tmp_path, monkeypatch):
 
 
 def expect_outside(action, path=None):
-    from bmpt.errors import ServiceError
+    from bmpt.core.errors import ServiceError
 
     with pytest.raises(ServiceError) as caught:
         action()
@@ -263,7 +264,7 @@ def test_output_folder_outside_the_roots_is_refused(dev):
 
 
 def test_library_takes_mods_from_inside_the_roots_only(dev):
-    from bmpt.errors import ServiceError
+    from bmpt.core.errors import ServiceError
     from bmpt.library import ModLibrary
 
     library = ModLibrary(dev.root / "library", SimpleNamespace(), object(), config.Settings(dev.root / "config.toml"))
@@ -665,7 +666,7 @@ def installable_build(tmp_path, monkeypatch):
 
 def test_a_build_never_replaces_itself_in_dev_mode(installable_build, monkeypatch, tmp_path):
     from bmpt import updater
-    from bmpt.errors import ServiceError
+    from bmpt.core.errors import ServiceError
 
     assert updater.install_target() == installable_build
     monkeypatch.setenv("BAMT_DEV_ROOTS", str(tmp_path))
@@ -681,7 +682,7 @@ def test_a_build_never_replaces_itself_in_dev_mode(installable_build, monkeypatc
 
 
 def test_builds_carry_the_hooks_version():
-    marker = Path(devmode.__file__).parent / "assets" / "dev-hooks.json"
+    marker = Path(devmode.__file__).parents[1] / "assets" / "dev-hooks.json"
     assert json.loads(marker.read_text(encoding="utf-8")) == {"hooks": devmode.HOOKS}
 
 

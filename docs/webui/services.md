@@ -5,7 +5,7 @@
 - **Threads.** Services are thread-safe: HTTP handlers run on many threads at once. UnityPy work on one bundle is
   serialised with a per-bundle lock. Long operations run on the single job worker (see [Jobs](api.md#jobs-and-events)).
 - **No prose in results.** Services return data, not sentences. Errors are `ServiceError(code, **params)`
-  (`bmpt/errors.py`); the front end shows the locale string `webui.error.<code>`. An error passes every parameter
+  (`bmpt/core/errors.py`); the front end shows the locale string `webui.error.<code>`. An error passes every parameter
   its text names, above all `file` (`tests/test_error_params.py` scans for omissions). Diagnostics go to
   `logging.getLogger(__name__)`, never `print`.
 - **JSON-ready results.** Dataclasses with `to_json()` returning plain dicts; paths as absolute strings, dates as

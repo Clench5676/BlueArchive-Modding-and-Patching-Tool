@@ -6,7 +6,7 @@ import shutil
 
 import pytest
 
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.webui import strings, tours
 from bmpt.webui.state import UiState
 

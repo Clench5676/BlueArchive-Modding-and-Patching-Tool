@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 from urllib.parse import quote, quote_plus
 
-from ..errors import ServiceError
+from ..core.errors import ServiceError
 
 LOG_LINES = 500
 LOG_BYTES = 2 * 1024 * 1024

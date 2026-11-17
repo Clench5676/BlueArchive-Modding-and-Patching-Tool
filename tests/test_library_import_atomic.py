@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.library import fingerprint, service, storage
 
 from test_library import game_bundle, make_mod, reload_library, setup_library

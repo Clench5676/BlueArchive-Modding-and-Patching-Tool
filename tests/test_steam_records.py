@@ -12,7 +12,7 @@ import pytest
 
 from bmpt import steam_records
 from bmpt.config import Settings
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.library import ModLibrary
 from ba_modding_toolkit.utils import CRCUtils
 

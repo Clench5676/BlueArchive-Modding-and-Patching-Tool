@@ -12,7 +12,7 @@ import hashlib
 import threading
 from pathlib import Path
 
-from ..errors import ServiceError
+from ..core.errors import ServiceError
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 

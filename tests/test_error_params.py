@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 from ba_modding_toolkit.bundle import Bundle
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.library import integrity, manual_identity
 from bmpt.webui import batch_import, export_service
 

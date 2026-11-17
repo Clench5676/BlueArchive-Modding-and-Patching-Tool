@@ -7,7 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from bmpt.config import Settings
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.webui.api import build_api
 from bmpt.webui.server import WebApp
 from bmpt.webui.services import Services
@@ -442,7 +442,7 @@ def test_another_students_model_is_a_preview_source_and_past_the_stretch_limit_s
 
 def test_every_preview_asset_counts_as_foreground(tmp_path):
     """Scans and background work step aside for portraits, lobbies and backgrounds too, not only 3D models."""
-    from bmpt import preview_gate
+    from bmpt.core import preview_gate
 
     seen = []
 

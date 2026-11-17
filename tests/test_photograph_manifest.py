@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.library.photographs import Photographs
 from test_photographs import capture
 from test_webui import app, rpc, services  # noqa: F401  (fixtures)

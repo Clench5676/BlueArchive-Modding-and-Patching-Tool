@@ -8,7 +8,7 @@ from dataclasses import replace
 
 import pytest
 
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from ba_modding_toolkit.bundle import Bundle
 from bmpt.library import integrity
 from bmpt.library import targets as resolver

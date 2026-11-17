@@ -14,7 +14,8 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-from bmpt import atlas_remap, devmode, mod_origin
+from bmpt import atlas_remap, mod_origin
+from bmpt.core import devmode
 from bmpt.engine import (
     AssetType,
     Bundle,
@@ -27,7 +28,7 @@ from bmpt.engine import (
     t,
 )
 from ..config import install_needs_crc
-from ..errors import ServiceError
+from ..core.errors import ServiceError
 from ..gameassets.spine import PREVIEW_TYPES, Composition, spine_revision
 from ..gameassets.discovery import cab_names
 from ..library import ba_mod, import_archive, integrity, staging, manual_identity

@@ -388,7 +388,7 @@ def install_window_commands(services, chrome):
     """
     import AppKit
     from PyObjCTools import AppHelper
-    from ..errors import ServiceError
+    from ..core.errors import ServiceError
 
     window = services.window.native
 

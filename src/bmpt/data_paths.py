@@ -21,8 +21,8 @@ from typing import Any
 
 import toml
 
-from . import devmode
-from .filelock import file_lock
+from .core import devmode
+from .core.filelock import file_lock
 
 APP_DIR_NAME = "bluearchive-modding-patching-tool"
 OLD_APP_DIR_NAME = "BA-Modding-Toolkit"

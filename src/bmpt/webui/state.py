@@ -32,9 +32,9 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-# the lock and the replace shared with the mod library (bmpt.filelock)
-from ..filelock import file_lock as _file_lock, replace as _replace
-from ..logging_utils import log_failure
+# the lock and the replace shared with the mod library (bmpt.core.filelock)
+from ..core.filelock import file_lock as _file_lock, replace as _replace
+from ..core.logging_utils import log_failure
 
 logger = logging.getLogger(__name__)
 

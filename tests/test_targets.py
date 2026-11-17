@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.library import targets as resolver
 from bmpt.library.targets import Readers, resolve
 

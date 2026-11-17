@@ -23,7 +23,7 @@ from typing import Any, Callable
 
 import toml
 
-from bmpt import devmode
+from bmpt.core import devmode
 from bmpt.engine import (
     EXE_DIR,
     AnimCheckOptions,
@@ -36,7 +36,7 @@ from bmpt.engine import (
     utils,
 )
 from .data_paths import APP_DIR_NAME, OLD_APP_DIR_NAME, default_cache_dir, migrate_cache_dir
-from .logging_utils import log_failure
+from .core.logging_utils import log_failure
 
 CONFIG_FILE = EXE_DIR / "config.toml"
 

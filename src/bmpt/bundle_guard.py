@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .errors import ServiceError
+from .core.errors import ServiceError
 from .unityfs import Layout, read_layout
 
 # Ceilings in bytes, each at least four times the largest value among the official game files (the test suite measures

@@ -16,7 +16,7 @@ import test_webui_mods
 from ba_modding_toolkit import i18n
 from bmpt import data_paths
 from ba_modding_toolkit.bundle import Bundle
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.library import ModLibrary, safety, service
 from bmpt.library.service import LEGACY_REMAP
 from bmpt.webui.services import LIBRARY_ITEMS

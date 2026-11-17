@@ -29,10 +29,10 @@ from typing import TYPE_CHECKING, Any
 
 from bmpt.engine import Bundle, SaveOptions
 
-from .. import devmode
-from ..errors import ServiceError
-from ..logging_utils import log_failure
-from ..openfiles import temporary_directory
+from ..core import devmode
+from ..core.errors import ServiceError
+from ..core.logging_utils import log_failure
+from ..core.openfiles import temporary_directory
 from . import profiles
 from .judge import core_of, other_target, packed_cab
 

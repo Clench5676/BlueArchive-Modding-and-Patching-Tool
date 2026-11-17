@@ -14,7 +14,7 @@ from ba_modding_toolkit import bundle as bundle_module
 from bmpt import bundle_guard, unityfs
 from ba_modding_toolkit.bundle import Bundle
 from bmpt.bundle_guard import check_bundle
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 
 from test_atlas_remap import write_bundle
 

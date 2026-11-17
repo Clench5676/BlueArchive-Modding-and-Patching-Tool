@@ -3,7 +3,7 @@ import shutil
 import sys
 from pathlib import Path
 from typing import Literal
-from bmpt import devmode
+from bmpt.core import devmode
 from bmpt.data_paths import migrate_data_dir
 from bmpt.game_paths import find_game_dirs
 

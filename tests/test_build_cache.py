@@ -4,7 +4,7 @@ import hashlib
 
 import pytest
 
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.library.storage import Fingerprints
 from ba_modding_toolkit.utils import CRCUtils
 

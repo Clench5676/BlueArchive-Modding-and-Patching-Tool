@@ -121,9 +121,9 @@ def test_engine_leaf_imports_keep_app_initialization_light():
     python_check("""
 import sys
 import ba_modding_toolkit.utils
-assert 'bmpt.devmode' in sys.modules
+assert 'bmpt.core.devmode' in sys.modules
 assert 'bmpt.webui' not in sys.modules
-assert 'bmpt.localization' not in sys.modules
+assert 'bmpt.core.localization' not in sys.modules
 from ba_modding_toolkit import i18n
 assert i18n._locale_dirs == []
 assert i18n.I18n('en-US').t('webui.error.required_asset_stream_missing') == 'webui.error.required_asset_stream_missing'

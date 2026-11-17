@@ -8,7 +8,7 @@ from types import SimpleNamespace as NS
 
 import pytest
 
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.webui.events import EventBus
 from bmpt.webui.jobs import JobRunner
 from bmpt.webui.window_chrome import Rect, WindowChrome, union, vertical_offsets

@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from bmpt.config import Settings
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.gameassets import lobby
 from bmpt.gameassets.unity import open_bundle
 from bmpt.webui.services import Services

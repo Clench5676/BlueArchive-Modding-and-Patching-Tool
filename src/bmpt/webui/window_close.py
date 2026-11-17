@@ -7,7 +7,7 @@ import threading
 import uuid
 from concurrent.futures import Future
 
-from ..errors import ServiceError
+from ..core.errors import ServiceError
 
 logger = logging.getLogger(__name__)
 

@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Iterable, Protocol
 
-from ..errors import ServiceError
+from ..core.errors import ServiceError
 from ..library import safety
 
 logger = logging.getLogger(__name__)

@@ -6,7 +6,7 @@ import inspect
 import logging
 from typing import Any, Callable
 
-from ..errors import ServiceError, log_service_error
+from ..core.errors import ServiceError, log_service_error
 
 logger = logging.getLogger(__name__)
 

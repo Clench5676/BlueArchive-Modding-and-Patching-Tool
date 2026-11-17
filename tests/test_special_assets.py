@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from bmpt.catalog import Catalog
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.gameassets import AssetCache, GameAssets
 from bmpt.library import ModLibrary
 from bmpt.library.identity import content_cores, identify

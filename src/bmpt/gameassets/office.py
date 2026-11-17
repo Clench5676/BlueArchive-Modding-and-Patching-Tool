@@ -8,7 +8,7 @@ import hashlib
 from pathlib import Path
 from urllib.parse import quote
 
-from ..errors import ServiceError
+from ..core.errors import ServiceError
 from .errors import AssetNotFound
 from .layouts import export_layout
 from .unity import open_bundle

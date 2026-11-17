@@ -301,7 +301,8 @@ def managed_cab_index(search_dirs: list[Path], cache_path: Path | None = None, *
     """
     import json
 
-    from bmpt import config, devmode
+    from bmpt import config
+    from bmpt.core import devmode
     from bmpt.gameassets.cache import PreviewCache
     from bmpt.gameassets.cabs import CabIndex
     from bmpt.gameassets.discovery import resource_version

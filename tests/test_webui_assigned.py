@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 
 from test_webui import app, services, rpc, FakeFamily, FakeMod, FakeVariant
 

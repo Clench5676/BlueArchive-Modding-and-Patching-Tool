@@ -10,7 +10,7 @@ import pytest
 from PIL import Image
 
 from ba_modding_toolkit.models import FilePair
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.library.rebuild import RebuildResult
 from bmpt import atlas_remap as remap
 from bmpt.library import fingerprint, service
@@ -226,7 +226,7 @@ def test_a_mod_with_its_own_complete_rig_is_left_alone(real):
     report = env.library.compatibility(entry.id)
     assert report["rig"] == {"layout": [], "animations": {}, "regions": {}, "unknown": []} and not report["remappable"]
     assert env.library.remap(entry.id, geometry=rig_geometry(env.library, entry.id)) == {"unchanged": True}
-    from bmpt.errors import ServiceError
+    from bmpt.core.errors import ServiceError
 
     with pytest.raises(ServiceError, match="bad_params"):  # a portrait is baked from the page's geometry
         env.library.remap(entry.id)

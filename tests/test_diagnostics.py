@@ -428,7 +428,7 @@ def test_safe_mode_disables_assets_and_maintenance_without_changing_consent(tmp_
     from bmpt.config import Settings
     from bmpt.webui.services import Services
     from bmpt.webui.state import UiState
-    from bmpt.errors import ServiceError
+    from bmpt.core.errors import ServiceError
     from bmpt.webui.server import WebApp
     from bmpt.webui.events import EventBus
     from bmpt.webui.rpc import RpcRegistry
@@ -915,7 +915,7 @@ def test_review_structured_filenames_keep_only_extensions():
 
 
 def test_batch_failure_is_redacted_in_session_log_before_report(reports):
-    from bmpt.errors import ServiceError
+    from bmpt.core.errors import ServiceError
     from bmpt.webui.batch_import import failure_detail
 
     path = reports.data_dir / "webui.log"

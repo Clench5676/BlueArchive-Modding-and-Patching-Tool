@@ -13,7 +13,7 @@ from types import SimpleNamespace
 import pytest
 
 from ba_modding_toolkit.bundle import Bundle
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.library import integrity
 from bmpt.library import targets as resolver
 from ba_modding_toolkit.models import AssetType, FilePair, PatchResult
@@ -1966,7 +1966,7 @@ def test_a_stored_mod_whose_install_fails_stays_in_the_library_row(env, monkeypa
 
 def test_an_import_whose_workspace_cannot_be_removed_still_reports_its_rows(env, monkeypatch):
     # On Windows a bundle read during the import can keep the workspace from being removed.
-    from bmpt import openfiles
+    from bmpt.core import openfiles
 
     def refuse(path, **kwargs):
         raise PermissionError(32, "The process cannot access the file because it is being used by another process")

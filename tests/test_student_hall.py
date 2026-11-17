@@ -5,7 +5,7 @@ from uuid import uuid4
 
 import pytest
 
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.webui.state import UiState
 from bmpt.webui.student_hall import empty_hall, normalize_hall, portrait_lines, save_hall, validate_hall
 

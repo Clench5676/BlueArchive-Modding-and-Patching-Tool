@@ -177,7 +177,7 @@ def test_conversion_update_add_apply_uses_real_classic_core(real_metadata, platf
 def test_current_release_spine_rebuilds_foreign_platform_instead_of_copying(
     real_metadata, kind, crc_name, manual, platform, source_platform
 ):
-    from bmpt.errors import ServiceError
+    from bmpt.core.errors import ServiceError
 
     env = real_metadata
     if kind == "lobby":
@@ -272,7 +272,7 @@ def test_current_release_cross_platform_rebuild_rejects_invalid_output(real_meta
 @pytest.mark.parametrize("kind", ["spr", "lobby"])
 @pytest.mark.parametrize("manual", [False, True])
 def test_current_release_spine_upgrades_serialized_version_using_target_format(real_metadata, kind, manual):
-    from bmpt.errors import ServiceError
+    from bmpt.core.errors import ServiceError
 
     env = real_metadata
     if kind == "lobby":
@@ -697,7 +697,7 @@ def test_conversion_failure_cannot_store_or_apply_mobile_bytes(real_metadata, mo
 
 @pytest.mark.parametrize("output", [False, True])
 def test_conversion_stages_only_inside_the_pinned_library_with_dev_guards(real_metadata, monkeypatch, output):
-    from bmpt import devmode
+    from bmpt.core import devmode
 
     env = real_metadata
     monkeypatch.setenv(devmode.ROOTS, str(env.tmp))
@@ -729,7 +729,7 @@ def test_conversion_stages_only_inside_the_pinned_library_with_dev_guards(real_m
 
 
 def test_system_temp_conversion_output_reproduces_the_dev_read_guard_failure(real_metadata, monkeypatch):
-    from bmpt import devmode
+    from bmpt.core import devmode
 
     env = real_metadata
     monkeypatch.setenv(devmode.ROOTS, str(env.tmp))
@@ -1060,7 +1060,7 @@ def test_import_uses_current_counterparts_and_reports_omissions(real_metadata, m
 @pytest.mark.parametrize("method", ["bundle", "inspect", "keys", "readable_keys"])
 @pytest.mark.parametrize("replacement", [False, True])
 def test_inspection_rejects_changed_file_revision(tmp_path, method, replacement):
-    from bmpt.errors import ServiceError
+    from bmpt.core.errors import ServiceError
 
     source = unity_bundle(tmp_path / "source.bundle")
     inspection = integrity.Inspection()
@@ -1109,7 +1109,7 @@ def test_judge_rejects_input_changed_during_library_identity(real_metadata, monk
 
 
 def test_inspection_rejects_a_file_changed_during_load(tmp_path, monkeypatch):
-    from bmpt.errors import ServiceError
+    from bmpt.core.errors import ServiceError
 
     source = unity_bundle(tmp_path / "source.bundle")
     load = Bundle.load
@@ -1317,7 +1317,7 @@ def test_reimport_rebuild_does_not_rebind_provenance_to_swapped_parts(real_metad
 
 
 def test_optional_stored_source_lookup_failure_does_not_block(real_metadata, monkeypatch):
-    from bmpt.errors import ServiceError
+    from bmpt.core.errors import ServiceError
 
     env = real_metadata
     source = old_bundle(

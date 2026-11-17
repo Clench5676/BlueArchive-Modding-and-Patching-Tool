@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from bmpt.error_codes import code_of, level_of
-from bmpt.errors import ServiceError
+from bmpt.core.error_codes import code_of, level_of
+from bmpt.core.errors import ServiceError
 from bmpt.webui.events import EventBus
 from bmpt.webui.jobs import JobRunner
 from bmpt.webui.rpc import RpcRegistry

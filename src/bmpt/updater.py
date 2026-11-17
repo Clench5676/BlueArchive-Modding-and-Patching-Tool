@@ -23,8 +23,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from . import devmode
-from .errors import ServiceError
+from .core import devmode
+from .core.errors import ServiceError
 from bmpt.engine import get_version_info
 
 logger = logging.getLogger(__name__)

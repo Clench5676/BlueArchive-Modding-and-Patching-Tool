@@ -15,7 +15,7 @@ from concurrent.futures import FIRST_COMPLETED, Future, TimeoutError as FutureTi
 from typing import Any
 from uuid import UUID, uuid4
 
-from ..errors import ServiceError
+from ..core.errors import ServiceError
 from .. import globallines
 from ..gameassets.errors import AssetNotFound
 from ..gameassets.layouts import export_layout, subtree

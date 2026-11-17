@@ -11,7 +11,7 @@ from types import SimpleNamespace
 import pytest
 from PIL import Image
 
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.gameassets import AssetCache, AssetNotFound, GameAssets
 from bmpt.gameassets.cache import PreviewCache
 from bmpt.gameassets import office

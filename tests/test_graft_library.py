@@ -7,7 +7,7 @@ import pytest
 from PIL import Image
 
 from bmpt import atlas_remap as remap
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.library.integrity import inspect as inspect_bundle
 from bmpt.spine_binary import Skeleton
 

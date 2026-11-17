@@ -22,9 +22,10 @@ from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import unquote
 
-from .. import devmode, globallines, updater
+from .. import globallines, updater
+from ..core import devmode
 from ..catalog.special import SPECIAL_PREFIX
-from ..errors import ServiceError
+from ..core.errors import ServiceError
 from bmpt.engine import get_version_info, i18n_manager, offered_languages, parse_filename, t
 from .strings import get_locale_dir
 from ..kivo import clip_id

@@ -21,8 +21,8 @@ import uuid
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from ..filelock import replace
-from ..logging_utils import log_failure
+from ..core.filelock import replace
+from ..core.logging_utils import log_failure
 from .storage import sync_directory
 
 logger = logging.getLogger(__name__)

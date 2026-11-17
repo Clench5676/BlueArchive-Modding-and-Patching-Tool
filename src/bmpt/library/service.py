@@ -28,19 +28,9 @@ from typing import TYPE_CHECKING, Any, Callable, Collection, Hashable, Iterable,
 
 from UnityPy.helpers.ResourceReader import get_resource_data
 
-from bmpt import (
-    atlas_remap,
-    devmode,
-    game_paths,
-    graft as grafting,
-    mod_origin,
-    preview_gate,
-    rebake,
-    spans,
-    spine_converter,
-    steam_records,
-)
-from bmpt.progress_meter import Meter
+from bmpt import atlas_remap, game_paths, graft as grafting, mod_origin, rebake, spine_converter, steam_records
+from bmpt.core import devmode, preview_gate, spans
+from bmpt.core.progress_meter import Meter
 from bmpt.engine import (
     SEARCH_DIR_SUFFIXES,
     AssetType,
@@ -57,13 +47,13 @@ from bmpt.engine import (
     t,
 )
 from ..catalog.models import CoreMap
-from ..errors import ServiceError
-from ..filelock import file_lock
+from ..core.errors import ServiceError
+from ..core.filelock import file_lock
 from ..gameassets.cabs import CabIndex
 from ..gameassets.discovery import cab_names, may_hold_model_root, own_bundle
 from ..gameassets.preview_reads import PreviewReads
-from ..logging_utils import log_failure
-from ..openfiles import remove_tree, temporary_directory
+from ..core.logging_utils import log_failure
+from ..core.openfiles import remove_tree, temporary_directory
 from . import profiles as profiles_mod
 from . import fingerprint, integrity, mod_progress, pointers, rig_archive, safety, staging, tested_build
 from .original_checks import OriginalChecks, Verdict

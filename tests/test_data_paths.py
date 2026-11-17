@@ -12,7 +12,8 @@ import pytest
 import toml
 
 from ba_modding_toolkit.utils import paths as utils_paths
-from bmpt import config, data_paths, devmode, filelock
+from bmpt import config, data_paths
+from bmpt.core import devmode, filelock
 from ba_modding_toolkit import utils
 from bmpt.data_paths import APP_DIR_NAME, OLD_APP_DIR_NAME, migrate_data_dir
 from bmpt.webui.instance import InstanceLock
@@ -542,7 +543,7 @@ def test_cache_cleanup_failure_keeps_old_cache_and_warns(tmp_path, monkeypatch, 
 
 @pytest.mark.parametrize("both", [False, True])
 def test_custom_cache_and_override(tmp_path, monkeypatch, both):
-    from bmpt.errors import ServiceError
+    from bmpt.core.errors import ServiceError
     from bmpt.webui.services import Services
     from bmpt.webui.state import UiState
 
@@ -578,7 +579,7 @@ def test_custom_cache_and_override(tmp_path, monkeypatch, both):
 
 
 def test_changing_cache_parent_recognizes_legacy_name(tmp_path, monkeypatch):
-    from bmpt.errors import ServiceError
+    from bmpt.core.errors import ServiceError
     from bmpt.webui.services import Services
     from bmpt.webui.state import UiState
 
@@ -600,7 +601,7 @@ def test_changing_cache_parent_recognizes_legacy_name(tmp_path, monkeypatch):
 
 
 def test_migrations_refuse_paths_outside_isolated_roots(folders, tmp_path, monkeypatch):
-    from bmpt.errors import ServiceError
+    from bmpt.core.errors import ServiceError
 
     old, new = folders
     # both lists, so a session that already runs isolated (writable roots set) gives the same answer

@@ -6,7 +6,7 @@ import struct
 import numpy as np
 import pytest
 
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.gameassets import model_adapt as ma
 from bmpt.gameassets import model_geometry as mg
 

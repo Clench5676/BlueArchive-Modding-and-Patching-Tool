@@ -7,7 +7,7 @@ import pytest
 
 from ba_modding_toolkit.bundle import Bundle
 from bmpt.catalog import Catalog
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from ba_modding_toolkit.i18n import t
 from bmpt.library.identity import content_cores, identify
 from ba_modding_toolkit.naming import parse_filename

@@ -784,7 +784,7 @@ def test_remap_review_and_discard_leave_no_mod_files_or_metadata(repair_review):
     assert not env.library._remap_previews
     assert all(path.read_bytes() == data for path, data in before.items())
     assert [path.name for path in (env.library.root / "mods").iterdir()] == [entry.id]
-    from bmpt.errors import ServiceError
+    from bmpt.core.errors import ServiceError
 
     with pytest.raises(ServiceError, match="entry_changed"):
         env.library.accept_remap(preview["preview"])
@@ -792,7 +792,7 @@ def test_remap_review_and_discard_leave_no_mod_files_or_metadata(repair_review):
 
 @pytest.mark.parametrize("legacy", [False, True])
 def test_accept_stores_reviewed_bytes_once_and_persists_both_markers(repair_review, legacy):
-    from bmpt.errors import ServiceError
+    from bmpt.core.errors import ServiceError
     from bmpt.library import ModLibrary
 
     env, entry, current, source = repair_review
@@ -840,7 +840,7 @@ def test_accept_stores_reviewed_bytes_once_and_persists_both_markers(repair_revi
 
 @pytest.mark.parametrize("language", ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR"])
 def test_accept_keeps_alias_names_and_repair_metadata_together(repair_review, monkeypatch, language):
-    from bmpt.errors import ServiceError
+    from bmpt.core.errors import ServiceError
 
     env, entry, current, source = repair_review
     translate = I18n(language).t
@@ -875,7 +875,7 @@ def test_accept_keeps_alias_names_and_repair_metadata_together(repair_review, mo
 
 
 def test_accept_refuses_changed_or_removed_original_and_expired_preview(repair_review):
-    from bmpt.errors import ServiceError
+    from bmpt.core.errors import ServiceError
 
     env, entry, _, _ = repair_review
     preview = env.library.remap(entry.id, geometry=rig_geometry(env.library, entry.id))["preview"]
@@ -941,7 +941,7 @@ def test_accept_failure_rolls_back_both_markers_and_the_new_directory(repair_rev
         raise OSError("write refused")
 
     monkeypatch.setattr(env.library, "_save", fail)
-    from bmpt.errors import ServiceError
+    from bmpt.core.errors import ServiceError
 
     with pytest.raises(ServiceError, match="library_io_error"):
         env.library.accept_remap(preview)
@@ -954,7 +954,7 @@ def test_accept_failure_rolls_back_both_markers_and_the_new_directory(repair_rev
 
 
 def test_source_changed_during_remapping_never_becomes_an_acceptable_preview(repair_review, monkeypatch):
-    from bmpt.errors import ServiceError
+    from bmpt.core.errors import ServiceError
 
     env, entry, _, _ = repair_review
     process = service.rebuild
@@ -1109,7 +1109,7 @@ def test_deleting_the_repaired_copy_clears_the_link_in_the_same_state_write(repa
 
 
 def test_a_failed_deletion_of_the_repaired_copy_restores_the_link(repair_review):
-    from bmpt.errors import ServiceError
+    from bmpt.core.errors import ServiceError
 
     env, entry, _, _ = repair_review
     child = _repair(env, entry)
@@ -1147,7 +1147,7 @@ def test_recovering_an_interrupted_deletion_of_the_repaired_copy_restores_the_li
 
 
 def test_a_repaired_id_pointing_at_no_record_counts_as_none_without_a_migration(repair_review, monkeypatch):
-    from bmpt.errors import ServiceError
+    from bmpt.core.errors import ServiceError
 
     env, entry, _, _ = repair_review
     env.library._records[entry.id]["repaired_id"] = "d" * 32  # an old library that deleted the copy
@@ -1167,7 +1167,7 @@ def test_a_repaired_id_pointing_at_no_record_counts_as_none_without_a_migration(
 
 
 def test_a_repaired_id_held_by_a_missing_folder_stays_and_repair_stays_refused(repair_review, monkeypatch):
-    from bmpt.errors import ServiceError
+    from bmpt.core.errors import ServiceError
 
     env, entry, _, _ = repair_review
     child = _repair(env, entry)

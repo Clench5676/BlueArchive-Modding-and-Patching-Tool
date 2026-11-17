@@ -22,7 +22,7 @@ from typing import Any, Callable, Iterable
 from urllib.parse import parse_qs, unquote
 from wsgiref.simple_server import WSGIRequestHandler, WSGIServer, make_server
 
-from ..errors import ServiceError
+from ..core.errors import ServiceError
 from .events import EventBus
 from .instance import RAISE_HEADER, RAISE_PATH
 from .rpc import RpcRegistry

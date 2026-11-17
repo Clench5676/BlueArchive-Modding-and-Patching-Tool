@@ -10,7 +10,7 @@ from types import SimpleNamespace
 import pytest
 
 from bmpt import game_paths
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.library import safety
 
 WINE_LINE = r"C:\Program Files (x86)\Steam\steamapps\common\BlueArchive\BlueArchive.exe"

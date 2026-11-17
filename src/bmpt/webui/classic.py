@@ -31,7 +31,7 @@ from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any, Callable, Iterable, Iterator, Mapping, Protocol, Sequence
 
-from ..errors import ServiceError
+from ..core.errors import ServiceError
 from .system import CREATE_NO_WINDOW, check_classic_tab, classic_command
 
 logger = logging.getLogger(__name__)

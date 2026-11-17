@@ -342,7 +342,7 @@ from UnityPy.helpers import CompressionHelper
 
 from ba_modding_toolkit.bundle import Bundle
 from ba_modding_toolkit.models import SaveOptions
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.library import bundle_saves as bs
 
 

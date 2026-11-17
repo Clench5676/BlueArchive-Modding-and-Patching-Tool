@@ -1,9 +1,9 @@
 """The progress line of a job over mods (library/mod_progress.py): the item at hand, who it is, its step and share."""
 
-from bmpt import progress_meter
+from bmpt.core import progress_meter
 from bmpt.library import mod_progress
 from bmpt.library.mod_progress import COSTUME_STEPS, ItemProgress, STEP_CHECK, STEP_RESTORE, STEP_WRITE
-from bmpt.progress_meter import Meter
+from bmpt.core.progress_meter import Meter
 
 
 def test_each_item_is_reported_as_it_starts_counted_from_one_with_who_it_is():

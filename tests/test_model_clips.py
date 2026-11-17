@@ -240,7 +240,7 @@ def test_a_clip_export_starts_at_once_while_a_long_costume_build_runs(tmp_path, 
     import threading
     import time
 
-    from bmpt import preview_gate
+    from bmpt.core import preview_gate
     from bmpt.gameassets import model_adapt
 
     prefab = "character-ch0242-_mxload-2024-11-18_assets_all_1.bundle"

@@ -10,7 +10,7 @@ import pytest
 
 from bmpt import globallines
 from bmpt.config import Settings
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.webui import api as webui_api
 from bmpt.webui.api import build_api
 from bmpt.webui.services import Services

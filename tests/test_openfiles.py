@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from bmpt import filelock, openfiles
+from bmpt.core import filelock, openfiles
 from bmpt.library import staging
 
 GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-game")
@@ -84,7 +84,7 @@ def test_temporary_directory_logs_a_folder_it_cannot_remove_and_keeps_errors_fro
         raise PermissionError(32, "in use")
 
     monkeypatch.setattr(openfiles, "remove_tree", refuse)
-    with caplog.at_level(logging.WARNING, logger="bmpt.openfiles"):
+    with caplog.at_level(logging.WARNING, logger="bmpt.core.openfiles"):
         with openfiles.temporary_directory(prefix="work-", dir=tmp_path) as folder:
             assert Path(folder).parent == tmp_path and Path(folder).name.startswith("work-")
     assert "Could not remove a temporary folder" in caplog.text

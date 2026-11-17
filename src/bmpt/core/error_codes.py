@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-_REGISTRY = json.loads((Path(__file__).resolve().parent / "web" / "error-codes.json").read_text(encoding="utf-8"))
+_REGISTRY = json.loads((Path(__file__).resolve().parents[1] / "web" / "error-codes.json").read_text(encoding="utf-8"))
 
 
 def code_of(name: str) -> str | None:

@@ -7,7 +7,7 @@ import json
 
 import pytest
 
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.library import service, portrait_edit, asset_delete
 from bmpt.library.photographs import Photographs
 from bmpt.library.judge import core_of

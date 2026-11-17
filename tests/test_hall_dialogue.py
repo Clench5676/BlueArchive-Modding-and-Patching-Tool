@@ -11,7 +11,7 @@ from types import SimpleNamespace
 import pytest
 
 from bmpt import globallines
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.webui import student_hall
 from bmpt.webui.student_hall import MemoryMemo, PortraitVoices, LocalPortraitVoices
 

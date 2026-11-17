@@ -192,7 +192,7 @@ def test_repair_writes_again_a_game_file_left_without_its_crc(updated, monkeypat
 
 
 def test_repair_leaves_game_files_for_a_later_start_while_the_game_runs(updated, monkeypatch):
-    from bmpt.errors import ServiceError
+    from bmpt.core.errors import ServiceError
     from bmpt.library import install, safety
 
     env = updated

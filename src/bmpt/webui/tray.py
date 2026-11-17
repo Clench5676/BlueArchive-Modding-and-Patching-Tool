@@ -36,7 +36,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Protocol
 
-from ..errors import ServiceError
+from ..core.errors import ServiceError
 from bmpt.engine import i18n_manager, t
 from .strings import fill, ui_strings
 

@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from ba_modding_toolkit.bundle import Bundle
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.library import ModLibrary, supports_kind
 from bmpt.library.identity import identify
 from bmpt.library.integrity import Contents, inspect as inspect_bundle

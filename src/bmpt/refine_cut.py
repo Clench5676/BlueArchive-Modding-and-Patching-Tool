@@ -1189,7 +1189,7 @@ def main(argv=None):
     Args:
         argv: Command-line arguments; None reads ``sys.argv``.
     """
-    from .localization import register_locales
+    from .core.localization import register_locales
 
     register_locales()
 

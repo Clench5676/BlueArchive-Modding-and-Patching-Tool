@@ -18,8 +18,8 @@ from typing import Any, Callable
 
 from PIL import Image
 
-from .. import devmode, preview_gate, spans
-from ..errors import ServiceError
+from ..core import devmode, preview_gate, spans
+from ..core.errors import ServiceError
 from bmpt.engine import parse_filename, spine_kind
 from ..texture_guard import texture_image
 from .cache import AssetCache, PreviewCache, pack_preview_files, unpack_preview_files

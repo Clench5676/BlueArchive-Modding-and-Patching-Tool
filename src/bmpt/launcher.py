@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 
-from .localization import register_locales
+from .core.localization import register_locales
 
 register_locales()
 

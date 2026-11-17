@@ -15,7 +15,7 @@ import urllib.request
 from collections import OrderedDict
 from typing import Any
 
-from .errors import ServiceError
+from .core.errors import ServiceError
 
 logger = logging.getLogger(__name__)
 

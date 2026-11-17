@@ -686,7 +686,7 @@ def test_official_rule_b_clip_edit_is_read_back_and_a_changed_curve_is_refused(v
     (Pajamas) with Optimize Physics edits 31 clips; one whose old constant curve changes on its way to the object is
     refused, naming the clip, and the pair is not returned."""
     from ba_modding_toolkit.bundle import Bundle
-    from bmpt.errors import ServiceError
+    from bmpt.core.errors import ServiceError
 
     files, index = view
     slot = _slot(files, "hina_original")

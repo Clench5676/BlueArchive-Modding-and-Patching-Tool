@@ -20,7 +20,7 @@ from urllib.parse import urlparse
 
 import pytest
 
-from bmpt.errors import ServiceError
+from bmpt.core.errors import ServiceError
 from bmpt.gui import control as ctl
 from bmpt.webui import classic as cl
 from bmpt.webui import system

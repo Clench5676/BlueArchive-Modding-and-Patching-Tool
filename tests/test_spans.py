@@ -5,7 +5,7 @@ from __future__ import annotations
 import threading
 import time
 
-from bmpt import spans
+from bmpt.core import spans
 from bmpt.webui.timing import Timings
 
 

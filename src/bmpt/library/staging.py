@@ -7,10 +7,10 @@ from pathlib import Path
 import shutil
 import time
 
-from .. import devmode
-from ..filelock import file_lock
-from ..logging_utils import log_failure
-from ..openfiles import remove_tree, temporary_directory
+from ..core import devmode
+from ..core.filelock import file_lock
+from ..core.logging_utils import log_failure
+from ..core.openfiles import remove_tree, temporary_directory
 from .import_archive import PREFIX as ARCHIVE_PREFIX
 
 logger = logging.getLogger(__name__)

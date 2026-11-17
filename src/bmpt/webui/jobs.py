@@ -11,7 +11,7 @@ import traceback
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from ..errors import ServiceError, log_service_error
+from ..core.errors import ServiceError, log_service_error
 from bmpt.engine import t
 from .events import EventBus
 from .rpc import to_json

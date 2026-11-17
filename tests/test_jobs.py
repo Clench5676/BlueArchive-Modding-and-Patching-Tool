@@ -105,7 +105,7 @@ def test_a_pending_job_is_never_forgotten():
 
 
 def test_failures_in_run_result_or_listeners_always_finish_and_release_the_worker():
-    from bmpt.errors import ServiceError
+    from bmpt.core.errors import ServiceError
 
     events = EventBus()
     seen = events.subscribe()
@@ -264,7 +264,7 @@ def test_a_cancelled_job_never_runs_when_queued_and_stops_at_its_next_step_when_
     """A page cancels a check it has stopped waiting for: a queued one never runs and ends "cancelled" at once; a
     running one is told and ends "cancelled" at its next step; a job not made cancellable, or of another kind, is
     refused."""
-    from bmpt.errors import ServiceError
+    from bmpt.core.errors import ServiceError
     from bmpt.webui.jobs import Cancelled
 
     events = EventBus()
