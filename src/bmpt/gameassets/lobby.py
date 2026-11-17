@@ -42,7 +42,7 @@ _ASPECT_SCRIPT = "UIManualScaleByAspect"
 
 
 def _f32(value: float) -> float:
-    """value rounded to single precision (the game computes in floats)."""
+    """Value rounded to single precision (the game computes in floats)."""
     return struct.unpack("<f", struct.pack("<f", value))[0]
 
 
@@ -271,8 +271,11 @@ def _mul(m: tuple[float, ...], l: tuple[float, ...]) -> tuple[float, ...]:
 
 
 def _box(m: tuple[float, ...], box: dict) -> tuple[list[float], float]:
-    """A BoxCollider in root space: [left, bottom, right, top] of its box unrotated around its centre, and the
-    rotation in degrees (counter-clockwise)."""
+    """Return a BoxCollider's unrotated bounds and rotation in root space.
+
+    The bounds are [left, bottom, right, top] of its box unrotated around its centre, and the rotation is in
+    degrees (counter-clockwise).
+    """
     a, b, c, d, tx, ty = m
     cx, cy = box.get("m_Center", {}).get("x", 0), box.get("m_Center", {}).get("y", 0)
     x, y = a * cx + c * cy + tx, b * cx + d * cy + ty
@@ -297,13 +300,16 @@ def _pages(
     renderer: dict,
     kind: str = "pages",
 ) -> dict[str, Any]:
-    """The render queue of each atlas page of a skeleton, {texture name: queue}. spine-unity gives each submesh the
-    material of its page, and Unity sorts every submesh by its own material's queue: a skeleton whose pages sit in
+    """Return the render queue of each atlas page of a skeleton, {texture name: queue}.
+
+    spine-unity gives each submesh the material of its page, and Unity sorts every submesh by its own material's
+    queue: a skeleton whose pages sit in
     several queues (the background page at 2900, the character's at 3050) is drawn in as many steps, in queue order,
     and a particle system that sorts between two of them draws between them (Hibiki's river surface over the river,
     under her). Read from the skeleton data's atlas assets, else from the materials the prefab's renderer keeps.
     With kind "shaders", the name of each page's shader instead, {texture name: shader}: the shaders take the slot
-    colours differently (slot-colours.js)."""
+    colours differently (slot-colours.js).
+    """
     if resolve is None:
         return {}
     pointer = sa.get("skeletonDataAsset") or {}

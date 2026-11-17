@@ -838,9 +838,11 @@ def sprite(
 
 
 def _custom_mix(c: Mapping[str, Any]) -> float | None:
-    """The mix a Spine clip starts with (SpineAnimationStateMixerBehaviour.GetCustomMixDuration): with a custom
-    duration the timeline clip's blend-in or ease-in (useBlendDuration) or the clip's own; else the skeleton's default
-    (None)."""
+    """Return the mix a Spine clip starts with.
+
+    SpineAnimationStateMixerBehaviour.GetCustomMixDuration uses the timeline clip's blend-in or ease-in
+    (useBlendDuration) or the clip's own duration when a custom duration is set; else the skeleton's default (None).
+    """
     a = c["asset"]
     if not a.get("customDuration"):
         return None

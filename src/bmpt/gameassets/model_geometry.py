@@ -127,8 +127,10 @@ def _unpack_floats(packed: Mapping[str, Any]) -> np.ndarray:
 
 
 def _pack_floats(packed: dict, values: np.ndarray, *, keep_range: bool) -> None:
-    """``values`` quantized into ``packed`` at its bit size; its start and range kept (normals, tangents: [-1, 1]) or
-    taken from the values (positions)."""
+    """Quantize ``values`` into ``packed`` at its bit size.
+
+    Keep its start and range (normals, tangents: [-1, 1]) or take them from the values (positions).
+    """
     bits = int(packed["m_BitSize"])
     top = (1 << bits) - 1
     if keep_range:

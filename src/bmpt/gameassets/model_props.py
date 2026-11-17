@@ -551,8 +551,11 @@ def enclosed_points(points: np.ndarray, triangles: np.ndarray) -> np.ndarray:
 def _enclosure(
     skeleton: ma.Skeleton, parts: list[ma.Part], items: list[Item], frames: list, step: Callable[[], None]
 ) -> None:
-    """``Item.enclosed`` of every item that may be packed: of the clips showing it, the share whose first frame showing
-    it has the costume (its skinned triangles at that pose) enclose ``ENCLOSED`` of its points."""
+    """Measure ``Item.enclosed`` for every item that may be packed.
+
+    Of the clips showing the item, this is the share whose first frame showing it has the costume (its skinned
+    triangles at that pose) enclose ``ENCLOSED`` of its points.
+    """
     wanted = [item for item in items if item.packable() and item._shown]
     if not wanted:
         return

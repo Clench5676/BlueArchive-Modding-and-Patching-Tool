@@ -567,9 +567,11 @@ class Solver:
             world[j] = world[ch.parents[j]] @ ch.local[j]
 
     def _joint(self, world: np.ndarray, base: np.ndarray, fixed: np.ndarray, grid: np.ndarray, frame: Frame) -> None:
-        """All chains at once: Gauss-Newton steps on the roots' turns (rotation vectors about their heads) and the
-        heads' shifts that carry the cloth inside the legs out, hold the cloth already clear, and keep the cloth's edges
-        from growing."""
+        """Solve all chains together with Gauss-Newton steps.
+
+        Steps on the roots' turns (rotation vectors about their heads) and the heads' shifts carry the cloth inside
+        the legs out, hold the cloth already clear, and keep the cloth's edges from growing.
+        """
         c, roots = self.cloth, self.roots
         if not roots:
             return

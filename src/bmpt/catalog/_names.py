@@ -128,9 +128,11 @@ def remark(row: dict[str, str]) -> str:
 
 
 def _glossary_wins(raw: str, localized: str, lang: str) -> bool:
-    """Whether the glossary's word for a Kivo skin replaces the character map's own: a zh-TW skin that only repeats
-    the Kivo text, and a ko skin the game words otherwise (the map's words for Battle Ready, New Year and Camp give way
-    to the game's own)."""
+    """Decide whether the glossary's word for a Kivo skin replaces the character map's own.
+
+    Replace a zh-TW skin name that only repeats the Kivo text, and a ko skin name the game words otherwise (the
+    map's words for Battle Ready, New Year and Camp give way to the game's own).
+    """
     word = NAMING["glossary"].get(raw, {}).get(lang)
     if word is None or word == localized:
         return False

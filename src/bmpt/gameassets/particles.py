@@ -417,8 +417,11 @@ def _main(ps: Mapping[str, Any]) -> dict:
 
 
 def _streams(renderer: Mapping[str, Any]) -> dict[str, list[int]]:
-    """Where UV, UV2 and the custom data land in TEXCOORD0.. (component offsets), as Unity packs the renderer's
-    vertex streams; without custom streams only UV is there (TEXCOORD0.xy) and the rest reads 0."""
+    """Locate UV, UV2 and the custom data in TEXCOORD0.. as component offsets.
+
+    Unity packs them in the renderer's vertex streams; without custom streams only UV is there (TEXCOORD0.xy)
+    and the rest reads 0.
+    """
     if not renderer.get("m_UseCustomVertexStreams"):
         return {"uv": [0, 2]}
     out, offset = {}, 0
@@ -608,9 +611,12 @@ _MESH_SLOTS = (
 
 
 def _mesh_choice(ids: list[tuple[str, float]], distribution: int) -> dict:
-    """What a mesh renderer draws: "mesh", the first of its meshes, and with more than one "meshes", all of them in
-    their slots' order (the empty slots left out): Unity picks one per particle, uniformly at random, or with
-    m_MeshDistribution 1 (non-uniform random) by their weights ("weights")."""
+    """Describe the meshes a mesh renderer draws.
+
+    "mesh" is the first of its meshes, and with more than one, "meshes" holds all of them in their slots' order
+    (the empty slots left out). Unity picks one per particle, uniformly at random, or with m_MeshDistribution 1
+    (non-uniform random) by their weights ("weights").
+    """
     out: dict[str, Any] = {"mesh": ids[0][0]}
     if len(ids) > 1:
         out["meshes"] = [i for i, _ in ids]

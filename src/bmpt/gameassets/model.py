@@ -1794,12 +1794,15 @@ class _Exporter:
 
 
 class _ClipExporter(_Exporter):
-    """One clip of a model, for a viewer that already shows the model's base GLB (:func:`export_chibi` of the same
-    files): no meshes, textures or halo effects of its own. The hierarchy's nodes come in the base GLB's order, so a
+    """Export one model clip for a viewer that already shows its base GLB.
+
+    The base GLB is :func:`export_chibi` of the same files; the clip has no meshes, textures or halo effects of its
+    own. The hierarchy's nodes come in the base GLB's order, so a
     channel's node is the same node there. Toggles name the node of the renderer's GameObject (the viewer finds its
     renderer in the base GLB: the node's ``extras.renderer`` or its mesh); a renderer the base GLB leaves out
     (disabled, or only an EX skill shows it) that the clip turns on comes along with its materials and textures, as
-    the base GLB would carry it: its node's ``extras.renderer`` (skinned) or ``mesh`` (static), hidden at rest."""
+    the base GLB would carry it: its node's ``extras.renderer`` (skinned) or ``mesh`` (static), hidden at rest.
+    """
 
     def __init__(self, graph: BundleGraph, dev: str):
         """Prepare a clip export using the base model's graph and character dev name."""
@@ -1818,8 +1821,11 @@ class _ClipExporter(_Exporter):
 
 
 def _model_clips(exporter: _Exporter, graph: BundleGraph, bundles: list[Path], kind: str) -> list[Any]:
-    """The clips a model plays: a field prefab's own list, the clips of a model of its own bundles that move it, else
-    its animator controllers' clips."""
+    """Return the clips a model plays.
+
+    Use a field prefab's own list, the clips of a model of its own bundles that move it, else its animator
+    controllers' clips.
+    """
     if exporter.animancer is not None:
         # a field prefab lists its clips itself; its bundle holds other students' prefabs and controllers
         listed = graph.tree(exporter.animancer).get("animationClips", [])

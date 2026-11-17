@@ -350,8 +350,11 @@ class Catalog:
         return self._snapshot
 
     def _metadata(self) -> tuple[dict, dict, set[str]]:
-        """A copy of the kept parse of the shipped data and the character map, parsed on first use: a build adds the
-        install's unknown portrait keys to it, which must not leak into another build or another install's map."""
+        """Return a copy of the cached parse of the shipped data and character map.
+
+        The data is parsed on first use. A build adds the install's unknown portrait keys to its copy, which must
+        not leak into another build or another install's map.
+        """
         if self._parsed is None:
             self._parsed = self._parse()
         return copy.deepcopy(self._parsed)
@@ -430,10 +433,12 @@ class Catalog:
         lobbies: list[str],
         special_cores: set[str] | None = None,
     ) -> tuple[dict[str, str], dict[str, list[str]], dict[str, list[str]]]:
-        """The roster's core rules on one install's core names: {lower-case core: variant key}, each key's lobby
-        cores in the install (the primary one first) and each portrait key's aliases (its key, then the core aliases
-        the rule kept). Unknown portrait keys are added to ``entries``, ``students`` and ``added``, as the roster
-        lists them, in the order the alias rule reads them."""
+        """Apply the roster's core rules to one install's core names.
+
+        Return {lower-case core: variant key}, each key's lobby cores in the install (the primary one first) and
+        each portrait key's aliases (its key, then the core aliases the rule kept). Unknown portrait keys are added
+        to ``entries``, ``students`` and ``added``, as the roster lists them, in the order the alias rule reads them.
+        """
         special_cores = {core.lower() for core in special_cores or ()}
         lobby_names = {core.lower(): core for core in lobbies if core.lower() not in special_cores}
         keys: dict[str, str] = {}
@@ -629,7 +634,8 @@ class Catalog:
 
         Each server builds its collection bundles with the students it has released, so an installed collection
         portrait decides. Without one, the shipped flag tells a portrait-name gap (True) from a student not on this
-        server yet (False); with no flag either, the install decides unless it has no collection index at all."""
+        server yet (False); with no flag either, the install decides unless it has no collection index at all.
+        """
         if not entry["playable"]:
             return False
         if installed:

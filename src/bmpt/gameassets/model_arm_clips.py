@@ -398,8 +398,11 @@ _KEY = np.dtype([("index", "<i4"), ("coefs", "<f4", (4,))])
 
 
 def _streamed_keys(words):
-    """Every key of a streamed clip in stream order: its frame's time (float64), curve index and four cubic
-    coefficients (float32). Frames are walked by their key counts; the keys are then read in one gather."""
+    """Read every key of a streamed clip in stream order.
+
+    Each key holds its frame's time (float64), curve index and four cubic coefficients (float32). Frames are walked
+    by their key counts; the keys are then read in one gather.
+    """
     w = np.asarray(words, dtype="<u4")
     starts, counts, pos, end = [], [], 0, len(w)
     while pos + 2 <= end:
@@ -479,8 +482,10 @@ def sample_curves(tree, wanted, *, hold_before=False):
 
 
 def _streamed_records(words):
-    """Per streamed curve its keys in stream order as rows (time, c0, c1, c2, c3), helper frames included: the
-    values ``read_streamed`` gives, read as arrays."""
+    """Read each streamed curve's keys in stream order as rows (time, c0, c1, c2, c3).
+
+    Helper frames are included: these are the values ``read_streamed`` gives, read as arrays.
+    """
     key_at, index, coefs = _streamed_keys(words)
     if not len(index):
         return {}
