@@ -3,6 +3,7 @@
 // the browser's rules for tabIndex (buttons and inputs are tab stops, plain elements are not) and for focus.
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
+import { IMPORT_PAGE_MODULES } from "./helpers/source-text.mjs";
 
 const STOPS = new Set(["BUTTON", "INPUT", "SELECT", "TEXTAREA"]);
 class El {
@@ -421,7 +422,7 @@ test("popup.js keeps one trap: the Hall modal and the import dialogs no longer c
   const { readFileSync } = await import("node:fs");
   const web = (file) => readFileSync(new URL(`../../src/bmpt/web/js/${file}`, import.meta.url), "utf8");
   assert.doesNotMatch(web("hall/student-hall-ui.js"), /event\.key !== "Tab"/);
-  assert.doesNotMatch(web("mods/batch-import.js"), /event\.key !== "Tab"/);
+  for (const file of IMPORT_PAGE_MODULES) assert.doesNotMatch(web(`mods/${file}`), /event\.key !== "Tab"/, file);
   assert.match(web("ui/popup.js"), /addEventListener\("keydown", trapKey\)/);
 });
 

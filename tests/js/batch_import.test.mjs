@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { makeImportLayouts, find, renderImportTree, FRAME_META, framePixels } from "./import_prefabs.mjs";
+import { IMPORT_PAGE_MODULES } from "./helpers/source-text.mjs";
 
 const walk = (element) => [element, ...element.children.flatMap(walk)];
 function matches(element, selector) {
@@ -1532,8 +1533,10 @@ test("the page clones runtime Items/Mailbox widgets and has no invented empty pr
   assert.equal(h.host.querySelector("img"), null, "pictures bind to prefab UITexture widgets");
   assert.equal(h.host.querySelector(".import-preview-image").dataset.path, "EquipPos/Texture");
   assert.equal(h.row("a").querySelector(".import-thumb").dataset.path, "List_01/BG_Icon/Icon_Arona");
-  const source = readFileSync(new URL("../../src/bmpt/web/js/mods/batch-import.js", import.meta.url), "utf8");
-  assert.doesNotMatch(source, /ui\.(sprite|node)\(|import\.choose|\b[Kk]ey[Hh]int/);
+  for (const file of IMPORT_PAGE_MODULES) {
+    const source = readFileSync(new URL(`../../src/bmpt/web/js/mods/${file}`, import.meta.url), "utf8");
+    assert.doesNotMatch(source, /ui\.(sprite|node)\(|import\.choose|\b[Kk]ey[Hh]int/, file);
+  }
   const css = readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
   const rules = css.slice(
     css.indexOf("/* Batch Import:"),
