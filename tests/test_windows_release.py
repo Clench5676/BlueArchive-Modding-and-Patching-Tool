@@ -181,7 +181,7 @@ def test_event_commit_cannot_change_after_publication(release_run, monkeypatch, 
 
 def test_only_windows_gui_workflows_remain():
     workflows = sorted((ROOT / ".github/workflows").glob("*.y*ml"))
-    assert [path.name for path in workflows] == ["build.yml", "windows-build.yml"]
+    assert [path.name for path in workflows] == ["build.yml", "lint.yml", "windows-build.yml"]
     workflow = (ROOT / ".github/workflows/build.yml").read_text()
     trigger = workflow[workflow.index("on:\n") : workflow.index("permissions:\n")]
     assert trigger.strip() == "on:\n  release:\n    types: [published]"
