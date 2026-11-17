@@ -1,11 +1,10 @@
-// Materials for the 3D chibi: ports of the game's character shaders (MX/C-*, compiled for D3D11 in the shader
-// bundles). Every term follows the game's ForwardLit and Outline passes: the light
-// term against a threshold, the diffuse blend of light tone and shadow tint, the rim, the four-layer mask, the
-// face's own light direction, the hair's highlight band, the weapon's per-vertex terms, unlit eyes and mouth,
-// and the outline as an inverted hull. The game runs in linear colour space: colour textures are decoded from
-// sRGB, masks are not, Color properties are converted to linear, and HDR Color properties (most of the character
-// shaders' tints) and Vector properties are used as stored. The light is the formation screen's (see LIGHT and
-// AMBIENT below).
+// Materials for the 3D chibi, matching the look of the game's character shaders (MX/C-*) in their ForwardLit and
+// Outline passes: the light term against a threshold, the diffuse blend of light tone and shadow tint, the rim, the
+// four-layer mask, the face's own light direction, the hair's highlight band, the weapon's per-vertex terms, unlit
+// eyes and mouth, and the outline as an inverted hull. The game runs in linear colour space: colour textures are
+// decoded from sRGB, masks are not, Color properties are converted to linear, and HDR Color properties (most of the
+// character shaders' tints) and Vector properties are used as stored. The light is the formation screen's (see LIGHT
+// and AMBIENT below).
 import * as THREE from "three";
 
 // glTF space mirrors Unity's x axis
