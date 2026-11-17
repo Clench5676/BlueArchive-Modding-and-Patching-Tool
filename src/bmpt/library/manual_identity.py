@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from .. import mod_origin
+from ..unity import mod_origin
 from ..core.errors import ServiceError
 from bmpt.engine import parse_filename
 from . import integrity

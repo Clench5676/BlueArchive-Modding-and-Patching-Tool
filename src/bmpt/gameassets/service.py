@@ -21,7 +21,7 @@ from PIL import Image
 from ..core import devmode, preview_gate, spans
 from ..core.errors import ServiceError
 from bmpt.engine import parse_filename, spine_kind
-from ..texture_guard import texture_image
+from ..unity.texture_guard import texture_image
 from .cache import AssetCache, PreviewCache, pack_preview_files, unpack_preview_files
 from . import lobby
 from .discovery import (

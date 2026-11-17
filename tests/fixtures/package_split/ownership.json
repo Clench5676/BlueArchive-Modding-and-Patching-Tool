@@ -329,13 +329,13 @@
       "file": "src/ba_modding_toolkit/asset.py",
       "line": 17,
       "original": "from .texture_guard import texture_image",
-      "import": "from bmpt.texture_guard import encodable_image, texture_image"
+      "import": "from bmpt.unity.texture_guard import encodable_image, texture_image"
     },
     {
       "file": "src/ba_modding_toolkit/bundle.py",
       "line": 15,
       "original": "from .bundle_guard import check_bundle",
-      "import": "from bmpt.bundle_guard import check_bundle"
+      "import": "from bmpt.unity.bundle_guard import check_bundle"
     },
     {
       "file": "src/ba_modding_toolkit/bundle.py",
@@ -347,7 +347,7 @@
       "file": "src/ba_modding_toolkit/bundle.py",
       "line": 57,
       "original": "from .unityfs import read_cab_names",
-      "import": "from bmpt.unityfs import read_cab_names"
+      "import": "from bmpt.unity.unityfs import read_cab_names"
     },
     {
       "file": "src/ba_modding_toolkit/cli/handlers.py",
@@ -365,7 +365,7 @@
       "file": "src/ba_modding_toolkit/core/extraction.py",
       "line": 22,
       "original": "from ..texture_guard import texture_image",
-      "import": "from bmpt.texture_guard import texture_image"
+      "import": "from bmpt.unity.texture_guard import texture_image"
     },
     {
       "file": "src/ba_modding_toolkit/gui/configs.py",

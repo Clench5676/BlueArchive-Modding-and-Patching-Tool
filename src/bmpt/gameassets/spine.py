@@ -11,7 +11,7 @@ from typing import Iterable, Mapping
 
 from PIL import Image
 
-from ..texture_guard import texture_image
+from ..unity.texture_guard import texture_image
 from .errors import AssetNotFound
 from .unity import open_bundle
 

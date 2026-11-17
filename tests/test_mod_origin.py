@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from bmpt import mod_origin
+from bmpt.unity import mod_origin
 from ba_modding_toolkit.bundle import Bundle
 from bmpt.library import integrity
 from bmpt.library import ModLibrary

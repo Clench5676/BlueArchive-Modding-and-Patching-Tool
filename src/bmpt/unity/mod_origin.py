@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .library.integrity import Contents
+from ..library.integrity import Contents
 
 SERVERS = ("global", "japan")
 PLATFORMS = ("android", "ios", "windows")

@@ -13,7 +13,7 @@ from PIL import Image, ImageMath
 from . import spine_names
 from .core import devmode
 from bmpt.engine import Bundle, ContNameTypeKey, Patch, get_skel_version
-from .texture_guard import texture_image
+from .unity.texture_guard import texture_image
 
 
 class RemapError(ValueError):

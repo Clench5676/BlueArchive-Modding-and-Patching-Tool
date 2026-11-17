@@ -14,7 +14,8 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
-from .. import atlas_remap, mod_origin
+from .. import atlas_remap
+from ..unity import mod_origin
 from ..core import devmode
 from ..core.errors import ServiceError
 from ..core.openfiles import temporary_directory

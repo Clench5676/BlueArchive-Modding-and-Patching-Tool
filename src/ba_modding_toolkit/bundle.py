@@ -12,7 +12,7 @@ from UnityPy.files import BundleFile, SerializedFile
 from UnityPy.environment import Environment as Env
 
 from .asset import ApplyContext, ExtractContext, apply_asset, extract_asset
-from bmpt.bundle_guard import check_bundle
+from bmpt.unity.bundle_guard import check_bundle
 from .i18n import t
 from bmpt.core.errors import ServiceError
 from .utils import apply_crc_fix, compute_crc32, no_log, throttle_progress
@@ -54,7 +54,7 @@ class BundleFileInfo:
 
 def get_cab_names(bundle_path: Path) -> set[str] | None:
     """Read internal names cheaply; preserve the CLI fallback contract."""
-    from bmpt.unityfs import read_cab_names
+    from bmpt.unity.unityfs import read_cab_names
 
     try:
         names = read_cab_names(bundle_path)

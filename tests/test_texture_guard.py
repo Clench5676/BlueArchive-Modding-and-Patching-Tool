@@ -14,7 +14,8 @@ from UnityPy.enums import BuildTarget, TextureFormat as TF
 from UnityPy.export import Texture2DConverter
 from UnityPy.helpers import ResourceReader, TextureSwizzler
 
-from bmpt import atlas_remap as remap, refine_assembly, texture_guard as guard
+from bmpt import atlas_remap as remap, refine_assembly
+from bmpt.unity import texture_guard as guard
 from ba_modding_toolkit.bundle import Bundle
 from ba_modding_toolkit.core import extraction
 from bmpt.core.errors import ServiceError

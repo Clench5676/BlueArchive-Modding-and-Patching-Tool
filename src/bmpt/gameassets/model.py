@@ -30,7 +30,7 @@ import UnityPy.helpers.MeshHelper as MeshHelper
 from UnityPy.helpers.MeshHelper import MeshHandler
 from UnityPy.helpers.PackedBitVector import reshape, unpack_floats, unpack_ints
 
-from ..texture_guard import texture_image
+from ..unity.texture_guard import texture_image
 from . import particles
 from .discovery import cab_names, own_bundle
 from .errors import AssetNotFound

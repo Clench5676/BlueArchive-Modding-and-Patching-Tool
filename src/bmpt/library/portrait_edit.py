@@ -15,7 +15,7 @@ from ..core import devmode
 from bmpt.engine import Bundle, SaveOptions
 from ..core.errors import ServiceError
 from ..core.openfiles import temporary_directory
-from ..texture_guard import texture_image
+from ..unity.texture_guard import texture_image
 from . import profiles
 from .judge import core_of, date_of, other_target
 from .models import PhotographApplyResult

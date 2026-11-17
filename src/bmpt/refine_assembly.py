@@ -18,7 +18,7 @@ from bmpt import atlas_remap as remap
 from bmpt.core import devmode
 from bmpt.engine import Bundle, SaveOptions, core
 from bmpt.core.openfiles import temporary_directory
-from .texture_guard import texture_image
+from .unity.texture_guard import texture_image
 
 
 @dataclass

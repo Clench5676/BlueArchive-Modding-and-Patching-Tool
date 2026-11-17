@@ -14,7 +14,7 @@ from .models import (
     FontAssetData,
 )
 from .spine import SkelConverter, SkelRef, check_skel_animation_diff
-from bmpt.texture_guard import encodable_image, texture_image
+from bmpt.unity.texture_guard import encodable_image, texture_image
 from .utils import no_log
 
 

@@ -96,8 +96,9 @@ The collection art is read where the game loads it (CostumeExcel's texture paths
 
 `model_glb` reads prefab bundles and resolves their external CABs on demand. Model, memorial and office graphs share
 the revision-checked `gameassets/cabs.py` resolver; the optional preview cache persists bounded, checksummed CAB
-metadata, confined to the installation and checked by device, inode, size, mtime and ctime. The shared `unityfs.py`
-parser reads only header/block info and uses the declared bundle length to ignore CRC-correction tails. The GLB
+metadata, confined to the installation and checked by device, inode, size, mtime and ctime. The shared
+`unity/unityfs.py` parser reads only header/block info and uses the declared bundle length to ignore CRC-correction
+tails. The GLB
 carries what the game's shaders need (materials, constants, keywords, outline, blend state, samplers, clip toggles);
 `web/js/chibi-materials.js` ports the game's shaders from their compiled programs, and `model.js` opens at the
 formation screen's view with the formation screen's light, both read from the game's own data and checked against

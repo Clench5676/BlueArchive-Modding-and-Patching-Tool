@@ -28,7 +28,8 @@ from typing import TYPE_CHECKING, Any, Callable, Collection, Hashable, Iterable,
 
 from UnityPy.helpers.ResourceReader import get_resource_data
 
-from bmpt import atlas_remap, graft as grafting, mod_origin, rebake, spine_converter
+from bmpt import atlas_remap, graft as grafting, rebake, spine_converter
+from bmpt.unity import mod_origin
 from bmpt.host import game_paths, steam_records
 from bmpt.core import devmode, preview_gate, spans
 from bmpt.core.progress_meter import Meter
