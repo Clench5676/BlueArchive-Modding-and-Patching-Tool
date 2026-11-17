@@ -1,8 +1,8 @@
 // Verified LobbyCommon and LobbyCommonNight: identity ancestors, TweenController/CharPos at (-112, -886),
 // scale 111. Ordinary portrait SkeletonDataAssets use .01. The game's 16:9 UI camera spans 2960 x 1665 units.
 // These are a projection baseline, not a claim about every runtime camera/character composition.
-import { CONTROL, SPACE } from "./ui/ui-tokens.js";
-import { row } from "./ui/ui-grid.js";
+import { CONTROL, SPACE } from "../ui/ui-tokens.js";
+import { row } from "../ui/ui-grid.js";
 export const LOBBY_CHARACTER_POS = Object.freeze({ pos: [-112, -886], scale: [111, 111] });
 export const LOBBY_UI_WIDTH = 2960;
 export const PORTRAIT_SKELETON_SCALE = 0.01;

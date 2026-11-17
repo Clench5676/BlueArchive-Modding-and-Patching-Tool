@@ -13,7 +13,7 @@ import * as Popup from "../ui/popup.js";
 import * as Prompts from "./prompts.js";
 import * as Impact from "./update-impact.js";
 import * as Roster from "../roster/roster.js";
-import * as StudentHall from "../student-hall.js";
+import * as StudentHall from "../hall/student-hall.js";
 import * as Settings from "../settings.js";
 import * as Update from "./update.js";
 import * as Tours from "./tours.js";

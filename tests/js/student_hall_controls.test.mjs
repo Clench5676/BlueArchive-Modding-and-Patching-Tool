@@ -109,13 +109,13 @@ globalThis.hallControlsHarness = {
   },
   lobby,
 };
-let source = await readFile(new URL("../../src/bmpt/web/js/student-hall.js", import.meta.url), "utf8");
+let source = await readFile(new URL("../../src/bmpt/web/js/hall/student-hall.js", import.meta.url), "utf8");
 source = source.replace(/^import [^;]*;$/gm, "");
 source =
   `import { CONTROL, XS_BUTTON, SPACE } from "${new URL("../../src/bmpt/web/js/ui/ui-tokens.js", import.meta.url).href}";\nimport { row } from "${new URL("../../src/bmpt/web/js/ui/ui-grid.js", import.meta.url).href}";\n` +
   source;
 source =
-  `import { portraitReplacements } from "${new URL("../../src/bmpt/web/js/student-hall-model.js", import.meta.url).href}";\nimport { portraitRect, portraitToolbarLayout, PORTRAIT_SIZE } from "${new URL("../../src/bmpt/web/js/student-hall-framing.js", import.meta.url).href}";\nimport { bindCorner } from "${new URL("../../src/bmpt/web/js/window/corner-layout.js", import.meta.url).href}";\n` +
+  `import { portraitReplacements } from "${new URL("../../src/bmpt/web/js/hall/student-hall-model.js", import.meta.url).href}";\nimport { portraitRect, portraitToolbarLayout, PORTRAIT_SIZE } from "${new URL("../../src/bmpt/web/js/hall/student-hall-framing.js", import.meta.url).href}";\nimport { bindCorner } from "${new URL("../../src/bmpt/web/js/window/corner-layout.js", import.meta.url).href}";\n` +
   source;
 source = `const {S,clone,NGUI,alignIcon,text,T,Popup,document,UI}=globalThis.hallControlsHarness;\n${source}\nexport {lobbyControl,controls,renderChrome,renderPortraitActions};
 export function setPortraits(value){portraits=value;}
@@ -333,7 +333,7 @@ test("the Common ChangeUnit portrait icon keeps its77x68ratio and enables only w
 });
 
 test("the own-size slider moves the toolbar only once a size is set, never under a dragged thumb", async () => {
-  const { portraitRect, portraitToolbarLayout } = await import("../../src/bmpt/web/js/student-hall-framing.js");
+  const { portraitRect, portraitToolbarLayout } = await import("../../src/bmpt/web/js/hall/student-hall-framing.js");
   const entry = { id: "a", variant: "hero", source: "mod:current", x: 400, y: 1100, scale: 1, mirror: false },
     ui = globalThis.hallControlsHarness.UI,
     saved = { ...ui };

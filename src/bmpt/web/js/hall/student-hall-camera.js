@@ -1,5 +1,5 @@
 // A temporary scene camera shared by every portrait and the office background; the layout data stays unchanged.
-import { wheelKind, wheelStep } from "./lobby/lobby-touch.js";
+import { wheelKind, wheelStep } from "../lobby/lobby-touch.js";
 
 const HOME = Object.freeze({ scale: 1, x: 0, y: 0 });
 const clamp = (n, low, high) => Math.max(low, Math.min(high, n));

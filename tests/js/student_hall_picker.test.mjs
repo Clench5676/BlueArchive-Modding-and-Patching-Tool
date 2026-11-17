@@ -7,7 +7,7 @@ import {
   portraitRows,
   studentChoices,
   memorialChoices,
-} from "../../src/bmpt/web/js/student-hall-model.js";
+} from "../../src/bmpt/web/js/hall/student-hall-model.js";
 import { normalizeView } from "../../src/bmpt/web/js/roster/roster-order.js";
 class Element {
   style = {};
@@ -119,7 +119,7 @@ globalThis.pickerFixture = {
     },
   },
 };
-let source = await readFile(new URL("../../src/bmpt/web/js/student-hall-picker.js", import.meta.url), "utf8");
+let source = await readFile(new URL("../../src/bmpt/web/js/hall/student-hall-picker.js", import.meta.url), "utf8");
 source = source.replace(/^import [^;]*;$/gm, "");
 const API = await import(
   `data:text/javascript;base64,${Buffer.from("const {UI,Display,Popup,bindReorder,dragFeedback,normalizeView,sourceKey,portraitRows,studentChoices,memorialChoices,thumbnailScope,lazyThumbnail,spineBase,L,T,language}=globalThis.pickerFixture;\n" + source + "\n//# sourceURL=hall-picker-fixture.js").toString("base64")}`

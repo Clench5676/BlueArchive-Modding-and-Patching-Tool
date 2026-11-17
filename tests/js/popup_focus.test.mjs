@@ -420,7 +420,7 @@ test("an asset-consent style popup that must be answered is trapped too, and Esc
 test("popup.js keeps one trap: the Hall modal and the import dialogs no longer carry their own", async () => {
   const { readFileSync } = await import("node:fs");
   const web = (file) => readFileSync(new URL(`../../src/bmpt/web/js/${file}`, import.meta.url), "utf8");
-  assert.doesNotMatch(web("student-hall-ui.js"), /event\.key !== "Tab"/);
+  assert.doesNotMatch(web("hall/student-hall-ui.js"), /event\.key !== "Tab"/);
   assert.doesNotMatch(web("mods/batch-import.js"), /event\.key !== "Tab"/);
   assert.match(web("ui/popup.js"), /addEventListener\("keydown", trapKey\)/);
 });

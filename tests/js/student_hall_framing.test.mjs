@@ -6,9 +6,9 @@ import {
   PORTRAIT_BASE_SCALE,
   portraitScale,
   portraitRect,
-} from "../../src/bmpt/web/js/student-hall-framing.js";
+} from "../../src/bmpt/web/js/hall/student-hall-framing.js";
 import { portraitViewport, stagePoint } from "../../src/bmpt/web/js/detail/portrait-view.js";
-import { createDraft } from "../../src/bmpt/web/js/student-hall-model.js";
+import { createDraft } from "../../src/bmpt/web/js/hall/student-hall-model.js";
 const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-7, `${actual} != ${expected}`);
 const box = { left: 0, top: 0, width: 1920, height: 1080 };
 
@@ -83,7 +83,7 @@ import {
   visibleHead,
   readyAlpha,
   ALPHA_SIDE,
-} from "../../src/bmpt/web/js/student-hall-framing.js";
+} from "../../src/bmpt/web/js/hall/student-hall-framing.js";
 const runtimeContext = vm.createContext({
   console,
   TextDecoder,
@@ -495,7 +495,7 @@ test("the visible head ignores Spine's bounds: transparent props, additive halos
   assert.equal(visibleHead(skeleton, Runtime, pages), null);
 });
 
-import { portraitToolbarLayout, PORTRAIT_TOOLBAR_HEIGHT } from "../../src/bmpt/web/js/student-hall-framing.js";
+import { portraitToolbarLayout, PORTRAIT_TOOLBAR_HEIGHT } from "../../src/bmpt/web/js/hall/student-hall-framing.js";
 import { CONTROL, SPACE } from "../../src/bmpt/web/js/ui/ui-tokens.js";
 for (const locale of ["en-US", "zh-CN"])
   test(`portrait toolbar centres equal icons with scaled gaps in ${locale}`, () => {

@@ -7,11 +7,11 @@ import {
   sourceKey,
   portraitSelection,
   portraitReplacements,
-} from "../../src/bmpt/web/js/student-hall-model.js";
-import { createMemorialPool } from "../../src/bmpt/web/js/student-hall-memorial.js";
+} from "../../src/bmpt/web/js/hall/student-hall-model.js";
+import { createMemorialPool } from "../../src/bmpt/web/js/hall/student-hall-memorial.js";
 import { dialogueText } from "../../src/bmpt/web/js/detail/dialogue-text.js";
-import { sceneRect, sceneViewport } from "../../src/bmpt/web/js/student-hall-camera.js";
-import { portraitRect } from "../../src/bmpt/web/js/student-hall-framing.js";
+import { sceneRect, sceneViewport } from "../../src/bmpt/web/js/hall/student-hall-camera.js";
+import { portraitRect } from "../../src/bmpt/web/js/hall/student-hall-framing.js";
 
 class Element {
   constructor() {
@@ -162,12 +162,12 @@ globalThis.sceneHarness = {
     return button;
   },
 };
-let source = await readFile(new URL("../../src/bmpt/web/js/student-hall.js", import.meta.url), "utf8");
+let source = await readFile(new URL("../../src/bmpt/web/js/hall/student-hall.js", import.meta.url), "utf8");
 source = source.replace(/^import [^;]*;$/gm, "");
 source =
   `import { CONTROL, XS_BUTTON, SPACE } from "${new URL("../../src/bmpt/web/js/ui/ui-tokens.js", import.meta.url).href}";\nimport { row } from "${new URL("../../src/bmpt/web/js/ui/ui-grid.js", import.meta.url).href}";\n` +
   source;
-source = `import { bindPortraitPointer, portraitToolbarLayout } from "${new URL("../../src/bmpt/web/js/student-hall-framing.js", import.meta.url).href}";\nconst {createDraft,createMemorialPool,sourceKey,portraitSelection,portraitReplacements,portraitRect,sceneRect,sceneViewport,dialogueText,language,clone,S,T,L,document,Backgrounds,Loading,Lobby,Popup,UI,rpc,hitButton}=globalThis.sceneHarness;\n${source}
+source = `import { bindPortraitPointer, portraitToolbarLayout } from "${new URL("../../src/bmpt/web/js/hall/student-hall-framing.js", import.meta.url).href}";\nconst {createDraft,createMemorialPool,sourceKey,portraitSelection,portraitReplacements,portraitRect,sceneRect,sceneViewport,dialogueText,language,clone,S,T,L,document,Backgrounds,Loading,Lobby,Popup,UI,rpc,hitButton}=globalThis.sceneHarness;\n${source}
 const originalHits=renderHits;
 export function fixture(value,renderer,memory=null,shownMode=value.mode){
  store=createDraft(value);root=document.createElement('div');art=document.createElement('div');hits=document.createElement('div');chrome=document.createElement('div');subtitle=document.createElement('div');root.append(art,hits,chrome,subtitle);

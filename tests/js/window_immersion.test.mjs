@@ -24,7 +24,7 @@ test("camera preparation is immersive even before the shared detail fullscreen f
     flat(source("web/js/photography/controller.js")),
     /document\.documentElement\.classList\.add\(["']photo-active["']\)/,
   );
-  assert.match(flat(source("web/js/student-hall-fullscreen.js")), /stage\.classList\.add\("hall-fullscreen"\)/);
+  assert.match(flat(source("web/js/hall/student-hall-fullscreen.js")), /stage\.classList\.add\("hall-fullscreen"\)/);
   assert.match(
     flat(source("web/js/window/window-chrome.js")),
     /observe\(document\.documentElement, \{ attributes: true, attributeFilter: \[["']class["']\]/,

@@ -6996,7 +6996,13 @@ test("the startup Spine notice wraps inside UIPopup_Sort at message sizes in eve
 
 // Every preview entry stays quiet while the startup acknowledgement is pending.
 test("preview, comparison and compatibility modules contain no licence notice or confirmation button", () => {
-  for (const name of ["lobby/lobby", "detail/detail", "student-hall", "mods/mod-compare", "mods/mod-compatibility"]) {
+  for (const name of [
+    "lobby/lobby",
+    "detail/detail",
+    "hall/student-hall",
+    "mods/mod-compare",
+    "mods/mod-compatibility",
+  ]) {
     const source = readFileSync(new URL(`../../src/bmpt/web/js/${name}.js`, import.meta.url), "utf8");
     assert.doesNotMatch(
       source,

@@ -1,8 +1,8 @@
 // Student Hall: UILobby controls, independent drafts, and modal resource editors built from native game prefabs.
-import * as NGUI from "./ui/ngui.js";
-import { bindCorner } from "./window/corner-layout.js";
-import * as Loading from "./app/loading.js";
-import * as Popup from "./ui/popup.js";
+import * as NGUI from "../ui/ngui.js";
+import { bindCorner } from "../window/corner-layout.js";
+import * as Loading from "../app/loading.js";
+import * as Popup from "../ui/popup.js";
 import * as UI from "./student-hall-ui.js";
 import * as Backgrounds from "./student-hall-backgrounds.js";
 import {
@@ -19,15 +19,15 @@ import { alignIcon } from "./student-hall-icons.js";
 import { createMemorialPool } from "./student-hall-memorial.js";
 import { createFullscreen } from "./student-hall-fullscreen.js";
 import { createSceneCamera, sceneRect, sceneViewport } from "./student-hall-camera.js";
-import { dialogueText } from "./detail/dialogue-text.js";
+import { dialogueText } from "../detail/dialogue-text.js";
 import { bindPortraitPointer, portraitRect, portraitToolbarLayout, PORTRAIT_SIZE } from "./student-hall-framing.js";
-import { rpc } from "./core/api.js";
-import { T, L, errorText, language } from "./core/i18n.js";
-import { clone, S, hitButton, text } from "./core/util.js";
-import { lazyThumbnail } from "./ui/lazy-thumbnail.js";
-import { thumbnailScope } from "./detail/thumbs.js";
-import { CONTROL, XS_BUTTON, SPACE } from "./ui/ui-tokens.js";
-import { row } from "./ui/ui-grid.js";
+import { rpc } from "../core/api.js";
+import { T, L, errorText, language } from "../core/i18n.js";
+import { clone, S, hitButton, text } from "../core/util.js";
+import { lazyThumbnail } from "../ui/lazy-thumbnail.js";
+import { thumbnailScope } from "../detail/thumbs.js";
+import { CONTROL, XS_BUTTON, SPACE } from "../ui/ui-tokens.js";
+import { row } from "../ui/ui-grid.js";
 
 let ctx, store, options, root, art, chrome, hits, subtitle, layouts, dialogue, fullscreen, sceneCamera;
 let page = 0,

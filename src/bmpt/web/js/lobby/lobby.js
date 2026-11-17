@@ -16,7 +16,7 @@ import { lobbyIdle } from "../spine/rest-pose.js";
 import { withPreviewTimeout as withTimeout } from "../core/async.js";
 import { atStep, previewError } from "../detail/preview-error.js";
 import { T, language } from "../core/i18n.js";
-const dialogueModule = () => import("../student-hall-dialogue.js");
+const dialogueModule = () => import("../hall/student-hall-dialogue.js");
 import { artBounds, containingView, overlaps, resumeRest, settle, validRect, worldBounds } from "./lobby-health.js";
 import * as Linear from "../core/linear.js";
 import * as Materials from "../spine/skeleton-materials.js";

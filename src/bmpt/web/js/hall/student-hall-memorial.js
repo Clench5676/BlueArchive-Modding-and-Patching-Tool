@@ -2,7 +2,7 @@
 const modules = [null, null];
 const moduleAt = (index) =>
   (modules[index] ||=
-    index === 0 ? import("./lobby/lobby.js?student-hall-a") : import("./lobby/lobby.js?student-hall-b"));
+    index === 0 ? import("../lobby/lobby.js?student-hall-a") : import("../lobby/lobby.js?student-hall-b"));
 /**
  * Make the Hall's pool of memorial lobbies: one retained current scene and one hidden replacement.
  * @param {object} options

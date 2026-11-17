@@ -1,5 +1,5 @@
 // Drafts and picker ordering are independent of DOM and game playback.
-import { order, normalizeView, fold, terms } from "./roster/roster-order.js";
+import { order, normalizeView, fold, terms } from "../roster/roster-order.js";
 import { PORTRAIT_ANCHOR, hallScale } from "./student-hall-framing.js";
 
 const copy = (value) => structuredClone(value);

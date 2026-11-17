@@ -1,7 +1,7 @@
 import { rpc, waitJob } from "../core/api.js";
 import { T, L } from "../core/i18n.js";
 import * as NGUI from "../ui/ngui.js";
-import * as UI from "../student-hall-ui.js";
+import * as UI from "../hall/student-hall-ui.js";
 import * as Popup from "../ui/popup.js";
 import * as Loading from "../app/loading.js";
 import { modJob } from "../core/job-progress.js";
@@ -14,7 +14,7 @@ import { FRAME, choiceLayout, otherMode, actionCaption } from "./camera.js";
 import { CONTROL, XS_BUTTON, SPACE, FULLSCREEN_BUTTON } from "../ui/ui-tokens.js";
 import { row } from "../ui/ui-grid.js";
 import { switchGrid } from "../mods/switch-layout.js";
-import { alignIcon, buttonCenter } from "../student-hall-icons.js";
+import { alignIcon, buttonCenter } from "../hall/student-hall-icons.js";
 import { anchoredCentre } from "../detail/visual-view.js";
 import { wheelKind, wheelStep } from "../lobby/lobby-touch.js";
 import { bindCorner, bindEdge } from "../window/corner-layout.js";

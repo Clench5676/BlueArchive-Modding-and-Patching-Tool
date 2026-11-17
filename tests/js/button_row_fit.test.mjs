@@ -450,7 +450,7 @@ for (const locale of LOCALES)
 await import("../../src/bmpt/web/js/ui/ui-grid.js");
 for (const locale of LOCALES)
   test(`the Hall modal's footer captions fit in ${locale}`, async () => {
-    const ui = await source("student-hall-ui.js");
+    const ui = await source("hall/student-hall-ui.js");
     assert.match(ui, /fitGroup\(captions, 40, 26, width \/ S - 60, 2, \{ maxH: height \/ S - 20 \}\)/);
     document.documentElement.lang = locale;
     const S = 1920 / 2960;

@@ -1,6 +1,6 @@
 // Align original game sprite ink with the visible body of its native inclined button.
-import * as NGUI from "./ui/ngui.js";
-import { spriteUrl } from "./core/api.js";
+import * as NGUI from "../ui/ngui.js";
+import { spriteUrl } from "../core/api.js";
 
 const metrics = new Map();
 /**

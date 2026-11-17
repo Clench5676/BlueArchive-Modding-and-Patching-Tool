@@ -1,17 +1,17 @@
 // Modal shells, controls and cards of the Student Hall, built on UIPopup_Sort, UICharacterCollection and the
 // switch-card renderer.
-import * as NGUI from "./ui/ngui.js";
-import * as Popup from "./ui/popup.js";
-import * as Loading from "./app/loading.js";
-import { withTimeout } from "./core/async.js";
-import * as Buttons from "./ui/game-buttons.js";
-import { searchTree, orderBody, toolbarLayout, toolbarTree } from "./roster/roster-widgets.js";
-import { clone, S, hitButton } from "./core/util.js";
-import { T } from "./core/i18n.js";
-import { spriteUrl } from "./core/api.js";
+import * as NGUI from "../ui/ngui.js";
+import * as Popup from "../ui/popup.js";
+import * as Loading from "../app/loading.js";
+import { withTimeout } from "../core/async.js";
+import * as Buttons from "../ui/game-buttons.js";
+import { searchTree, orderBody, toolbarLayout, toolbarTree } from "../roster/roster-widgets.js";
+import { clone, S, hitButton } from "../core/util.js";
+import { T } from "../core/i18n.js";
+import { spriteUrl } from "../core/api.js";
 import { bindScale } from "./student-hall-scale.js";
-import { POPUP, POPUP_FRAME, XS_BUTTON, CONTROL, TYPE, SPACE, captionMinimum } from "./ui/ui-tokens.js";
-import { stack as layoutStack } from "./ui/ui-grid.js";
+import { POPUP, POPUP_FRAME, XS_BUTTON, CONTROL, TYPE, SPACE, captionMinimum } from "../ui/ui-tokens.js";
+import { stack as layoutStack } from "../ui/ui-grid.js";
 // A Hall small button is a buttonS control (docs/design-system/controls.md): its height, minimum width and
 // caption size are the system's, the caption's floor the body role's. Its fit insets are the Common_Btn_BG
 // body's (XS_BUTTON), not a scale value. the compact bodies (half an XS body high) hold one line at TYPE.micro's

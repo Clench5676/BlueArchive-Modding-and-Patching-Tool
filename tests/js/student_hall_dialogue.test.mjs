@@ -65,7 +65,7 @@ globalThis.hallDialogueHarness = {
   URL: { createObjectURL: () => `blob:voice-${nextTimer}`, revokeObjectURL: (url) => revoked.push(url) },
   freezeWhileLoading,
 };
-let source = await readFile(new URL("../../src/bmpt/web/js/student-hall-dialogue.js", import.meta.url), "utf8");
+let source = await readFile(new URL("../../src/bmpt/web/js/hall/student-hall-dialogue.js", import.meta.url), "utf8");
 source = source.replace(/^import [^;]*;$/gm, "");
 source = `const {NGUI, defaultRpc, language, S, talkExpression, setTimeout, clearTimeout, URL, spriteBorders, sliceAxis, slicePoint, dialogueText, freezeWhileLoading} = globalThis.hallDialogueHarness;\n${source}`;
 const {
@@ -1142,7 +1142,7 @@ test("balloon subtitle transitions preserve the 260 ms sequence and immediate la
 test("the Hall and memorial lobby use one prepareBalloon and CSS contributes no subtitle look", async () => {
   const lobby = await readFile(new URL("../../src/bmpt/web/js/lobby/lobby.js", import.meta.url), "utf8");
   const css = await readFile(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
-  assert.match(flat(lobby), /import\("\.\.\/student-hall-dialogue.js"\)/);
+  assert.match(flat(lobby), /import\("\.\.\/hall\/student-hall-dialogue.js"\)/);
   assert.equal((source.match(/function prepareBalloon\(/g) || []).length, 1);
   assert.equal((flat(source).match(/prepareBalloon\(template|prepareBalloon\(saved/g) || []).length, 3);
   for (const rule of css.matchAll(/[^{}]*\.lobby-subtitle[^{}]*\{([^}]*)\}/g))

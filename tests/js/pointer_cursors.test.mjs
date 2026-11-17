@@ -51,7 +51,7 @@ test("a hit area or an unseen control never sets a system cursor of its own", ()
   assert.doesNotMatch(app.match(/\.hit\.slider-range\s*\{[^}]*\}/)[0], /cursor/);
   assert.match(app, /^\.hit\s*\{[^}]*cursor: var\(--cursor-press\)/m);
   // a card that does not open a preview shows the plain game pointer, not the system arrow
-  const hall = readFileSync(join(WEB, "js/student-hall-ui.js"), "utf8");
+  const hall = readFileSync(join(WEB, "js/hall/student-hall-ui.js"), "utf8");
   assert.match(hall, /if \(!interactive\) \{[^}]*hit\.style\.cursor = "var\(--cursor\)"/);
 });
 

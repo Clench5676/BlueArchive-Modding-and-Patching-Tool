@@ -457,7 +457,7 @@ for (const locale of LOCALES)
 
 // the Hall's student cards (student-hall-ui.js formationCardTree: 36 down to 24, two lines, 190 wide)
 const hall = await (async () => {
-  let source = readFileSync(new URL("../../src/bmpt/web/js/student-hall-ui.js", import.meta.url), "utf8");
+  let source = readFileSync(new URL("../../src/bmpt/web/js/hall/student-hall-ui.js", import.meta.url), "utf8");
   const { POPUP, POPUP_FRAME, CONTROL, TYPE, SPACE, XS_BUTTON } = await import("../../src/bmpt/web/js/ui/ui-tokens.js");
   const { stack: layoutStack } = await import("../../src/bmpt/web/js/ui/ui-grid.js");
   globalThis.hallHarness = {

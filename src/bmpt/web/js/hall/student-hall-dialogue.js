@@ -1,12 +1,12 @@
 // Ordinary LobbyCommon/ChatDialog/Talk balloon; original NGUI sprite, font and padding follow the clicked actor.
-import * as NGUI from "./ui/ngui.js";
-import { rpc as defaultRpc } from "./core/api.js";
-import { language } from "./core/i18n.js";
-import { S } from "./core/util.js";
+import * as NGUI from "../ui/ngui.js";
+import { rpc as defaultRpc } from "../core/api.js";
+import { language } from "../core/i18n.js";
+import { S } from "../core/util.js";
 import { talkExpression } from "./student-hall-portraits.js";
-import { spriteBorders, sliceAxis, slicePoint } from "./ui/sprite-slices.js";
-import { dialogueText } from "./detail/dialogue-text.js";
-import { freezeWhileLoading } from "./detail/preview-lifecycle.js";
+import { spriteBorders, sliceAxis, slicePoint } from "../ui/sprite-slices.js";
+import { dialogueText } from "../detail/dialogue-text.js";
+import { freezeWhileLoading } from "../detail/preview-lifecycle.js";
 
 const LANGS = { "en-US": "en", "zh-CN": "zh-CN", "zh-TW": "zh-TW", "ja-JP": "ja", "ko-KR": "ko", "th-TH": "th" };
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));

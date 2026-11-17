@@ -1,8 +1,8 @@
 // LobbyCommon/LobbyCommonNight use authored NGUI layers and serialized shader pass blending.
-import * as NGUI from "./ui/ngui.js";
-import { withTimeout } from "./core/async.js";
-import { T } from "./core/i18n.js";
-import { S } from "./core/util.js";
+import * as NGUI from "../ui/ngui.js";
+import { withTimeout } from "../core/async.js";
+import { T } from "../core/i18n.js";
+import { S } from "../core/util.js";
 
 /**
  * Choose the Hall background: the saved one, else office-day, else the first with a picture, else the first.

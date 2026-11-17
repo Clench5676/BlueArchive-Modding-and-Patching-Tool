@@ -225,7 +225,7 @@ test("the other copies of that expression use the shared errorText too", async (
     "app/nav.js",
     "mods/mod-alias.js",
     "mods/mod-export.js",
-    "student-hall.js",
+    "hall/student-hall.js",
     "app/main.js",
   ]) {
     const source = read(name);

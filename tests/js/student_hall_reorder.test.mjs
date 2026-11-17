@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { bindReorder, dragFeedback, TOUCH_REORDER_HOLD } from "../../src/bmpt/web/js/student-hall-reorder.js";
+import { bindReorder, dragFeedback, TOUCH_REORDER_HOLD } from "../../src/bmpt/web/js/hall/student-hall-reorder.js";
 import { horizontalScroll } from "../../src/bmpt/web/js/ui/horizontal-scroll.js";
 class Target {
   style = {};
