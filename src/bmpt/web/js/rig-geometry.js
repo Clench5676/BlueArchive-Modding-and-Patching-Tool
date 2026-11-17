@@ -1,4 +1,4 @@
-// What a portrait rig draws, pose by pose, for the remap's world-space rebake (rebake.py): per drawn slot its
+// What a portrait rig draws, pose by pose, for the remap's world-space rebake (spine/rebake.py): per drawn slot its
 // region, page, blend, alpha, world vertices, page UVs and triangles. The caller supplies the shipped Spine runtime;
 // all posing uses its public API.
 
@@ -165,7 +165,7 @@ export function restOnly(geometry) {
 }
 
 /**
- * The setup pose of a rig for the graft (graft.py setup): per bone its world matrix [a, b, c, d, x, y], per
+ * The setup pose of a rig for the graft (spine/graft.py setup): per bone its world matrix [a, b, c, d, x, y], per
  * slot its bone, and per skin attachment that draws a region its page, world vertices, page UVs and triangles.
  */
 export function setupOf(S, atlasText, skeletonData) {
@@ -217,7 +217,7 @@ export function setupOf(S, atlasText, skeletonData) {
 }
 
 /**
- * Poses for the graft's check (graft.py choose), in rebake.rig's shape: the rest pose left empty and, per
+ * Poses for the graft's check (spine/graft.py choose), in rebake.rig's shape: the rest pose left empty and, per
  * animation of `check` (name -> slots) the skeleton has, what those slots draw with the idle on track 0 and the
  * animation on track 1.
  */
@@ -234,7 +234,7 @@ export function partPoses(S, atlasText, skeletonData, check) {
 }
 
 /**
- * The graft's check of a rig without a picture to compare (graft.py plain): the animations of `names` the
+ * The graft's check of a rig without a picture to compare (spine/graft.py plain): the animations of `names` the
  * runtime cannot pose (all of them when the rig does not read), each tried on track 0 from the setup pose at
  * `times` (shares of its duration). An animation fails when posing it throws or gives a bone or a drawn vertex
  * that is not finite; one the skeleton lacks fails too.

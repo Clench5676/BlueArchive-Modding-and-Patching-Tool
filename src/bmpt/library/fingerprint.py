@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .. import atlas_remap, spine_names
+from ..spine import atlas_remap, names as spine_names
 from . import integrity
 from .storage import atomic_json
 
@@ -158,7 +158,7 @@ def painted(parts: list[dict], mod: dict, skeletons: dict[str, bytes] | None = N
 
     Retain each atlas entry by name, with its paired official skeleton encoded as
     base64 when available. A later repack leaves the mod's textures on their original
-    layout; the retained layout and rig provide the source for bmpt.rebake.
+    layout; the retained layout and rig provide the source for bmpt.spine.rebake.
 
     Args:
         parts: Official part fingerprints the mod is known to have been made for.

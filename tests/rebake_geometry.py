@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import zlib
 
-from bmpt.atlas_remap import parse_atlas
+from bmpt.spine.atlas_remap import parse_atlas
 from bmpt.library.judge import core_of
 
 

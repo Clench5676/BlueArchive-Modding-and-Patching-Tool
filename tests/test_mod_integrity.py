@@ -536,14 +536,14 @@ def test_self_contained_atlas_positions_rotations_and_trims_are_not_official_dri
     assert not report["remappable"]
     register(source, {"atlases": {"test.atlas": new}, "textures": {"page": [64, 64]}})
     # Inspecting an equal atlas is insensitive to line indentation and syntax spelling.
-    from bmpt.atlas_remap import layout_changes
+    from bmpt.spine.atlas_remap import layout_changes
 
     equivalent = old.replace("rotate: false", "rotate: 0")
     assert layout_changes({"test.atlas": old.encode()}, {"test.atlas": equivalent.encode()}) == []
 
 
 def test_import_validates_parts_without_running_compatibility(serialized, monkeypatch):
-    from bmpt import atlas_remap
+    from bmpt.spine import atlas_remap
 
     env, register = serialized
     source = register(make_mod(env.original, env.tmp / "input"))

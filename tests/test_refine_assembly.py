@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from bmpt import atlas_remap as remap
+from bmpt.spine import atlas_remap as remap
 from ba_modding_toolkit.bundle import Bundle
 from bmpt.refine_assembly import assemble_mod, assemble_page, misalignment
 

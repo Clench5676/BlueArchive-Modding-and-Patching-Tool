@@ -12,7 +12,7 @@ from PIL import Image
 from ba_modding_toolkit.models import FilePair
 from bmpt.core.errors import ServiceError
 from bmpt.library.rebuild import RebuildResult
-from bmpt import atlas_remap as remap
+from bmpt.spine import atlas_remap as remap
 from bmpt.library import fingerprint, service
 from bmpt.library.integrity import inspect as inspect_bundle
 
@@ -131,7 +131,7 @@ def real(setup_library, monkeypatch):
     monkeypatch.setattr("bmpt.library.integrity.inspect", inspect_bundle)
     # The synthetic rigs (rebake_geometry) draw every region at a place of its own name, an expression beside the
     # body rather than over it: the rest pictures of rigs that gained one do not overlap as real ones do.
-    monkeypatch.setattr("bmpt.rebake.REDRAWN_BELOW", 0)
+    monkeypatch.setattr("bmpt.spine.rebake.REDRAWN_BELOW", 0)
     env = setup_library
     env.original.unlink()
     return env

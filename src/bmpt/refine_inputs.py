@@ -1174,7 +1174,7 @@ def main(argv=None):
             parser.error("--returns is required for finish")
         atlas = None
         if spec.get("atlas"):
-            from .atlas_remap import parse_atlas
+            from .spine.atlas_remap import parse_atlas
 
             raw = Path(spec["atlas"]).read_bytes()
             if _hash(raw) != spec["source_hashes"]["atlas"]:

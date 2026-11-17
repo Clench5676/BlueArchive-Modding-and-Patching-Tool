@@ -1,8 +1,8 @@
-"""Test rigs for the graft (bmpt.graft): an official skeleton with parts taken out, to be grafted back."""
+"""Test rigs for the graft (bmpt.spine.graft): an official skeleton with parts taken out, to be grafted back."""
 
 from __future__ import annotations
 
-from bmpt.spine_binary import Skeleton, draw_order, draw_order_bytes, varint_bytes
+from bmpt.spine.binary import Skeleton, draw_order, draw_order_bytes, varint_bytes
 
 
 def remove_animations(data: bytes, names) -> bytes:
@@ -74,7 +74,7 @@ def remove_slot(data: bytes, name: str):
     return out, [a["name"] for a in gone]
 
 
-# --- synthetic binary skeletons (the 4.2 layout bmpt.spine_binary walks)
+# --- synthetic binary skeletons (the 4.2 layout bmpt.spine.binary walks)
 
 
 def _varint(value: int) -> bytes:

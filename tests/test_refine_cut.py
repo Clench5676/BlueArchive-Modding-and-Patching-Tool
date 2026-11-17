@@ -286,7 +286,7 @@ def test_shipped_paths_do_not_import_optional_refine_modules():
 def test_official_animation_state_every_listed_pose(tmp_path):
     if not os.environ.get("BAMT_TEST_GAME_DIR"):
         pytest.skip("Set BAMT_TEST_GAME_DIR to a verified official development view")
-    from bmpt.atlas_remap import read_inputs
+    from bmpt.spine.atlas_remap import read_inputs
     from ba_modding_toolkit.searching import get_search_dirs
 
     name = "shiroko_ridingsuit_spr"

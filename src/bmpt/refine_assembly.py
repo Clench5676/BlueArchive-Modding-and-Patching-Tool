@@ -14,7 +14,7 @@ from pathlib import Path
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageOps
 
-from bmpt import atlas_remap as remap
+from bmpt.spine import atlas_remap as remap
 from bmpt.core import devmode
 from bmpt.engine import Bundle, SaveOptions, core
 from bmpt.core.openfiles import temporary_directory

@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, Any, Callable, Collection, Hashable, Iterable,
 
 from UnityPy.helpers.ResourceReader import get_resource_data
 
-from bmpt import atlas_remap, graft as grafting, rebake, spine_converter
+from bmpt.spine import atlas_remap, graft as grafting, rebake, converter as spine_converter
 from bmpt.unity import mod_origin
 from bmpt.host import game_paths, steam_records
 from bmpt.core import devmode, preview_gate, spans
@@ -2305,7 +2305,7 @@ class ModLibrary:
                 "animations": old_rig.animations,
                 "available": not unavailable and old_rig.available,
             }
-            # The graft (bmpt.graft): the mod's own binary skeleton keeps its rig and takes the animations the
+            # The graft (bmpt.spine.graft): the mod's own binary skeleton keeps its rig and takes the animations the
             # official one gained; or the old rig above takes them, where they keep it from being offered.
             # Memorial lobbies and Spine backgrounds take the graft too (``graft.plain``): what each new animation
             # needs is known from the two skeletons alone, so the check tells which it carries and why not the others.
@@ -10555,7 +10555,7 @@ class ModLibrary:
 
     @staticmethod
     def _rebake_plan(inputs: dict) -> dict[str, bytes]:
-        """Plan the portrait atlases the world-space rebake bakes (``bmpt.rebake``).
+        """Plan the portrait atlases the world-space rebake bakes (``bmpt.spine.rebake``).
 
         Each comes with the atlas the mod's textures were drawn on, chosen as ``rig-geometry.js`` ``forRemap`` chooses
         it (the mod's own, else the recorded one: the fingerprint's, or the official copy of the mod's date, else the

@@ -158,7 +158,7 @@ def test_invalid_geometry_or_density_is_refused():
 def test_official_binary_composite_identity_and_every_expression(tmp_path):
     if not os.environ.get("BAMT_TEST_GAME_DIR"):
         pytest.skip("Set BAMT_TEST_GAME_DIR to a verified official development view")
-    from bmpt.atlas_remap import read_inputs
+    from bmpt.spine.atlas_remap import read_inputs
     from ba_modding_toolkit.searching import get_search_dirs
 
     paths = sorted(

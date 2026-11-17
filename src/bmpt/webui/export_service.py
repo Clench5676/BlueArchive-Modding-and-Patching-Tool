@@ -14,7 +14,7 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
-from .. import atlas_remap
+from ..spine import atlas_remap
 from ..unity import mod_origin
 from ..core import devmode
 from ..core.errors import ServiceError

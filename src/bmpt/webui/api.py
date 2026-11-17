@@ -1729,7 +1729,7 @@ def build_api(s: Services) -> RpcRegistry:
     def actions_discard_graft(token: str) -> None:
         s.library.discard_graft(token)
 
-    # the converter route (bmpt.spine_converter): the optional helper for what the graft refuses
+    # the converter route (bmpt.spine.converter): the optional helper for what the graft refuses
     @rpc.method("actions.converterStatus")
     def actions_converter_status() -> dict:
         """Whether the converter is in place, whether the App can fetch it here, and what its consent names."""
@@ -1772,7 +1772,7 @@ def build_api(s: Services) -> RpcRegistry:
     @rpc.method("app.openConverterPage")
     def app_open_converter_page() -> None:
         """The converter's own page (its licence and source), in the browser."""
-        from bmpt import spine_converter
+        from bmpt.spine import converter as spine_converter
 
         webbrowser.open(spine_converter.HOME)
 

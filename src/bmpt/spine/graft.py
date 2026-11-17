@@ -1,6 +1,6 @@
 """Graft the animations a newer official portrait rig has into a mod's own rig, keeping the mod's rig.
 
-The project's own design (GPLv3), built on the binary walk of ``bmpt.spine_binary`` (a Spine runtime derivative): every
+The project's own design (GPLv3), built on the binary walk of ``bmpt.spine.binary`` (a Spine runtime derivative): every
 reference is mapped by name; nothing of the mod's skeleton changes but what the graft adds.
 
 - Skeleton (``SkeletonGraft``): every animation the official rig has and the mod lacks, with all its timelines; the
@@ -35,7 +35,7 @@ import numpy as np
 from PIL import Image
 
 from . import atlas_remap, rebake
-from .spine_binary import (
+from .binary import (
     MESH,
     REGION,
     Skeleton,

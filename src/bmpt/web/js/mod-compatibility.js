@@ -20,7 +20,7 @@ const shortList = (items) =>
   items.length > 3 ? T("compatibility.more", { names: joined(items.slice(0, 3)), n: items.length - 3 }) : joined(items);
 const reports = new Map(),
   stamps = new Map();
-// Why the graft cannot carry an animation (graft.py SkeletonGraft.refused, "kind:name"), as a reason each.
+// Why the graft cannot carry an animation (spine/graft.py SkeletonGraft.refused, "kind:name"), as a reason each.
 const reason = (entry) => {
   const at = entry.indexOf(":"),
     kind = at < 0 ? entry : entry.slice(0, at),
@@ -463,7 +463,7 @@ export function reviewLines(report, { convert = false } = {}) {
   ];
 }
 
-// The optional converter (bmpt/spine_converter.py): its program's name, as its author writes it
+// The optional converter (bmpt/spine/converter.py): its program's name, as its author writes it
 export const CONVERTER_NAME = "SpineSkeletonDataConverter";
 
 // The converter route (actions.graft, graftConvert, graftConvertCheck): the page poses the mod's setup for the packing,
@@ -512,7 +512,7 @@ async function converted(id, subject) {
 }
 
 /**
- * The optional converter (bmpt/spine_converter.py), fetched once with the user's consent to its licence
+ * The optional converter (bmpt/spine/converter.py), fetched once with the user's consent to its licence
  * (Windows), or the note that the macOS build is the user's own to compile.
  * @returns {Promise<boolean>} True when it is in place.
  */

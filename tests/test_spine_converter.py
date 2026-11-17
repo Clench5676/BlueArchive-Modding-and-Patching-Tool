@@ -1,4 +1,4 @@
-"""The optional converter route of the graft (bmpt.spine_converter): fetching the pinned release, running it safely,
+"""The optional converter route of the graft (bmpt.spine.converter): fetching the pinned release, running it safely,
 and the graft in JSON."""
 
 import hashlib
@@ -7,7 +7,7 @@ import json
 
 import pytest
 
-from bmpt import spine_converter as sc
+from bmpt.spine import converter as sc
 
 
 def _official():

@@ -1,8 +1,8 @@
 """SpineSkeletonDataConverter (wang606, PolyForm Noncommercial 1.0.0) as an optional helper of the graft.
 
-Where the built-in graft (``bmpt.graft``) refuses an animation (it needs a bone, slot, event, constraint or skin the
-mod's rig lacks), the rigs go through the converter to JSON, the animation is added there by name with what it needs
-(:func:`graft_json`), and the result goes back to binary.
+Where the built-in graft (``bmpt.spine.graft``) refuses an animation (it needs a bone, slot, event, constraint or skin
+the mod's rig lacks), the rigs go through the converter to JSON, the animation is added there by name with what it
+needs (:func:`graft_json`), and the result goes back to binary.
 
 The project's own code (GPLv3): it starts the converter as a separate program and edits JSON; it holds none of the
 converter's code. The converter is never shipped with the App: the user fetches it after confirming its licence
@@ -10,7 +10,7 @@ converter's code. The converter is never shipped with the App: the user fetches 
 macOS build; a user who compiled one puts it into the tools folder (:func:`located`).
 
 Safety: mod skeletons are untrusted and the converter is a C++ parser. A skeleton goes to it only after the App's own
-reader (``bmpt.spine_binary``) walked it whole (:func:`to_json`), only as a temporary copy, started with an argument
+reader (``bmpt.spine.binary``) walked it whole (:func:`to_json`), only as a temporary copy, started with an argument
 list, never through a shell, with a time limit. The converter rounds numbers to two decimals: the caller compares the
 mod's own poses before and after (:func:`drift`) and refuses a result past ``DRIFT``.
 """
@@ -263,7 +263,7 @@ def to_json(exe: Path, skeleton: bytes) -> dict:
         ConverterError: ``converter_unreadable`` for a skeleton the reader refuses; ``converter_failed`` as
             ``convert`` raises it, or for output that is not a skeleton document.
     """
-    from .spine_binary import Skeleton  # the runtime-derived reader, after the user's Spine licence answer
+    from .binary import Skeleton  # the runtime-derived reader, after the user's Spine licence answer
 
     try:
         Skeleton(skeleton)
@@ -285,7 +285,7 @@ def to_binary(exe: Path, document: dict) -> bytes:
         ConverterError: ``converter_failed`` as ``convert`` raises it, or for a result the reader refuses.
     """
     data = convert(exe, json.dumps(document, ensure_ascii=False).encode("utf-8"), ".json", ".skel")
-    from .spine_binary import Skeleton
+    from .binary import Skeleton
 
     try:
         Skeleton(data)

@@ -934,7 +934,7 @@ def cut(
             uv = np.asarray(a["uvs"]).reshape(-1, 2) * baseline[name].size
             rects[key] = (*np.floor(uv.min(0)).astype(int), *np.ceil(uv.max(0)).astype(int))
     if atlas is not None:
-        from .atlas_remap import _box
+        from .spine.atlas_remap import _box
 
         rects = {
             (r.page, r.name, r.index): _box(r, atlas.pages[r.page], baseline[r.page]) for r in atlas.regions.values()
@@ -1221,7 +1221,7 @@ def main(argv=None):
     ]
     atlas = None
     if spec.get("atlas"):
-        from .atlas_remap import parse_atlas
+        from .spine.atlas_remap import parse_atlas
 
         atlas = parse_atlas(resolve(spec["atlas"]).read_bytes())
     output.mkdir(parents=True, exist_ok=True)

@@ -11,7 +11,7 @@ from UnityPy.helpers import TypeTreeHelper
 from UnityPy.helpers.Tpk import get_typetree_node
 from UnityPy.streams import EndianBinaryWriter
 
-from bmpt import atlas_remap as remap
+from bmpt.spine import atlas_remap as remap
 from ba_modding_toolkit.bundle import Bundle
 from ba_modding_toolkit.i18n import I18n, t
 from bmpt.library import rebuild as app_rebuild, service
@@ -972,7 +972,7 @@ def test_source_changed_during_remapping_never_becomes_an_acceptable_preview(rep
 
 
 def test_a_region_the_source_lacks_keeps_the_official_pixels_and_is_reported(repair_review, monkeypatch):
-    from bmpt import rebake
+    from bmpt.spine import rebake
 
     env, entry, current, _ = repair_review
     kept = next(path for path in (env.library.root / "originals").glob("*.bundle") if "2025-01-01" in path.name)

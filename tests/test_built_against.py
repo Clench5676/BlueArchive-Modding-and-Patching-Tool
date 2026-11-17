@@ -13,7 +13,7 @@ import pytest
 
 from ba_modding_toolkit.models import FilePair
 from bmpt.library.rebuild import RebuildResult
-from bmpt import spine_names
+from bmpt.spine import names as spine_names
 from bmpt.library import fingerprint, service
 from bmpt.library.integrity import Contents
 

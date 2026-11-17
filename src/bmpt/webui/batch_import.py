@@ -14,7 +14,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-from bmpt import atlas_remap
+from bmpt.spine import atlas_remap
 from bmpt.unity import mod_origin
 from bmpt.core import devmode
 from bmpt.engine import (
