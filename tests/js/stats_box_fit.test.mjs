@@ -42,15 +42,21 @@ globalThis.fetch = async (url) => {
       : null;
   return { ok: !!body, status: body ? 200 : 404, json: async () => body };
 };
-// detail.js keeps detailsBody private: this loader hook exposes it to this test only
+// the detail screen keeps detailsBody (detail-files.js), switchTextLayout and nameplateRow (detail-screen.js)
+// private: this loader hook exposes them to this test only
 const DETAIL = new URL("../../src/bmpt/web/js/detail/detail.js", import.meta.url).href;
+const PRIVATE = {
+  [new URL("../../src/bmpt/web/js/detail/detail-files.js", import.meta.url).href]: "detailsBody",
+  [new URL("../../src/bmpt/web/js/detail/detail-screen.js", import.meta.url).href]: "switchTextLayout, nameplateRow",
+};
 register(
   `data:text/javascript,${encodeURIComponent(`
+const PRIVATE = ${JSON.stringify(PRIVATE)};
 export async function load(url, ctx, next) {
   const result = await next(url, ctx);
-  if (url === ${JSON.stringify(DETAIL)}) {
+  if (PRIVATE[url]) {
     const source = typeof result.source === "string" ? result.source : new TextDecoder().decode(result.source);
-    return { ...result, source: source + "\\nexport { detailsBody, switchTextLayout, nameplateRow };" };
+    return { ...result, source: source + "\\nexport { " + PRIVATE[url] + " };" };
   }
   return result;
 }`)}`,
@@ -59,7 +65,11 @@ const JS = "../../src/bmpt/web/js/";
 const NGUI = await import(`${JS}ui/ngui.js`);
 const Tokens = await import(`${JS}ui/ui-tokens.js`);
 const Popup = await import(`${JS}ui/popup.js`);
-const Detail = await import(DETAIL);
+await import(DETAIL);
+const Detail = {
+  ...(await import(Object.keys(PRIVATE)[0])),
+  ...(await import(Object.keys(PRIVATE)[1])),
+};
 const Buttons = await import(`${JS}ui/game-buttons.js`);
 await Buttons.ready();
 const Update = await import(`${JS}app/update.js`);

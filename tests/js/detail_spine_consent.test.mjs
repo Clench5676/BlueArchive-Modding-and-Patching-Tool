@@ -3,7 +3,11 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { decodeAll } from "../../src/bmpt/web/js/core/image-decode.js";
 
-const source = readFileSync(new URL("../../src/bmpt/web/js/detail/detail.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../src/bmpt/web/js/detail/detail-portrait.js", import.meta.url), "utf8");
+const detailSource = readFileSync(new URL("../../src/bmpt/web/js/detail/detail.js", import.meta.url), "utf8").replace(
+  /^export /gm,
+  "",
+);
 const portraitCode = source.slice(
   source.indexOf("async function showSpine("),
   source.indexOf("// the detail screen's portrait framing"),
@@ -61,6 +65,7 @@ function portraitHarness(portrait, confirm = async () => false, decode = () => P
     "env",
     `const { ${Object.keys(env).join(", ")} } = env;
     let spineToken = 1, batch = null, blinkTimer, mainPlayer = null, open = true;
+    function setMainPlayer(value) { mainPlayer = value; }
     ${portraitCode}; return showSpine;`,
   )(env);
   return {
@@ -151,7 +156,10 @@ test("a cancelled confirmation read cannot add a portrait after detail was left"
 });
 
 test("detail thumbnail fallbacks use collection portraits only for the matching official source", () => {
-  const code = source.slice(source.indexOf("function collectionPortrait("), source.indexOf("function begin()"));
+  const code = detailSource.slice(
+    detailSource.indexOf("function collectionPortrait("),
+    detailSource.indexOf("function begin()"),
+  );
   const variants = [
     { key: "ibuki", spr: "ibuki_spr", portrait: "/ibuki.png", modList: [{ id: "added", kind: "spr" }] },
     { key: "special:npc", lobby: "npc" },

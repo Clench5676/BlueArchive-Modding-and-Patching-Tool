@@ -190,7 +190,8 @@ test("no site outside ui-tokens.js carries a retired backdrop or colour literal"
 test("the call sites take the status colours from the tokens, the style sheet repeats the same values", () => {
   const uses = {
     "js/app/update.js": ["COLOUR.success", "COLOUR.error"],
-    "js/detail/detail.js": ["COLOUR.success", "COLOUR.warning", "COLOUR.greyed"],
+    "js/detail/detail-screen.js": ["COLOUR.success", "COLOUR.warning"],
+    "js/detail/detail-switchers.js": ["COLOUR.greyed"],
     "js/mods/mod-compare.js": ["COLOUR.warning", "COLOUR.success", "COLOUR.error"],
     "js/app/prompts.js": ["COLOUR.greyed"],
     "js/ui/popup-list.js": ["COLOUR.inUse", "COLOUR.inUseInk"],

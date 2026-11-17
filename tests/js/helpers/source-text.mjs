@@ -115,6 +115,24 @@ export const POPUP_MODULES = [
   "popup-message.js",
 ];
 
+// The detail screen's code: detail.js and the modules split from it, paths under web/js/detail.
+export const DETAIL_MODULES = [
+  "detail.js",
+  "detail-screen.js",
+  "detail-actions.js",
+  "detail-chips.js",
+  "detail-strip.js",
+  "detail-portrait.js",
+  "detail-switchers.js",
+  "detail-aliases.js",
+  "detail-files.js",
+  "detail-lobby-tab.js",
+  "detail-model-tab.js",
+  "detail-fullscreen.js",
+  "detail-changes.js",
+  "detail-photo.js",
+];
+
 // The relative specifier a web UI module writes to import another, as a regular expression source matching only that
 // specifier: `from` and `to` are paths under web/js (e.g. "app/main.js", "core/i18n.js").
 export function importOf(from, to) {

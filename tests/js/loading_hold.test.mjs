@@ -270,7 +270,11 @@ test("a repair cover blocks Back, popup clicks and Escape until success or failu
   }
 });
 
-const detailSource = readFileSync(new URL("../../src/bmpt/web/js/detail/detail.js", import.meta.url), "utf8");
+// the actions module, its exports as plain declarations
+const detailSource = readFileSync(
+  new URL("../../src/bmpt/web/js/detail/detail-actions.js", import.meta.url),
+  "utf8",
+).replace(/^export /gm, "");
 const detailJob = detailSource.slice(
   detailSource.indexOf("async function job("),
   detailSource.indexOf("function shownMod()"),

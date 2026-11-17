@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { register } from "node:module";
 import { test } from "node:test";
+import { DETAIL_MODULES } from "./helpers/source-text.mjs";
 import { switchPrefabs } from "./switch_prefabs.mjs";
 import { selectionPrefab, selectionFramePixels, selectionSprite } from "./selection_prefabs.mjs";
 import { controls } from "./control_prefabs.mjs";
@@ -530,9 +531,11 @@ const atlas = {
     [
       ...new Set([
         ...[
-          ...readFileSync(new URL("../../src/bmpt/web/js/detail/detail.js", import.meta.url), "utf8").matchAll(
-            /"(Common_[A-Za-z0-9_]+)"/g,
-          ),
+          ...DETAIL_MODULES.map((file) =>
+            readFileSync(new URL(`../../src/bmpt/web/js/detail/${file}`, import.meta.url), "utf8"),
+          )
+            .join("\n")
+            .matchAll(/"(Common_[A-Za-z0-9_]+)"/g),
         ].map((m) => m[1]),
         "Common_Bg_Raius10px_Select",
         "Common_Icon_Check_Y_Off",
@@ -710,9 +713,16 @@ const modelStub = `data:text/javascript,${encodeURIComponent(
 register(
   `data:text/javascript,${encodeURIComponent(`export async function load(url, ctx, next) {
   const result = await next(url, ctx);
-  if (url.endsWith("/web/js/detail/detail.js")) {
+  // the detail screen's private layouts, each from the module that holds it
+  const exposed = {
+    "detail-screen.js": "screenTree, nameplateRow, switchTextLayout",
+    "detail-chips.js": "chipBoxes",
+    "detail-strip.js": "expressionBoxes, pileBoxes",
+    "detail-files.js": "detailsBody",
+  }[url.split("/web/js/detail/")[1]];
+  if (exposed) {
     const source = typeof result.source === "string" ? result.source : new TextDecoder().decode(result.source);
-    return { ...result, source: source + "\\nexport { screenTree, nameplateRow, chipBoxes, expressionBoxes, pileBoxes, switchTextLayout, detailsBody };" };
+    return { ...result, source: source + "\\nexport { " + exposed + " };" };
   }
   return result;
 }
@@ -724,7 +734,13 @@ export async function resolve(spec, ctx, next) {
 }`)}`,
 );
 await import(modelStub);
-const Detail = await import("../../src/bmpt/web/js/detail/detail.js");
+// detail.js first, as the app loads it; then the modules split from it, read as one with it
+const Detail = Object.assign(
+  {},
+  ...(await Promise.all(
+    DETAIL_MODULES.map((file) => import(new URL(`../../src/bmpt/web/js/detail/${file}`, import.meta.url).href)),
+  )),
+);
 const localeTable = (lang) =>
   flat(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url), "utf8")));
 
@@ -4061,10 +4077,10 @@ test("variant chips are 272 x 72 with the caption at 40 down to 28, the second c
       Math.abs(parseFloat(caption.style.fontSize) - NGUI.fontSizeFor(caption.textContent, CHIP.fs) * S) < 0.02,
       "caption size 40",
     );
-    const source = readFileSync(new URL("../../src/bmpt/web/js/detail/detail.js", import.meta.url), "utf8").replace(
-      /\s+/g,
-      " ",
-    );
+    const source = readFileSync(
+      new URL("../../src/bmpt/web/js/detail/detail-chips.js", import.meta.url),
+      "utf8",
+    ).replace(/\s+/g, " ");
     assert.match(source, /const CHIP_FS = CHIP\.fs, CHIP_W = CHIP\.w, CHIP_PITCH = CHIP\.pitch;/);
     assert.doesNotMatch(source, /CHIP_FS = 38/);
     Detail.hide();

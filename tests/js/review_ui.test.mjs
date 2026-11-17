@@ -103,7 +103,8 @@ test("an expression cancels blinking immediately, stale blinks cannot replace it
       clearTrack: (track) => clears.push(track),
     },
   };
-  const code = source("detail/detail")
+  const code = source("detail/detail-portrait")
+    .replace(/^export /gm, "")
     .split("function scheduleBlink(player) {")[1]
     .split("function disposePortrait()")[0];
   const run = new Function(

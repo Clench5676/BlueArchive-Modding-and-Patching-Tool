@@ -4,7 +4,11 @@ import { setStrings, T as translate } from "../../src/bmpt/web/js/core/i18n.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-const source = readFileSync(new URL("../../src/bmpt/web/js/detail/detail.js", import.meta.url), "utf8");
+// the module's exports as plain declarations
+const source = readFileSync(new URL("../../src/bmpt/web/js/detail/detail-actions.js", import.meta.url), "utf8").replace(
+  /^export /gm,
+  "",
+);
 const jobSource = source.slice(source.indexOf("async function job("), source.indexOf("function shownMod()"));
 const loadingSource = readFileSync(new URL("../../src/bmpt/web/js/app/loading.js", import.meta.url), "utf8");
 const progressSource = loadingSource.slice(

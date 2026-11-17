@@ -165,10 +165,10 @@ test("with the Chinese wording the five-button row keeps equal bodies at a full 
   assert.ok(row.every((f) => f.width === row[0].width));
 });
 
-// --- the detail page's action cards and tabs (detail.js screenTree) ---
+// --- the detail page's action cards and tabs (detail-screen.js screenTree) ---
 for (const locale of LOCALES)
   test(`the four action cards and the three tabs share one size each in ${locale}`, async () => {
-    const detail = await source("detail/detail.js");
+    const detail = await source("detail/detail-screen.js");
     assert.match(detail, /const ROW_L = 58 \+ 37, ROW_R = 1320 - 37, GAP = 6, CW = \(ROW_R - ROW_L - 3 \* GAP\) \/ 4;/);
     assert.match(detail, /fitGroup\(actions\.map\(\(\[, key\]\) => T\(key\)\), 40, 28, CW - 60, 2, \{ maxH: 90 \}\)/);
     assert.match(detail, /fitGroup\(tabLabels, 52, 36, 360, 1\)/);
@@ -545,12 +545,12 @@ for (const locale of LOCALES)
     }
   });
 
-// --- the 3D model tab's action cards (detail.js stripCard): a 242-wide Common_Btn_BG card, its caption 56 down
+// --- the 3D model tab's action cards (detail-strip.js stripCard): a 242-wide Common_Btn_BG card, its caption 56 down
 // to 28 in 50 less than the card's width, up to two lines; every action model.js plays has its caption in every
 // locale ---
 for (const locale of LOCALES)
   test(`the 3D model's action captions fit their cards in ${locale}`, async () => {
-    const detail = await source("detail/detail.js"),
+    const detail = await source("detail/detail-strip.js"),
       model = await raw("model/model.js");
     assert.match(detail, /const CARD = \{ w: 242, h: 209 \};/);
     // (the action bar's group cards bring their own fit: action_list.test.mjs)

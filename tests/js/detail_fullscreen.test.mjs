@@ -3,11 +3,11 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import { test } from "node:test";
 
-const source = readFileSync(new URL("../../src/bmpt/web/js/detail/detail.js", import.meta.url), "utf8");
-const code = source.slice(
-  source.indexOf("// fullscreen memorial lobby:"),
-  source.indexOf("// the switch card's still"),
-);
+const source = readFileSync(new URL("../../src/bmpt/web/js/detail/detail-fullscreen.js", import.meta.url), "utf8");
+// the module's exports are plain declarations in the harness
+const code = source
+  .slice(source.indexOf("// fullscreen memorial lobby:"), source.indexOf("// the switch card's still"))
+  .replace(/^export /gm, "");
 function harness(start, hasLobby = true) {
   const calls = [],
     nodes = new Map();
@@ -73,6 +73,13 @@ function harness(start, hasLobby = true) {
     },
     stillAfterFullscreen() {},
     photoBridge: { release: async () => {} },
+  };
+  // the screen's state this module writes through detail.js's setters
+  env.setTab = (value) => {
+    env.tab = value;
+  };
+  env.setFullscreenState = (value) => {
+    env.fullscreen = value;
   };
   vm.runInNewContext(
     `${code}\nglobalThis.switchView = switchFullscreenView; globalThis.back = () => setFullscreen(false);`,

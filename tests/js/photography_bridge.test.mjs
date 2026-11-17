@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { photograph } from "../../src/bmpt/web/js/photography/shoot.js";
-const source = readFileSync(new URL("../../src/bmpt/web/js/detail/detail.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../src/bmpt/web/js/detail/detail-photo.js", import.meta.url), "utf8");
 const code = source.slice(source.search(/^ {2}async redraw\(\) ?\{/m), source.search(/^ {2}pan\(dx, ?dy\)/m));
 function setup(tab = "portrait", mainPlayer = null, Lobby = { prepareFrame: async () => false }) {
   return new Function("env", `let {tab,mainPlayer,Lobby}=env;return {${code} setPlayer(value){mainPlayer=value;}};`)({

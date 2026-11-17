@@ -3,8 +3,9 @@ import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 import { test } from "node:test";
 import { n, spr, insert } from "./control_prefabs.mjs";
-const detail = await readFile(new URL("../../src/bmpt/web/js/detail/detail.js", import.meta.url), "utf8");
-const code = detail.slice(detail.indexOf("// Student photography retains"));
+const detail = await readFile(new URL("../../src/bmpt/web/js/detail/detail-photo.js", import.meta.url), "utf8");
+// the module's exports as plain declarations
+const code = detail.slice(detail.indexOf("// Student photography retains")).replace(/^export /gm, "");
 const playbackFixture = n("Inventory_ListControl");
 insert(
   playbackFixture,
@@ -103,6 +104,13 @@ function harness({ start = "portrait", show } = {}) {
       },
     },
   };
+  // detail.js's setters of the screen's state the bridge writes
+  for (const name of ["tab", "fullscreen", "expression", "shownLeft", "shownKey", "lobbyFrom", "lobbyStale"]) {
+    const setter = { fullscreen: "setFullscreenState", expression: "setExpressionState" }[name];
+    env[setter ?? `set${name[0].toUpperCase()}${name.slice(1)}`] = (value) => {
+      env[name] = value;
+    };
+  }
   env.setFullscreen = async (on) => {
     calls.push(["fullscreen", on]);
     env.fullscreen = on;

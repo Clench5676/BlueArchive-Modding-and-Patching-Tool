@@ -2,7 +2,7 @@
 // several cards ticked, the start sequence), web/js/app/update.js and detail.js's preview actions, on a small stand-in
 // DOM. Run by tests/test_popup.py with Node's test runner: node --test tests/js/popup.test.mjs
 import assert from "node:assert/strict";
-import { flat, POPUP_MODULES } from "./helpers/source-text.mjs";
+import { DETAIL_MODULES, flat, POPUP_MODULES } from "./helpers/source-text.mjs";
 import { readFileSync } from "node:fs";
 import { register } from "node:module";
 import { afterEach, test } from "node:test";
@@ -1934,24 +1934,43 @@ test("portrait and memorial lobby mods share the localized Mod chip under the na
   }
 });
 
-// Exercise the detail actions with the real RPC/job and popup code. The loader exposes its private actions only
-// to this test and replaces thumbnail rendering; panel/player drawing is observed through the setup callback.
-const DETAIL = new URL("../../src/bmpt/web/js/detail/detail.js", import.meta.url).href;
+// Exercise the detail actions with the real RPC/job and popup code. The loader exposes their private parts only to
+// this test (each in the detail module that holds it) and replaces thumbnail rendering; panel/player drawing is
+// observed through the setup callback.
+const detailUrl = (name) => new URL(`../../src/bmpt/web/js/detail/${name}`, import.meta.url).href;
+const DETAIL = detailUrl("detail.js");
 const THUMBS = new URL("../../src/bmpt/web/js/detail/thumbs.js", import.meta.url).href;
-const detailTest = `
-export { baseOf, detailsBody, renderPopup, runUpdate, runCompatibility, copyName };
+const detailTest = {
+  [DETAIL]: `
+import { setupActionsTest } from "./detail-actions.js";
+import { setupSwitchersTest } from "./detail-switchers.js";
+import { setupScreenTest } from "./detail-screen.js";
+import { setupChipsTest } from "./detail-chips.js";
+import { setupStripTest } from "./detail-strip.js";
 export function setupPreviewTest(data, kind, onLeft = async () => {}) {
   fam = data; variantKey = data.variants[0].key; ctx = { invalidateRoster() {} };
-  open = true; busy = false; tab = kind === "lobby" ? "lobby" : "portrait";
-  popupKind = kind; popupSeg = 0; pending = shownSource(variant(), kind); previewEnabled = modsOn();
-  switchThumbnails?.cancel(); switchThumbnails = thumbnailScope(); switchPopupPage = pageToken;
+  open = true; setupActionsTest(); tab = kind === "lobby" ? "lobby" : "portrait";
+  setupSwitchersTest(kind, () => { pending = shownSource(variant(), kind); }, pageToken);
+  previewEnabled = modsOn();
   expression = "03"; mainPlayer = { cached: true }; lobbyShot = "cached";
   lobbySeq = "talk"; lobbyAll = true; lobbyStale = false; shownLeft = tab; shownKey = "cached";
-  renderScreen = renderChips = renderExpressions = async () => {};
+  setupScreenTest(); setupChipsTest(); setupStripTest();
   renderLeft = onLeft;
 }
 export const previewTestState = () => ({ expression, mainPlayer, lobbyShot, lobbySeq, lobbyAll, lobbyStale, shownKey, pending });
-`;
+`,
+  [detailUrl("detail-actions.js")]: "\nexport function setupActionsTest() { busy = false; }\n",
+  [detailUrl("detail-switchers.js")]: `
+export function setupSwitchersTest(kind, setPending, pageToken) {
+  popupKind = kind; popupSeg = 0; setPending();
+  switchThumbnails?.cancel(); switchThumbnails = thumbnailScope(); switchPopupPage = pageToken;
+}
+`,
+  [detailUrl("detail-screen.js")]: "\nexport function setupScreenTest() { renderScreen = async () => {}; }\n",
+  [detailUrl("detail-chips.js")]: "\nexport function setupChipsTest() { renderChips = async () => {}; }\n",
+  [detailUrl("detail-strip.js")]: "\nexport function setupStripTest() { renderExpressions = async () => {}; }\n",
+  [detailUrl("detail-files.js")]: "\nexport { detailsBody };\n",
+};
 const thumbsTest = `
 export const forgotten = [];
 export const forget = (base) => forgotten.push(base);
@@ -1966,17 +1985,20 @@ export const prioritise = () => {};
 `;
 register(
   `data:text/javascript,${encodeURIComponent(`
+const DETAIL_TEST = ${JSON.stringify(detailTest)};
 export async function load(url, ctx, next) {
   if (url === ${JSON.stringify(THUMBS)}) return { format: "module", shortCircuit: true, source: ${JSON.stringify(thumbsTest)} };
   const result = await next(url, ctx);
-  if (url === ${JSON.stringify(DETAIL)}) {
+  if (DETAIL_TEST[url]) {
     const source = typeof result.source === "string" ? result.source : new TextDecoder().decode(result.source);
-    return { ...result, source: source + ${JSON.stringify(detailTest)} };
+    return { ...result, source: source + DETAIL_TEST[url] };
   }
   return result;
 }`)}`,
 );
-const Detail = await import(DETAIL);
+// detail.js first, as the app loads it; then the modules split from it, read as one with it
+await import(DETAIL);
+const Detail = Object.assign({}, ...(await Promise.all(Object.keys(detailTest).map((url) => import(url)))));
 const Mods = await import("../../src/bmpt/web/js/mods/mod-switch.js");
 const Thumbs = await import(THUMBS);
 const switchHost = host("popup");
@@ -7013,8 +7035,10 @@ test("the startup Spine notice wraps inside UIPopup_Sort at message sizes in eve
 test("preview, comparison and compatibility modules contain no licence notice or confirmation button", () => {
   for (const name of [
     "lobby/lobby",
-    "detail/detail",
+    "lobby/lobby-measure",
+    ...DETAIL_MODULES.map((file) => `detail/${file.replace(/\.js$/, "")}`),
     "hall/student-hall",
+    "hall/student-hall-portrait-toolbar",
     "mods/mod-compare",
     "mods/mod-compatibility",
   ]) {

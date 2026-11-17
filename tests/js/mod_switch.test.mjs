@@ -2176,10 +2176,10 @@ test("the startup update check can be disabled for compiled releases", () => {
 });
 
 test("detail refresh callers await changes queued while an earlier refresh is drawing", async () => {
-  const detail = readFileSync(new URL("../../src/bmpt/web/js/detail/detail.js", import.meta.url), "utf8");
+  const detail = readFileSync(new URL("../../src/bmpt/web/js/detail/detail-changes.js", import.meta.url), "utf8");
   const changed = detail
     .slice(detail.indexOf("let heldChange;"), detail.indexOf("async function reloadChanged()"))
-    .replace("export function", "function");
+    .replace(/^export /gm, "");
   const first = deferred(),
     second = deferred();
   let reads = 0,

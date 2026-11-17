@@ -2,7 +2,7 @@
 // tests/test_i18n.py with Node's test runner: node --test tests/js/i18n.test.mjs
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { importOf } from "./helpers/source-text.mjs";
+import { DETAIL_MODULES, importOf } from "./helpers/source-text.mjs";
 
 globalThis.document = { documentElement: { lang: "" } };
 const { L, NAME_LANG, T, language, nameKeys, setStrings, languageRefresh } = await import(
@@ -221,7 +221,8 @@ test("the other copies of that expression use the shared errorText too", async (
   const { readFileSync } = await import("node:fs");
   const read = (name) => readFileSync(new URL(`../../src/bmpt/web/js/${name}`, import.meta.url), "utf8");
   for (const name of [
-    "detail/detail.js",
+    "detail/detail-actions.js",
+    "detail/detail-switchers.js",
     "app/nav.js",
     "mods/mod-alias.js",
     "mods/mod-export.js",
@@ -242,5 +243,19 @@ test("the other copies of that expression use the shared errorText too", async (
       `${name} imports the shared one`,
     );
     assert.match(source, /\berrorText\(/, name);
+  }
+});
+
+test("none of the detail screen's modules builds an error text of its own", async () => {
+  const { readFileSync } = await import("node:fs");
+  for (const file of DETAIL_MODULES) {
+    const source = readFileSync(new URL(`../../src/bmpt/web/js/detail/${file}`, import.meta.url), "utf8");
+    assert.doesNotMatch(
+      source,
+      /T\(`error\.\$\{\w+\??\.code \|\| "internal"\}`/,
+      `${file} builds no error key of its own`,
+    );
+    assert.doesNotMatch(source, /String\(err(or)?\) \}\)/, `${file} builds no error detail of its own`);
+    assert.doesNotMatch(source, /const errorText =/, `${file} has no errorText of its own`);
   }
 });

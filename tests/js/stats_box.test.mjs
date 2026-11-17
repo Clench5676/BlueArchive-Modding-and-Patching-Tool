@@ -247,7 +247,13 @@ test("the stats box's fill and line colours are written in ui-tokens.js only (an
   // the line's colour is also the progress bar's, the chips' outline and the dotted dividers of the file table
   for (const file of holders("#c0c9d4"))
     assert.ok(
-      ["js/detail/detail.js", "js/ui/popup-details.js", "js/ui/ui-tokens.js", "js/app/update.js"].includes(file),
+      [
+        "js/detail/detail-chips.js",
+        "js/detail/detail-files.js",
+        "js/ui/popup-details.js",
+        "js/ui/ui-tokens.js",
+        "js/app/update.js",
+      ].includes(file),
       file,
     );
 });
@@ -256,7 +262,7 @@ test("the four sites build their box with statsBox()", () => {
   for (const [file, calls] of [
     ["js/ui/popup-details.js", 1],
     ["js/ui/popup-message.js", 1],
-    ["js/detail/detail.js", 1],
+    ["js/detail/detail-files.js", 1],
     ["js/app/update.js", 2],
   ]) {
     const source = read(file);
@@ -269,5 +275,5 @@ test("the four sites build their box with statsBox()", () => {
   }
   assert.match(read("js/ui/popup-details.js"), /name: "Fields"/);
   assert.match(flat(read("js/ui/popup-message.js")), /name: "Box", names: \{ value: "Row", divider: "Dot" \}/);
-  assert.match(read("js/detail/detail.js"), /name: "Summary"/);
+  assert.match(read("js/detail/detail-files.js"), /name: "Summary"/);
 });
