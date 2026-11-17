@@ -1,8 +1,11 @@
 # Front end
 
 `ngui.js` (prefab renderer), the roster, the detail screen, the popups, the consent popup and the lobby player, as ES
-modules under `web/js/`, one page with a hash router (`#/roster`, `#/student/<family>/<variant>`). Data comes from the
-RPC methods, art from `/asset/...`, strings from the locale files. Invisible buttons over drawn controls carry their
+modules under `web/js/`, one page with a hash router (`#/roster`, `#/student/<family>/<variant>`). The modules sit in
+folders by screen area: `app/` (start-up, navigation, loading, updates, prompts), `window/` (window chrome and top bar),
+`core/` (RPC, strings, shared helpers), `ui/` (NGUI, popups, shared widgets and tokens), `roster/`, `detail/`, `mods/`
+(mod switching and import), `spine/`, `lobby/`, `model/` (3D), `hall/`, `settings/` and `photography/`. Data comes from
+the RPC methods, art from `/asset/...`, strings from the locale files. Invisible buttons over drawn controls carry their
 accessible names from the locale files; a control that picks one of several carries `aria-pressed`.
 
 ## Student list

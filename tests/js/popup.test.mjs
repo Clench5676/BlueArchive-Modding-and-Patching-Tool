@@ -1636,7 +1636,7 @@ test("concurrent checks share one request and popup through download and dismiss
 });
 
 test("Settings disables Check for Updates while pending and uses the shared popup check", async () => {
-  const Settings = await import("../../src/bmpt/web/js/settings.js");
+  const Settings = await import("../../src/bmpt/web/js/settings/settings.js");
   handlers.set("settings.get", () => ({
     result: {
       version: "1.0.0",
@@ -1699,7 +1699,7 @@ test("Settings disables Check for Updates while pending and uses the shared popu
 });
 
 test("Settings includes Thai as a sixth language with its native label and language tag", async () => {
-  const Settings = await import("../../src/bmpt/web/js/settings.js");
+  const Settings = await import("../../src/bmpt/web/js/settings/settings.js");
   const languages = ["zh-CN", "zh-TW", "en-US", "ja-JP", "ko-KR", "th-TH"].map((code) => ({
     code,
     name: JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${code}.json`, import.meta.url))).webui.languageName,
@@ -1720,7 +1720,7 @@ test("Settings includes Thai as a sixth language with its native label and langu
 });
 
 test("a manual Settings check joins an automatic offer already queued behind Settings", async () => {
-  const Settings = await import("../../src/bmpt/web/js/settings.js");
+  const Settings = await import("../../src/bmpt/web/js/settings/settings.js");
   handlers.set("settings.get", () => ({
     result: {
       version: "1.0.0",
@@ -4221,7 +4221,7 @@ test("tour pages and sibling controls fit all six locales inside the notice pref
 
 for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
   test(`Settings New Features has no value and empty paths retain Not set in ${lang}`, async () => {
-    const Settings = await import("../../src/bmpt/web/js/settings.js");
+    const Settings = await import("../../src/bmpt/web/js/settings/settings.js");
     const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
     const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
     const byPath = (path) => walk(settings).find((el) => el.dataset.path === `Rows/${path}`);
@@ -4718,7 +4718,7 @@ test("tour frame height grows for longer copy and is scoped to its version", asy
 });
 
 test("Settings exposes one prerelease simulation row with both cases and stable exposes none", async () => {
-  const Settings = await import("../../src/bmpt/web/js/settings.js");
+  const Settings = await import("../../src/bmpt/web/js/settings/settings.js");
   try {
     for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
       const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
@@ -5353,7 +5353,7 @@ for (const lang of ADD_LOCALES)
   });
 
 test("Settings is on the popup stack: Escape and the backdrop close it, and a popup over it takes the key first", async () => {
-  const Settings = await import("../../src/bmpt/web/js/settings.js");
+  const Settings = await import("../../src/bmpt/web/js/settings/settings.js");
   handlers.set("settings.get", () => ({
     result: {
       version: "1.0.0",
@@ -5874,7 +5874,7 @@ async function openSound(prefs = {}, tabName = "sound") {
     Object.assign(state, { [key]: value });
     return { result: state };
   });
-  const Settings = await import("../../src/bmpt/web/js/settings.js");
+  const Settings = await import("../../src/bmpt/web/js/settings/settings.js");
   await Settings.open(null, tabName);
   return { saved, state, Settings };
 }
@@ -6362,7 +6362,7 @@ test("every popup frame draws the one backdrop token", async () => {
     assert.equal(colour(Popup.popupFrame("T", w, h, { ok: "OK" })), Tokens.BACKDROP);
   // the consent and update dialogs take it from popupFrame; the list popup, the display settings and Settings set
   // the same token
-  for (const file of ["ui/popup.js", "app/display.js", "settings.js"]) {
+  for (const file of ["ui/popup.js", "app/display.js", "settings/settings.js"]) {
     const source = readFileSync(new URL(`../../src/bmpt/web/js/${file}`, import.meta.url), "utf8");
     const sites =
       source.match(/BlackBgClickArea"\)\.widgets\.find\(\(\w+\) => "sprite" in \w+\)\.color = [^;]+;/g) || [];
@@ -6456,7 +6456,7 @@ for (const lang of LOCALE_LIST)
   });
 
 test("value rows lay their 308 x 104 buttons right-aligned 328 apart in the card's content box and wrap to a second line, never shrinking one", async () => {
-  const Rows = await import("../../src/bmpt/web/js/settings-rows.js");
+  const Rows = await import("../../src/bmpt/web/js/settings/settings-rows.js");
   const { XS_BUTTON: B, SPACE, PANEL } = Tokens;
   // the content box: the 1552-wide card less its padding (58 each side), SPACE.m under the dotted line (109 down),
   // SPACE.l above the foot
@@ -6576,7 +6576,7 @@ for (const lang of LOCALE_LIST)
     handlers.set("app.tours", () => ({ result: { tours: [] } }));
     setStrings(lang, Object.fromEntries(strings(ui)));
     document.documentElement.lang = lang;
-    const Settings = await import("../../src/bmpt/web/js/settings.js");
+    const Settings = await import("../../src/bmpt/web/js/settings/settings.js");
     const rectOf = (el) => NGUI.rect(el);
     const inside = (a, b, eps = 0.05) =>
       a[0] >= b[0] - eps && a[1] >= b[1] - eps && a[0] + a[2] <= b[0] + b[2] + eps && a[1] + a[3] <= b[1] + b[3] + eps;

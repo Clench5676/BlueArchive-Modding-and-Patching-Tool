@@ -179,7 +179,7 @@ test("a name with no word break to wrap at is not cut off by the plate", () => {
 });
 
 // --- options side by side share one size (settings-rows.js radioRow: Language, Match Strategy, Spine ...) ---
-const { radioRow } = await import("../../src/bmpt/web/js/settings-rows.js");
+const { radioRow } = await import("../../src/bmpt/web/js/settings/settings-rows.js");
 // the language picker's order (i18n.py UI_LANGUAGES), each option named in its own language
 const LANGUAGES = ["zh-CN", "zh-TW", "en-US", "ja-JP", "ko-KR", "th-TH"];
 // the labels a radio row draws, in order: [widget, node]

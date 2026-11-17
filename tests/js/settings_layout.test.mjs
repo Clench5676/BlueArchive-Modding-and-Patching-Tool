@@ -9,7 +9,7 @@ import { test } from "node:test";
 import { controls } from "./control_prefabs.mjs";
 
 const web = new URL("../../src/bmpt/web/js/", import.meta.url);
-const source = readFileSync(new URL("settings.js", web), "utf8");
+const source = readFileSync(new URL("settings/settings.js", web), "utf8");
 const strip = (s) => s.replace(/^import [^;]*;\n/gm, "").replace(/^export /gm, "");
 class El {
   style = {};
@@ -32,7 +32,7 @@ class El {
 globalThis.document = { documentElement: new El(), createElement: () => new El() };
 const NGUI = await import(new URL("ui/ngui.js", web));
 const { wrapPath, S, glyphsOf } = await import(new URL("core/util.js", web));
-const Rows = await import(new URL("settings-rows.js", web));
+const Rows = await import(new URL("settings/settings-rows.js", web));
 const ButtonsModule = await import(new URL("ui/game-buttons.js", web));
 const { errorText } = await import(new URL("core/i18n.js", web));
 const { BACKDROP, XS_BUTTON, TYPE, SPACE, PANEL, CONTROL } = await import(new URL("ui/ui-tokens.js", web));
@@ -274,7 +274,7 @@ test("the Enable Mods ? stands SPACE.xl after the title text, on the title's lin
 
 test("Settings keeps no hand-placed value geometry of its own", () => {
   assert.doesNotMatch(source, /VALUE_ROOM|VALUE_ROOM_MIN|BUTTONS_X|BELOW_ROOM|BUTTON_STEP|SETTINGS\.rowGap/);
-  const rowsSource = readFileSync(new URL("settings-rows.js", web), "utf8");
+  const rowsSource = readFileSync(new URL("settings/settings-rows.js", web), "utf8");
   assert.doesNotMatch(rowsSource, /\b1400\b|\b1440\b|-718|-689|\b700\b/);
 });
 

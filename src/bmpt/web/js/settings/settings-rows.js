@@ -5,9 +5,9 @@
 // 508 apart, the cards 12 apart, the small buttons 20 apart); the other numbers of the card's anatomy (240, 109,
 // the dotted line's size and place, 100, 19, 5) are kept as they are, and everything the App adds comes from the
 // scales (ui-tokens.js).
-import { node, sprite, label, fitText, fitGroup } from "./ui/ngui.js";
-import { PANEL, SPACE, CONTROL, XS_BUTTON, TYPE, COLOUR } from "./ui/ui-tokens.js";
-import { container, grid, row as layoutRow, stack as layoutStack, toNode } from "./ui/ui-grid.js";
+import { node, sprite, label, fitText, fitGroup } from "../ui/ngui.js";
+import { PANEL, SPACE, CONTROL, XS_BUTTON, TYPE, COLOUR } from "../ui/ui-tokens.js";
+import { container, grid, row as layoutRow, stack as layoutStack, toNode } from "../ui/ui-grid.js";
 
 // UIPopup_Option_PC's card: 1552 wide (PANEL.padCard 58 each side), 240 high with one line of options, its
 // dotted line (Common_Dotline, 1523 x 4) 109 under its top and 16.3 in from its left edge (the line is not

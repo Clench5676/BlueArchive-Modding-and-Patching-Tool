@@ -1007,7 +1007,7 @@ test("state refresh, the first explanation and help never measure logical origin
 });
 
 test("Settings measures built mods only when its Mods row is drawn, and remeasures after cleanup", async () => {
-  const Settings = await import("../../src/bmpt/web/js/settings.js");
+  const Settings = await import("../../src/bmpt/web/js/settings/settings.js");
   answers["settings.get"] = {
     languages: [{ code: "en-US", name: "English" }],
     language: "en-US",
@@ -1070,7 +1070,7 @@ test("Settings measures built mods only when its Mods row is drawn, and remeasur
 });
 
 test("Troubleshoot Mods shows only in pre-release builds, and Apply Official to All confirms, runs and shows the check", async () => {
-  const Settings = await import("../../src/bmpt/web/js/settings.js");
+  const Settings = await import("../../src/bmpt/web/js/settings/settings.js");
   const T = await import("../../src/bmpt/web/js/app/troubleshoot.js");
   const button = (name) =>
     walk(settingsHost).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === name);
@@ -1210,7 +1210,7 @@ test("the help fits its opening lines together in every locale, with and without
 });
 
 test("Settings combines scan consent and automatic checks, preserving the consent popup from Off", async () => {
-  const Settings = await import("../../src/bmpt/web/js/settings.js");
+  const Settings = await import("../../src/bmpt/web/js/settings/settings.js");
   const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
   let prefs = {
     ...answers["settings.get"],
@@ -1299,7 +1299,7 @@ test("Settings combines scan consent and automatic checks, preserving the consen
 });
 
 test("Settings' manual Check asks for missing consent, stops on refusal, and checks after Allow", async () => {
-  const Settings = await import("../../src/bmpt/web/js/settings.js");
+  const Settings = await import("../../src/bmpt/web/js/settings/settings.js");
   const saved = { ...answers };
   let state;
   answers["mods.state"] = () => state;
@@ -1846,7 +1846,7 @@ test("the tray's Back to Official opens the drift prompt: two buttons and no way
 });
 
 test('the Game Files row\'s "?": one definition of configuration drift', async () => {
-  const Settings = await import("../../src/bmpt/web/js/settings.js");
+  const Settings = await import("../../src/bmpt/web/js/settings/settings.js");
   try {
     for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
       const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
@@ -2347,7 +2347,7 @@ test("startup shows the Spine notice after assets until it is acknowledged, re-r
 
 test("Settings Spine value row opens the same read-only notice in every locale without changing state", async () => {
   const Consent = await import("../../src/bmpt/web/js/app/consent.js");
-  const Settings = await import("../../src/bmpt/web/js/settings.js");
+  const Settings = await import("../../src/bmpt/web/js/settings/settings.js");
   const Runtime = await import("../../src/bmpt/web/js/spine/spine-runtime.js");
   const saved = { ...answers },
     S = I18n.T;

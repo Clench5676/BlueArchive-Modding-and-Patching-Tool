@@ -191,7 +191,7 @@ const {
 } = await import("../../src/bmpt/web/js/mods/import-layout.js");
 const { DIALOG_H } = await import("../../src/bmpt/web/js/mods/batch-import.js");
 const { frameOutline } = await import("../../src/bmpt/web/js/ui/row-thumbnail.js");
-const { ROW_W: OPTION_WIDTH, rowBase, radioRow } = await import("../../src/bmpt/web/js/settings-rows.js");
+const { ROW_W: OPTION_WIDTH, rowBase, radioRow } = await import("../../src/bmpt/web/js/settings/settings-rows.js");
 const { S } = await import("../../src/bmpt/web/js/core/util.js");
 const { SPACE, TYPE, LINE, CONTROL, POPUP_FOOTER, POPUP_FRAME, POPUP_TYPE } = await import(
   "../../src/bmpt/web/js/ui/ui-tokens.js"

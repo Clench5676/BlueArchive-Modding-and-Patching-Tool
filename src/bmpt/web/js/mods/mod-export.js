@@ -4,7 +4,7 @@ import * as Popup from "../ui/popup.js";
 import * as Loading from "../app/loading.js";
 import { EXPORT } from "../ui/popup-frames.js";
 import { POPUP_TYPE } from "../ui/ui-tokens.js";
-import { rowBase, radioRow } from "../settings-rows.js";
+import { rowBase, radioRow } from "../settings/settings-rows.js";
 import { rpc, waitJob } from "../core/api.js";
 import { T, errorText } from "../core/i18n.js";
 import { S, hitButton, wrapPath } from "../core/util.js";

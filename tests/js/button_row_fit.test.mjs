@@ -341,7 +341,7 @@ const { XS_BUTTON } = await import("../../src/bmpt/web/js/ui/ui-tokens.js");
 const S = 1920 / 2960;
 for (const locale of LOCALES)
   test(`Settings tabs and button pairs share one size and fit in ${locale}`, async () => {
-    const settings = await source("settings.js"),
+    const settings = await source("settings/settings.js"),
       buttons = await source("ui/game-buttons.js");
     assert.match(settings, /fitGroup\(TABS\.map\(\(id\) => T\(`settings\.tab\.\$\{id\}`\)\), 56, 40, 300, 2\)/);
     assert.match(

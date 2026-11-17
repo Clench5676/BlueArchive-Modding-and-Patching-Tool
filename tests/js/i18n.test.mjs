@@ -193,7 +193,7 @@ test("the sites the review lists draw their error text through the shared errorT
   const { readFileSync } = await import("node:fs");
   const { flat } = await import("./helpers/source-text.mjs");
   const read = (name) => readFileSync(new URL(`../../src/bmpt/web/js/${name}`, import.meta.url), "utf8");
-  for (const name of ["app/consent.js", "app/update.js", "app/quit.js", "settings.js"]) {
+  for (const name of ["app/consent.js", "app/update.js", "app/quit.js", "settings/settings.js"]) {
     const source = read(name);
     assert.doesNotMatch(source, /`error\.\$\{/, `${name} builds no error key of its own`);
     assert.doesNotMatch(source, /const errorText =/, `${name} has no errorText of its own`);

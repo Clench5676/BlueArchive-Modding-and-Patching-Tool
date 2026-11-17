@@ -5,20 +5,20 @@
 // its square "?", where the switch shows, the startup file checks, the tray icon, Settings' Check of the game
 // files, and the size and cleanup of the mod cache. Whether the classic UI asks before it opens is a General
 // row, under More Settings.
-import { notify } from "./ui/popup.js";
-import * as ModSwitch from "./mods/mod-switch.js";
-import * as NGUI from "./ui/ngui.js";
-import * as Popup from "./ui/popup.js";
-import * as Prompts from "./app/prompts.js";
-import * as Impact from "./app/update-impact.js";
-import * as Consent from "./app/consent.js";
+import { notify } from "../ui/popup.js";
+import * as ModSwitch from "../mods/mod-switch.js";
+import * as NGUI from "../ui/ngui.js";
+import * as Popup from "../ui/popup.js";
+import * as Prompts from "../app/prompts.js";
+import * as Impact from "../app/update-impact.js";
+import * as Consent from "../app/consent.js";
 import * as OtherMods from "./settings-other.js";
-import * as ModExport from "./mods/mod-export.js";
-import * as Tours from "./app/tours.js";
-import * as Troubleshoot from "./app/troubleshoot.js";
-import * as Update from "./app/update.js";
-import * as Buttons from "./ui/game-buttons.js";
-import { BACKDROP, XS_BUTTON, TYPE } from "./ui/ui-tokens.js";
+import * as ModExport from "../mods/mod-export.js";
+import * as Tours from "../app/tours.js";
+import * as Troubleshoot from "../app/troubleshoot.js";
+import * as Update from "../app/update.js";
+import * as Buttons from "../ui/game-buttons.js";
+import { BACKDROP, XS_BUTTON, TYPE } from "../ui/ui-tokens.js";
 import {
   rowBase,
   radioRow,
@@ -30,9 +30,9 @@ import {
   noteFit,
   noteNode,
 } from "./settings-rows.js";
-import { on, rpc } from "./core/api.js";
-import { T, errorText, platform } from "./core/i18n.js";
-import { $, DOT, S, clone, glyphsOf, hitButton, wrapPath } from "./core/util.js";
+import { on, rpc } from "../core/api.js";
+import { T, errorText, platform } from "../core/i18n.js";
+import { $, DOT, S, clone, glyphsOf, hitButton, wrapPath } from "../core/util.js";
 
 const { node, sprite, label, find, rect } = NGUI;
 const fitText = (...a) => NGUI.fitText(...a);
@@ -650,7 +650,7 @@ async function checkUpdate(event) {
   event.currentTarget.disabled = true;
   try {
     await render();
-    const { check } = await import("./app/update.js");
+    const { check } = await import("../app/update.js");
     await check($("consent"), undefined, {
       // no newer release: the check's only answer (offline and failures go to onError)
       onCheck: (info) => {
