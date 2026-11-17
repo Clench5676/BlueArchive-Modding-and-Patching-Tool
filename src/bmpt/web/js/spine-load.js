@@ -41,15 +41,12 @@ export function latestLoad() {
  * Create a spine-player and wait until it is loaded. The runtime does not await success hooks, so it settles on
  * hook errors, cancellation, disposal and missing callbacks too. Each player owns its atlas and textures; a
  * cancelled player's hooks never touch the next view's state.
- * @param {(config: object) => object} create Makes the player from its configuration.
- * @param {object} config The spine-player configuration.
- * @param {object} [options] Options.
- * @param {AbortSignal} [options.signal] Cancels the load.
+ * @param {(config: object) => object} create
+ * @param {object} [options]
  * @param {number} [options.timeout] The most milliseconds to wait.
- * @param {(error: Error) => void} [options.onError] Called with a failure.
- * @param {() => void} [options.onResume] Called when rendering resumes.
- * @param {() => void} [options.onRecover] Called when the context is recovered.
- * @param {boolean} [options.manual] The owner draws the frames.
+ * @param {(error: Error) => void} [options.onError]
+ * @param {() => void} [options.onResume]
+ * @param {() => void} [options.onRecover]
  * @returns {{player: object|null, ready: Promise<object>, dispose: () => void, active?: () => boolean}} The
  *     player, a promise of it once it has drawn, and the means to free it.
  */

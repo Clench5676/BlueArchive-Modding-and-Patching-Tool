@@ -723,8 +723,6 @@ const TEXTURES = {
 
 /**
  * Show an action card in its normal state; a disabled card takes the colour of FilterSort's disabled button.
- * @param {NguiNode} card The action card.
- * @param {boolean} enabled Whether the action is enabled.
  * @param {NguiNode|null} [disabledTemplate] FilterSort's disabled button.
  */
 export function actionState(card, enabled, disabledTemplate = null) {
@@ -4312,7 +4310,7 @@ async function ensureLayouts() {
 /**
  * Apply the settings the lobby and the voices take: the voice volume and mute (development runs started with
  * --mute stay silent), the zoom-out limit and the post-processing.
- * @param {object|undefined} prefs The settings as read.
+ * @param {object|undefined} prefs
  */
 export function applyPrefs(prefs) {
   Lobby.setVolume((prefs?.voiceVolume ?? 80) / 100, ctx?.info?.mute || prefs?.voiceMuted);
@@ -4434,10 +4432,8 @@ addEventListener("blur", () => keySteps.release());
 /**
  * Open the detail screen on a variant. In place (another variant or family while the screen is shown), the
  * shown screen stays until the new one is ready and every part swaps in one frame.
- * @param {object} context The shared screen context.
  * @param {object} familyData The family, as family.get gives it.
- * @param {string} key The variant's key.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {boolean} [options.inPlace] Swap the parts in place of the shown screen.
  * @param {string|null} [options.kind] The tab to open on: "spr", "lobby" or "model".
  * @returns {Promise<void>} Settles once the screen is ready (the panels, primary preview and decoded UI
@@ -4526,9 +4522,7 @@ export async function show(context, familyData, key, { inPlace = false, kind = n
   if (open && hasLobby(variant())) rpc("lobby.warm").catch(() => {});
 }
 
-/**
- * Tell the screen a route to a student failed: a key step waiting for that screen goes on at once.
- */
+/** Tell the screen a route to a student failed: a key step waiting for that screen goes on at once. */
 export function stepFailed() {
   arrived();
 }
@@ -4560,9 +4554,7 @@ export function suspend() {
   spineToken += 1;
 }
 
-/**
- * Leave the screen: stop the players and drop any change being prepared.
- */
+/** Leave the screen: stop the players and drop any change being prepared. */
 export function hide() {
   Photo.destroy();
   Camera.close(false);

@@ -35,7 +35,6 @@ const stage = () => document.getElementById("stage");
 /**
  * Show the framing button beside the photography button: in the fullscreen lobby only, and not in a lobby
  * without a prefab (nothing to keep the camera in).
- * @param {boolean} on Whether the fullscreen lobby is shown.
  * @param {object} [bridge] The detail screen's hooks (lobby(), the shown variant and the actions the camera
  *     needs); the last given ones are kept.
  * @returns {Promise<void>} Settles when the button is drawn.
@@ -249,8 +248,5 @@ export function close(reenter = true) {
   Lobby.camera(false);
   if (reenter) void entry(true);
 }
-/**
- * Whether the framing mode is on.
- * @returns {boolean} True when it is.
- */
+/** Whether the framing mode is on. */
 export const isOpen = () => active;

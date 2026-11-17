@@ -36,9 +36,8 @@ export const barImage = (width, height, scale = 1, dpi = globalThis.devicePixelR
  * starts in an animation frame.
  * @param {object} [options] Replaceable steps, for the tests.
  * @param {(width: number, height: number, scale: number, dpi: number) => Promise<string>} [options.raster]
- *     Draws the image.
  * @param {(fn: () => void) => void} [options.frame] Runs a draw in an animation frame.
- * @param {(url: string) => Promise<HTMLImageElement>} [options.decode] Decodes the image.
+ * @param {(url: string) => Promise<HTMLImageElement>} [options.decode]
  * @returns {(bar: HTMLElement, scale: number) => Promise<void>} Paints a bar; settles when its newest request
  *     is painted.
  */

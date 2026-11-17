@@ -4,9 +4,8 @@ import { maskWithSprite } from "./sprite-mask.js";
  * Clip a roster card's band and portrait to the game's filled card surface. Its bevel and shadow are outside
  * the picture, including the diagonal top-left/bottom-right cuts.
  * @param {RenderView} view What render() drew.
- * @param {string} root The card's path.
- * @param {object} [options] Options.
- * @param {(url: string) => Promise<HTMLImageElement>} [options.load] The image loader.
+ * @param {object} [options]
+ * @param {(url: string) => Promise<HTMLImageElement>} [options.load]
  * @returns {Promise<void>} Settles when the masks are applied.
  */
 export async function clipRosterBand(view, root, { load } = {}) {

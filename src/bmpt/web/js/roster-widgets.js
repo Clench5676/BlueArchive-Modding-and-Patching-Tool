@@ -7,7 +7,6 @@ import { row } from "./ui-grid.js";
 
 /**
  * The game's search field, emptied.
- * @param {NguiNode} collection The UICharacterCollection layout.
  * @returns {NguiNode} A copy of the CharacterSearch node.
  */
 export function searchTree(collection) {
@@ -20,8 +19,6 @@ export function searchTree(collection) {
 /**
  * The sort button's body for a width. The roster's funnel line, expand marker, caption and inclined shadow stay
  * together when the width changes.
- * @param {NguiNode} collection The UICharacterCollection layout.
- * @param {{text: string, fs: number}} fitted The fitted caption.
  * @param {number} width The body's width in units.
  * @param {boolean} filtered Whether a display setting filters the list (the funnel shows in blue).
  * @returns {NguiNode} The button body.
@@ -48,7 +45,6 @@ export function sortBody(collection, fitted, width, filtered) {
 
 /**
  * The order button's body, showing one arrow.
- * @param {NguiNode} collection The UICharacterCollection layout.
  * @param {boolean} ascending True for the up arrow, false for the down arrow.
  * @returns {NguiNode} The button body.
  */
@@ -62,11 +58,9 @@ export function orderBody(collection, ascending) {
 /**
  * A list popup's cards for its search and sort: found by their name, full name, original name, key and any
  * further terms of their own (an item's `terms`: a model's dev ids).
- * @param {object[]} items The cards.
- * @param {object} [options] The search and the sort.
- * @param {string} [options.query] The search text.
+ * @param {object[]} items
+ * @param {object} [options]
  * @param {string} [options.sort] "name" sorts by label; anything else keeps the order.
- * @param {boolean} [options.ascending] False reverses the order.
  * @returns {object[]} The cards that match.
  */
 export function pickerItems(items, { query = "", sort = "default", ascending = true } = {}) {
@@ -91,8 +85,7 @@ const { find, node, label, fitText } = NGUI;
 /**
  * The student roster's toolbar fit: its Group Alts checkbox, the two segment filters, search, sort and order.
  * @param {RosterView} view The view; its sort picks the sort button's caption.
- * @param {object} [options] The room.
- * @param {string} [options.title] The toolbar's title.
+ * @param {object} [options]
  * @param {number} [options.left] The left edge in units.
  * @param {number} [options.right] The right edge in units.
  * @returns {object|null} The fit, as toolbarFit gives it.
@@ -117,14 +110,12 @@ export function toolbarLayout(view, { title = T("roster.title"), left = -1270, r
  * after the title (the first step that fits; the last one regardless, `fits` says): a checkbox, the segment
  * filters, the search, sort and order tools. The roster takes -1270 to 1412 after its title; a list popup its
  * own width and no title.
- * @param {object} options What the toolbar holds.
- * @param {string} [options.title] The title the toolbar follows.
+ * @param {object} options
  * @param {number} options.left The left edge in units.
  * @param {number} options.right The right edge in units.
  * @param {string[][]} options.filters The three captions of each segment filter.
  * @param {string[]} options.sorts Every caption the sort button can show (it is as wide as its longest, so
  *     choosing another moves nothing).
- * @param {number} [options.sortAt] The index of the shown caption.
  * @param {string|null} [options.check] The checkbox's caption; null for no checkbox.
  * @param {number} [options.icons] How many icon toggles stand before search (a list popup's).
  * @param {boolean} [options.spread] The checkbox and the filters from the left edge, the tools at the right (a
@@ -237,9 +228,7 @@ export function emptyListY(centre, label) {
 /**
  * The toolbar's three toggles as hit areas, in SeletControl's units: the six segments of the two filters and
  * Group Alts.
- * @param {RosterView} view The view.
  * @param {object} lay The toolbar fit, as toolbarFit gives it.
- * @param {number} [segY] The y of the segments' centre.
  * @returns {{box: number[], name: string, pressed: boolean, apply: (target: RosterView) => void}[]} Each
  *     toggle's box [x, y, width, height] (centre), its name (the caption it draws, "All" in both filters),
  *     whether its setting is on (aria-pressed) and apply(view), which sets it.
@@ -275,7 +264,6 @@ export const TOOLBAR_CENTRE_Y = -219 - 50.2;
 /**
  * What the roster's toolbar shows of a view: one entry per filter of the layout (its node's name and the active
  * segment), the checkbox, the sort button's funnel (a display setting filters the list) and the order arrow.
- * @param {RosterView} view The view.
  * @returns
  *     {{filters: {name: string, active: number}[], checked: boolean, filtered: boolean, ascending: boolean}}
  *     The state.
@@ -292,11 +280,9 @@ export const rosterToolbarState = (view) => ({
 
 /**
  * Build the complete UICharacterCollection toolbar; callers keep their own list and title.
- * @param {NguiNode} collection The UICharacterCollection layout.
- * @param {NguiNode|null} checkbox The checkbox layout.
- * @param {RosterView} view The view.
+ * @param {NguiNode|null} checkbox
  * @param {boolean} searching Whether the search box is open (its button is pressed).
- * @param {object|null} [lay] The toolbar fit.
+ * @param {object|null} [lay]
  * @param {object} [state] What the toolbar shows (`rosterToolbarState`), for a list popup's own.
  * @returns {NguiNode} The toolbar's node tree.
  */

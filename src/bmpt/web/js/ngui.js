@@ -33,8 +33,6 @@ const isLatin = (str) =>
 /**
  * The font size to draw a text at: Latin-only text is drawn larger than the nominal size, so it matches CJK
  * text.
- * @param {string} str The text.
- * @param {number} fs The nominal font size.
  * @returns {number} The size to draw with.
  */
 export const fontSizeFor = (str, fs) => fs * (isLatin(str) ? LATIN_SCALE : 1);
@@ -78,15 +76,9 @@ export function textWidth(str, fs) {
 let index = null,
   textures = null,
   initDone = null;
-/**
- * The atlas index: atlas name to sprite name to its metadata. Empty until init() has loaded it.
- * @returns {Object<string, Object<string, {width: number, height: number}>>} The index.
- */
+/** The atlas index: atlas name to sprite name to its metadata. Empty until init() has loaded it. */
 export const atlasIndex = () => index || {};
-/**
- * The UI texture index: texture name to the URL of its image. Empty until init() has loaded it.
- * @returns {Object<string, string>} The index.
- */
+/** The UI texture index: texture name to the URL of its image. Empty until init() has loaded it. */
 export const textureIndex = () => textures || {};
 let atlasDone = null,
   texturesDone = null;
@@ -184,7 +176,6 @@ async function assetJson(url, cache, label = url) {
 
 /**
  * Load an image, shared by URL unless a signal is given.
- * @param {string} url The image URL.
  * @param {{signal?: AbortSignal}} [options] With a signal the load is private and is dropped when it aborts.
  * @returns {Promise<HTMLImageElement>} The decoded-on-demand image; rejects after 15 s.
  */
@@ -242,7 +233,6 @@ export async function spritePixels(widget) {
  * Turn a canvas into an in-memory blob URL (never written anywhere).
  * A canvas with no backing store gives no blob and encodes to "data:,": that is a failure, so the caches below
  * drop it and the next render draws the picture again.
- * @param {HTMLCanvasElement} c The canvas.
  * @returns {Promise<string>} The blob URL; rejects when the canvas cannot be encoded.
  */
 export const canvasUrl = (c) =>
@@ -269,7 +259,6 @@ export const canvasUrl = (c) =>
 
 /**
  * Multiply an image by a tint colour, keeping its alpha (the tint's alpha is applied as opacity).
- * @param {string} url The image URL.
  * @param {string} hex The tint as "#rrggbb"; white returns the URL unchanged.
  * @returns {Promise<string>} The URL of the tinted image.
  */
@@ -343,7 +332,6 @@ async function gradientTint(url, colors) {
 const baked = new Map();
 /**
  * Draw a sliced sprite into one image, at least 2x with a higher effective DPI when requested.
- * @param {string} url The atlas image URL.
  * @param {number[]} b The borders [top, right, bottom, left] in source pixels.
  * @param {number} wpx The drawn width in stage pixels.
  * @param {number} hpx The drawn height in stage pixels.
@@ -479,9 +467,7 @@ const colorOf = (c) => {
 
 /**
  * Draw a layout tree into a host element.
- * @param {NguiNode} tree The prefab layout.
- * @param {HTMLElement} host The element the nodes are appended to.
- * @param {RenderOptions} [opts] How to draw it.
+ * @param {RenderOptions} [opts]
  * @returns {Promise<RenderView>} The drawn elements and the picture work.
  */
 export async function render(tree, host, opts = {}) {
@@ -980,7 +966,6 @@ function tierTag({ el, path, w, h, kind }, z, inks, S) {
 
 /**
  * Find a subtree by path.
- * @param {NguiNode} tree The node the path is relative to.
  * @param {string} path Names joined by "/", for example "A/B/C".
  * @returns {NguiNode|null} The node, or null when a part is missing.
  */
@@ -996,7 +981,6 @@ export function find(tree, path) {
 /**
  * Find the first node with a name, depth first.
  * @param {NguiNode} tree The node to search from, itself included.
- * @param {string} name The node name.
  * @returns {NguiNode|null} The node, or null when there is none.
  */
 export function findNamed(tree, name) {
@@ -1041,7 +1025,6 @@ export function layout(name) {
 
 /**
  * The stage rectangle of an element made by render().
- * @param {HTMLElement} el The element.
  * @returns {number[]} [left, top, width, height] in stage pixels.
  */
 export const rect = (el) => ["left", "top", "width", "height"].map((k) => parseFloat(el.style[k]));
@@ -1055,7 +1038,7 @@ const decodeImage = imageDecoder(() => new Image());
  * @param {number} cap The longest wait in milliseconds.
  * @param {HTMLElement|null} [shown] An element whose pictures are on screen already, so decoded; they are left
  *     out (a Chromium decode() takes a frame or two even then).
- * @param {{signal?: AbortSignal}} [options] Stops the wait when it aborts.
+ * @param {{signal?: AbortSignal}} [options]
  * @returns {Promise<void>} Settles when the pictures are decoded or the cap has passed.
  */
 export function decoded(root, cap, shown = null, { signal } = {}) {
@@ -1079,12 +1062,9 @@ export function decoded(root, cap, shown = null, { signal } = {}) {
 
 /**
  * Build a plain node by hand.
- * @param {string} name The node name.
  * @param {number[]} pos Local position [x, y] in NGUI units.
- * @param {object[]} [widgets] The widgets on the node.
- * @param {NguiNode[]} [children] The child nodes.
+ * @param {NguiNode[]} [children]
  * @param {number[]} [scale] Local scale [x, y].
- * @returns {NguiNode} The node.
  */
 export const node = (name, pos, widgets = [], children = [], scale = [1, 1]) => ({
   name,
@@ -1101,7 +1081,6 @@ export const node = (name, pos, widgets = [], children = [], scale = [1, 1]) => 
  * @param {number} w The widget width in NGUI units.
  * @param {number} h The widget height in NGUI units.
  * @param {object} [opts] Fields that replace the defaults (atlas Common, type 1, pivot 4, depth 5, white).
- * @returns {object} The widget.
  */
 export const sprite = (name, w, h, opts = {}) => ({
   sprite: name,
@@ -1118,13 +1097,10 @@ export const sprite = (name, w, h, opts = {}) => ({
 });
 /**
  * Build a label widget.
- * @param {string} text The text.
- * @param {number} fontSize The nominal font size.
  * @param {string} color The colour as "#rrggbb/alpha".
  * @param {number} w The widget width in NGUI units.
  * @param {number} h The widget height in NGUI units.
  * @param {object} [opts] Fields that replace the defaults (pivot 4, depth 9, align 0).
- * @returns {object} The widget.
  */
 export const label = (text, fontSize, color, w, h, opts = {}) => ({
   cls: "UILabel",
@@ -1142,8 +1118,6 @@ export const label = (text, fontSize, color, w, h, opts = {}) => ({
 /**
  * The ink width of the widest line of a text. A closing full-width bracket or corner bracket is mostly blank on
  * the right.
- * @param {string} str The text.
- * @param {number} fs The nominal font size.
  * @returns {number} The width in pixels.
  */
 export const glyphWidth = (str, fs) =>
@@ -1230,11 +1204,7 @@ function breakLines(tokens, fs, maxW) {
 /**
  * Fit text into a width: shrink it from fsMax to fsMin on one line; if it still does not fit, break it into up
  * to maxLines lines at the smallest size that fits. Wrapped text is never larger than fsMin.
- * @param {string} str The text.
- * @param {number} fsMax The largest font size.
  * @param {number} fsMin The smallest font size before wrapping.
- * @param {number} maxW The width to fit into.
- * @param {number} [maxLines=2] The most lines.
  * @param {string|null} [lang] The text's language when it is not the page's; it is drawn in that language's
  *     fonts (app.css).
  * @returns {{text: string, fs: number, lines: number, overflow?: boolean}} The text with its line breaks, the
@@ -1315,10 +1285,6 @@ export const LINE_PITCH = 1.15;
  * Draw a caption at the size already chosen for its sibling group, trying every permitted word and CJK break at
  * that size. fitText can otherwise choose a smaller size before trying Thai word breaks, undoing the group's
  * shared size.
- * @param {string} str The text.
- * @param {number} fs The size.
- * @param {number} maxW The width to fit into.
- * @param {number} [maxLines=2] The most lines.
  * @param {string|null} [lang] The text's language when it is not the page's.
  * @returns {{text: string, fs: number, lines: number, overflow: boolean}} The wrapped text; overflow is true
  *     when it does not fit.
@@ -1346,9 +1312,7 @@ const sizeFloor = (fsMin) => Math.max(8, Math.floor(fsMin * 0.4));
  * within that height. A wrap that wins only a step or two of size over every label on one line is not used. A
  * size under fsMin is used only where some label cannot fit at fsMin, in steps of 2 down to 40 % of it: text
  * never runs past its box.
- * @param {string[]} strs The labels.
- * @param {number} fsMax The largest size.
- * @param {number} fsMin The bottom of the size range.
+ * @param {string[]} strs
  * @param {number|number[]} maxW The width of the box, or one per label.
  * @param {number} [maxLines=2] The most lines per label.
  * @param {{lang?: string|string[]|null, maxH?: number}} [options] One language for every label or a list with
@@ -1439,8 +1403,7 @@ function layoutOptions(str, fs, maxLines, maxH) {
  * force the size below fsMin, the bottom of the prefab's range: then a body is at least as wide as its caption
  * needs and the rest are as equal as the width allows. A long word takes width from its neighbours, who keep
  * the same size, so one word costs the row a little evenness instead of the size of every caption.
- * @param {string[]} strs The captions.
- * @param {number} fsMax The largest size.
+ * @param {string[]} strs
  * @param {number} fsMin The bottom of the prefab's size range.
  * @param {number} total The width of the bodies together, without the gaps between them.
  * @param {number} inset The clear space across each body, both sides together.
@@ -1490,7 +1453,6 @@ export function fitRow(strs, fsMax, fsMin, total, inset, maxLines = 2, { lang = 
 /**
  * A glyph that stands for the vertical band Latin and Thai text occupies, so a title does not move with the
  * descenders and ascenders of its own letters: capital H for Latin, a consonant for Thai.
- * @param {string} str The text.
  * @returns {string|null} The glyph, or null for Han, kana and Hangul, which fill the same band whatever the
  *     characters are, so their own ink counts.
  */
@@ -1504,7 +1466,6 @@ export function inkReference(str) {
  * The box centres its lines (NGUI's 1.15 pitch) by font metrics, while the eye centres the ink of the first
  * line's top and the last line's bottom. It is measured with the font stack the text draws with, so it works on
  * a tree that is not in the document yet (computed style is empty there).
- * @param {string} str The text.
  * @param {number} px The font size in CSS pixels.
  * @param {{reference?: boolean}} [options] reference: measure the script's reference glyph (inkReference)
  *     instead of these letters, giving one baseline for every title of a language.
@@ -1531,7 +1492,6 @@ export function inkShift(str, px, { reference = false } = {}) {
  * The ink of text drawn in a label box: its top and bottom as offsets from the box's centre.
  * It is the extent the eye sees (first line's ascent to last line's descent, lines at NGUI's 1.15 pitch,
  * centred as inkShift describes); without font metrics, the em box of the lines.
- * @param {string} str The text.
  * @param {number} px The font size in CSS pixels.
  * @returns {{top: number, bottom: number}} The offsets in CSS pixels, down from the centre.
  */
@@ -1552,11 +1512,8 @@ export function inkBand(str, px) {
  * least maxW wide.
  * @param {object[]} widgets The label widgets; each is updated in place.
  * @param {string[]} strs The texts, one per widget.
- * @param {number} fsMax The largest size.
- * @param {number} fsMin The bottom of the size range.
- * @param {number} maxW The width to fit into.
  * @param {number} [maxLines=2] The most lines per label.
- * @param {{maxH?: number}} [opts] Passed to fitGroup.
+ * @param {{maxH?: number}} [opts]
  * @returns {{text: string, fs: number, lines: number}[]} The fit of each widget, as fitGroup gives it.
  */
 export function fitLabels(widgets, strs, fsMax, fsMin, maxW, maxLines = 2, opts = {}) {
@@ -1575,11 +1532,7 @@ export function fitLabels(widgets, strs, fsMax, fsMin, maxW, maxLines = 2, opts 
  * Fit text into a label widget: its text and size, and its box at least maxW wide, so text fitted to maxW never
  * spills out of a narrower box (a prefab label is often a little narrower than the button drawn round it).
  * @param {object} widget The label widget; updated in place.
- * @param {string} str The text.
- * @param {number} fsMax The largest size.
  * @param {number} fsMin The smallest size before wrapping.
- * @param {number} maxW The width to fit into.
- * @param {number} [maxLines=2] The most lines.
  * @returns {{text: string, fs: number, lines: number}} The fit, as fitText gives it.
  */
 export function fitLabel(widget, str, fsMax, fsMin, maxW, maxLines = 2) {

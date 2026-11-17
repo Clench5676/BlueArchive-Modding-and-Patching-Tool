@@ -39,7 +39,6 @@ export function frameMesh(effect) {
  * carries the light and, as its alpha, what the blend leaves of what is behind; the canvas draws nothing where
  * the mask is zero, so the card keeps its own pixels there.
  * @param {number[]} emission The shader's linear colour [r, g, b].
- * @param {number} alpha The shader's coverage.
  * @returns {{color: number[], alpha: number}} The layer's sRGB colour and alpha.
  */
 export function frameBlend(emission, alpha) {
@@ -119,8 +118,7 @@ reduced?.addEventListener?.("change", () => {
 /**
  * Draw the frame effect of a card into a canvas and keep it animated while it is on screen.
  * @param {object} effect The effect read from the prefab: mesh, material and particle system.
- * @param {HTMLElement} host The element the canvas is appended to.
- * @param {FramePlacement} placement Where the canvas goes.
+ * @param {FramePlacement} placement
  * @returns {Promise<void>} Settles once the textures are in and the canvas is in the host.
  */
 export async function renderFrameEffect(effect, host, { x, y, sx, sy, z, load }) {

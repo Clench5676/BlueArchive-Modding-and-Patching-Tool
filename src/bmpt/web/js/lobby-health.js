@@ -10,13 +10,12 @@ import { lobbyIdles } from "./rest-pose.js";
 
 /**
  * Whether a rectangle has finite edges and some area.
- * @param {Rect|null|undefined} r The rectangle.
+ * @param {Rect|null|undefined} r
  * @returns {boolean} True when it is valid.
  */
 export const validRect = (r) => r && [r.x0, r.y0, r.x1, r.y1].every(Number.isFinite) && r.x1 > r.x0 && r.y1 > r.y0;
 /**
  * Whether two valid rectangles overlap.
- * @param {Rect} a The first rectangle.
  * @param {Rect} b The second rectangle.
  * @returns {boolean} True when they share area.
  */
@@ -53,8 +52,8 @@ export function artBounds(sk) {
 
 /**
  * Move skeleton bounds into the lobby's world by a layer's placement.
- * @param {Rect|null} r The skeleton bounds.
- * @param {{x: number, y: number, scale: number, name?: string}} layer The layer's placement.
+ * @param {Rect|null} r
+ * @param {{x: number, y: number, scale: number, name?: string}} layer
  * @returns {Rect|null} The bounds in lobby units; null for invalid bounds.
  */
 export function worldBounds(r, layer) {
@@ -68,7 +67,6 @@ export function worldBounds(r, layer) {
 /**
  * The smallest 16:9 view that contains a rectangle.
  * @param {Rect} r The rectangle; it must be valid.
- * @returns {{x: number, y: number, w: number, h: number}} The view.
  */
 export function containingView(r) {
   if (!validRect(r)) throw new Error("No drawable lobby bounds");
@@ -76,11 +74,7 @@ export function containingView(r) {
   return { x: (r.x0 + r.x1 - w) / 2, y: (r.y0 + r.y1 - (w * 9) / 16) / 2, w, h: (w * 9) / 16 };
 }
 
-/**
- * Put a layer's rest animation back on track 0 when the track is empty.
- * @param {object} player The spine-player.
- * @param {{rest?: {name: string, time: number}}} layer The layer.
- */
+/** Put a layer's rest animation back on track 0 when the track is empty. */
 export function resumeRest(player, layer) {
   const rest = layer.rest,
     entry = player.animationState?.getCurrent(0);
@@ -93,7 +87,6 @@ export function resumeRest(player, layer) {
  * draws something. The player runtime needs a track even for a static setup pose. Candidate poses are tested on
  * a separate skeleton, so a rejected empty or hiding idle never leaks into the live tracks. Intro-only scenes
  * may legitimately be empty.
- * @param {object} player The spine-player.
  * @param {object} layer The layer; its `rest` and `skin` are set.
  * @param {object} info The lobby's information (idles, pins).
  * @param {(skeleton: object, name: string, pins?: object[]|null) => void} pin Applies the pins to a posed

@@ -74,9 +74,7 @@ let thumbnailWork = thumbnailScope();
 const listTop = () => (searching ? SEARCH_LIST_TOP : PAPER_TOP);
 const clipTop = () => ORIGIN[1] - listTop() * S;
 
-/**
- * Mark the roster's drawn list as stale, so the next show() draws it again.
- */
+/** Mark the roster's drawn list as stale, so the next show() draws it again. */
 export function invalidate() {
   dirty = true;
 }
@@ -84,7 +82,6 @@ export function invalidate() {
 /**
  * Restore the saved view (settings.get's "roster"); called once at start, before the roster or a detail screen
  * shows.
- * @param {object} prefs The settings as read.
  */
 export function init(prefs) {
   view = { ...normalizeView(prefs), scroll: 0 };
@@ -123,8 +120,7 @@ function opts(extra = {}) {
 
 /**
  * The cards in the roster's order, as it shows them (the detail screen's arrows step through these).
- * @param {{families?: object[]}} rosterData The data of roster.list.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {boolean} [options.unfiltered] True: the whole roster in the same order.
  * @returns {object[]} The cards.
  */
@@ -724,9 +720,7 @@ function warm() {
 // request with show() and drops a failed one, which show() then asks for again.
 const PREFABS = ["UICharacterCollection", "UICharacterCollectionPopulatorUnit", "UIPopup_GachaCharList.Btn_Checkbox"];
 const prefabs = () => Promise.all(PREFABS.map((name) => NGUI.layout(name)));
-/**
- * Ask for the roster's prefabs in the background. Never awaited: a failure surfaces when show() asks again.
- */
+/** Ask for the roster's prefabs in the background. Never awaited: a failure surfaces when show() asks again. */
 export function preload() {
   prefabs().catch(() => {});
 }
@@ -734,8 +728,6 @@ export function preload() {
 /**
  * Show the roster from its saved data. Required UI and available pictures decode before reveal; offscreen rows
  * do not extend that barrier.
- * @param {object} context The shared screen context.
- * @param {{families?: object[]}} rosterData The data of roster.list.
  * @returns {Promise<void>} Settles when it has finished.
  */
 export async function show(context, rosterData) {
@@ -758,9 +750,7 @@ export async function show(context, rosterData) {
   warm();
 }
 
-/**
- * Hide the roster: stop its motion and thumbnail work and mark its list stale.
- */
+/** Hide the roster: stop its motion and thumbnail work and mark its list stale. */
 export function hide() {
   wheelMotion?.stop();
   thumbnailWork.cancel();

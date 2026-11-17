@@ -26,7 +26,7 @@ export const ITEMS = Object.freeze(
 
 /**
  * Whether an entry is greyed: exactly when it has a classic tab and no web screen.
- * @param {NavItem} item The entry.
+ * @param {NavItem} item
  * @returns {boolean} True when greyed.
  */
 export const greyed = (item) => !!item.classic && !item.route;
@@ -34,8 +34,8 @@ export const greyed = (item) => !!item.classic && !item.route;
 /**
  * How an entry is drawn: its label, the accessible name ("{label} - Classic UI" for a greyed one, the label
  * alone otherwise; never a tooltip), whether it is greyed, and where it goes.
- * @param {NavItem} item The entry.
- * @param {(key: string, params?: object) => string} T The translate function.
+ * @param {NavItem} item
+ * @param {(key: string, params?: object) => string} T
  * @returns {{label: string, name: string, greyed: boolean, route: string|null, tab: string|null}} The route, or
  *     the classic tab it hands off to.
  */
@@ -54,8 +54,8 @@ export function view(item, T) {
 /**
  * The hand-off prompt (a popup.js message): the entry's label, where it opens, Don't Ask Again (unticked),
  * Cancel and Open.
- * @param {NavItem} item The entry.
- * @param {(key: string) => string} T The translate function.
+ * @param {NavItem} item
+ * @param {(key: string) => string} T
  * @returns {object} The options for popup.js message().
  */
 export const handOffPrompt = (item, T) => ({
@@ -72,15 +72,15 @@ export const handOffPrompt = (item, T) => ({
 // box ticked calls it, before the hand-off).
 /**
  * Handle a click on an entry.
- * @param {NavItem} item The entry.
- * @param {object} options What the click may do.
+ * @param {NavItem} item
+ * @param {object} options
  * @param {boolean} [options.prompt] Whether the hand-off prompt shows first (the pref classicPrompt; on unless
  *     it is false).
  * @param {(route: string) => Promise<boolean|void>} options.go Shows a web screen; false cancels.
  * @param {(item: NavItem) => Promise<{button: string, checked: boolean}>} options.ask Shows the hand-off
  *     prompt.
  * @param {(tab: string) => Promise<void>} options.open Hands over to the classic UI on that tab.
- * @param {(on: boolean) => Promise<void>} options.savePrompt Turns the prompt off.
+ * @param {(on: boolean) => Promise<void>} options.savePrompt
  * @returns {Promise<"route"|"cancel"|"open">} What happened.
  */
 export async function activate(item, { prompt = true, go, ask, open, savePrompt }) {
@@ -117,7 +117,7 @@ const rgbOf = (color) => {
  * The tint of a greyed entry, in the first of the three modes (see the greyed look) that applies.
  * @param {NguiNode|null} grid The layout of UILobby's Front/Bottom/Menu/BG/Grid; null when there is no game or
  *     it could not be read.
- * @param {object} [options] Options.
+ * @param {object} [options]
  * @param {boolean} [options.game] False when there is no game folder.
  * @returns {{mode: "game"|"ngui"|"plain", factor: number}} The mode and the brightness factor.
  */

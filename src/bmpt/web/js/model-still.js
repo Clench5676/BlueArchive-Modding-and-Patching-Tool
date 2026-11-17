@@ -10,8 +10,6 @@ import { onCapturePriorityChange, popupCapturesOpen, popupItem, captureEligible 
 /**
  * The version of a variant's 3D stills: it changes when the model's files or any model mod of the family
  * change.
- * @param {object} family The family.
- * @param {object} variant The variant.
  * @param {number} [generation] A number the caller raises to make every still new.
  * @returns {string} The version.
  */
@@ -28,10 +26,7 @@ export const modelStillVersion = (family, variant, generation = 0) =>
   ]);
 /**
  * The key of a 3D still in the caches.
- * @param {string} key The variant's key.
- * @param {string} source The model's source.
  * @param {string|null} version The still's version (modelStillVersion).
- * @returns {string} The key.
  */
 // the key names the still's schema: change it when the picture changes
 export const modelStillKey = (key, source, version) => JSON.stringify([key, source, version, "square-640-v3"]);
@@ -40,10 +35,9 @@ export const modelStillKey = (key, source, version) => JSON.stringify([key, sour
  * Make the 3D stills' queue: one extra 3D context at a time. Stills share the detail renderer but never its
  * live camera or lifecycle. A failed attempt can be tried again.
  * @param {object} [options] Replaceable parts, for the tests.
- * @param {() => Promise<object>} [options.renderer] Loads the model renderer.
- * @param {(error: Error, source: string, kind: string) => void} [options.report] Reports a failure.
+ * @param {() => Promise<object>} [options.renderer]
+ * @param {(error: Error, source: string, kind: string) => void} [options.report]
  * @param {number} [options.timeout] The most milliseconds one still may take.
- * @param {object} [options.persistent] The persistent preview cache.
  * @returns
  *     {(variant: object, source: string, options?: {version?: string|null, signal?: AbortSignal}) => Promise<string|null>}
  *     Asks for a variant's still: a promise of its URL, with `thumbnail`, `signal`, `failure()` and `bump()`

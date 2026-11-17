@@ -1,10 +1,9 @@
 /**
  * Measure an element's text with the browser's text layout, including trailing letter spacing and script
  * shaping; canvas font shorthand and glyph counts cannot reproduce it.
- * @param {HTMLElement} element The element.
  * @param {number} [scale] A factor applied to the measured width.
- * @param {Document} [doc] The document to measure in.
- * @param {(element: HTMLElement) => CSSStyleDeclaration} [styleOf] Reads the computed style.
+ * @param {Document} [doc]
+ * @param {(element: HTMLElement) => CSSStyleDeclaration} [styleOf]
  * @returns {number} The width, rounded up.
  */
 export function naturalTextWidth(element, scale = 1, doc = document, styleOf = getComputedStyle) {

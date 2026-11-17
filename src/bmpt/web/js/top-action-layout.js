@@ -22,8 +22,7 @@ export function topActionLayout(boxes, hall, safeRight = 0) {
  * How far the actions must stand in from the right so they clear the native window controls.
  * @param {{width: number, left: number, right: number, top: number}|undefined} stage The bar's or the stage's
  *     rect.
- * @param {{left: number, right: number, top: number, bottom: number, width?: number}|undefined} controls The
- *     native controls' rect.
+ * @param {{left: number, right: number, top: number, bottom: number, width?: number}|undefined} controls
  * @param {number[]} box The action's box [right, top, width, height].
  * @param {number} [headerScale] Pixels per stage unit; from the stage's width by default.
  * @returns {number} The clearance in stage units; 0 when the controls do not overlap.

@@ -101,7 +101,6 @@ export const CAPTION_EXCEPTIONS = Object.freeze({
  * The smallest font size a caption may shrink to at a site and locale: the prefab minimum, or a lower approved
  * one.
  * @param {string} site The wording site, a key of CAPTION_EXCEPTIONS.
- * @param {string} locale The UI language tag.
  * @param {number} minimum The prefab's minimum size.
  * @returns {number} The minimum to use.
  */

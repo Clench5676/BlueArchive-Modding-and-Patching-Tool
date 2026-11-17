@@ -4,7 +4,6 @@ export const ROOT_ROUTE = "#/hall";
 const screen = (route) => route.split("/")[1] || "hall";
 /**
  * Start a history of the pages the user entered.
- * @param {string} [root] The root route.
  * @returns
  *     {{current: () => string, entries: () => string[], commit: (route: string, options?: {home?: boolean}) => string, back: (requested?: string) => string|null}}
  *     current: the last route; entries: a copy of all; commit: enter a route (home resets to the root) and

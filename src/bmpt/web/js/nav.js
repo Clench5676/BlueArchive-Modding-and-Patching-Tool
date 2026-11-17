@@ -63,7 +63,6 @@ let navRevision = 0;
 /**
  * Draw the bottom navigation.
  * @param {number} [active] The index of the entry for the shown screen.
- * @param {{game?: boolean, prefs?: () => object, setPrefs?: (prefs: object) => void}} [opts] Options.
  * @returns {Promise<void>} Settles when the bar is drawn.
  */
 export async function renderNav(active = 0, opts = {}) {
@@ -120,7 +119,6 @@ const topBoxes = {
 /**
  * Show the top bar for the Student Hall (hall) or for the other screens.
  * @param {boolean} hall Whether the Student Hall is shown: the home and back buttons are hidden then.
- * @param {boolean} [available] Whether the home button is available.
  */
 export function setTopActions(hall, available = true) {
   topHall = hall;
@@ -130,9 +128,7 @@ export function setTopActions(hall, available = true) {
   if (back) back.hidden = hall || !back.onclick;
   reflowTopActions();
 }
-/**
- * Place the top bar's home, option and divider controls against the native window controls.
- */
+/** Place the top bar's home, option and divider controls against the native window controls. */
 export function reflowTopActions() {
   document.querySelector(".topbar")?.style.setProperty("--corner-margin", `${CORNER_MARGIN}px`);
   const bar = document.querySelector(".topbar")?.getBoundingClientRect?.(),
@@ -215,7 +211,6 @@ function skinTop() {
 
 /**
  * Set the top bar's label and back action.
- * @param {string} text The accessible label of the bar.
  * @param {(() => void)|null} onBack What the back button does; none hides it.
  */
 export function setTitle(text, onBack) {

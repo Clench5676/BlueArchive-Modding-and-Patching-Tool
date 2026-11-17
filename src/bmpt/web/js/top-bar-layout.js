@@ -11,7 +11,6 @@ export const FILL = Object.freeze({ top: 0, bottom: 97, height: 105 });
 /**
  * The centre of a bar of a height, from where the fill is in the sprite (its rows scale with the bar).
  * @param {{top: number, bottom: number, height: number}} [fill] The fill's rows in the sprite.
- * @param {number} [height] The bar's height.
  * @returns {number} The centre, from the bar's top.
  */
 export const barCentre = (fill = FILL, height = BAR_HEIGHT) => ((fill.top + fill.bottom) / 2 / fill.height) * height;
@@ -19,16 +18,14 @@ export const barCentre = (fill = FILL, height = BAR_HEIGHT) => ((fill.top + fill
 /**
  * The padding under the bar's content that makes flex centring use the fill's centre instead of the whole
  * height's.
- * @param {number} centre The fill's centre.
- * @param {number} [height] The bar's height.
  * @returns {number} The padding.
  */
 export const barPadding = (centre, height = BAR_HEIGHT) => Math.max(0, height - 2 * centre);
 
 /**
  * The vertical extent of several rectangles together.
- * @param {{top: number, bottom: number}[]} rects The rectangles.
- * @returns {number[]|null} [top, bottom], or null without any.
+ * @param {{top: number, bottom: number}[]} rects
+ * @returns {{top: number, bottom: number}|null} The union of the rectangles' vertical extents; null when none has any height.
  */
 export function extent(rects) {
   const list = rects.filter((r) => r && r.bottom > r.top);
@@ -51,8 +48,7 @@ export const inkRect = (box, rows) => ({
 
 /**
  * How far down an element has to move for the centre of its ink to sit on a centre (all px, one origin).
- * @param {number} centre The target centre.
- * @param {{top: number, bottom: number}|null} ink The element's ink.
+ * @param {{top: number, bottom: number}|null} ink
  * @returns {number} The distance; 0 without ink.
  */
 export const moveBy = (centre, ink) => (ink ? centre - (ink.top + ink.bottom) / 2 : 0);

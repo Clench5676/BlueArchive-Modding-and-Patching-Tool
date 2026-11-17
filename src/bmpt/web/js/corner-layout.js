@@ -10,15 +10,13 @@ export const CORNER_MARGIN = (CORNER_UNITS * 1920) / 2960;
  * area outside a letterboxed stage, so the inset is always measured from the window. Scene controls make room
  * for a bar the pointer brought back.
  * @param {number[]} box The control's box [x, y, width, height] in stage units.
- * @param {object} options Where it goes.
+ * @param {object} options
  * @param {string} options.corner "top-left", "top-right", "bottom-left" or "bottom-right".
  * @param {boolean} [options.immersive] Whether the scene is immersive (its bars reach into the window by
  *     `insets`).
- * @param {number} options.width The window's width.
- * @param {number} options.height The window's height.
- * @param {DOMRect} options.stage The stage's rect.
+ * @param {DOMRect} options.stage
  * @param {number} [options.barBottom] The top bar's bottom edge, for a scene that is not immersive.
- * @param {{active?: boolean, bounds?: DOMRect}|null} [options.native] The native window controls.
+ * @param {{active?: boolean, bounds?: DOMRect}|null} [options.native]
  * @param {{top?: number, bottom?: number, offset?: number}|null} [options.insets] chrome-motion.js: how far an
  *     immersive scene's top bar and bottom menu reach into the window now, and the top bar's offset, which the
  *     macOS window buttons share.
@@ -98,7 +96,6 @@ function place(element, entry) {
 /**
  * Keep a control in a corner of the window: it is placed now and again whenever the window changes
  * (reflowCorners).
- * @param {HTMLElement} element The control.
  * @param {number[]} box The control's prefab box [x, y, width, height].
  * @param {object} options As for cornerBox: corner and immersive.
  */
@@ -113,11 +110,7 @@ export function bindCorner(element, box, options) {
   Object.assign(entry, { box, options });
   place(element, entry);
 }
-/**
- * Keep an immersive scene's control centred on the stage's top or bottom edge (the photography shutter).
- * @param {HTMLElement} element The control.
- * @param {"top"|"bottom"} edge The edge.
- */
+/** Keep an immersive scene's control centred on the stage's top or bottom edge (the photography shutter). */
 export function bindEdge(element, edge) {
   if (!element) return;
   let entry = registered.get(element);
@@ -129,9 +122,7 @@ export function bindEdge(element, edge) {
   Object.assign(entry, { box: null, options: { edge } });
   place(element, entry);
 }
-/**
- * Place every bound control again, after the window or the bars changed.
- */
+/** Place every bound control again, after the window or the bars changed. */
 export function reflowCorners() {
   for (const entry of controls) {
     const element = entry.ref.deref();

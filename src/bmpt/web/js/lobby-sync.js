@@ -8,18 +8,13 @@
 
 /**
  * UnityEngine.Random.Range: a float in [min, max].
- * @param {number} min The lower bound.
- * @param {number} max The upper bound.
  * @param {() => number} [rnd] A random number in [0, 1).
- * @returns {number} The number.
  */
 export const range = (min, max, rnd = Math.random) => min + (max - min) * rnd();
 /**
  * UnityEngine.Random.Range for ints: an int in [min, max) (min when the range is empty).
- * @param {number} min The lower bound.
  * @param {number} max The bound the result stays under.
  * @param {() => number} [rnd] A random number in [0, 1).
- * @returns {number} The number.
  */
 export const rangeInt = (min, max, rnd = Math.random) => (max > min ? min + Math.floor(rnd() * (max - min)) : min);
 
@@ -48,8 +43,6 @@ export function extraPlays(r, rnd = Math.random) {
 /**
  * Add handlers to a track entry's events, keeping any it has (spine-ts calls entry.listener). Entries are
  * pooled, so a handler must let go of the entry on dispose.
- * @param {object} entry The track entry.
- * @param {Object<string, Function>} handlers The handlers by event kind.
  * @returns {object} The entry.
  */
 export function listen(entry, handlers) {

@@ -48,7 +48,6 @@ export function frameGeometry(width, height = 0) {
  * Text and panel content share their top and footer clearance (POPUP_FOOTER); without a footer the panel
  * padding stays at the bottom.
  * @param {string|number} width A class name or the width the content needs.
- * @param {number} height The height the content needs.
  * @param {{text?: boolean, footer?: boolean}} [options] text: the wider side padding of text; footer: leave
  *     room for the footer buttons.
  * @returns {Box} The box inside the padding, in the frame's own coordinates.
@@ -95,7 +94,6 @@ export const ALIAS = {
 };
 /**
  * The frame of the alias editor for a number of rows.
- * @param {number} n The number of rows.
  * @returns {PopupFrame & {ys: number[], bottom: number, content: Box}} The frame, the y
  *     of each row, the lowest edge and the content box.
  */
@@ -120,7 +118,6 @@ export const DETAILS = {
 };
 /**
  * The frame of the details popup around a body.
- * @param {number} bodyHeight The height of the body.
  * @returns {PopupFrame & {top: number, bottom: number, content: Box}} The frame and the
  *     body's top and bottom.
  */
@@ -151,7 +148,6 @@ MOD_ALIAS.bottom = MOD_ALIAS.input.y + MOD_ALIAS.hint.dy - MOD_ALIAS.hint.h / 2;
 /**
  * The frame of the comparison popup and its rows.
  * @param {boolean} review Whether the popup is a review with a footer, at full height.
- * @param {number} [count] The number of rows to show.
  * @returns
  *     {PopupFrame & {rows: object, scroll: object, lift: number, bottom: number, content: Box}}
  *     The frame, the rows' placement (first y, pitch, height, the most that fit), the scroll area, and the

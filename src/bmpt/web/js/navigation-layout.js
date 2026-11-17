@@ -5,9 +5,7 @@ import { clone } from "./util.js";
 /**
  * The origin of an entry's drawing: UILobby's label half-height supplies the bottom inset as well as the space
  * below the baseline.
- * @param {NguiNode} tree The entry's layout.
  * @param {number} scale Stage pixels per NGUI unit.
- * @param {number} [width] The entry's width.
  * @returns {number[]} The origin [x, y] in stage pixels.
  */
 export const navigationOrigin = (tree, scale, width = 260) => [
@@ -18,11 +16,9 @@ export const navigationOrigin = (tree, scale, width = 260) => [
 /**
  * Build one navigation entry from a donor of UILobby's grid, set to the app's icon and caption.
  * @param {NguiNode} grid The layout of UILobby's bottom menu grid.
- * @param {NavItem} item The entry.
- * @param {string} caption The caption.
+ * @param {NavItem} item
  * @param {boolean} greyed Whether the entry hands over to the classic UI: it shows the dimmed icon only.
  * @param {number} index The entry's index; picks a donor when no donor has the icon.
- * @param {number} [width] The entry's width.
  * @returns {NguiNode} The entry's node.
  */
 export function navigationEntry(grid, item, caption, greyed, index, width = 260) {

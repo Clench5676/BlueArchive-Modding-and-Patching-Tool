@@ -17,7 +17,7 @@ import { IDENTITY, mul, euler } from "./particles.js";
  * A curve at a time (intro.py evaluate): a streamed curve's last key at or before t ({"s": [[time, a, b, c,
  * d]]}, ((a x + b) x + c) x + d with x the time since the key), a dense curve's frames lerped ({"d": [begin,
  * rate, values]}), a constant ({"k": v}).
- * @param {{k?: number, s?: number[][], d?: [number, number, number[]]}|null|undefined} c The curve.
+ * @param {{k?: number, s?: number[][], d?: [number, number, number[]]}|null|undefined} c
  * @param {number} t The time in seconds.
  * @returns {number} The value; 0 without a curve.
  */
@@ -47,7 +47,6 @@ export function evaluate(c, t) {
  * clip and off once it has ended (ActivationControlPlayable).
  * @param {object} n The intro node, as nodesOf makes it.
  * @param {number} t The time in seconds.
- * @returns {boolean} True when the object is on.
  */
 export function activeAt(n, t) {
   let on = n.own;
@@ -214,10 +213,6 @@ export const playingAt = (clips, t) => clips.filter((c) => t >= c.t && t < c.t +
  * Start a clip on the skeleton's AnimationState (SpineAnimationStateMixerBehaviour.ProcessFrame at run time):
  * its animation with the clip's mix (the skeleton's default without a custom one; an empty track first fades in
  * from the setup pose), at its time in the clip.
- * @param {object} st The spine AnimationState.
- * @param {object} data The skeleton data.
- * @param {number} track The track index.
- * @param {object} c The clip.
  * @param {number} t The time in seconds.
  * @param {number} delta The frame time the AnimationState adds right after.
  * @returns {object|null} The track entry; null for an empty or unknown animation.
@@ -251,7 +246,6 @@ export function startClip(st, data, track, c, t, delta) {
 /**
  * The intro's GameObjects with their curves (activity, transform), control and activation clips.
  * @param {object} intro The intro, as lobby.json holds it.
- * @returns {object[]} The nodes.
  */
 export function nodesOf(intro) {
   const nodes = (intro.nodes || []).map((n) => ({
@@ -327,21 +321,19 @@ export function sampler(intro, layers) {
 /**
  * Play a lobby's intro.
  * @param {object} intro The intro, as lobby.json holds it.
- * @param {object} env What the intro acts on.
+ * @param {object} env
  * @returns
  *     {{frame: (player: object, delta: number) => void, skip: () => void, running: () => boolean, pending: () => boolean, done: () => boolean, state: () => object, dispose: () => void}}
  *     The intro's controls: frame is each player's frame hook, before its animation update.
  * @param {{name: string, player: object, introOnly?: boolean}[]} env.layers The layers in stacking order.
  * @param {object} [env.fx] The lobby's effects (particles-gl.js).
- * @param {object} [env.post] The rest post-processing.
- * @param {object} [env.host] The host player.
  * @param {(id: string, set: Set<object>) => void} [env.sfx] Plays a sound event by the app's sound settings;
  *     its audio joins `set`.
  * @param {(player: object) => void} [env.screen] The layer moved: its post-processing screen again.
- * @param {(player: object, on: boolean) => void} [env.clear] Clears a player.
+ * @param {(player: object, on: boolean) => void} [env.clear]
  * @param {(player: object, on: boolean) => void} [env.show] A scene shown or hidden; without it, its element.
- * @param {(skeleton: object, bone: object) => *} [env.bone] Reads a bone.
- * @param {() => boolean} [env.visible] Whether the lobby is on screen.
+ * @param {(skeleton: object, bone: object) => *} [env.bone]
+ * @param {() => boolean} [env.visible]
  * @param {() => number} [env.now] The frame's time stamp, for tests.
  */
 export function create(intro, env) {

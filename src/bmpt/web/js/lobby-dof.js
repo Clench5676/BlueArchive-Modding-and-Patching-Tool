@@ -159,7 +159,6 @@ function pass(gl, src, st, w, h, screen) {
 
 /**
  * Turn the depth of field on for a player, or off; Linear's pass draws with it.
- * @param {object} player The spine-player.
  * @param {{radius: number}|null} dof The volume's max radius; null for off.
  * @param {object} Linear The linear.js module, whose pass hook is used.
  */
@@ -191,11 +190,7 @@ export function set(player, dof, Linear) {
   }
 }
 
-/**
- * Free a player's depth of field targets and programs; called before the player is disposed.
- * @param {object} player The spine-player.
- * @param {object} [Linear] The linear.js module.
- */
+/** Free a player's depth of field targets and programs; called before the player is disposed. */
 export function detach(player, Linear) {
   const st = states.get(player);
   if (!st) return;

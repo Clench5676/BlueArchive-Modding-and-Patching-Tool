@@ -465,7 +465,7 @@ const modalLayoutFor = (web) => {
     "BUTTON",
     "layoutStack",
     `${source
-      .slice(source.indexOf("export const modalContentBottom"), source.indexOf("// Keep a caller's centre"))
+      .slice(source.indexOf("export const modalContentBottom"), source.indexOf("export function buttonBox("))
       .replaceAll(
         "export ",
         "",

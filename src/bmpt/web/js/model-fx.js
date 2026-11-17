@@ -56,7 +56,6 @@ function swap(src, from, to) {
 /**
  * A lobby program's vertex GLSL for three.js: 3D positions through the object's model-view and the camera's
  * projection.
- * @param {string} kind The program's kind.
  * @returns {string} The GLSL source.
  */
 export function vertex3d(kind) {
@@ -70,7 +69,6 @@ export function vertex3d(kind) {
  * A lobby program's fragment GLSL for three.js: the textures read with V flipped (glTF images are stored top
  * row first, Unity's UV origin is the bottom-left corner), the colour encoded to sRGB at the end
  * (premultiplied: u_premul 1, the colour divided by the alpha first).
- * @param {string} kind The program's kind.
  * @returns {string} The GLSL source.
  */
 export function fragment3d(kind) {
@@ -100,7 +98,7 @@ void main() {
 /**
  * The blend of a material (its BlendMode src and dst): the game's for colour; coverage only where the game's
  * blend covers what is behind (additive light adds none, as the lobbies' player does).
- * @param {{src: number, dst: number}} mat The material.
+ * @param {{src: number, dst: number}} mat
  * @returns {object} The three.js blend settings.
  */
 export function blendOf(mat) {
@@ -118,7 +116,7 @@ export function blendOf(mat) {
 
 /**
  * Convert a three.js matrix (column-major 4 x 4) to a particles.js matrix (row-major 3 x 4).
- * @param {THREE.Matrix4} m The matrix.
+ * @param {THREE.Matrix4} m
  * @returns {number[]} The 12 numbers.
  */
 export const rows = (m) => {
@@ -128,7 +126,6 @@ export const rows = (m) => {
 
 /**
  * The camera in the simulation's space (particles.js geometry3d's view).
- * @param {THREE.Camera} camera The camera.
  * @param {THREE.Matrix4} toSim Maps three.js world space to the simulation's.
  * @returns {object} The view: eye and axes in lobby units.
  */
@@ -145,11 +142,11 @@ export function viewOf(camera, toSim) {
 
 /**
  * Make the effects of one model.
- * @param {object|undefined} fx The GLB's haloFx.
- * @param {object} options The model's parts.
+ * @param {object|undefined} fx
+ * @param {object} options
  * @param {THREE.Object3D[]} options.nodes Its glTF nodes (three.js objects by index).
  * @param {THREE.Texture[]} options.textures Its glTF textures (by index).
- * @param {THREE.Object3D} options.root The glTF scene.
+ * @param {THREE.Object3D} options.root
  * @returns {{group: THREE.Group, update: Function, settle: Function, dispose: Function}|null} group goes into
  *     the view's scene; update() advances and draws the effects, settle() puts them at a fixed moment for a
  *     still, dispose() frees what they made (the glTF textures are the view's); null without systems.

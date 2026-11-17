@@ -62,7 +62,7 @@ export function normalizeView(v) {
 /**
  * Whether the display settings' filters narrow the list: a group narrows only when some but not all of its
  * options are on.
- * @param {Object<string, string[]>|undefined} filters The options on in each group.
+ * @param {Object<string, string[]>|undefined} filters
  * @returns {boolean} True when some group narrows.
  */
 export const filtering = (filters) =>
@@ -76,7 +76,6 @@ export const filtering = (filters) =>
  * Fold a text for searching: case, width, kana and separators (brackets, dots, commas, dashes, quotes and the
  * marks inside official names such as Shiroko*Terror, Golconde&Decalcomania or a "?" title), so a name typed
  * without them is found.
- * @param {string} str The text.
  * @returns {string} The folded text.
  */
 export function fold(str) {
@@ -88,7 +87,6 @@ export function fold(str) {
 }
 /**
  * Split a search text into its folded words.
- * @param {string} query The search text.
  * @returns {string[]} The words.
  */
 export const terms = (query) =>
@@ -232,11 +230,9 @@ function comparator(view, collator) {
 /**
  * Arrange the roster's cards for a view.
  * @param {{families?: object[]}} data The roster data of roster.list.
- * @param {RosterView} view The view.
- * @param {object} [options] The search and the language.
- * @param {string} [options.query] The search text.
+ * @param {object} [options]
  * @param {(names: object) => *} [options.label] Gives the UI language's value of a {lang: value} object.
- * @param {Intl.Collator|null} [options.collator] Compares names.
+ * @param {Intl.Collator|null} [options.collator]
  * @param {boolean} [options.unfiltered] True: the whole roster in the view's order, for stepping from a card
  *     the view hides.
  * @returns {{groups: {id: "mods"|"none", items: object[]}[], total: number}} The cards in their groups and the
@@ -268,8 +264,6 @@ export function arrange(
 /**
  * The cards in the roster's order, in one list.
  * @param {{families?: object[]}} data The roster data of roster.list.
- * @param {RosterView} view The view.
- * @param {object} [opts] As for arrange.
  * @returns {object[]} The cards.
  */
 export const order = (data, view, opts) => arrange(data, view, opts).groups.flatMap((g) => g.items);
@@ -297,9 +291,9 @@ export function visit(data, key) {
  * Find the card a step away from the shown one in a list, wrapping round.
  * A variant the list hides (another chip of the family, a deep link) steps to the nearest listed card after or
  * before its place in full.
- * @param {object[]} list The cards as shown.
+ * @param {object[]} list
  * @param {object[]|(() => object[])|null} full The unfiltered order, or a function making it.
- * @param {{family: string, variant: string, merged: boolean}} at The shown card.
+ * @param {{family: string, variant: string, merged: boolean}} at
  * @param {number} delta The step, +1 or -1.
  * @returns {object|null} The card, or null when there is nowhere else to go.
  */

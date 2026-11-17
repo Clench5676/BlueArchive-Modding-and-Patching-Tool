@@ -48,9 +48,7 @@ export function order(layers, merged = true) {
  * Make a spine-player; with a host (the lobby's bottom player), one that draws with the host's WebGL context:
  * the canvas it makes asks for a context while the player is made, and gets the host's. Losing and restoring
  * the host's context reaches the guest's textures and shaders too.
- * @param {object|null} host The host player.
- * @param {() => object} create Makes the spine-player.
- * @returns {object} The player.
+ * @param {() => object} create
  */
 export function make(host, create) {
   const gl = host?.context?.gl;
@@ -76,7 +74,6 @@ export function make(host, create) {
 
 /**
  * The player whose context a player draws with.
- * @param {object} player The player.
  * @returns {object|null} The host, or null.
  */
 export const hostOf = (player) => hosts.get(player) || null;
@@ -93,8 +90,6 @@ function showElement(player, on) {
  * Show or hide a player (a scene only the intro shows). Drawn by a host, its parts are left out of the host's
  * frame, where the rest of the lobby and the effects keep their order; on a canvas of its own, its element is
  * hidden. The host's element always shows: it carries the whole lobby.
- * @param {object} player The player.
- * @param {boolean} on Whether it is shown.
  */
 export function setShown(player, on) {
   if (!player) return;
@@ -104,7 +99,6 @@ export function setShown(player, on) {
 }
 /**
  * Whether a player is shown.
- * @param {object} player The player.
  * @returns {boolean} True unless setShown hid it.
  */
 export const shown = (player) => !hidden.has(player);
@@ -113,7 +107,6 @@ export const shown = (player) => !hidden.has(player);
  * A player is loaded (its success hook, before its first frame). A guest stops drawing and running on its own:
  * its renderer draws nothing when its own frame asks, its frame loop stops (the host runs its frames) and a
  * window resize runs none. Any other player draws its skeleton's parts (install() adds what goes between them).
- * @param {object} player The player.
  */
 export function ready(player) {
   const renderer = player?.sceneRenderer;
@@ -173,7 +166,6 @@ export function install(players, fx) {
  * For checks: draw the skeletons of the lobby installed last interleaved by render queue in their one context
  * (true, as the game draws them) or one after another in stacking order (false, as one canvas per skeleton drew
  * them).
- * @param {boolean} on Whether to interleave.
  */
 export function setInterleaved(on) {
   interleave = !!on;
@@ -197,7 +189,6 @@ export function drawn() {
 /**
  * In the host's frame hook, before anything else: run its guests' frames (time, clips, animation, drags,
  * camera), so it draws them posed for this frame; the viewport each of them set goes back to the host's.
- * @param {object} player The host player.
  */
 export function frame(player) {
   const guests = plans.get(player)?.guests;

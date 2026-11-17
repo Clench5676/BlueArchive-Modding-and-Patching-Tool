@@ -7,10 +7,8 @@ const PIVY = [1, 1, 1, 0.5, 0.5, 0.5, 0, 0, 0];
 
 /**
  * Resize a button body in place, moving its decoration patterns with the body's edges.
- * @param {NguiNode} body The button node.
  * @param {number|null} [width] The new body width in NGUI units; unchanged when null.
  * @param {number|null} [height] The new body height; unchanged when null.
- * @returns {NguiNode} The same node.
  */
 export function resizeButton(body, width = null, height = null) {
   const bg = body.widgets.find((w) => "sprite" in w && "w_" in w);
@@ -126,8 +124,6 @@ export function buttonTier(height, tolerance = 0.5) {
 }
 /**
  * Whether a body is shaped like a button.
- * @param {number} width The body width.
- * @param {number} height The body height.
  * @returns {boolean} True for a body at most PILL.maxH high and PILL.ratio times as wide as high.
  */
 export const isPill = (width, height) => height <= PILL.maxH && width >= PILL.ratio * height;
@@ -144,8 +140,6 @@ export function chipTier(height, tolerance = 0.5) {
 }
 /**
  * The size tag of a body.
- * @param {number} width The body width.
- * @param {number} height The body height.
  * @param {string|null} [kind] What the widget says it is (its `tier`): "button" for a button whatever its shape
  *     (a narrow body in a row of actions), "chip" for a chip, measured against the chips' sizes; without it, a
  *     Common_Btn_BG pill is a button.
@@ -164,7 +158,6 @@ export function tagOf(width, height, kind = null) {
 export const TAG = Object.freeze({ h: 16, padX: 10, perChar: 8 });
 /**
  * The box of a size tag.
- * @param {string} text The tag's text.
  * @param {number} left The body's left edge in px.
  * @param {number} top The body's top edge in px.
  * @returns {number[]} [left, top, width, height] in px.
@@ -182,9 +175,8 @@ export const overlaps = (a, b) => a[0] < b[0] + b[2] && b[0] < a[0] + a[2] && a[
  * widget aligns them.
  * @param {number[]} box [left, top, width, height] of the widget's box.
  * @param {number} inkW The widest line's width.
- * @param {number} inkH The lines' height.
- * @param {"left"|"right"|"center"} align The horizontal alignment.
- * @param {"flex-start"|"flex-end"|"center"} vertical The vertical alignment.
+ * @param {"left"|"right"|"center"} align
+ * @param {"flex-start"|"flex-end"|"center"} vertical
  * @returns {number[]} [left, top, width, height] of the ink.
  */
 export function inkBox([left, top, width, height], inkW, inkH, align, vertical) {

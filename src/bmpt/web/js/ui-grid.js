@@ -26,14 +26,7 @@ import { GRID } from "./ui-tokens.js";
  * @property {number} [mid] The item's visual centre from its top, where it gives one.
  */
 
-/**
- * Make a box.
- * @param {number} x The left edge.
- * @param {number} y The top edge.
- * @param {number} w The width.
- * @param {number} h The height.
- * @returns {Box} The box.
- */
+/** Make a box. */
 export const box = (x, y, w, h) => ({ x, y, w, h });
 
 // padding: one number, [vertical, horizontal] or [top, right, bottom, left], as in CSS
@@ -45,8 +38,6 @@ function sides(padding) {
 
 /**
  * The box inside another once padding is taken off.
- * @param {Box} b The outer box.
- * @param {Padding} padding The padding.
  * @returns {Box} The inner box.
  */
 export function inset(b, padding) {
@@ -67,7 +58,6 @@ export function container({ x = 0, y = 0, w, h, padding = 0 }) {
 
 /**
  * The 12-column grid of a box (the Bootstrap model).
- * @param {Box} b The box.
  * @param {{columns?: number, gutter?: number}} [options] The column count and the gutter between columns.
  * @returns {{pitch: number, column: number, at: (n: number) => number, span: (n: number, offset?: number) =>
  *     Box}} The
@@ -88,7 +78,6 @@ export function grid(b, { columns = GRID.columns, gutter = GRID.gutter } = {}) {
  * An item's visual centre from its top: mid where the item gives one (a text's: its script's reference glyph,
  * so the lines of one language share a centre line whatever their letters), else the middle of its ink, else
  * its box's.
- * @param {LayoutItem} item The item.
  * @returns {number} The distance from the item's top.
  */
 export const centreOf = (item) => item.mid ?? (item.ink ? (item.ink[0] + item.ink[1]) / 2 : item.h / 2);
@@ -97,16 +86,13 @@ export const centreOf = (item) => item.mid ?? (item.ink ? (item.ink[0] + item.in
  * Place items side by side.
  * Each item is a fixed size, a share of the width left over (grow), or both; any other field of an item comes
  * back on its box. The row is as tall as h, or as the room its items need around the shared centre line.
- * @param {LayoutItem[]} items The items.
  * @param {object} [options] The row's frame and layout.
- * @param {number} [options.x] The left edge.
- * @param {number} [options.y] The top edge.
  * @param {number|null} [options.w] The width, or the items' own.
  * @param {number|null} [options.h] The height, or what the items need.
  * @param {number} [options.gap] The space between items.
  * @param {"start"|"end"|"center"} [options.align] Across the row; centre means the visual centre: a text's ink,
  *     a widget's box (the game's rule: every element's visual centre on the bar's centre line).
- * @param {"start"|"end"|"center"|"between"} [options.justify] Along the row.
+ * @param {"start"|"end"|"center"|"between"} [options.justify]
  * @returns {{boxes: (LayoutItem & Box)[], w: number, h: number, centre: number|null}} The items' boxes, the
  *     row's size and the centre line (null unless centred).
  */
@@ -145,10 +131,7 @@ export function row(items, { x = 0, y = 0, w = null, h = null, gap = 0, align = 
 
 /**
  * Place items one under the other.
- * @param {LayoutItem[]} items The items.
  * @param {object} [options] The stack's frame and layout.
- * @param {number} [options.x] The left edge.
- * @param {number} [options.y] The top edge.
  * @param {number|null} [options.w] The width, or the widest item's.
  * @param {number|null} [options.h] The height, or the items' together.
  * @param {number} [options.gap] The space between items.
@@ -178,8 +161,7 @@ export function stack(items, { x = 0, y = 0, w = null, h = null, gap = 0, align 
  * drawn from the box's top), its ink (the band its glyphs cover) and mid (the centre of its script's reference
  * glyph, what centres it: the rule badges follow).
  * @param {object} ui NGUI's measures: fitText, glyphWidth, fontSizeFor, inkBand, inkShift and LINE_PITCH.
- * @param {string} text The text.
- * @param {{fs: number, min: number}} type A TYPE role.
+ * @param {{fs: number, min: number}} type
  * @param {{maxW?: number, lines?: number}} [options] The width the text may take and the most lines it may wrap
  *     to.
  * @returns {{text: string, fs: number, px: number, w: number, h: number, ink: number[]|null, mid: number|null,
@@ -200,8 +182,7 @@ export function textItem(ui, text, type, { maxW = Infinity, lines = 1 } = {}) {
 
 /**
  * The width of a control that follows its caption: the caption's width and the pad on each side, at least minW.
- * @param {{fs: number, pad: number, minW?: number}} control A CONTROL entry.
- * @param {string} caption The caption.
+ * @param {{fs: number, pad: number, minW?: number}} control
  * @param {(caption: string, fs: number) => number} measure The caption's width at a size.
  * @returns {number} The control's width.
  */

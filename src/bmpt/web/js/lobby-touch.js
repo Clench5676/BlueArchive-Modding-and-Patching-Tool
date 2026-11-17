@@ -274,7 +274,6 @@ function up(e) {
 // of 120.
 /**
  * Classify a wheel event by its device.
- * @param {WheelEvent} e The event.
  * @returns {"notch"|"maybe"|"smooth"} The kind of step.
  */
 export function wheelStep(e) {
@@ -298,9 +297,8 @@ export function wheelStep(e) {
 // trackpad at the first event a wheel never sends.
 /**
  * Tell a mouse from a trackpad for a wheel event.
- * @param {WheelEvent} e The event.
  * @param {number} [now] The time in milliseconds.
- * @param {{at: number, kind: string|null}} [last] The previous scroll.
+ * @param {{at: number, kind: string|null}} [last]
  * @returns {"mouse"|"trackpad"} The device kind.
  */
 export function wheelKind(e, now = performance.now(), last = scroll) {
@@ -404,10 +402,7 @@ const handlers = [
   ["webkitmouseforcewillbegin", noDrag],
   ["webkitmouseforcedown", noDrag],
 ];
-/**
- * Start listening for the lobby's pointer, wheel and gesture events on an element.
- * @param {HTMLElement} el The lobby's element.
- */
+/** Start listening for the lobby's pointer, wheel and gesture events on an element. */
 export function attach(el) {
   if (!el || host === el || !lobby) return;
   detach();
@@ -415,9 +410,7 @@ export function attach(el) {
   for (const [type, fn, opts] of handlers) host.addEventListener(type, fn, opts);
   if (traceSink) for (const type of SPY) document.addEventListener(type, spy, true);
 }
-/**
- * Leave fullscreen: stop listening; a running drag ends as if released.
- */
+/** Leave fullscreen: stop listening; a running drag ends as if released. */
 export function detach() {
   if (press && !press.pan) {
     clearTimeout(press.timer);

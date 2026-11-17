@@ -3,7 +3,6 @@
 /**
  * The CSS text-shadow of a label's NGUI effect (shadow or outline), in scaled CSS pixels. NGUI's effect
  * distance uses screen-down y.
- * @param {{effect?: number, effectColor?: string, effectDistance?: number[]}} widget The label widget.
  * @param {number} [scale=1] Stage pixels per NGUI unit.
  * @returns {string} The text-shadow value, or "" when the label has no effect.
  */
@@ -31,7 +30,6 @@ export function labelEffect(widget, scale = 1) {
 /**
  * The distance from the bottom of a bottom-pivot label to its font baseline in ngui.js.
  * @param {string} text The label text; Latin-only text is drawn larger.
- * @param {number} fontSize The nominal font size.
  * @returns {number} The distance in NGUI units.
  */
 export function labelBaselineInset(text, fontSize) {
@@ -45,7 +43,6 @@ export function labelBaselineInset(text, fontSize) {
 /**
  * The room an ellipsis-clipped label needs around its box: a CSS line box is shorter than this font's ink, and
  * ellipsis clips both axes, so its canvas gets room for descenders, combining marks and the prefab's effect.
- * @param {{effect?: number, effectDistance?: number[]}} widget The label widget.
  * @param {number} fs The font size in CSS pixels.
  * @param {Partial<TextMetrics>} [metrics] A measurement of the text; font metrics are assumed when it is
  *     missing.
@@ -140,7 +137,6 @@ export function loadingInkLine(repeater, scale, ink) {
  * the rendered DOM baseline before publication.
  * @param {NguiNode} repeater The loading prefab's layout.
  * @param {NguiNode|null} loading The layout that supplies the label effect when the repeater's label has none.
- * @param {string} text The caption.
  * @param {number} scale Stage pixels per NGUI unit.
  * @param {LetterInk} [ink] The opaque rows of the letter sprites.
  * @returns {NguiNode|null} The label node, with `inkLine` (its baseline); null when there is nothing to take
