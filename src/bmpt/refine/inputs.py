@@ -1,7 +1,7 @@
 """Offline generation inputs, distance keying and seam stitching for refinement.
 
 No generator or runtime is launched. The caller supplies posed public-runtime
-geometry. All images and plans are external artifacts. Cut policy stays in refine_cut.
+geometry. All images and plans are external artifacts. Cut policy stays in refine.cut.
 """
 
 from __future__ import annotations
@@ -17,9 +17,9 @@ import shutil
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 
-from .refine_composite import compose, _rgba
-from .refine_cut import Pose, GateError, cut, _masks, subset, pushpull, join_band_gate
-from .refine_stitch import (
+from .composite import compose, _rgba
+from .cut import Pose, GateError, cut, _masks, subset, pushpull, join_band_gate
+from .stitch import (
     stitch,
     native_movement,
     gross_disagreement,
@@ -93,15 +93,15 @@ def _json(value):
 
 def _external(folder):
     folder = Path(folder).resolve()
-    root = Path(__file__).resolve().parents[2]
+    root = Path(__file__).resolve().parents[3]
     if folder == root or root in folder.parents:
         raise ValueError("Artifacts must be outside the repository")
     return folder
 
 
 def templates():
-    """Return the prompt templates of ``refine_prompts.json``."""
-    return json.loads(Path(__file__).with_name("refine_prompts.json").read_text())["templates"]
+    """Return the prompt templates of ``prompts.json``."""
+    return json.loads(Path(__file__).with_name("prompts.json").read_text())["templates"]
 
 
 def prompt(template_id, *, version=1, **fields):
@@ -373,7 +373,7 @@ def plan_inputs(
 ):
     """Write opaque crops and a self-contained, hashed plan to an external folder.
 
-    Page replication matches the cut (``refine_cut``). Each input is rendered directly on its recorded crop grid.
+    Page replication matches the cut (``refine.cut``). Each input is rendered directly on its recorded crop grid.
     Merge resamples edit residuals onto the master, so an identity edit adds neither an extra filtering pass nor a
     crop-grid seam to official pixels.
 
@@ -935,7 +935,7 @@ def expression_inputs(plan_path, base_target, output):
         ValueError: The output folder is not new, or the base target is not on the master grid.
         InputGateError: The base target moved against the official base.
     """
-    from .refine_cut import dilate
+    from .cut import dilate
 
     path = Path(plan_path).resolve()
     plan = load_plan(path)
@@ -1077,7 +1077,7 @@ def finish(plan_path, returned, output, *, diagnostic=False, atlas=None, pack=No
         result.edited_meshes[name].save(out / f"page-{i}-meshes.png")
     report = {"merge": merge_report, "cut": result.report, "packed": []}
     if pack and merge_report["passed"] and result.report["passed"]:
-        from .refine_assembly import Assembly, assemble_mod
+        from .assembly import Assembly, assemble_mod
 
         for filename, expected in pack.get("hashes", {}).items():
             if _hash(Path(filename).read_bytes()) != expected:
@@ -1118,7 +1118,7 @@ def main(argv=None):
     Args:
         argv: Command-line arguments; None reads ``sys.argv``.
     """
-    from .core.localization import register_locales
+    from ..core.localization import register_locales
 
     register_locales()
 
@@ -1174,7 +1174,7 @@ def main(argv=None):
             parser.error("--returns is required for finish")
         atlas = None
         if spec.get("atlas"):
-            from .spine.atlas_remap import parse_atlas
+            from ..spine.atlas_remap import parse_atlas
 
             raw = Path(spec["atlas"]).read_bytes()
             if _hash(raw) != spec["source_hashes"]["atlas"]:

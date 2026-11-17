@@ -14,7 +14,7 @@ from UnityPy.enums import BuildTarget, TextureFormat as TF
 from UnityPy.export import Texture2DConverter
 from UnityPy.helpers import ResourceReader, TextureSwizzler
 
-from bmpt import refine_assembly
+from bmpt.refine import assembly as refine_assembly
 from bmpt.spine import atlas_remap as remap
 from bmpt.unity import texture_guard as guard
 from ba_modding_toolkit.bundle import Bundle

@@ -29,7 +29,7 @@ include = ["bmpt", "bmpt.*", "ba_modding_toolkit*"]
 [tool.setuptools.package-data]
 ba_modding_toolkit = ["locales/*.json", "assets/*.ico", "assets/*.png", "py.typed"]
 bmpt = [
-    "locales/*.json", "catalog/data/*.json", "refine_prompts.json",
+    "locales/*.json", "catalog/data/*.json", "refine/prompts.json",
     "assets/dev-hooks.json", "assets/release-notes/*.md", "assets/tray/*",
     "web/*", "web/css/*", "web/js/*.js", "web/js/photography/*.js", "web/fonts/*",
     "web/vendor/*/*", "web/vendor/*/build/*",

@@ -12,9 +12,9 @@ import numpy as np
 from PIL import Image, ImageDraw
 import pytest
 
-from bmpt.refine_composite import compose
-from bmpt.refine_cut import Pose
-from bmpt.refine_inputs import (
+from bmpt.refine.composite import compose
+from bmpt.refine.cut import Pose
+from bmpt.refine.inputs import (
     InputParameters,
     InputGateError,
     choose_key,

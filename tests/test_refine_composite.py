@@ -9,7 +9,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 import pytest
 
-from bmpt.refine_composite import compose, project, movement_check
+from bmpt.refine.composite import compose, project, movement_check
 
 
 def geometry(overlap=False, blend=0, tint=None):

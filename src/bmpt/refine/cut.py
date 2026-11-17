@@ -15,7 +15,7 @@ import re
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 
-from .refine_composite import compose, _distance, _rgba, _sample, _tri_map
+from .composite import compose, _distance, _rgba, _sample, _tri_map
 
 
 @dataclass(frozen=True)
@@ -572,7 +572,7 @@ def check_invariants(pages, baseline, frozen, allowed, edited):
 def _review(folder, name, rendered, target, bands, focus_box=None):
     # Asset images must never be written into the source tree.
     folder = Path(folder).resolve()
-    source_root = Path(__file__).resolve().parents[2]
+    source_root = Path(__file__).resolve().parents[3]
     if folder == source_root or source_root in folder.parents:
         raise ValueError("Review folder must be outside the repository")
     folder.mkdir(parents=True, exist_ok=True)
@@ -934,7 +934,7 @@ def cut(
             uv = np.asarray(a["uvs"]).reshape(-1, 2) * baseline[name].size
             rects[key] = (*np.floor(uv.min(0)).astype(int), *np.ceil(uv.max(0)).astype(int))
     if atlas is not None:
-        from .spine.atlas_remap import _box
+        from ..spine.atlas_remap import _box
 
         rects = {
             (r.page, r.name, r.index): _box(r, atlas.pages[r.page], baseline[r.page]) for r in atlas.regions.values()
@@ -1189,7 +1189,7 @@ def main(argv=None):
     Args:
         argv: Command-line arguments; None reads ``sys.argv``.
     """
-    from .core.localization import register_locales
+    from ..core.localization import register_locales
 
     register_locales()
 
@@ -1201,7 +1201,7 @@ def main(argv=None):
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--diagnostic", action="store_true")
     args = parser.parse_args(argv)
-    source_root = Path(__file__).resolve().parents[2]
+    source_root = Path(__file__).resolve().parents[3]
     output = args.output.resolve()
     if output == source_root or source_root in output.parents:
         parser.error("Output must be outside the repository")
@@ -1221,7 +1221,7 @@ def main(argv=None):
     ]
     atlas = None
     if spec.get("atlas"):
-        from .spine.atlas_remap import parse_atlas
+        from ..spine.atlas_remap import parse_atlas
 
         atlas = parse_atlas(resolve(spec["atlas"]).read_bytes())
     output.mkdir(parents=True, exist_ok=True)

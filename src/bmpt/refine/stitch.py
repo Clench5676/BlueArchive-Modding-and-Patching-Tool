@@ -9,7 +9,7 @@ from __future__ import annotations
 import numpy as np
 from PIL import Image, ImageFilter
 
-from .refine_composite import movement_check
+from .composite import movement_check
 
 
 def detail(rgb):
@@ -437,7 +437,7 @@ def despill_key_band(rgb, alpha, key, band, *, tolerance=4 / 255):
     dominance = np.min(rgb[..., high], axis=-1) - np.max(rgb[..., low], axis=-1)
     seeds = (alpha >= 0.98) & (~band | (dominance <= tolerance))
     query = band & (alpha > 0) & ((rgb @ direction) > tolerance)
-    from .refine_cut import pushpull
+    from .cut import pushpull
 
     fallback = pushpull(rgb, seeds)
     out = rgb.copy()
