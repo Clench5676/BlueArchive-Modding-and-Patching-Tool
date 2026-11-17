@@ -34,11 +34,28 @@ PUBLISHED_TOURS: tuple[dict, ...] = (
 
 
 def version_key(version: Any) -> tuple | None:
+    """Return the sort key of a version string, ignoring a ``-dev`` suffix; None when it is not a version.
+
+    Args:
+        version: The version; anything that is not a string gives None.
+    """
     return parse_version(version.removesuffix("-dev")) if isinstance(version, str) else None
 
 
 def release_key(version: str, current: str) -> tuple | None:
-    """A release's tour can be reviewed during that release's own pre-release series."""
+    """Rank a release for deciding whether its tour is due.
+
+    A stable release's tour can be previewed in the pre-release builds of the same ``major.minor.patch``: they count
+    as having reached it.
+
+    Args:
+        version: The release the tour belongs to.
+        current: The running version.
+
+    Returns:
+        The release's sort key, lowered to the running version's while that is a pre-release of it; None when
+        ``version`` is not a version.
+    """
     key, running = version_key(version), version_key(current)
     if key and running and key[3][0] == 1 and prerelease_previews(current) and key[:3] == running[:3]:
         return min(key, running)
@@ -46,7 +63,21 @@ def release_key(version: str, current: str) -> tuple | None:
 
 
 def published(current: str, language: str) -> list[dict]:
-    """Ignore incomplete content; an absent illustration is always optional. Newest release first."""
+    """List the tours that may be shown now, in the language, newest release first.
+
+    A tour is left out when it is not approved (``prerelease`` content counts only on a pre-release build), belongs
+    to a release newer than the running one, repeats a release, or has a page that is invalid. A page needs a title
+    and a body within their limits in every locale: a fallback language must not make an incomplete locale look
+    ready. An absent illustration is always optional.
+
+    Args:
+        current: The running version.
+        language: The UI language; one the tours have no locale for falls back to ``en-US``.
+
+    Returns:
+        ``{version, pages}`` per tour; each page has ``id``, ``title``, ``body``, ``image``, ``caption`` and
+        ``version``.
+    """
     current_key = version_key(current)
     result, versions = [], set()
     locale_strings = {}
@@ -110,7 +141,20 @@ def published(current: str, language: str) -> list[dict]:
 
 
 def launch(state: UiState, current: str, tours: list[dict]) -> dict:
-    """Offer upgrades to existing pre-tour profiles too; keep pending work and the downgrade high-water mark."""
+    """Choose the tours to present at this launch and update the profile's tour history.
+
+    A profile that gave its asset consent before but has no tour history counts as an upgrade, so it is offered the
+    tours up to the running version too. The history keeps the highest version launched and the tours still
+    pending. A downgrade never presents a tour, not even one pending from a launch of a newer version.
+
+    Args:
+        state: The profile's UI state, which holds the tour history.
+        current: The running version.
+        tours: The tours ``published`` returned.
+
+    Returns:
+        ``versions``, the releases to present, and ``pages``, their pages without a repeated page id.
+    """
     current_key = version_key(current)
     if current_key is None:
         return {"versions": [], "pages": []}
@@ -149,6 +193,16 @@ def launch(state: UiState, current: str, tours: list[dict]) -> dict:
 
 
 def presented(state: UiState, versions: list[str], tours: list[dict]) -> None:
+    """Record that the page presented the tours of some releases.
+
+    Args:
+        state: The profile's UI state, which holds the tour history.
+        versions: The releases presented; each must be one of ``tours``.
+        tours: The tours ``published`` returned.
+
+    Raises:
+        ServiceError: ``bad_params``, ``versions`` is empty or names a release that has no tour.
+    """
     allowed = {t["version"] for t in tours}
     if (
         not isinstance(versions, list)
@@ -170,9 +224,19 @@ def presented(state: UiState, versions: list[str], tours: list[dict]) -> None:
 
 
 def notes_launch(state: UiState, current: str) -> bool:
-    """Whether this launch should show the running version's release notes: the first launch of a newer version on a
-    profile that ran an older one, every pre-release build included. A fresh profile or a downgrade records the version
-    quietly; an offer stays pending for this version until notes_presented."""
+    """Decide whether this launch shows the running version's release notes, and record the launch.
+
+    The notes are due at the first launch of a newer version on a profile that ran an older one, every pre-release
+    build included. A fresh profile or a downgrade records the version quietly. An offer stays pending for this
+    version until ``notes_presented``.
+
+    Args:
+        state: The profile's UI state, which holds the notes history.
+        current: The running version.
+
+    Returns:
+        Whether the notes are due; False when ``current`` is not a version.
+    """
     current_key = version_key(current)
     if current_key is None:
         return False
@@ -183,8 +247,8 @@ def notes_launch(state: UiState, current: str) -> bool:
         notes = notes if isinstance(notes, dict) else {}
         high = version_key(notes.get("highest"))
         if high is None:
-            # A profile from before these notes: the tours' launch history, still the previous launch's because the
-            # page asks for the notes before the tours.
+            # A profile without a notes history yet: the tours' launch history, still the previous launch's
+            # because the page asks for the notes before the tours.
             high = version_key(history.get("highest"))
         if (high is None and state.had_asset_consent) or (high is not None and current_key > high):
             notes["pending"] = current
@@ -198,6 +262,15 @@ def notes_launch(state: UiState, current: str) -> bool:
 
 
 def notes_presented(state: UiState, version: str) -> None:
+    """Record that the page showed a version's release notes, which ends the pending offer.
+
+    Args:
+        state: The profile's UI state, which holds the notes history.
+        version: The version whose notes were shown.
+
+    Raises:
+        ServiceError: ``bad_params``, ``version`` is not a version.
+    """
     if not isinstance(version, str) or version_key(version) is None:
         raise ServiceError("bad_params", key="version")
 
@@ -210,6 +283,13 @@ def notes_presented(state: UiState, version: str) -> None:
 
 
 def register(rpc: Any, services: Any) -> None:
+    """Register the tour and upgrade-notes RPC methods.
+
+    Args:
+        rpc: The ``RpcRegistry`` to register on.
+        services: The Services, whose UI state holds the history; automatic tours and notes need
+            ``tours_ready`` and are off in safe mode.
+    """
     from bmpt.engine import get_version_info, i18n_manager
 
     def available() -> tuple[str, list[dict]]:

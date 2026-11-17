@@ -1,8 +1,8 @@
 """The tray icon (Windows) and the menu bar icon (macOS); see docs/webui/desktop.md, "Tray".
 
-Its menu: one Enable Mods item for every known install, Back to Official while a scan found drift, Open
-and Quit. The icon is shown while the preference ``tray`` is on, only in the app window, and it goes with the app:
-closing the window quits.
+Its menu: one Enable Mods item for every known install, Back to Official while a scan found drift, Open and Quit.
+The icon is shown while the preference ``tray`` is on, only in the app window, and it goes with the app: closing the
+window quits.
 
 - **The model** is pure: ``tray_menu(snapshot, strings)``, ``tray_tooltip``, ``toggle_action`` and ``needs_window``
   read only a ``mods.state`` snapshot. Opening the menu never calls ``ps``, never builds the library and never takes
@@ -55,8 +55,11 @@ RESULT_KEYS = ("failed", "stuck", "left", "held")  # a toggle's entries that bri
 
 @dataclass(frozen=True)
 class MenuItem:
-    """One line of the menu. ``action`` is what a click does: ``toggle``, ``drift``, ``open`` or ``quit``. A line
-    without one is a disabled note (the reason under Enable Mods), or a separator when it has no label either."""
+    """One line of the menu.
+
+    ``action`` is what a click does: ``toggle``, ``drift``, ``open`` or ``quit``. A line without one is a disabled
+    note (the reason under Enable Mods), or a separator when it has no label either.
+    """
 
     action: str | None
     label: str = ""
@@ -65,6 +68,7 @@ class MenuItem:
 
     @property
     def separator(self) -> bool:
+        """Whether the line is a separator."""
         return self.action is None and not self.label
 
 
@@ -77,8 +81,14 @@ def _text(strings: dict[str, str], key: str, **values: Any) -> str:
 
 
 def clickable(snapshot: dict[str, Any] | None) -> bool:
-    """Whether Enable Mods can be clicked: a snapshot is there, nothing makes the switch unavailable and no toggle is
-    queued or running (nor writes queued for the classic window)."""
+    """Return whether Enable Mods can be clicked.
+
+    That needs a snapshot, nothing that makes the switch unavailable and no toggle queued or running (nor writes
+    queued for the classic window).
+
+    Args:
+        snapshot: The ``mods.state`` snapshot; None before the first one.
+    """
     return (
         bool(snapshot)
         and not snapshot.get("reason")
@@ -95,8 +105,16 @@ def _working(snapshot: dict[str, Any], strings: dict[str, str]) -> str:
 
 
 def unavailable_line(snapshot: dict[str, Any] | None, strings: dict[str, str]) -> str | None:
-    """The disabled line under a greyed Enable Mods: the reason, "Working n/m" while a toggle runs, "Working" while
-    the first snapshot is read; ``None`` while it can be clicked."""
+    """Give the disabled line under a greyed Enable Mods.
+
+    Args:
+        snapshot: The ``mods.state`` snapshot; None before the first one.
+        strings: The UI language's ``webui.*`` strings.
+
+    Returns:
+        The reason, "Working n/m" while a toggle runs, or "Working" while the first snapshot is read; None while the
+        item can be clicked.
+    """
     if not snapshot:
         return _text(strings, "job.running")
     reason = snapshot.get("reason")
@@ -109,7 +127,16 @@ def unavailable_line(snapshot: dict[str, Any] | None, strings: dict[str, str]) -
 
 
 def tray_menu(snapshot: dict[str, Any] | None, strings: dict[str, str]) -> list[MenuItem]:
-    """The menu for a ``mods.state`` snapshot (``None`` before the first one), in the UI language's strings."""
+    """Build the menu for a ``mods.state`` snapshot.
+
+    Args:
+        snapshot: The snapshot; None before the first one.
+        strings: The UI language's ``webui.*`` strings.
+
+    Returns:
+        The lines: Enable Mods (with the reason under it while it is greyed), Back to Official while a scan found
+        drift, a separator, Open and Quit.
+    """
     line = unavailable_line(snapshot, strings)
     on = bool(snapshot.get("enabled", True)) if snapshot else False
     items = [MenuItem("toggle", _text(strings, "mods.switch"), enabled=line is None, checked=on)]
@@ -127,7 +154,16 @@ def tray_menu(snapshot: dict[str, Any] | None, strings: dict[str, str]) -> list[
 
 
 def tray_tooltip(snapshot: dict[str, Any] | None, strings: dict[str, str], title: str) -> str:
-    """The app title and the state: "Mods on", "Mods off", or "Working 12/40" while a toggle runs."""
+    """Build the icon's tooltip: the app title and the state.
+
+    Args:
+        snapshot: The ``mods.state`` snapshot; None before the first one, which leaves the title alone.
+        strings: The UI language's ``webui.*`` strings.
+        title: The app title.
+
+    Returns:
+        The title and a line that says "Mods on", "Mods off", or "Working 12/40" while a toggle runs.
+    """
     if not snapshot:
         return title
     if (snapshot.get("progress") or {}).get("total") and snapshot.get("busy"):
@@ -138,10 +174,16 @@ def tray_tooltip(snapshot: dict[str, Any] | None, strings: dict[str, str], title
 
 
 def toggle_action(snapshot: dict[str, Any] | None) -> tuple[str, dict[str, bool]] | None:
-    """What a click on Enable Mods does: ``("explain", params)`` opens the window on the first toggle's explanation
-   , ``("submit", params)`` submits ``mods.toggle`` at once, an Off with mods outside the library
-    included; ``None`` while the item is greyed. ``params`` is ``{enabled, expect}``, the snapshot's
-    intent as ``expect``."""
+    """Decide what a click on Enable Mods does.
+
+    Args:
+        snapshot: The ``mods.state`` snapshot; None before the first one.
+
+    Returns:
+        ``("explain", params)`` to open the window on the first toggle's explanation, or ``("submit", params)`` to
+        submit ``mods.toggle`` at once, an Off with mods outside the library included. ``params`` is
+        ``{enabled, expect}``, the snapshot's intent as ``expect``. None while the item is greyed.
+    """
     if not clickable(snapshot):
         return None
     current = bool(snapshot.get("enabled", True))
@@ -150,8 +192,15 @@ def toggle_action(snapshot: dict[str, Any] | None) -> tuple[str, dict[str, bool]
 
 
 def needs_window(state: str, result: Any) -> bool:
-    """Whether a tray toggle's end brings the window to the front, where the page shows the error or the result
-    popup: the job failed (a refusal, ``not_enough_space`` included), or entries failed, stuck, were left or held."""
+    """Decide whether a tray toggle's end brings the window to the front.
+
+    The page shows the error or the result popup there. That is the case when the job failed (a refusal,
+    ``not_enough_space`` included), or entries failed, stuck, were left or held.
+
+    Args:
+        state: The job's final state.
+        result: The job's result.
+    """
     if state == "failed":
         return True
     return state == "done" and isinstance(result, dict) and any(result.get(key) for key in RESULT_KEYS)
@@ -161,6 +210,8 @@ def needs_window(state: str, result: Any) -> bool:
 
 
 class Backend(Protocol):
+    """What the tray needs of a platform's icon: ``CocoaTray`` and ``WinFormsTray`` provide it."""
+
     def start(self) -> None:
         """Make what the icon needs on its UI thread (asynchronously)."""
 
@@ -182,11 +233,19 @@ def _importable(name: str) -> bool:
 
 
 class Tray:
-    """The tray or menu bar icon of the app window. ``attach()`` follows ``mods.state`` and the jobs from before the
-    window opens; ``start(window)`` is ``webview.start``'s function, called once the GUI loop runs; ``close()`` after
-    the loop ended."""
+    """The tray or menu bar icon of the app window.
+
+    ``attach()`` follows ``mods.state`` and the jobs from before the window opens; ``start(window)`` is
+    ``webview.start``'s function, called once the GUI loop runs; ``close()`` comes after the loop ended.
+    """
 
     def __init__(self, services: Any, backend: Backend | None = None):
+        """Create the tray; it shows nothing until ``start`` ran.
+
+        Args:
+            services: The Services, whose events, jobs and window the tray follows and drives.
+            backend: The platform's icon; None makes it for this system once the window has shown.
+        """
         self.s = services
         self._backend = backend
         self._lock = threading.Lock()  # a leaf lock: the snapshot, the strings and the followed jobs
@@ -198,8 +257,13 @@ class Tray:
 
     @staticmethod
     def supported(platform: str = sys.platform) -> bool:
-        """Whether this system can show the icon: macOS through PyObjC, Windows through pythonnet (both come with
-        pywebview there)."""
+        """Return whether this system can show the icon.
+
+        macOS shows it through PyObjC, Windows through pythonnet; both come with pywebview there.
+
+        Args:
+            platform: A ``sys.platform`` value.
+        """
         if platform == "darwin":
             return _importable("AppKit") and _importable("PyObjCTools")
         if platform == "win32":
@@ -207,15 +271,24 @@ class Tray:
         return False
 
     def attach(self) -> None:
+        """Follow ``mods.state`` events and finished jobs, which can happen before the window opens."""
         self._unobserve = self.s.events.observe(self._on_event)
         self.s.jobs.listen(self._job_finished)
 
     def start(self, window: Any) -> None:
-        """Hand over to a daemon thread, so a window that never shows never holds up the exit."""
+        """Hand over to a daemon thread, so a window that never shows never holds up the exit.
+
+        Args:
+            window: The pywebview window; ``webview.start`` passes it.
+        """
         threading.Thread(target=self.run, args=(window,), name="bamt-tray", daemon=True).start()
 
     def run(self, window: Any) -> None:
-        """Wait for the window to show, make the backend and show the icon if the preference is on."""
+        """Wait for the window to show, make the backend and show the icon if the preference is on.
+
+        Args:
+            window: The pywebview window whose ``shown`` and ``closed`` events are watched.
+        """
         events = getattr(window, "events", None)
         shown, closed = getattr(events, "shown", None), getattr(events, "closed", None)
         deadline = time.monotonic() + WINDOW_WAIT
@@ -244,6 +317,7 @@ class Tray:
         self._sync()
 
     def close(self) -> None:
+        """Stop following events and remove the icon; the GUI loop may have ended already."""
         with self._lock:
             self._closed = True
             backend = self._backend
@@ -260,6 +334,7 @@ class Tray:
     # --- what the icon shows ---
 
     def snapshot(self) -> dict[str, Any] | None:
+        """Return the last ``mods.state`` snapshot, or None before the first one."""
         with self._lock:
             return self._snapshot
 
@@ -275,8 +350,10 @@ class Tray:
         return cached[1]
 
     def menu_items(self) -> list[MenuItem]:
-        """The menu as it opens, on the UI thread: from the last snapshot only. The game watch polls again on its
-        own thread, and the next opening shows its answer."""
+        """Build the menu as it opens, on the UI thread, from the last snapshot only.
+
+        The game watch polls again on its own thread, and the next opening shows its answer.
+        """
         watch = getattr(self.s, "watch", None)
         if watch is not None:
             watch.poke()
@@ -285,6 +362,7 @@ class Tray:
         return items
 
     def tooltip(self) -> str:
+        """Return the icon's tooltip for the last snapshot, in the UI language."""
         return tray_tooltip(self.snapshot(), self.strings(), t("ui.app_title"))
 
     def _on_event(self, event: str, data: Any) -> None:
@@ -309,7 +387,11 @@ class Tray:
     # --- clicks ---
 
     def on_action(self, action: str) -> None:
-        """A click, on the UI thread: its work runs on a thread of its own."""
+        """Handle a click, called on the UI thread; its work runs on a thread of its own.
+
+        Args:
+            action: The clicked line's ``MenuItem.action``.
+        """
         work = {"toggle": self._toggle, "drift": self._drift, "open": self._open, "quit": self._quit}.get(action)
         if work is not None:
             threading.Thread(target=self._guarded, args=(work,), name=f"bamt-tray-{action}", daemon=True).start()
@@ -381,6 +463,15 @@ class Tray:
 
 
 def make_backend(tray: Tray, window: Any) -> Backend:
+    """Make the icon backend of this system.
+
+    Args:
+        tray: The tray that the backend draws.
+        window: The pywebview window; the Windows icon lives on its thread.
+
+    Raises:
+        RuntimeError: This system has no tray icon.
+    """
     if sys.platform == "darwin":
         return CocoaTray(tray)
     if sys.platform == "win32":
@@ -416,7 +507,11 @@ def _cocoa_target() -> Any:
 
 
 def menubar_image() -> Any:
-    """The menu bar icon: the PDF as a vector template image, else the 2x PNG; ``None`` when neither loads."""
+    """Load the menu bar icon: the PDF as a vector template image, else the 2x PNG.
+
+    Returns:
+        The ``NSImage``; None when neither file loads.
+    """
     from AppKit import NSImage
 
     for name in ("menubar.pdf", "menubar@2x.png"):
@@ -431,10 +526,17 @@ def menubar_image() -> Any:
 
 
 class CocoaTray:
-    """An ``NSStatusItem``, made and changed on the main thread only (``AppHelper.callAfter``); either click opens
-    the menu, which ``menuNeedsUpdate:`` rebuilds as it opens."""
+    """An ``NSStatusItem``, made and changed on the main thread only (``AppHelper.callAfter``).
+
+    Either click opens the menu, which ``menuNeedsUpdate:`` rebuilds as it opens.
+    """
 
     def __init__(self, tray: Tray):
+        """Create the backend; the status item is made when it is first shown.
+
+        Args:
+            tray: The tray whose menu the item shows and whose actions it triggers.
+        """
         from PyObjCTools import AppHelper
 
         self._tray = tray
@@ -445,9 +547,11 @@ class CocoaTray:
         self._actions: list[str | None] = []
 
     def start(self) -> None:
+        """Do nothing: the status item is made when it is first shown."""
         pass  # the status item is made when it is first shown
 
     def call(self, fn: Callable[[], Any]) -> None:
+        """Run a function on the main thread, without waiting; its failure is logged."""
         self._after(self._safe, fn)
 
     @staticmethod
@@ -458,6 +562,12 @@ class CocoaTray:
             logger.exception("menu bar icon update failed")
 
     def sync(self, shown: bool, tooltip: str) -> None:
+        """Show or remove the status item and set its tooltip; on the main thread.
+
+        Args:
+            shown: Whether the icon is wanted.
+            tooltip: The tooltip text.
+        """
         if shown and self._item is None:
             self._create()
         elif not shown and self._item is not None:
@@ -485,7 +595,11 @@ class CocoaTray:
         self.rebuild(menu)
 
     def rebuild(self, menu: Any) -> None:
-        """menuNeedsUpdate: the items from the last snapshot."""
+        """Fill the menu with the items of the last snapshot, as ``menuNeedsUpdate:`` asks.
+
+        Args:
+            menu: The ``NSMenu`` that is about to open.
+        """
         from AppKit import NSMenuItem
 
         items = self._tray.menu_items()
@@ -506,6 +620,11 @@ class CocoaTray:
         self._actions = [item.action for item in items]
 
     def clicked(self, index: int) -> None:
+        """Run the action of a clicked menu line.
+
+        Args:
+            index: The line's tag, its position in the menu.
+        """
         if 0 <= index < len(self._actions) and self._actions[index]:
             self._tray.on_action(self._actions[index])
 
@@ -523,10 +642,11 @@ class CocoaTray:
             logger.info("menu bar icon removed")
 
     def close(self) -> None:
+        """Remove the status item, on the main thread when called from another."""
         from Foundation import NSThread
 
         if NSThread.isMainThread():
-            self._remove()  # after webview.start returned: the run loop no longer runs queued calls
+            self._remove()  # after webview.start returned: the run loop does not run queued calls
         else:
             self.call(self._remove)
 
@@ -535,12 +655,21 @@ class CocoaTray:
 
 
 class WinFormsTray:
-    """A ``NotifyIcon`` with a ``ContextMenuStrip``, made on the window's WinForms thread (``window.native.Invoke``),
-    or, when that fails, on an STA thread of its own with its own message loop. A left click (or double click) opens
-    the window, a right click the menu, which its ``Opening`` event rebuilds. The icon is hidden and disposed of when
-    the window closes, so Windows keeps no dead icon."""
+    """A ``NotifyIcon`` with a ``ContextMenuStrip``.
+
+    It is made on the window's WinForms thread (``window.native.Invoke``) or, when that fails, on an STA thread of
+    its own with its own message loop. A left click (or double click) opens the window, a right click the menu,
+    which its ``Opening`` event rebuilds. The icon is hidden and disposed of when the window closes, so Windows
+    keeps no dead icon.
+    """
 
     def __init__(self, tray: Tray, window: Any):
+        """Create the backend; the icon is made by ``start``.
+
+        Args:
+            tray: The tray whose menu the icon shows and whose actions it triggers.
+            window: The pywebview window, whose WinForms form hosts the icon.
+        """
         import clr
 
         for assembly in ("System.Windows.Forms", "System.Drawing"):
@@ -558,6 +687,7 @@ class WinFormsTray:
         self._lock = threading.Lock()
 
     def start(self) -> None:
+        """Make the icon's menu and message hook on the window's thread, or on a thread of its own."""
         from System import Func, Type
 
         form = getattr(self._window, "native", None)
@@ -607,6 +737,10 @@ class WinFormsTray:
             self._safe(pending)
 
     def call(self, fn: Callable[[], Any]) -> None:
+        """Run a function on the icon's thread, without waiting.
+
+        Until that thread is ready only the latest call is kept, which runs then.
+        """
         from System import Action
 
         with self._lock:
@@ -627,6 +761,12 @@ class WinFormsTray:
             logger.exception("tray icon update failed")
 
     def sync(self, shown: bool, tooltip: str) -> None:
+        """Show or remove the icon and set its tooltip; on the icon's thread.
+
+        Args:
+            shown: Whether the icon is wanted.
+            tooltip: The tooltip text, clipped to the limit of ``NotifyIcon.Text``.
+        """
         import System.Windows.Forms as WinForms
 
         if shown and self._icon is None:
@@ -685,8 +825,11 @@ class WinFormsTray:
         self._dispose_icon()
 
     def close(self) -> None:
-        """On the window's thread the icon went with the form (FormClosed), and that thread has ended; an own thread
-        still runs its loop: it removes the icon and ends. Never waits more than CLOSE_WAIT_MS."""
+        """Remove the icon and end the icon's own thread, if it has one.
+
+        On the window's thread the icon went with the form (FormClosed), and that thread has ended. An own thread
+        still runs its loop: it removes the icon and ends. Never waits more than ``CLOSE_WAIT_MS``.
+        """
         if not self._own_thread or self._marshal is None:
             return
         from System import Action

@@ -36,6 +36,19 @@ def build(
     safe_mode: bool = False,
     reports: Reports | None = None,
 ) -> tuple[Services, Server]:
+    """Wire the services, the RPC methods and the HTTP server; the server is not started.
+
+    Args:
+        port: The port to listen on at 127.0.0.1; 0 takes a free one.
+        services: Services to serve, for tests and tools; None creates them.
+        token: The session token the page must send; None picks a random one (a fixed one is for development).
+        safe_mode: Start without game assets, Spine or restored pages. Applies only to the services created here.
+        reports: The run's crash reports, which take over the services' report state and secrets so that the log
+            hides them; None keeps the services' own.
+
+    Returns:
+        The services and the server.
+    """
     s = services or Services(safe_mode=safe_mode)
     if reports is not None:
         reports.services = s
@@ -75,8 +88,10 @@ def _watch_config(s: Services, stop: threading.Event) -> None:
 
 
 def _trace_to_file(path: Path) -> None:
-    """The front end's input trace (debug.trace) also goes to a file next to the settings, which a compiled app can
-    send along without a terminal; it starts empty on every --debug start."""
+    """Write the front end's input trace (debug.trace) to a file next to the settings too.
+
+    A compiled app can send the file along without a terminal; it starts empty on every --debug start.
+    """
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         handler = logging.FileHandler(path, mode="w", encoding="utf-8")
@@ -91,6 +106,17 @@ def _trace_to_file(path: Path) -> None:
 
 
 def main(argv: list[str] | None = None) -> None:
+    """Run the web UI until its window or browser session ends.
+
+    A second start on the same data directory raises the running instance's window and exits. After a request
+    to restart, a new process starts in safe mode.
+
+    Args:
+        argv: The command line without the program name; None reads ``sys.argv``.
+
+    Raises:
+        SystemExit: Another instance runs on the data directory.
+    """
     parser = argparse.ArgumentParser(prog="bamt-web")
     parser.add_argument("--browser", action="store_true", help="open the UI in the system browser instead of a window")
     parser.add_argument("--serve", action="store_true", help="only run the server (for development tools)")
@@ -123,8 +149,16 @@ def main(argv: list[str] | None = None) -> None:
 
 
 def second_start(data_dir: Path, *, serve: bool) -> int:
-    """Another instance runs on this data directory: bring its window to the front and exit (exit code 0), or, with
-    ``--serve`` or without an answer, refuse to start (1)."""
+    """Handle a start while another instance runs on the data directory.
+
+    Args:
+        data_dir: The data directory the running instance holds.
+        serve: Started with ``--serve``, which never raises the other window.
+
+    Returns:
+        The exit code: 0 when the running instance's window was brought to the front, 1 when this start must
+        refuse (with ``--serve``, or the instance gave no answer).
+    """
     if serve:
         logger.error("another instance of the web UI runs on the data directory %s", data_dir)
         return 1
@@ -136,6 +170,14 @@ def second_start(data_dir: Path, *, serve: bool) -> int:
 
 
 def recovery_config(s: Services) -> dict:
+    """Build what the recovery overlay of the served page needs, whether or not the page loads its own script.
+
+    Args:
+        s: The services; their safe-mode flag and window decide whether a restart in safe mode is offered.
+
+    Returns:
+        ``safeMode``, ``canRestartSafe``, ``language`` and the recovery strings in the UI language.
+    """
     from .strings import ui_strings
     from .system import can_restart_safe
 

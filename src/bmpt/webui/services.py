@@ -89,11 +89,15 @@ def folder_writable(folder: Path) -> bool:
 
 
 class ModsSnapshot:
-    """What ``mods.state`` answers from, never through the library lock: the library's status (the known installs,
-    the shared intent, the disk use; ``ModLibrary.status``), the last scan's entries and a running toggle's progress.
-    GameWatch, the scanner and the jobs update it. Its lock is a leaf lock."""
+    """What ``mods.state`` answers from, never through the library lock.
+
+    It holds the library's status (the known installs, the shared intent, the disk use; ``ModLibrary.status``), the
+    last scan's entries and a running toggle's progress. GameWatch, the scanner and the jobs update it. Its lock is
+    a leaf lock.
+    """
 
     def __init__(self) -> None:
+        """Start with nothing known."""
         self._lock = threading.Lock()
         self._status: dict[str, Any] | None = None
         self._entries: list[Any] = []
@@ -101,55 +105,74 @@ class ModsSnapshot:
         self._progress: dict[str, int] | None = None
 
     def status(self) -> dict[str, Any] | None:
+        """Return the library's status as last read; None before the first read."""
         with self._lock:
             return self._status
 
     def set_status(self, status: dict[str, Any] | None) -> None:
+        """Keep the library's status as the last one read."""
         with self._lock:
             self._status = status
 
     def entries(self) -> list[Any]:
+        """Return a copy of the entries of the last scan."""
         with self._lock:
             return list(self._entries)
 
     def scanned(self) -> str | None:
+        """Return when the entries were scanned, as a UTC ISO time; None while there are none."""
         with self._lock:
             return self._scanned
 
     def set_entries(self, entries: list[Any], scanned: str | None) -> None:
+        """Keep the entries of a scan and the time it ended."""
         with self._lock:
             self._entries, self._scanned = list(entries), scanned
 
     def clear_entries(self) -> None:
+        """Forget the entries and the scan time."""
         with self._lock:
             self._entries, self._scanned = [], None
 
     def drop_entries(self, keys: set[tuple[str, str]], cores: set[str] = frozenset()) -> None:
-        """Leave out the entries a job switched or adopted, until the scan after it: ``keys`` (install, core), and
-        ``cores`` in any install."""
+        """Leave out the entries a job switched or adopted, until the scan after it.
+
+        Args:
+            keys: The entries as ``(install key, core)``.
+            cores: Cores whose entries go in any install.
+        """
         if not keys and not cores:
             return
         with self._lock:
             self._entries = [e for e in self._entries if (e.install, e.core) not in keys and e.core not in cores]
 
     def mark_dismissed(self, keys: set[tuple[str, str]]) -> None:
+        """Mark entries as dismissed.
+
+        Args:
+            keys: The entries as ``(install key, core)``.
+        """
         from dataclasses import replace
 
         with self._lock:
             self._entries = [replace(e, dismissed=True) if (e.install, e.core) in keys else e for e in self._entries]
 
     def progress(self) -> dict[str, int] | None:
+        """Return a running toggle's progress, ``{done, total}``; None when none runs."""
         with self._lock:
             return self._progress
 
     def set_progress(self, progress: dict[str, int] | None) -> None:
+        """Keep a toggle's progress; None when it ended."""
         with self._lock:
             self._progress = progress
 
 
 class _WindowOps(NativeOps):
-    """The classic window's native operations on the window the services hold at the call (pywebview makes it after
-    the services are built; none in browser and serve mode)."""
+    """The classic window's native operations on the window the services hold at the call.
+
+    pywebview makes the window after the services are built; there is none in browser and serve mode.
+    """
 
     def __init__(self, services: Services):
         self._services = services
@@ -237,8 +260,11 @@ def _changed_of(result: Any) -> dict[str, list[str]]:
 
 
 def _touched(result: Any) -> tuple[set[tuple[str, str]], set[str]]:
-    """The entries a job's result names as switched, adopted or dropped (install, core), and the cores of the mods an
-    adoption added."""
+    """Collect the entries a job's result names as switched, adopted or dropped.
+
+    Returns:
+        The entries as (install, core), and the cores of the mods an adoption added.
+    """
     keys: set[tuple[str, str]] = set()
     for name in ("done", "adopted", "dropped"):
         for item in getattr(result, name, None) or []:
@@ -256,8 +282,10 @@ def _intent_key(status: dict[str, Any] | None) -> tuple:
 
 
 class Services:
-    """The web UI's service container. Game-backed services are built on first use and rebuilt after a game
-    folder change; tests pass fakes for any of them.
+    """The web UI's service container.
+
+    Game-backed services are built on first use and rebuilt after a game folder change; tests pass fakes for any
+    of them.
 
     In dev mode (devmode) the data directory, the library and the cache must lie inside the dev roots, and moving
     the library or the cache out of them is refused.
@@ -282,6 +310,21 @@ class Services:
         classic_options: dict[str, Any] | None = None,
         safe_mode: bool = False,
     ):
+        """Create the container; game-backed services are built when first used.
+
+        Args:
+            settings: The classic settings (config.toml); None loads them.
+            data_dir: The data directory: webui.json, the logs and, by default, the mod library are in it.
+            events: The event bus; None creates one.
+            jobs: The job runner; None creates one on ``events``.
+            state: The UI state; None reads webui.json in ``data_dir``.
+            cache: An asset cache to use instead of the consented one in the cache folder; for tests.
+            game: Game assets to use instead of the ones built from the settings; for tests.
+            catalog: A catalog to use instead of the built one; for tests.
+            library: A mod library to use instead of the built one; for tests.
+            classic_options: Options of the ``ClassicWindow``, such as a fake ``popen``; for tests.
+            safe_mode: Start without game assets, Spine or restored pages.
+        """
         devmode.check_read(data_dir)
         self.timings = Timings()
         spans.install(self.timings)  # game assets and the library record their waits here
@@ -378,9 +421,18 @@ class Services:
         self.batch_import = BatchImport(self)
 
     def translate_error(self, error: BaseException) -> ServiceError | None:
-        """The ServiceError a failure stands for, None when it stands for none. A write the permissions refuse, to a file
-        in the data folder while that folder cannot be written, is ``data_dir_readonly`` rather than ``internal``. A
-        single file that is busy while the folder takes new files is not this."""
+        """Say which ``ServiceError`` an unexpected failure stands for.
+
+        A write the permissions refuse, to a file in the data folder while that folder cannot be written, is
+        ``data_dir_readonly`` rather than ``internal``. A single file that is busy while the folder takes new files
+        is not this.
+
+        Args:
+            error: The exception.
+
+        Returns:
+            The error; None when the failure stands for none.
+        """
         if not isinstance(error, OSError) or error.errno not in WRITE_DENIED:
             return None
         root = os.path.normcase(os.path.abspath(self.data_dir))
@@ -400,6 +452,7 @@ class Services:
 
     @property
     def cache(self) -> Any:
+        """The asset cache in the cache folder, made on first use; it stores only with the asset consent."""
         with self._lock:
             if self._cache is None:
                 from ..gameassets import AssetCache
@@ -409,6 +462,7 @@ class Services:
 
     @property
     def preview_cache(self) -> Any:
+        """The store of persisted preview stills, made on first use; it stores unless the user opted out."""
         with self._lock:
             if self._preview_cache is None:
                 from ..gameassets.cache import PreviewCache
@@ -417,16 +471,33 @@ class Services:
             return self._preview_cache
 
     def set_preview_cache(self, enabled: bool) -> None:
+        """Save whether previews are stored on disk, and apply it at once.
+
+        Args:
+            enabled: Whether stills are persisted.
+        """
         with self._lock:
             self.state.set("preview_cache", enabled)
             self.preview_cache.allowed = enabled
 
     def preview_thumbnail_key(self, key: str, renderer: str, *, by_version: bool = False) -> str:
-        """The client hashes all renderer inputs, the revision of every source a still was drawn from included (the
-        stamps of its Spine bundles, the bytes of its background and framing, its model's export); the server isolates
-        the installation and the renderer's own code (``stills.revision``): a release that draws a still differently
-        never reuses the old one. Not the install's resource version: a game update then redraws only the stills
-        whose sources it changed. ``by_version``: the key stills had while it held the resource version."""
+        """Build the storage key of a persisted still.
+
+        The client hashes all renderer inputs, the revision of every source a still was drawn from included (the
+        stamps of its Spine bundles, the bytes of its background and framing, its model's export). The server
+        isolates the installation and the renderer's own code (``stills.revision``): a release that draws a still
+        differently never reuses the earlier still. The install's resource version is not part of the key, so a game
+        update redraws only the stills whose sources it changed.
+
+        Args:
+            key: The client's hash of the still's inputs.
+            renderer: The renderer that draws it, a key of ``stills.RENDERERS``.
+            by_version: Build the key that includes the install's resource version, under which ``preview_thumbnail``
+                looks for stills to move to the current key.
+
+        Raises:
+            ServiceError: ``bad_params`` for a key that is empty or longer than 4096 bytes, or an unknown renderer.
+        """
         if not isinstance(key, str) or not key or len(key) > 4096:
             raise ServiceError("bad_params", key="key")
         try:
@@ -453,8 +524,18 @@ class Services:
         return "thumbnail/" + hashlib.sha256((namespace + "\n" + key).encode()).hexdigest()
 
     def preview_thumbnail(self, key: str, renderer: str) -> bytes | None:
-        """A persisted still, or None. One stored under its former key (with the resource version) moves to its
-        current one, so stills drawn before keys left the version out are not drawn again."""
+        """Read a persisted still.
+
+        A still stored under the key that includes the install's resource version moves to the current key, so it is
+        not drawn again.
+
+        Args:
+            key: The client's hash of the still's inputs.
+            renderer: The renderer that draws it, a key of ``stills.RENDERERS``.
+
+        Returns:
+            The image bytes; None when none is stored.
+        """
         cache = self.preview_cache
         found = cache.get(self.preview_thumbnail_key(key, renderer))
         if found is None:
@@ -464,6 +545,7 @@ class Services:
         return found
 
     def clear_cache(self) -> None:
+        """Empty the asset cache and the preview store, and drop the game assets built from the game files."""
         with self._lock:
             self.preview_cache.clear_with(self.cache.clear)
             for game in [self._game, *self._other_games.values()]:
@@ -475,6 +557,11 @@ class Services:
 
     @property
     def game(self) -> Any:
+        """The game assets of the selected install, built on first use.
+
+        Raises:
+            ServiceError: ``game_not_found`` when the settings name no resource folder.
+        """
         self._refresh_if_idle()
         with self._lock:
             if self._game is None:
@@ -499,6 +586,7 @@ class Services:
         return GameAssets(dirs, self.cache, preview_cache=self.preview_cache)
 
     def game_found(self) -> bool:
+        """Return whether the selected folder holds a game; always False in safe mode."""
         if self.safe_mode:
             return False
         try:
@@ -509,9 +597,11 @@ class Services:
         return "game" in self._injected or self._holds_game()
 
     def _holds_game(self) -> bool:
-        """Whether the selected game folder is a game install (``searching.is_game_install``). A positive verdict is
-        kept while the search directories keep their listing stamps; a folder without the game is checked again at
-        every call, so a download that adds the UI bundles is seen."""
+        """Return whether the selected game folder is a game install (``searching.is_game_install``).
+
+        A positive verdict is kept while the search directories keep their listing stamps; a folder without the
+        game is checked again at every call, so a download that adds the UI bundles is seen.
+        """
         from bmpt.engine import get_search_dirs, is_game_install
 
         base = self.settings.game_dir()
@@ -532,6 +622,7 @@ class Services:
 
     @property
     def catalog(self) -> Any:
+        """The student catalog, built on first use from the game and the character map."""
         self._refresh_if_idle()
         with self._lock:
             if self._catalog is None:
@@ -549,8 +640,11 @@ class Services:
 
     @property
     def library(self) -> Any:
-        """The mod library. Built without a current install too (ADB mode, the selected folder missing): the switch
-        then works over the other known installs. A new library gets its ``library.prune`` job and the start scan."""
+        """The mod library, built on first use.
+
+        It is built without a current install too (ADB mode, the selected folder missing): the switch then works
+        over the other known installs. A new library gets its ``library.prune`` job and the start scan.
+        """
         self._refresh_if_idle()
         built = None
         with self._lock:
@@ -582,7 +676,7 @@ class Services:
                 None if unreadable is not None and unreadable() else lambda: [m.id for m in library.mods()]
             )
             if built is not None:
-                # kept originals the game no longer needs (verified in the launcher, replaced by a game update) are
+                # kept originals the game has no use for (verified in the launcher, replaced by a game update) are
                 # deleted once per library, on the job worker so no apply runs meanwhile; the judging of the
                 # unfinished list follows it
                 if self._startup_ready and self.scan_allowed():
@@ -593,10 +687,12 @@ class Services:
 
     @property
     def photographs(self):
-        """The photograph store of the library folder in use. Its family lookup is bound to the catalog resolved here,
-        never reached through the services lock: the store's own lock is held while it looks families up, and no code
-        path may hold that lock while it waits for ``self._lock``. A new catalog (a new game folder) makes a new store.
-        Call it with the photograph lock free."""
+        """The photograph store of the library folder in use.
+
+        Its family lookup is bound to the catalog resolved here, never reached through the services lock: the
+        store's own lock is held while it looks families up, and no code path may hold that lock while it waits for
+        ``self._lock``. A new catalog (a new game folder) makes a new store. Call it with the photograph lock free.
+        """
         from ..library.photographs import Photographs, student_family
 
         catalog = self.catalog
@@ -610,6 +706,7 @@ class Services:
 
     @property
     def photography(self):
+        """The student photography operations, made on first use."""
         from .photography import Photography
 
         if not hasattr(self, "_photography"):
@@ -624,12 +721,25 @@ class Services:
         self._prune_job = self.submit("library.prune", prune, writes="library", library=library, rank=MAINTENANCE)
 
     def cache_dir(self) -> Path:
-        """Where consented game assets are cached: a bluearchive-modding-patching-tool/cache folder inside the chosen folder,
-        else the default user cache folder. Always a folder of its own, so clearing it never touches anything else."""
+        """Return where consented game assets are cached.
+
+        That is a ``cache`` folder of the App's own inside the chosen folder, else the default user cache folder.
+        It is always a folder of its own, so clearing it never touches anything else.
+        """
         return managed_cache_dir(self.state.get("cache_parent"))
 
     def set_cache_parent(self, parent: Path) -> Path:
-        """Cache in another folder; the old cache is removed (it is rebuilt from the game files on demand)."""
+        """Move the cache to another folder; the cache left behind is removed and rebuilt from the game files on demand.
+
+        Args:
+            parent: The folder that holds the App's own cache folder.
+
+        Returns:
+            The new cache folder.
+
+        Raises:
+            ServiceError: ``path_not_found`` when ``parent`` is not a folder.
+        """
         parent = Path(parent).expanduser().resolve()
         devmode.check_read(parent)
         if not parent.is_dir():
@@ -640,7 +750,7 @@ class Services:
             self.state.set("cache_parent", str(parent))
             new = self.cache_dir()
             if new != old:
-                # A cache relocation must invalidate pending writes to the old generation too.
+                # A cache relocation must invalidate pending writes to the previous generation too.
                 def clear_old() -> None:
                     if self._cache is not None:
                         self._cache.clear()
@@ -652,18 +762,31 @@ class Services:
         return new
 
     def library_dir(self) -> Path:
-        """Where the mod library lives: the user's choice, else the data directory's library folder."""
+        """Return where the mod library lives: the user's choice, else the data directory's ``library`` folder."""
         chosen = self.state.get("library_dir")
         return Path(chosen) if chosen else self.data_dir / "library"
 
     def move_library(self, target: Path) -> Path:
-        """Use another folder for the mod library. The current library moves there when the target holds none: its
-        mods, kept originals, built copies, pending journals, photographs, state.json and profiles.json (each with its
-        .prev and .bad). The items are copied into the target and checked, published there, and only then is the
-        library switched to the target and the old folder cleared (library.relocate). A failure before the switch
-        removes the copies and leaves the library where it was, so the move can be tried again at once. A failure
-        clearing the old folder is logged and leaves the library at the target, complete, with the old folder keeping
-        the items it could not remove."""
+        """Use another folder for the mod library.
+
+        The current library moves there when the target holds none: its mods, kept originals, built copies, pending
+        journals, photographs, state.json and profiles.json (each with its .prev and .bad). The items are copied
+        into the target and checked, published there, and only then is the library switched to the target and the
+        source folder cleared (``library.relocate``). A failure before the switch removes the copies and leaves the
+        library where it was, so the move can be tried again at once. A failure clearing the source folder is logged
+        and leaves the library at the target, complete, with the source folder keeping the items it could not remove.
+
+        Args:
+            target: The new library folder; one that already holds a library is adopted as it is.
+
+        Returns:
+            The resolved target.
+
+        Raises:
+            ServiceError: ``busy`` while a job runs; ``path_not_found`` when ``target`` is a file;
+                ``library_target_not_empty`` when it holds items that would clash; ``library_io_error`` when the
+                copy fails.
+        """
         target = Path(target).expanduser().resolve()
         devmode.check_read(target)
         current = self.library_dir().resolve()
@@ -730,7 +853,7 @@ class Services:
                 self._preview_cache.invalidate_pending()
         self._refresh_if_idle()
         self.events.publish("config.changed")
-        # the known installs may be others now: a running scan is of the old ones
+        # the known installs may be others now: a running scan covers the previous ones
         self.scanner.cancel()
         self.refresh_status()
         self.request_scan()
@@ -748,16 +871,29 @@ class Services:
             self._profiles_signature = None
 
     def set_consent(self, granted: bool) -> None:
+        """Save the answer to the asset consent popup and apply it to the cache.
+
+        Args:
+            granted: Whether the web view and the cache may store light assets.
+        """
         self.state.set_consent(granted)
         if self._cache is not None:
             self._cache.allowed = granted
 
     def set_spine_consent(self, granted: bool) -> None:
-        """Save the acknowledgement through the existing Spine consent RPC."""
+        """Save the answer to the Spine licence notice.
+
+        Args:
+            granted: True once the notice is acknowledged.
+        """
         self.state.set("spine_consent", granted)
 
     def ui_cached(self, version: str | None = None) -> bool:
-        """Whether consented light UI assets already exist for the current install."""
+        """Return whether consented light UI assets already exist for the current install.
+
+        Args:
+            version: The install's resource version; None reads it from the game.
+        """
         if self.safe_mode or self.state.consent is not True:
             return False
         if version is None:
@@ -774,7 +910,11 @@ class Services:
         return self.state.scan_consent is True
 
     def set_scan_consent(self, granted: bool) -> None:
-        """Save consent; granted, request a scan; withdrawn, scans stop and the entries empty."""
+        """Save the scan consent: granted, request a scan; withdrawn, scans stop and the entries empty.
+
+        Args:
+            granted: Whether the game folders may be checked.
+        """
         self.state.set_scan_consent(bool(granted))
         if granted:
             self.request_scan()
@@ -786,7 +926,16 @@ class Services:
         self.publish_state()
 
     def request_scan(self, dismissed: bool = False, *, cores: set[str] | None = None) -> int | None:
-        """Every check requires consent; Settings' Check also lists dismissed entries again."""
+        """Ask the scanner for a scan, which needs the scan consent.
+
+        Args:
+            dismissed: Settings' Check, which lists dismissed entries again and starts a prune job first when no job
+                runs.
+            cores: Scan only these bundle cores; None scans everything.
+
+        Returns:
+            The request's number; None without consent.
+        """
         if not self.scan_allowed():
             return None
         if dismissed and self.scan_allowed():
@@ -798,10 +947,13 @@ class Services:
         return self.scanner.request(cores=cores) if cores is not None else self.scanner.request()
 
     def _scan(self, cancel: Callable[[], bool], dismissed: bool, cores: set[str] | None = None) -> Any:
-        """One scan over every known install, on the scanner's thread. The start scan waits for the prune job, and
-        every scan for the writer jobs queued or running: a scan between a job's steps holds the library while the job
-        waits (a 209-entry Enable Mods waited a minute for the scans its own progress requested), and reads
-        files the job is replacing; the end of each writer job requests the scan that follows it."""
+        """Scan every known install, on the scanner's thread.
+
+        The start scan waits for the prune job, and every scan for the writer jobs queued or running: a scan between
+        a job's steps holds the library while the job waits (a 209-entry Enable Mods waited a minute for the scans
+        its own progress requested), and reads files the job is replacing; the end of each writer job requests the
+        scan that follows it.
+        """
         if self._prune_job is not None:
             with self.timings.measure("scan.prune-wait"):
                 self.jobs.wait(self._prune_job, PRUNE_WAIT)
@@ -836,9 +988,13 @@ class Services:
         self._release_queue(served)
 
     def _release_queue(self, served: int | None = None) -> None:
-        """Run the classic queue once the scan it waits for is done (``served``, the last request a scan attempt
-        served), or at once (``None``: consent was withdrawn). Only one caller takes
-        the ticket."""
+        """Run the classic queue once the scan it waits for is done, or at once when consent was withdrawn.
+
+        Only one caller takes the ticket.
+
+        Args:
+            served: The number of the last request a scan attempt served; None runs the queue at once.
+        """
         with self._lock:
             ticket = self._queue_ticket
             if ticket is None or (served is not None and served < ticket):
@@ -858,10 +1014,23 @@ class Services:
         rank: int = USER,
         **params: Any,
     ) -> str:
-        """Submit a job. A writer job (``writes``: "game" or "library") ends on the worker with the library's
-        judging of the unfinished list, a new ``mods.state`` snapshot, ``library.changed {cores, kinds}`` and a scan
-        (with scan consent); ``library`` is the library it works through, captured at submit. ``rank``: the job's
-        class in the queue (``jobs.USER`` unless maintenance)."""
+        """Submit a job to the runner.
+
+        A writer job ends on the worker with the library's judging of the unfinished list, a new ``mods.state``
+        snapshot, ``library.changed {cores, kinds}`` and a scan (with scan consent).
+
+        Args:
+            kind: The job's kind, which names it in events.
+            fn: The job's work, called as ``fn(log=..., progress=..., **params)``.
+            writes: ``"game"`` or ``"library"`` for a writer job (what it writes); None for a read-only job.
+            library: For a writer job, the library it works through, captured at submit; None takes the current one.
+            rank: The job's class in the queue, ``jobs.USER`` unless it is maintenance.
+            **params: The keyword arguments of ``fn``; ``cancellable=True`` makes a read-only job cancellable
+                (``JobRunner.submit``).
+
+        Returns:
+            The job's id.
+        """
         if writes is None:
             return self.jobs.submit(kind, fn, rank=rank, **params)
 
@@ -922,8 +1091,11 @@ class Services:
             self.publish_state()
 
     def _progress(self, progress: Callable[..., Any]) -> Callable[..., Any]:
-        """A toggle's progress callback that also feeds ``mods.state.progress`` ("Working 12/40"). The job reports
-        its item at hand as a dict (``mod_progress``): the items before it are done, and it is once its share is whole."""
+        """Wrap a toggle's progress callback so that it also feeds ``mods.state.progress`` ("Working 12/40").
+
+        The job reports its item at hand as a dict (``mod_progress``): the items before it are done, and it is once
+        its share is whole.
+        """
 
         def report(current: int | dict[str, Any], total: int | None = None, label: str = "") -> None:
             progress(current, total, label)
@@ -956,9 +1128,20 @@ class Services:
         return pin
 
     def submit_toggle(self, enabled: bool, expect: bool) -> str:
-        """``mods.toggle``: the Enable Mods switch over every known install, pinned at submit. ``busy`` while another
-        toggle is queued or running, ``classic_open`` while a classic window is open (checked again when the job
-        starts, before the intent is saved)."""
+        """Submit ``mods.toggle``: the Enable Mods switch over every known install, pinned at submit.
+
+        Args:
+            enabled: The wanted state of the switch.
+            expect: The intent the caller saw; the job refuses when the stored one differs.
+
+        Returns:
+            The job's id.
+
+        Raises:
+            ServiceError: ``bad_params`` for non-booleans; ``busy`` while another toggle is queued or running;
+                ``classic_open`` while a classic window is open (checked again when the job starts, before the
+                intent is saved).
+        """
         if not isinstance(enabled, bool) or not isinstance(expect, bool):
             raise ServiceError("bad_params", key="enabled")
         library = self.library
@@ -977,8 +1160,20 @@ class Services:
         return job
 
     def submit_troubleshoot(self, action: str) -> str:
-        """``mods.applyOfficial`` / ``mods.restoreConfig`` (Troubleshoot Mods): over every known install, pinned at
-        submit; ``busy`` while a toggle is queued or running, ``classic_open`` while a classic window is open."""
+        """Submit ``mods.applyOfficial`` or ``mods.restoreConfig`` (Troubleshoot Mods) over every known install.
+
+        The installs are pinned at submit.
+
+        Args:
+            action: ``apply`` to apply the official files to all; anything else restores the saved configuration.
+
+        Returns:
+            The job's id.
+
+        Raises:
+            ServiceError: ``busy`` while a toggle or another troubleshoot job is queued or running; ``classic_open``
+                while a classic window is open.
+        """
         from ..library import troubleshoot
 
         library = self.library
@@ -998,7 +1193,18 @@ class Services:
         return job
 
     def submit_restore_drift(self, entries: list[dict]) -> str:
-        """``mods.restoreDrift``: Apply Mod Configuration of the given entries, pinned at submit."""
+        """Submit ``mods.restoreDrift``: Apply Mod Configuration of the given entries, pinned at submit.
+
+        Args:
+            entries: The entries to apply, as the scan lists them.
+
+        Returns:
+            The job's id.
+
+        Raises:
+            ServiceError: ``bad_params`` when ``entries`` is not a list of dicts; ``classic_open`` while a classic
+                window is open.
+        """
         if not isinstance(entries, list) or not all(isinstance(item, dict) for item in entries):
             raise ServiceError("bad_params", key="entries")
         library = self.library
@@ -1013,9 +1219,14 @@ class Services:
             return self.submit("mods.restore", run, writes="game", library=library)
 
     def submit_refresh_costumes(self) -> str:
-        """``mods.refreshCostumes``: at the start, the costume builds of an older costume rule built again
-        (``refresh_costumes``), on the current install; with a classic window open the game files are left for the next
-        start."""
+        """Submit ``mods.refreshCostumes``: build again, at the start, the costume builds of an older costume rule.
+
+        See ``refresh_costumes``; it works on the current install. With a classic window open the game files are
+        left for the next start.
+
+        Returns:
+            The job's id.
+        """
         library = self.library
         pin = self._current_pin(library)
 
@@ -1027,8 +1238,16 @@ class Services:
             return self.submit("mods.refreshCostumes", run, writes="game", library=library)
 
     def submit_retry_failed(self) -> str:
-        """``mods.retryFailed``: at the start, the entries of the current install whose last write failed written again
-        once under this build (``retry_failed``)."""
+        """Submit ``mods.retryFailed``: at the start, write again the entries whose last write failed.
+
+        The entries are those of the current install (``retry_failed``); each is tried once under this build.
+
+        Returns:
+            The job's id.
+
+        Raises:
+            ServiceError: ``classic_open`` while a classic window is open.
+        """
         library = self.library
         pin = self._current_pin(library)
 
@@ -1042,8 +1261,20 @@ class Services:
             return self.submit("mods.retryFailed", run, writes="game", library=library)
 
     def submit_apply(self, variant: str, source: str, kind: str = "spr") -> str:
-        """``actions.apply``: one entry of the current install, pinned at submit. ``classic_open`` only when it would
-        write a game file (an apply while mods are off only changes the configuration)."""
+        """Submit ``actions.apply``: one entry of the current install, pinned at submit.
+
+        Args:
+            variant: The variant key.
+            source: The source to switch to: ``official``, ``mod:<id>`` or ``variant:<key>``.
+            kind: The asset kind, ``spr``, ``lobby``, ``model`` or ``other``.
+
+        Returns:
+            The job's id.
+
+        Raises:
+            ServiceError: ``bad_params`` for an unknown kind; ``classic_open`` only when it would write a game file
+                (an apply while mods are off only changes the configuration).
+        """
         if kind not in ("spr", "lobby", "model", "other"):
             raise ServiceError("bad_params", kind=kind)
         library = self.library
@@ -1059,9 +1290,22 @@ class Services:
             return self.submit("apply", run, writes="game", library=library)
 
     def submit_restore(self, variant: str, kind: str = "spr") -> str:
-        """``actions.restore``: back to official, pinned at submit. A restore that writes nothing (the files are
-        official already) is allowed while a classic window is open; if it turns out to write after all (the full
-        judgement finds a file changed), the write itself is refused with ``classic_open``."""
+        """Submit ``actions.restore``: one entry of the current install back to official, pinned at submit.
+
+        A restore that writes nothing (the files are official already) is allowed while a classic window is open;
+        if it turns out to write after all (the full judgement finds a file changed), the write itself is refused
+        with ``classic_open``.
+
+        Args:
+            variant: The variant key.
+            kind: The asset kind, ``spr``, ``lobby``, ``model`` or ``other``.
+
+        Returns:
+            The job's id.
+
+        Raises:
+            ServiceError: ``bad_params`` for an unknown kind; ``classic_open`` when the restore would write.
+        """
         if kind not in ("spr", "lobby", "model", "other"):
             raise ServiceError("bad_params", kind=kind)
         library = self.library
@@ -1077,7 +1321,18 @@ class Services:
             return self.submit("restore", run, writes="game", library=library)
 
     def submit_call(self, method: str, params: dict[str, Any]) -> str:
-        """Submit one of the calls the classic queue holds, as its normal job."""
+        """Submit one of the calls the classic queue holds, as its normal job.
+
+        Args:
+            method: The RPC method, one of ``classic.QUEUE_METHODS``.
+            params: The call's parameters as the queue kept them.
+
+        Returns:
+            The job's id.
+
+        Raises:
+            ServiceError: ``bad_params`` for another method, or the submit's own refusal.
+        """
         params = dict(params or {})
         if method == "mods.toggle":
             return self.submit_toggle(params.get("enabled"), params.get("expect"))
@@ -1090,7 +1345,11 @@ class Services:
         raise ServiceError("bad_params", method=method)
 
     def submit_judge(self) -> str | None:
-        """Judge the unfinished list again as a library writer job (another data directory changed the intent)."""
+        """Judge the unfinished list again as a library writer job, after another data directory changed the intent.
+
+        Returns:
+            The job's id; None while no library is built or such a job is queued already.
+        """
         library = self._library
         if library is None or self.jobs.active("library.judge"):
             return None
@@ -1109,6 +1368,11 @@ class Services:
         return self.classic.is_open()
 
     def check_classic(self) -> None:
+        """Refuse while a classic window is open.
+
+        Raises:
+            ServiceError: ``classic_open``.
+        """
         if self.classic_open():
             raise ServiceError("classic_open")
 
@@ -1128,8 +1392,10 @@ class Services:
         self.after_classic()
 
     def after_classic(self) -> None:
-        """The classic tabs may have changed game files: the page reads them again, a scan runs with consent,
-        then the queued writes."""
+        """Follow up a closed classic window: the page reads the files again, a scan runs with consent, then the queue.
+
+        The classic tabs may have changed game files.
+        """
         self.events.publish("library.changed")
         ticket = self.request_scan()
         if ticket is None:
@@ -1142,8 +1408,13 @@ class Services:
         self.publish_state()
 
     def run_queue(self) -> Any:
-        """Submit the writes queued while the classic window was open, those that still hold; the dropped ones are
-        published (``classic.queueDone``) for one result popup."""
+        """Submit the writes queued while the classic window was open, those that still hold.
+
+        The dropped ones are published (``classic.queueDone``) for one result popup.
+
+        Returns:
+            The queue's run (``QueueRun``); None when nothing was queued.
+        """
         if not len(self.queue):
             return None
         run = self.queue.run(_QueueHost(self))
@@ -1152,8 +1423,21 @@ class Services:
         return run
 
     def queue_call(self, method: str, params: dict[str, Any]) -> int:
-        """``classic.queue``: keep a refused write for when the classic window closes, with its pins and the sizes
-        and dates of its entries' files. Returns how many items are queued."""
+        """Keep a write that was refused for when the classic window closes (``classic.queue``).
+
+        The call is kept with its pins and the sizes and dates of its entries' files.
+
+        Args:
+            method: The refused RPC method, one of ``classic.QUEUE_METHODS``.
+            params: The refused call's parameters.
+
+        Returns:
+            How many calls are queued.
+
+        Raises:
+            ServiceError: ``bad_params`` for another method or invalid parameters; ``game_file_not_found`` for a
+                variant with no files.
+        """
         if method not in QUEUE_METHODS or not isinstance(params, dict):
             raise ServiceError("bad_params", method=method)
         library = self.library
@@ -1232,6 +1516,11 @@ class Services:
         return count
 
     def clear_queue(self) -> int:
+        """Empty the classic queue and publish the state.
+
+        Returns:
+            How many calls were dropped.
+        """
         dropped = self.queue.clear()
         self.publish_state()
         return dropped
@@ -1243,8 +1532,14 @@ class Services:
     # --- the mods.state snapshot ---
 
     def refresh_status(self, library: Any = None) -> dict[str, Any] | None:
-        """Read the library's status into the snapshot (names and profiles.json only, never the library
-        lock)."""
+        """Read the library's status into the snapshot; it reads names and profiles.json only, never the library lock.
+
+        Args:
+            library: The library to read; None takes the current one.
+
+        Returns:
+            The status; the last known one when it cannot be read.
+        """
         try:
             library = library if library is not None else self.library
             status = library.status()
@@ -1259,10 +1554,16 @@ class Services:
         return status
 
     def profiles_seen(self) -> bool:
-        """The game watch's question at each poll: did another data directory sharing the library change its shared
-        intent (``enabled``, ``toggled``, ``unfinished``)? profiles.json is read again only when its size or date
-        changed, under its file lock, never under the library lock. A change also requests a scan and the judging of
-        the unfinished list, so the red dot follows with or without scan consent."""
+        """Tell the game watch whether another data directory changed the library's shared intent.
+
+        The watch asks at each poll. The intent is ``enabled``, ``toggled`` and ``unfinished`` of profiles.json,
+        which is read again only when its size or date changed, under its file lock, never under the library lock.
+        A change also requests a scan and the judging of the unfinished list, so the red dot follows with or
+        without scan consent.
+
+        Returns:
+            Whether the shared intent changed since the last call.
+        """
         library = self._library
         profiles = getattr(library, "profiles", None)
         if profiles is None:
@@ -1290,7 +1591,16 @@ class Services:
         return True
 
     def mods_state(self) -> dict[str, Any]:
-        """``mods.state``: from the snapshot, the preferences, the game watch, the classic window and the jobs."""
+        """Build the ``mods.state`` answer.
+
+        It comes from the snapshot, the preferences, the game watch, the classic window and the jobs.
+
+        Returns:
+            The labelled ``installs`` and the ``current`` one, ``enabled``, ``available`` with the ``reason`` it is
+            not, the ``scan`` consent, the counts of ``pending``, ``stuck``, ``left``, ``held``, ``drift``,
+            ``untracked``, ``damaged`` and ``sourceMissing`` entries, the ``queued`` calls, when it was ``scanned``,
+            the tray flags, ``busy`` and the toggle's ``progress``.
+        """
         status = self.snapshot.status()
         if status is None:
             status = self.refresh_status() or {}
@@ -1351,9 +1661,12 @@ class Services:
         }
 
     def _reason(self, status: dict[str, Any]) -> tuple[str | None, dict[str, Any]]:
-        """Why the switch is unavailable: no known install at all, an unreadable configuration, the game watch's
-        answer (the game running or its state unknown, Steam busy, a classic window left by an earlier instance), or
-        this instance's classic window."""
+        """Say why the switch is unavailable, with the reason's parameters.
+
+        The reasons are: no known install at all, an unreadable configuration, the game watch's answer (the game
+        running or its state unknown, Steam busy, a classic window left by an earlier instance), or this instance's
+        classic window.
+        """
         if not status.get("installs"):
             return "game_not_found", {}
         if status.get("reason"):
@@ -1374,6 +1687,7 @@ class Services:
         return cached[1]
 
     def publish_state(self) -> None:
+        """Publish ``mods.state`` to the pages and the tray; a failure is logged."""
         try:
             self.events.publish("mods.state", self.mods_state())
         except Exception:
@@ -1423,9 +1737,12 @@ class Services:
             logger.exception("startup maintenance failed")
 
     def _start_crc_repair(self, library: Any) -> str | None:
-        """What an older build left without its part's CRC, repaired without asking: a game writer job, once
-        found (``crc_repair_due``, read once per library); returns its job id. Nothing is shown: an entry it cannot
-        write now (the game running, a classic window open) is logged and tried again at the next start."""
+        """Repair, without asking, the files whose bytes lack their target filename's CRC.
+
+        This is a game writer job, started once such files are found (``crc_repair_due``, read once per library);
+        it returns the job's id, or None when nothing is due. Nothing is shown: an entry it cannot write now (the
+        game running, a classic window open) is logged and tried again at the next start.
+        """
         due = getattr(library, "crc_repair_due", None)
         try:
             if due is None or not due().get("due"):
@@ -1443,7 +1760,11 @@ class Services:
         return self.submit("mods.crcRepair", run, writes="game", library=library, rank=MAINTENANCE)
 
     def start_watch(self, run: bool = True) -> None:
-        """Make the game watch and (``run``) start its thread; without, ``watch.poll()`` checks once."""
+        """Make the game watch, once.
+
+        Args:
+            run: Start the watch's thread; without it, ``watch.poll()`` checks once.
+        """
         from .gamewatch import GameWatch
 
         if self.watch is not None:
@@ -1465,8 +1786,11 @@ class Services:
             self.watch.start()
 
     def _steam_idle(self) -> None:
-        """Steam went idle on an install: when a game update changed a built game's resource version, rebuild the
-        game-backed services as a settings change does (once no job runs). An unchanged version does nothing."""
+        """Rebuild the game-backed services after Steam went idle on an install, if a game update changed them.
+
+        The services are rebuilt as a settings change does it (once no job runs) when a built game's resource version
+        changed. An unchanged version does nothing.
+        """
         with self._lock:
             games = [game for game in (self._game, *self._other_games.values()) if game is not None]
         changed = False
@@ -1483,8 +1807,10 @@ class Services:
             self._on_settings_changed()
 
     def raise_window(self) -> None:
-        """A second start of the program on this data directory: show and raise the window (browser mode: open the
-        page again)."""
+        """Show and raise the window for a second start of the program on this data directory.
+
+        In browser mode the page is opened again.
+        """
         window = self.window
         if window is not None:
             for name in ("show", "restore"):
@@ -1497,8 +1823,14 @@ class Services:
             webbrowser.open(self.browser_url)
 
     def quit(self, *, restart: bool = False) -> None:
-        """``app.quit``: ``busy`` while a writer job is queued or running; closes the window, or in browser mode
-        stops the server once the answer went out; ``native_unavailable`` with ``--serve``."""
+        """Quit the App (``app.quit``): close the window, or in browser mode stop the server once the answer went out.
+
+        Args:
+            restart: Start the App again in safe mode after it quit.
+
+        Raises:
+            ServiceError: ``busy`` while a writer job is queued or running; ``native_unavailable`` with ``--serve``.
+        """
         if self.jobs.busy():
             raise ServiceError("busy")
         if self.close_coordinator is not None:
@@ -1520,7 +1852,18 @@ class Services:
         raise ServiceError("native_unavailable")
 
     def install_update(self, path: Path, md5: str) -> None:
-        """Reserve writer and classic admission until the native window closes or refuses the update."""
+        """Close the window and run the prepared installer, reserving writer and classic admission until then.
+
+        The reservation holds until the native window closes or refuses the update.
+
+        Args:
+            path: The downloaded installer.
+            md5: Its MD5, verified before it runs.
+
+        Raises:
+            ServiceError: ``busy`` while an update is installing; ``classic_open`` while a classic window is open;
+                ``update_restart_failed`` when the window does not close in time.
+        """
         if self.close_coordinator is not None:
             return self.close_coordinator.request(lambda: self._install_update(path, md5), reserve=False).result()
         return self._install_update(path, md5)
@@ -1568,7 +1911,11 @@ class Services:
             pending[1].set_exception(error)
 
     def on_closing(self) -> bool:
-        """The native closing handler: refuse quitting while a writer or a classic window holds the update."""
+        """Decide whether the window may close: refuse while a writer job or a classic window holds the update.
+
+        Returns:
+            Whether the close may go on.
+        """
         with self.classic.starting():
             if self.jobs.busy():
                 if self._pending_update is not None:
@@ -1603,6 +1950,23 @@ class Services:
     # --- /asset/... ---
 
     def asset(self, path: str, query: dict[str, str]) -> AssetResponse:
+        """Answer an ``/asset/...`` request.
+
+        The first segment is the kind: ``photography``, ``ui``, ``office``, ``art``, ``spine``, ``model`` or
+        ``voice``. Previews the page draws (``PREVIEW_ASSETS``) are class 1: scans and background work step aside
+        until they are answered.
+
+        Args:
+            path: The path after ``/asset/``.
+            query: The request's query parameters, such as a model's ``source`` and ``clip``.
+
+        Returns:
+            The asset.
+
+        Raises:
+            ServiceError: ``game_not_found`` in safe mode or without a game; others from the services.
+            KeyError: The path names no asset, which is a 404.
+        """
         if self.safe_mode:
             raise ServiceError("game_not_found")
         if path.split("/", 1)[0] in PREVIEW_ASSETS:
@@ -1679,14 +2043,27 @@ class Services:
         raise KeyError(path)
 
     def costume_check(self, target: str, other: str, cancelled: Callable[[], bool] | None = None) -> dict[str, Any]:
-        """Check another variant's costume on a variant's model to its end, as the Switch 3D Model card shows it:
-        the slot built (``library.costume_preview``) and its preview exported. Saved as the pair's verdict, keyed by
-        the build signature: the rule's refusals, program errors and export failures, so the pair is never
-        offered; a refusal of the moment (a missing original, a locked file) is returned unsaved and checked again.
-        ``cancelled``: the job's flag (``jobs.cancel``), checked between the phases (before the build, after it,
-        before the export and before any verdict is saved); once set, ``jobs.Cancelled`` ends the check with no
-        verdict saved, so the pair is checked again next time; the build stops at its next step
-        (``costume_preview``)."""
+        """Check another variant's costume on a variant's model to its end, as the Switch 3D Model card shows it.
+
+        The slot is built (``library.costume_preview``) and its preview exported. The verdict is saved for the
+        pair, keyed by the build signature: the rule's refusals, program errors and export failures, so the pair
+        is never offered. A refusal of the moment (a missing original, a locked file) is returned unsaved and
+        checked again.
+
+        Args:
+            target: The variant whose model wears the costume.
+            other: The variant whose costume it is.
+            cancelled: The job's flag (``jobs.cancel``), checked between the phases (before the build, after it,
+                before the export and before any verdict is saved); the build stops at its next step
+                (``costume_preview``).
+
+        Returns:
+            The verdict: ``ok``, with ``preview`` for a costume past the stretch limit, or not ok with a
+            ``reason``, and ``transient`` for one that is not saved.
+
+        Raises:
+            Cancelled: ``cancelled`` was set; no verdict is saved, so the pair is checked again next time.
+        """
 
         def stop() -> None:
             if cancelled is not None and cancelled():
@@ -1723,10 +2100,19 @@ class Services:
         return library.costume_verdict(target, other) or library.record_costume_verdict(target, other, True)
 
     def _model_asset(self, core: str, target: str, source: str, path: str, clip: str | None = None) -> bytes:
-        """A variant's 3D chibi as GLB from one source: live game files, official copies, a library mod or an
-        import candidate (KeyError, a 404, for anything else). Every source but ``live`` reads the files outside its
-        own parts by the library's rule (``preview_reads``), never as the game folder holds them now. ``clip``: one
-        clip of that model instead, from the same files (a costume's adapted bundles included)."""
+        """Export a variant's 3D chibi as GLB from one source.
+
+        The source is the live game files, official copies, a library mod or an import candidate (KeyError, a 404,
+        for anything else). Every source but ``live`` reads the files outside its own parts by the library's rule
+        (``preview_reads``), never as the game folder holds them now.
+
+        Args:
+            core: The model's core.
+            target: The variant the model belongs to.
+            source: ``live``, ``official``, ``mod:<id>``, ``variant:<key>`` or ``import:<key>``.
+            path: The asset path, for the KeyError.
+            clip: One clip of that model instead, from the same files (a costume's adapted bundles included).
+        """
         extra = {"clip": clip} if clip else {}
         if source == "live":
             return self.game.model_glb(core, **extra)
@@ -1797,9 +2183,11 @@ class Services:
         raise KeyError("/".join(parts))
 
     def _install_game(self, install_id: str) -> Any:
-        """The game files of another known install, by its id in ``mods.state.installs`` (an entry card of that
-        install draws its own files): a GameAssets over that install's pinned resource folders, built on first use
-        and dropped with the services rebuild. KeyError (404) for an unknown id."""
+        """Return the game files of another known install, by its id in ``mods.state.installs``.
+
+        An entry card of that install draws its own files: a GameAssets over that install's pinned resource
+        folders, built on first use and dropped with the services rebuild. KeyError (404) for an unknown id.
+        """
         library = self.library
         pin = next((p for p in library.installs() if p.id == install_id), None)
         if pin is None:
@@ -1962,9 +2350,11 @@ class Services:
         return library.recorded_rig(mod_id, atlases) if atlases else library.recorded_rig(mod_id)
 
     def _revision(self, kind: str, key: str, bundles: list[Path]) -> str:
-        """A Spine preview's revision: its composition's (``spine_revision``) and, for a mod, the rigs its fingerprint
-        recorded where there are any (``_drawn_as_made`` draws on them), so that a preview drawn before on the
-        official rig is drawn again."""
+        """Return a Spine preview's revision: its composition's (``spine_revision``).
+
+        For a mod it also covers the rigs its fingerprint recorded where there are any (``_drawn_as_made`` draws on
+        them), so that a preview drawn on the official rig is drawn again on the recorded one.
+        """
         from ..gameassets.spine import spine_revision
 
         revision = spine_revision(bundles)
@@ -1979,9 +2369,11 @@ class Services:
         return hashlib.sha256(json.dumps([revision, rigs, kept]).encode()).hexdigest()
 
     def _drawn_as_made(self, mod_id: str, files: dict[str, bytes]) -> dict[str, bytes]:
-        """A texture-only portrait mod's preview files on the rig its textures were drawn for, where the game
-        repacked the atlas since (``fingerprint.drawn_on``), so that an old mod shows as it was made; its
-        pages keep the names the recorded atlas gives them."""
+        """Return a texture-only portrait mod's preview files on the rig its textures were drawn for.
+
+        This applies where the game has repacked the atlas (``fingerprint.drawn_on``), so that the mod shows as it
+        was made; its pages keep the names the recorded atlas gives them.
+        """
         from ..gameassets import AssetNotFound
         from ..gameassets.spine import atlas_pages
         from ..library.fingerprint import drawn_on
@@ -2014,8 +2406,8 @@ class Services:
         meta, own, official, timeline = found
         if official is None:
             return game.lobby_info(meta["core"], prefab=own)
-        # a game update replaced the prefab it was made on and it was not made again yet: framed on the fly, from the
-        # stored parameters
+        # the game replaced the prefab the camera was made on and the camera is not rebuilt yet: framed on the fly,
+        # from the stored parameters
         with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
             output = Path(temporary) / official.name
             patch_prefab(
@@ -2024,6 +2416,13 @@ class Services:
             return game.lobby_info(meta["core"], prefab=output)
 
     def close(self, wait: float | None = 600.0) -> None:
+        """Shut the services down.
+
+        The game watch and the scanner stop, the classic long-polls end, the jobs drain and the event bus closes.
+
+        Args:
+            wait: Seconds to wait for writer jobs to finish (``JobRunner.shutdown``); None does not wait.
+        """
         if self.watch is not None:
             self.watch.stop()
         self.scanner.stop()
@@ -2033,9 +2432,19 @@ class Services:
 
 
 def skeleton_file(files: Mapping[str, Any], core: str, suffix: str) -> str | None:
-    """The file "skeleton.skel" / "skeleton.atlas" stands for: the skeleton named after the core, else the only one,
-    else, for a set of several (ui_set holds 22 raid and world boss banners), the first by name; its atlas is the one
-    of the same stem."""
+    """Pick the file that "skeleton.skel" or "skeleton.atlas" stands for.
+
+    That is the skeleton named after the core, else the only one, else, for a set of several (ui_set holds 22 raid
+    and world boss banners), the first by name; its atlas is the one of the same stem.
+
+    Args:
+        files: The files of the composition, by name.
+        core: The core the preview is for.
+        suffix: ``.skel`` or ``.atlas``.
+
+    Returns:
+        The file's name; None when none can be told.
+    """
     stems = sorted(
         {Path(k).stem for k in files if k.endswith(".skel")} | {Path(k).stem for k in files if k.endswith(".atlas")}
     )

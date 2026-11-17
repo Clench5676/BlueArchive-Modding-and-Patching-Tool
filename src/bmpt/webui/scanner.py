@@ -1,5 +1,6 @@
-"""The scan of the game folders (see docs/webui/mods-switch.md, "Mods state, scan and the classic queue"), on a
-thread of its own, never on the job worker.
+"""Scan the game folders on a thread of its own, never on the job worker.
+
+See docs/webui/mods-switch.md, "Mods state, scan and the classic queue".
 
 - Only with the scan consent: ``allowed()`` is asked at each request and again before each scan, and a request
   without it is refused (``request`` returns ``None``). The library refuses on its own too (``scan_off``).
@@ -28,6 +29,8 @@ logger = logging.getLogger(__name__)
 
 
 class Scanner:
+    """Runs the scans of the game folders on a thread of its own, one at a time, for the requests made."""
+
     def __init__(
         self,
         scan: Callable[[Callable[[], bool], bool], Any],
@@ -36,6 +39,17 @@ class Scanner:
         writer_busy: Callable[[], bool] = lambda: False,
         on_done: Callable[[Any, int], Any] | None = None,
     ):
+        """Create the scanner; its thread starts with the first request.
+
+        Args:
+            scan: ``scan(cancel, dismissed)`` or ``scan(cancel, dismissed, cores)``, one scan: ``cancel()`` is true
+                once the result is not wanted; ``dismissed`` includes the dismissed entries; ``cores``, when
+                given, limits the scan to those bundle cores. Returns the result, which says whether it is
+                ``stale``, or None.
+            allowed: Whether the user has consented to scanning.
+            writer_busy: Whether a writer job is queued or running, which decides if a stale scan is repeated.
+            on_done: ``on_done(result, served)`` after every attempt; None when nothing was kept.
+        """
         self._scan = scan
         self._allowed = allowed
         self._writer_busy = writer_busy
@@ -54,7 +68,17 @@ class Scanner:
     # --- requests ---
 
     def request(self, dismissed: bool = False, *, cores: set[str] | None = None) -> int | None:
-        """Ask for a scan; its number, or ``None`` without the scan consent (nothing is queued then)."""
+        """Ask for a scan; requests made while one runs are served together by the next.
+
+        Args:
+            dismissed: The scan also covers the dismissed entries (Settings' Check), which widens the next scan.
+            cores: Scan only these bundle cores; None scans everything. Pending requests merge: any request
+                for everything makes the scan cover everything.
+
+        Returns:
+            The request's number, which ``on_done`` and ``served`` report; None without the scan consent or after
+            ``stop``, when nothing is queued.
+        """
         if not self._is_allowed():
             return None
         with self._cond:
@@ -89,6 +113,7 @@ class Scanner:
 
     @property
     def running(self) -> bool:
+        """Whether a scan is running."""
         with self._cond:
             return self._running
 
@@ -104,11 +129,19 @@ class Scanner:
             return self._served
 
     def wait_idle(self, timeout: float | None = None) -> bool:
-        """Wait until no scan runs and no request waits; whether it got there in time."""
+        """Wait until no scan runs and no request waits.
+
+        Args:
+            timeout: Seconds to wait at most; None waits without limit.
+
+        Returns:
+            Whether the scanner went idle in time.
+        """
         with self._cond:
             return self._cond.wait_for(lambda: not self._running and self._served >= self._requested, timeout)
 
     def stop(self) -> None:
+        """End the thread after the running scan, which is cancelled; later requests are refused."""
         with self._cond:
             self._stopped = True
             self._generation += 1

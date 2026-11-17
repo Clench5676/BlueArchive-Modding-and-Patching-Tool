@@ -1,4 +1,7 @@
-"""M1: public AppKit standard buttons and window-scoped native drag events."""
+"""The AppKit host of the window chrome.
+
+The standard window buttons sit in the page's top bar, and window-scoped native events drag the window by it.
+"""
 
 from __future__ import annotations
 
@@ -13,20 +16,37 @@ logger = logging.getLogger(__name__)
 
 
 class PointerProbe:
-    """What AppKit shows as the pointer while it moves over the window, for the session log: the system arrow,
-    a hand, the text beam, or an image (the page's game pointer). Logs a burst of changes (the two flickering) and a system
-    pointer that stays over the page; quiet otherwise."""
+    """Log what AppKit shows as the pointer while it moves over the window.
+
+    The pointer is the system arrow, a hand, the text beam, or an image (the page's game pointer). The probe logs
+    a burst of changes (the two flickering) and a system pointer that stays over the page; it is quiet otherwise.
+    """
 
     WINDOW, BURST, STUCK, QUIET = 10.0, 8, 5.0, 60.0
     PAGE = ("image", "I-beam")
 
     def __init__(self, api, clock=time.monotonic):
+        """Create a probe that has seen no pointer yet.
+
+        Args:
+            api: The AppKit module.
+            clock: Returns the time in seconds; tests inject a fake one.
+        """
         self.api, self.clock = api, clock
         self.kind, self.since, self.changes = None, 0.0, deque()
         self.burst_at = self.stuck_at = -math.inf
         self.stuck_logged = False
 
     def kind_of(self, cursor):
+        """Name a cursor.
+
+        Args:
+            cursor: An ``NSCursor``, or None.
+
+        Returns:
+            ``none``, ``arrow``, ``open hand``, ``closed hand``, ``I-beam``, ``pointing hand``, or ``image`` for any
+            other cursor.
+        """
         if cursor is None:
             return "none"
         known = self.api.NSCursor
@@ -42,6 +62,12 @@ class PointerProbe:
         return "image"
 
     def moved(self, y, over_page):
+        """Take the pointer's kind after a move and log a burst of changes or a system pointer stuck over the page.
+
+        Args:
+            y: The pointer's distance from the top of the content view, in points, for the log.
+            over_page: Whether the pointer is below the top bar, over the page.
+        """
         now, kind = self.clock(), self.kind_of(self.api.NSCursor.currentCursor())
         if kind != self.kind:
             if self.kind is not None:
@@ -64,10 +90,17 @@ class PointerProbe:
 
 
 class CocoaHost:
+    """The macOS chrome host: it aligns the standard window buttons to the page's top bar and drags the window by it.
+
+    The buttons follow the top bar's motion and stay hidden until the page has placed it. A local event monitor
+    turns presses on the page's drag regions into window drags and double-click actions.
+    """
+
     # A missing content view is measured again this often, this many times (pywebview swaps it while it loads).
     RETRY_DELAY, RETRY_LIMIT = 0.25, 8
-    # The buttons start hidden and stay so until the page says where its top bar is (its first motion), so no coloured
-    # dots show on the black start screen; this long after install they appear anyway, should the page never speak.
+    # The buttons start hidden and stay so until the page says where its top bar is (its first motion), so no
+    # coloured dots show on the black start screen; this long after install they appear anyway, should the page
+    # never speak.
     HOLD_LIMIT = 8.0
     held = False
     # The top bar's offset the buttons share (points up, chrome-motion.js), the motion playing it, where they were
@@ -77,6 +110,16 @@ class CocoaHost:
     centre, probe, pointer_monitor = None, None, None
 
     def __init__(self, window, owner, *, api=None, dispatch=None, later=None):
+        """Create the host, not yet installed.
+
+        Args:
+            window: The pywebview window, whose ``NSWindow`` is used.
+            owner: The ``WindowChrome`` that holds the layout and publishes what the host reports.
+            api: The AppKit module; None imports it. For tests.
+            dispatch: Runs a function on the main thread; None uses ``AppHelper.callAfter``.
+            later: ``later(seconds, fn)`` runs a function after a delay on the main thread; None uses
+                ``AppHelper.callLater``.
+        """
         if api is None:
             import AppKit as api
         if dispatch is None or later is None:
@@ -93,6 +136,14 @@ class CocoaHost:
         self.ignored = ""
 
     def mouse_down(self, event):
+        """Start a window drag, or the double-click action, for a press on a drag region of the top bar.
+
+        Args:
+            event: The ``NSEvent`` of the left mouse press.
+
+        Returns:
+            The event, to go on to the page; None when the press was a drag or double-click on the top bar.
+        """
         # A local monitor runs before WKWebView hit testing, including after Cocoa
         # replaces contentView. Rectangles arrive in viewport CSS pixels (AppKit points).
         if event.window() != self.window or not self.owner.active:
@@ -138,8 +189,16 @@ class CocoaHost:
         return Rect(frame.origin.x, top, frame.origin.x + frame.size.width, top + frame.size.height)
 
     def install(self):
+        """Hide the standard buttons until the page places its top bar, and watch the window.
+
+        The window gets a 16:9 content aspect ratio; mouse presses, pointer moves and the window's resize, move,
+        key, miniaturize and fullscreen notifications are observed.
+
+        Raises:
+            RuntimeError: AppKit has no standard window button.
+        """
         api, window = self.api, self.window
-        # This content policy is independent of M1 button alignment/rollback.
+        # This content policy is independent of the button alignment.
         # AppKit applies it to interactive resizing, leaving fullscreen to the OS.
         window.setContentAspectRatio_((16, 9))
         for kind in (api.NSWindowCloseButton, api.NSWindowMiniaturizeButton, api.NSWindowZoomButton):
@@ -184,6 +243,11 @@ class CocoaHost:
             )
 
     def pointer_moved(self, event):
+        """Feed the pointer probe from a mouse move; the event is returned unchanged.
+
+        Args:
+            event: The ``NSEvent`` of the move.
+        """
         # Only reads AppKit's pointer for the log; the event goes on unchanged whatever happens here.
         try:
             content = self.window.contentView()
@@ -197,7 +261,7 @@ class CocoaHost:
         return event
 
     def _placed(self, centre):
-        """The buttons still where the last alignment and the offset put them, for the same centre line."""
+        """Tell whether the buttons are still where the last alignment and offset put them, for the same centre."""
         if not self.base or self.resting is None or centre != self.centre:
             return False
         for button, (x, y) in zip(self.buttons, self.base):
@@ -208,7 +272,10 @@ class CocoaHost:
         return True
 
     def release(self):
-        """End the start hold: the buttons take the place the offset gives them (hidden when it is wholly above the window)."""
+        """End the start hold: the buttons take the place the offset gives them.
+
+        They are hidden when the offset puts them wholly above the window.
+        """
         if not self.held:
             return
         self.held = False
@@ -216,12 +283,19 @@ class CocoaHost:
         self._place()
 
     def slide(self, frames, period):
-        """Play the page's top bar offsets on the buttons, one per period; a newer motion replaces this one."""
+        """Play the page's top bar offsets on the buttons; a newer motion replaces this one.
+
+        The first call after install ends the start hold and only moves the buttons to the final offset.
+
+        Args:
+            frames: The top bar's offsets in points up from where the buttons rest.
+            period: Seconds between two offsets.
+        """
         self.motion += 1
         token = self.motion
         if self.held:
-            # the page's first word on its top bar: the buttons take that place at once, for they were never shown at the
-            # place the motion starts from
+            # the page's first word on its top bar: the buttons take that place at once, for they were never shown
+            # at the place the motion starts from
             self.offset = frames[-1]
             self.release()
             return
@@ -237,8 +311,10 @@ class CocoaHost:
         step(0)
 
     def _place(self):
-        """The buttons at their aligned place moved up by the offset, hidden once wholly above the window. macOS
-        fullscreen shows and hides them itself: there they only get back what this changed."""
+        """Put the buttons at their aligned place moved up by the offset, hidden once wholly above the window.
+
+        macOS fullscreen shows and hides them itself: there they only get back what this changed.
+        """
         if self.held or not self.base or self.transition or self.window.contentView() is None:
             return
         fullscreen = self.state()["fullscreen"]
@@ -247,8 +323,8 @@ class CocoaHost:
         for button, (x, y) in zip(self.buttons, self.base):
             up = -1 if button.superview().isFlipped() else 1
             origin = button.frame().origin
-            # in fullscreen AppKit may have laid the buttons out again: move only those still where this put them. A move
-            # to where a button already is would still make AppKit reset the pointer: skip it.
+            # in fullscreen AppKit may have laid the buttons out again: move only those still where this put them.
+            # A move to where a button already is would still make AppKit reset the pointer: skip it.
             if (not fullscreen or abs(origin.y - (y + up * self.applied)) < 0.5) and (
                 abs(origin.x - x) > 0.01 or abs(origin.y - (y + up * offset)) > 0.01
             ):
@@ -258,8 +334,10 @@ class CocoaHost:
         self.applied, self.hid = offset, hide
 
     def _within_container(self, dy):
-        """The downward move (content points) closest to ``dy`` that keeps every button inside its container; 0 when none
-        does."""
+        """Return the downward move (content points) closest to ``dy`` that keeps every button inside its container.
+
+        It is 0 when no move does.
+        """
         low, high = -float("inf"), float("inf")
         for button in self.buttons:
             frame, parent = button.frame(), button.superview()
@@ -275,6 +353,7 @@ class CocoaHost:
         return min(max(dy, low), high)
 
     def state(self):
+        """Return the window state: ``maximized``, ``minimized`` and ``fullscreen`` as booleans."""
         return {
             "maximized": bool(self.window.isZoomed()),
             "minimized": bool(self.window.isMiniaturized()),
@@ -282,6 +361,19 @@ class CocoaHost:
         }
 
     def measure(self, layout):
+        """Align the buttons to the toolbar's centre line and measure them.
+
+        Args:
+            layout: The page's toolbar layout, the ``WindowChrome``'s: ``centre``, ``height`` and ``drag``.
+
+        Returns:
+            The rectangle the buttons cover where they rest, in CSS pixels of the content view. In fullscreen,
+            where AppKit places them, it is where they are now. None when there is nothing to measure: no content
+            view yet, the window is miniaturized or a fullscreen transition runs.
+
+        Raises:
+            RuntimeError: AppKit would clip a button or rejected the alignment.
+        """
         content = self.window.contentView()
         # pywebview's close handler removes the web view, which is the content view, before AppKit posts the window's
         # last notifications: nothing to measure then, and no reason to give the native chrome up. No notification
@@ -296,16 +388,17 @@ class CocoaHost:
             return None
         fullscreen = self.state()["fullscreen"]
         if not fullscreen:
-            # Every page layout measures again. Buttons already aligned (and moved by the top bar's offset) stay put: each
-            # real move makes AppKit reset the pointer, which flickered against the page's game pointer.
+            # Every page layout measures again. Buttons already aligned (and moved by the top bar's offset) stay
+            # put: each real move makes AppKit reset the pointer, which flickered against the page's game pointer.
             if self._placed(layout["centre"]):
                 if self.offset != self.applied:
                     self._place()
                 return self.resting
             before = [self._rect(button, content) for button in self.buttons]
             wanted = vertical_offsets(before, layout["centre"])
-            # The title bar container is only so high (32 pt with the current SDK). On a wide window the toolbar's centre line
-            # sits lower than the buttons can go inside it: they go as low as it allows rather than giving the controls up.
+            # The title bar container is only so high (32 pt with the current SDK). On a wide window the toolbar's
+            # centre line sits lower than the buttons can go inside it: they go as low as it allows rather than
+            # giving the controls up.
             dy = self._within_container(wanted[0].top - before[0].top)
             targets = [Rect(r.left, r.top + dy, r.right, r.bottom + dy) for r in before]
             for button in self.buttons:
@@ -321,7 +414,8 @@ class CocoaHost:
             self.base = [(button.frame().origin.x, button.frame().origin.y) for button in self.buttons]
             self.applied, self.centre = 0.0, layout["centre"]
         else:
-            # AppKit lays them out in fullscreen: they get back what the offset changed, and are aligned again on the way out
+            # AppKit lays them out in fullscreen: they get back what the offset changed, and are aligned again on
+            # the way out
             self.centre = None
             if self.applied or self.hid:
                 self._place()
@@ -339,6 +433,11 @@ class CocoaHost:
         return self.resting
 
     def command(self, action):
+        """Do a window action.
+
+        Args:
+            action: ``minimize``, ``maximize`` (zoom) or ``fullscreen``.
+        """
         selectors = {
             "minimize": self.window.performMiniaturize_,
             "maximize": self.window.performZoom_,
@@ -347,6 +446,7 @@ class CocoaHost:
         selectors[action](None)
 
     def dispose(self):
+        """Stop the motion, remove the observers and monitors, and put the standard buttons back as they were."""
         self.motion += 1
         self.held = False
         centre = self.api.NSNotificationCenter.defaultCenter()

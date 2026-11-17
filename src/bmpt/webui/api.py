@@ -37,15 +37,26 @@ from .session_log import tail
 from .state import ALIAS_LENGTH, ALIAS_MAX, LOBBY_ZOOM_MODES, alias_key, alias_text, is_number, lobby_zoom, roster_view
 from .system import can_restart_safe, reveal
 
-# the jobs a page may cancel once it no longer wants them (``jobs.cancel``): read-only checks of what it shows
+# the jobs a page may cancel when it drops what they check (``jobs.cancel``): read-only checks of what it shows
 CANCELLABLE = ("costume-check",)
 # a build's own release notes, one Markdown file per version (shipped with the package's assets)
 RELEASE_NOTES_DIR = Path(__file__).resolve().parent.parent / "assets" / "release-notes"
 
 
 def release_notes(version: str, folder: Path = RELEASE_NOTES_DIR) -> dict[str, str]:
-    """A build's own release notes (<X.Y.Z>.md, the text its GitHub release carries; a pre-release reads its version's),
-    for Settings' update preview. Empty notes when the build ships none."""
+    """Read a build's own release notes, for Settings' update preview.
+
+    The notes are ``<X.Y.Z>.md``, the text its GitHub release carries; a pre-release reads the file of its own
+    ``X.Y.Z``.
+
+    Args:
+        version: The build's version; its ``X.Y.Z`` part names the file.
+        folder: The folder of the notes files.
+
+    Returns:
+        ``version`` (the ``X.Y.Z`` part, or ``version`` itself when it has none) and ``notes`` (Markdown; empty when
+        the build ships none).
+    """
     found = re.match(r"\d+\.\d+\.\d+", version)
     path = folder / f"{found.group(0)}.md" if found else None
     notes = path.read_text(encoding="utf-8") if path is not None and path.is_file() else ""
@@ -68,7 +79,14 @@ def ui_strings(lang: str) -> dict[str, str]:
 
 
 def clip_talks(talks: Any) -> dict[str, list[str]]:
-    """The page's {talk animation: [clip ids]}, checked and normalised; {} when absent or malformed."""
+    """Check and normalise the page's talk animations, ``{animation: [clip ids]}``.
+
+    Args:
+        talks: What the page sent; at most 64 animations are read, with at most 32 clips each.
+
+    Returns:
+        The normalised table; empty when ``talks`` is not a dict.
+    """
     if not isinstance(talks, dict):
         return {}
     return {
@@ -105,6 +123,18 @@ FLAG_KEYS = {"tray": "tray", "classicPrompt": "classic_prompt", "startupUpdate":
 
 
 def build_api(s: Services) -> RpcRegistry:
+    """Build the registry of the RPC methods the front end calls through ``/api/rpc``.
+
+    The methods are grouped by namespace (``app``, ``settings``, ``mods``, ``actions``, ``import``, ...) and each
+    is a thin call into the services; the photography, tours, export and Student Hall methods come from their own
+    modules. The RPC table in docs/webui/api.md lists them.
+
+    Args:
+        s: The Services every method works on.
+
+    Returns:
+        The registry.
+    """
     rpc = RpcRegistry(
         on_exception=lambda *args: s.reports.backend_exception(*args) if hasattr(s, "reports") else None,
         translate=getattr(s, "translate_error", None),
@@ -623,8 +653,10 @@ def build_api(s: Services) -> RpcRegistry:
 
     @rpc.method("debug.trace")
     def debug_trace(events: list[Any]) -> None:
-        """Input events of the fullscreen lobby, logged when the app was started with --debug (a user's trackpad
-        reproduces once and the log tells what the page received)."""
+        """Log the fullscreen lobby's input events, when the App was started with ``--debug``.
+
+        A user's trackpad behaviour reproduces once, and the log tells what the page received.
+        """
         if not s.debug or not isinstance(events, list):
             return
         for event in events[:TRACE_BATCH]:
@@ -658,7 +690,8 @@ def build_api(s: Services) -> RpcRegistry:
 
     def alias_target(family: Any) -> str:
         # A missing normal base never gives its nickname to a skin. A special-only family has no such base:
-        # attach its old name to one stable, catalog-ordered scene and persist that choice.
+        # attach the aliases stored under its family key to one stable, catalog-ordered scene and persist that
+        # choice.
         if family.variants and all(v.key.startswith(SPECIAL_PREFIX) for v in family.variants):
             return min(family.variants, key=lambda v: (v.order, v.key)).key
         return family.key
@@ -921,10 +954,12 @@ def build_api(s: Services) -> RpcRegistry:
 
     @rpc.method("model.costumes")
     def model_costumes(variant: str, others: list[str]) -> dict[str, str | None]:
-        """The saved verdicts of other variants' costumes on a variant's model (Switch 3D Model): "ok",
-        "preview" (past the stretch limit: shown, and applied only for another student's costume),
-        "refused", or None when not checked yet (``model.checkCostumes``). "ok" and "preview" pairs are offered;
-        ``others`` may name any student's variants (the switch's search hits)."""
+        """Return the saved verdicts of other variants' costumes on a variant's model (Switch 3D Model).
+
+        A verdict is "ok", "preview" (past the stretch limit: shown, and applied only for another student's
+        costume), "refused", or None when not checked yet (``model.checkCostumes``). "ok" and "preview" pairs are
+        offered; ``others`` may name any student's variants (the switch's search hits).
+        """
         out: dict[str, str | None] = {}
         for other in costume_keys(variant, others):
             try:
@@ -940,9 +975,11 @@ def build_api(s: Services) -> RpcRegistry:
 
     @rpc.method("model.costumeCautions")
     def model_costume_cautions(variant: str, others: list[str]) -> dict[str, list[str]]:
-        """What the offered pairs among ``others`` may draw differently in the game than in the preview (the switch's
-        cautions, ``model_adapt.Result.cautions``): {other: ["ex_parts" | "carried_shader", ...]}, only the pairs
-        that have any."""
+        """Return what the offered pairs among ``others`` may draw differently in the game than in the preview.
+
+        These are the switch's cautions (``model_adapt.Result.cautions``): ``{other: ["ex_parts" |
+        "carried_shader", ...]}``, only the pairs that have any.
+        """
         out: dict[str, list[str]] = {}
         for other in costume_keys(variant, others):
             try:
@@ -961,10 +998,13 @@ def build_api(s: Services) -> RpcRegistry:
 
     @rpc.method("model.checkCostumes")
     def model_check_costumes(variant: str, others: list[str]) -> str:
-        """A job checking other variants' costumes on a variant's model to their end (``Services.costume_check``);
-        its result is {other: "ok" | "preview" | "refused"}. A refusal of the moment is "refused" and not saved.
-        Class 2, read-only; the page cancels it (``jobs.cancel``) once its 3D tab is left: a queued one never runs, a
-        running one stops between its pairs and phases, saving no verdict (the "cancelled" state)."""
+        """Start a job that checks other variants' costumes on a variant's model to their end.
+
+        See ``Services.costume_check``; the result is ``{other: "ok" | "preview" | "refused"}``. A refusal of the
+        moment is "refused" and not saved. Class 2, read-only; the page cancels it (``jobs.cancel``) once its 3D tab
+        is left: a queued one never runs, a running one stops between its pairs and phases, saving no verdict (the
+        "cancelled" state).
+        """
         keys = costume_keys(variant, others)
 
         def run(log: Any, progress: Any, cancelled: Callable[[], bool]) -> dict[str, str]:
@@ -989,10 +1029,12 @@ def build_api(s: Services) -> RpcRegistry:
 
     @rpc.method("model.optimize")
     def model_optimize(variant: str, source: str, name: str = "") -> str:
-        """A job running Optimize Physics on a variant's 3D model from one source: "official" or
-        "variant:<key>", another variant's costume. Its result is {"mod": id}, the copy kept in the library, or
-        {"unneeded": true, "reason": "official" | "no_gain"}. ``name`` is the source as the screen shows it, the copy's
-        name."""
+        """Start a job that runs Optimize Physics on a variant's 3D model from one source.
+
+        The source is "official" or "variant:<key>", another variant's costume. The result is ``{"mod": id}``, the
+        copy kept in the library, or ``{"unneeded": true, "reason": "official" | "no_gain"}``. ``name`` is the source
+        as the screen shows it, the copy's name.
+        """
         if (
             not isinstance(variant, str)
             or not variant
@@ -1051,16 +1093,18 @@ def build_api(s: Services) -> RpcRegistry:
 
     @rpc.method("aliases.set")
     def aliases_set(aliases: list[str], variant: str | None = None, family: str | None = None) -> list[str]:
-        """Keep the user's own aliases of a variant (the roster search matches them) and return them as kept: each
-        cleaned (state.alias_text), empty and repeated ones dropped. ``alias_too_long`` or ``alias_too_many`` past the
-        limits; nothing is kept then."""
+        """Keep the user's own aliases of a variant, which the roster search matches, and return them as kept.
+
+        Each is cleaned (``state.alias_text``), and empty and repeated ones are dropped. ``alias_too_long`` or
+        ``alias_too_many`` past the limits; nothing is kept then.
+        """
         if (
             not isinstance(variant if variant is not None else family, str)
             or not isinstance(aliases, list)
             or not all(isinstance(a, str) for a in aliases)
         ):
             raise ServiceError("bad_params", key="aliases")
-        # The legacy family argument edits the original variant only.
+        # The family argument edits the original variant only.
         key = (
             visible_variant(variant).key
             if variant is not None
@@ -1100,10 +1144,13 @@ def build_api(s: Services) -> RpcRegistry:
     def lobby_camera_save(
         variant: str, lobby: str, view: dict, scale: float, offset: list, source: str = "official"
     ) -> str:
-        """A job keeping the lobby's framing (``lobby.js cameraParams``) as a new Memorial Lobby choice of the variant
-        (``library/lobby_camera.py``): its art the source the lobby showed ("official", ``mod:<id>`` of a lobby mod of
-        the variant, or one of its cameras), its camera the prefab scaled by ``scale`` and moved by ``offset``. Its
-        result: {variant, lobby, number, scale, offset, mod}. ``view`` is the framed view, for the log only."""
+        """Start a job that keeps the lobby's framing as a new Memorial Lobby choice of the variant.
+
+        The framing is ``lobby.js cameraParams`` (``library/lobby_camera.py``): its art is the source the lobby
+        showed ("official", ``mod:<id>`` of a lobby mod of the variant, or one of its cameras), its camera the
+        prefab scaled by ``scale`` and moved by ``offset``. The result is ``{variant, lobby, number, scale, offset,
+        mod}``. ``view`` is the framed view, for the log only.
+        """
         from ..gameassets import AssetNotFound
         from ..library import lobby_camera
 
@@ -1148,11 +1195,13 @@ def build_api(s: Services) -> RpcRegistry:
 
     @rpc.method("lobby.lines")
     def lobby_lines(variant: str, talks: dict[str, list[str]] | None = None, lang: str | None = None) -> dict[str, Any]:
-        """The memorial lobby's lines by voice clip ({clip: {lang: text, "voice": bool}}): Kivo's (zh-CN, ja, the
-        voices) and, for a ``lang`` other than zh-CN, the Global server's official text on the clips of each talk
-        animation (``talks``: {animation: [clip ids in order]} from the skeleton, else Kivo's clip names).
-        ``lines_unavailable`` when neither can be read; the Global text is left out when its table takes longer
-        than LINES_WAIT."""
+        """Return the memorial lobby's lines by voice clip, ``{clip: {lang: text, "voice": bool}}``.
+
+        The lines are Kivo's (zh-CN, ja, the voices) and, for a ``lang`` other than zh-CN, the Global server's
+        official text on the clips of each talk animation (``talks``: ``{animation: [clip ids in order]}`` from the
+        skeleton, else Kivo's clip names). ``lines_unavailable`` when neither can be read; the Global text is left
+        out when its table takes longer than ``LINES_WAIT``.
+        """
         v = visible_variant(variant)
         lang = lang or LINE_LANGS.get(i18n_manager.lang, "en")
         character = getattr(v, "schale_id", None)
@@ -1390,8 +1439,10 @@ def build_api(s: Services) -> RpcRegistry:
 
     @rpc.method("mods.scan")
     def mods_scan(dismissed: bool = False) -> dict[str, bool]:
-        """Request a scan (``dismissed``: Settings' Check, which lists dismissed entries again); the result comes as
-        ``library.scanned``. ``scan_off`` without the scan consent."""
+        """Request a scan; the result comes as ``library.scanned``.
+
+        ``dismissed`` is Settings' Check, which lists dismissed entries again. ``scan_off`` without the scan consent.
+        """
         if not s.scan_allowed():
             raise ServiceError("scan_off")
         return {"requested": s.request_scan(bool(dismissed)) is not None}
@@ -1445,10 +1496,12 @@ def build_api(s: Services) -> RpcRegistry:
 
     @rpc.method("mods.impact")
     def mods_impact(ids: list[str] | None = None, force: bool = False) -> str:
-        """What a game update did under the library's mods (a reader job). Without ``ids``: the impact summary of the
-        current install, classified only when its resource version differs from the last one seen, or always with
-        ``force`` (Settings' View) (``update_impact``). With ``ids``: those mods' impacts now, {mods: [{id,
-        impact}]}."""
+        """Start a reader job on what a game update did under the library's mods.
+
+        Without ``ids``: the impact summary of the current install, classified only when its resource version
+        differs from the last one seen, or always with ``force`` (Settings' View) (``update_impact``). With ``ids``:
+        those mods' impacts now, ``{mods: [{id, impact}]}``.
+        """
         if ids is not None and (
             not isinstance(ids, list) or len(ids) > 4096 or not all(isinstance(v, str) and v for v in ids)
         ):
@@ -1465,35 +1518,44 @@ def build_api(s: Services) -> RpcRegistry:
 
     @rpc.method("mods.impactLast")
     def mods_impact_last() -> dict[str, Any]:
-        """The outcome of the last impact check of the current install, without checking (``last_impact``):
-        {install, version, checked, update, mods}; Settings' View Mods to Update."""
+        """Return the outcome of the last impact check of the current install, without checking.
+
+        See ``last_impact``: ``{install, version, checked, update, mods}``; Settings' View Mods to Update.
+        """
         library = s.library
         return library.last_impact(library.current_pin())
 
     @rpc.method("mods.updateDue")
     def mods_update_due() -> dict[str, Any]:
-        """Whether the start asks to check the mods against a game update (``update_due``): {due, outdated, retry,
-        install, version, previous}; ``outdated``: costume builds of an older costume rule to build again first
-        (``mods.refreshCostumes``); ``retry``: entries whose last write failed to write again (``mods.retryFailed``).
-        Reads the version file, the configuration and cached fingerprints only."""
+        """Tell whether the start asks to check the mods against a game update (``update_due``).
+
+        The answer is ``{due, outdated, retry, install, version, previous}``. ``outdated`` lists costume builds of an
+        older costume rule to build again first (``mods.refreshCostumes``); ``retry`` lists entries whose last write
+        failed, to write again (``mods.retryFailed``). Reads the version file, the configuration and cached
+        fingerprints only.
+        """
         library = s.library
         return library.update_due(library.current_pin())  # no game folder: nothing is asked
 
     @rpc.method("mods.refreshCostumes")
     def mods_refresh_costumes() -> str:
-        """At the start: what the App built from a costume under an older costume rule built again, without asking
-        (``refresh_costumes``): {done, kept, left}."""
+        """Build again, at the start and without asking, what the App built from a costume under an older rule.
+
+        See ``refresh_costumes``; the result is ``{done, kept, left}``.
+        """
         return s.submit_refresh_costumes()
 
     @rpc.method("mods.retryFailed")
     def mods_retry_failed() -> str:
-        """At the start: the entries whose last write failed written again once under this build, without asking
-        (``retry_failed``): a toggle result, or None with nothing to try."""
+        """Write again, at the start and without asking, the entries whose last write failed, once under this build.
+
+        See ``retry_failed``; the result is a toggle result, or None with nothing to try.
+        """
         return s.submit_retry_failed()
 
     @rpc.method("mods.impactSeen")
     def mods_impact_seen(install: str, version: str) -> dict[str, Any]:
-        """The impact summary of a game update was shown: its resource version is not told again."""
+        """Record that the impact summary of a game update was shown, so its resource version is not told again."""
         if not isinstance(install, str) or not isinstance(version, str) or not version:
             raise ServiceError("bad_params", key="version")
         s.library.impact_seen(install, version)
@@ -1501,8 +1563,11 @@ def build_api(s: Services) -> RpcRegistry:
 
     @rpc.method("mods.confirmUntested")
     def mods_confirm_untested(confirm: dict[str, Any]) -> dict[str, Any]:
-        """The user confirmed the writes an ``untested_build`` refusal named: its ``confirm`` given back
-        ({install: {version, cores}}); the refused call is then made again."""
+        """Take the user's confirmation of the writes an ``untested_build`` refusal named.
+
+        The refusal's ``confirm`` is given back, ``{install: {version, cores}}``; the refused call is then made
+        again.
+        """
         s.library.confirm_untested(confirm)
         return {}
 
@@ -1522,8 +1587,10 @@ def build_api(s: Services) -> RpcRegistry:
 
     @rpc.method("mods.forget")
     def mods_forget(install: str) -> str:
-        """Remove from List: a recorded install this data directory's settings no longer name; ``bad_params`` for a
-        named one."""
+        """Remove an install from the list: the library records it, but this data directory's settings do not name it.
+
+        ``bad_params`` for a named one.
+        """
         library = s.library
         named = {item["key"] for item in library.status().get("installs", []) if item.get("named")}
         if not isinstance(install, str) or install in named:
@@ -1562,9 +1629,12 @@ def build_api(s: Services) -> RpcRegistry:
 
     @rpc.method("actions.apply")
     def actions_apply(variant: str, source: str, kind: str = "spr") -> str:
-        """Switch what the game shows: write a source into the variant's portrait ("spr") or memorial lobby ("lobby")
-        game files of the current install, pinned at submit, and configure it. The library keeps what it replaces
-        (ModLibrary._commit). While mods are off it only configures the source (``deferred``)."""
+        """Switch what the game shows: write a source into the variant's game files, and configure it.
+
+        The files are the portrait ("spr") or memorial lobby ("lobby") ones of the current install, pinned at
+        submit. The library keeps what it replaces (``ModLibrary._commit``). While mods are off it only configures
+        the source (``deferred``).
+        """
         return s.submit_apply(variant, source, kind)
 
     @rpc.method("actions.restore")
@@ -1608,8 +1678,10 @@ def build_api(s: Services) -> RpcRegistry:
 
     @rpc.method("actions.oldRig")
     def actions_old_rig(mod: str) -> str:
-        """The repair review of a texture-only portrait with the rig it was drawn for (ModLibrary.old_rig); accepted
-        or discarded as a remap's."""
+        """Start the repair review of a texture-only portrait with the rig it was drawn for.
+
+        See ``ModLibrary.old_rig``; it is accepted or discarded as a remap's.
+        """
         library = s.library
         pin = s._current_pin(library)
         return s.submit("remap", lambda log, progress: library.old_rig(mod, log=log, progress=progress, pin=pin))
@@ -1621,8 +1693,10 @@ def build_api(s: Services) -> RpcRegistry:
 
     @rpc.method("actions.graft")
     def actions_graft(mod: str) -> str:
-        """The first step of a graft of the official rig's new animations into a mod's own rig (ModLibrary.graft):
-        the rigs for the page to pose."""
+        """Start the first step of a graft of the official rig's new animations into a mod's own rig.
+
+        See ``ModLibrary.graft``; the result is the rigs for the page to pose.
+        """
         spine_licensed()
         library = s.library
         pin = s._current_pin(library)
@@ -1669,8 +1743,10 @@ def build_api(s: Services) -> RpcRegistry:
 
     @rpc.method("actions.graftConvert")
     def actions_graft_convert(token: str, geometry: Any = None) -> str:
-        """The converter route after actions.graft: the rigs rewritten through the converter, before and after, to
-        pose."""
+        """Start the converter route after ``actions.graft``: the rigs rewritten through the converter.
+
+        The result is the rigs before and after, to pose.
+        """
         spine_licensed()
         library = s.library
 
@@ -1741,9 +1817,11 @@ def build_api(s: Services) -> RpcRegistry:
 
     @rpc.method("jobs.cancel")
     def jobs_cancel(id: str) -> str:
-        """Stop a job the page no longer wants, of the kinds that allow it (``CANCELLABLE``): its state afterwards
-        ("cancelled" at once for a queued one; a running one stops at its next step). ``bad_params`` for any other
-        job."""
+        """Stop a job the page has given up on, of the kinds that allow it (``CANCELLABLE``).
+
+        The result is its state afterwards ("cancelled" at once for a queued one; a running one stops at its next
+        step). ``bad_params`` for any other job.
+        """
         if not isinstance(id, str) or not id or len(id) > 64:
             raise ServiceError("bad_params", key="id")
         return s.jobs.cancel(id, CANCELLABLE)

@@ -14,7 +14,17 @@ WEBVIEW2_URL = "https://developer.microsoft.com/microsoft-edge/webview2/"
 def pick_files(
     window: Any, file_types: Iterable[str] = (), multiple: bool = True, *, directory: str | None = None
 ) -> list[Path]:
-    """The native open-file dialog. ``file_types`` entries look like ``"Bundle (*.bundle;*.backup)"``."""
+    """Show the native open-file dialog.
+
+    Args:
+        window: The pywebview window the dialog belongs to.
+        file_types: Filters in pywebview's form, such as ``"Bundle (*.bundle;*.backup)"``; none shows all files.
+        multiple: Whether several files may be chosen.
+        directory: The folder the dialog opens in; None leaves it to the system.
+
+    Returns:
+        The chosen files; empty when the dialog was cancelled.
+    """
     import webview
 
     result = window.create_file_dialog(
@@ -27,7 +37,15 @@ def pick_files(
 
 
 def pick_folder(window: Any, multiple: bool = True) -> list[Path]:
-    """The native folder dialog, with the same cancellation shape as pick_files."""
+    """Show the native folder dialog.
+
+    Args:
+        window: The pywebview window the dialog belongs to.
+        multiple: Whether several folders may be chosen.
+
+    Returns:
+        The chosen folders; empty when the dialog was cancelled.
+    """
     import webview
 
     result = window.create_file_dialog(webview.FileDialog.FOLDER, allow_multiple=multiple)
@@ -37,8 +55,19 @@ def pick_folder(window: Any, multiple: bool = True) -> list[Path]:
 def watch_drops(
     window: Any, on_paths: Callable[[list[str]], None], *, stopped: Callable[[], bool] = lambda: False
 ) -> bool:
-    """Report the full paths of files dropped on the page. pywebview only adds the paths when the drop handler is
-    registered from Python. Return False if shutdown abandons registration."""
+    """Report the full paths of files dropped on the page.
+
+    pywebview adds the paths to a drop event only when its handler is registered from Python.
+
+    Args:
+        window: The pywebview window whose page is watched.
+        on_paths: Called with the dropped files' full paths.
+        stopped: Whether the window is shutting down; registration stops at the next event name and drops are
+            ignored from then on.
+
+    Returns:
+        Whether every handler was registered; False when shutdown abandoned the registration.
+    """
     from webview.dom import DOMEventHandler
 
     def on_drop(event: dict) -> None:
@@ -69,7 +98,13 @@ def watch_drops(
 
 
 def renderer_supported(renderer: str) -> bool:
-    """pywebview falls back to MSHTML (Internet Explorer) without WebView2; the front end cannot run there."""
+    """Return whether the front end can run in a renderer; MSHTML (Internet Explorer) cannot.
+
+    pywebview falls back to MSHTML where WebView2 is missing.
+
+    Args:
+        renderer: The renderer name pywebview reports at initialization.
+    """
     return renderer not in ("mshtml",)
 
 
@@ -79,7 +114,16 @@ WEBVIEW2_CLIENT = r"SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8B
 
 
 def webview2_version(registry=None) -> str | None:
-    """Check per-user and per-machine Evergreen runtimes in both registry views."""
+    """Find the newest installed WebView2 Evergreen runtime on Windows.
+
+    Per-user and per-machine runtimes are read in both registry views.
+
+    Args:
+        registry: The ``winreg`` module; None imports it. A stand-in lets tests run it on other systems.
+
+    Returns:
+        The version string, such as ``"120.0.2210.91"``; None when no runtime is installed.
+    """
     if registry is None:
         import winreg as registry
     versions = []
@@ -97,6 +141,7 @@ def webview2_version(registry=None) -> str | None:
 
 
 def webview2_supported(version: str | None) -> bool:
+    """Return whether a WebView2 version meets ``MIN_WEBVIEW2_MAJOR``; False for None or an unreadable version."""
     try:
         return int(version.split(".")[0]) >= MIN_WEBVIEW2_MAJOR
     except (AttributeError, ValueError):
@@ -104,6 +149,11 @@ def webview2_supported(version: str | None) -> bool:
 
 
 def engine_info() -> dict:
+    """Describe the web engine the window uses.
+
+    Returns:
+        ``engine`` (WebView2, WebKit or unknown) and ``version``, which is None when it cannot be read.
+    """
     import sys
 
     if sys.platform == "win32":
@@ -122,7 +172,10 @@ def engine_info() -> dict:
 
 
 def report_folders() -> list[Path]:
-    """Use OS folder locations, including redirected Windows Desktop/Downloads."""
+    """Return the Desktop and Downloads folders, where a report is saved.
+
+    On Windows they come from the registry, which follows a redirected Desktop or Downloads.
+    """
     import sys
 
     if sys.platform == "win32":
@@ -142,6 +195,15 @@ def report_folders() -> list[Path]:
 
 
 def copy_text(text: str) -> None:
+    """Put text on the system clipboard, without pywebview.
+
+    Args:
+        text: The text to copy.
+
+    Raises:
+        OSError: The Windows clipboard could not be allocated, locked, opened or written.
+        subprocess.CalledProcessError: The clipboard tool of macOS or Linux (``pbcopy``, ``xclip``) failed.
+    """
     import subprocess
     import sys
 
@@ -187,7 +249,12 @@ def copy_text(text: str) -> None:
 
 
 def message_box(title: str, message: str) -> None:
-    """No dependency on pywebview, its renderer or the HTTP server."""
+    """Show a blocking error dialog that depends on neither pywebview, its renderer nor the HTTP server.
+
+    Args:
+        title: The dialog's title.
+        message: The dialog's text.
+    """
     import sys
 
     if sys.platform == "win32":
@@ -211,6 +278,17 @@ def message_box(title: str, message: str) -> None:
 
 
 def startup_failure(reports, error: BaseException, *, runtime: bool = False) -> dict | None:
+    """Report a failure to start the window: write a report and tell the user in an error dialog.
+
+    Args:
+        reports: The run's ``Reports``, which write the report file.
+        error: What went wrong; its text goes into the report.
+        runtime: The failure is the missing or unsupported WebView2 runtime; the dialog names it and its download
+            address.
+
+    Returns:
+        The report as ``Reports.generate`` returned it; None when no report could be written.
+    """
     from bmpt.engine import t
 
     result, report_path = None, None
@@ -253,7 +331,10 @@ def _install_edit_menu(api, main):
 
 
 def install_edit_menu() -> None:
-    """Restore standard responder editing shortcuts without pywebview's default application menus."""
+    """Add an Edit menu on macOS, which restores the editing shortcuts without pywebview's default menus.
+
+    Does nothing on other systems.
+    """
     import sys
 
     if sys.platform != "darwin":
@@ -270,9 +351,15 @@ def install_edit_menu() -> None:
 
 
 def keep_web_view_black(window) -> None:
-    """macOS: stop the web view painting a background of its own. WKWebView fills itself white until the page has drawn
-    its first frame, which showed as a white flash after the window opened; without that fill the window's black
-    (``background_color``) stays visible until the page paints, and the page's own backdrop is black too."""
+    """Stop the macOS web view from painting a background of its own.
+
+    WKWebView fills itself white until the page has drawn its first frame, which shows as a white flash after the
+    window opens. Without that fill the window's black (``background_color``) stays visible until the page paints,
+    and the page's own backdrop is black too.
+
+    Args:
+        window: The pywebview window, once it exists.
+    """
     import AppKit
     from webview.platforms.cocoa import BrowserView
 
@@ -286,7 +373,19 @@ def keep_web_view_black(window) -> None:
 
 
 def install_window_commands(services, chrome):
-    """Intercept Command-Q before WKWebView's direct app.stop_ path, including in inputs."""
+    """Route Command-Q and Command-W through the App's own quit, and add Command-M and Control-Command-F.
+
+    Command-Q must be caught before WKWebView's direct ``app.stop_`` path, also while an input has the focus. The
+    menu's Quit item is retargeted the same way, and the Edit menu is rebuilt after pywebview rebuilds the menus.
+
+    Args:
+        services: The Services; ``quit`` handles the close request.
+        chrome: The window chrome; not used by the commands.
+
+    Returns:
+        A function that removes the key monitor and the observer; its ``refresh`` attribute reapplies the menu
+        changes.
+    """
     import AppKit
     from PyObjCTools import AppHelper
     from ..errors import ServiceError

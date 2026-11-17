@@ -27,10 +27,18 @@ RAISE_TIMEOUT = 5.0
 
 
 class InstanceLock:
-    """The data directory's instance lock: ``acquire()`` without waiting, ``publish(port, token)`` once the server
-    listens, ``release()`` at exit."""
+    """The data directory's instance lock.
+
+    ``acquire()`` takes it without waiting, ``publish(port, token)`` names the instance once the server listens,
+    ``release()`` lets go at exit.
+    """
 
     def __init__(self, data_dir: Path):
+        """Point the lock at a data directory; nothing is locked until ``acquire``.
+
+        Args:
+            data_dir: The data directory, which holds ``instance.lock`` and ``instance.json``.
+        """
         self.data_dir = Path(data_dir)
         self.path = self.data_dir / LOCK
         self.info = self.data_dir / INFO
@@ -38,11 +46,18 @@ class InstanceLock:
 
     @property
     def held(self) -> bool:
+        """Whether this process holds the lock; False after an unlocked start."""
         return self._handle is not None
 
     def acquire(self) -> bool:
-        """Take the lock; False while another process holds it. Without a lock file (an unwritable folder) the start
-        goes ahead unlocked, as the other shared files of the data directory do."""
+        """Take the lock without waiting.
+
+        Without a lock file (an unwritable folder) the start goes ahead unlocked, as the other shared files of the
+        data directory do.
+
+        Returns:
+            False while another process holds the lock; True otherwise.
+        """
         if self._handle is not None:
             return True
         try:
@@ -68,7 +83,12 @@ class InstanceLock:
         return True
 
     def publish(self, port: int, token: str) -> None:
-        """Name this instance in instance.json, for a second start to find."""
+        """Name this instance in instance.json, for a second start to find.
+
+        Args:
+            port: The port the server listens on.
+            token: The secret a second start sends in ``X-BAMT-Raise`` to be believed.
+        """
         tmp = self.info.with_name(f".{self.info.name}.{os.getpid()}.tmp")
         try:
             tmp.write_text(json.dumps({"pid": os.getpid(), "port": int(port), "raise_token": token}), encoding="utf-8")
@@ -105,7 +125,14 @@ class InstanceLock:
 
 
 def read_info(data_dir: Path) -> dict[str, Any] | None:
-    """What instance.json says about the running instance: ``{pid, port, raise_token}``, None without a valid file."""
+    """Read what instance.json says about the running instance.
+
+    Args:
+        data_dir: The data directory.
+
+    Returns:
+        ``{pid, port, raise_token}``; None when the file is missing, unreadable or its port or token is invalid.
+    """
     try:
         data = json.loads((Path(data_dir) / INFO).read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -121,8 +148,18 @@ def read_info(data_dir: Path) -> dict[str, Any] | None:
 
 
 def raise_running(data_dir: Path, *, opener: Any = None, timeout: float = RAISE_TIMEOUT) -> bool:
-    """Ask the instance running on this data directory to bring its window to the front; whether it answered. Never
-    through a proxy: the instance listens on 127.0.0.1."""
+    """Ask the instance running on this data directory to bring its window to the front.
+
+    The request never goes through a proxy: the instance listens on 127.0.0.1.
+
+    Args:
+        data_dir: The data directory.
+        opener: A ``urllib`` opener to send the request with; None builds one without proxies.
+        timeout: Seconds to wait for the answer.
+
+    Returns:
+        Whether the instance answered with a success status.
+    """
     info = read_info(data_dir)
     if info is None:
         return False

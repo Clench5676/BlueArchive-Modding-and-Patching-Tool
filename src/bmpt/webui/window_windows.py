@@ -14,9 +14,22 @@ WM_SIZING, WM_DPICHANGED = 0x214, 0x2E0
 def aspect_rect(rect, edge, frame, minimum=(960, 540), dpi=96):
     """Constrain client pixels to 16:9, anchoring the opposite dragged edges.
 
-    RECT and frame sizes are physical pixels; the client minimum is in CSS pixels.
-    Corners project onto the nearest point on the aspect line. Integer RECTs permit
-    at most half a physical pixel of rounding error in the dependent dimension.
+    Corners project onto the nearest point on the aspect line. Integer RECTs permit at most half a physical pixel
+    of rounding error in the dependent dimension.
+
+    Args:
+        rect: The window rectangle being dragged, in physical pixels.
+        edge: The ``WM_SIZING`` edge code, 1 to 8: left, right, top, top left, top right, bottom, bottom left,
+            bottom right.
+        frame: The width and height of the window frame around the client area, in physical pixels.
+        minimum: The smallest client size, in CSS pixels.
+        dpi: The window's DPI; 96 is a scale of 100%.
+
+    Returns:
+        The corrected window rectangle, in physical pixels.
+
+    Raises:
+        ValueError: ``edge`` is not a known sizing edge.
     """
     if edge not in range(1, 9):
         raise ValueError("Unknown sizing edge")
@@ -39,20 +52,36 @@ def aspect_rect(rect, edge, frame, minimum=(960, 540), dpi=96):
 
 
 def private_user32():
-    """user32 with prototypes of its own. ``ctypes.windll.user32`` is shared with pywebview, whose ``move`` passes
-    ``None`` sizes to an unprototyped SetWindowPos; prototypes set there turn every one of those calls into
-    ``ctypes.ArgumentError``."""
+    """Return a private copy of user32, so that its prototypes are ours alone.
+
+    ``ctypes.windll.user32`` is shared with pywebview, whose ``move`` passes ``None`` sizes to an unprototyped
+    SetWindowPos; prototypes set there turn every one of those calls into ``ctypes.ArgumentError``.
+    """
     return ctypes.WinDLL("user32", use_last_error=True)
 
 
 class WindowsHost:
+    """The Windows chrome host: the standard frame stays, and the client area keeps its 16:9 shape.
+
+    It reports the window state and runs the window commands; it has no native buttons to measure.
+    """
+
     def __init__(self, window, owner, *, api=None, subclass_factory=None):
+        """Create the host, not yet installed.
+
+        Args:
+            window: The pywebview window, whose WinForms form is used.
+            owner: The ``WindowChrome`` that publishes what the host reports.
+            api: The user32 module; None uses ``private_user32()``. For tests.
+            subclass_factory: Creates the window's message hook; None uses ``WindowSubclass``. For tests.
+        """
         self.window, self.owner, self.form = window, owner, window.native
         self.user, self.subclass_factory = api, subclass_factory or WindowSubclass
         self.hook = None
         self.old_minimum = None
 
     def dispatch(self, fn):
+        """Run a function on the form's GUI thread, at once when already there."""
         from System import Action
 
         if self.form.InvokeRequired:
@@ -61,6 +90,7 @@ class WindowsHost:
             fn()
 
     def install(self):
+        """Set the user32 prototypes, hook the window's messages and fit the client area to 16:9."""
         # pywebview creates the normal resizable frame. Its caption, hit testing,
         # resize borders and WebView client bounds remain owned by WinForms/Windows.
         self.user = self.user or private_user32()
@@ -103,6 +133,7 @@ class WindowsHost:
         self._set_minimum()
 
     def on_handle(self, *_):
+        """Hook the new window handle after WinForms recreated it."""
         # WinForms may recreate its handle while entering/leaving fullscreen.
         try:
             self._attach_handle()
@@ -115,9 +146,15 @@ class WindowsHost:
         self.form.BeginInvoke(Action(lambda: self.owner.fail(error)))
 
     def dpi(self):
+        """Return the window's DPI; 96 is a scale of 100%."""
         return self.user.GetDpiForWindow(self.handle) or self.form.DeviceDpi
 
     def frame_size(self):
+        """Return the width and height of the standard window frame around the client area, in physical pixels.
+
+        Raises:
+            OSError: Windows cannot measure the frame.
+        """
         get_style = getattr(self.user, "GetWindowLongPtrW", None) or self.user.GetWindowLongW
         rect = wintypes.RECT(0, 0, 0, 0)
         if not self.user.AdjustWindowRectExForDpi(
@@ -164,6 +201,17 @@ class WindowsHost:
             raise OSError("Cannot set the Windows client aspect ratio")
 
     def message(self, code, wparam, lparam, default):
+        """Handle a window message: keep the aspect ratio while sizing, refit after a DPI change.
+
+        Args:
+            code: The window message.
+            wparam: The message's WPARAM; for ``WM_SIZING`` the dragged edge.
+            lparam: The message's LPARAM; for ``WM_SIZING`` the address of the window RECT to correct.
+            default: Forwards the message to the window's previous procedure and returns its result.
+
+        Returns:
+            The message's result; 1 when ``WM_SIZING`` was handled here.
+        """
         if code == WM_SIZING and not any(self.state().values()):
             rect = wintypes.RECT.from_address(lparam)
             corrected = aspect_rect(
@@ -189,6 +237,7 @@ class WindowsHost:
         return result
 
     def state(self):
+        """Return the window state: ``maximized``, ``minimized`` and ``fullscreen`` as booleans."""
         name = str(self.form.WindowState)
         return {
             "maximized": name == "Maximized",
@@ -197,10 +246,19 @@ class WindowsHost:
         }
 
     def measure(self, layout):
-        # The standard caption is outside the WebView's client area.
+        """Return None: the standard caption is outside the WebView's client area, so there is nothing to measure.
+
+        Args:
+            layout: The page's toolbar layout; unused here.
+        """
         return None
 
     def command(self, action):
+        """Do a window action.
+
+        Args:
+            action: ``minimize``, ``maximize`` (which restores a maximized window) or ``fullscreen``.
+        """
         from System.Windows.Forms import FormWindowState
 
         if action == "fullscreen":
@@ -215,6 +273,7 @@ class WindowsHost:
             )
 
     def dispose(self):
+        """Remove the form's event handlers and the message hook, and restore the form's minimum size."""
         if hasattr(self, "on_resize"):
             self.form.Resize -= self.on_resize
             if hasattr(self.form, "DpiChanged"):
@@ -237,6 +296,19 @@ class WindowSubclass:
     """
 
     def __init__(self, handle, message, failed, *, api=None, callback_type=None):
+        """Subclass a window.
+
+        Args:
+            handle: The window's HWND.
+            message: ``message(code, wparam, lparam, default)``, called for every window message; its result is
+                the message's result.
+            failed: Called with an exception that ``message`` raised; the message then takes its default.
+            api: The comctl32 module; None uses ``ctypes.windll.comctl32``. For tests.
+            callback_type: The ctypes function-type factory; None uses ``ctypes.WINFUNCTYPE``. For tests.
+
+        Raises:
+            OSError: Windows refuses the subclass.
+        """
         self.api = api or ctypes.windll.comctl32
         callback_type = callback_type or ctypes.WINFUNCTYPE
         self.handle, self.identifier = handle, id(self)
@@ -275,4 +347,5 @@ class WindowSubclass:
             raise OSError("Native message subclass installation failed")
 
     def dispose(self):
+        """Remove the subclass."""
         self.api.RemoveWindowSubclass(self.handle, self.callback, self.identifier)
