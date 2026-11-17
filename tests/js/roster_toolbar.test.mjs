@@ -154,7 +154,6 @@ test("every shipped language names the segments and Group Alts with its own capt
 });
 
 // UI-18: the empty list's picture and message sit on the middle of the paper the eye sees
-const UNITS = 2960 / 1920; // NGUI units per stage px: S is stage px per unit
 const PAPER_TOP = 334.5,
   PAPER_BOTTOM = -714.5,
   SEARCH_LIST_TOP = 314 - 112 - 20; // roster.js: the whole paper, and what the open search box leaves

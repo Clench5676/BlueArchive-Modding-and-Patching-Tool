@@ -510,7 +510,7 @@ async function shadeEdges(o) {
     o.shade = false;
     return;
   }
-  for (const [name, width, angle, x, y, reach, inset] of [
+  for (const [name, width, angle, x, y, reach, _inset] of [
     ["Bottom", 1920, 0, 960, 1080, EDGE_HORIZONTAL, EDGE_SIDE],
     ["Top", 1920, 180, 960, 0, EDGE_HORIZONTAL, EDGE_SIDE],
     ["Left", 1080, 90, 0, 540, EDGE_SIDE, EDGE_HORIZONTAL],

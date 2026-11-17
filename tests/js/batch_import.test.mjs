@@ -2044,9 +2044,7 @@ test("both preview tags align to the panel top and both image slots to its heade
   const h = await fixture();
   await h.analyze([entry("a")]);
   const panel = h.host.querySelector(".import-panel"),
-    header = h.host.querySelector(".import-header"),
     preview = h.host.querySelector(".import-detail");
-  const paper = panel.art.children.find((e) => e.dataset.path === "ListBG/PaperBG");
   for (const box of h.host.querySelectorAll(".import-preview")) {
     const tag = box.art.children.find((e) => e.dataset.path === "EquipPos/Text_Type/TypeBG");
     const image = box.querySelector(".import-preview-image");
@@ -2511,7 +2509,7 @@ test("empty, full, filtered and long Thai toolbars fit the header, with search c
         const controls = artworkBounds(h, header, (p) => !p.endsWith("Label_Locale_Title"));
         assert.ok(title[2] < Math.min(...controls.map((r) => r[0])), "title stays left of the tools");
         const list = h.host.querySelector(".import-list");
-        const [lx, ly, lw, lh] = rectOf(list);
+        const [_lx, ly, _lw, lh] = rectOf(list);
         assert.ok(ly > headerBottom);
         assert.ok(ly + lh < parseFloat(h.action("files").style.top));
         const wrap = h.host.querySelector(".import-input-wrap");
@@ -3542,8 +3540,7 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
       for (const row of walk(ready.dialog).filter((el) => el.dataset.result)) {
         const { tree } = drawn(ready, row),
           paths = ["Label_Locale_Received", ...(find(tree, "Platform") ? ["Platform"] : []), "Label_Locale_Limit"];
-        const list = drawn(ready, ready.row(row.dataset.result)),
-          resultDraw = drawn(ready, row);
+        const list = drawn(ready, ready.row(row.dataset.result));
         assert.equal(find(list.tree, "Label_Locale_Received").widgets[0].fontSize, 42);
         assert.equal(find(tree, "Label_Locale_Received").widgets[0].fontSize, 42);
         const labels = paths.map((p) => find(tree, p));

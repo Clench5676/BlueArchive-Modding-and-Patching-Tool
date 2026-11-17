@@ -25,7 +25,6 @@ class El {
     };
   }
 }
-const original = globalThis.document;
 globalThis.document = { documentElement: new El(), createElement: () => new El() };
 const NGUI = await import(new URL("ngui.js", web));
 const { wrapPath, S } = await import(new URL("util.js", web));

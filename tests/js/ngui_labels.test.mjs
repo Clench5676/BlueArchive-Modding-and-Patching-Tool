@@ -39,8 +39,7 @@ test("loading progress clones the prefab label effect and NGUI renders its exact
 test("progress labels retain the target line across Latin, CJK and Thai initial placements", () => {
   for (const scale of [1920 / 2960, 0.54, 1])
     for (const text of ["Applying Mods", "\u6b63\u5728\u52a0\u5165", "\u0e01\u0e33\u0e25\u0e31\u0e07"]) {
-      const tree = loadingLabel(repeater, null, text, scale),
-        w = tree.widgets[0];
+      const tree = loadingLabel(repeater, null, text, scale);
       const expected =
         1080 - (720 - 600) * scale + (letter.h_ * scale) / 2 - labelBaselineInset(letter.text, letter.fontSize) * scale;
       assert.ok(Math.abs(expected - tree.inkLine) < 1e-8);

@@ -2532,7 +2532,6 @@ for (const background of ["/asset/art/bg/Original_Collection", null])
       assert.ok(!bust.style.backgroundImage, "no background picture on the portrait card");
       assert.equal(bust.children.length, 1, "the portrait thumbnail draws above the card artwork");
       assert.ok(bust.children[0].style.maskImage.includes("#000 70%"));
-      const screen = walk(hosts["ngui-bg"]).find((e) => e.dataset.path?.endsWith("/BG"));
     } finally {
       Detail.hide();
       await flush();
@@ -3637,10 +3636,6 @@ for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
   });
 
 // --- UI-13: accessible names and pressed states of the detail screen's controls, from the locale files ---
-const named = (host, pattern) =>
-  walk(host).filter(
-    (e) => e.tagName === "BUTTON" && pattern.test(e.dataset.part || e.getAttribute("aria-label") || ""),
-  );
 const everyLocale = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"];
 
 test("the student arrows, the copy button and the variant chips are named, and the shown chip is pressed, in every locale", async (t) => {

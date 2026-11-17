@@ -46,7 +46,7 @@ for (const platform of ["darwin", "win32", "fallback"])
       [2560, 1080],
       [960, 1200],
     ])
-      for (const dpi of [1, 1.25, 1.5, 2, 3]) {
+      for (const _dpi of [1, 1.25, 1.5, 2, 3]) {
         const bounds =
           platform === "darwin"
             ? { left: 12, top: 8, right: 80, bottom: 30 }

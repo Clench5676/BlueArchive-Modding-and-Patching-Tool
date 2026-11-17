@@ -30,7 +30,6 @@ import * as Compatibility from "./mod-compatibility.js";
 import * as ActionList from "./action-list.js";
 import { actionLabel, actionsOf, groupLabel, menuOf } from "./clip-names.js";
 import { cardText, fitCards } from "./action-list-layout.js";
-import { show as showCompare } from "./mod-compare.js";
 import * as Lobby from "./lobby.js";
 import * as Visual from "./visual-mode.js";
 import { QUEUEABLE, current as modsState, entryLabel, listSep, refused } from "./mod-switch.js";
@@ -206,8 +205,7 @@ const showable = (part, my, latest, gen) =>
 let open = false,
   suspended = false,
   pageToken = 0;
-let leftPage = Promise.resolve(),
-  leavePage = () => {};
+let leavePage = () => {};
 // a generation of the screen: a newer show, tab change or hide ends the wait of the one before
 let showGen = 0,
   endWait = () => {};
@@ -699,8 +697,6 @@ const candidateLabel = (c, v = variant()) =>
     : c.kind === "mod" && !c.mod.alias && c.origin && c.origin.key !== v.key
       ? `${shortName(c.origin)} - ${c.label}`
       : c.label;
-// The lobby's preview source as a label: the original, a mod's or another variant's name, or "replaced".
-const lobbyLabel = (v) => sourceLabel(v, "lobby");
 function sourceLabel(v, kind) {
   const key = shownSource(v, kind);
   if (key === "self") return T(`${kind}.original`);
@@ -806,7 +802,7 @@ function screenTree() {
   // the three captions share one size: the largest at which every one fits its tab on one line
   const tabLabels = tabs.map(([, key, id]) => T(isSpecial(v) && id === "lobby" ? "special.background" : key));
   const tabSize = NGUI.fitGroup(tabLabels, 52, 36, 360, 1)[0].fs;
-  for (const [index, [node_, key, id, enabled]] of tabs.entries()) {
+  for (const [index, [node_, _key, id, enabled]] of tabs.entries()) {
     const base = `RightInfo/Target/Active/CharacterTab/${node_}`;
     const label = tabLabels[index];
     for (const state of ["Tab_On", "Tab_Off"]) text(t, `${base}/${state}/Label`, label, { w_: 400, fontSize: tabSize });
@@ -967,7 +963,7 @@ function screenTree() {
     2,
     { maxH: 90 },
   );
-  for (const [index, [card, key, glyph, enabled, loading]] of actions.entries()) {
+  for (const [index, [card, _key, glyph, enabled, loading]] of actions.entries()) {
     const base = `${INFO}/Skill/${card}`;
     actionState(at(t, base), enabled, layouts.disabled);
     off(t, `${base}/Normal/Label_SkillType (1)`, `${base}/Normal/Line (1)`);
@@ -1805,12 +1801,6 @@ function runExport() {
   if (busy) return;
   const target = c ? `mod:${c.id}` : `variant:${variant().key}`;
   ModExport.open({ scope: "single", target, kind: switchKind() || "spr" });
-}
-async function runCompare() {
-  const c = shownMod();
-  if (!c || busy) return;
-  const result = await call(() => rpc("actions.compare", { mod: c.id }));
-  if (result) showCompare(result);
 }
 // switch: the chosen source is written into the variant's game files of that kind, so the game shows it; the library
 // keeps what it replaces (an official file until it is official again, a mod in the library)
@@ -4415,7 +4405,7 @@ export async function show(context, familyData, key, { inPlace = false, kind = n
   ModAlias.close();
   leavePage();
   pageToken += 1;
-  leftPage = new Promise((resolve) => {
+  new Promise((resolve) => {
     leavePage = resolve;
   });
   ctx = context;

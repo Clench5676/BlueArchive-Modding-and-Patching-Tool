@@ -1290,7 +1290,7 @@ test("switch detail actions retain the prefab pattern at every button width and 
       const body = findPart(path),
         corner = findPart(`${path}/Corner`),
         box = (el) => ["left", "top", "width", "height"].map((key) => parseFloat(el.style[key]));
-      const [x, y, w, h] = box(body),
+      const [x, y, w, _h] = box(body),
         [dx, dy, dw, dh] = box(corner),
         k = ((count < 4 ? 104 : 88) / 177) * S; // the Sort prefab's 177-high body drawn at the XS height, four on one XXS row
       near(x + w - dx - dw, 4 * k);
@@ -1927,7 +1927,6 @@ export { baseOf, detailsBody, renderPopup, runUpdate, runCompatibility, copyName
 export function setupPreviewTest(data, kind, onLeft = async () => {}) {
   fam = data; variantKey = data.variants[0].key; ctx = { invalidateRoster() {} };
   open = true; busy = false; tab = kind === "lobby" ? "lobby" : "portrait";
-  leftPage = new Promise(() => {});
   popupKind = kind; popupSeg = 0; pending = shownSource(variant(), kind); previewEnabled = modsOn();
   switchThumbnails?.cancel(); switchThumbnails = thumbnailScope(); switchPopupPage = pageToken;
   expression = "03"; mainPlayer = { cached: true }; lobbyShot = "cached";
@@ -2915,7 +2914,7 @@ test("switch geometry: per-kind columns, aspects, card bounds, labels and portra
         const cards = items.map((it) => box(`Card_${it.key}`));
         const ratio = cards[0][2] / cards[0][3];
         if (kind === "spr") {
-          const still = box("Details/Picture/Texture");
+          box("Details/Picture/Texture");
           assert.ok(Math.abs(1 / ratio - 2.2) < 0.01, "portrait height follows the latest 2.2:1 sketch");
         }
         if (kind === "lobby") assert.ok(Math.abs(ratio - 16 / 9) < 0.02);
@@ -6034,20 +6033,7 @@ test("the custom zoom-out limit's slider is a range input with the value as its 
 // --- design-system popup anatomy, independent of the Sort prefab's original dimensions ---
 const Tokens = await import("../../src/bmpt/web/js/ui-tokens.js");
 const Frames = await import("../../src/bmpt/web/js/popup-frames.js");
-const { FOOTER, POPUP, POPUP_FOOTER, POPUP_FRAME, CONTROL, SPACE, TYPE } = Tokens;
-const STAGE_HALF = 540 / S;
-const unitsOf = (el) => {
-  const [top, height, left, width] = ["top", "height", "left", "width"].map((key) => parseFloat(el.style[key]));
-  return {
-    cx: (left + width / 2 - 960) / S,
-    cy: (540 - (top + height / 2)) / S,
-    w: width / S,
-    h: height / S,
-    top: (540 - top) / S,
-    bottom: (540 - top - height) / S,
-  };
-};
-const measure = (root, path) => unitsOf(walk(root).find((e) => e.dataset.path === path));
+const { POPUP, POPUP_FOOTER, POPUP_FRAME, CONTROL, SPACE, TYPE } = Tokens;
 const near2 = (a, b, eps = 0.02) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b}`);
 
 for (const lang of ["en-US", "zh-CN"])
@@ -6176,7 +6162,7 @@ for (const lang of ["en-US", "zh-CN"])
     const NGUI = await import("../../src/bmpt/web/js/ngui.js");
     await Popup.ready();
     const layout = Popup.listLayout(true),
-      { content, frame } = layout;
+      { frame } = layout;
     near2(layout.left.l, -frame.w / 2 + 40);
     near2(layout.list.r, frame.w / 2 - 40);
     near2(layout.list.l - layout.left.r, 40);

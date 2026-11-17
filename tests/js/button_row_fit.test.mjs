@@ -196,7 +196,7 @@ for (const locale of LOCALES)
 
 // --- popup buttons: the default footer is XS, 104 high, captions 40 down to 28 in a box 12 less high; its bodies
 // are as wide as the captions need (200 at least, 551 at most), so the room is the body less its padding each side ---
-const { CONTROL, SPACE, TYPE } = await import("../../src/bmpt/web/js/ui-tokens.js");
+const { CONTROL, SPACE } = await import("../../src/bmpt/web/js/ui-tokens.js");
 const PAIRS = [
   ["picker.ok", "popup.cancel"],
   ["popup.save", "popup.cancel"],
@@ -335,7 +335,7 @@ for (const locale of LOCALES)
   });
 
 // --- Settings: tabs (300 wide), the buttons of a value row (402 x 136, the prefab's small button), the export pair (680 x 136) ---
-const { XS_BUTTON, SMALL_BUTTON } = await import("../../src/bmpt/web/js/ui-tokens.js");
+const { XS_BUTTON } = await import("../../src/bmpt/web/js/ui-tokens.js");
 const S = 1920 / 2960;
 for (const locale of LOCALES)
   test(`Settings tabs and button pairs share one size and fit in ${locale}`, async () => {
@@ -443,7 +443,7 @@ for (const locale of LOCALES)
   });
 
 // --- the Hall modal's retained footer ---
-const { row } = await import("../../src/bmpt/web/js/ui-grid.js");
+await import("../../src/bmpt/web/js/ui-grid.js");
 for (const locale of LOCALES)
   test(`the Hall modal's footer captions fit in ${locale}`, async () => {
     const ui = await source("student-hall-ui.js");

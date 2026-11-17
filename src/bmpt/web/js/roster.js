@@ -33,7 +33,7 @@ import { configuredKey, hasAsset, previewBase, primaryKind } from "./switch-sour
 import { $, RECRUIT, S, advanceOf, clone, glyphsOf } from "./util.js";
 import { DEFAULT_VIEW, arrange, normalizeView, order as orderOf } from "./roster-order.js";
 
-const { node, sprite, label, find } = NGUI;
+const { node, sprite, find } = NGUI;
 const fitText = (...a) => NGUI.fitText(...a);
 
 const PANEL_TOP = (720 - 525) * S; // the collection prefab's frame top, below its round back button

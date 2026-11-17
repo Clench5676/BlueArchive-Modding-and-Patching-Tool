@@ -101,7 +101,7 @@ test("scrollbar slices share integer raster edges at every supported stage scale
           horizontal,
         });
         await bar.sync(100, 1000, 300);
-        for (const [url, b, width, height, bs, density] of slices) {
+        for (const [_url, _b, _width, height, bs, density] of slices) {
           assert.ok(density >= dpi * scale && density >= 2);
           const axis = sliceAxis(24, 8, 8, height, bs, density);
           assert.equal(axis.spans[0][3], axis.spans[1][2]);
