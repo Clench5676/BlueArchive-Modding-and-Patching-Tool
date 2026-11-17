@@ -56,13 +56,15 @@ _ATLASES = "atlases-v2/"
 
 
 class _ModelLock:
-    """The model lock: one reader at a time of those that hold several bundles open at once (model and clip exports,
-    the selection-frame layout, lobby particles, office models), each keeping the path lock of every bundle it read
-    until it ends, so two of them could wait on each other's bundles. Held for one export (about 1 s for a model,
-    0.5 s for a clip, no step inside it); taken after the library's lock, never before it. A costume build needs no
-    model lock: it reads bundles from memory after each individually locked load (``unity.load_bundle``).
-    A foreground preview that waits for it while a job or background work holds it (the costume check's export, a
-    lobby warm-up) waits outside its own time (``preview_gate.waiting``): the page's deadline leaves the wait out.
+    """The model lock: one reader at a time of those that hold several bundles open at once.
+
+    Those readers are model and clip exports, the selection-frame layout, lobby particles and office models, each
+    keeping the path lock of every bundle it read until it ends, so two of them could wait on each other's bundles. Held
+    for one export (about 1 s for a model, 0.5 s for a clip, no step inside it); taken after the library's lock, never
+    before it. A costume build needs no model lock: it reads bundles from memory after each individually locked load
+    (``unity.load_bundle``). A foreground preview that waits for it while a job or background work holds it (the costume
+    check's export, a lobby warm-up) waits outside its own time (``preview_gate.waiting``): the page's deadline leaves
+    the wait out.
     """
 
     def __init__(self) -> None:
@@ -609,8 +611,9 @@ class GameAssets:
         return sorted(self._texture_index()["textures"])
 
     def _pointer_index(self) -> dict:
-        """The PC client's cursor and the touch effect's textures (a small scan, about 0.1 s). An index of its own,
-        so a UI texture index cached before these families were read stays valid.
+        """The PC client's cursor and the touch effect's textures (a small scan, about 0.1 s).
+
+        An index of its own, so a UI texture index cached before these families were read stays valid.
         """
         return self._index(
             "pointer-textures", lambda: self._scan_textures(filter(is_pointer_texture, self._paths()))["textures"]
@@ -638,9 +641,10 @@ class GameAssets:
         return self._index("prefabs", self._scan_prefabs)
 
     def _prefab_bundle(self, root: str) -> Path:
-        """The bundle holding a prefab root: the known bundle first (one small read), after a game update the
-        bundle of the same name less the CRC that holds the known CAB (a header read each), else the full index
-        (a scan of every UI prefab bundle, about 12 s cold).
+        """The bundle holding a prefab root.
+
+        The known bundle first (one small read), after a game update the bundle of the same name less the CRC that holds
+        the known CAB (a header read each), else the full index (a scan of every UI prefab bundle, about 12 s cold).
         """
         for path in self._hinted_bundles(root):
             suffix = f"/{root.lower()}.prefab"
@@ -1047,9 +1051,10 @@ class GameAssets:
         return set(self._model_index())
 
     def _field_index(self) -> dict[str, list[str]]:
-        """Field-mode models (event and story variants with no battle model): lower-case dev name -> the field
-        character bundles holding ``Field_Player_<dev>[_NonWeapon]``, or a field NPC named by the character's id
-        (``Field_NPC_<id>[_...]``, keyed by the lower-case id), read from their containers.
+        """Field-mode models (event and story variants with no battle model) by lower-case dev name.
+
+        Each entry lists the field character bundles holding ``Field_Player_<dev>[_NonWeapon]``, or a field NPC named by
+        the character's id (``Field_NPC_<id>[_...]``, keyed by the lower-case id), read from their containers.
         """
         from .model import NPC_PREFAB
 
@@ -1082,8 +1087,9 @@ class GameAssets:
         return set(self._field_index())
 
     def _asset_families(self) -> dict[str, list[str]]:
-        """The characters' and NPCs' own dependency bundles (``assets-_mx-npcs|characters-<dev>-_mxdependency-*``)
-        by lower-case dev name, from the file names alone.
+        """The characters' and NPCs' own dependency bundles by lower-case dev name.
+
+        They are ``assets-_mx-npcs|characters-<dev>-_mxdependency-*``, found from the file names alone.
         """
 
         def build() -> dict[str, list[str]]:
@@ -1096,9 +1102,10 @@ class GameAssets:
         return self._index("asset-families", build, disk=False)
 
     def _asset_model(self, core: str, paths: list[str]) -> list[str] | None:
-        """The bundles to export a model of ``core``'s own dependency bundles from (:func:`model.asset_root`): the
-        one holding its root, then those holding clips. Parts that cannot hold a root are not opened
-        (:func:`discovery.may_hold_model_root`).
+        """The bundles to export a model of ``core``'s own dependency bundles from.
+
+        See :func:`model.asset_root`. The one holding its root, then those holding clips. Parts that cannot hold a root
+        are not opened (:func:`discovery.may_hold_model_root`).
         """
         from .model import BundleGraph, asset_roots
 
@@ -1136,9 +1143,10 @@ class GameAssets:
             return {core for core in (str(c).lower() for c in candidates) if found.get(core)}
 
     def _story_clips(self) -> dict[str, list[str]]:
-        """The story cutscenes' clips by the character id they are named after (NP0206_Cutin_A_01): {id: [bundle]},
-        among the cutscenes' dependency bundles (assets-_mx-prodresources-sccutscene_*). A story model moves only there
-        (Ayame's story forms).
+        """The story cutscenes' clips by the character id they are named after.
+
+        An id looks like NP0206_Cutin_A_01; the result is {id: [bundle]}, among the cutscenes' dependency bundles
+        (assets-_mx-prodresources-sccutscene_*). A story model moves only there (Ayame's story forms).
         """
 
         def build() -> dict[str, list[str]]:
@@ -1397,8 +1405,10 @@ class GameAssets:
                 del self._model_flights[key]
 
     def _lobby_prefabs(self) -> dict[str, str]:
-        """Memorial lobby prefab names (lower case) -> bundle names, from the bundle containers alone (about 5 s
-        cold). It holds names only, so it is cached like the other indexes.
+        """Memorial lobby prefab names (lower case) -> bundle names.
+
+        Read from the bundle containers alone (about 5 s cold). It holds names only, so it is cached like the other
+        indexes.
         """
 
         def build() -> dict[str, str]:
@@ -1497,8 +1507,10 @@ class GameAssets:
         behaviours: dict[tuple[str, int], dict] | None = None,
         path: Path | None = None,
     ) -> dict | None:
-        """read_prefab on a prefab bundle (``path``: that file in its place); behaviours are the lobby core's
-        MonoBehaviours by (CAB name, path id), where the prefab's volume profiles usually are.
+        """Read a lobby prefab on its bundle (``path``: that file in its place), as ``read_prefab`` does.
+
+        ``behaviours`` are the lobby core's MonoBehaviours by (CAB name, path id), where the prefab's volume profiles
+        usually are.
         """
         from .model import BundleGraph
 
@@ -1542,8 +1554,10 @@ class GameAssets:
             return lobby.read_prefab(kinds, tree, scripts, root, skeletons, clips, profile=profile, resolve=fx.resolve)
 
     def _lobby_behaviours(self, cab: str) -> dict[tuple[str, int], dict]:
-        """The MonoBehaviours of another lobby core's bundle by (CAB name, path id): a few lobbies share a volume
-        profile (Neru's is Serika's). Read on demand and kept in memory only, like the lobby data.
+        """The MonoBehaviours of another lobby core's bundle by (CAB name, path id).
+
+        A few lobbies share a volume profile (Neru's is Serika's). Read on demand and kept in memory only, like the
+        lobby data.
         """
         path = self._resolve_cabs({cab}).get(cab.lower())
         out: dict[tuple[str, int], dict] = {}
@@ -1559,9 +1573,10 @@ class GameAssets:
         return out
 
     def _lobby_sound_events(self, ids: Iterable[str]) -> dict[str, dict]:
-        """The sound key events (AnimationAudioEvent assets of the lobbies' shared bundle) by id ("<cab>_<path id>"),
-        as lobby.sound_event reads them; their clips are ids of the same form. An event that cannot be read is left
-        out. Part of the lobby data: kept in memory only.
+        """The sound key events by id ("<cab>_<path id>"), as lobby.sound_event reads them.
+
+        They are the AnimationAudioEvent assets of the lobbies' shared bundle; their clips are ids of the same form. An
+        event that cannot be read is left out. Part of the lobby data: kept in memory only.
         """
         wanted: dict[str, set[int]] = {}
         for event in ids:
@@ -1690,12 +1705,14 @@ def _builtin_quad(owner: Any, pointer: dict | None) -> tuple[str, None] | None:
 
 
 class _FxResolver:
-    """Reads what a lobby's renderers point at, for lobby.read_prefab: a particle material as (id, particles.material)
-    with its textures (particles.texture), a mesh as (id, particles.mesh) (Unity's built-in Quad as ("quad", None)),
-    the render queue of a skeleton's atlas pages ("pages": a SkeletonDataAsset, or one Material) as (id, {texture
-    name: queue}), or their shaders' names ("shaders") as (id, {texture name: shader name}), the materials a skeleton
-    is drawn with ("skeleton": a SkeletonDataAsset) as (id, spine_materials.skeleton) and an Animator's controller
-    ("animator") as (id, {"decoded", "bindings", "loop"}) of its default state's clip. Ids are "<cab>_<path id>".
+    """Reads what a lobby's renderers point at, for lobby.read_prefab.
+
+    A particle material is read as (id, particles.material) with its textures (particles.texture), a mesh as (id,
+    particles.mesh) (Unity's built-in Quad as ("quad", None)), the render queue of a skeleton's atlas pages ("pages": a
+    SkeletonDataAsset, or one Material) as (id, {texture name: queue}), or their shaders' names ("shaders") as (id,
+    {texture name: shader name}), the materials a skeleton is drawn with ("skeleton": a SkeletonDataAsset) as (id,
+    spine_materials.skeleton) and an Animator's controller ("animator") as (id, {"decoded", "bindings", "loop"}) of its
+    default state's clip. Ids are "<cab>_<path id>".
     """
 
     def __init__(self, graph: Any, objects: dict[int, Any], shader_forms: dict):
@@ -1771,8 +1788,10 @@ class _FxResolver:
         return {**event, "id": f"{asset.assets_file.name.lower()}_{asset.path_id}"} if event else None
 
     def _sprite(self, obj: Any) -> dict | None:
-        """A Sprite as intro.sprite draws it: its texture (particles.texture), its rect in the texture's pixels, its
-        size in units (rect / pixels per unit) and its pivot (0 to 1). The pixels are read when served.
+        """A Sprite as intro.sprite draws it.
+
+        That is its texture (particles.texture), its rect in the texture's pixels, its size in units (rect / pixels per
+        unit) and its pivot (0 to 1). The pixels are read when served.
         """
         from . import particles
 
@@ -1796,11 +1815,12 @@ class _FxResolver:
         }
 
     def _pages(self, obj: Any, kind: str = "pages") -> dict[str, Any]:
-        """{texture name: render queue} of a SkeletonDataAsset's atlas pages, as spine-unity draws them: each page with
-        the material its SpineAtlasAsset lists for it (matched by the material's main texture name, which is the page's
-        file name without its extension). For a Material, its own page. With kind "shaders", {texture name: the name
-        of the material's shader} instead (a page without a shader is left out). The textures' pixels are never
-        read.
+        """{texture name: render queue} of a SkeletonDataAsset's atlas pages, as spine-unity draws them.
+
+        Each page comes with the material its SpineAtlasAsset lists for it (matched by the material's main texture name,
+        which is the page's file name without its extension). For a Material, its own page. With kind "shaders",
+        {texture name: the name of the material's shader} instead (a page without a shader is left out). The textures'
+        pixels are never read.
         """
         g = self.graph
         materials = [obj]
@@ -1825,8 +1845,10 @@ class _FxResolver:
         return out
 
     def _state(self, obj: Any, tree: dict) -> tuple[str | None, dict | None, dict]:
-        """A material's shader name, the shader's parsed form (the parts read here) and the render state of its
-        colour pass for this material (model.shader_state: blend and queue).
+        """A material's shader name, the shader's parsed form and the render state of its colour pass.
+
+        The parsed form holds the parts read here; the render state is this material's (model.shader_state: blend and
+        queue).
         """
         from .model import shader_state
 
@@ -1881,8 +1903,9 @@ class _FxResolver:
         return out
 
     def _skeleton(self, obj: Any) -> dict:
-        """The materials of a SkeletonDataAsset's atlas pages and its blend mode replacement materials
-        (spine_materials.skeleton). Only the pages a ported shader draws read their other textures' settings; no
+        """The materials of a SkeletonDataAsset's atlas pages and its blend mode replacement materials.
+
+        See spine_materials.skeleton. Only the pages a ported shader draws read their other textures' settings; no
         pixels are read.
         """
         from . import spine_materials
@@ -1921,8 +1944,10 @@ class _FxResolver:
         return (main.peek_name() if main is not None else None), spine_materials.material(name, form, tree, textures)
 
     def _animator(self, controller: Any, oid: str) -> tuple[str, dict] | None:
-        """The clip an AnimatorController's first layer plays in its default state (the lobbies' controllers have one
-        state, looping one clip), decoded (model.decode_clip) with its bindings.
+        """The clip an AnimatorController's first layer plays in its default state.
+
+        The lobbies' controllers have one state, looping one clip. The clip is decoded (model.decode_clip) with its
+        bindings.
         """
         from .model import decode_clip
 

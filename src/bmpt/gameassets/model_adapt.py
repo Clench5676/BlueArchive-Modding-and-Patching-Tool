@@ -149,8 +149,10 @@ def refuse(reason: str, **params: Any) -> ServiceError:
 
 
 def _inverse(matrix: np.ndarray, bone: str) -> np.ndarray:
-    """The inverse of a rest matrix; a singular or nearly singular one (a bone at no volume) is a refusal, not a
-    program error or bindposes of 1e4 and more.
+    """The inverse of a rest matrix.
+
+    A singular or nearly singular one (a bone at no volume) is a refusal, not a program error or bindposes of 1e4 and
+    more.
     """
     linear = matrix[:3, :3]
     if not np.isfinite(matrix).all():
@@ -816,7 +818,9 @@ def carriers(target: Skeleton, source: Skeleton, flat: Flat, poses: list[list[np
     dominant = flat.joints[np.arange(len(flat.vertices)), np.argmax(flat.weights, axis=1)]
 
     def group(n: int) -> int:
-        """A Biped bone stands for itself; a bone outside the Biped for its branch: the node right under the nearest
+        """The group a bone stands for.
+
+        A Biped bone stands for itself; a bone outside the Biped for its branch: the node right under the nearest
         ancestor the slot has by name (a prop's whole chain, never torn across the body).
         """
         return n if source.nodes[n].name.startswith("Bip001") else _branch_top(target, source, n)
@@ -874,10 +878,12 @@ UPPER_ARM = re.compile(r"^Bip001 ([LR]) UpperArm$")
 
 
 def _shoulder_mount(target: Skeleton, source: Skeleton, node: int, dominant: np.ndarray) -> int | None:
-    """A mount on an upper arm the slot lacks (a Biped-named bone below ``Bip001 L/R UpperArm`` that skins nothing
-    itself and holds only props: Airi (Band)'s shoulder bag on its strap): the slot's arm moves otherwise than the
-    source's, whose own keys held the prop at her side, so the prop hangs from the shoulder (that side's clavicle)
-    instead of following the arm. None for anything else.
+    """The slot's node a mount on an upper arm the slot lacks hangs from, or None.
+
+    A mount on an upper arm the slot lacks is a Biped-named bone below ``Bip001 L/R UpperArm`` that skins nothing itself
+    and holds only props (Airi (Band)'s shoulder bag on its strap): the slot's arm moves otherwise than the source's,
+    whose own keys held the prop at her side, so the prop hangs from the shoulder (that side's clavicle) instead of
+    following the arm. None for anything else.
     """
     parent = source.nodes[node].parent
     side = UPPER_ARM.match(source.nodes[parent].name) if parent is not None else None
@@ -999,7 +1005,9 @@ def stow(fit: Fit, flat: Flat, props: Mapping[int, tuple[int, np.ndarray, np.nda
 
 
 def _branch_top(target: Skeleton, source: Skeleton, n: int) -> int:
-    """A bone outside the Biped stands for its branch: the node right under the nearest ancestor the slot has by name
+    """The node that stands for the branch of a bone outside the Biped.
+
+    A bone outside the Biped stands for its branch: the node right under the nearest ancestor the slot has by name
     (``carriers``'s groups).
     """
     kept = _kept_ancestor(target, source, n)
@@ -1013,8 +1021,10 @@ def _branch_top(target: Skeleton, source: Skeleton, n: int) -> int:
 
 
 def _kept_ancestor(target: Skeleton, source: Skeleton, node: int) -> int | None:
-    """The nearest ancestor of ``node`` the slot has a bone of the name for: where the mapping leaves an unmatched
-    bone that has no carrier (a bag hung off a prop node the slot lacks stays with the prefab's root, None).
+    """The nearest ancestor of ``node`` the slot has a bone of the name for.
+
+    This is where the mapping leaves an unmatched bone that has no carrier (a bag hung off a prop node the slot lacks
+    stays with the prefab's root, None).
     """
     p = source.nodes[node].parent
     while p is not None and source.nodes[p].parent is not None and target.first(source.nodes[p].name) is None:
@@ -1394,12 +1404,13 @@ def _anchor_move(
     s_rest: list[np.ndarray],
     carried: Mapping[int, int] | None = None,
 ) -> np.ndarray:
-    """How a refit carries what anchors on the source's ``a`` to the slot's ``t`` (``refit``): "moved", the joint's
-    move alone; "refitted", its move and turn. The head goes with the neck: it keeps its own turn, but its joint goes
-    where the neck's move takes it, not onto the slot's Head joint. Two rigs put the Head joint at different heights
-    inside the head (Aris's 3.5 cm above her chin, Yuzu's 1.6 cm), so a whole head carried onto the slot's joint rises
-    or sinks against the collar that the neck and spine carry, stretching the neck between (Yuzu's costume on Aris:
-    her head 1.8 cm up out of her high collar) or vanished. The head then turns about the slot's joint.
+    """How a refit carries what anchors on the source's ``a`` to the slot's ``t`` (``refit``).
+
+    "moved" is the joint's move alone; "refitted", its move and turn. The head goes with the neck: it keeps its own
+    turn, but its joint goes where the neck's move takes it, not onto the slot's Head joint. Two rigs put the Head joint
+    at different heights inside the head (Aris's 3.5 cm above her chin, Yuzu's 1.6 cm), so a whole head carried onto the
+    slot's joint rises or sinks against the collar that the neck and spine carry, stretching the neck between (Yuzu's
+    costume on Aris: her head 1.8 cm up out of her high collar) or vanished. The head then turns about the slot's joint.
     """
     m = t_rest[t] @ _inverse(s_rest[a], source.nodes[a].name)
     if shape == "moved":  # the joint's move alone, no turn
@@ -1560,8 +1571,9 @@ def _judge(
     posed_targets: list[np.ndarray],
     own: float,
 ) -> Plan:
-    """One shape's plan: each group's choice (``mapping`` is changed in place), the rest pose, the stretch from
-    ``reference`` (the costume's shape before the refit).
+    """One shape's plan: each group's choice, the rest pose and the stretch.
+
+    ``mapping`` is changed in place; the stretch is measured from ``reference`` (the costume's shape before the refit).
     """
     t_rest = target.skeleton.world()
     sv, sj, sw, se = shape.vertices, flat_source.joints, flat_source.weights, flat_source.edges
@@ -1843,8 +1855,10 @@ class Hems:
 
 @dataclass
 class _SkirtCandidate:
-    """A Rule B candidate: dense weights over the measured columns and then the chains' bones, its solver, and
-    the new bones those columns name (shared by the candidates of one build).
+    """A Rule B candidate.
+
+    It holds dense weights over the measured columns and then the chains' bones, its solver, and the new bones those
+    columns name (shared by the candidates of one build).
     """
 
     rule: str
@@ -1869,12 +1883,13 @@ def _skirt_candidates(
     writable_rows: np.ndarray,
     anchors: Iterable[int] | None = None,
 ) -> list[_SkirtCandidate]:
-    """Rule B's candidates ("skirt": the costume's weights, "skirt smooth": blended across the chains' seams) and
-    their new bones, for the skirt chains of the cloth around the legs that the group choice left rigid, hanging off
-    the pelvis or another of ``anchors`` (source Biped bones; the pelvis alone by default): each chain's first bone
-    hangs off the slot's bone of its own anchor (a coat's tails off the spine, a strap off a thigh). ``flat``: the
-    costume in the source's space; ``sv``: its vertices in the shape bound on the slot, where each chain's
-    bones go along with its cloth.
+    """Rule B's candidates and their new bones, for the skirt chains left rigid by the group choice.
+
+    The candidates are "skirt" (the costume's weights) and "skirt smooth" (blended across the chains' seams). The skirt
+    chains are those of the cloth around the legs that the group choice left rigid, hanging off the pelvis or another of
+    ``anchors`` (source Biped bones; the pelvis alone by default): each chain's first bone hangs off the slot's bone of
+    its own anchor (a coat's tails off the spine, a strap off a thigh). ``flat``: the costume in the source's space;
+    ``sv``: its vertices in the shape bound on the slot, where each chain's bones go along with its cloth.
     """
     pelvis = s_legs["pelvis"]
     anchors = [
@@ -2450,11 +2465,12 @@ def _thin_legs(
     at: Mapping[str, np.ndarray],
     up: np.ndarray,
 ) -> None:
-    """Optimize Physics: the costume's leg vertices deep inside the cloth at rest (``THIN_DEPTH``) moved toward their
-    leg's axis, so that knees and shins stay under a skirt or gown; judged with the chosen rule's weights by the same
-    pass-through measure, kept when it takes ``THIN_GAIN`` points off and leaves no clip worse than the rule alone
-    (``result.thin``); cloth geometry and its stretch stay unchanged. Removing hidden triangles would leave a gap
-    where the cloth lifts: thinning only.
+    """Optimize Physics: move the costume's leg vertices deep inside the cloth toward their leg's axis.
+
+    The vertices deep inside the cloth at rest (``THIN_DEPTH``) are moved toward their leg's axis, so that knees and
+    shins stay under a skirt or gown; judged with the chosen rule's weights by the same pass-through measure, kept when
+    it takes ``THIN_GAIN`` points off and leaves no clip worse than the rule alone (``result.thin``); cloth geometry and
+    its stretch stay unchanged. Removing hidden triangles would leave a gap where the cloth lifts: thinning only.
     """
     state, depth = hm.cover(sv, legs, triangles, at["pelvis"], up)
     with np.errstate(invalid="ignore"):
@@ -3200,9 +3216,10 @@ def halo_of(skeleton: Skeleton) -> Halo:
 
 
 def _skinned_halo(skeleton: Skeleton, shaded: list[tuple[int, Any]]) -> Halo | None:
-    """A followerless halo that can be carried: one halo-shaded skinned renderer bound to one bone at or below
-    the head, with its mesh and materials (Ayame's). A boss's halo is not: Binah's has no head, Chesed's hangs from
-    two bones of the body.
+    """A followerless halo that can be carried, or None.
+
+    It is one halo-shaded skinned renderer bound to one bone at or below the head, with its mesh and materials
+    (Ayame's). A boss's halo is not: Binah's has no head, Chesed's hangs from two bones of the body.
     """
     g = skeleton.graph
     head = skeleton.first(HEAD)
@@ -3233,10 +3250,11 @@ def _skinned_halo(skeleton: Skeleton, shaded: list[tuple[int, Any]]) -> Halo | N
 
 
 def _mesh_tree(mesh: Any) -> dict:
-    """A mesh's tree holding its vertex data: a mesh that streams it from its bundle's resource file (Yukino's halo)
-    takes it along, so the copy reads in any file. Costume meshes go through it too: a streamed one would
-    name the source bundle's resource file, which the game need not have loaded. Data that cannot be read is a
-    refusal.
+    """A mesh's tree holding its vertex data.
+
+    A mesh that streams it from its bundle's resource file (Yukino's halo) takes it along, so the copy reads in any
+    file. Costume meshes go through it too: a streamed one would name the source bundle's resource file, which the game
+    need not have loaded. Data that cannot be read is a refusal.
     """
     tree = mesh.read_typetree()
     stream = tree.get("m_StreamData") or {}
@@ -3262,10 +3280,12 @@ def _halo_change(
     names: tuple[str, str],
     head: np.ndarray | None = None,
 ) -> HaloChange | None:
-    """The slot's halo after the swap: the source's carried (its mesh and materials added by
-    ``carry_mesh`` and ``carry_material``) and drawn by the slot's halo renderer where the source draws its own, or
-    else the slot's hidden; never the slot's own. None when the slot has no halo. ``head``: where the bound costume's
-    head sits against the slot's Head joint (``Fit.head``); a carried halo moves along by it.
+    """The slot's halo after the swap, or None when the slot has no halo.
+
+    The source's halo is carried (its mesh and materials added by ``carry_mesh`` and ``carry_material``) and drawn by
+    the slot's halo renderer where the source draws its own, or else the slot's is hidden; never the slot's own.
+    ``head``: where the bound costume's head sits against the slot's Head joint (``Fit.head``); a carried halo moves
+    along by it.
     """
     change = _halo_carried(t_skeleton, s_skeleton, carry_mesh, carry_material, names)
     if change is not None and change.follower and head is not None and float(np.abs(head).max()) > 1e-6:
@@ -3274,8 +3294,9 @@ def _halo_change(
 
 
 def _halo_shift(t_skeleton: Skeleton, follower: dict[str, Any], head: np.ndarray) -> None:
-    """The follower's offset (and its clamp box, when it carries one) moved by ``head``, a move in the prefab root's
-    space, as the slot's followed node (the head) sees it at rest.
+    """Move the follower's offset (and its clamp box, when it carries one) by ``head``.
+
+    ``head`` is a move in the prefab root's space, as the slot's followed node (the head) sees it at rest.
     """
     t_head = t_skeleton.first(HEAD)
     if t_head is None or "TargetRelativePosition" not in follower:
@@ -3366,10 +3387,11 @@ def _pointers(value: Any) -> Iterable[dict]:
 def _halo_transplant(
     s_skeleton: Skeleton, s: Halo, carry_mesh: Callable[[Any], int], carry_material: Callable[[Any], int], into: Any
 ) -> Transplant | None:
-    """The source's halo as new nodes (:class:`Transplant`): everything below its followed node, with the
-    meshes and materials its renderers and particle systems draw carried into the slot's files. None (nothing
-    carried) when something there points elsewhere (another node of the model, a script, a sprite) or cannot be
-    added to the slot's prefab file ``into``.
+    """The source's halo as new nodes (:class:`Transplant`), or None.
+
+    The nodes are everything below its followed node, with the meshes and materials its renderers and particle systems
+    draw carried into the slot's files. None (nothing carried) when something there points elsewhere (another node of
+    the model, a script, a sprite) or cannot be added to the slot's prefab file ``into``.
     """
     g = s_skeleton.graph
     below = s_skeleton.descendants(s.root)
@@ -3448,10 +3470,12 @@ def _halo_transplant(
 
 
 def _halo_place(t_skeleton: Skeleton, s_skeleton: Skeleton, t: Halo, s: Halo) -> tuple[np.ndarray, dict] | None:
-    """Where the slot's halo renderer draws the source's halo mesh: its local matrix below its parent and the
-    follower offsets of the slot's followed node. A followed source halo keeps its place below its followed node
-    and its follower's offsets; a skinned one puts the followed node where its bone sits against the node the
-    slot's follower follows (the head), the mesh below it as the bone draws it. None when it cannot be carried.
+    """Where the slot's halo renderer draws the source's halo mesh.
+
+    That is its local matrix below its parent and the follower offsets of the slot's followed node. A followed source
+    halo keeps its place below its followed node and its follower's offsets; a skinned one puts the followed node where
+    its bone sits against the node the slot's follower follows (the head), the mesh below it as the bone draws it. None
+    when it cannot be carried.
     """
     s_world, t_world = s_skeleton.world(), t_skeleton.world()
     parent = t_skeleton.nodes[t.node].parent
@@ -3710,9 +3734,10 @@ class Rendered:
 
 
 def _sanity(meshes: list[Written], renderers: list[Rendered]) -> None:
-    """The last check before the bundles are returned: what this run wrote must be numbers a player can
-    load. A failure refuses the pair (``source_unsupported``) rather than saving a mesh that draws nothing or flies
-    apart. Over arrays already in memory; nothing is read again.
+    """The last check before the bundles are returned.
+
+    What this run wrote must be numbers a player can load. A failure refuses the pair (``source_unsupported``) rather
+    than saving a mesh that draws nothing or flies apart. Over arrays already in memory; nothing is read again.
     """
     for mesh in meshes:
         if mesh.streamed:
@@ -4267,8 +4292,10 @@ def _adapt(
     mesh_sf, material_sf, texture_sf = writer.file(mesh_cab), writer.file(material_cab), writer.file(texture_cab)
 
     def shared(cab: str) -> bool:
-        """Whether the game has ``cab`` whenever the target's prefab is loaded: a slot file, a file the prefab's
-        files already reference (its catalog dependencies), or an always-loaded (prolog) bundle.
+        """Whether the game has ``cab`` whenever the target's prefab is loaded.
+
+        That holds for a slot file, a file the prefab's files already reference (its catalog dependencies), or an
+        always-loaded (prolog) bundle.
         """
         path = index.get(cab) or (graph.locations.get(cab))
         if cab in slot or cab in loaded:
@@ -4316,8 +4343,10 @@ def _adapt(
         )
 
     def carry_material(material: Any) -> int:
-        """A source material added to the slot's material file, with its textures (and its shader where the game does
-        not load it with the slot's prefab); an eye-mouth material in ``retiled`` with the slot's mouth atlas.
+        """A source material added to the slot's material file, with its textures.
+
+        Its shader is added too where the game does not load it with the slot's prefab; an eye-mouth material in
+        ``retiled`` is added with the slot's mouth atlas.
         """
         if _key(material) not in materials:
             tree = material.read_typetree()
@@ -4648,8 +4677,10 @@ def _edit_prefabs(
     mouth: Mouth | None = None,
     worn: Mapping[tuple[str, int], int | None] | None = None,
 ) -> None:
-    """One prefab file's renderers draw the new costume; ``worn``: the slot's meshes of worn items and what their
-    renderers draw instead (None for nothing, else a new mesh in the mesh file).
+    """Make one prefab file's renderers draw the new costume.
+
+    ``worn``: the slot's meshes of worn items and what their renderers draw instead (None for nothing, else a new mesh
+    in the mesh file).
     """
     objects = sf.objects
     trees: dict[int, dict] = {}
@@ -4859,10 +4890,12 @@ def _edit_mouth(
     renderer: int,
     mouth: Mouth,
 ) -> None:
-    """The prefab's mouth receivers that point at one of the slot's costume renderers draw the source's mouth: on
-    ``renderer`` (the primary, or the part added for the source's mouth), with the source's material index and
-    ``mouth``'s default tile (the source's, or the slot's where the mouth takes the slot's atlas). The receiver indexes
-    the renderer's replacement materials in the source's order.
+    """Make the prefab's mouth receivers that point at a slot costume renderer draw the source's mouth.
+
+    That is every receiver that points at one of the slot's costume renderers: on ``renderer`` (the primary, or the part
+    added for the source's mouth), with the source's material index and ``mouth``'s default tile (the source's, or the
+    slot's where the mouth takes the slot's atlas). The receiver indexes the renderer's replacement materials in the
+    source's order.
     """
     for pid in behaviours:
         t = tree(pid)
@@ -4891,10 +4924,12 @@ def _edit_halo(
     sf: Any,
     writer: _Writer,
 ) -> list[dict]:
-    """One prefab's halo changed (:class:`HaloChange`): its renderer that draws the slot's halo mesh, and the follower
-    of its followed node; or, hiding it, everything drawn at the hidden paths, then the source's halo nodes added
-    below the followed node (a transplant). The slot's nodes stay, so the clips that move or toggle them still do.
-    Returns the added objects the prefab loads through its preload entries.
+    """Change one prefab's halo (:class:`HaloChange`).
+
+    That is its renderer that draws the slot's halo mesh, and the follower of its followed node; or, hiding it,
+    everything drawn at the hidden paths, then the source's halo nodes added below the followed node (a transplant). The
+    slot's nodes stay, so the clips that move or toggle them still do. Returns the added objects the prefab loads
+    through its preload entries.
     """
 
     def components(path: str) -> list[int]:
@@ -4982,8 +5017,10 @@ def _transplant(
     sf: Any,
     writer: _Writer,
 ) -> list[dict]:
-    """The source's halo nodes (:class:`Transplant`) added to one prefab below its followed node ``root`` (a
-    Transform), which keeps the source's follower offsets. Returns the new objects the prefab loads.
+    """Add the source's halo nodes (:class:`Transplant`) to one prefab.
+
+    They go below its followed node ``root`` (a Transform), which keeps the source's follower offsets. Returns the new
+    objects the prefab loads.
     """
     plan = halo.transplant
     ids: list[int] = []
@@ -5065,9 +5102,10 @@ def _append_beside(value: Any, existing: dict, new: dict) -> bool:
 
 
 def _bounds(mesh: Written, nodes: list[int], t_skeleton: Skeleton, root: int, poses: list[list[np.ndarray]]) -> dict:
-    """A renderer's ``m_AABB``, in its root bone's space: the box around the part as the slot skins it in each of
-    ``poses`` (the rest first), its vertices without weight where the rest puts them. A bone added after the poses
-    were taken (Rule B's) goes with its nearest ancestor there.
+    """A renderer's ``m_AABB``, in its root bone's space.
+
+    The box around the part as the slot skins it in each of ``poses`` (the rest first), its vertices without weight
+    where the rest puts them. A bone added after the poses were taken (Rule B's) goes with its nearest ancestor there.
     """
     rest = t_skeleton.world()
     skin = Skin(mesh.vertices, mesh.joints, mesh.weights, np.zeros((0, 2), int))
@@ -5099,6 +5137,7 @@ def _bounds(mesh: Written, nodes: list[int], t_skeleton: Skeleton, root: int, po
 
 def _extend_preload(asset_bundle: dict, additions: Mapping[int, list[dict]]) -> None:
     """The preload ranges of the edited prefabs grown by their added objects (``additions``, by container entry).
+
     Contiguous ranges are rebuilt in place, a range two entries share taking both entries' objects; otherwise each
     edited entry gets a copy of its range at the end, so two entries that shared one never take each other's.
     """

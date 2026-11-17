@@ -170,10 +170,10 @@ def test_cocoa_moves_only_y_and_leaves_fullscreen_reveal_to_appkit(flipped):
     state.update(fullscreen=False, mini=True)
     assert host.measure({"centre": 30}) is None
     state["mini"] = False
-    # a wide window: the bar's centre line is lower than a 32-high title bar container lets the buttons go. They go as low as
-    # it allows and stay inside it; the native chrome is not given up (a second display)
-    # (the container spans the content's top 32 points; this stand-in converts frames unchanged, so an unflipped container
-    # starts 168 up)
+    # a wide window: the bar's centre line is lower than a 32-high title bar container lets the buttons go. They go
+    # as low as it allows and stay inside it; the native chrome is not given up (a second display)
+    # (the container spans the content's top 32 points; this stand-in converts frames unchanged, so an unflipped
+    # container starts 168 up)
     base = 0 if flipped else 168
     for button in host.buttons:
         button.parent.bounds = lambda: rect(0, base, 200, 32)

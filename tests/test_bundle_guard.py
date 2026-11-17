@@ -1,4 +1,7 @@
-"""Bundle sizes are bounded before UnityPy loads a bundle (synthetic files; the official sweep needs BAMT_TEST_GAME_DIR)."""
+"""Bundle sizes are bounded before UnityPy loads a bundle.
+
+The files are synthetic; the official sweep needs BAMT_TEST_GAME_DIR.
+"""
 
 import os
 import struct

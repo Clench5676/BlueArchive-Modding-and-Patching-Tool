@@ -522,7 +522,10 @@ def test_adding_without_an_install_keeps_the_mod_and_reports_the_refused_switch(
 
 def test_self_contained_atlas_positions_rotations_and_trims_are_not_official_drift(serialized):
     env, register = serialized
-    old = "page.png\nsize: 64,64\npart\n  rotate: false\n  xy: 0,0\n  size: 4,8\n  orig: 6,10\n  offset: 1,1\n  index: -1\n"
+    old = (
+        "page.png\nsize: 64,64\npart\n  rotate: false\n  xy: 0,0\n  size: 4,8\n  orig: 6,10\n  offset: 1,1\n"
+        "  index: -1\n"
+    )
     new = "page.png\nsize: 64,64\npart\n  rotate: 90\n  bounds: 20,20,4,8\n  offsets: 1,1,6,10\n  index: -1\n"
     register(env.original, {"atlases": {"test.atlas": new}, "textures": {"page": [64, 64]}})
     source = register(

@@ -203,7 +203,8 @@ def test_official_split_model_dependency_mod_on_clones(tmp_path, batch, complete
         record_property("cloned_model_files", len(official))
         record_property("cloned_shared_files", len(sources - set(official) - portraits))
         print(
-            f"Hoshino clone workflow: slot_files={len(official)}; shared_files={len(sources - set(official) - portraits)}; changed={len(targets)}"
+            f"Hoshino clone workflow: slot_files={len(official)}; "
+            f"shared_files={len(sources - set(official) - portraits)}; changed={len(targets)}"
         )
         print("Hoshino slot files: " + ", ".join(sorted(path.name for path in official)))
     finally:
@@ -1132,7 +1133,8 @@ def test_official_roster_partial_and_complete_mod_preflight(tmp_path, monkeypatc
             seen.add(core)
             if len(seen) % 100 == 0:
                 print(
-                    f"Roster progress: cores={len(seen)}; parts={counters}; seconds={time.perf_counter() - started:.3f}",
+                    f"Roster progress: cores={len(seen)}; parts={counters}; "
+                    f"seconds={time.perf_counter() - started:.3f}",
                     flush=True,
                 )
             targets = library._spine_parts(core, pin)
@@ -1211,7 +1213,8 @@ def test_official_roster_partial_and_complete_mod_preflight(tmp_path, monkeypatc
     record_property("roster_counts", str(counters))
     record_property("roster_seconds", round(elapsed, 3))
     print(
-        f"Roster preflight: {counters}; variants={len(variants)}; sample={len(sample)}; seconds={elapsed:.3f}; full={full}"
+        f"Roster preflight: {counters}; variants={len(variants)}; sample={len(sample)}; "
+        f"seconds={elapsed:.3f}; full={full}"
     )
     assert not failures, failures[:30]
 

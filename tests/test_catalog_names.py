@@ -341,7 +341,8 @@ def test_generator_names_playables_in_kivo_wording(generator, case):
 
 
 def test_shipped_terror_names_use_one_asterisk(shipped: dict):
-    # Chinese and Japanese write it full width, English and Korean half width (\uc2dc\ub85c\ucf54*\ud14c\ub7ec, as the game does)
+    # Chinese and Japanese write it full width, English and Korean half width
+    # (\uc2dc\ub85c\ucf54*\ud14c\ub7ec, as the game does)
     half = ("en", "ko", "th")
     names = [(key, lang, text) for key, lang, text in all_names(shipped) if lang not in half]
     assert not [item for item in names if "*" in item[2]]
