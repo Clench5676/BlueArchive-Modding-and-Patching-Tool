@@ -298,6 +298,10 @@ class EnableMixin:
             toggle_timing.planned(len(plan))
             if enabled:  # an On, its Retry or Apply Mod Configuration: confirmed before the intent changes
                 self._untested_plan(plan, config, drift is not None)
+            with toggle_timing.stage("progress_identity"):
+                identities = (
+                    {(pin.key, core): self._entry_identity(pin, core, config) for pin, core in plan} if progress else {}
+                )
         stamp = now()
         if drift is None and retry is None:
 
@@ -344,9 +348,7 @@ class EnableMixin:
                         with _errors("toggle"):
                             self._check_pins(pins)
                             if progress:
-                                with toggle_timing.stage("progress_identity"):
-                                    identity = self._entry_identity(pin, core, config)
-                                line.item(i, **identity, step=mod_progress.STEP_CHECK)
+                                line.item(i, **identities[(pin.key, core)], step=mod_progress.STEP_CHECK)
                             outcome, why, entry = self._reach(
                                 pin,
                                 core,
