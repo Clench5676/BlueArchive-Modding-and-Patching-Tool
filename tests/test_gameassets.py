@@ -85,6 +85,27 @@ def test_cache_consent_switch_and_clear(tmp_path):
     assert not root.exists()
 
 
+def test_asset_disk_fallback_promotes_the_matching_version_without_touching_legacy(tmp_path):
+    legacy = AssetCache("resource-version", root=tmp_path / "legacy", allowed=True)
+    legacy.put("light", b"old asset")
+    entry = legacy._path(legacy.resource_version, "light")
+    os.utime(entry.parent, ns=(1_000_000_000, 1_000_000_000))
+    stamps = (entry.stat().st_mtime_ns, entry.parent.stat().st_mtime_ns)
+    cache = AssetCache(legacy.resource_version, root=tmp_path / "current", fallback=legacy.root)
+    assert cache.get("light") is None
+    assert not cache.has_disk_entries(cache.resource_version)
+    cache.allowed = True
+    assert cache.has_disk_entries(cache.resource_version)
+    assert cache.get("light", version="another") is None
+    assert cache.get("light", disk=False) is None
+    assert cache.get("light") == b"old asset"
+    assert cache._path(cache.resource_version, "light").read_bytes() == entry.read_bytes() == b"old asset"
+    assert (entry.stat().st_mtime_ns, entry.parent.stat().st_mtime_ns) == stamps
+    cache.clear()
+    assert cache.get("light") is None
+    assert entry.read_bytes() == b"old asset"
+
+
 def test_cache_accounts_decoded_images_and_versions(tmp_path):
     cache = AssetCache(root=tmp_path, max_bytes=16)
     image = Image.new("RGBA", (2, 2))

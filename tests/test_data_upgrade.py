@@ -48,6 +48,78 @@ def _open(data, **options):
     return DataUpgrade(data, qualify=lambda _: "apfs", **options)
 
 
+def test_upgrade_reports_weighted_steps_and_marks_skipped_staging_done(tmp_path, monkeypatch):
+    data = _data(tmp_path / "data")
+    _write(data / "library" / "state.json", {"version": 1, "mods": []})
+    _write(data / "library" / "profiles.json", {"version": 1, "folders": {}})
+    samples = []
+    upgrade = _open(data, fault=lambda label: samples.append((label, upgrade.state())))
+    report = upgrade._status
+
+    def observe(**values):
+        report(**values)
+        if values.get("progress"):
+            samples.append(("progress", upgrade.state()))
+
+    monkeypatch.setattr(upgrade, "_status", observe)
+    assert upgrade.state()["steps"] is None and upgrade.state()["percent"] == 0
+    try:
+        ready = upgrade.run()
+        ids = ["check", "settings", "library", "verify", "open"]
+        states = [state for _, state in samples] + [ready]
+        assert all([step["id"] for step in state["steps"]] == ids for state in states)
+        assert [state["percent"] for state in states] == sorted(state["percent"] for state in states)
+        assert all(state["percent"] < 100 for state in states[:-1])
+        running = []
+        for state in states[:-1]:
+            statuses = [step["status"] for step in state["steps"]]
+            index = statuses.index("running")
+            assert statuses == ["done"] * index + ["running"] + ["pending"] * (len(ids) - index - 1)
+            if not running or running[-1] != ids[index]:
+                running.append(ids[index])
+        assert running == ids
+        assert {state["percent"] for label, state in samples if label == "progress"} >= {5, 10, 50, 90}
+        assert ready["status"] == "ready" and ready["percent"] == 100
+        assert all(step["status"] == "done" for step in ready["steps"])
+
+        upgrade.close()
+        samples.clear()
+        assert upgrade.run()["status"] == "ready"
+        opening = next(state for label, state in samples if label == "open")
+        assert opening["percent"] == 90
+        assert [step["status"] for step in opening["steps"]] == ["done", "done", "done", "running", "pending"]
+    finally:
+        upgrade.close()
+
+
+def test_upgrade_copies_revision_keyed_library_caches_when_absent(tmp_path):
+    data = _data(tmp_path / "data")
+    legacy = data / "library"
+    entries = {
+        "costume-verdicts.json": b'{"version":1,"verdicts":{}}',
+        "worn-items.json": b'{"version":1,"models":{}}',
+        "costume-poses/" + "a" * 64 + ".npz": b"cached pose",
+    }
+    for name, value in entries.items():
+        path = legacy / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(value)
+    original_times = {name: (legacy / name).stat().st_mtime_ns for name in entries}
+    upgrade = _open(data)
+    try:
+        assert upgrade.run()["status"] == "ready"
+        root = upgrade.paths.library_cache
+        for name, value in entries.items():
+            assert (root / name).read_bytes() == (legacy / name).read_bytes() == value
+            assert (legacy / name).stat().st_mtime_ns == original_times[name]
+            (root / name).write_bytes(b"new cache contents")
+        upgrade.close()
+        assert upgrade.run()["status"] == "ready"
+        assert all((root / name).read_bytes() == b"new cache contents" for name in entries)
+    finally:
+        upgrade.close()
+
+
 @pytest.mark.parametrize(
     ("store", "original", "path", "expected"),
     [
@@ -261,6 +333,7 @@ def test_payload_that_cannot_be_cloned_or_linked_leaves_legacy_data_intact(tmp_p
         state = upgrade.run()
         assert state["status"] == "failed" and state["reason"] == "unsupportedStorage"
         assert state["notice"] is None
+        assert state["steps"] is None and state["percent"] < 100
         assert not (data / "data.json").exists()
         assert not (data / "library" / "library.json").exists()
         assert original.read_bytes() == b"official"
@@ -278,7 +351,9 @@ def test_notice_acknowledgement_survives_restoring_an_older_generation_2_backup(
         document = load_document("U", legacy, generation=1)
         document["prefs"]["test_preference"] = "imported"
         _write(legacy, document)
-        assert upgrade.run()["status"] == "changed"
+        state = upgrade.run()
+        assert state["status"] == "changed"
+        assert state["steps"] is None and state["percent"] < 100
         assert upgrade.run("import")["notice"] == "upgraded"
         upgrade.acknowledge()
         paths = upgrade.restore_backup(0)

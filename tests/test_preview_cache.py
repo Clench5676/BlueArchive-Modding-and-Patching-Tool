@@ -17,7 +17,8 @@ from types import SimpleNamespace
 import pytest
 from PIL import Image
 
-from bmpt.host.config import Settings
+from bmpt.host.config import APP_DIR_NAME, Settings
+from bmpt.host.data_upgrade import DataUpgrade
 from bmpt.gameassets import AssetCache, AssetNotFound, GameAssets
 from bmpt.gameassets import model, service
 from bmpt.gameassets import model_service
@@ -49,6 +50,74 @@ def test_preview_cache_requires_separate_consent_and_rejects_old_generations(tmp
     cache.clear()
     assert not cache.root.exists()
     assert not cache.put("portrait", b"late work", generation=granted)
+
+
+def test_preview_fallback_promotes_verified_entries_without_changing_legacy(tmp_path):
+    legacy = PreviewCache(tmp_path / "legacy", allowed=True)
+    assert legacy.put("good", b"cached preview", generation=legacy.generation)
+    assert legacy.put("corrupt", b"original bytes", generation=legacy.generation)
+    corrupt = legacy._path("corrupt")
+    corrupt.write_bytes(corrupt.read_bytes()[:-1] + b"!")
+    paths = [legacy._path("good"), corrupt]
+    for path in paths:
+        os.utime(path, ns=(1_000_000_000, 1_000_000_000))
+    before = [(path.read_bytes(), path.stat().st_mtime_ns) for path in paths]
+
+    current = PreviewCache(tmp_path / "current", fallback=legacy.root)
+    assert current.get("good") is None
+    assert not current.root.exists()
+    current.allowed = True
+    assert current.get("good") == b"cached preview"
+    assert current._path("good").read_bytes() == before[0][0]
+    assert current.get("corrupt") is None
+    assert not current._path("corrupt").exists()
+    assert [(path.read_bytes(), path.stat().st_mtime_ns) for path in paths] == before
+
+    tiny = PreviewCache(tmp_path / "tiny", allowed=True, max_bytes=1, fallback=legacy.root)
+    assert tiny.get("good") == b"cached preview"
+    assert not tiny.root.exists()
+
+
+@pytest.mark.parametrize("operation", ["clear", "move"])
+def test_settings_cache_reset_drops_both_legacy_fallbacks(tmp_path, operation):
+    data = tmp_path / "data"
+    data.mkdir()
+    legacy = tmp_path / "original" / APP_DIR_NAME / "cache"
+    (data / "webui.json").write_text(
+        json.dumps({"prefs": {"data_id": "012345abcdef", "cache_parent": str(legacy.parent.parent)}})
+    )
+    upgrade = DataUpgrade(data, qualify=lambda _: "apfs", updated_in_app=False)
+    try:
+        assert upgrade.run()["status"] == "ready"
+        previews = PreviewCache(legacy / "previews", allowed=True)
+        assets = AssetCache(root=legacy, allowed=True)
+        assert previews.put("preview", b"cached preview", generation=previews.generation)
+        assets.put("asset", b"cached asset")
+        settings = Settings(upgrade.paths.config)
+        services = Services(settings, upgrade=upgrade, game=FakeGame(), catalog=FakeCatalog(), library=FakeLibrary())
+        try:
+            cache = services.cache
+            cache.allowed = True
+            assert cache.get("asset") == b"cached asset"
+            assert services.preview_cache.get("preview") == b"cached preview"
+            if operation == "clear":
+                result = rpc(WebApp(build_api(services), services.events, token="tok"), "settings.clearCache")
+                assert result["result"]["previewCache"] is True
+            else:
+                parent = tmp_path / "new"
+                parent.mkdir()
+                assert services.set_cache_parent(parent).parent == parent / APP_DIR_NAME
+            assert not legacy.exists()
+            fallback = services.cache_dir().with_name("cache")
+            restored = PreviewCache(fallback / "previews", allowed=True)
+            assert restored.put("preview", b"legacy again", generation=restored.generation)
+            AssetCache(root=fallback, allowed=True).put("asset", b"legacy again")
+            assert services.preview_cache.get("preview") is None
+            assert cache.get("asset") is None
+        finally:
+            services.close()
+    finally:
+        upgrade.close()
 
 
 def test_preview_cache_bounds_disk_lru_and_hashes_keys(tmp_path):

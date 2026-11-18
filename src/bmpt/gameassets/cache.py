@@ -47,6 +47,7 @@ class AssetCache:
         allowed: bool = False,
         max_bytes: int = 512 * 1024 * 1024,
         root: Path | None = None,
+        fallback: Path | None = None,
     ):
         """Create empty memory accounting and configure optional light-asset disk storage.
 
@@ -55,6 +56,7 @@ class AssetCache:
             allowed: Whether disk reads and writes have user consent.
             max_bytes: Nonnegative memory budget in bytes, including decoded image pixels.
             root: Disk cache folder; None uses config.user_cache_dir without creating it yet.
+            fallback: Optional legacy disk cache to read on a miss.
 
         Raises:
             ValueError: The memory budget is negative.
@@ -64,6 +66,9 @@ class AssetCache:
         self.resource_version = resource_version
         self.root = Path(root) if root is not None else config.user_cache_dir()
         devmode.check_read(self.root)
+        self._fallback = Path(fallback) if fallback is not None else None
+        if self._fallback is not None:
+            devmode.check_read(self._fallback)
         self.max_bytes = max_bytes
         self._allowed = allowed
         self._lock = threading.RLock()
@@ -114,8 +119,12 @@ class AssetCache:
         with self._lock:
             if not self._allowed:
                 return False
+            folder = self._path(version, "").parent
+            folders = [folder]
+            if self._fallback is not None:
+                folders.append(self._fallback / folder.name)
             try:
-                return any(path.is_file() for path in self._path(version, "").parent.glob("*.cache"))
+                return any(path.is_file() for folder in folders for path in folder.glob("*.cache"))
             except OSError:
                 return False
 
@@ -134,16 +143,24 @@ class AssetCache:
                 self._items.move_to_end(token)
                 return self._items[token][0]
             if disk and self._allowed:
+                path = self._path(version, key)
                 try:
-                    value = self._path(version, key).read_bytes()
+                    value = path.read_bytes()
                 except FileNotFoundError:
-                    return None
+                    pass
                 except OSError:
                     logger.warning("Cannot read asset cache entry %s", key, exc_info=True)
-                    return None
-                self._mark_used(self._path(version, key).parent)
-                self._remember(token, value, len(value))
-                return value
+                else:
+                    self._mark_used(path.parent)
+                    self._remember(token, value, len(value))
+                    return value
+                if self._fallback is not None:
+                    try:
+                        value = (self._fallback / path.relative_to(self.root)).read_bytes()
+                    except OSError:
+                        return None
+                    self.put(key, value, version=version, generation=self._generation)
+                    return value
         return None
 
     def _mark_used(self, folder: Path) -> None:
@@ -258,16 +275,25 @@ class AssetCache:
                     logger.warning("Cannot write asset cache entry %s", key, exc_info=True)
                 finally:
                     if temporary is not None:
-                        temporary.unlink(missing_ok=True)
+                        try:
+                            temporary.unlink(missing_ok=True)
+                        except OSError:
+                            pass
                 if first:
                     self._retire_versions(folder)
 
     def clear(self) -> None:
-        """Remove all memory entries and all resource versions on disk."""
+        """Remove memory and disk entries and detach the legacy cache."""
         with self._lock:
+            self.drop_fallback()
             self.clear_memory()
             if self.root.exists():
                 shutil.rmtree(self.root)
+
+    def drop_fallback(self) -> None:
+        """Stop looking up entries in the legacy cache."""
+        with self._lock:
+            self._fallback = None
 
     def clear_memory(self) -> None:
         """Drop decoded entries and accounting, invalidating in-flight writes without deleting disk files."""
@@ -294,19 +320,25 @@ class PreviewCache:
     Reads touch entries for LRU eviction, which also removes old resource versions.
     """
 
-    def __init__(self, root: Path, *, allowed: bool = False, max_bytes: int = 2 * 1024**3):
+    def __init__(
+        self, root: Path, *, allowed: bool = False, max_bytes: int = 2 * 1024**3, fallback: Path | None = None
+    ):
         """Configure consent-controlled preview storage without creating its folder.
 
         Args:
             root: Folder holding checksummed preview entries.
             allowed: Whether preview persistence has user consent.
             max_bytes: Nonnegative total disk budget in bytes, enforced by LRU eviction.
+            fallback: Optional legacy disk cache to read on a miss.
 
         Raises:
             ValueError: The disk budget is negative.
         """
         self.root = Path(root)
         devmode.check_read(self.root)
+        self._fallback = Path(fallback) if fallback is not None else None
+        if self._fallback is not None:
+            devmode.check_read(self._fallback)
         if max_bytes < 0:
             raise ValueError("max_bytes must be nonnegative")
         self.max_bytes = max_bytes
@@ -363,6 +395,17 @@ class PreviewCache:
         digest = hashlib.sha256((PREVIEW_SCHEMA + "\n" + key).encode()).hexdigest()
         return self.root / (digest + ".preview")
 
+    @staticmethod
+    def _read(path: Path) -> bytes:
+        header = len(_PREVIEW_MAGIC)
+        if path.stat().st_size > PREVIEW_ENTRY_LIMIT + header + 32:
+            raise ValueError("Oversized preview cache entry")
+        raw = path.read_bytes()
+        value = raw[header + 32 :]
+        if raw[:header] != _PREVIEW_MAGIC or raw[header : header + 32] != hashlib.sha256(value).digest():
+            raise ValueError("Invalid preview cache checksum")
+        return value
+
     def get(self, key: str) -> bytes | None:
         """Read and validate an entry, touching it for LRU eviction.
 
@@ -378,24 +421,17 @@ class PreviewCache:
             path = self._path(key)
             try:
                 self._sync_inventory()
-                if path.stat().st_size > PREVIEW_ENTRY_LIMIT + len(_PREVIEW_MAGIC) + 32:
-                    raise ValueError("Oversized preview cache entry")
-                raw = path.read_bytes()
-                header = len(_PREVIEW_MAGIC)
-                value = raw[header + 32 :]
-                if raw[:header] != _PREVIEW_MAGIC or raw[header : header + 32] != hashlib.sha256(value).digest():
-                    raise ValueError("Invalid preview cache checksum")
+                value = self._read(path)
                 try:
                     os.utime(path, None)
                 except OSError:
                     pass
-                self._remember_disk(path, len(raw))
+                self._remember_disk(path, len(_PREVIEW_MAGIC) + 32 + len(value))
                 self._prune()
                 self._inventory_stamp = self._directory_stamp()
                 return value
             except FileNotFoundError:
                 self._forget_disk(path)
-                return None
             except (OSError, ValueError):
                 # A cache failure must never prevent loading the original assets.
                 try:
@@ -404,7 +440,15 @@ class PreviewCache:
                     pass
                 self._forget_disk(path)
                 self._inventory = None
+            if self._fallback is None:
                 return None
+            generation = self.generation
+            try:
+                value = self._read(self._fallback / path.name)
+            except (OSError, ValueError):
+                return None
+            self.put(key, value, generation=generation)
+            return value
 
     def put(self, key: str, value: bytes, *, generation: str) -> bool:
         """Persist a checksummed export atomically if consent, size, and generation permit.
@@ -530,10 +574,16 @@ class PreviewCache:
         self._root_id = None
 
     def clear(self) -> None:
-        """Invalidate pending writes and delete the preview folder and its inventory."""
+        """Invalidate pending writes, detach the legacy cache and delete the preview folder."""
         with self._lock:
+            self.drop_fallback()
             self._generation = secrets.token_hex(16)
             self._clear_files()
+
+    def drop_fallback(self) -> None:
+        """Stop looking up entries in the legacy preview cache."""
+        with self._lock:
+            self._fallback = None
 
     def clear_with(self, clear: Any) -> None:
         """Clear previews and the parent UI cache under the preview write lock.

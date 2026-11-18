@@ -19,6 +19,12 @@ export const REASONS = Object.freeze([
 const RELOCATABLE = new Set(["busy", "unavailable", "unsupportedStorage"]);
 const WRITES = new Set(["retry", "keep", "import", "relocate"]);
 
+/** The steps of an upgrade under way, in order; each has its line under upgrade.step. */
+export const STEPS = Object.freeze(["check", "settings", "library", "verify", "open"]);
+// the steps that count their items (the state's progress) while they run
+const COUNTED = new Set(["settings", "library"]);
+const STEP_STATES = new Set(["done", "running", "pending"]);
+
 /**
  * The bootstrap request of a notice action: its path under /upgrade/ and its body.
  * @type {Readonly<Record<string, {path: string, body?: object}>>}
@@ -45,11 +51,12 @@ export const stringsOf =
 
 /**
  * What the notice shows for a bootstrap state; null when the App may start.
- * @param {object} state GET /upgrade/state: status, phase, reason, progress, affected, strings.
+ * @param {object} state GET /upgrade/state: status, phase, reason, steps, percent, progress, affected, strings.
  * @param {boolean} [canRelocate] Whether the host can open its folder picker.
- * @returns {{title: string, hint: string, lines: Array<{text: string}>, actions: Array<{id: string, label: string}>, poll: boolean}|null}
- *     The title and hint, the lines, the action buttons in order, and whether the state is read again by itself
- *     (an upgrade under way).
+ * @returns {{title: string, hint: string, lines: Array<{text: string, state?: string}>, actions: Array<{id: string, label: string}>, poll: boolean, busy?: boolean, progress?: {percent: number}}|null}
+ *     The title and hint, the lines (an upgrade's steps carry their state), the action buttons in order, whether
+ *     the state is read again by itself (an upgrade under way), and for an upgrade under way the spinner and its
+ *     percentage.
  */
 export function noticeView(state, canRelocate = true) {
   if (state.status === "ready") return null;
@@ -87,13 +94,27 @@ export function noticeView(state, canRelocate = true) {
     };
   }
   const p = state.progress;
+  const count =
+    p && Number.isFinite(p.total) && p.total > 0
+      ? T("upgrade.count", { done: Math.max(0, Math.min(p.done || 0, p.total)), total: p.total })
+      : "";
+  const percent = Number.isFinite(state.percent) ? Math.max(0, Math.min(100, Math.round(state.percent))) : 0;
   return {
     title: T("upgrade.title"),
-    hint:
-      p && Number.isFinite(p.total) && p.total > 0 ? `${Math.max(0, Math.min(p.done || 0, p.total))} / ${p.total}` : "",
-    lines: [],
+    hint: T("upgrade.subject"),
+    lines: (Array.isArray(state.steps) ? state.steps : [])
+      .filter(({ id }) => STEPS.includes(id))
+      .map(({ id, status }) => {
+        const step = STEP_STATES.has(status) ? status : "pending";
+        return {
+          text: T(`upgrade.step.${id}`) + (step === "running" && COUNTED.has(id) ? count : ""),
+          state: step,
+        };
+      }),
     actions: [],
     poll: true,
+    busy: true,
+    progress: { percent },
   };
 }
 
@@ -126,14 +147,16 @@ export async function upgradeGate({ request, show, hide, hold, strings = {}, can
   const submit = async ({ path, body }) => {
     const sent = fetchState(path, body).then((state) => ({ complete: state }));
     if (!WRITES.has(path)) return (await sent).complete;
-    let progress = null;
+    let running = {};
     for (;;) {
-      const view = noticeView({ status: "running", progress, strings: currentStrings });
+      const view = noticeView({ ...running, status: "running", strings: currentStrings });
       const displayed = await Promise.race([sent, show(view).then(() => ({}))]);
       if (displayed.complete) return displayed.complete;
       const observed = await Promise.race([sent, fetchState("state").then((state) => ({ state }))]);
       if (observed.complete) return observed.complete;
-      progress = observed.state.status === "running" ? observed.state.progress : null;
+      const { steps, percent, progress } = observed.state;
+      // a read before the write has started, or after it has ended, keeps the last steps seen on screen
+      if (observed.state.status === "running") running = { steps, percent, progress };
     }
   };
   let quit = false;

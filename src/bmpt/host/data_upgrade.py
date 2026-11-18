@@ -71,6 +71,7 @@ if TYPE_CHECKING:
 
 _JOURNALS = ("T", "I", "D")
 _NOTICE_PREF = "data_upgrade_notice"
+_STEPS = (("check", 5), ("settings", 5), ("library", 80), ("verify", 5), ("open", 5))
 
 
 def _upgrade_notice(path: Path) -> str | None:
@@ -159,6 +160,8 @@ class DataUpgrade:
         self._startup_instance: InstanceLock | None = None
         self._session: ExitStack | None = None
         self._state_lock = threading.Lock()
+        self._step_index: int | None = None
+        self._percent = 0
         self._operation = threading.Lock()
         self._prompt: tuple[str, str, str] | None = None
         self._confirm_legacy: tuple[str, str, str] | None = None
@@ -183,7 +186,21 @@ class DataUpgrade:
     def state(self) -> Document:
         """Read a snapshot of the bootstrap state."""
         with self._state_lock:
-            return copy.deepcopy(self._state)
+            state = copy.deepcopy(self._state)
+            steps = None
+            if self._step_index is not None and state["status"] in ("running", "ready"):
+                steps = [
+                    {
+                        "id": name,
+                        "status": "done"
+                        if state["status"] == "ready" or index < self._step_index
+                        else "running"
+                        if index == self._step_index
+                        else "pending",
+                    }
+                    for index, (name, _) in enumerate(_STEPS)
+                ]
+            return {**state, "steps": steps, "percent": self._percent}
 
     def acknowledge(self) -> None:
         """Durably clear the completed format upgrade notice for this data directory."""
@@ -200,6 +217,29 @@ class DataUpgrade:
     def _status(self, **values: Any) -> None:
         with self._state_lock:
             self._state.update(values)
+            if values.get("status") == "running":
+                self._step_index = 0
+                self._percent = 0
+            elif values.get("status") == "ready":
+                self._percent = 100
+            elif values.get("status") in ("failed", "changed"):
+                self._percent = min(99, self._percent)
+            elif (
+                self._state["status"] == "running"
+                and self._step_index is not None
+                and (progress := values.get("progress"))
+                and progress["total"]
+            ):
+                start = sum(weight for _, weight in _STEPS[: self._step_index])
+                weight = _STEPS[self._step_index][1]
+                self._percent = start + weight * progress["done"] // progress["total"]
+
+    def _advance_step(self, name: str) -> None:
+        index = next(index for index, (step, _) in enumerate(_STEPS) if step == name)
+        with self._state_lock:
+            if self._state["status"] == "running" and self._step_index is not None and index > self._step_index:
+                self._step_index = index
+                self._percent = sum(weight for _, weight in _STEPS[:index])
 
     def _failure(self, bootstrap_reason: str, **details: Any) -> None:
         self._status(**{"status": "failed", "reason": bootstrap_reason, "progress": None, **details})
@@ -432,6 +472,7 @@ class DataUpgrade:
                 member = head["members"][route["dataId"]]
                 member["source"] = path_record(source_l_path, data)
                 member["legacySetting"] = (ui or {}).get("prefs", {}).get("library_dir")
+                self._advance_step("verify")
                 self._validate_epoch(epoch_path(selected, "library", head["epoch"]), head["libraryId"], "library")
                 self._rescan(source_d, source_l)
                 self._publish_head(selected, preview_head, head)
@@ -639,6 +680,7 @@ class DataUpgrade:
                 staged = self._stage(source_l, selected, "library", epoch_l, library_id, moved)
                 candidates.append(staged)
             else:
+                self._advance_step("verify")
                 self._validate_epoch(epoch_path(selected, "library", epoch_l), library_id, "library")
             self._rescan(source_d, source_l)
             for stage, destination in candidates:
@@ -736,6 +778,7 @@ class DataUpgrade:
         )
 
     def _rescan(self, source_d: Snapshot, source_l: Snapshot) -> None:
+        self._advance_step("verify")
         self._phase("rescan")
         self._legacy_writers(source_d.root)
         for snapshot, owner in ((source_d, "data"), (source_l, "library")):
@@ -755,6 +798,7 @@ class DataUpgrade:
         *,
         ui: Document | None = None,
     ) -> tuple[Path, Path]:
+        self._advance_step("settings" if owner == "data" else "library")
         destination = epoch_path(root, owner, epoch)
         stage = destination.parent.parent / f".stage-{epoch}"
         files.make_directory(stage)
@@ -964,6 +1008,7 @@ class DataUpgrade:
                 load_document(store_id, path.with_name(f"{path.name}.prev"))
 
     def _publish_head(self, root: Path, previous: Document | None, proposed: Document) -> None:
+        self._advance_step("verify")
         self._phase("publish")
         private = namespace(root)
         path = root / LIBRARY_MANIFEST
@@ -995,12 +1040,14 @@ class DataUpgrade:
         self._fault("head:durable")
 
     def _open(self, data: Path, library: Path, source: Path, route: Document, head: Document) -> None:
+        self._advance_step("verify")
         self._phase("open")
         member = head["members"][route["dataId"]]
         d_epoch = epoch_path(data, "data", member["epoch"])
         l_epoch = epoch_path(library, "library", head["epoch"])
         for epoch, identity, owner in ((d_epoch, route["dataId"], "data"), (l_epoch, head["libraryId"], "library")):
             self._validate_epoch(epoch, identity, owner)
+        self._advance_step("open")
         if not route.get("established") or route.get("epoch") != member["epoch"]:
             route = {**route, "established": True}
             write_route(data, route, member["epoch"])
@@ -1013,7 +1060,30 @@ class DataUpgrade:
         self._fault("open:ready")
         paths = CommittedPaths(data, library, source, d_epoch, l_epoch, route["dataId"], head["libraryId"])
         self._status(notice=_upgrade_notice(paths.ui_state))
+        self._carry_library_caches(paths)
         self.paths = paths
+
+    def _carry_library_caches(self, paths: CommittedPaths) -> None:
+        for store_id in ("V", "W", "Q"):
+            store = STORES[store_id]
+            source = paths.legacy_library / store.legacy
+            target = paths.library_cache / store.current
+            try:
+                if not files.present(source) or files.present(target):
+                    continue
+                if store_id != "Q":
+                    files.write_bytes(target, source.read_bytes())
+                    continue
+                files.make_directory(target.parent)
+                with tempfile.TemporaryDirectory(prefix=".poses-", dir=target.parent) as directory:
+                    staged = Path(directory) / target.name
+                    staged.mkdir()
+                    for pose in source.glob("*.npz"):
+                        if files.present(pose) and pose.is_file():
+                            shutil.copy2(pose, staged / pose.name)
+                    files.replace_path(staged, target)
+            except (OSError, InvalidStore) as error:
+                self._log(f"Could not reuse {store.legacy}: {error}")
 
     def _freeze(self, root: Path, owner: str, old_key: str, identity: str) -> str:
         source = epoch_path(root, owner, old_key)

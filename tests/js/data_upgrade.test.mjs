@@ -5,6 +5,7 @@ import vm from "node:vm";
 import {
   ACTIONS,
   REASONS,
+  STEPS,
   bootstrapRequest,
   noticeView,
   startGate,
@@ -30,6 +31,9 @@ const keys = [
   "affected",
   "backup",
   "upgradedWarning",
+  "subject",
+  "count",
+  ...STEPS.map((s) => `step.${s}`),
   "reason.newerFormatData",
   ...REASONS.map((r) => `reason.${r}`),
 ];
@@ -47,6 +51,16 @@ function localeStrings(locale) {
 }
 const strings = localeStrings("en-US");
 const state = (status, details = {}) => ({ status, phase: "", reason: null, progress: null, strings, ...details });
+// a running state whose given step runs: the steps before it done, the ones after it pending
+const running = (at, details = {}) =>
+  state("running", {
+    steps: STEPS.map((id, i) => ({
+      id,
+      status: i < STEPS.indexOf(at) ? "done" : id === at ? "running" : "pending",
+    })),
+    percent: 0,
+    ...details,
+  });
 
 class El {
   children = [];
@@ -61,6 +75,7 @@ class El {
   appendChild(child) {
     this.children.push(child);
     child.parent = this;
+    return child;
   }
   insertBefore(child, anchor) {
     this.children.splice(this.children.indexOf(anchor), 0, child);
@@ -111,14 +126,35 @@ test("all six locales supply the upgrade captions and no consent text", () => {
     const ui = JSON.parse(readFileSync(new URL(`${locale}.json`, localeFiles), "utf8")).webui;
     assert.equal(ui.error.protective_copies_needed, undefined, `${locale}: no protective-copy refusal text`);
   }
-  assert.equal(localeStrings("zh-CN")["upgrade.upgradedWarning"], "数据格式已升级，请勿再打开旧版本");
-  assert.equal(localeStrings("en-US")["upgrade.upgradedWarning"], "Data format upgraded. Do not open older versions");
+  for (const locale of locales) {
+    const translated = localeStrings(locale);
+    assert.match(translated["upgrade.count"], /\{done\}.*\{total\}/, locale);
+    assert.doesNotMatch(Object.values(translated).join("\n"), /[·・]/, locale);
+  }
+  const zh = localeStrings("zh-CN"),
+    en = localeStrings("en-US");
+  assert.equal(zh["upgrade.upgradedWarning"], "数据格式已升级，请勿打开旧版本的管理器");
+  assert.equal(en["upgrade.upgradedWarning"], "Data format upgraded. Do not open older versions of the mod manager");
+  assert.equal(zh["upgrade.subject"], "升级内容：Mod 仓库、设置、缩略图、学生大厅");
+  assert.equal(en["upgrade.subject"], "Upgrading: Mod Library, Settings, Thumbnails, Student Hall");
+  assert.deepEqual(
+    STEPS.map((id) => [zh[`upgrade.step.${id}`], en[`upgrade.step.${id}`]]),
+    [
+      ["检查旧数据", "Check Old Data"],
+      ["转换设置", "Convert Settings"],
+      ["转换 Mod 仓库", "Convert Mod Library"],
+      ["校验新数据", "Verify New Data"],
+      ["启用新数据", "Open New Data"],
+    ],
+  );
+  assert.equal(zh["upgrade.count"], "（{done}/{total}）");
+  assert.equal(en["upgrade.count"], " ({done}/{total})");
 });
 
 test("the recovery overlay draws the running and changed notices", () => {
   const h = harness();
   for (const [snapshot, title, hint, actions] of [
-    [state("running", { progress: { done: 2, total: 7 } }), "Data Upgrade", "2 / 7", []],
+    [state("running", { progress: { done: 2, total: 7 } }), "Data Upgrade", strings["upgrade.subject"], []],
     [state("changed", { affected: ["/data/a", "/data/b"] }), "Old Data Changed", "", ["import", "keep", "quit"]],
   ]) {
     h.api.notice(noticeView(snapshot), () => {});
@@ -255,7 +291,8 @@ test("the gate shows progress during a pending write action, then releases start
   const pending = new Promise((resolve) => {
     finish = resolve;
   });
-  const hints = [];
+  const hints = [],
+    percents = [];
   let reads = 0,
     released = false;
   const ready = await upgradeGate({
@@ -264,13 +301,14 @@ test("the gate shows progress during a pending write action, then releases start
         ? Promise.resolve(
             reads++ === 0
               ? state("changed", { affected: ["/one"] })
-              : state("running", { progress: { done: 5, total: 8 } }),
+              : running("library", { percent: 62, progress: { done: 5, total: 8 } }),
           )
         : pending,
     show: async (view) => {
-      hints.push(view.hint);
+      hints.push(view.lines.map((line) => line.text));
+      percents.push(view.progress?.percent);
       if (view.actions.length) return "keep";
-      if (view.hint) finish(state("ready"));
+      if (view.lines.length) finish(state("ready"));
       return null;
     },
     hide() {},
@@ -279,7 +317,8 @@ test("the gate shows progress during a pending write action, then releases start
     },
   });
   assert.equal(ready.status, "ready");
-  assert.ok(hints.includes("5 / 8"));
+  assert.ok(hints.some((lines) => lines.includes("Convert Mod Library (5/8)")));
+  assert.deepEqual(percents.at(-1), 62);
   assert.equal(released, true);
 });
 
@@ -430,7 +469,7 @@ test("the upgraded notice shows once for notice upgraded: title, the line in the
   assert.equal(h.shown.length, 1);
   assert.deepEqual(h.shown[0], {
     title: "Data Upgrade",
-    lines: [{ text: "Data format upgraded. Do not open older versions", color: "#f14f00" }],
+    lines: [{ text: "Data format upgraded. Do not open older versions of the mod manager", color: "#f14f00" }],
     ok: "picker.ok",
   });
   assert.equal(h.shown[0].cancel, undefined);
@@ -479,4 +518,119 @@ test("no consent path remains in the page's upgrade code", () => {
     noticeView(state("consent")).actions.some(({ id }) => id === "continue" || id === "protect"),
     false,
   );
+});
+
+test("a running upgrade names what it upgrades and lists its steps with their states", () => {
+  const view = noticeView(running("library", { percent: 37, progress: { done: 3, total: 12 } }));
+  assert.equal(view.title, "Data Upgrade");
+  assert.equal(view.hint, "Upgrading: Mod Library, Settings, Thumbnails, Student Hall");
+  assert.deepEqual(view.lines, [
+    { text: "Check Old Data", state: "done" },
+    { text: "Convert Settings", state: "done" },
+    { text: "Convert Mod Library (3/12)", state: "running" },
+    { text: "Verify New Data", state: "pending" },
+    { text: "Open New Data", state: "pending" },
+  ]);
+  assert.deepEqual(view.actions, []);
+  assert.equal(view.poll, true);
+  assert.equal(view.busy, true);
+  assert.deepEqual(view.progress, { percent: 37 });
+  const zh = { ...localeStrings("zh-CN") };
+  const settings = noticeView({
+    ...running("settings", { percent: 12, progress: { done: 1, total: 2 } }),
+    strings: zh,
+  });
+  assert.equal(settings.hint, "升级内容：Mod 仓库、设置、缩略图、学生大厅");
+  assert.deepEqual(settings.lines[1], { text: "转换设置（1/2）", state: "running" });
+});
+
+test("the count shows only on a running settings or library step that has a total", () => {
+  const counted = (at, progress) =>
+    noticeView(running(at, { progress }))
+      .lines.map((line) => line.text)
+      .filter((text) => text.includes("("));
+  assert.deepEqual(counted("check", { done: 1, total: 4 }), []);
+  assert.deepEqual(counted("verify", { done: 1, total: 4 }), []);
+  assert.deepEqual(counted("open", { done: 1, total: 4 }), []);
+  assert.deepEqual(counted("settings", { done: 9, total: 4 }), ["Convert Settings (4/4)"]);
+  assert.deepEqual(counted("library", { done: 0, total: 0 }), []);
+  assert.deepEqual(counted("library", null), []);
+});
+
+test("the percentage is the state's own, 0 when it is missing, and kept within 0..100", () => {
+  assert.equal(noticeView(running("check", { percent: undefined })).progress.percent, 0);
+  assert.equal(noticeView(running("verify", { percent: 88 })).progress.percent, 88);
+  assert.equal(noticeView(running("open", { percent: 140 })).progress.percent, 100);
+  assert.equal(noticeView(running("open", { percent: -3 })).progress.percent, 0);
+});
+
+test("a running state without steps shows the subject, the spinner and 0%, and no step lines", () => {
+  for (const steps of [undefined, null]) {
+    const view = noticeView(state("running", { steps, progress: { done: 2, total: 5 } }));
+    assert.equal(view.hint, strings["upgrade.subject"]);
+    assert.deepEqual(view.lines, []);
+    assert.equal(view.busy, true);
+    assert.deepEqual(view.progress, { percent: 0 });
+  }
+});
+
+test("the overlay draws the running upgrade as a struck-through list with the spinner and its percentage", () => {
+  const h = harness();
+  h.api.notice(noticeView(running("library", { percent: 44, progress: { done: 3, total: 9 } })), () => {});
+  const [title, hint, list, busy] = h.panel().children;
+  assert.deepEqual([title.textContent, hint.textContent], ["Data Upgrade", strings["upgrade.subject"]]);
+  assert.deepEqual(
+    list.children.map((item) => [item.tag, item.className, item.textContent]),
+    [
+      ["li", "done", "Check Old Data"],
+      ["li", "done", "Convert Settings"],
+      ["li", "running", "Convert Mod Library (3/9)"],
+      ["li", "pending", "Verify New Data"],
+      ["li", "pending", "Open New Data"],
+    ],
+  );
+  assert.deepEqual(
+    busy.children.map((part) => part.className),
+    ["spinner", "percent"],
+  );
+  assert.equal(busy.children[1].textContent, "44%");
+  h.api.notice(noticeView(running("verify", { percent: 91 })), () => {});
+  assert.equal(h.panel().children[2], list, "a poll updates the list in place");
+  assert.equal(list.children[2].className, "done");
+  assert.equal(list.children[2].textContent, "Convert Mod Library");
+  assert.equal(busy.children[1].textContent, "91%");
+});
+
+test("a write action keeps the observed steps and percentage for the next view", async () => {
+  let finish;
+  const pending = new Promise((resolve) => {
+    finish = resolve;
+  });
+  const reads = [
+    state("failed", { reason: "busy" }),
+    running("settings", { percent: 10, progress: { done: 1, total: 3 } }),
+    state("failed", { reason: "busy" }),
+    running("verify", { percent: 85 }),
+  ];
+  const views = [];
+  const ready = await upgradeGate({
+    request: (path) => (path === "state" ? Promise.resolve(reads.shift() ?? running("verify")) : pending),
+    show: async (view) => {
+      views.push(view);
+      if (view.actions.length) return "retry";
+      if (views.length === 5) finish(state("ready"));
+      return null;
+    },
+    hide() {},
+  });
+  assert.equal(ready.status, "ready");
+  const shown = views
+    .slice(1)
+    .map((view) => [view.lines.find((line) => line.state === "running")?.text, view.progress.percent]);
+  assert.deepEqual(shown, [
+    [undefined, 0],
+    ["Convert Settings (1/3)", 10],
+    ["Convert Settings (1/3)", 10],
+    ["Verify New Data", 85],
+  ]);
 });
