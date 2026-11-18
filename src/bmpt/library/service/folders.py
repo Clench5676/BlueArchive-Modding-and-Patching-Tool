@@ -8,6 +8,7 @@ import hashlib
 import logging
 import os
 from dataclasses import replace
+from operator import attrgetter, methodcaller
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -21,7 +22,7 @@ from ...catalog.models import CoreMap
 from ...core.errors import ServiceError
 from ...gameassets.discovery import cab_names
 from ...core.logging_utils import log_failure
-from .. import safety
+from .. import safety, toggle_timing
 from .. import targets as resolver
 from ..judge import (
     KINDS,
@@ -43,6 +44,16 @@ from .base import _View, _pins_signature, _record_maps, _serialized
 
 
 logger = logging.getLogger(__package__)
+
+
+def _directory_revision(directory: Path) -> tuple[int, int, int, int]:
+    info = directory.stat()
+    return info.st_dev, info.st_ino, info.st_mtime_ns, info.st_ctime_ns
+
+
+_REGULAR_FILE = methodcaller("is_file", follow_symlinks=False)
+_ENTRY_NAME = attrgetter("name")
+_BUNDLE_NAME = methodcaller("endswith", ".bundle")
 
 
 class FoldersMixin:
@@ -259,6 +270,13 @@ class FoldersMixin:
                 continue
         return listing
 
+    @toggle_timing.stage("index_listing")
+    def _bundle_names(self, directory: Path) -> dict[str, None]:
+        with os.scandir(directory) as entries:
+            names = map(_ENTRY_NAME, filter(_REGULAR_FILE, entries))
+            # Keep listing order for a rebuild and compare names independently of that order.
+            return dict.fromkeys(filter(_BUNDLE_NAME, names))
+
     @_serialized
     def note_packed(self, paths: Iterable[Path], pin: Pin | None = None) -> None:
         """Learn CAB-based slots for packed generic files before import identity is resolved.
@@ -366,21 +384,30 @@ class FoldersMixin:
     def _index(self, pin: Pin) -> dict[str, list[Path]]:
         """Index the install's bundle files by lower-case core (names only).
 
-        The index is listed again when a folder changes, and rebuilt only when the files there are not the same ones (a
-        write replacing a file keeps the index).
+        Compare regular-file names only in directories with a new revision. Build paths, slot mappings and name
+        lookups again only when membership changes.
         """
+        cached = self._indexes.get(pin.key)
         try:
-            signature_ = tuple((str(d), d.stat().st_mtime_ns) for d in pin.dirs)
+            signature_ = tuple((directory, _directory_revision(directory)) for directory in pin.dirs)
+            if cached and cached[0] == signature_ and signature_:
+                return cached[1]
+            previous = dict(cached[0]) if cached else {}
+            files = {
+                directory: cached[2][directory]
+                if cached and previous.get(directory) == revision
+                else self._bundle_names(directory)
+                for directory, revision in signature_
+            }
         except OSError:
             signature_ = ()
-        cached = self._indexes.get(pin.key)
-        if cached and cached[0] == signature_ and signature_:
-            return cached[1]
-        listing = self._listing(pin)
-        files = frozenset(path for _name, path in listing)
+            files = {directory: {} for directory in pin.dirs}
+            for name, path in self._listing(pin):
+                files[Path(path).parent][name] = None
         if cached and cached[2] == files:
             self._indexes[pin.key] = (signature_, cached[1], files, cached[3])
             return cached[1]
+        listing = [(name, os.path.join(directory, name)) for directory in pin.dirs for name in files[directory]]
         packed = self._packed_groups(listing)
         wanted = self._wanted_packed()
         self._learn_packed([path for key, paths in packed.items() if key in wanted for path in paths])
@@ -414,15 +441,10 @@ class FoldersMixin:
             return "model"
         return kind_of(core)
 
-    def _built_for(self, pin: Pin) -> int:
-        """Which build of the install's index the caches built on it belong to."""
-        self._index(pin)
-        return self._indexes[pin.key][3]
-
     def _core_map(self, pin: Pin) -> CoreMap:
         """How the install's cores map to variant keys (Catalog.core_map on its file names)."""
         index = self._index(pin)
-        built_for = self._built_for(pin)
+        built_for = self._indexes[pin.key][3]
         cached = self._maps.get(pin.key)
         if cached and cached[0] == built_for:
             return cached[1]
@@ -492,7 +514,7 @@ class FoldersMixin:
     def _names(self, pin: Pin) -> dict[str, Path]:
         """The install's bundle files by name, rebuilt with its index."""
         index = self._index(pin)
-        built_for = self._built_for(pin)
+        built_for = self._indexes[pin.key][3]
         cached = self._names_cache.get(pin.key)
         if cached and cached[0] == built_for:
             return cached[1]

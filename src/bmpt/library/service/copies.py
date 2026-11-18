@@ -36,6 +36,7 @@ from ..models import (
     ScanResult,
 )
 from ..storage import (
+    Fingerprint,
     atomic_copy,
     read_tail,
 )
@@ -94,7 +95,8 @@ class CopiesMixin:
             with toggle_timing.stage("build_prepare"):
                 return build()
 
-        if len({path.name for path in targets}) != len(targets):
+        target_names = {path.name for path in targets}
+        if len(target_names) != len(targets):
             return prepare()  # built keys identify parts by file name
         try:
             signature = self._build_signature(sources, targets, pin)
@@ -109,7 +111,7 @@ class CopiesMixin:
                 if key.get("build") != signature or key.get("source") != configured.get("source"):
                     continue
                 parts = key.get("parts") or {}
-                if not parts or not set(parts) <= {target.name for target in targets}:
+                if not parts or not set(parts) <= target_names:
                     continue
                 try:
                     replacements = {}
@@ -121,9 +123,10 @@ class CopiesMixin:
                         kept = self.root / "built" / f"{part['sha1']}.bundle"
                         if part.get("mod_file") and key["source"].startswith("mod:"):
                             kept = self.root / "mods" / key["source"][4:] / part["mod_file"]
-                        if self._hashes.get(kept).sha1 != part["sha1"]:
+                        fingerprint = self._hashes.get(kept)
+                        if fingerprint.sha1 != part["sha1"]:
                             raise ValueError("Changed built copy")
-                        if not self._kept_crc_fits(kept, target):
+                        if not self._kept_crc_fits(fingerprint, target):
                             raise ValueError("Built copy without the part's CRC")
                         replacements[target] = kept
                     if self._stale_build(replacements, pin):
@@ -152,7 +155,7 @@ class CopiesMixin:
         key = (folder.get("built") or {}).get(core)
         if not key:
             return None
-        names = {path.name for paths in self._index(pin).values() for path in paths}
+        names = self._names(pin)
         parts = key.get("parts") or {}
         fits = (
             key.get("source") == source
@@ -173,7 +176,8 @@ class CopiesMixin:
                     else self.root / "built" / f"{part.get('sha1')}.bundle"
                 )
                 try:
-                    if self._hashes.get(kept).sha1 != part.get("sha1") or not self._kept_crc_fits(kept, target):
+                    fingerprint = self._hashes.get(kept)
+                    if fingerprint.sha1 != part.get("sha1") or not self._kept_crc_fits(fingerprint, target):
                         raise ValueError(kept)
                 except (OSError, ValueError):
                     logger.info("The built copy of %s no longer fits, rebuilding", target.name)
@@ -190,13 +194,12 @@ class CopiesMixin:
         self._drop_built(pin, [core])
         return None
 
-    def _kept_crc_fits(self, kept: Path, target: Path) -> bool:
+    def _kept_crc_fits(self, fingerprint: Fingerprint, target: Path) -> bool:
         """Tell whether a built copy's part may go over ``target`` as it is.
 
         It may when its bytes carry the CRC of the target's name, or the target needs no CRC. An older build kept the
         bytes of a mod file written whole over a part whose name carries another CRC; such a copy is built again.
         """
-        fingerprint = self._hashes.get(kept)
         if crc_state(fingerprint.crc, fingerprint.trailing, target.name) != "needs_fix":
             return True
         return not self.settings.crc_needed(target)

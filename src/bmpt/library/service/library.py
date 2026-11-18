@@ -158,8 +158,8 @@ class ModLibrary(
         self._reread = False  # the last read could not open state.json: read it again at the next call
         self._version = 0  # bumped by every change of _applied, so a scan can tell it is stale
         self._pruned_cores: set[str] = set()
-        # per install key: (folders' signature, index, its files, generation); file name -> lower-case core
-        self._indexes: dict[str, tuple[tuple, dict[str, list[Path]], frozenset, int]] = {}
+        # Per install: directory revisions, core index, regular bundle names by directory, generation.
+        self._indexes: dict[str, tuple[tuple, dict[str, list[Path]], dict[Path, dict[str, None]], int]] = {}
         self._cab_indexes: dict[tuple[str, tuple[Path, ...]], CabIndex] = {}
         self._costume_builds: dict[str, threading.Event] = {}  # costume preview signatures being built
         self._costume_builds_lock = threading.Lock()

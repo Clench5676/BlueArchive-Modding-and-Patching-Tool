@@ -824,6 +824,61 @@ def test_a_built_copy_whose_bytes_changed_is_dropped_and_rebuilt(world, monkeypa
     assert "rebuilt=1 reused=0 direct=0" in caplog.text
 
 
+def test_a_rebuilt_mod_installed_by_another_program_build_needs_a_new_build(world, monkeypatch, caplog):
+    from bmpt.library.service import copies
+
+    mod = world.add(world.spr, fixed=True)
+    rebuilding_installer(monkeypatch)
+    monkeypatch.setattr(copies, "_build_version", lambda: "previous")
+    world.library.apply("test", f"mod:{mod.id}")
+    assert world.spr.read_bytes() != mod.file.read_bytes()
+    monkeypatch.setattr(copies, "_build_version", lambda: "current")
+    with caplog.at_level("INFO", logger="bmpt.library"):
+        world.toggle(False)
+    assert "Not keeping the built copy of test_spr" in caplog.text
+    assert world.spr.read_bytes() == OFFICIAL and "test_spr" not in world.folder()["built"]
+
+
+def test_managed_toggle_reuses_names_and_detects_an_outside_folder_change(world, monkeypatch):
+    world.root = world.tmp / ".bmpt-upgrade" / "library" / "g2" / "active"
+    library = world.reload()
+    files = three_mods(world)
+    modded = {key: file.read_bytes() for key, file in files.items()}
+    pin = library.current_pin()
+    names = library._names(pin)
+    timings = Timings()
+    monkeypatch.setattr(spans, "_sink", timings)
+    added = None
+
+    def progress(current, *_):
+        nonlocal added
+        if added is None and current["fraction"] == 1:
+            added = game_bundle(world.game, "outside_spr")
+
+    assert len(world.toggle(False, progress=progress).done) == len(files)
+    assert all(file.read_bytes() == OFFICIAL for file in files.values())
+    assert added is not None and added.name not in names and library._names(pin)[added.name] == added
+    assert len(world.toggle(True).done) == len(files)
+    assert {key: file.read_bytes() for key, file in files.items()} == modded
+    assert len(world.reload()._applied) == len(files)
+    for direction in ("off", "on"):
+        assert timings.snapshot()[f"mods.toggle.{direction}.state_save"]["count"] == len(files)
+
+
+def test_the_name_index_survives_a_replacement_and_tracks_file_type_changes(world):
+    library = world.library
+    pin = library.current_pin()
+    original = library._names(pin)
+    replacement = world.tmp / "replacement"
+    replacement.write_bytes(OFFICIAL)
+    replacement.replace(world.spr)
+    assert library._names(pin) is original
+
+    world.spr.unlink()
+    world.spr.mkdir()
+    assert world.spr.name not in library._names(pin)
+
+
 def test_clear_built_mods_keeps_keys_of_mod_files(world, monkeypatch):
     lobby = game_bundle(world.game, "test_home", payload=b"lobby!!!")
     portrait, home = world.add(world.spr, fixed=True), world.add(lobby, payload=b"lobbymod")
@@ -3567,7 +3622,7 @@ def test_roster_snapshot_reads_one_pin_and_profile_without_hashing_or_per_varian
     monkeypatch.setattr(world.library, "configured", forbidden)
     monkeypatch.setattr(world.library._hashes, "get", forbidden)
     snapshot = world.library.roster_snapshot(keys)
-    assert calls == {"pin": 1, "profiles": 1, "inventory": 5}
+    assert calls == {"pin": 1, "profiles": 1, "inventory": 3}
     assert snapshot["install"] == world.key()
     assert snapshot["favorites"] == {"test"} and [entry.id for entry in snapshot["mods"]] == [mod.id]
     assert snapshot["configured"]["test"] == {"spr": source, "lobby": None}
