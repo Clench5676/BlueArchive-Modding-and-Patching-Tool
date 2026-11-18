@@ -96,7 +96,7 @@ def test_first_start_handoff_and_bootstrap_run_log(tmp_path, monkeypatch, caplog
 
     monkeypatch.setattr(main, "EXE_DIR", tmp_path)
     monkeypatch.setattr(main, "DataUpgrade", make_upgrade)
-    monkeypatch.setattr(system, "can_restart_safe", lambda: compiled)
+    monkeypatch.setattr(system, "can_relaunch", lambda: compiled)
     monkeypatch.setattr(system, "program_command", lambda: ["bmpt-test-program"])
     monkeypatch.setattr(main.Services, "start", lambda self: None)
     monkeypatch.setattr(main, "_watch_config", lambda *_: None)

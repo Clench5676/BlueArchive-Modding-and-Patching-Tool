@@ -517,13 +517,13 @@ def _serve_bootstrap(
     start_upgrade: bool = False,
     reports: Reports | None = None,
 ) -> bool | Literal["relaunch"]:
-    from .system import can_restart_safe
+    from .system import can_relaunch
 
     stop = threading.Event()
     window = None
     services = None
     safe_mode = getattr(args, "safe_mode", False)
-    relaunch = not (classic or args.browser or safe_mode) and can_restart_safe()
+    relaunch = not (classic or args.browser or safe_mode) and can_relaunch()
     relaunch_requested = False
     own_log = reports is None
     if reports is None:
