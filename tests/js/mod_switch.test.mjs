@@ -552,7 +552,7 @@ test("the switch's view from mods.state: on, off, busy, unavailable with its rea
     "steam_busy",
     "classic_open",
     "game_not_found",
-    "profiles_unreadable",
+    "mod_configuration_unreadable",
   ]) {
     const v = MS.view(base({ available: false, reason }));
     assert.equal(v.unavailable, true, reason);
@@ -564,7 +564,7 @@ test("the switch's view from mods.state: on, off, busy, unavailable with its rea
   }
   assert.equal(MS.reasonText(base({ available: false, reason: "game_running" })), S("error.game_running"));
   assert.equal(
-    MS.reasonText(base({ available: false, reason: "profiles_unreadable", reasonParams: { file: "p.json" } })),
+    MS.reasonText(base({ available: false, reason: "mod_configuration_unreadable", reasonParams: { file: "p.json" } })),
     "Unreadable mod settings: p.json",
   );
   // the red dot: entries not switched or left as is, as the services count them (the last scan with the scan consent,
@@ -741,8 +741,8 @@ test("entries a game update's rig change holds: their own help line and Details,
   const s = base({
     held: 2,
     heldEntries: [
-      { install: "/a", core: "a_spr", variant: "a", kind: "spr" },
-      { install: "/a", core: "b_home", variant: "b", kind: "lobby" },
+      { install: "/a", core: "a_spr", alt: "a", resourceType: "portrait" },
+      { install: "/a", core: "b_home", alt: "b", resourceType: "memorialLobby" },
     ],
   });
   const lines = MS.helpLines(s);
@@ -763,31 +763,31 @@ test("a toggle's end: silence, or the result popup naming each failed entry with
     null,
   );
   assert.deepEqual(MS.resultSummary({ enabled: true, done: [] }), null);
-  const names = (e) => ({ airi: "Airi", ch0251: "Airi (Band)" })[e.variant] || e.variant;
+  const names = (e) => ({ airi: "Airi", ch0251: "Airi (Band)" })[e.alt] || e.alt;
   const r = MS.resultSummary(
     {
       enabled: false,
       done: [{}, {}, {}],
-      adopted: [{ variant: "airi" }],
+      adopted: [{ alt: "airi" }],
       failed: [
         {
-          entry: { install: "/g", core: "airi_spr", variant: "airi", kind: "spr" },
+          entry: { install: "/g", core: "airi_spr", alt: "airi", resourceType: "portrait" },
           code: "game_file_locked",
           params: {},
         },
         {
-          entry: { install: "/g", core: "ch0251_home", variant: "ch0251", kind: "lobby" },
+          entry: { install: "/g", core: "ch0251_home", alt: "ch0251", resourceType: "memorialLobby" },
           code: "not_enough_space",
           params: { need: 3 * 1048576, free: 1048576 },
         },
       ],
-      stuck: [{ variant: "ch0251" }],
+      stuck: [{ alt: "ch0251" }],
       left: [
         {
           install: "/g",
           core: "zz_spr",
-          variant: "zz",
-          kind: "spr",
+          alt: "zz",
+          resourceType: "portrait",
           code: "not_enough_space",
           params: { need: 2 * 1048576, free: 1048576 },
         },
@@ -808,7 +808,7 @@ test("a toggle's end: silence, or the result popup naming each failed entry with
   const many = MS.resultSummary({
     enabled: true,
     failed: Array.from({ length: 9 }, (_, i) => ({
-      entry: { core: `c${i}_spr`, variant: `c${i}` },
+      entry: { core: `c${i}_spr`, alt: `c${i}` },
       code: "game_file_locked",
     })),
   });
@@ -917,7 +917,7 @@ test("sizes and the free-space refusal's sizes", () => {
 
 test("the top bar's switch follows mods.state, and the first toggle explains once from any place", async () => {
   answers["mods.state"] = base({ explained: false });
-  await MS.init({ names: async () => (e) => e.variant });
+  await MS.init({ names: async () => (e) => e.alt });
   const toggle = switchHost.children.find((e) => e.className === "ms-toggle");
   assert.equal(switchHost.hidden, false);
   assert.equal(toggle.getAttribute("role"), "switch");
@@ -1413,10 +1413,10 @@ test("an untested game build: the confirmation names the entries, Apply Anyway c
   const entries = Array.from({ length: 8 }, (_, i) => ({
     install: "/g",
     core: `c${i}_spr`,
-    variant: `c${i}`,
-    kind: i ? "spr" : "lobby",
+    alt: `c${i}`,
+    resourceType: i ? "portrait" : "memorialLobby",
   }));
-  const lines = MS.untestedLines({ entries }, (e) => e.variant.toUpperCase());
+  const lines = MS.untestedLines({ entries }, (e) => e.alt.toUpperCase());
   assert.equal(lines[0].text, "Affected by the game update: 8");
   assert.deepEqual(
     lines.slice(1).map((l) => l.text),
@@ -1466,7 +1466,10 @@ test("the classic modal queues the refused write only when its box is ticked, on
   assert.equal(await m, null);
   assert.equal(queued(), 0);
   // ticked, closed with Escape: queued with its call
-  m = MS.classicModal({ method: "actions.apply", params: { variant: "airi", source: "variant:ch0251", kind: "spr" } });
+  m = MS.classicModal({
+    method: "actions.apply",
+    params: { alt: "airi", source: "alt:ch0251", resourceType: "portrait" },
+  });
   await drawn(dialog, "check");
   action(dialog, "check").click();
   press("Escape");
@@ -1476,7 +1479,7 @@ test("the classic modal queues the refused write only when its box is ticked, on
   assert.equal(dialog.hidden, true, "plain confirmations stay silent");
   assert.deepEqual(called("classic.queue")[0], {
     method: "actions.apply",
-    params: { variant: "airi", source: "variant:ch0251", kind: "spr" },
+    params: { alt: "airi", source: "alt:ch0251", resourceType: "portrait" },
   });
   // ticked, Bring to Front: raised and queued
   m = MS.classicModal({ method: "mods.toggle", params: { enabled: true, expect: false } });
@@ -1529,7 +1532,7 @@ const GLOBAL = "/games/BlueArchive",
 const gameFile = (core, extra = {}) => ({
   file: `${GLOBAL}/${core}.bundle`,
   core,
-  kind: /_spr$/.test(core) ? "spr" : "lobby",
+  resourceType: /_spr$/.test(core) ? "portrait" : "memorialLobby",
   applied: "unknown",
   crc: "fixed",
   original: false,
@@ -1543,9 +1546,9 @@ const gameFile = (core, extra = {}) => ({
 const entry = (core, state, extra = {}) => ({
   install: GLOBAL,
   core,
-  variant: core.replace(/_spr$|_home.*$/, ""),
+  alt: core.replace(/_spr$|_home.*$/, ""),
   names: null,
-  kind: /_spr$/.test(core) ? "spr" : "lobby",
+  resourceType: /_spr$/.test(core) ? "portrait" : "memorialLobby",
   source: "unknown",
   configured: null,
   state,
@@ -1593,7 +1596,7 @@ test("which entries each prompt lists: drift while mods are on, untracked and ch
 
 test("a prompt's cards: the name, the kind and install chips, No Official Copy, and what cannot be ticked", () => {
   const two = base({ installs: [install(GLOBAL, "Global"), install(JAPAN, "Japan", { id: "0123abcd4567" })] });
-  const nameOf = (e) => ({ airi: "Airi", hina: "Hina" })[e.variant] || e.variant;
+  const nameOf = (e) => ({ airi: "Airi", hina: "Hina" })[e.alt] || e.alt;
   const c = P.card(entry("airi_spr", "untracked"), { state: base(), nameOf });
   assert.deepEqual(
     [c.key, c.label, c.full, c.chips, c.disabled, c.size],
@@ -1613,9 +1616,9 @@ test("a prompt's cards: the name, the kind and install chips, No Official Copy, 
   // another install's card draws that install's own files (<core>@<id>), the current one's its plain core
   assert.equal(
     P.entryBase(entry("hina_home_gl", "untracked", { install: JAPAN }), two),
-    "/asset/spine/lobby/hina_home_gl@0123abcd4567/skeleton",
+    "/asset/spine/memorialLobby/hina_home_gl@0123abcd4567/skeleton",
   );
-  assert.equal(P.entryBase(entry("airi_spr", "untracked"), two), "/asset/spine/spr/airi_spr/skeleton");
+  assert.equal(P.entryBase(entry("airi_spr", "untracked"), two), "/asset/spine/portrait/airi_spr/skeleton");
   // the details: file, size, CRC state and where an official copy is
   const det = P.details(
     entry("airi_spr", "untracked", { files: [gameFile("airi_spr", { copy: "backup", size: 2 * 1048576 })] }),
@@ -1681,14 +1684,16 @@ test("the untracked prompt's buttons: add the ticked cards, Don't Ask Again dism
 
 test("Apply Mod Configuration's result names the entries skipped because their files changed", () => {
   assert.deepEqual(P.driftSummary({ done: [{}], failed: [], skipped: [], stuck: [] }), null);
-  const nameOf = (e) => e.variant;
+  const nameOf = (e) => e.alt;
   const r = P.driftSummary(
     {
       done: [{}],
       stuck: [],
-      failed: [{ entry: { core: "airi_spr", variant: "Airi", kind: "spr" }, code: "game_file_locked", params: {} }],
+      failed: [
+        { entry: { core: "airi_spr", alt: "Airi", resourceType: "portrait" }, code: "game_file_locked", params: {} },
+      ],
       skipped: [
-        { install: GLOBAL, core: "hina_home", variant: "Hina", kind: "lobby", why: "changed" },
+        { install: GLOBAL, core: "hina_home", alt: "Hina", resourceType: "memorialLobby", why: "changed" },
         { core: "x_spr", why: "missing" },
       ],
     },
@@ -1772,7 +1777,9 @@ test("the tray's refusal shows as the page's own, and its toggle is followed to 
       adopted: [],
       stuck: [],
       left: [],
-      failed: [{ entry: { core: "airi_spr", variant: "airi", kind: "spr" }, code: "game_file_locked", params: {} }],
+      failed: [
+        { entry: { core: "airi_spr", alt: "airi", resourceType: "portrait" }, code: "game_file_locked", params: {} },
+      ],
     },
   };
   const followed = MS.trayToggle({ job: "job-tray-3", enabled: false, expect: true });
@@ -1786,7 +1793,7 @@ test("the tray's refusal shows as the page's own, and its toggle is followed to 
 });
 
 test("the tray's Back to Official opens the drift prompt: two buttons and no way out but them", async () => {
-  P.init({ names: async () => (e) => ({ airi: "Airi", hina: "Hina" })[e.variant] || e.variant });
+  P.init({ names: async () => (e) => ({ airi: "Airi", hina: "Hina" })[e.alt] || e.alt });
   answers["mods.state"] = base();
   await MS.refresh();
   answers["mods.entries"] = [
@@ -1874,7 +1881,7 @@ test("held refusal prompts accept Overwritten, Add First and its result, and sca
   answers["mods.adopt"] = "job-held-adopt";
   jobs["job-held-adopt"] = {
     state: "done",
-    result: { added: [], failed: [{ entry: { variant: "airi", core: "airi_spr" }, code: "game_file_locked" }] },
+    result: { added: [], failed: [{ entry: { alt: "airi", core: "airi_spr" }, code: "game_file_locked" }] },
   };
   held = Loading.hold(() => P.overwritten({ name: "Airi", core: "airi_spr", files: [gameFile("airi_spr")] }));
   await drawn(dialog, "cancel");
@@ -1908,7 +1915,7 @@ test("a toggle holds page input through the refresh and drawing, then shows an a
   answers["mods.toggle"] = "job-refresh";
   jobs["job-refresh"] = {
     state: "done",
-    result: { enabled: false, failed: [{ entry: { variant: "airi", core: "airi_spr" }, code: "game_file_locked" }] },
+    result: { enabled: false, failed: [{ entry: { alt: "airi", core: "airi_spr" }, code: "game_file_locked" }] },
   };
   await MS.init({
     refreshPage: async () => {
@@ -2143,7 +2150,7 @@ test("main refreshes on external Enable Mods changes and keeps the awaited local
   };
   await new Function(
     "ModSwitch",
-    "variantNames",
+    "altNames",
     "refreshAfterToggle",
     "libraryChanged",
     "timed",
@@ -2194,7 +2201,7 @@ test("detail refresh callers await changes queued while an earlier refresh is dr
   const h = new Function(
     "env",
     `let { ${Object.keys(env).join(", ")} } = env;
-    let open = true, busy = false, fullscreen = false, fam = { variants: [{ spr: "airi_spr" }] };
+    let open = true, busy = false, fullscreen = false, shownStudent = { alts: [{ portrait: "airi_spr" }] };
     ${changed}
     async function reloadChanged() { heldChange = undefined; await env.draw(); }
     return { filesChanged };`,
@@ -2421,28 +2428,36 @@ test("an update's impact as a list: only the mods to update, each a card with it
   const mods = [
     {
       id: "1",
-      target: "hoshino",
+      targetAlt: "hoshino",
       core: "ch0101_spr",
-      kind: "spr",
+      resourceType: "portrait",
       impact: "rig_changed",
-      label: "Bunny Hoshino",
+      name: "Bunny Hoshino",
       configured: true,
       changes: { repacked: true, animations: 3, textures: true },
     },
-    { id: "2", target: "airi", core: "ch0200_spr", kind: "spr", impact: "rebuilt", label: "Airi", changes: {} },
-    { id: "3", target: "hina", core: "ch0063_home", kind: "lobby", impact: "gone", label: "Night" },
-    { id: "4", target: "aru", core: "aru_spr", kind: "spr", impact: "unchanged" },
+    {
+      id: "2",
+      targetAlt: "airi",
+      core: "ch0200_spr",
+      resourceType: "portrait",
+      impact: "rebuilt",
+      name: "Airi",
+      changes: {},
+    },
+    { id: "3", targetAlt: "hina", core: "ch0063_home", resourceType: "memorialLobby", impact: "gone", name: "Night" },
+    { id: "4", targetAlt: "aru", core: "aru_spr", resourceType: "portrait", impact: "unchanged" },
     {
       id: "5",
-      target: "aris",
+      targetAlt: "aris",
       core: "aris_spr",
-      kind: "spr",
+      resourceType: "portrait",
       impact: "rig_changed",
-      repaired_id: "5r",
+      repairedCopyId: "5r",
       configured: false,
     },
   ];
-  const nameOf = (e) => e.variant[0].toUpperCase() + e.variant.slice(1);
+  const nameOf = (e) => e.alt[0].toUpperCase() + e.alt.slice(1);
   // what was handled by itself (rebuilt, new parts, gone) is never listed; a mod a repaired copy replaced neither
   const listed = Impact.heldOf({ due: true, mods });
   assert.deepEqual(
@@ -2468,15 +2483,16 @@ test("an update's impact as a list: only the mods to update, each a card with it
       id: "g",
       target: "other-set:0d9415b79fe5",
       core: "other-set:0d9415b79fe5",
-      kind: "other",
+      resourceType: "other",
       impact: "rig_changed",
-      label: "UI Font",
+      name: "UI Font",
     },
-    (e) => e.variant,
+    (e) => e.alt,
   );
   assert.deepEqual([generic.label, generic.full, generic.thumb], ["UI Font", "UI Font", null]);
   assert.equal(
-    Impact.card({ id: "g", target: "other-set:0d94", kind: "other", impact: "rig_changed" }, (e) => e.variant).label,
+    Impact.card({ id: "g", target: "other-set:0d94", resourceType: "other", impact: "rig_changed" }, (e) => e.alt)
+      .label,
     "Other Mods",
   );
   // the details: the mod's name, what changed (without the kind's prefix); Go To, the preview, Update and Apply
@@ -2562,12 +2578,12 @@ test("an update's impact as a list: only the mods to update, each a card with it
         assert.ok(typeof ui.mods[k] === "string" && ui.mods[k].length > 0, `${lang} ${k}`);
       const every = { repacked: true, animations: 2, rig: true, removed: true, added: true };
       for (const [kind, changes] of [
-        ["spr", every],
-        ["lobby", { animations: 1 }],
-        ["model", { textures: true }],
+        ["portrait", every],
+        ["memorialLobby", { animations: 1 }],
+        ["chibi", { textures: true }],
         ["other", { removed: true }],
       ]) {
-        const text = Impact.changeText({ kind, changes });
+        const text = Impact.changeText({ resourceType: kind, changes });
         assert.ok(text && !/[{}]|mods\./.test(text), `${lang} ${kind} ${text}`);
       }
       for (const k of ["impact", "view", "viewUpdates"])
@@ -2579,7 +2595,7 @@ test("an update's impact as a list: only the mods to update, each a card with it
       flat({ webui: JSON.parse(readFileSync(new URL("../../src/bmpt/locales/zh-CN.json", import.meta.url))).webui }),
     );
     assert.equal(
-      Impact.changeText({ kind: "spr", changes: { repacked: true, animations: 1 } }),
+      Impact.changeText({ resourceType: "portrait", changes: { repacked: true, animations: 1 } }),
       "官方立绘变动：.atlas 文件布局改变，.skel 文件新增动画 x1",
     );
   } finally {
@@ -2588,37 +2604,47 @@ test("an update's impact as a list: only the mods to update, each a card with it
 });
 
 test("what an update changed in a mod's official parts: each change once, a repack carrying its texture sizes", () => {
-  assert.equal(Impact.changeText({ kind: "spr", changes: {} }), "");
-  assert.equal(Impact.changeText({ kind: "spr" }), "");
+  assert.equal(Impact.changeText({ resourceType: "portrait", changes: {} }), "");
+  assert.equal(Impact.changeText({ resourceType: "portrait" }), "");
   assert.equal(
-    Impact.changeText({ kind: "spr", changes: { animations: 1 } }),
+    Impact.changeText({ resourceType: "portrait", changes: { animations: 1 } }),
     "Official Portrait changes: 1 new animation in the .skel file",
   );
   assert.equal(
-    Impact.changeText({ kind: "lobby", changes: { repacked: true, textures: true, rig: true } }),
+    Impact.changeText({ resourceType: "memorialLobby", changes: { repacked: true, textures: true, rig: true } }),
     "Official Memorial Lobby changes: .atlas file layout changed, .skel file structure changed",
   );
   assert.equal(
-    Impact.changeText({ kind: "model", changes: { textures: true, removed: true, added: true } }),
+    Impact.changeText({ resourceType: "chibi", changes: { textures: true, removed: true, added: true } }),
     "Official Chibi changes: texture size changed, part removed, new parts",
   );
-  assert.equal(Impact.changeText({ kind: "other", changes: { removed: true } }), "Official files: part removed");
+  assert.equal(
+    Impact.changeText({ resourceType: "other", changes: { removed: true } }),
+    "Official files: part removed",
+  );
   // a generic mod: its own name and the kind, no Go To (no student page); a held one keeps Fix
-  const other = Impact.modLines({ id: "9", kind: "other", label: "UI Font", target: "", changes: { removed: true } });
+  const other = Impact.modLines({
+    id: "9",
+    resourceType: "other",
+    name: "UI Font",
+    target: "",
+    changes: { removed: true },
+  });
   assert.equal(other[0].text, "UI Font - Other Mods");
   assert.equal(other[0].button, undefined);
   assert.equal(
-    Impact.modLines({ id: "9", kind: "other", label: "UI Font", target: "" }, undefined, { fix: true })[0].button.label,
+    Impact.modLines({ id: "9", resourceType: "other", name: "UI Font", target: "" }, undefined, { fix: true })[0].button
+      .label,
     "Update and Apply",
   );
 });
 
 test("the held entries' Details name each mod with Go To and Fix where its mod is known, then how the hold ends", () => {
   const entries = [
-    { install: "/a", core: "a_spr", variant: "a", kind: "spr", source: "mod:1", label: "Swim A" },
-    { install: "/a", core: "b_home", variant: "b", kind: "lobby", source: "variant:c" },
+    { install: "/a", core: "a_spr", alt: "a", resourceType: "portrait", source: "mod:1", name: "Swim A" },
+    { install: "/a", core: "b_home", alt: "b", resourceType: "memorialLobby", source: "alt:c" },
   ];
-  const lines = Impact.heldLines(entries, (e) => e.variant.toUpperCase());
+  const lines = Impact.heldLines(entries, (e) => e.alt.toUpperCase());
   assert.deepEqual(
     lines.map((l) => [l.text, l.button?.label || null, (l.more || []).map((b) => b.label)]),
     [
@@ -2628,10 +2654,10 @@ test("the held entries' Details name each mod with Go To and Fix where its mod i
   );
   assert.deepEqual(Impact.heldMods(entries)[0], {
     id: "1",
-    target: "a",
+    targetAlt: "a",
     core: "a_spr",
-    kind: "spr",
-    label: "Swim A",
+    resourceType: "portrait",
+    name: "Swim A",
     configured: true,
   });
 });
@@ -2656,8 +2682,8 @@ test("the entries a game update overwrote that need no repair are applied again;
   // a repaired copy that took a mod's place: not held, unless its student is still configured with the mod
   const fixed = {
     mods: [
-      { id: "x", impact: "rig_changed", repaired_id: "y", configured: false },
-      { id: "z", impact: "rig_changed", repaired_id: "w", configured: true },
+      { id: "x", impact: "rig_changed", repairedCopyId: "y", configured: false },
+      { id: "z", impact: "rig_changed", repairedCopyId: "w", configured: true },
       { id: "v", impact: "rig_changed" },
     ],
   };
@@ -2716,14 +2742,22 @@ test("the start asks before the first screen, checks under the loading screen, a
     mods: [
       {
         id: "b",
-        target: "hina",
+        targetAlt: "hina",
         core: "hina_home",
-        kind: "lobby",
+        resourceType: "memorialLobby",
         impact: "rig_changed",
-        label: "Night",
+        name: "Night",
         configured: true,
       },
-      { id: "a", target: "airi", core: "airi_spr", kind: "spr", impact: "rebuilt", label: "Band", configured: true },
+      {
+        id: "a",
+        targetAlt: "airi",
+        core: "airi_spr",
+        resourceType: "portrait",
+        impact: "rebuilt",
+        name: "Band",
+        configured: true,
+      },
     ],
   };
   try {
@@ -2882,7 +2916,7 @@ test("the drift prompt asks the impacts of the mods its entries are configured w
   const entries = [
     { install: "/a", core: "a_spr", configured: "mod:1" },
     { install: "/a", core: "b_spr", configured: "mod:2" },
-    { install: "/a", core: "c_spr", configured: "variant:x" },
+    { install: "/a", core: "c_spr", configured: "alt:x" },
     { install: "/b", core: "a_spr", configured: "mod:1" },
   ];
   assert.deepEqual(Impact.configuredMods(entries), ["1", "2"]);
@@ -2905,7 +2939,7 @@ test("the drift prompt asks the impacts of the mods its entries are configured w
       const Pop = await import("../../src/bmpt/web/js/ui/popup.js");
       const { switchGrid } = await import("../../src/bmpt/web/js/mods/switch-layout.js");
       const { TAN10 } = await import("../../src/bmpt/web/js/core/util.js");
-      for (const kind of [null, "spr", "lobby", "model"]) {
+      for (const kind of [null, "portrait", "lobby", "model"]) {
         const card = switchGrid(kind, Pop.listCardBox(Pop.listLayout(false, kind)).w).card;
         const room = Pop.badgeRoom(card);
         const fit = NGUI.fitText(ui.mods.heldBadge, 26, 20, room - 24, 1);
@@ -2942,13 +2976,13 @@ test("the impact list: a card's click shows it, its corner ticks it; Update and 
   // memorial lobbies: the generic list (the portrait frame's prefab is not in this stand-in)
   const held = (extra = {}) => ({
     id: "r",
-    target: "hina",
+    targetAlt: "hina",
     core: "hina_home",
-    kind: "lobby",
+    resourceType: "memorialLobby",
     impact: "rig_changed",
-    label: "Night",
+    name: "Night",
     configured: true,
-    repaired_id: "r2",
+    repairedCopyId: "r2",
     ...extra,
   });
   const result = {
@@ -2956,7 +2990,7 @@ test("the impact list: a card's click shows it, its corner ticks it; Update and 
     install: GLOBAL,
     version: "v4",
     counts: { rig_changed: 2 },
-    mods: [held(), held({ id: "s", target: "airi", core: "airi_home", label: "Band", repaired_id: "" })],
+    mods: [held(), held({ id: "s", targetAlt: "airi", core: "airi_home", name: "Band", repairedCopyId: "" })],
   };
   try {
     answers["mods.updateDue"] = { due: true, install: GLOBAL, version: "v4", previous: "v3" };
@@ -3000,7 +3034,7 @@ test("the impact list: a card's click shows it, its corner ticks it; Update and 
       .find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === "Update and Apply")
       .click();
     await until(() => called("actions.apply").length > 0, "applied");
-    assert.deepEqual(called("actions.apply").at(-1), { variant: "hina", source: "mod:r2", kind: "lobby" });
+    assert.deepEqual(called("actions.apply").at(-1), { alt: "hina", source: "mod:r2", resourceType: "memorialLobby" });
     await until(
       () => !prompt.hidden && !walk(prompt).some((e) => e.dataset?.key === "r"),
       "the list again, without the fixed mod",
@@ -3029,13 +3063,13 @@ test("Settings' View Mods to Update opens the last check without checking; Check
       .map((e) => e.getAttribute("aria-label"));
   const held = {
     id: "s",
-    target: "airi",
+    targetAlt: "airi",
     core: "airi_home",
-    kind: "lobby",
+    resourceType: "memorialLobby",
     impact: "rig_changed",
-    label: "Band",
+    name: "Band",
     configured: true,
-    repaired_id: "",
+    repairedCopyId: "",
   };
   try {
     answers["mods.state"] = base({ scan: false });

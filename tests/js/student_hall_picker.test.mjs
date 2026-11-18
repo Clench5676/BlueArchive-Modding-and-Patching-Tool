@@ -129,18 +129,18 @@ const settle = async () => {
   await drawn.at(-1);
 };
 test("adding a memorial disables its current control synchronously and the redraw reports Added", async () => {
-  const draft = createDraft({ revision: 0, mode: "memorial", portraits: [], memorials: [], active: null });
-  draft.begin("memorial");
+  const draft = createDraft({ revision: 0, mode: "memorialLobby", portraits: [], memorialLobbies: [], active: null });
+  draft.begin("memorialLobby");
   const choice = {
-    variant: "hero",
-    family: "hero",
-    kind: "lobby",
+    alt: "hero",
+    student: "hero",
+    resourceType: "memorialLobby",
     source: "official",
     core: "hero_home",
     names: { en: { full: "Hero" } },
   };
   const picker = API.openPicker({
-    kind: "lobby",
+    kind: "memorialLobby",
     choices: [choice],
     draft,
     onError: (error) => errors.push(error),
@@ -157,13 +157,13 @@ test("adding a memorial disables its current control synchronously and the redra
   const hit = { disabled: false };
   const pending = candidate.options.onAdd({ currentTarget: hit });
   assert.equal(hit.disabled, true);
-  assert.equal(draft.current().memorials.length, 1);
+  assert.equal(draft.current().memorialLobbies.length, 1);
   await pending;
   const next = cards.filter((card) => card.options.onAdd).at(-1);
   assert.equal(next.options.addEnabled, false);
   assert.equal(next.options.addLabel, "hall.added");
   await candidate.options.onAdd({ currentTarget: hit });
-  assert.equal(draft.current().memorials.length, 1);
+  assert.equal(draft.current().memorialLobbies.length, 1);
   assert.deepEqual(errors, []);
   picker.close();
 });
@@ -186,18 +186,18 @@ test("Escape in the picker's search closes the search and clears it; the picker 
     closed++;
   };
   try {
-    const draft = createDraft({ revision: 0, mode: "memorial", portraits: [], memorials: [], active: null });
-    draft.begin("memorial");
+    const draft = createDraft({ revision: 0, mode: "memorialLobby", portraits: [], memorialLobbies: [], active: null });
+    draft.begin("memorialLobby");
     const choice = {
-      variant: "hero",
-      family: "hero",
-      kind: "lobby",
+      alt: "hero",
+      student: "hero",
+      resourceType: "memorialLobby",
       source: "official",
       core: "hero_home",
       names: { en: { full: "Hero" } },
     };
     const picker = API.openPicker({
-      kind: "lobby",
+      kind: "memorialLobby",
       choices: [choice],
       draft,
       onError: (error) => errors.push(error),
@@ -236,21 +236,21 @@ test("portrait replacement reuses Hall rows and explicit choice buttons without 
     draft = createDraft({
       revision: 0,
       mode: "portraits",
-      portraits: [{ id: "a", variant: "hero", source: "mod:old", x: 800, y: 1100, scale: 1 }],
-      memorials: [],
+      portraits: [{ id: "a", alt: "hero", source: "mod:old", x: 800, y: 1100, scale: 1 }],
+      memorialLobbies: [],
       active: null,
     });
   draft.begin("layout");
   const choice = {
-    variant: "hero-alt",
-    family: "hero",
-    kind: "spr",
+    alt: "hero-alt",
+    student: "hero",
+    resourceType: "portrait",
     source: "official",
     core: "hero_alt_spr",
     names: { en: { full: "Hero Alt" } },
   };
   const picker = API.openPicker({
-    kind: "spr",
+    kind: "portrait",
     choices: [choice],
     draft,
     onError: (e) => errors.push(e),
@@ -283,17 +283,23 @@ test("the portrait picker draws names and plates from the row layout, with Done 
   cards.length = 0;
   captions.length = 0;
   plates.length = 0;
-  const draft = createDraft({ revision: 0, mode: "portraits", portraits: [], memorials: [], active: null });
+  const draft = createDraft({ revision: 0, mode: "portraits", portraits: [], memorialLobbies: [], active: null });
   draft.begin("layout");
   const choice = {
-    variant: "hero",
-    family: "hero",
-    kind: "spr",
+    alt: "hero",
+    student: "hero",
+    resourceType: "portrait",
     source: "official",
     core: "hero_spr",
     names: { en: { full: "Hero" } },
   };
-  const picker = API.openPicker({ kind: "spr", choices: [choice], draft, onError: (e) => errors.push(e), onDone() {} });
+  const picker = API.openPicker({
+    resourceType: "portrait",
+    choices: [choice],
+    draft,
+    onError: (e) => errors.push(e),
+    onDone() {},
+  });
   await settle();
   assert.deepEqual(plates.at(-1)[1], [1309, 393], "the plate is as wide as the picker's panels");
   assert.deepEqual(captions.at(-1)[2], [110, 170, 148], "the name stands where the row layout puts it");

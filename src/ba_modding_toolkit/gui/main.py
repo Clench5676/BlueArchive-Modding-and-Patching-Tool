@@ -4,6 +4,7 @@ import argparse
 import atexit
 import os
 import sys
+from pathlib import Path
 
 from ..utils import EXE_DIR
 from bmpt.webui.classic import remove_classic_json
@@ -36,7 +37,7 @@ def main(argv: list[str] | None = None):
     if control:
         ControlBridge(root, app, ControlClient(*channel)).start()
         # the web UI wrote classic.json at ready; an instance started later reads it while this window is open
-        atexit.register(remove_classic_json, EXE_DIR, os.getpid())
+        atexit.register(remove_classic_json, Path(os.environ.get("BMPT_CLASSIC_RUNTIME", EXE_DIR)), os.getpid())
     print("Blue Archive Modding and Patching Tool 已启动")
 
     root.mainloop()

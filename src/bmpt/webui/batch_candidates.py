@@ -29,11 +29,11 @@ logger = logging.getLogger("bmpt.webui.batch_import")  # batch import logs under
 PREF = "batch_import"
 TYPES = ("Texture2D", "TextAsset", "Mesh", "AnimationClip", "ALL")
 CHOICES = {
-    "strategy": ("path_id", "cont_name_type", "name_type"),
-    "crc": ("auto", "on", "off"),
+    "matchStrategy": ("path_id", "containerNameType", "name_type"),
+    "crcCorrection": ("auto", "on", "off"),
     "compression": ("lzma", "lz4", "original", "none"),
 }
-BOOLS = ("skipUnchanged", "backup", "enableAfterImport", "previewAfterImport")
+BOOLS = ("skipUnchanged", "createBackup", "enableAfterImport", "previewAfterImport")
 IMPORTABLE = frozenset(("ready", "convert", "update"))
 # Staging folders are named by the first hex digits of an id or digest. The bundle names inside keep their full form,
 # so the folder names stay short enough for Windows paths (259 characters) with the longest official bundle names.
@@ -53,7 +53,7 @@ def options_of(value: Any, defaults: dict) -> dict:
         defaults: The options the settings give (``BatchImport.defaults``).
 
     Returns:
-        The options, with ``types`` deduplicated and ``output`` resolved to an absolute path.
+        The options, with ``assetTypes`` deduplicated and ``outputFolder`` resolved to an absolute path.
 
     Raises:
         ServiceError: ``bad_params`` naming the invalid option.
@@ -67,22 +67,29 @@ def options_of(value: Any, defaults: dict) -> dict:
     if any(not isinstance(out[key], bool) for key in BOOLS):
         raise ServiceError("bad_params", key="options")
     if (
-        not isinstance(out["types"], list)
-        or not out["types"]
-        or any(not isinstance(item, str) or item not in TYPES for item in out["types"])
+        not isinstance(out["assetTypes"], list)
+        or not out["assetTypes"]
+        or any(not isinstance(item, str) or item not in TYPES for item in out["assetTypes"])
     ):
-        raise ServiceError("bad_params", key="types")
-    out["types"] = list(dict.fromkeys(out["types"]))
-    if not isinstance(out["workers"], int) or isinstance(out["workers"], bool) or not 1 <= out["workers"] <= 64:
-        raise ServiceError("bad_params", key="workers")
+        raise ServiceError("bad_params", key="assetTypes")
+    out["assetTypes"] = list(dict.fromkeys(out["assetTypes"]))
+    if not isinstance(out["threads"], int) or isinstance(out["threads"], bool) or not 1 <= out["threads"] <= 64:
+        raise ServiceError("bad_params", key="threads")
     if not isinstance(out["extraBytes"], str) or (out["extraBytes"] and parse_hex_bytes(out["extraBytes"]) is None):
         raise ServiceError("bad_params", key="extraBytes")
-    if out["output"] is not None and (not isinstance(out["output"], str) or not out["output"].strip()):
-        raise ServiceError("bad_params", key="output")
-    if out["output"] is not None:
-        out["output"] = str(Path(out["output"]).expanduser().resolve())
-        devmode.check_read(Path(out["output"]))
+    if out["outputFolder"] is not None and (
+        not isinstance(out["outputFolder"], str) or not out["outputFolder"].strip()
+    ):
+        raise ServiceError("bad_params", key="outputFolder")
+    if out["outputFolder"] is not None:
+        out["outputFolder"] = str(Path(out["outputFolder"]).expanduser().resolve())
+        devmode.check_read(Path(out["outputFolder"]))
     return out
+
+
+def engine_match_strategy(value: str) -> str:
+    """Translate the container matching option for the engine."""
+    return "cont_name_type" if value == "containerNameType" else value
 
 
 class ImportSettings:
@@ -103,7 +110,7 @@ class ImportSettings:
 
     def asset_types(self) -> set[str]:
         """Return the asset types the options select."""
-        return set(self.options["types"])
+        return set(self.options["assetTypes"])
 
     def crc_needed(self, target: Path | None = None) -> bool:
         """Decide whether bundles get their CRC corrected.
@@ -115,10 +122,14 @@ class ImportSettings:
             The option's choice (``on`` or ``off``); ``auto`` follows the selected install, as
             ``Settings.crc_needed`` does.
         """
-        setting = self.options["crc"]
+        setting = self.options["crcCorrection"]
         if setting != "auto":
             return setting == "on"
         return install_needs_crc(self.base.get("file_source"))
+
+    def match_strategy(self) -> str:
+        """Return the engine's matching discriminator."""
+        return engine_match_strategy(self.options["matchStrategy"])
 
     def save_options(self, perform_crc: bool) -> SaveOptions:
         """Build the options for saving a bundle, with the compression and extra bytes of the import options.
@@ -243,8 +254,8 @@ def blocked_reason(error: ServiceError) -> str:
         "no_matching_assets",
         "conversion_failed",
         "entry_changed",
-        "original_unavailable",
-        "original_invalid",
+        "official_unavailable",
+        "official_invalid",
         "conflict",
         "unreadable",
         "unsupported",
@@ -365,7 +376,7 @@ def transfer_compatibility(
         sources: The uploaded bundles.
         targets: The bundles the transfer writes into.
         originals: The official bundles whose parts are retained.
-        strategy: How assets are matched, one of ``CHOICES["strategy"]``.
+        strategy: How assets are matched, one of ``CHOICES["matchStrategy"]``.
 
     Returns:
         The official Spine versions per matched skeleton (a set), the uploaded skeletons' versions, and whether

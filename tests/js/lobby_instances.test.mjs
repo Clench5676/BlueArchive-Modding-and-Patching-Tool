@@ -80,7 +80,7 @@ test("two instances hold their own settings, dialogue state, timers and caches",
   );
   assert.deepEqual(
     [b.S.zoomMode, b.S.zoomCustom, b.S.introOn, b.S.volume, b.S.muted, b.S.fixedDt],
-    ["art", 2, true, 0.8, false, null],
+    ["fullArt", 2, true, 0.8, false, null],
   );
   assert.equal(a.S.dialogueFullscreen, true);
   assert.equal(b.S.dialogueFullscreen, null);

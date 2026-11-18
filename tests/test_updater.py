@@ -12,7 +12,7 @@ from types import SimpleNamespace
 import pytest
 
 from ba_modding_toolkit.utils import paths as utils_paths
-from bmpt.host import updater
+from bmpt.host import addons, updater
 from ba_modding_toolkit import utils
 from bmpt.core.errors import ServiceError
 
@@ -443,17 +443,28 @@ def test_compiled_addons_are_copied_once_and_existing_maps_are_preserved(
         raising=False,
     )
     monkeypatch.setattr(utils_paths, "__file__", str(extracted / "ba_modding_toolkit" / "utils" / "paths.py"))
+    monkeypatch.setattr(utils, "PACKAGE_DIR", extracted / "ba_modding_toolkit")
     monkeypatch.setattr(sys, "executable", str(extracted / "Tool" if macos else portable / "Tool.exe"))
+    monkeypatch.setattr(addons.sys, "platform", "darwin" if macos else "win32")
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     expected_dir = (
         tmp_path / "Library" / "Application Support" / "bluearchive-modding-patching-tool" if macos else portable
     )
     assert utils._get_exe_dir() == expected_dir
-    assert (expected_dir / "Addons" / csv).read_text() == "bundled map"
-    assert (expected_dir / "Addons" / license_name).read_text() == "CC BY-SA 4.0"
-    (expected_dir / "Addons" / csv).write_text("user map")
-    assert utils._get_exe_dir() == expected_dir
-    assert (expected_dir / "Addons" / csv).read_text() == "user map"
+    assert not (expected_dir / "Addons").exists()
+    default_map = expected_dir / "Addons" / csv
+    assert addons.character_map_path(default_map, expected_dir) == bundled / csv
+    custom_map = tmp_path / "my-map.csv"
+    assert addons.character_map_path(custom_map, expected_dir) == custom_map
+    artifacts = expected_dir / ".bmpt-upgrade" / "artifacts"
+    artifacts.mkdir(parents=True)
+    addons.prepare_classic_addons(expected_dir, artifacts)
+    assert (artifacts / "Addons" / csv).read_text() == "bundled map"
+    assert (artifacts / "Addons" / license_name).read_text() == "CC BY-SA 4.0"
+    (artifacts / "Addons" / csv).write_text("user map")
+    addons.prepare_classic_addons(expected_dir, artifacts)
+    assert (artifacts / "Addons" / csv).read_text() == "user map"
+    assert not (expected_dir / "Addons").exists()
 
 
 def test_compiled_build_without_addons_still_returns_portable_directory(
@@ -479,11 +490,19 @@ def test_bundled_addons_do_not_prevent_launch_from_an_unwritable_install(
         utils_paths, "__file__", str(tmp_path / "extracted" / "ba_modding_toolkit" / "utils" / "paths.py")
     )
 
-    def deny_copy(*args) -> None:
-        raise PermissionError("install directory is read-only")
+    monkeypatch.setattr(addons, "bundled_addons", lambda: bundled)
+    data = utils._get_exe_dir()
+    assert data == tmp_path
+    artifacts = data / ".bmpt-upgrade" / "artifacts"
+    artifacts.mkdir(parents=True)
 
-    monkeypatch.setattr(utils_paths.shutil, "copytree", deny_copy)
-    assert utils._get_exe_dir() == tmp_path
+    def deny_copy(*args, **kwargs) -> None:
+        raise PermissionError("copy destination is read-only")
+
+    monkeypatch.setattr(addons.shutil, "copytree", deny_copy)
+    addons.prepare_classic_addons(data, artifacts)
+    assert list(artifacts.iterdir()) == []
+    assert bundled.exists()
 
 
 @pytest.fixture

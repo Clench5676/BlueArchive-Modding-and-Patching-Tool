@@ -23,8 +23,13 @@ async function write(method, params, mod, name, changed) {
         ? "progress.actionRestore"
         : "progress.actionApply";
   const line = modJob(
-    { variant: mod?.target || "", kind: "other", core: mod?.core || mod?.file?.split(/[\\/]/).pop() || name, name },
-    { nameOf: Loading.variantName, action },
+    {
+      alt: mod?.genericTarget ?? mod?.targetAlt ?? "",
+      resourceType: "other",
+      core: mod?.core || mod?.file?.split(/[\\/]/).pop() || name,
+      name,
+    },
+    { nameOf: Loading.altName, action },
   );
   try {
     await Loading.task(
@@ -44,7 +49,7 @@ async function write(method, params, mod, name, changed) {
     });
     await ModSwitch.refresh();
   } catch (err) {
-    if (err.code === "original_unavailable") {
+    if (err.code === "official_unavailable") {
       const state = ModSwitch.current?.() || {};
       await Popup.message({
         title: T("mods.overwrittenTitle"),
@@ -75,8 +80,12 @@ async function write(method, params, mod, name, changed) {
  */
 export async function select(mod, changed, useMod = !mod.selected) {
   const method = useMod ? "actions.apply" : "actions.restore";
-  const params = { variant: mod.target, kind: "other", ...(useMod ? { source: `mod:${mod.id}` } : {}) };
-  return write(method, params, mod, mod.label, changed);
+  const params = {
+    alt: mod.genericTarget ?? mod.targetAlt,
+    resourceType: "other",
+    ...(useMod ? { source: `mod:${mod.id}` } : {}),
+  };
+  return write(method, params, mod, mod.name, changed);
 }
 
 /**
@@ -123,7 +132,7 @@ export function rows(mods, valueRow, changed) {
     valueRow(
       `Other_${i}`,
       0,
-      mod.label,
+      mod.name,
       valueText(mod),
       [
         [

@@ -25,10 +25,11 @@ from .strings import get_locale_dir
 from . import strings
 from .api_mods import register as register_mods
 from .api_students import register as register_students
+from .contract import SPINE_TYPES
 from .rpc import RpcRegistry
 from .services import Services
 from .session_log import tail
-from .state import LOBBY_ZOOM_MODES, is_number, lobby_zoom, roster_view
+from .state import MEMORIAL_LOBBY_ZOOM_MODES, is_number, memorial_lobby_zoom, student_list_view
 from .system import can_restart_safe, reveal
 
 # a build's own release notes, one Markdown file per version (shipped with the package's assets)
@@ -83,12 +84,13 @@ def build_api(s: Services) -> RpcRegistry:
         The registry.
     """
     rpc = RpcRegistry(
+        current=True,
         on_exception=lambda *args: s.reports.backend_exception(*args) if hasattr(s, "reports") else None,
         translate=getattr(s, "translate_error", None),
     )
-    from .photography import register as register_photography
+    from .thumbnails import register as register_thumbnails
 
-    register_photography(rpc, s)
+    register_thumbnails(rpc, s)
     from .tours import register as register_tours
 
     register_tours(rpc, s)
@@ -376,17 +378,17 @@ def build_api(s: Services) -> RpcRegistry:
             "fileSource": st.get("file_source"),
             "gameDirs": {"global": st.get("game_resource_dir"), "japan": st.get("game_resource_dir_japan")},
             "gameFound": s.game_found(),
-            "libraryDir": str(s.library_dir()),
+            "libraryDir": str(s.selected_library_dir()),
             "outputDir": st.get("output_dir"),
             "voiceVolume": int(s.state.get("voice_volume", 80)),
             "voiceMuted": bool(s.state.get("voice_muted", False)),
             # {mode, custom}; before the modes it was a boolean, lobby_zoom_out
-            "lobbyZoom": lobby_zoom(
+            "lobbyZoom": memorial_lobby_zoom(
                 s.state.get("lobby_zoom"), s.state.get("lobby_zoom_custom"), s.state.get("lobby_zoom_out")
             ),
             "lobbyPost": bool(s.state.get("lobby_post", True)),
             "lobbyIntro": bool(s.state.get("lobby_intro", True)),
-            "roster": roster_view(s.state.get("roster")),
+            "roster": student_list_view(s.state.get("roster")),
             "consent": s.state.consent,
             "cacheDir": str(s.cache_dir()),
             "spineConsent": s.state.spine_consent,
@@ -444,12 +446,22 @@ def build_api(s: Services) -> RpcRegistry:
                 s.reload_game()
         elif key == "outputDir":
             path = Path(str(value)).expanduser()
-            devmode.check_read(path)
-            path.mkdir(parents=True, exist_ok=True)
+            s.check_output(path, writing=False)
             st.set("output_dir", str(path))
             st.save()
         elif key == "libraryDir":
-            s.move_library(Path(str(value)))
+            if (
+                isinstance(value, dict)
+                and set(value) == {"path", "adopt"}
+                and isinstance(value["path"], str)
+                and value["path"]
+                and value["adopt"] is True
+            ):
+                s.move_library(Path(value["path"]), adopt=True)
+            elif isinstance(value, str) and value:
+                s.move_library(Path(value))
+            else:
+                raise ServiceError("bad_params", key=key)
         elif key == "cacheDir":
             s.set_cache_parent(Path(str(value)))
         elif key == "previewCache":
@@ -461,19 +473,19 @@ def build_api(s: Services) -> RpcRegistry:
         elif key == "voiceMuted":
             s.state.set("voice_muted", bool(value))
         elif key == "lobbyZoom":
-            if not isinstance(value, str) or value not in LOBBY_ZOOM_MODES:
+            if not isinstance(value, str) or value not in MEMORIAL_LOBBY_ZOOM_MODES:
                 raise ServiceError("bad_params", key=key)
             s.state.set("lobby_zoom", value)
         elif key == "lobbyZoomCustom":
             if not is_number(value):
                 raise ServiceError("bad_params", key=key)
-            s.state.set("lobby_zoom_custom", lobby_zoom(None, value)["custom"])
+            s.state.set("lobby_zoom_custom", memorial_lobby_zoom(None, value)["custom"])
         elif key == "lobbyPost":
             s.state.set("lobby_post", bool(value))
         elif key == "lobbyIntro":
             s.state.set("lobby_intro", bool(value))
         elif key == "roster":
-            s.state.set("roster", roster_view(value))
+            s.state.set("roster", student_list_view(value))
         elif key in FLAG_KEYS:
             if not isinstance(value, bool):
                 raise ServiceError("bad_params", key=key)
@@ -484,14 +496,14 @@ def build_api(s: Services) -> RpcRegistry:
         return settings_get()
 
     @rpc.method("settings.detectGame")
-    def settings_detect_game(region: str) -> list[str]:
-        if region not in ("global", "japan"):
-            raise ServiceError("bad_params", region=region)
+    def settings_detect_game(server: str) -> list[str]:
+        if server not in ("global", "japan"):
+            raise ServiceError("bad_params", region=server)
         if not s.scan_allowed():
             raise ServiceError("scan_off")  # finding the game reads Steam's records: the Check Game Files consent
         from ..host.game_paths import find_game_dirs
 
-        return [str(p) for p in find_game_dirs(region)]
+        return [str(p) for p in find_game_dirs(server)]
 
     @rpc.method("settings.pickFolder")
     def settings_pick_folder(start: str | None = None) -> str | None:
@@ -522,22 +534,22 @@ def build_api(s: Services) -> RpcRegistry:
             "data": base64.b64encode(data).decode("ascii") if data is not None else None,
         }
 
-    @rpc.method("preview.modelRevision")
-    def preview_model_revision(variant: str, source: str = "live") -> dict[str, str]:
+    @rpc.method("preview.chibiRevision")
+    def preview_chibi_revision(alt: str, source: str = "live") -> dict[str, str]:
         if (
-            not isinstance(variant, str)
-            or not variant
-            or len(variant) > 256
-            or "/" in variant
+            not isinstance(alt, str)
+            or not alt
+            or len(alt) > 256
+            or "/" in alt
             or not isinstance(source, str)
             or len(source) > 512
         ):
-            raise ServiceError("bad_params", key="variant")
+            raise ServiceError("bad_params", key="alt")
         generation = s.preview_cache.generation
         try:
-            exported = s.asset("model/" + variant + ".glb", {"source": source})
+            exported = s.asset("chibi/" + alt + ".glb", {"source": source})
         except KeyError as error:
-            raise ServiceError("bad_params", key="variant") from error
+            raise ServiceError("bad_params", key="alt") from error
         return {"revision": hashlib.sha256(exported.body).hexdigest(), "generation": generation}
 
     @rpc.method("preview.assetRevision")
@@ -547,6 +559,7 @@ def build_api(s: Services) -> RpcRegistry:
             raise ServiceError("bad_params", key="previewCache")
         if not isinstance(paths, list) or not 1 <= len(paths) <= 2:
             raise ServiceError("bad_params", key="paths")
+        spine_types = "|".join(map(re.escape, SPINE_TYPES))
         checked = []
         for path in paths:
             if not isinstance(path, str) or len(path) > 2048:
@@ -555,9 +568,9 @@ def build_api(s: Services) -> RpcRegistry:
                 path = unquote(path, errors="strict")
             except UnicodeError as error:
                 raise ServiceError("bad_params", key="paths") from error
-            background = re.fullmatch(r"/asset/art/bg/BG_[a-zA-Z0-9_-]+\.png", path)
+            background = re.fullmatch(r"/asset/art/background/BG_[a-zA-Z0-9_-]+\.png", path)
             framing = re.fullmatch(
-                r"/asset/spine/(?:spr|lobby|official-spr|official-lobby|mod|import)/"
+                rf"/asset/spine/(?:{spine_types})/"
                 r"[a-zA-Z0-9_][a-zA-Z0-9_@.:-]{0,511}/[a-f0-9]{64}/framing\.json",
                 path,
             )

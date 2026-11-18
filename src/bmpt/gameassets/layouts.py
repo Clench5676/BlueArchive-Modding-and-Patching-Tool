@@ -29,17 +29,17 @@ STATE_FIELDS = {
 def _widget(obj: ObjectReader, tree: dict, names: dict[str, str], scripts: dict) -> dict:
     script = tree.get("m_Script", {})
     cls = scripts.get(script.get("m_PathID")) if not script.get("m_FileID") else None
-    widget = {"cls": cls}
+    widget = {"className": cls}
     if "mSpriteName" in tree:
         widget.update(
-            cls=cls or "UISprite",
-            sprite=tree["mSpriteName"],
+            className=cls or "UISprite",
+            spriteName=tree["mSpriteName"],
             atlas=names.get(ref_key(*reference(obj, tree["mAtlas"]))),
             type=tree["mType"],
             flip=tree["mFlip"],
-            incline=tree.get("inclineAngle"),
-            fillDir=tree.get("mFillDirection"),
-            fill=tree.get("mFillAmount"),
+            inclineAngle=tree.get("inclineAngle"),
+            fillDirection=tree.get("mFillDirection"),
+            fillAmount=tree.get("mFillAmount"),
             fillCenter=tree.get("mFillCenter"),
         )
         if tree.get("mApplyGradient"):
@@ -63,9 +63,9 @@ def _widget(obj: ObjectReader, tree: dict, names: dict[str, str], scripts: dict)
             text=tree["mText"][:60],
             fontSize=tree.get("mFontSize"),
             overflow=tree.get("mOverflow"),
-            align=tree.get("mAlignment"),
+            alignment=tree.get("mAlignment"),
             spacingX=tree.get("mSpacingX"),
-            effect=tree.get("mEffectStyle"),
+            effectStyle=tree.get("mEffectStyle"),
         )
         effect_color = tree.get("mEffectColor")
         if effect_color:
@@ -81,8 +81,8 @@ def _widget(obj: ObjectReader, tree: dict, names: dict[str, str], scripts: dict)
     if "mWidth" in tree:
         color = tree.get("mColor")
         widget.update(
-            w_=tree["mWidth"],
-            h_=tree["mHeight"],
+            width=tree["mWidth"],
+            height=tree["mHeight"],
             pivot=tree.get("mPivot"),
             depth=tree.get("mDepth"),
             color=(
@@ -163,7 +163,7 @@ def export_layout(env: Environment, root: str, names: dict[str, str], *, effects
         owners[obj.path_id] = gid
         widget = _widget(obj, tree, names, scripts)
         components.setdefault(gid, []).append(widget)
-        if widget["cls"] in STATE_FIELDS:
+        if widget["className"] in STATE_FIELDS:
             controllers.append((gid, widget, tree))
     parents = {
         gid: owners.get(transform.m_Father.path_id)
@@ -183,7 +183,7 @@ def export_layout(env: Environment, root: str, names: dict[str, str], *, effects
 
     # References are resolved once every component is read: a controller may name a component read after it.
     for gid, widget, tree in controllers:
-        widget["states"] = {field: relative(gid, tree.get(field) or {}) for field in STATE_FIELDS[widget["cls"]]}
+        widget["states"] = {field: relative(gid, tree.get(field) or {}) for field in STATE_FIELDS[widget["className"]]}
 
     def node(gid: int) -> dict:
         game_object, transform = gos[gid], transforms[gid]
@@ -192,9 +192,9 @@ def export_layout(env: Environment, root: str, names: dict[str, str], *, effects
         result = {
             "name": game_object.m_Name,
             "active": bool(game_object.m_IsActive),
-            "pos": [round(transform.m_LocalPosition.x, 1), round(transform.m_LocalPosition.y, 1)],
+            "localPosition": [round(transform.m_LocalPosition.x, 1), round(transform.m_LocalPosition.y, 1)],
             "scale": [round(transform.m_LocalScale.x, 3), round(transform.m_LocalScale.y, 3)],
-            "rotZ": round(rotation, 2),
+            "localRotationZDegrees": round(rotation, 2),
             "widgets": components.get(gid, []),
         }
         if effects and gid in effects:

@@ -30,7 +30,7 @@ def test_assignment_catalog_has_unreleased_students_without_local_assets():
     assert len(variants) > 100
     assert all(variant.spr is None and variant.lobby is None and variant.model is None for variant in variants)
     assert catalog.assignment_variant(variants[-1].key.upper()).key == variants[-1].key
-    with pytest.raises(ServiceError, match="catalog_variant_not_found"):
+    with pytest.raises(ServiceError, match="catalog_alt_not_found"):
         catalog.variant(variants[-1].key)
     families[0].variants.clear()
     assert catalog.assignment_families()[0].variants
@@ -91,8 +91,8 @@ def test_unreleased_assignment_stores_self_contained_mod_and_never_applies(env, 
     original = env.original.read_bytes()
     (entry,) = analyze(env, [source])["entries"]
     assert entry["state"] == "blocked"
-    assigned = finish(env, rpc(env, "import.assignCharacter", id=entry["id"], variant=chosen.key))
-    assert assigned["variant"] == chosen.key and assigned["libraryOnly"] and assigned["state"] == "ready"
+    assigned = finish(env, rpc(env, "import.assignAlt", id=entry["id"], alt=chosen.key))
+    assert assigned["alt"] == chosen.key and assigned["libraryOnly"] and assigned["state"] == "ready"
     assert env.services.batch_import.preview(assigned["preview"]["key"])[1] == [source]
     (result,) = run(env, [assigned], enableAfterImport=True, previewAfterImport=True)
     assert result["outcome"] == "imported", result
@@ -107,7 +107,7 @@ def test_unreleased_assignment_stores_self_contained_mod_and_never_applies(env, 
 
     restarted = BatchImport(env.services)
     (entry,) = finish(env, restarted.analyze([str(source)]))["entries"]
-    assert entry["state"] == "library" and entry["variant"] == chosen.key
+    assert entry["state"] == "library" and entry["alt"] == chosen.key
 
 
 def test_failed_import_never_selects_preview(env, monkeypatch):

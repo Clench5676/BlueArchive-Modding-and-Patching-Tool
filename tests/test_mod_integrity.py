@@ -711,7 +711,7 @@ def test_unreplaced_install_bundle_supplies_new_reference_without_official_copie
 
     def official(path, *args, **kwargs):
         if missing_official == "all" or missing_official == "replaced" and path == e.original:
-            raise ServiceError("original_unavailable", file=path.name)
+            raise ServiceError("official_unavailable", file=path.name)
         return official_for(path, *args, **kwargs)
 
     monkeypatch.setattr(e.library, "_official_for", official)
@@ -752,7 +752,7 @@ def test_baseline_quirks_pass_but_new_missing_atlas_does_not(checks, monkeypatch
     if unavailable:
 
         def absent(*args, **kwargs):
-            raise ServiceError("original_unavailable")
+            raise ServiceError("official_unavailable")
 
         monkeypatch.setattr(e.library, "_official_for", absent)
     source = e.register(
@@ -793,7 +793,7 @@ def test_add_and_batch_keep_known_names_despite_conflicting_content(checks, monk
     (row,) = analyze(e, [source])["entries"]
     (mod,) = e.library.add([source])
     assert (mod.file.name, mod.target, mod.kind) == expected
-    assert (Path(row["files"][0]["path"]).name, row["variant"], row["kind"]) == expected
+    assert (Path(row["files"][0]["path"]).name, row["alt"], row["resourceType"]) == (source.name, "test", "portrait")
 
 
 def test_model_content_keeps_its_dependency_core_even_when_variant_model_differs(checks, monkeypatch):
@@ -860,7 +860,8 @@ def test_pre_split_older_bundle_keeps_all_update_targets_in_add_and_batch(checks
     assert next(path.name for path in targets if "_001_" in path.name) == caught.value.params["files"]
     e.register(old, cab="cab-old", names={"com.nexon.bluearchive"})
     (row,) = analyze(e, [old])["entries"]
-    assert (row["kind"], row["state"], row["reason"]) == (kind, "update", None)
+    resource_type = {"spr": "portrait", "lobby": "memorialLobby", "model": "chibi"}[kind]
+    assert (row["resourceType"], row["state"], row["reason"]) == (resource_type, "update", None)
     assert any(sources == [old] and set(candidates) == set(targets) for sources, candidates in matches)
     assert set(e.services.batch_import._latest[row["id"]].targets) == set(targets)
     (mod,) = e.library.add_files(kind, [old])

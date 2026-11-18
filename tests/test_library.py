@@ -392,7 +392,8 @@ def test_official_preview_uses_kept_parts_and_is_unavailable_without_them(setup_
 
     monkeypatch.setattr("bmpt.gameassets.service.extract_spine", extract)
     services = Services(env.settings, env.tmp / "ui", game=game, catalog=env.catalog, library=env.library)
-    prefix = f"spine/official-{kind}/{core}"
+    resource_type = {"spr": "portrait", "lobby": "memorialLobby"}[kind]
+    prefix = f"spine/official-{resource_type}/{core}"
     try:
         before = json.loads(services.asset(f"{prefix}/manifest.json", {}).body)["revision"]
         assert services.asset(f"{prefix}/{before}/skeleton.skel", {}).body == expected
@@ -411,9 +412,9 @@ def test_official_preview_uses_kept_parts_and_is_unavailable_without_them(setup_
         with pytest.raises(KeyError):
             services.asset(f"{prefix}/{before}/Pages/portrait.png", {})
         kept.unlink()
-        expect_error("original_unavailable", lambda: env.library.official_bundles(core))
-        expect_error("original_unavailable", lambda: services.asset(f"{prefix}/manifest.json", {}))
-        expect_error("original_unavailable", lambda: services.asset(f"{prefix}/{after}/Pages/portrait.png", {}))
+        expect_error("official_unavailable", lambda: env.library.official_bundles(core))
+        expect_error("official_unavailable", lambda: services.asset(f"{prefix}/manifest.json", {}))
+        expect_error("official_unavailable", lambda: services.asset(f"{prefix}/{after}/Pages/portrait.png", {}))
     finally:
         services.close()
 
@@ -459,7 +460,8 @@ def test_live_spine_files_merge_in_the_previews_order(setup_library, monkeypatch
 
     monkeypatch.setattr("bmpt.gameassets.service.extract_spine", extract)
     services = Services(env.settings, env.tmp / "ui", cache=cache, game=game, catalog=env.catalog, library=env.library)
-    prefix = f"spine/{kind}/{core_name}"
+    resource_type = {"spr": "portrait", "lobby": "memorialLobby"}[kind]
+    prefix = f"spine/{resource_type}/{core_name}"
     try:
         for name in ("manifest.json", "skeleton.skel"):
             services.asset(f"{prefix}/{name}", {})
@@ -491,7 +493,7 @@ def test_partial_mod_preview_uses_same_size_live_mod_without_claiming_it_officia
     assert result.incomplete and result.kept_current
     assert env.original.read_bytes() == header_bundle(b"modified")
     assert env.library.selection("test")["spr"]["incomplete"]
-    expect_error("original_unavailable", lambda: env.library.official_bundles("test_spr"))
+    expect_error("official_unavailable", lambda: env.library.official_bundles("test_spr"))
 
 
 def test_legacy_single_file_record_can_apply_and_reset_other_parts(setup_library):
@@ -885,7 +887,7 @@ def test_invalid_kept_original_is_never_overwritten(setup_library):
     backup = env.root / "originals" / env.original.name
     backup.parent.mkdir(parents=True)
     backup.write_bytes(b"invalid")
-    expect_error("original_invalid", lambda: env.library.apply("test", f"mod:{entry.id}"))
+    expect_error("official_invalid", lambda: env.library.apply("test", f"mod:{entry.id}"))
     assert backup.read_bytes() == b"invalid"
 
 
@@ -910,7 +912,7 @@ def test_missing_official_apply_keeps_all_outside_parts_and_repair_clears_state(
     kept_files = {path.name: path.read_bytes() for path in kept.file.parent.glob("*.bundle")}
     assert kept_files == {path.name: data for path, data in outside.items()}
     assert first.read_bytes() == mod.file.read_bytes() and second.read_bytes() == outside[second]
-    expect_error("original_unavailable", lambda: env.library.restore("test", kind=kind))
+    expect_error("official_unavailable", lambda: env.library.restore("test", kind=kind))
     off = env.library.toggle(False, True)
     assert any(item["core"] == core_name for item in off.stuck)
     assert first.read_bytes() == mod.file.read_bytes() and second.read_bytes() == outside[second]
@@ -1205,7 +1207,7 @@ def test_target_mismatch_and_missing_targets(setup_library):
     env = setup_library
     entry = env.library.add([make_mod(env.original, env.tmp / "input")])[0]
     expect_error("mod_target_mismatch", lambda: env.library.apply("other", f"mod:{entry.id}"))
-    expect_error("variant_not_found", lambda: env.library.state("missing"))
+    expect_error("alt_not_found", lambda: env.library.state("missing"))
     expect_error("source_unsupported", lambda: env.library.apply("test", "bad"))
     env.original.unlink()
     expect_error("game_file_not_found", lambda: env.library.apply("test", f"mod:{entry.id}"))
@@ -1305,7 +1307,7 @@ def test_default_portrait_choices_ignore_unavailable_lobby_originals(setup_libra
     patch_everywhere(monkeypatch, [service], "rebuild", update)
     env.library.apply("test", "variant:other")
     assert {path: path.read_bytes() for path in untouched} == untouched
-    expect_error("original_unavailable", lambda: env.library.restore("test", kind=None))
+    expect_error("official_unavailable", lambda: env.library.restore("test", kind=None))
 
 
 def test_cross_variant_mod_uses_mod_parts_official_baselines_and_tracks_source(setup_library, monkeypatch):
@@ -1418,7 +1420,7 @@ def test_variant_swap_rejects_incompatible_texture_page_counts(setup_library, mo
     monkeypatch.setattr(Bundle, "load", load)
     before = {path: path.read_bytes() for path in (env.original, other)}
     source = "variant:other" if source_type == "variant" else f"mod:{entry.id}"
-    expect_error("variant_incompatible", lambda: env.library.apply("test", source))
+    expect_error("alt_incompatible", lambda: env.library.apply("test", source))
     assert {path: path.read_bytes() for path in before} == before
     assert not (env.root / "originals").exists()
 
@@ -3058,7 +3060,7 @@ def test_adapted_apply_without_official_target_keeps_the_outside_mod(setup_libra
     assert env.original.read_bytes() == header_bundle(b"adapted")
     assert any(entry.file.read_bytes() == outside for entry in env.library.mods())
     assert not (env.root / "originals" / env.original.name).exists()
-    expect_error("original_unavailable", lambda: env.library.restore("test"))
+    expect_error("official_unavailable", lambda: env.library.restore("test"))
 
 
 def _old_release(env, directory):

@@ -37,7 +37,7 @@ class _ExportLibrary:
     def inspect_import(self, *args: Any, **kwargs: Any) -> dict:
         report = dict(self.library.inspect_import(*args, **kwargs))
         if report.get("recognized"):
-            raise ServiceError("original_unavailable")
+            raise ServiceError("official_unavailable")
         report.update(libraryId=None, installed=False)
         return report
 
@@ -50,11 +50,11 @@ class _Preparation(BatchImport):
         # Export all transferable Mod content; import filters and output preferences do not apply.
         return {
             **self.defaults(),
-            "types": ["ALL"],
-            "output": None,
+            "assetTypes": ["ALL"],
+            "outputFolder": None,
             "skipUnchanged": False,
-            "crc": "auto",
-            "strategy": "name_type",
+            "crcCorrection": "auto",
+            "matchStrategy": "name_type",
         }
 
 
@@ -407,7 +407,7 @@ def export_zip(
             ``entry_changed`` when a file changed while it was copied; ``library_io_error`` when the finished
             archive fails its check.
     """
-    devmode.check_write(folder)
+    services.check_output(folder)
     folder.mkdir(parents=True, exist_ok=True)
     destination = folder / f"mods-{scope}-{server}-{platform}-{uuid.uuid4().hex}.zip"
     temporary_zip = None
@@ -547,7 +547,7 @@ def register_api(rpc: Any, services: Any) -> None:
 
     @rpc.method("export.start")
     def start(
-        scope: str, folder: str, server: str, platform: str, target: str | None = None, kind: str | None = None
+        scope: str, folder: str, server: str, platform: str, target: str | None = None, resource_type: str | None = None
     ) -> str:
         if (
             scope not in ("single", "library", "applied")
@@ -555,10 +555,14 @@ def register_api(rpc: Any, services: Any) -> None:
             or platform not in mod_origin.PLATFORMS
         ):
             raise ServiceError("bad_params", key="export")
-        if not isinstance(folder, str) or not folder.strip() or kind not in (None, "spr", "lobby", "model", "other"):
+        if (
+            not isinstance(folder, str)
+            or not folder.strip()
+            or resource_type not in (None, "spr", "lobby", "model", "other")
+        ):
             raise ServiceError("bad_params", key="folder")
         destination = Path(folder).expanduser().resolve()
-        devmode.check_write(destination)
+        services.check_output(destination)
         library = services.library
         with library._lock:
             pin = _target_pin(library, services.settings, server, platform)
@@ -573,7 +577,7 @@ def register_api(rpc: Any, services: Any) -> None:
                 folder=destination,
                 server=server,
                 platform=platform,
-                kind=kind,
+                kind=resource_type,
                 log=log,
                 progress=progress,
             ),

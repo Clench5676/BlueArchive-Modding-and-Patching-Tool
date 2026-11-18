@@ -41,7 +41,7 @@ class EnableMixin:
         """Build the switch snapshot from names and profiles without locking or walking storage.
 
         Include known installs, the current install, intent, configured count, and
-        reason (profiles_unreadable or None). Each install's
+        reason (mod_configuration_unreadable or None). Each install's
         ``distinct`` is the shortest trailing part of its path that tells it from the other installs of its server
         (for the install label, "Global (BlueArchive)"), None when it is the only one of its server.
         """
@@ -568,7 +568,7 @@ class EnableMixin:
             try:
                 self._switch(pin, core, "official", log, fraction=fraction)
             except ServiceError as error:
-                if error.code == "original_unavailable":
+                if error.code == "official_unavailable":
                     outcome["stuck"] = item
                     return outcome, "stuck", item
                 raise
@@ -600,7 +600,7 @@ class EnableMixin:
         try:
             self._switch(pin, core, target, log, fraction=fraction)
         except ServiceError as error:
-            if error.code == "original_unavailable":
+            if error.code == "official_unavailable":
                 outcome["stuck"] = item
                 return outcome, "stuck", item
             raise

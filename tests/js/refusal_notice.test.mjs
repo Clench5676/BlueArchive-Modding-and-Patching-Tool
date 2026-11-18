@@ -179,13 +179,13 @@ test("every refusal code is a code the page can say: a string in all six languag
       "mod_in_use_elsewhere",
       "mod_last_copy",
       "asset_official",
-      "photo_in_use",
+      "thumbnail_in_use",
       "library_target_not_empty",
-      "hall_last_portrait",
-      "hall_last_memorial",
-      "hall_duplicate_portrait",
-      "hall_duplicate_memorial",
-      "hall_conflict",
+      "student_hall_last_portrait",
+      "student_hall_last_memorial",
+      "student_hall_duplicate_portrait",
+      "student_hall_duplicate_memorial",
+      "student_hall_conflict",
       "alias_too_long",
       "alias_too_many",
       "export_empty",
@@ -194,7 +194,7 @@ test("every refusal code is a code the page can say: a string in all six languag
       "native_unavailable",
       "untested_build",
     ].sort(),
-    "the registry preserves all 27 original notices, untested_build after them",
+    "the registry preserves all 27 original notices and untested_build after them",
   );
 });
 
@@ -213,7 +213,7 @@ test("the refusals are state and rule refusals; unreadable or unknown states sta
   for (const code of [
     "internal",
     "game_status_unavailable",
-    "profiles_unreadable",
+    "mod_configuration_unreadable",
     "game_file_locked",
     "library_io_error",
     "mod_apply_failed",
@@ -264,7 +264,7 @@ test("notify keeps Failed and the Error Report for a real failure, with or witho
     for (const error of [
       { code: "library_io_error", params: { file: "x.bundle" } },
       { code: "game_file_locked" },
-      { code: "profiles_unreadable" },
+      { code: "mod_configuration_unreadable" },
       { code: "game_status_unavailable" },
       { code: "internal" },
       null,

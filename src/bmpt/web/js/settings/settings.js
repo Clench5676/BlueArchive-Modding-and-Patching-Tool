@@ -30,6 +30,7 @@ import {
   noteFit,
   noteNode,
 } from "./settings-rows.js";
+import { ZOOM_LABELS, ZOOM_MODES } from "../lobby/lobby-measure.js";
 import { on, rpc } from "../core/api.js";
 import { T, errorText, platform } from "../core/i18n.js";
 import { $, DOT, S, clone, glyphsOf, hitButton, wrapPath } from "../core/util.js";
@@ -251,7 +252,7 @@ function factorRow(name, y, title, value) {
     value: f,
     steps: Math.round((hi - lo) * 10),
     text: (x) => factorText(at(x)),
-    set: (x) => set("lobbyZoomCustom", at(x)),
+    set: (x) => set("memorialLobbyZoomOutCustomLimit", at(x)),
   };
   return { tree: t, h: 172, hits: [], slider };
 }
@@ -528,9 +529,9 @@ function rows({ builtSize = null, sizeError = null } = {}) {
   } else if (tab === "l2d") {
     // the memorial lobby's fullscreen zoom-out limit: the game's view, the art every clip keeps painted, everything
     // painted, or a custom number of game views across (its slider shows with Custom)
-    const zoom = p.lobbyZoom || { mode: "art", custom: 2 };
-    const modes = ["game", "art", "unlocked", "custom"].map((m) => [m, T(`settings.zoomOut.${m}`)]);
-    add(radioRow("ZoomOut", 0, T("settings.zoomOut.label"), modes, zoom.mode, (v) => set("lobbyZoom", v)));
+    const zoom = p.memorialLobbyZoomOut || { mode: "fullArt", custom: 2 };
+    const modes = ZOOM_MODES.map((m) => [m, T(`settings.zoomOut.${ZOOM_LABELS[m]}`)]);
+    add(radioRow("ZoomOut", 0, T("settings.zoomOut.label"), modes, zoom.mode, (v) => set("memorialLobbyZoomOut", v)));
     if (zoom.mode === "custom") add(factorRow("ZoomCustom", 0, T("settings.zoomOut.limit"), zoom.custom));
     // the game's PP option: the lobby's post-processing volumes (colour grading, chromatic aberration, Panini)
     add(
@@ -542,8 +543,8 @@ function rows({ builtSize = null, sizeError = null } = {}) {
           [true, T("settings.post.on")],
           [false, T("settings.post.off")],
         ],
-        p.lobbyPost !== false,
-        (v) => set("lobbyPost", v),
+        p.memorialLobbyPostProcessing !== false,
+        (v) => set("memorialLobbyPostProcessing", v),
       ),
     );
     // the memorial lobby's intro when it is entered (off: the lobby as the intro leaves it)
@@ -556,8 +557,8 @@ function rows({ builtSize = null, sizeError = null } = {}) {
           [true, T("settings.intro.on")],
           [false, T("settings.intro.off")],
         ],
-        p.lobbyIntro !== false,
-        (v) => set("lobbyIntro", v),
+        p.memorialLobbyIntro !== false,
+        (v) => set("memorialLobbyIntro", v),
       ),
     );
   } else {
@@ -670,7 +671,7 @@ async function checkUpdate(event) {
 let languageWrite = Promise.resolve(),
   resourceWrite = Promise.resolve();
 function set(key, value) {
-  if (key === "fileSource" || key.startsWith("gameDir")) {
+  if (key === "fileSource" || key.startsWith("gameDir") || key === "libraryDir") {
     const saved = resourceWrite.then(() => saveSetting(key, value));
     resourceWrite = saved.catch(() => {});
     return saved;
@@ -682,8 +683,34 @@ function set(key, value) {
   languageWrite = saved.catch(() => {});
   return saved;
 }
+/**
+ * Save a setting; a library move onto an existing library asks first and moves again once confirmed. Closing the
+ * question moves nothing.
+ * @returns {Promise<object|null>} settings.set's preferences; null when the move was not confirmed.
+ */
+export async function setSetting(key, value, request = rpc, ask = (opts) => Popup.message(opts)) {
+  for (;;) {
+    try {
+      return await request("settings.set", { key, value });
+    } catch (err) {
+      if (key !== "libraryDir") throw err;
+      if (err?.code === "library_target_not_empty" && err.params?.adoptable && typeof value === "string") {
+        const answer = await ask({
+          title: T("settings.library"),
+          lines: [errorText(err)],
+          ok: T("picker.ok"),
+          cancel: T("popup.cancel"),
+        });
+        if (answer?.button !== "ok") return null;
+        value = { path: value, adopt: true };
+        continue;
+      }
+      throw err;
+    }
+  }
+}
 async function saveSetting(key, value) {
-  const next = await call(() => rpc("settings.set", { key, value }));
+  const next = await call(() => setSetting(key, value));
   if (!next) return;
   prefs = next;
   await call(() => onChange?.(key, next));

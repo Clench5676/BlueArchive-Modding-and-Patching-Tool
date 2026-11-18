@@ -16,13 +16,13 @@ export function assignmentChoices(data, view, query = "") {
 }
 
 /**
- * The keys of the variants a view offers: with Group Alts every variant of a family shown, else the cards' own.
+ * The keys of the alts a view offers: with Group Alts every alt of a student shown, else the cards' own.
  */
 export function offeredKeys(data, view, cards) {
   return new Set(
     cards.flatMap((card) =>
-      view.merged
-        ? (data.families.find((item) => item.key === card.family)?.variants || []).map((variant) => variant.key)
+      view.groupAlts
+        ? (data.students.find((item) => item.key === card.student)?.alts || []).map((alt) => alt.key)
         : [card.key],
     ),
   );
@@ -31,8 +31,8 @@ export function offeredKeys(data, view, cards) {
 /**
  * Fill the character picker's dialog: a list of students with a search, sort and the Group Alts option.
  * @param {object} options The dialog's parts.
- * @param {object} options.data The data of roster.list.
- * @param {string|null} options.selected The selected variant's key.
+ * @param {object} options.data The data of students.list.
+ * @param {string|null} options.selected The selected alt's key.
  * @param {object} options.dialog The dialog, whose scrolling area `refresh` follows.
  * @param {(area: object) => void} [options.refresh] Called when the dialog's scrolling area changed height (its
  *     game scrollbar follows).
@@ -53,7 +53,7 @@ export async function characterPicker({
   let view = normalizeView({ sort: "name", order: "asc" }),
     query = "",
     page = 0,
-    family = null;
+    student = null;
   let choice = selected || null;
   await dialog(
     T("import.assignCharacter"),
@@ -68,8 +68,8 @@ export async function characterPicker({
       const mods = button(T("seg.all"), "characterMods", { width: 180, scale: 0.34 });
       const recruit = button(T("seg.all"), "characterRecruit", { width: 230, scale: 0.34 });
       const merged = checkbox(T("roster.merge"), false, (value) => {
-        view.merged = value;
-        family = null;
+        view.groupAlts = value;
+        student = null;
         page = 0;
         draw();
       });
@@ -86,15 +86,15 @@ export async function characterPicker({
       const next = button("›", "characterNext", { width: 100, scale: 0.34, name: T("photo.next") });
       pages.append(previous, next);
       area.appendChild(pages);
-      const label = (variant) => studentName(variant, L(variant.names)?.full || variant.key);
+      const label = (alt) => studentName(alt, L(alt.names)?.full || alt.key);
       const draw = () => {
         const cards = assignmentChoices(data, view, query);
         const values = cards.slice(page * 24, page * 24 + 24).flatMap((card) => {
-          if (!view.merged) return [[card.key, card.name]];
-          const variants = data.families.find((item) => item.key === card.family)?.variants || [];
+          if (!view.groupAlts) return [[card.key, card.name]];
+          const alts = data.students.find((item) => item.key === card.student)?.alts || [];
           return [
-            [`family:${card.family}`, card.name],
-            ...(family === card.family ? variants.map((variant) => [variant.key, label(variant)]) : []),
+            [`student:${card.student}`, card.name],
+            ...(student === card.student ? alts.map((alt) => [alt.key, label(alt)]) : []),
           ];
         });
         list.replaceChildren();
@@ -110,8 +110,8 @@ export async function characterPicker({
             values,
             choice,
             (value) => {
-              if (value.startsWith("family:")) {
-                family = value.slice(7);
+              if (value.startsWith("student:")) {
+                student = value.slice(8);
                 draw();
               } else {
                 choice = value;
@@ -131,7 +131,7 @@ export async function characterPicker({
       const searchChanged = () => {
         query = search.input.value;
         page = 0;
-        family = null;
+        student = null;
         draw();
       };
       search.input.addEventListener("input", (event) => {
@@ -171,7 +171,7 @@ export async function characterPicker({
           draw();
         });
       segment(mods, "mods", ["all", "mods", "none"], ["seg.all", "seg.mods", "seg.noMods"]);
-      segment(recruit, "recruit", ["all", "yes", "no"], ["seg.all", "seg.recruit", "seg.noRecruit"]);
+      segment(recruit, "releaseStatus", ["all", "yes", "no"], ["seg.all", "seg.recruit", "seg.noRecruit"]);
       filters.addEventListener("click", () =>
         Display.open({
           view,

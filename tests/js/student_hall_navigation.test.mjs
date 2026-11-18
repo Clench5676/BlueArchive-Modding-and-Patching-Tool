@@ -19,8 +19,8 @@ globalThis.hallHarness = {
   T: (key) => key,
   rpc: (method, params) => {
     requests.push({ method, params });
-    if (method !== "hall.update")
-      return Promise.resolve(method === "hall.get" ? saved() : { choices: [], backgrounds: [] });
+    if (method !== "studentHall.update")
+      return Promise.resolve(method === "studentHall.get" ? saved() : { choices: [], backgrounds: [] });
     if (auto) return Promise.resolve({ ...params.value, revision: params.revision + 1 });
     return new Promise((resolve, reject) => deferred.push({ resolve, reject }));
   },
@@ -66,7 +66,13 @@ export function initializePending(){store=null;root=art=nodeFake();}
 export function draft(){return store;} export {step,setMode,persist,saveDraft,cancelDraft};`;
 const Hall = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
 function saved() {
-  return { revision: 0, mode: "memorial", portraits: [], memorials: [{ id: "one" }, { id: "two" }], active: "one" };
+  return {
+    revision: 0,
+    mode: "memorialLobby",
+    portraits: [],
+    memorialLobbies: [{ id: "one" }, { id: "two" }],
+    active: "one",
+  };
 }
 function setup() {
   requests = [];
@@ -153,7 +159,7 @@ test("Discard leaves without writing, Save persists the full draft once", async 
   await tick();
   prompts[0].actions[2].fn();
   assert.equal(await leaving, true);
-  assert.equal(requests.filter((r) => r.method === "hall.update").length, 1);
+  assert.equal(requests.filter((r) => r.method === "studentHall.update").length, 1);
   assert.equal(Hall.draft().saved().background, "saved");
   Hall.hide();
 });

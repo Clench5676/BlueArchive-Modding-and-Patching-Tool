@@ -347,7 +347,7 @@ def test_model_dependency_replaced_during_decode_is_not_cached(tmp_path, monkeyp
     with pytest.raises(AssetNotFound, match="Model dependency changed"):
         game.model_glb("ch0242")
     assert not preview.root.exists(), "old decoded bytes must never be persisted with the new source stamp"
-    assert not any(key[1].startswith("gameassets-v1/model/") for key in game.cache._items)
+    assert not any(key[1].startswith("gameassets-v2/model/") for key in game.cache._items)
 
 
 def test_missing_model_cab_is_not_persisted_and_new_dependency_exports_on_restart(tmp_path, monkeypatch):
@@ -549,16 +549,16 @@ def test_model_revision_rpc_hashes_validated_glb(preview_app, preview_services, 
         return AssetResponse(b"glTF exact bytes", "model/gltf-binary", False)
 
     monkeypatch.setattr(preview_services, "asset", asset)
-    result = rpc(preview_app, "preview.modelRevision", variant="shiroko", source="mod:1")["result"]
+    result = rpc(preview_app, "preview.chibiRevision", alt="shiroko", source="mod:1")["result"]
     assert result["revision"] == hashlib.sha256(b"glTF exact bytes").hexdigest()
-    assert calls == [("model/shiroko.glb", {"source": "mod:1"})]
-    assert rpc(preview_app, "preview.modelRevision", variant="../bad")["error"]["code"] == "bad_params"
+    assert calls == [("chibi/shiroko.glb", {"source": "mod:1"})]
+    assert rpc(preview_app, "preview.chibiRevision", alt="../bad")["error"]["code"] == "bad_params"
 
 
 def test_asset_revision_rpc_tracks_exact_background_and_framing_bytes(preview_app, preview_services, monkeypatch):
     paths = [
-        "/asset/art/bg/BG_Cafe_Collection.png",
-        "/asset/spine/lobby/hero_home%40install/" + "a" * 64 + "/framing.json",
+        "/asset/art/background/BG_Cafe_Collection.png",
+        "/asset/spine/memorialLobby/hero_home%40install/" + "a" * 64 + "/framing.json",
     ]
     calls = []
     contents = {
@@ -591,20 +591,20 @@ def test_asset_revision_rpc_tracks_exact_background_and_framing_bytes(preview_ap
     "paths",
     [
         [],
-        ["/asset/art/bg/BG_Cafe.png"] * 3,
+        ["/asset/art/background/BG_Cafe.png"] * 3,
         "not a list",
         [None],
-        ["https://example.test/asset/art/bg/BG_Cafe.png"],
-        ["//example.test/asset/art/bg/BG_Cafe.png"],
-        ["/asset/art/bg/BG_Cafe.png?other=true"],
-        ["/asset/art/bg/BG_Cafe.png#fragment"],
-        ["/asset/art/bg/../BG_Cafe.png"],
-        ["/asset/art/bg/BG_Cafe%2f..%2fother.png"],
+        ["https://example.test/asset/art/background/BG_Cafe.png"],
+        ["//example.test/asset/art/background/BG_Cafe.png"],
+        ["/asset/art/background/BG_Cafe.png?other=true"],
+        ["/asset/art/background/BG_Cafe.png#fragment"],
+        ["/asset/art/background/../BG_Cafe.png"],
+        ["/asset/art/background/BG_Cafe%2f..%2fother.png"],
         ["/asset/ui/texture/BG_Cafe.png"],
-        ["/asset/art/portrait/Student_Portrait.png"],
-        ["/asset/spine/lobby/hero_home/framing.json"],
-        ["/asset/spine/lobby/../" + "a" * 64 + "/framing.json"],
-        ["/asset/spine/lobby/hero_home/" + "a" * 64 + "/skeleton.skel"],
+        ["/asset/art/officialThumbnail/Student_Portrait.png"],
+        ["/asset/spine/memorialLobby/hero_home/framing.json"],
+        ["/asset/spine/memorialLobby/../" + "a" * 64 + "/framing.json"],
+        ["/asset/spine/memorialLobby/hero_home/" + "a" * 64 + "/skeleton.skel"],
     ],
 )
 def test_asset_revision_rejects_non_dependency_urls(preview_app, preview_services, monkeypatch, paths):

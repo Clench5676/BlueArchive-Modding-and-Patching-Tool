@@ -82,15 +82,15 @@ def test_batch_import_analyzes_differently_dated_parts_as_one_row_and_applies_al
     sources = dated_sources(env, targets)
     (entry,) = analyze(env, [sources[0].parent])["entries"]
     assert entry["paths"] == sorted(map(str, sources))
-    assert (entry["variant"], entry["core"], entry["kind"], entry["state"], entry["reason"]) == (
+    assert (entry["alt"], entry["core"], entry["resourceType"], entry["state"], entry["reason"]) == (
         "test",
         "test_spr",
-        "spr",
+        "portrait",
         "ready",
         None,
     )
     assert {file["target"] for file in entry["files"]} == {target.name for target in targets}
-    (result,) = run(env, [entry], backup=False)
+    (result,) = run(env, [entry], createBackup=False)
     assert (result["outcome"], result["applied"], result["configured"]) == ("imported", True, True)
     (mod,) = env.library.mods()
     assert result["libraryId"] == mod.id and stored_names(env.library, mod) == {target.name for target in targets}
@@ -129,13 +129,13 @@ def test_mixed_folders_with_two_cores_and_a_lobby_make_one_row_per_core(env):
     lobby = game_bundle(env.game_dir, "test_home_gl", date="2025-12-01")
     sources = [*dated_sources(env, dated_targets(env)), *dated_sources(env, other), *dated_sources(env, [lobby])]
     rows = analyze(env, [sources[0].parent])["entries"]
-    assert sorted((row["core"], row["kind"], len(row["paths"])) for row in rows) == [
-        ("other_spr", "spr", 2),
-        ("test_home_gl", "lobby", 1),
-        ("test_spr", "spr", 2),
+    assert sorted((row["core"], row["resourceType"], len(row["paths"])) for row in rows) == [
+        ("other_spr", "portrait", 2),
+        ("test_home_gl", "memorialLobby", 1),
+        ("test_spr", "portrait", 2),
     ]
     assert {row["state"] for row in rows} == {"ready"}
-    assert [result["outcome"] for result in run(env, rows, backup=False)] == ["imported"] * 3
+    assert [result["outcome"] for result in run(env, rows, createBackup=False)] == ["imported"] * 3
     assert len(env.library.mods()) == 3
 
 
@@ -209,13 +209,13 @@ def test_model_prefab_and_dependencies_with_other_dates_are_one_row_and_one_mod(
     env.parts[0] = prefab.rename(prefab.with_name(prefab.name.replace("2026-01-01", "2026-02-01")))
     sources = [make_mod(path, env.tmp / "input", payload=f"mod {i}".encode()) for i, path in enumerate(env.parts)]
     (entry,) = analyze(env, [sources[0].parent])["entries"]
-    assert (entry["kind"], entry["core"], entry["state"], entry["paths"]) == (
-        "model",
+    assert (entry["resourceType"], entry["core"], entry["state"], entry["paths"]) == (
+        "chibi",
         "hoshino_original",
         "ready",
         sorted(map(str, sources)),
     )
-    (result,) = run(env, [entry], backup=False)
+    (result,) = run(env, [entry], createBackup=False)
     assert (result["outcome"], result["applied"]) == ("imported", True)
     (mod,) = env.library.mods()
     assert mod.kind == "model" and mod.date == "2026-02-01" and len(stored_names(env.library, mod)) == 3

@@ -48,9 +48,9 @@ test("intentional stored positions and relative zoom remain untouched while hit 
   assert.deepEqual(entry, before);
 });
 test("new entries use the verified lobby anchor with relative scale one", () => {
-  const state = createDraft({ revision: 0, mode: "portraits", portraits: [], memorials: [], active: null });
+  const state = createDraft({ revision: 0, mode: "portraits", portraits: [], memorialLobbies: [], active: null });
   state.begin("layout");
-  const entry = state.add({ variant: "hero", source: "mod:a", kind: "spr" }, () => "first");
+  const entry = state.add({ alt: "hero", source: "mod:a", resourceType: "portrait" }, () => "first");
   assert.equal(entry.scale, 1);
   close(entry.x, PORTRAIT_ANCHOR.x);
   close(entry.y, PORTRAIT_ANCHOR.y);
@@ -61,7 +61,7 @@ test("horizontal flip reflects asymmetric bounds around the same anchor for hits
     bounds = { x: -180, y: 35, width: 730, height: 1450 };
   for (const globalScale of [0.25, 1, 1.5]) {
     const plain = portraitRect(entry, bounds, globalScale),
-      flipped = portraitRect({ ...entry, mirror: true }, bounds, globalScale);
+      flipped = portraitRect({ ...entry, flipHorizontal: true }, bounds, globalScale);
     close(flipped.x, 2 * entry.x - plain.x - plain.width);
     close(flipped.width, plain.width);
     close(flipped.height, plain.height);

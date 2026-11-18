@@ -80,7 +80,7 @@ def test_grouping_and_base_playable_story_order(catalog: Catalog):
 def test_no_install_and_missing_portraits_are_excluded(catalog: Catalog):
     assert Catalog(None, None, Path("missing.json")).families() == []
     assert Catalog(None, None).variant_for_core("hoshino_home") is None
-    with pytest.raises(ServiceError, match="catalog_variant_not_found"):
+    with pytest.raises(ServiceError, match="catalog_alt_not_found"):
         catalog.variant("ch9000")
     with pytest.raises(ServiceError) as failure:
         catalog.family("missing")

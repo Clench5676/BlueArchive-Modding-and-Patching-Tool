@@ -23,7 +23,7 @@ function backend() {
     },
     async request(method, args) {
       calls.push([method, args]);
-      if (method === "preview.modelRevision" || method === "preview.assetRevision") return { revision, generation };
+      if (method === "preview.chibiRevision" || method === "preview.assetRevision") return { revision, generation };
       if (method === "preview.cacheGet") return { allowed: true, generation, data: files.get(args.key) ?? null };
       if (method === "preview.cachePut") {
         if (args.generation !== generation) return false;
@@ -87,11 +87,11 @@ test("stalled optional cache RPCs time out and fall back without blocking render
   configured(store);
   assert.equal(await store.get(store.ticket("source", "spine")), null);
   assert.equal(await store.modelTicket("source", "student", "live"), null);
-  assert.equal(await store.assetTicket(store.ticket("source", "spine"), ["/asset/art/bg/BG_Cafe.png"]), null);
+  assert.equal(await store.assetTicket(store.ticket("source", "spine"), ["/asset/art/background/BG_Cafe.png"]), null);
   assert.equal(await store.put(store.ticket("source", "spine"), "blob:x"), false);
   assert.deepEqual(calls, [
     ["preview.cacheGet", 5],
-    ["preview.modelRevision", 5],
+    ["preview.chibiRevision", 5],
     ["preview.assetRevision", 5],
     ["preview.cachePut", 5],
   ]);
@@ -178,7 +178,10 @@ test("background and framing dependencies invalidate stills and are rechecked af
   const server = backend(),
     store = createPreviewCache(options(server));
   configured(store);
-  const paths = ["/asset/art/bg/collection.png", `/asset/spine/lobby/core/${"f".repeat(64)}/framing.json`];
+  const paths = [
+    "/asset/art/background/collection.png",
+    `/asset/spine/memorialLobby/core/${"f".repeat(64)}/framing.json`,
+  ];
   const a = await store.assetTicket(store.ticket("same-spine", "spine"), paths);
   server.revision("c".repeat(64));
   const b = await store.assetTicket(store.ticket("same-spine", "spine"), paths);

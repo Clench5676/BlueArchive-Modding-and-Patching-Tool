@@ -10,7 +10,7 @@ export const STATES = Object.freeze([
   "incomplete",
   "done",
 ]);
-export const RESOURCE_TYPES = Object.freeze(["ALL", "Texture2D", "TextAsset", "Mesh", "AnimationClip"]);
+export const ASSET_TYPES = Object.freeze(["ALL", "Texture2D", "TextAsset", "Mesh", "AnimationClip"]);
 /** Whether an import entry can be imported: ready, to convert or to update. */
 export const eligible = (entry) => ["ready", "convert", "update"].includes(entry?.state);
 /** The distinct file paths of entries. */
@@ -20,7 +20,7 @@ export function sourceFolder(path) {
   const end = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
   return end < 0 ? "" : path.slice(0, end + (end === 0 || (end === 2 && path[1] === ":") ? 1 : 0));
 }
-const snapshot = (options) => ({ ...options, types: [...options.types] });
+const snapshot = (options) => ({ ...options, assetTypes: [...options.assetTypes] });
 
 /** The number of entries in each state (STATES). */
 export function countsOf(entries) {
@@ -243,7 +243,7 @@ export function createImportState({ rpc, waitJob, changed = () => {}, suggest = 
     recheck() {
       return analyze(retryPaths.length ? retryPaths : pathsOf(state.entries), retryRecursive, "recheck");
     },
-    async assignCharacter(id, variant) {
+    async assignAlt(id, alt) {
       if (busy() || !state.entries.some((entry) => entry.id === id)) return false;
       const contextAtStart = contextRevision;
       state.phase = "analyzing";
@@ -253,7 +253,7 @@ export function createImportState({ rpc, waitJob, changed = () => {}, suggest = 
       revision++;
       emit();
       try {
-        const job = await rpc("import.assignCharacter", { id, variant });
+        const job = await rpc("import.assignAlt", { id, alt });
         const entry = await waitForJob(job);
         state.analysisRevision = entry.revision;
         state.entries = state.entries.map((item) => (item.id === id ? entry : item));
@@ -527,7 +527,7 @@ export function createMissingFlow({
     if (
       !(await ask({
         title: typeof title === "function" ? title() : title,
-        lines: promptLines(entry, { student: identify(entry), kind: kindName(entry.kind), text }),
+        lines: promptLines(entry, { student: identify(entry), kind: kindName(entry.resourceType), text }),
         ok: text("addTogether"),
       }))
     )
@@ -540,7 +540,7 @@ export function createMissingFlow({
     if (!rows.length || model.busy()) return false;
     rows.forEach((entry) => shown.add(key(entry)));
     const lines = rows.map((entry) =>
-      text("fillLine", { student: identify(entry), kind: kindName(entry.kind), n: entry.missing.found.length }),
+      text("fillLine", { student: identify(entry), kind: kindName(entry.resourceType), n: entry.missing.found.length }),
     );
     if (!(await ask({ title: text("fillAll", { n: rows.length }), lines, ok: text("addTogether") }))) return false;
     if (model.state.analysisRevision !== revision || !rows.every((row) => model.state.entries.includes(row)))

@@ -147,7 +147,7 @@ globalThis.getComputedStyle = () => ({ getPropertyValue: () => "" });
 const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
 
 for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
-  for (const mode of ["portrait", "lobby"]) {
+  for (const mode of ["portrait", "memorialLobby"]) {
     test(`real ${mode} camera controls retain native Back dimensions and fit composed rows at all corner margins in ${locale}`, async () => {
       const webui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url))).webui;
       const strings = webui.photo;

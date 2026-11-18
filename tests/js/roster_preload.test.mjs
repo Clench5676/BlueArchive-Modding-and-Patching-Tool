@@ -28,7 +28,7 @@ function runStart(gameFound) {
   const env = {
     ctx: {},
     ROOT_ROUTE: "#/",
-    variantNames: {},
+    altNames: {},
     routeToken: 0,
     timed: (_phase, work) => work(),
     rpc: async (method) => (method === "app.info" ? { gameFound, resourceContext: "rev-2" } : {}),

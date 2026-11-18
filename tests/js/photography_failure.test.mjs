@@ -50,7 +50,7 @@ test("coded and cancelled photography failures stay out of the report", async ()
   const h = setup();
   try {
     await h.safe(async () => {
-      throw Object.assign(new Error("Renderer did not recover"), { code: "photo_capture_unavailable" });
+      throw Object.assign(new Error("Renderer did not recover"), { code: "thumbnail_capture_unavailable" });
     })();
     await h.safe(async () => {
       throw new DOMException("Photography ended", "AbortError");
@@ -58,7 +58,7 @@ test("coded and cancelled photography failures stay out of the report", async ()
     assert.deepEqual(h.forwarded, []);
     assert.deepEqual(
       h.popups.map((popup) => popup.lines),
-      [["T:error.photo_capture_unavailable"]],
+      [["T:error.thumbnail_capture_unavailable"]],
     );
   } finally {
     h.restore();

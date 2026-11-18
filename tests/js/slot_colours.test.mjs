@@ -83,7 +83,7 @@ function player(slots) {
   };
 }
 
-test("MX Standard and its noise flow variant take the colour as it is; spine-unity's shaders decode it with UnityCG's cubic", () => {
+test("MX Standard and its noise flow alt take the colour as it is; spine-unity's shaders decode it with UnityCG's cubic", () => {
   const { curveOf, CURVES } = SlotColours;
   assert.equal(curveOf("Spine/Skeleton MX Standard"), CURVES.asIs);
   assert.equal(curveOf("Spine/Skeleton MX Standard - NoiseFlowAnimation"), CURVES.asIs);

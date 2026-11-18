@@ -119,8 +119,8 @@
     },
     "src/ba_modding_toolkit/gui/app.py": {
       "blob": "d4aa3d5d04573a7a38846c79c706c08db037264a",
-      "non_import_ast_sha256": "c7c7130821c8e36bcd021d564c5d3ef0294031e88ef86a69b3ec2d6ad222bc56",
-      "masked_import_lines_sha256": "d579d8df37761162f76735262de861de1cc26d6627d4c1ad1a64f485a412316b"
+      "non_import_ast_sha256": "f79837e73a0b5a46d5e87776bca8588a99562c641f2d94a5e25354ac912e3fc3",
+      "masked_import_lines_sha256": "dec7cd71e1a33802dbef6122e45ce5fe87a4337419d5d448a04410fccf7c37d2"
     },
     "src/ba_modding_toolkit/gui/components.py": {
       "blob": "aaf100806492e8f076f07615b9cc415ca3962d67",
@@ -129,13 +129,13 @@
     },
     "src/ba_modding_toolkit/gui/configs.py": {
       "blob": "9867e76da6d94ed049ec5679f828a212cc7e43e8",
-      "non_import_ast_sha256": "01d095b112f925f9c987bea603cf60f6e404f5656bde614497811edcee41378f",
-      "masked_import_lines_sha256": "b1dbefb591e0cbe8c1b618b9ddd7a664822db4fba7d78dd256eb912cf3f3085a"
+      "non_import_ast_sha256": "0a2812fbfac33d1d4deab4e95f0d5b673cd52b8a3b18230094c951a02195786c",
+      "masked_import_lines_sha256": "ba9155d3e34bef2d14a11655dfbd545d0064163146eeee9c6ed8a3bc1f60803b"
     },
     "src/ba_modding_toolkit/gui/main.py": {
       "blob": "59c17c5685283fa1fb8001b16c37da39f5bef1c1",
-      "non_import_ast_sha256": "7b6d998bd134a9e7aca0e9ccff635b12dd4d940b31b462f9190b3e1c5d475573",
-      "masked_import_lines_sha256": "6ac7707d19b7e3006ae8fe942912fe37ef9932502437a18128c5a2c7aba8e250"
+      "non_import_ast_sha256": "eff58ce57aa2d30862d9e003010b8a9268d75e1eb8567bde9475736cc4f1f8df",
+      "masked_import_lines_sha256": "53edd2ed3d471e08df28fa46204c80f204daedd96369a8e6ad340d37f24a68f0"
     },
     "src/ba_modding_toolkit/gui/tabs/__init__.py": {
       "blob": "3d94c7152d66d74925c6651cd6ebda94647f2bb9",
@@ -308,8 +308,8 @@
     },
     "src/ba_modding_toolkit/utils/paths.py": {
       "blob": "72784230e37d3e40fd26edf87306f70fa05ed068",
-      "non_import_ast_sha256": "ad9a44b937254c638d588fca9f4148a9248f7b00437d7ffde6b350036a298594",
-      "masked_import_lines_sha256": "87de59540896d168a1e5dfd55dad301432ab7c755e283d77e97343b1a0606312"
+      "non_import_ast_sha256": "7f72505d02cdcd56d304c7fe9e56369252712976e553a76f8b98afb6c52809c4",
+      "masked_import_lines_sha256": "c91f93a62b268a51f849f9f269f9f01b18d21d01d60e2110ee688316a829caee"
     }
   },
   "allowed_app_imports": [
@@ -369,19 +369,37 @@
     },
     {
       "file": "src/ba_modding_toolkit/gui/configs.py",
-      "line": 200,
+      "line": 184,
+      "original": "",
+      "import": "from bmpt.core.filelock import file_lock"
+    },
+    {
+      "file": "src/ba_modding_toolkit/gui/configs.py",
+      "line": 185,
+      "original": "",
+      "import": "from bmpt.host.store_formats import epoch_root"
+    },
+    {
+      "file": "src/ba_modding_toolkit/gui/configs.py",
+      "line": 186,
+      "original": "",
+      "import": "from bmpt.host.upgrade_files import write_bytes"
+    },
+    {
+      "file": "src/ba_modding_toolkit/gui/configs.py",
+      "line": 212,
       "original": "from ..config import migrate_game_directories",
       "import": "from bmpt.host.config import migrate_game_directories"
     },
     {
       "file": "src/ba_modding_toolkit/gui/main.py",
-      "line": 9,
+      "line": 10,
       "original": "from ..webui.classic import remove_classic_json",
       "import": "from bmpt.webui.classic import remove_classic_json"
     },
     {
       "file": "src/ba_modding_toolkit/gui/main.py",
-      "line": 10,
+      "line": 11,
       "original": "from .control import ControlBridge, ControlClient, take_channel",
       "import": "from bmpt.gui.control import ControlBridge, ControlClient, take_channel"
     },
@@ -465,19 +483,19 @@
     },
     {
       "file": "src/ba_modding_toolkit/utils/paths.py",
-      "line": 6,
+      "line": 4,
       "original": "from .. import devmode",
       "import": "from bmpt.core import devmode"
     },
     {
       "file": "src/ba_modding_toolkit/utils/paths.py",
-      "line": 7,
+      "line": 5,
       "original": "from ..data_paths import migrate_data_dir",
-      "import": "from bmpt.host.data_paths import migrate_data_dir"
+      "import": "from bmpt.host.upgrade_inputs import discover_macos_data"
     },
     {
       "file": "src/ba_modding_toolkit/utils/paths.py",
-      "line": 8,
+      "line": 6,
       "original": "from ..game_paths import find_game_dirs",
       "import": "from bmpt.host.game_paths import find_game_dirs"
     }

@@ -11,31 +11,34 @@ const { COUNT_ICONS, countNodes, countText, iconsOf } = await import("../../src/
 test("count icons are the two named game sprites, found in the loaded atlases only", () => {
   const index = {
     Other: { Common_Icon_Lobby: { width: 80, height: 100 } },
-    Common: { [COUNT_ICONS.spr]: { width: 100, height: 80 }, [COUNT_ICONS.lobby]: { width: 90, height: 100 } },
+    Common: {
+      [COUNT_ICONS.portrait]: { width: 100, height: 80 },
+      [COUNT_ICONS.memorialLobby]: { width: 90, height: 100 },
+    },
   };
   const icons = iconsOf(index);
-  assert.deepEqual(icons.spr, { atlas: "Common", name: COUNT_ICONS.spr, ratio: 1.25 });
-  assert.equal(icons.lobby.name, COUNT_ICONS.lobby);
+  assert.deepEqual(icons.portrait, { atlas: "Common", name: COUNT_ICONS.portrait, ratio: 1.25 });
+  assert.equal(icons.memorialLobby.name, COUNT_ICONS.memorialLobby);
   assert.deepEqual(
-    iconsOf({ Common: { [COUNT_ICONS.spr]: { width: 40, height: 40 } } }).lobby,
+    iconsOf({ Common: { [COUNT_ICONS.portrait]: { width: 40, height: 40 } } }).memorialLobby,
     undefined,
     "a missing sprite is never replaced by a guess",
   );
   assert.deepEqual(iconsOf({}), {});
-  const [portraits, lobbies] = countNodes({ spr: 3, lobby: 1 }, icons);
+  const [portraits, lobbies] = countNodes({ portrait: 3, memorialLobby: 1 }, icons);
   assert.equal(portraits.children[0].widgets[0].text, "\u00d73");
   assert.equal(lobbies.children[0].widgets[0].text, "\u00d71");
-  assert.equal(lobbies.children[1].widgets[0].sprite, icons.lobby.name);
-  assert.equal(lobbies.children[1].widgets[0].atlas, icons.lobby.atlas);
-  const big = countNodes({ spr: 1234567, lobby: 0 }, icons);
+  assert.equal(lobbies.children[1].widgets[0].sprite, icons.memorialLobby.name);
+  assert.equal(lobbies.children[1].widgets[0].atlas, icons.memorialLobby.atlas);
+  const big = countNodes({ portrait: 1234567, memorialLobby: 0 }, icons);
   assert.ok(big[0].children[0].widgets[0].fontSize < 36);
   assert.equal(big[1].children[0].widgets[0].text, "\u00d70");
 });
 
 test("a count whose sprite is missing degrades to a word and the number", () => {
   const T = (key) => ({ "band.portrait": "Portrait", "band.lobby": "Lobby" })[key];
-  const icons = iconsOf({ Common: { [COUNT_ICONS.spr]: { width: 40, height: 40 } } });
-  const [portraits, lobbies] = countNodes({ spr: 3, lobby: 1 }, icons, T);
+  const icons = iconsOf({ Common: { [COUNT_ICONS.portrait]: { width: 40, height: 40 } } });
+  const [portraits, lobbies] = countNodes({ portrait: 3, memorialLobby: 1 }, icons, T);
   assert.equal(portraits.children.length, 2, "the portrait count keeps its icon");
   assert.equal(portraits.children[0].widgets[0].text, "\u00d73");
   assert.equal(lobbies.children.length, 1, "no icon node for the missing sprite");
@@ -52,7 +55,7 @@ test("both counts have full localized text and the mod chip is kind neutral in a
       assert.equal(key, "band.modCounts");
       return ui.band.modCounts.replace(/\{(\w+)\}/g, (_, name) => params[name]);
     };
-    const text = countText({ spr: 3, lobby: 1 }, T);
+    const text = countText({ portrait: 3, memorialLobby: 1 }, T);
     assert.ok(text.includes(ui.tab.portrait) || lang === "en-US");
     assert.ok(text.includes(ui.tab.lobby) || lang === "en-US");
     assert.ok(text.includes("3") && text.includes("1"));
@@ -63,9 +66,12 @@ test("both counts have full localized text and the mod chip is kind neutral in a
 });
 
 test("the count nodes draw the roster icons and include models and generic assets", () => {
-  const kinds = ["spr", "lobby", "model", "other"];
+  const kinds = ["portrait", "memorialLobby", "chibi", "other"];
   const index = { Common: Object.fromEntries(kinds.map((kind) => [COUNT_ICONS[kind], { width: 40, height: 40 }])) };
-  const nodes = countNodes({ spr: 2, lobby: 3, model: 4, other: 5 }, iconsOf(index), null, { kinds, width: 800 });
+  const nodes = countNodes({ portrait: 2, memorialLobby: 3, chibi: 4, other: 5 }, iconsOf(index), null, {
+    kinds,
+    width: 800,
+  });
   assert.deepEqual(
     nodes.map((node) => node.name),
     kinds,

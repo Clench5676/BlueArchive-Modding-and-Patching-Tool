@@ -34,6 +34,7 @@ function harness({ first = NO_GAME } = {}) {
     scene = deferred();
   let hold = false;
   const env = {
+    upgradedNotice: null,
     Cursor: { init: () => log.push(["cursor"]) },
     Consent: { init: (value) => log.push(["consent.init", value.gameFound]) },
     Loading: {

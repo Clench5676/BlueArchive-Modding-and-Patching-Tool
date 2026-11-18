@@ -58,7 +58,7 @@ def layouts():
 
 
 def sprite(node, name=None):
-    return next(w for w in node["widgets"] if "sprite" in w and (name is None or w["sprite"] == name))
+    return next(w for w in node["widgets"] if "spriteName" in w and (name is None or w["spriteName"] == name))
 
 
 def label(node):
@@ -72,7 +72,7 @@ def test_toolbar_height_is_the_lobby_clone(tokens, record_property):
             roots[name] = export_layout(env, name, {})
     lobby = roots["UILobby"]
     clone = "Front/Right/Btn_RotateSpine/ConditionRoot/Able_Count"
-    assert sprite(subtree(lobby, f"{clone}/Bg"))["h_"] == tokens["CONTROL"]["toolbar"]["h"] == 104
+    assert sprite(subtree(lobby, f"{clone}/Bg"))["height"] == tokens["CONTROL"]["toolbar"]["h"] == 104
     # Derived widget geometry only, kept in the test report for a before/after comparison.
     geometry = {}
     for root, path in (
@@ -88,16 +88,16 @@ def test_toolbar_height_is_the_lobby_clone(tokens, record_property):
     ):
         node = subtree(roots[root], path)
         geometry[path] = {
-            "pos": node["pos"],
+            "localPosition": node["localPosition"],
             "widgets": [
-                {key: w[key] for key in ("w_", "h_", "pivot", "fontSize") if key in w}
+                {key: w[key] for key in ("width", "height", "pivot", "fontSize") if key in w}
                 for w in node["widgets"]
-                if "w_" in w
+                if "width" in w
             ],
         }
     for name in ("SearchBtn", "SortBtn", "OrderBtn"):
         path = f"SeletControl/TopMenu/{name}/Btn_Normal"
-        assert sprite(subtree(roots["UICharacterCollection"], path))["h_"] == 116
+        assert sprite(subtree(roots["UICharacterCollection"], path))["height"] == 116
     record_property("toolbar_prefab_geometry", json.dumps(geometry))
 
 
@@ -105,25 +105,25 @@ def test_legacy_popup_frame_and_footer_geometry_remain_pinned(tokens, layouts):
     sort = layouts["UIPopup_Sort"]
     base, bg = subtree(sort, "Center/Popup/Base"), subtree(sort, "Center/Popup/Base/BG")
     popup, footer = tokens["POPUP"], tokens["FOOTER"]
-    assert [base["pos"][1], bg["pos"][1]] == [popup["baseY"], popup["bgY"]]
-    assert base["pos"][1] + bg["pos"][1] == popup["frameY"]
+    assert [base["localPosition"][1], bg["localPosition"][1]] == [popup["baseY"], popup["bgY"]]
+    assert base["localPosition"][1] + bg["localPosition"][1] == popup["frameY"]
     frame = sprite(bg, "Common_Popup_Bg")
-    assert [frame["w_"], frame["h_"]] == [popup["frameW"], popup["frameH"]]
+    assert [frame["width"], frame["height"]] == [popup["frameW"], popup["frameH"]]
     # the footer's centre above the frame's bottom edge: Btn's y less the bottom edge (frame centre less half its
     # height)
     btn = subtree(sort, "Center/Popup/Btn")
-    assert btn["pos"][1] == footer["btnY"]
-    assert btn["pos"][1] - (popup["frameY"] - frame["h_"] / 2) == footer["centre"] == 190.5
+    assert btn["localPosition"][1] == footer["btnY"]
+    assert btn["localPosition"][1] - (popup["frameY"] - frame["height"] / 2) == footer["centre"] == 190.5
     ok, cancel = subtree(sort, "Center/Popup/Btn/Btn_Ok"), subtree(sort, "Center/Popup/Btn/Btn_Cancel")
-    assert [ok["pos"][0], cancel["pos"][0]] == [footer["pairX"], -footer["pairX"]]
+    assert [ok["localPosition"][0], cancel["localPosition"][0]] == [footer["pairX"], -footer["pairX"]]
     body = sprite(subtree(sort, "Center/Popup/Btn/Btn_Ok/BG (1)"), "Common_Btn_BG")
-    assert [body["w_"], body["h_"]] == [footer["body"]["w"], footer["body"]["h"]] == [496, 177]
+    assert [body["width"], body["height"]] == [footer["body"]["w"], footer["body"]["h"]] == [496, 177]
     cancel_body = sprite(subtree(sort, "Center/Popup/Btn/Btn_Cancel/BG (1)"), "Common_Btn_BG")
-    assert [cancel_body["w_"], cancel_body["h_"]] == [496, 177]
+    assert [cancel_body["width"], cancel_body["height"]] == [496, 177]
     # the bodies of the pair stand 88 apart
-    assert ok["pos"][0] - cancel["pos"][0] - body["w_"] == footer["pairGap"] == 88
+    assert ok["localPosition"][0] - cancel["localPosition"][0] - body["width"] == footer["pairGap"] == 88
     caption = label(subtree(sort, "Center/Popup/Btn/Btn_Ok/Label_Locale"))
-    assert [caption["fontSize"], caption["w_"]] == [footer["caption"]["fs"], footer["caption"]["w"]] == [72, 400]
+    assert [caption["fontSize"], caption["width"]] == [footer["caption"]["fs"], footer["caption"]["w"]] == [72, 400]
 
 
 def test_small_button_is_the_option_popups_button_bg(tokens, layouts):
@@ -131,7 +131,7 @@ def test_small_button_is_the_option_popups_button_bg(tokens, layouts):
     button = subtree(option, "Center/Popup/List/Sound_Setting/ETCSetting/ButtonBg")
     body = sprite(button, "Common_Btn_BG")
     small = tokens["SMALL_BUTTON"]
-    assert [body["w_"], body["h_"]] == [small["w"], small["h"]] == [402, 136]
+    assert [body["width"], body["height"]] == [small["w"], small["h"]] == [402, 136]
     assert (
         label(subtree(option, "Center/Popup/List/Sound_Setting/ETCSetting/ButtonBg/Label_Locale"))["fontSize"]
         == small["fs"]
@@ -146,8 +146,8 @@ def test_chip_is_the_detail_screens_type_chip(tokens, layouts):
     path = "Inventory_ListControl/LeftInfo/CharInfo/Char_Target/Type/MainType/BG"
     chip = tokens["CHIP"]
     body = sprite(subtree(detail, path), "Common_Bg_Raius10px")
-    assert [body["w_"], body["h_"]] == [chip["w"], chip["h"]] == [272, 72]
-    assert body["incline"] == 10
+    assert [body["width"], body["height"]] == [chip["w"], chip["h"]] == [272, 72]
+    assert body["inclineAngle"] == 10
     assert label(subtree(detail, f"{path}/Label"))["fontSize"] == chip["fs"] == 40
     # the pitch (290) and the second row (84) are the nameplate's own layout, not a node of this prefab
     assert chip["pitch"] - chip["w"] == chip["gap"]
@@ -166,18 +166,21 @@ def test_stats_box_is_the_detail_screens_status_box(tokens, layouts):
     assert [fill["color"], fill_1["color"]] == [f"{box['fill']}/1.00"] * 2 == ["#ecf5f9/1.00"] * 2
     assert [line["color"], line_1["color"]] == [f"{box['line']}/1.00"] * 2 == ["#c0c9d4/1.00"] * 2
     assert divider["color"] == f"{box['divider']}/1.00" == "#c0c9d4/1.00"
-    assert divider["h_"] == 4
+    assert divider["height"] == 4
     # the line is the fill plus 5 across and 5 down, centred to within a unit (Deco at -2.3, +3.0)
-    assert [line_1["w_"] - fill_1["w_"], line_1["h_"] - fill_1["h_"]] == [box["lineOutset"]] * 2 == [5, 5]
-    assert line["h_"] - fill["h_"] == box["lineOutset"]
+    assert [line_1["width"] - fill_1["width"], line_1["height"] - fill_1["height"]] == [box["lineOutset"]] * 2 == [5, 5]
+    assert line["height"] - fill["height"] == box["lineOutset"]
     assert (
-        abs(second_line["pos"][0] + box["lineOutset"] / 2) <= 0.5
-        and abs(second_line["pos"][1] - box["lineOutset"] / 2) <= 0.5
+        abs(second_line["localPosition"][0] + box["lineOutset"] / 2) <= 0.5
+        and abs(second_line["localPosition"][1] - box["lineOutset"] / 2) <= 0.5
     )
-    assert second_line["pos"] == bg_line["pos"]
+    assert second_line["localPosition"] == bg_line["localPosition"]
     # the first fill's line is 10 wider: its right 5 more lie under the second fill, which is drawn above it
-    assert line["w_"] - fill["w_"] == 2 * box["lineOutset"]
-    assert second["pos"][0] + fill_1["w_"] >= bg_line["pos"][0] + line["w_"] and fill_1["depth"] > line["depth"]
+    assert line["width"] - fill["width"] == 2 * box["lineOutset"]
+    assert (
+        second["localPosition"][0] + fill_1["width"] >= bg_line["localPosition"][0] + line["width"]
+        and fill_1["depth"] > line["depth"]
+    )
 
 
 @pytest.mark.parametrize("root", ["UIPopup_Sort", "UIPopup_Option_PC", "UIPopup_FilterSort"])
@@ -236,7 +239,7 @@ def test_applied_selection_gold_is_the_mulligan_selectline_sprite(tokens):
     with open_bundle(bundle_of("UIPopup_Mulligan")) as env:
         tree = export_layout(env, "UIPopup_Mulligan", {})
     line = subtree(tree, "Center/Popup/01/UIMulliganSlot/SelectLine")
-    sprites = [w for w in line["widgets"] if "sprite" in w]
+    sprites = [w for w in line["widgets"] if "spriteName" in w]
     assert len(sprites) == 1
     assert sprites[0]["color"] == tokens["APPLIED_SELECTION_GOLD"] + "/1.00"
 
@@ -262,7 +265,7 @@ def test_lobby_entry_is_uiani_lobby(tokens, tmp_path_factory):
         # the clip ends the top bar where the prefab puts it and the bottom menu 2 units above (-678 for the prefab's
         # -680): the offsets are from where the clip leaves the node
         rest = keys[-1]["value"]["y"]
-        assert rest - subtree(layout, path)["pos"][1] == {"top": 0, "bottom": 2}[edge]
+        assert rest - subtree(layout, path)["localPosition"][1] == {"top": 0, "bottom": 2}[edge]
         assert all(k["weightedMode"] == 0 for k in keys)
         got = [[k["time"], k["value"]["y"] - rest, k["outSlope"]["y"]] for k in keys]
         assert all(k["inSlope"]["y"] == k["outSlope"]["y"] for k in keys)
@@ -296,9 +299,9 @@ def exemplars():
 
 def edges(node, widget, origin=(0, 0)):
     """left, top, right, bottom of a widget at its node's position (plus origin), y up"""
-    w, h, pivot = widget["w_"] * node["scale"][0], widget["h_"] * node["scale"][1], widget.get("pivot", 4)
-    left = origin[0] + node["pos"][0] - w * PX[pivot % 3]
-    top = origin[1] + node["pos"][1] + h * PX[pivot // 3]
+    w, h, pivot = widget["width"] * node["scale"][0], widget["height"] * node["scale"][1], widget.get("pivot", 4)
+    left = origin[0] + node["localPosition"][0] - w * PX[pivot % 3]
+    top = origin[1] + node["localPosition"][1] + h * PX[pivot // 3]
     return left, top, left + w, top - h
 
 
@@ -313,17 +316,17 @@ def test_type_ramp_and_controls_are_the_exemplar_nodes(tokens, layouts, exemplar
     assert label(subtree(option, info))["fontSize"] == T["caption"]["fs"] == 36
     # the badge and the row's action
     badge = sprite(subtree(mail, f"{ROW}/TimeLimit/Bg"), "Common_Bg_Raius10px")
-    assert [badge["w_"], badge["h_"]] == [C["badge"]["minW"], C["badge"]["h"]] == [220, 54]
+    assert [badge["width"], badge["height"]] == [C["badge"]["minW"], C["badge"]["h"]] == [220, 54]
     receive = sprite(subtree(mail, f"{ROW}/Btn_Receive"), "Common_Btn_BG")
-    assert [receive["w_"], receive["h_"]] == [C["buttonM"]["minW"], C["buttonM"]["h"]] == [348, 162]
+    assert [receive["width"], receive["height"]] == [C["buttonM"]["minW"], C["buttonM"]["h"]] == [348, 162]
     assert label(subtree(mail, f"{ROW}/Btn_Receive/Label_Locale"))["fontSize"] == C["buttonM"]["fs"] == 60
 
 
 def test_list_row_anatomy_is_the_mailbox_row(tokens, exemplars):
     mail, R, C = exemplars["UIMailBox"], tokens["LIST_ROW"], tokens["CONTROL"]
     row = subtree(mail, ROW)
-    frame = next(w for w in row["widgets"] if w.get("w_") == R["w"])
-    assert [frame["w_"], frame["h_"]] == [R["w"], R["h"]] == [2208, 329]
+    frame = next(w for w in row["widgets"] if w.get("width") == R["w"])
+    assert [frame["width"], frame["height"]] == [R["w"], R["h"]] == [2208, 329]
     left, top = -R["w"] / 2, R["h"] / 2
     title = subtree(mail, f"{ROW}/Label_System")
     t = edges(title, label(title))
@@ -332,7 +335,7 @@ def test_list_row_anatomy_is_the_mailbox_row(tokens, exemplars):
     m = edges(meta, label(meta))
     assert round(top - m[1]) == R["metaTop"]
     limit = subtree(mail, f"{ROW}/Label_Locale_Limit")
-    assert round(limit["pos"][1] - meta["pos"][1]) == -R["metaPitch"]
+    assert round(limit["localPosition"][1] - meta["localPosition"][1]) == -R["metaPitch"]
     button = subtree(mail, f"{ROW}/Btn_Receive")
     b = edges(button, sprite(button, "Common_Btn_BG"))
     assert round(-left - b[2]) == R["actionRight"] and round(b[3] + top) == R["actionBottom"]
@@ -345,19 +348,19 @@ def test_popup_frames_and_the_small_frames_anatomy(tokens, layouts, exemplars):
     assert P["maxH"] == tokens["POPUP"]["maxH"] == 1560
     assert P["footer"]["bottom"] + C["buttonL"]["h"] / 2 == 190
     frame = lambda tree, path: sprite(subtree(tree, path), "Common_Popup_Bg")
-    assert [frame(layouts["UIPopup_Option_PC"], "Center/Popup/Base/BG")[k] for k in ("w_", "h_")] == [
+    assert [frame(layouts["UIPopup_Option_PC"], "Center/Popup/Base/BG")[k] for k in ("width", "height")] == [
         P["L"]["w"],
         P["L"]["h"],
     ]
     gacha = exemplars["UIPopup_GachaCharList"]
-    xl = next(w for w in [frame_w for frame_w in _all_sprites(gacha) if frame_w["sprite"] == "Common_Popup_Bg"])
-    assert [xl["w_"], xl["h_"]] == [P["XL"]["w"], P["XL"]["h"]] == [2841, 1353]
+    xl = next(w for w in [frame_w for frame_w in _all_sprites(gacha) if frame_w["spriteName"] == "Common_Popup_Bg"])
+    assert [xl["width"], xl["height"]] == [P["XL"]["w"], P["XL"]["h"]] == [2841, 1353]
     check = exemplars["UIPopup_RaidEnterCheck"]
     base = subtree(check, "Center/Popup/Base")
     bg_node = subtree(check, "Center/Popup/Base/BG")
     s = sprite(bg_node, "Common_Popup_Bg")
-    assert [s["w_"], s["h_"]] == [P["S"]["w"], P["S"]["h"]] == [1300, 1050]
-    origin = (base["pos"][0], base["pos"][1])
+    assert [s["width"], s["height"]] == [P["S"]["w"], P["S"]["h"]] == [1300, 1050]
+    origin = (base["localPosition"][0], base["localPosition"][1])
     f = edges(bg_node, s, origin)
     title_node = subtree(check, "Center/Popup/Base/Label_Title_Locale")
     title = edges(title_node, label(title_node), origin)
@@ -400,7 +403,7 @@ def test_a_settings_card_pads_its_title(tokens, layouts):
 
 def _all_sprites(tree):
     for w in tree.get("widgets", []):
-        if "sprite" in w:
+        if "spriteName" in w:
             yield w
     for child in tree.get("children", []):
         yield from _all_sprites(child)
@@ -412,10 +415,10 @@ def _origin(tree, path):
     node = tree
     for part in path.split("/")[:-1]:
         node = next(c for c in node["children"] if c["name"] == part)
-        x += node["pos"][0]
-        y += node["pos"][1]
+        x += node["localPosition"][0]
+        y += node["localPosition"][1]
     leaf = next(c for c in node["children"] if c["name"] == path.split("/")[-1])
-    return x + leaf["pos"][0], y + leaf["pos"][1]
+    return x + leaf["localPosition"][0], y + leaf["localPosition"][1]
 
 
 def test_popup_minimum_is_the_title_band_over_the_xs_footer(tokens):
@@ -427,7 +430,7 @@ def test_popup_minimum_is_the_title_band_over_the_xs_footer(tokens):
     with open_bundle(path) as env:
         tree = export_layout(env, "UIPopup_ClientVersion", {})
     bg = sprite(subtree(tree, "Center/Popup/Base/BG"), "Common_Popup_Bg")
-    assert (bg["w_"], bg["h_"]) == (1115, 786)
+    assert (bg["width"], bg["height"]) == (1115, 786)
     footer, frame, control = tokens["POPUP_FOOTER"], tokens["POPUP_FRAME"], tokens["CONTROL"]
     assert footer["control"] == control["buttonXS"]
     # the prefab's 102 under its 176-high buttonL bodies, scaled to the XS body's 104
@@ -435,4 +438,4 @@ def test_popup_minimum_is_the_title_band_over_the_xs_footer(tokens):
         footer["bottom"] == round(frame["footer"]["bottom"] * control["buttonXS"]["h"] / control["buttonL"]["h"]) == 60
     )
     assert footer["clearance"] == footer["bottom"] + control["buttonXS"]["h"] + footer["above"]
-    assert frame["minH"] == frame["contentTop"] + footer["clearance"] < bg["h_"]
+    assert frame["minH"] == frame["contentTop"] + footer["clearance"] < bg["height"]

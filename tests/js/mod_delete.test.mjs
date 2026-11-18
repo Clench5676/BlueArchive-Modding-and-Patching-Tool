@@ -89,17 +89,17 @@ test("applying the manifest's current source does not start another job", async 
   const messages = [];
   const apply = new Function(
     "deps",
-    `const {${["variant", "busy", "coreOf", "isApplied", "notify", "T", "job"].join(",")}} = deps;
+    `const {${["alt", "busy", "coreOf", "isApplied", "notify", "T", "job"].join(",")}} = deps;
     ${applySource}; return applyCandidate;`,
   )({
-    variant: () => ({ key: "test", spr: "test_spr" }),
+    alt: () => ({ key: "test", portrait: "test_spr" }),
     coreOf: (v, kind) => v[kind],
     busy: false,
-    isApplied: (_variant, _kind, key) => key === "m:m1",
+    isApplied: (_alt, _kind, key) => key === "m:m1",
     T: (s) => s,
     notify: (s) => messages.push(s),
     job: () => assert.fail("must not submit a job"),
   });
-  await apply("m:m1", "spr");
+  await apply("m:m1", "portrait");
   assert.deepEqual(messages, []);
 });

@@ -29,7 +29,7 @@ function spreadPitch(count, w, span) {
 // and name band kept) until they fit the paper less its inset, the vertical scrollbar's band (SCROLL_BAND) and
 // the inclined edges' overhang; a portrait strip (horizontal) at PORTRAIT_SCALE, its names clear of the
 // scrollbar under it.
-export const MIN_COLUMNS = Object.freeze({ lobby: 2, model: 3, photo: 3 });
+export const MIN_COLUMNS = Object.freeze({ memorialLobby: 2, chibi: 3, photo: 3 });
 export const PORTRAIT_SCALE = 0.875; // 280 x 616: whole units
 export const SCROLL_BAND = SPACE.m;
 /**
@@ -51,16 +51,16 @@ export function switchGrid(kind, width = GRID_WIDTH) {
       overhang: 304 * lean,
     };
   let card =
-    kind === "spr"
+    kind === "portrait"
       ? { w: 320 * PORTRAIT_SCALE, h: 704 * PORTRAIT_SCALE, bar: 104 }
-      : kind === "lobby"
+      : kind === "memorialLobby"
         ? { w: 790, h: 444.375, bar: 104 }
-        : kind === "model" || kind === "photo"
+        : kind === "chibi" || kind === "photo"
           ? { w: 360, h: 360, bar: 104 }
           : { w: 250, h: 226, bar: 68 };
-  const max = kind === "lobby" ? 2 : kind === "spr" || kind === "model" || kind === "photo" ? 4 : 6;
+  const max = kind === "memorialLobby" ? 2 : kind === "portrait" || kind === "chibi" || kind === "photo" ? 4 : 6;
   // the paper less its inset and, for a list that scrolls down, the scrollbar's band at its right
-  const area = container({ w: width - (kind === "spr" ? 0 : SCROLL_BAND), h: 0, padding: [0, INSET] }).inner;
+  const area = container({ w: width - (kind === "portrait" ? 0 : SCROLL_BAND), h: 0, padding: [0, INSET] }).inner;
   const least = MIN_COLUMNS[kind];
   if (least) {
     // m cards, GAP apart, and the overhang of the last one's incline: m w + (m - 1) GAP + (w r + bar + 10) lean <= area
@@ -73,8 +73,8 @@ export function switchGrid(kind, width = GRID_WIDTH) {
   const overhang = (card.h + card.bar + 10) * lean;
   const columns = Math.max(1, Math.min(max, Math.floor((area.w - overhang + GAP) / (card.w + GAP))));
   const rowH = card.h + card.bar;
-  const pitch = [kind === "spr" ? card.w + GAP : spreadPitch(columns, card.w, area.w - overhang), rowH + GAP];
-  return { card, columns, pitch, rowH, overhang, horizontal: kind === "spr", leftAligned: true };
+  const pitch = [kind === "portrait" ? card.w + GAP : spreadPitch(columns, card.w, area.w - overhang), rowH + GAP];
+  return { card, columns, pitch, rowH, overhang, horizontal: kind === "portrait", leftAligned: true };
 }
 
 /**

@@ -147,15 +147,15 @@ def clip_entry(
         "track": tree.get("Track", 0),
         "loop": bool(tree.get("Loop")),
         "mode": mode,
-        "finish": tree.get("FinishMode", 0),
-        "intro": _r(default_mix if tree.get("UseDefaultIntroMix") else tree.get("IntroMix", 0), 3),
-        "outro": _r(default_mix if tree.get("UseDefaultOutroMix") else tree.get("OutroMix", 0), 3),
-        "outroAt": None if tree.get("UseDefaultOutroMix") else _r(tree.get("OutroStartOffset", 0), 3),
+        "finishMode": tree.get("FinishMode", 0),
+        "introMix": _r(default_mix if tree.get("UseDefaultIntroMix") else tree.get("IntroMix", 0), 3),
+        "outroMix": _r(default_mix if tree.get("UseDefaultOutroMix") else tree.get("OutroMix", 0), 3),
+        "outroStartOffset": None if tree.get("UseDefaultOutroMix") else _r(tree.get("OutroStartOffset", 0), 3),
         "next": _short(names.get(nxt)) if nxt else None,
         "sync": [
             _short(names[p["m_PathID"]]) for p in tree.get("SyncPlayClipObjects", []) if p.get("m_PathID") in names
         ],
-        "block": bool(tree.get("BlockInteractionOnPlay")),
+        "blockInteractionOnPlay": bool(tree.get("BlockInteractionOnPlay")),
         "random": random,
     }
     keys = (
@@ -600,7 +600,7 @@ def read_prefab(
         rect, rot = _box(n["m"], box)
         return {
             "rect": rect,
-            "rot": rot,
+            "rotation": rot,
             "depth": widget.get("mDepth", 0),
             "enabled": n["active"] and bool(t.get("m_Enabled", 1)) and bool(box.get("m_Enabled", True)),
         }

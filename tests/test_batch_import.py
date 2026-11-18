@@ -68,8 +68,8 @@ def batch_model_env(model_env, monkeypatch):
     env.services.close()
 
 
-def rpc(env, method, **params):
-    answer = env.rpc.call(method, params)
+def rpc(env, name, **params):
+    answer = env.rpc.call(name, params)
     assert "error" not in answer, answer
     return answer["result"]
 
@@ -87,7 +87,7 @@ def analyze(env, paths, recursive=False):
 
 
 def run(env, entries, **options):
-    options = {**rpc(env, "import.options"), "output": None, **options}
+    options = {**rpc(env, "import.options"), "outputFolder": None, **options}
     return finish(
         env,
         rpc(
@@ -113,9 +113,9 @@ def test_entry_shapes_grouping_stable_ids_and_recursive_scan(env):
     assert set(entry) == {
         "id",
         "paths",
-        "variant",
+        "alt",
         "core",
-        "kind",
+        "resourceType",
         "files",
         "size",
         "state",
@@ -126,7 +126,12 @@ def test_entry_shapes_grouping_stable_ids_and_recursive_scan(env):
         "target",
     }
     assert entry["paths"] == sorted(map(str, [texture, text]))
-    assert (entry["variant"], entry["core"], entry["kind"], entry["state"]) == ("test", "test_spr", "spr", "ready")
+    assert (entry["alt"], entry["core"], entry["resourceType"], entry["state"]) == (
+        "test",
+        "test_spr",
+        "portrait",
+        "ready",
+    )
     assert entry["reason"] is None and entry["libraryId"] is None
     assert entry["size"] == texture.stat().st_size + text.stat().st_size
     assert all(set(f) == {"path", "size", "target"} for f in entry["files"])
@@ -136,8 +141,8 @@ def test_entry_shapes_grouping_stable_ids_and_recursive_scan(env):
     assert again["skipped"] == 1
     deep = analyze(env, [texture.parent], recursive=True)
     assert len(deep["entries"]) == 2
-    assert {e["kind"] for e in deep["entries"]} == {"spr", "lobby"}
-    assert next(e for e in deep["entries"] if e["kind"] == "lobby")["paths"] == [str(lobby)]
+    assert {e["resourceType"] for e in deep["entries"]} == {"portrait", "memorialLobby"}
+    assert next(e for e in deep["entries"] if e["resourceType"] == "memorialLobby")["paths"] == [str(lobby)]
     assert not env.library.mods()
 
 
@@ -225,7 +230,11 @@ def test_backup_upload_and_content_alias_use_library_normalization(env, monkeypa
     renamed = game_bundle(env.tmp / "wrong-name", date="2025-01-01", payload=b"lobby data")
     monkeypatch.setattr("bmpt.library.identity.content_cores", lambda path: {"test_home_gl"})
     (entry,) = analyze(env, [renamed])["entries"]
-    assert (entry["kind"], entry["core"], entry["files"][0]["target"]) == ("lobby", "test_home_gl", target.name)
+    assert (entry["resourceType"], entry["core"], entry["files"][0]["target"]) == (
+        "memorialLobby",
+        "test_home_gl",
+        target.name,
+    )
     assert entry["state"] == "update"
     assert entry["paths"] == [str(renamed)]
 
@@ -241,7 +250,7 @@ def test_backup_upload_and_content_alias_use_library_normalization(env, monkeypa
 )
 def test_blocked_reasons_are_codes_and_failures_do_not_hide_other_entries(env, monkeypatch, problem, reason):
     source = make_mod(env.original, env.tmp / "bad")
-    expected_kind = "spr"
+    expected_kind = "portrait"
     if problem == "unreadable":
         source.write_bytes(b"broken")
     elif problem == "missing":
@@ -257,7 +266,7 @@ def test_blocked_reasons_are_codes_and_failures_do_not_hide_other_entries(env, m
     good = make_mod(env.original, env.tmp / "good", payload=b"fine")
     result = analyze(env, [source, good])
     bad, valid = result["entries"]
-    assert (bad["state"], bad["reason"], bad["kind"]) == ("blocked", reason, expected_kind)
+    assert (bad["state"], bad["reason"], bad["resourceType"]) == ("blocked", reason, expected_kind)
     assert valid["state"] == "ready"
     results = run(env, result["entries"], enableAfterImport=False)
     assert results[0]["outcome"] == "skipped" and results[0]["reason"] == reason
@@ -269,7 +278,7 @@ def test_library_capability_api_rejects_an_unsupported_kind(env, monkeypatch):
     monkeypatch.setattr(env.library, "supports_kind", lambda kind: seen.append(kind) or False, raising=False)
     source = game_bundle(env.tmp / "input", "ch0242", category="characters")
     (entry,) = analyze(env, [source])["entries"]
-    assert (entry["kind"], entry["reason"]) == ("model", "unsupported")
+    assert (entry["resourceType"], entry["reason"]) == ("chibi", "unsupported")
     assert seen == ["model"]
 
 
@@ -286,8 +295,8 @@ def test_model_prefab_and_dependencies_analyze_update_add_and_apply(batch_model_
             make_mod(path, env.tmp / "input", payload=f"mod {i}".encode()) for i, path in enumerate(env.parts[:2])
         ]
     (entry,) = analyze(env, sources)["entries"]
-    assert (entry["kind"], entry["variant"], entry["core"], entry["state"], entry["reason"]) == (
-        "model",
+    assert (entry["resourceType"], entry["alt"], entry["core"], entry["state"], entry["reason"]) == (
+        "chibi",
         "hoshino",
         "hoshino_original",
         "update" if outdated else "ready",
@@ -296,7 +305,7 @@ def test_model_prefab_and_dependencies_analyze_update_add_and_apply(batch_model_
     assert entry["paths"] == sorted(map(str, sources))
     calls = []
     updater(monkeypatch, calls)
-    (result,) = run(env, [entry], backup=False)
+    (result,) = run(env, [entry], createBackup=False)
     assert result["outcome"] == ("updated" if outdated else "imported")
     assert result["applied"] and len(calls) == int(outdated)
     (mod,) = env.library.mods()
@@ -330,7 +339,7 @@ def test_old_model_mesh_updates_when_prefab_has_a_newer_release(batch_model_env,
     assert (entry["state"], entry["reason"], entry["files"][0]["target"]) == ("update", None, mesh.name)
     calls = []
     updater(monkeypatch, calls)
-    (result,) = run(env, [entry], backup=False)
+    (result,) = run(env, [entry], createBackup=False)
     assert result["outcome"] == "updated" and result["applied"]
     assert len(calls) == 1 and calls[0][1]["source_paths"] == [source]
     assert [path.name for path in calls[0][1]["target_paths"]] == [mesh.name]
@@ -382,7 +391,7 @@ def test_removed_skeleton_does_not_block_a_matching_texture_update(env, monkeypa
         )
 
     mock_spine_contents(monkeypatch, inspect)
-    rpc(env, "import.setOptions", **{**rpc(env, "import.options"), "types": types})
+    rpc(env, "import.setOptions", **{**rpc(env, "import.options"), "assetTypes": types})
     assert not env.settings.spine_options().is_valid()
     (entry,) = analyze(env, [source])["entries"]
     assert (entry["state"], entry["reason"]) == ("update", None)
@@ -406,12 +415,12 @@ def test_texture_only_update_ignores_a_matching_incompatible_skeleton(env, monke
         )
 
     mock_spine_contents(monkeypatch, inspect)
-    rpc(env, "import.setOptions", **{**rpc(env, "import.options"), "types": ["Texture2D"]})
+    rpc(env, "import.setOptions", **{**rpc(env, "import.options"), "assetTypes": ["Texture2D"]})
     (entry,) = analyze(env, [source])["entries"]
     assert (entry["state"], entry["reason"]) == ("update", None)
 
 
-@pytest.mark.parametrize("strategy", ["name_type", "cont_name_type", "path_id"])
+@pytest.mark.parametrize("strategy", ["name_type", "containerNameType", "path_id"])
 @pytest.mark.parametrize("version", [b"3.8.75", b"undecodable skeleton"])
 def test_direct_copy_checks_skeletons_outside_the_update_filter(env, monkeypatch, strategy, version):
     source = make_mod(env.original, env.tmp / "input")
@@ -436,7 +445,11 @@ def test_direct_copy_checks_skeletons_outside_the_update_filter(env, monkeypatch
         return bundle
 
     monkeypatch.setattr(Bundle, "load", with_changed_keys)
-    rpc(env, "import.setOptions", **{**rpc(env, "import.options"), "types": ["Texture2D"], "strategy": strategy})
+    rpc(
+        env,
+        "import.setOptions",
+        **{**rpc(env, "import.options"), "assetTypes": ["Texture2D"], "matchStrategy": strategy},
+    )
     before = env.original.read_bytes()
     (entry,) = analyze(env, [source])["entries"]
     assert (entry["state"], entry["reason"]) == ("blocked", "spine_version")
@@ -472,7 +485,7 @@ def test_texture_import_checks_retained_official_atlas(env, monkeypatch, outdate
         "sharing_keys",
         lambda sources, candidates, keys: [path for path in candidates if path.name == env.original.name],
     )
-    rpc(env, "import.setOptions", **{**rpc(env, "import.options"), "types": ["Texture2D"]})
+    rpc(env, "import.setOptions", **{**rpc(env, "import.options"), "assetTypes": ["Texture2D"]})
     before = {path: path.read_bytes() for path in (env.original, text)}
     (entry,) = analyze(env, [source])["entries"]
     if size == (8, 4):
@@ -485,7 +498,7 @@ def test_texture_import_checks_retained_official_atlas(env, monkeypatch, outdate
     assert not env.library.mods()
 
 
-@pytest.mark.parametrize("strategy", ["cont_name_type", "path_id"])
+@pytest.mark.parametrize("strategy", ["containerNameType", "path_id"])
 def test_spine_checks_use_the_transfer_matching_strategy(env, monkeypatch, strategy):
     source = game_bundle(env.tmp / "old", date="2025-01-01", payload=b"old mod")
 
@@ -509,13 +522,13 @@ def test_spine_checks_use_the_transfer_matching_strategy(env, monkeypatch, strat
         return bundle
 
     monkeypatch.setattr(Bundle, "load", with_removed_skeleton)
-    rpc(env, "import.setOptions", **{**rpc(env, "import.options"), "strategy": strategy})
+    rpc(env, "import.setOptions", **{**rpc(env, "import.options"), "matchStrategy": strategy})
     (entry,) = analyze(env, [source])["entries"]
     assert (entry["state"], entry["reason"]) == ("update", None)
     calls = []
     updater(monkeypatch, calls)
     # Run-time options must also scope the recheck, even if the saved options differ.
-    assert run(env, [entry], strategy="name_type", enableAfterImport=False)[0]["reason"] == "spine_version"
+    assert run(env, [entry], matchStrategy="name_type", enableAfterImport=False)[0]["reason"] == "spine_version"
     assert run(env, [entry], enableAfterImport=False)[0]["outcome"] == "skipped"
     (entry,) = analyze(env, [source])["entries"]
     assert run(env, [entry], enableAfterImport=False)[0]["outcome"] == "updated"
@@ -800,15 +813,15 @@ def test_update_then_add_then_apply_forwards_every_classic_option_and_reports_ev
     monkeypatch.setattr(env.library, "apply_import", applying)
     events = env.services.events.subscribe()
     options = dict(
-        strategy="name_type",
-        types=["Texture2D", "Mesh"],
+        matchStrategy="name_type",
+        assetTypes=["Texture2D", "Mesh"],
         skipUnchanged=False,
-        crc="on",
+        crcCorrection="on",
         compression="lz4",
         extraBytes="0xaabb",
-        backup=True,
-        workers=2,
-        output=str(env.tmp / "exports"),
+        createBackup=True,
+        threads=2,
+        outputFolder=str(env.tmp / "exports"),
     )
     # Avoid a second CRC-only rebuild in the real apply flow; the option is checked on the update call below.
     monkeypatch.setattr(env.library, "_needs_crc_fix", lambda *args: False)
@@ -850,7 +863,7 @@ def test_update_then_add_then_apply_forwards_every_classic_option_and_reports_ev
     assert progress[-1]["done"] == progress[-1]["total"] == 1
     assert all(p["index"] == 1 and p["step"].startswith("import.step.") for p in progress)
     changed = next(data for event, data in seen if event == "library.changed")
-    assert changed == {"cores": ["test_spr"], "kinds": ["spr"], "mods": True}
+    assert changed == {"cores": ["test_spr"], "resourceTypes": ["portrait"], "mods": True}
     assert any(event == "mods.state" for event, _ in seen)
 
 
@@ -875,7 +888,7 @@ def test_enable_after_import_configures_every_kind_and_defers_game_writes(reques
     sources = [make_mod(target, env.tmp / "input", payload=f"mod {i}".encode()) for i, target in enumerate(targets)]
     before = {target: target.read_bytes() for target in targets}
     (entry,) = analyze(env, sources)["entries"]
-    (result,) = run(env, [entry], enableAfterImport=enable, backup=False)
+    (result,) = run(env, [entry], enableAfterImport=enable, createBackup=False)
     assert result["outcome"] == "imported" and result["applied"] is (enable and switch)
     assert result.get("configured", False) is enable
     (mod,) = env.library.mods()
@@ -915,7 +928,7 @@ def test_several_mods_for_one_variant_configure_in_request_order_last_wins_and_r
     jid = rpc(env, "import.analyze", paths=list(map(str, sources)))
     entries = finish(env, jid)["entries"]
     chosen = list(reversed(entries))
-    results = run(env, chosen, workers=3)
+    results = run(env, chosen, threads=3)
     assert [result["id"] for result in results] == [entry["id"] for entry in chosen]
     assert all(
         result["outcome"] == "imported" and result["applied"] is switch and result["configured"] for result in results
@@ -1022,7 +1035,7 @@ def test_enable_after_import_applies_to_the_pinned_install_when_already_installe
         return added
 
     monkeypatch.setattr(env.library, "add_files", adding)
-    (result,) = run(env, [entry], backup=False)
+    (result,) = run(env, [entry], createBackup=False)
     assert recognized and recognized[0].id == result["libraryId"]
     assert result["outcome"] == "imported" and result["applied"]
     assert env.original.read_bytes() == source.read_bytes()
@@ -1063,7 +1076,7 @@ def test_per_entry_failures_keep_successful_imports_and_error_codes(env, monkeyp
 
         monkeypatch.setattr(env.library, "apply_import", fail)
         code = "game_running"
-    failed, imported = run(env, entries, backup=False)
+    failed, imported = run(env, entries, createBackup=False)
     assert failed["outcome"] == "failed" and failed["reason"] == code and not failed["applied"]
     assert bool(failed["libraryId"]) is (phase == "apply")
     assert imported["outcome"] == "imported" and imported["applied"]
@@ -1189,7 +1202,7 @@ def test_workers_parallelize_updates_while_library_adds_remain_serial(env, monke
         return update(**kwargs)
 
     patch_batch(monkeypatch, "rebuild", parallel)
-    results = run(env, entries, workers=2, enableAfterImport=False)
+    results = run(env, entries, threads=2, enableAfterImport=False)
     assert [r["outcome"] for r in results] == ["updated", "updated"]
     assert len(threads) == 2 and len(env.library.mods()) == 2
 
@@ -1215,7 +1228,7 @@ def test_parallel_progress_separates_completed_count_from_active_input_order(env
 
     monkeypatch.setattr(env.services.batch_import, "_prepare", reordered)
     events = env.services.events.subscribe()
-    results = run(env, entries, workers=3, enableAfterImport=False)
+    results = run(env, entries, threads=3, enableAfterImport=False)
     updates = []
     while not events.empty():
         event, data = events.get_nowait()
@@ -1255,7 +1268,9 @@ def test_batch_application_prunes_globally_once_even_after_failure(env, monkeypa
 )
 def test_auto_crc_follows_the_install_without_loading_the_target(env, monkeypatch, source, needed):
     env.settings.set("file_source", source)
-    settings = batch_import.ImportSettings(env.settings, {**env.services.batch_import.options(), "crc": "auto"})
+    settings = batch_import.ImportSettings(
+        env.settings, {**env.services.batch_import.options(), "crcCorrection": "auto"}
+    )
     monkeypatch.setattr(Bundle, "load", lambda *args, **kwargs: pytest.fail("the target was loaded"))
     unreadable = env.tmp / "unreadable.bundle"
     unreadable.write_bytes(b"not a bundle")
@@ -1268,7 +1283,9 @@ def test_auto_crc_follows_the_install_without_loading_the_target(env, monkeypatc
 def test_explicit_import_crc_option_wins_over_the_install(env, option, needed):
     for source in ("windows_global", "adb_global"):
         env.settings.set("file_source", source)
-        settings = batch_import.ImportSettings(env.settings, {**env.services.batch_import.options(), "crc": option})
+        settings = batch_import.ImportSettings(
+            env.settings, {**env.services.batch_import.options(), "crcCorrection": option}
+        )
         assert settings.crc_needed(env.original) is needed
 
 
@@ -1309,7 +1326,7 @@ def test_later_worker_uses_frozen_official_bytes_after_an_earlier_apply(env, mon
     monkeypatch.setattr(env.services.batch_import, "_prepare", delayed)
     monkeypatch.setattr(env.library, "apply_import", applying)
     patch_batch(monkeypatch, "rebuild", update)
-    results = run(env, entries, workers=2)
+    results = run(env, entries, threads=2)
     assert all(result["outcome"] == "updated" and result["applied"] for result in results)
     assert baselines == [original, original]
     assert copies == [env.original]
@@ -1356,7 +1373,7 @@ def test_import_backup_preserves_an_official_baseline_from_a_classic_backup(env)
     incoming = make_mod(env.original, env.tmp / "incoming", payload=b"new mod")
     (entry,) = analyze(env, [incoming])["entries"]
     assert entry["state"] == "ready"
-    (result,) = run(env, [entry], backup=True)
+    (result,) = run(env, [entry], createBackup=True)
     assert result["outcome"] == "imported" and result["applied"]
     assert env.original.read_bytes() == incoming.read_bytes()
     assert backup.read_bytes() == official  # an existing .backup is left alone, never overwritten
@@ -1380,8 +1397,8 @@ def test_missing_official_still_blocks_asset_transfer_with_the_specific_reason(e
 
         monkeypatch.setattr(env.library, "direct_import", incompatible)
     (entry,) = analyze(env, [source])["entries"]
-    assert (entry["state"], entry["reason"]) == ("blocked", "original_unavailable")
-    assert entry["error"]["code"] == "original_unavailable"
+    assert (entry["state"], entry["reason"]) == ("blocked", "official_unavailable")
+    assert entry["error"]["code"] == "official_unavailable"
     assert not env.library.mods()
 
 
@@ -1398,57 +1415,66 @@ def test_partial_batch_without_official_imports_and_reports_incomplete(env):
     assert env.library.preview_incomplete(result["libraryId"])
 
 
-def test_options_persist_in_app_prefs_and_default_to_classic_settings(env):
+@pytest.mark.parametrize("managed", [False, True], ids=["legacy", "generation-2"])
+def test_options_persist_in_app_prefs_and_default_to_classic_settings(env, managed):
+    if managed:
+        directory = env.tmp / ".bmpt-upgrade" / "data" / "g2" / ("a" * 32)
+        env.services.state = UiState(directory / "webui.json")
     defaults = rpc(env, "import.options")
     assert set(defaults) == {
-        "strategy",
-        "types",
+        "matchStrategy",
+        "assetTypes",
         "skipUnchanged",
-        "crc",
+        "crcCorrection",
         "compression",
         "extraBytes",
-        "backup",
-        "workers",
-        "output",
+        "createBackup",
+        "threads",
+        "outputFolder",
         "enableAfterImport",
         "previewAfterImport",
     }
-    assert defaults["compression"] == "none" and defaults["crc"] == "off"
-    assert defaults["workers"] == env.settings.get("max_workers")
-    assert set(defaults["types"]) == env.settings.asset_types()
+    assert defaults["compression"] == "none" and defaults["crcCorrection"] == "off"
+    assert defaults["matchStrategy"] == "containerNameType"
+    assert defaults["threads"] == env.settings.get("max_workers")
+    assert set(defaults["assetTypes"]) == env.settings.asset_types()
     changed = {
         **defaults,
-        "strategy": "path_id",
-        "types": ["ALL"],
+        "matchStrategy": "containerNameType",
+        "assetTypes": ["ALL"],
         "enableAfterImport": False,
-        "workers": 3,
-        "output": None,
+        "threads": 3,
+        "outputFolder": None,
     }
     assert rpc(env, "import.setOptions", **changed) == changed
     state = UiState(env.services.state.path)
-    assert state.get(batch_import.PREF) == changed
+    assert batch_import.import_options_from_storage(state.get(batch_import.PREF)) == changed
     env.services.state = state
     assert rpc(env, "import.options") == changed
     assert not env.settings.path.exists()
-    assert "prefs" in json.loads(state.path.read_text())
+    saved = json.loads(state.path.read_text())["prefs"]["batch_import"]
+    if managed:
+        assert saved == changed
+    else:
+        assert saved["strategy"] == "cont_name_type" and saved["types"] == changed["assetTypes"]
 
 
 @pytest.mark.parametrize(
     "field,value",
     [
-        ("strategy", "guess"),
-        ("types", []),
-        ("types", ["unknown"]),
+        ("matchStrategy", "guess"),
+        ("assetTypes", []),
+        ("assetTypes", ["unknown"]),
         ("skipUnchanged", 1),
-        ("crc", True),
-        ("crc", "true"),
+        ("crcCorrection", True),
+        ("crcCorrection", "true"),
         ("compression", "zip"),
         ("extraBytes", "0x0"),
-        ("backup", "yes"),
-        ("workers", True),
-        ("workers", 0),
-        ("workers", 65),
-        ("output", ""),
+        ("createBackup", "yes"),
+        ("threads", True),
+        ("threads", 0),
+        ("threads", 65),
+        ("outputFolder", ""),
         ("enableAfterImport", None),
     ],
 )
@@ -1544,10 +1570,10 @@ def test_generic_batch_multi_target_import_apply_library_and_settings_rpc(batch_
     env = batch_other_env
     sources = [make_mod(p, env.tmp / "incoming", payload=f"mod {i}".encode()) for i, p in enumerate(env.parts)]
     (entry,) = analyze(env, [sources[0].parent])["entries"]
-    assert entry["kind"] == "other" and entry["variant"] is None
+    assert entry["resourceType"] == "other" and entry["alt"] is None
     assert entry["state"] == "ready" and entry["reason"] is None
     assert {f["target"] for f in entry["files"]} == {p.name for p in env.parts}
-    (result,) = run(env, [entry], backup=True)
+    (result,) = run(env, [entry], createBackup=True)
     assert result["outcome"] == "imported" and result["applied"]
     (mod,) = env.library.mods()
     assert mod.id == result["libraryId"]
@@ -1556,10 +1582,10 @@ def test_generic_batch_multi_target_import_apply_library_and_settings_rpc(batch_
     assert row["id"] == mod.id and row["selected"] and row["state"] == "active"
     (duplicate,) = analyze(env, sources)["entries"]
     assert duplicate["state"] == "done" and duplicate["libraryId"] == mod.id
-    finish(env, rpc(env, "actions.restore", variant=mod.target, kind="other"))
+    finish(env, rpc(env, "actions.restore", alt=mod.target, resourceType="other"))
     assert rpc(env, "mods.other")[0]["state"] == "official"
     assert all(p.read_bytes() == data for p, data in env.official.items())
-    finish(env, rpc(env, "actions.apply", variant=mod.target, source=f"mod:{mod.id}", kind="other"))
+    finish(env, rpc(env, "actions.apply", alt=mod.target, source=f"mod:{mod.id}", resourceType="other"))
     finish(env, rpc(env, "mods.remove", id=mod.id, confirm=True))
     assert rpc(env, "mods.other") == []
     assert all(p.read_bytes() == data for p, data in env.official.items())
@@ -1575,7 +1601,7 @@ def test_generic_old_batch_uses_classic_update_then_add_and_deferred_apply(batch
     calls = []
     updater(monkeypatch, calls)
     assert not env.library.toggle(False, True).failed
-    (result,) = run(env, [entry], strategy="cont_name_type")
+    (result,) = run(env, [entry], matchStrategy="containerNameType")
     assert result["outcome"] == "updated" and not result["applied"] and result["configured"]
     assert calls[0][1]["source_paths"] == [old]
     assert [p.name for p in calls[0][1]["target_paths"]] == [env.parts[0].name]
@@ -1613,7 +1639,7 @@ def test_generic_multi_prefix_updates_keep_each_patch_with_its_official_targets(
     assert entry["state"] == "update"
     calls = []
     updater(monkeypatch, calls)
-    (result,) = run(env, [entry], enableAfterImport=False, types=["ALL"])
+    (result,) = run(env, [entry], enableAfterImport=False, assetTypes=["ALL"])
     assert result["outcome"] == "updated"
     assert len(calls) == 2
     for _, call in calls:
@@ -1652,9 +1678,12 @@ def test_generic_classic_queue_pins_every_target_slot(batch_other_env):
 
     env = batch_other_env
     (mod,) = env.library.add_files("other", [make_mod(p, env.tmp / "incoming") for p in env.parts])
-    count = env.services.queue_call(
-        "actions.apply", {"variant": mod.target, "kind": "other", "source": f"mod:{mod.id}"}
-    )
+    count = rpc(
+        env,
+        "classic.queue",
+        method="actions.apply",
+        params={"alt": mod.target, "resourceType": "other", "source": f"mod:{mod.id}"},
+    )["queued"]
     assert count == 1
     (call,) = env.services.queue.items()
     assert {core for _, core in call.entries} == {core_of(p.name) for p in env.parts}
@@ -1952,7 +1981,7 @@ def test_direct_auto_crc_does_not_read_the_target_or_its_official_copy(env, monk
     (entry,) = analyze(env, [incoming])["entries"]
     assert entry["state"] == "ready"
     monkeypatch.setattr(Bundle, "check_need_crc", lambda *args, **kwargs: pytest.fail("platform read from a file"))
-    (result,) = run(env, [entry], crc="auto", enableAfterImport=False)
+    (result,) = run(env, [entry], crcCorrection="auto", enableAfterImport=False)
     assert result["outcome"] == "imported"
 
 
@@ -2182,7 +2211,7 @@ def test_official_3d_slot_with_one_file_omitted_then_completed_on_clones(tmp_pat
         with monkeypatch.context() as patch:
             patch.setattr(integrity.Inspection, "inspect", selected_only)
             (row,) = analyze(environment, uploads[:-1])["entries"]
-        assert (row["state"], row["kind"], row["variant"]) == ("incomplete", "model", "ch0258")
+        assert (row["state"], row["resourceType"], row["alt"]) == ("incomplete", "chibi", "ch0258")
         assert row["missing"]["found"] == [{"path": str(omitted), "name": omitted.name, "size": omitted.stat().st_size}]
         (completed,) = analyze(environment, uploads)["entries"]
         assert completed["state"] == "ready" and "missing" not in completed

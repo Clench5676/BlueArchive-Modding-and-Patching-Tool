@@ -7,7 +7,7 @@ import pytest
 
 from bmpt.catalog import Catalog, Variant
 from bmpt.library import ModLibrary
-from bmpt.webui.photography import Photography
+from bmpt.webui.thumbnails import Thumbnails
 from bmpt.webui.student_hall import empty_hall
 from test_webui import app, services, rpc
 from test_library import setup_library, game_bundle, make_mod
@@ -32,6 +32,12 @@ def test_missing_japanese_folder_keeps_global_and_hall_then_recovers(app, servic
     hall["memorials"] = [{"id": str(uuid4()), "variant": "hoshino", "source": "mod:m1"}]
     hall["active"] = hall["memorials"][0]["id"]
     services.state.set("student_hall", hall)
+    wire_hall = {key: value for key, value in hall.items() if key not in ("portraits", "memorials")}
+    wire_hall["portraits"] = [
+        {"id": row["id"], "alt": "hoshino", "source": "mod:m1", "x": 400, "y": 980, "scale": 1, "flipHorizontal": False}
+        for row in hall["portraits"]
+    ]
+    wire_hall["memorialLobbies"] = [{"id": hall["active"], "alt": "hoshino", "source": "mod:m1"}]
     before = services.state.path.read_bytes(), settings.path.read_bytes()
     changes = []
     monkeypatch.setattr(services, "reload_game", lambda: changes.append(settings.server_region()))
@@ -41,7 +47,7 @@ def test_missing_japanese_folder_keeps_global_and_hall_then_recovers(app, servic
     assert settings.get("file_source") == "windows_global"
     assert before == (services.state.path.read_bytes(), settings.path.read_bytes())
     assert not changes and not services.library.applied
-    assert rpc(app, "hall.get")["result"] == hall
+    assert rpc(app, "studentHall.get")["result"] == wire_hall
     japan = tmp_path / "japan"
     japan.mkdir()
     game_bytes = japan / "sentinel.bundle"
@@ -51,7 +57,7 @@ def test_missing_japanese_folder_keeps_global_and_hall_then_recovers(app, servic
     assert "result" in rpc(app, "settings.set", key="fileSource", value="windows_japan")
     assert settings.server_region() == "japan"
     assert "result" in rpc(app, "settings.set", key="fileSource", value="windows_global")
-    assert rpc(app, "hall.get")["result"] == hall
+    assert rpc(app, "studentHall.get")["result"] == wire_hall
     assert json.loads(services.state.path.read_bytes())["prefs"]["student_hall"] == hall
     assert game_bytes.read_bytes() == b"never write game files"
     assert not services.library.applied
@@ -59,7 +65,7 @@ def test_missing_japanese_folder_keeps_global_and_hall_then_recovers(app, servic
 
 def test_missing_resources_have_an_actionable_hall_error(app, services, monkeypatch):
     monkeypatch.setattr(services, "game_found", lambda: False)
-    assert rpc(app, "hall.options")["error"]["code"] == "game_directory_missing"
+    assert rpc(app, "studentHall.options")["error"]["code"] == "game_directory_missing"
 
 
 def test_absent_catalog_model_record_has_complete_names_for_display(tmp_path):
@@ -76,7 +82,7 @@ def test_absent_catalog_model_record_has_complete_names_for_display(tmp_path):
     record = library.variant_metadata(key)
     assert isinstance(record, Variant)
     assert all(value["full"] == key for value in record.names.values())
-    result = Photography(SimpleNamespace(catalog=catalog, library=library)).describe({"photos": [{"variant": key}]})
+    result = Thumbnails(SimpleNamespace(catalog=catalog, library=library)).describe({"photos": [{"variant": key}]})
     assert result["photos"][0]["names"] == record.names
 
 
@@ -98,13 +104,13 @@ def test_photograph_store_follows_the_selected_catalog(services):
     """The store's family lookup is bound to its catalog (it never waits for the services lock under its own lock),
     so a new catalog makes a new store: a caller never gets one that resolves through a replaced catalog."""
     services._catalog = SimpleNamespace(variant=lambda key: SimpleNamespace(family="global-family"))
-    photographs = services.photographs
+    photographs = services.thumbnail_store
     assert photographs.family("student") == "global-family"
-    assert services.photographs is photographs
+    assert services.thumbnail_store is photographs
     services._catalog = SimpleNamespace(variant=lambda key: SimpleNamespace(family="japan-family"))
-    current = services.photographs
+    current = services.thumbnail_store
     assert current is not photographs and current.family("student") == "japan-family"
-    assert services.photographs is current
+    assert services.thumbnail_store is current
 
 
 def test_server_switch_cannot_reuse_a_catalog_retained_by_an_active_task(app, services, tmp_path, monkeypatch):

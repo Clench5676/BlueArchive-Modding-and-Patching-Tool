@@ -38,6 +38,7 @@ from .batch_candidates import (
     source_file,
     staging_name,
 )
+from .contract import stored_import_options, import_options_from_storage
 from .batch_judge import JudgeMixin
 
 
@@ -74,20 +75,21 @@ class BatchImport(JudgeMixin):
     def defaults(self) -> dict:
         """Return the import options the settings give.
 
-        The keys are ``strategy``, ``types``, ``skipUnchanged``, ``crc``, ``compression``, ``extraBytes``,
-        ``backup``, ``workers``, ``output``, ``enableAfterImport`` and ``previewAfterImport``.
+        The keys are ``matchStrategy``, ``assetTypes``, ``skipUnchanged``, ``crcCorrection``, ``compression``,
+        ``extraBytes``, ``createBackup``, ``threads``, ``outputFolder``, ``enableAfterImport`` and
+        ``previewAfterImport``.
         """
         settings = self.services.settings
         return {
-            "strategy": "cont_name_type",
-            "types": sorted(settings.asset_types()) or ["ALL"],
+            "matchStrategy": "containerNameType",
+            "assetTypes": sorted(settings.asset_types()) or ["ALL"],
             "skipUnchanged": settings.get("skip_unchanged"),
-            "crc": {"true": "on", "false": "off"}.get(settings.get("enable_crc_correction"), "auto"),
+            "crcCorrection": {"true": "on", "false": "off"}.get(settings.get("enable_crc_correction"), "auto"),
             "compression": settings.get("compression_method"),
             "extraBytes": settings.get("extra_bytes"),
-            "backup": settings.get("create_backup"),
-            "workers": settings.get("max_workers"),
-            "output": settings.get("output_dir") or None,
+            "createBackup": settings.get("create_backup"),
+            "threads": settings.get("max_workers"),
+            "outputFolder": settings.get("output_dir") or None,
             "enableAfterImport": True,
             "previewAfterImport": False,
         }
@@ -96,7 +98,7 @@ class BatchImport(JudgeMixin):
         """Return the saved import options over the defaults; the defaults alone when the saved ones are invalid."""
         defaults = self.defaults()
         try:
-            return options_of(self.services.state.get(PREF, {}), defaults)
+            return options_of(import_options_from_storage(self.services.state.get(PREF, {})), defaults)
         except ServiceError:
             return options_of({}, defaults)
 
@@ -113,7 +115,9 @@ class BatchImport(JudgeMixin):
             ServiceError: ``bad_params`` naming the invalid option.
         """
         options = options_of(value, self.defaults())
-        self.services.state.set(PREF, options)
+        previous = self.services.state.get(PREF, {})
+        legacy = stored_import_options(options)
+        self.services.state.set(PREF, {**previous, **legacy} if isinstance(previous, dict) else legacy)
         return options
 
     def pick(self, folder: bool = False, recursive: bool = False, directory: str | None = None) -> dict:
@@ -278,7 +282,7 @@ class BatchImport(JudgeMixin):
             )
         return {"families": families}
 
-    def assign_character(self, id: str, variant: str) -> str:
+    def assign_alt(self, id: str, variant: str) -> str:
         """Assign a row to a student of the user's choice, for a mod whose target the files do not give.
 
         Args:
@@ -390,7 +394,13 @@ class BatchImport(JudgeMixin):
                 snapshot = library.legacy_import_snapshot(candidate.entry["kind"], candidate.entry["variant"])
                 if not snapshot:
                     return
-                options = {**self.options(), "output": None, "compression": "none", "crc": "off", "extraBytes": ""}
+                options = {
+                    **self.options(),
+                    "outputFolder": None,
+                    "compression": "none",
+                    "crcCorrection": "off",
+                    "extraBytes": "",
+                }
                 key = json.dumps(
                     [
                         candidate.provenance,
@@ -475,7 +485,7 @@ class BatchImport(JudgeMixin):
         # A Spine import that transfers assets (update, convert) writes only the asset types its options name: the
         # preview keeps every official part and leaves the other types of the source files out, so it shows what the
         # game will. Whole-file imports (ready) and 3D previews compose the source files whole.
-        types = set(self.options()["types"])
+        types = set(self.options()["assetTypes"])
         transfers = candidate.entry["state"] in ("update", "convert") and candidate.entry["kind"] in ("spr", "lobby")
         left = set() if "ALL" in types or not transfers else set(PREVIEW_TYPES) - types
         try:
@@ -487,7 +497,7 @@ class BatchImport(JudgeMixin):
                 else []
             )
         except ServiceError as error:
-            if error.code not in ("game_file_not_found", "original_unavailable", "original_invalid"):
+            if error.code not in ("game_file_not_found", "official_unavailable", "official_invalid"):
                 raise
             originals = []  # A self-contained upload can preview without recoverable official parts.
         bundles = Composition(originals + paths, {path: left for path in paths})
@@ -570,7 +580,7 @@ class BatchImport(JudgeMixin):
             # Converted bundles are read back by add_files. Keep both target
             # copies and output in this library's allowed data, not system temp.
             with library.import_batch(), staging.import_directory(library.root) as temporary:
-                with ThreadPoolExecutor(max_workers=options["workers"]) as workers:
+                with ThreadPoolExecutor(max_workers=options["threads"]) as workers:
                     futures, analyzed, originals = {}, {}, {}
                     for candidate in chosen:
                         if candidate.entry["state"] not in IMPORTABLE:
@@ -606,7 +616,7 @@ class BatchImport(JudgeMixin):
                                 pin,
                                 log,
                                 asset_types=settings.asset_types(),
-                                strategy=settings.options["strategy"],
+                                strategy=settings.match_strategy(),
                             )
                             analyzed[candidate.entry["id"]] = fresh
                             self._log_analysis(fresh, "execute")
@@ -716,7 +726,7 @@ class BatchImport(JudgeMixin):
                                                 kind=mod.kind,
                                                 pin=pin,
                                                 settings=settings,
-                                                backup=options["backup"],
+                                                backup=options["createBackup"],
                                                 log=log,
                                             )
                                         # A successful apply configures the source, including deferred applies.
@@ -881,9 +891,7 @@ class BatchImport(JudgeMixin):
                 save_options=settings.save_options(settings.crc_needed(group[0])),
                 spine_options=spine,
                 skip_unchanged=settings.options["skipUnchanged"],
-                match_strategy="name_type"
-                if candidate.conversion or candidate.rebuild
-                else settings.options["strategy"],
+                match_strategy="name_type" if candidate.conversion or candidate.rebuild else settings.match_strategy(),
                 anim_check=settings.anim_check_options(),
                 log=log,
                 on_step=lambda step: progress(candidate, phase, step),
@@ -914,13 +922,14 @@ class BatchImport(JudgeMixin):
                     raise ServiceError("mod_release_mismatch", file=path.name)
                 integrity.check_format(validation.metadata(path), path, validation.metadata(baselines[name]))
             validation.validate()
-        if settings.options["output"]:
+        if settings.options["outputFolder"]:
             progress(candidate, phase, "export")
-            destination = Path(settings.options["output"]) / "bundles" / entry["id"]
+            destination = Path(settings.options["outputFolder"]) / "bundles" / entry["id"]
+            self.services.check_output(destination)
             for path in generated.values():
                 exported = destination / path.name
                 if exported.resolve() in candidate.files.values():
-                    raise ServiceError("bad_params", key="output")
+                    raise ServiceError("bad_params", key="outputFolder")
             destination.mkdir(parents=True, exist_ok=True)
             for path in generated.values():
                 shutil.copy2(path, destination / path.name)

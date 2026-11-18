@@ -43,38 +43,37 @@ export { DIALOG_AREA, DIALOG_H } from "./import-dialogs.js";
 const baseName = (path) => path?.split(/[\\/]/).pop() || "";
 
 /**
- * The roster's variants as a flat list, each with its family.
- * @param {{families?: object[]}} data The data of roster.list.
+ * The roster's alts as a flat list, each with its student.
+ * @param {{students?: object[]}} data The data of students.list.
  */
 export function catalogEntries(data) {
-  return (data?.families || []).flatMap((family) => (family.variants || []).map((variant) => ({ ...variant, family })));
+  return (data?.students || []).flatMap((student) => (student.alts || []).map((alt) => ({ ...alt, student })));
 }
 /**
- * Who an import entry is for: the catalog variant its variant key or its core names, the student's display
+ * Who an import entry is for: the catalog alt its alt key or its core names, the student's display
  * name, the core and the search words.
  * @param {object} entry The import entry.
- * @param {object[]} catalog The variants (catalogEntries).
+ * @param {object[]} catalog The alts (catalogEntries).
  */
 export function entryIdentity(entry, catalog) {
-  const variant =
-    catalog.find((item) => item.key === entry.variant) ||
-    catalog.find((item) => entry.core && [item.fileId, item.spr, item.lobby, item.model].includes(entry.core));
-  const names = L(variant?.names);
-  const name = studentName(
-    variant,
-    names?.full || names?.short || entry.core || baseName(entry.paths?.[0]) || entry.id,
-  );
+  const alt =
+    catalog.find((item) => item.key === entry.alt) ||
+    catalog.find(
+      (item) => entry.core && [item.fileId, item.portrait, item.memorialLobby, item.chibi].includes(entry.core),
+    );
+  const names = L(alt?.names);
+  const name = studentName(alt, names?.full || names?.short || entry.core || baseName(entry.paths?.[0]) || entry.id);
   return {
-    variant,
+    alt,
     name,
-    core: entry.core || variant?.fileId || entry.variant || baseName(entry.paths?.[0]),
+    core: entry.core || alt?.fileId || entry.alt || baseName(entry.paths?.[0]),
     search: [
       name,
       entry.core,
-      entry.variant,
+      entry.alt,
       ...(entry.paths || []),
-      ...customAliases(variant),
-      ...Object.values(variant?.names || {}).flatMap((value) =>
+      ...customAliases(alt),
+      ...Object.values(alt?.names || {}).flatMap((value) =>
         typeof value === "string" ? [value] : Object.values(value),
       ),
     ]
@@ -189,7 +188,7 @@ export function createImportPage({
         action: phase,
         // who and the kind as a job over mods names them (job-progress.js modLine): "Hoshino (Swimsuit) - Chibi"
         name: current
-          ? `${progressName(identity.variant, "", identity.name)}${T("progress.sep")}${T(KIND_KEYS[current.kind] || KIND_KEYS.other)}`
+          ? `${progressName(identity.alt, "", identity.name)}${T("progress.sep")}${T(KIND_KEYS[current.resourceType] || KIND_KEYS.other)}`
           : "",
         step: detail && detail !== phase && repeated[action] !== step ? T("progress.step", { step: detail }) : "",
       });
@@ -227,7 +226,7 @@ export function createImportPage({
   }
   const report = (error, entry = null) => {
     const code = typeof error === "string" ? error : error?.code || error?.reason;
-    if (code === "original_unavailable") {
+    if (code === "official_unavailable") {
       const state = modsState() || {};
       return [
         T("mods.overwrittenTitle"),
@@ -250,7 +249,7 @@ export function createImportPage({
   const resultNote = (item, entry) => {
     const detail = item.error || { code: item.reason, params: item.params || {} };
     const label = report(item, entry);
-    if (item.reason === "original_unavailable") return label;
+    if (item.reason === "official_unavailable") return label;
     const key = `error.${detail.code}`,
       text = detail.code ? T(key, { file: entry?.paths?.[0] || "", ...(detail.params || {}) }) : key;
     return text !== key && text !== label ? `${label} - ${text}` : label;
@@ -566,14 +565,14 @@ export function createImportPage({
     if (model.busy()) return;
     const data = await call("import.catalog");
     // Installed entries supply the same aliases, favourites and Mod counts as the main roster.
-    const current = new Map(P.catalog.map((variant) => [variant.key, variant]));
-    for (const family of data.families)
-      family.variants = family.variants.map((variant) => ({ ...variant, ...current.get(variant.key) }));
+    const current = new Map(P.catalog.map((alt) => [alt.key, alt]));
+    for (const student of data.students)
+      student.alts = student.alts.map((alt) => ({ ...alt, ...current.get(alt.key) }));
     P.catalog = catalogEntries(data);
     P.identities = new WeakMap();
     await characterPicker({
       data,
-      selected: entry.variant,
+      selected: entry.alt,
       dialog,
       el,
       button,
@@ -582,7 +581,7 @@ export function createImportPage({
       radioOptions,
       emptyNote: (host, caption) => textWidget(host, caption, "empty", { scale: 0.5, origin: [685, 50] }),
       refresh: syncBar,
-      onSelect: (variant) => model.assignCharacter(entry.id, variant),
+      onSelect: (alt) => model.assignAlt(entry.id, alt),
     });
   }
 
@@ -790,7 +789,7 @@ let page;
 /**
  * Show the batch import page.
  * @param {object} context The shared screen context.
- * @param {object} data The data of roster.list.
+ * @param {object} data The data of students.list.
  */
 export function show(context, data) {
   page ||= createImportPage({ host: document.getElementById("import") });

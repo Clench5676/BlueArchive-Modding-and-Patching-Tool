@@ -40,10 +40,10 @@ def test_corner_prefab_geometry(root):
         layout = export_layout(env, root, {})
     for path, reference in expected.items():
         node = subtree(layout, path)
-        assert node["pos"] == pytest.approx(reference["pos"]), path
+        assert node["localPosition"] == pytest.approx(reference["pos"]), path
         if "size" in reference:
-            widget = next(w for w in node["widgets"] if w.get("sprite") == reference["sprite"])
-            assert [widget["w_"], widget["h_"]] == reference["size"], path
+            widget = next(w for w in node["widgets"] if w.get("spriteName") == reference["sprite"])
+            assert [widget["width"], widget["height"]] == reference["size"], path
             assert widget["pivot"] == reference["pivot"], path
             if "incline" in reference:
-                assert widget["incline"] == reference["incline"], path
+                assert widget["inclineAngle"] == reference["incline"], path

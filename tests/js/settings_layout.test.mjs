@@ -80,7 +80,7 @@ function harness(locale, tab) {
     gameDirs: { global: "/Applications/Blue Archive/Game/Contents/Global", japan: "" },
     libraryDir: "/Users/someone/library",
     outputDir: "/Users/someone/output",
-    lobbyZoom: { mode: "custom", custom: 2 },
+    memorialLobbyZoomOut: { mode: "custom", custom: 2 },
     voiceVolume: 80,
   };
   const ModSwitch = {

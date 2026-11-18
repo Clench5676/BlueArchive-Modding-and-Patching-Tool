@@ -94,6 +94,11 @@ def test_app_package_initialization_is_empty():
     assert (APP / "__init__.py").read_bytes() == b""
 
 
+def test_source_file_size():
+    oversized = {path.relative_to(ROOT): len(path.read_text().splitlines()) for path in APP.rglob("*.py")}
+    assert {path: size for path, size in oversized.items() if size > 1500} == {}
+
+
 def python_check(code):
     result = subprocess.run(
         [sys.executable, "-c", code], env=os.environ.copy(), text=True, capture_output=True, timeout=60
@@ -132,11 +137,15 @@ assert i18n.I18n('en-US').t('webui.error.required_asset_stream_missing') == 'web
 
 @pytest.mark.parametrize("entry", ["bmpt", "bmpt.launcher", "bmpt.webui", "ba_modding_toolkit"])
 @pytest.mark.parametrize("classic", [False, True])
-def test_entries_register_before_dispatch(entry, classic):
+def test_entries_register_before_dispatch(entry, classic, tmp_path):
     # Dispatch only to a stub: no native window or server is ever started.
     python_check(f"""
-import runpy, sys, types
+import os, runpy, sys, types
+os.environ['BAMT_DATA_DIR'] = {str(tmp_path)!r}
 from ba_modding_toolkit import i18n
+from bmpt.host import data_upgrade
+coordinator = data_upgrade.DataUpgrade
+data_upgrade.DataUpgrade = lambda path: coordinator(path, qualify=lambda _: 'apfs')
 seen = []
 def check(*args):
     assert i18n.i18n_manager.t('webui.error.required_asset_stream_missing') != \
@@ -145,6 +154,12 @@ def check(*args):
 for name in ('bmpt.webui.main', 'ba_modding_toolkit.gui.main'):
     module = types.ModuleType(name)
     module.main = check
+    if name == 'bmpt.webui.main':
+        def open_classic(upgrade):
+            assert i18n.i18n_manager.t('webui.error.required_asset_stream_missing') != \
+'webui.error.required_asset_stream_missing'
+            return upgrade.run()['status'] == 'ready'
+        module.open_classic_upgrade = open_classic
     sys.modules[name] = module
 sys.argv = [{entry!r}] + (['--classic'] if {classic!r} else [])
 runpy.run_module({entry!r}, run_name='__main__')

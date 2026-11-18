@@ -453,10 +453,12 @@ function centred(R, w) {
     h = (w * 9) / 16;
   return { x0: cx - w / 2, x1: cx + w / 2, y0: cy - h / 2, y1: cy + h / 2 };
 }
-export const ZOOM_MODES = ["game", "art", "unlocked", "custom"];
+export const ZOOM_MODES = ["gameView", "fullArt", "unlocked", "custom"];
+// the locale key of each mode under settings.zoomOut
+export const ZOOM_LABELS = Object.freeze({ gameView: "game", fullArt: "art", unlocked: "unlocked", custom: "custom" });
 /**
- * The rect a fullscreen view stays inside for the zoom-out setting: the game's view ("game"), the art every
- * clip keeps painted ("art"), the box of the scene's art over its poses ("unlocked"), or `custom` game views
+ * The rect a fullscreen view stays inside for the zoom-out setting: the game's view ("gameView"), the art every
+ * clip keeps painted ("fullArt"), the box of the scene's art over its poses ("unlocked"), or `custom` game views
  * across around the game's view ("custom", 1 to ZOOM_OUT_MAX); never less than the game's view, never more than
  * ZOOM_OUT_MAX game views across.
  * @param {{mode: string, custom?: number}} zoom
@@ -467,7 +469,7 @@ export function zoomBounds(zoom, m, G) {
   const full = rectOf(m.full),
     f = clamp(Number(zoom?.custom) || ZOOM_CUSTOM, 1, ZOOM_OUT_MAX);
   const B =
-    zoom?.mode === "art"
+    zoom?.mode === "fullArt"
       ? m.outer
       : zoom?.mode === "unlocked"
         ? m.whole

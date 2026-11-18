@@ -138,8 +138,8 @@ const renderer = {
 
 async function shown() {
   const view = createStillView({ renderer });
-  Object.assign(view, { key: "x_y", source: "variant:x_z" });
-  await view.load("/asset/model/x_y.glb?source=variant%3Ax_z");
+  Object.assign(view, { key: "x_y", source: "alt:x_z" });
+  await view.load("/asset/chibi/x_y.glb?source=alt%3Ax_z");
   return view;
 }
 
@@ -152,7 +152,7 @@ test("an added clip is fetched from the shown model's source, plays on the shown
     await view.addClips(["X_Y_Formation_Idle", "X_Y_Exs"]);
     assert.deepEqual(
       requests.map(([url]) => url),
-      ["/asset/model/x_y.glb?source=variant%3Ax_z&clip=X_Y_Exs"],
+      ["/asset/chibi/x_y.glb?source=alt%3Ax_z&clip=X_Y_Exs"],
       "the GLB's own clip is not fetched",
     );
     const entry = view.named.get("X_Y_Exs");

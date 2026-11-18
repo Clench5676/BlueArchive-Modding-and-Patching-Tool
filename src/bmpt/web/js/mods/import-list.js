@@ -35,7 +35,12 @@ export const LIST_X = 26,
   LIST_W = 1220,
   LIST_BOTTOM = 616;
 // the caption key of each kind of Mod an entry can be
-export const KIND_KEYS = { spr: "tab.portrait", lobby: "tab.lobby", model: "tab.model", other: "import.other" };
+export const KIND_KEYS = {
+  portrait: "tab.portrait",
+  memorialLobby: "tab.lobby",
+  chibi: "tab.model",
+  other: "import.other",
+};
 // the reasons a row can carry that have their own label (import.reason.*)
 export const REASONS = new Set([
   "unreadable",
@@ -63,7 +68,7 @@ export const REASONS = new Set([
   "required_asset_apply_failed",
   "required_assets_unmatched",
   "entry_changed",
-  "original_invalid",
+  "official_invalid",
   "failed",
 ]);
 const OUTCOMES = new Set(["imported", "updated", "unchanged", "failed", "skipped"]);
@@ -86,7 +91,7 @@ export function createImportList(P, page) {
   // a refused row's reason is on its badge (stateText); the note line keeps only what a badge cannot say: a
   // missing official copy's repair guidance
   const rowNote = (entry) =>
-    entry.state === "blocked" && entry.reason === "original_unavailable" ? report(entry, entry) : "";
+    entry.state === "blocked" && entry.reason === "official_unavailable" ? report(entry, entry) : "";
   // the badge's short reason: the row's reason label, the error's own text when it needs no parameters, or Import Check
   // Failed (the details give the rest)
   const ANY_PARAMETER = new Proxy({}, { get: () => "\u0000" });
@@ -192,7 +197,9 @@ export function createImportList(P, page) {
   }
   function incomingBase(entry) {
     const source = incomingSource(entry);
-    return source && ["spr", "lobby"].includes(entry.kind) ? spineBase(source.kind, source.key) : null;
+    return source && ["portrait", "memorialLobby"].includes(entry.resourceType)
+      ? spineBase(source.kind, source.key)
+      : null;
   }
   const representative = (entries) =>
     entries.find((entry) => eligible(entry) && incomingBase(entry)) ||
@@ -200,14 +207,14 @@ export function createImportList(P, page) {
     entries.find(eligible) ||
     entries.find((entry) => incomingSource(entry)) ||
     entries[0];
-  const liveIdentity = (entry, variant) =>
+  const liveIdentity = (entry, alt) =>
     JSON.stringify([
-      entry.kind,
-      entry.kind === "model"
-        ? variant?.key || entry.variant
-        : entry.kind === "spr"
-          ? variant?.spr || entry.core
-          : variant?.lobby || entry.core,
+      entry.resourceType,
+      entry.resourceType === "chibi"
+        ? alt?.key || entry.alt
+        : entry.resourceType === "portrait"
+          ? alt?.portrait || entry.core
+          : alt?.memorialLobby || entry.core,
     ]);
   function refreshCurrentPreviews() {
     for (const [key, version] of P.liveVersions) P.liveVersions.set(key, version + 1);
@@ -215,7 +222,7 @@ export function createImportList(P, page) {
       const [kind, base, incoming] = JSON.parse(key);
       if (incoming) continue;
       P.thumbnailJobs.delete(key);
-      if (base && ["spr", "lobby"].includes(kind)) forget(base.slice(0, base.lastIndexOf("/")));
+      if (base && ["portrait", "memorialLobby"].includes(kind)) forget(base.slice(0, base.lastIndexOf("/")));
     }
     P.previewKey = null;
   }
@@ -225,43 +232,48 @@ export function createImportList(P, page) {
       P.refreshedResults.add(result);
       const entry = model.state.taskEntries.find((item) => item.id === result.id);
       if (!entry) continue;
-      const { variant } = identified(entry),
-        key = liveIdentity(entry, variant);
+      const { alt } = identified(entry),
+        key = liveIdentity(entry, alt);
       P.liveVersions.set(key, (P.liveVersions.get(key) || 0) + 1);
-      if (["spr", "lobby"].includes(entry.kind)) {
-        const core = entry.kind === "spr" ? variant?.spr || entry.core : variant?.lobby || entry.core;
-        if (core) forget(spinePrefix(entry.kind, core));
+      if (["portrait", "memorialLobby"].includes(entry.resourceType)) {
+        const core = entry.resourceType === "portrait" ? alt?.portrait || entry.core : alt?.memorialLobby || entry.core;
+        if (core) forget(spinePrefix(entry.resourceType, core));
       }
     }
   }
   function thumbnail(entry, { incoming = false, large = false } = {}) {
-    const { variant } = identified(entry);
+    const { alt } = identified(entry);
     const signal = P.scope?.signal;
-    const kind = entry.kind;
-    const key = kind === "spr" ? variant?.spr || entry.core : kind === "lobby" ? variant?.lobby || entry.core : null;
+    const kind = entry.resourceType;
+    const key =
+      kind === "portrait"
+        ? alt?.portrait || entry.core
+        : kind === "memorialLobby"
+          ? alt?.memorialLobby || entry.core
+          : null;
     const base = incoming ? incomingBase(entry) : key ? spineBase(kind, key) : null;
     const input = incomingSource(entry),
-      framing = specialFraming(variant);
-    const frame = large ? (kind === "lobby" ? "landscape" : "portrait") : "card";
-    const liveKey = liveIdentity(entry, variant);
+      framing = specialFraming(alt);
+    const frame = large ? (kind === "memorialLobby" ? "landscape" : "portrait") : "card";
+    const liveKey = liveIdentity(entry, alt);
     if (!incoming && !P.liveVersions.has(liveKey)) P.liveVersions.set(liveKey, 0);
     const liveVersion = incoming ? 0 : P.liveVersions.get(liveKey);
     const version = JSON.stringify([incoming ? input : "live", entry.files, liveVersion]);
     const identity = JSON.stringify([
       kind,
-      kind === "model" ? variant?.key || entry.variant : base,
+      kind === "chibi" ? alt?.key || entry.alt : base,
       incoming,
       frame,
       framing,
-      variant?.bg,
-      kind === "model" ? version : null,
+      alt?.background,
+      kind === "chibi" ? version : null,
       liveVersion,
       allowed(),
     ]);
     if (P.thumbnailJobs.has(identity)) return P.thumbnailJobs.get(identity);
     let work = Promise.resolve(null);
-    const modelKey = variant?.key || entry.variant;
-    if (kind === "model" && modelKey && P.scope) {
+    const modelKey = alt?.key || entry.alt;
+    if (kind === "chibi" && modelKey && P.scope) {
       const source = input;
       if (!incoming || source)
         work = modelThumbnails(modelKey, incoming ? `${source.kind}:${source.key}` : "live", {
@@ -269,7 +281,7 @@ export function createImportList(P, page) {
           version,
         });
     } else if (allowed() && base && P.scope) {
-      work = P.scope.thumb(base, frame, null, kind === "lobby", framing, variant?.bg);
+      work = P.scope.thumb(base, frame, null, kind === "memorialLobby", framing, alt?.background);
     }
     if (large) work.bump?.();
     const source = Promise.resolve(work)
@@ -324,7 +336,7 @@ export function createImportList(P, page) {
     const next = el("div", "import-detail-content");
     if (entry) {
       const identity = identified(entry);
-      const landscape = entry.kind === "lobby";
+      const landscape = entry.resourceType === "memorialLobby";
       // two pictures, side by side or stacked, above the name plate, whose foot meets the list's
       const width = landscape ? 444 : 254,
         height = landscape ? 250 : 466,
@@ -361,7 +373,7 @@ export function createImportList(P, page) {
         next.appendChild(box);
       }
       const banner = place(el("div", "import-name-banner"), 0, 587, 524, 120);
-      paint(banner, P.art.banner(identity.name, T(KIND_KEYS[entry.kind] || KIND_KEYS.other)), {
+      paint(banner, P.art.banner(identity.name, T(KIND_KEYS[entry.resourceType] || KIND_KEYS.other)), {
         scale: 0.42,
         origin: [255, 104],
       });
@@ -376,8 +388,8 @@ export function createImportList(P, page) {
         next.appendChild(sourceControl(entry));
       if (
         !["done", "library", "installed"].includes(entry.state) &&
-        (!entry.variant ||
-          entry.assignment ||
+        (!entry.alt ||
+          entry.assignedAlt ||
           ["mod_target_unknown", "mod_target_ambiguous", "no_target"].includes(entry.reason))
       ) {
         const assign = button(T("import.assignCharacter"), "assignCharacter", { width: 524, scale: 0.34 });
@@ -445,7 +457,7 @@ export function createImportList(P, page) {
         .join(listSeparator());
     return {
       result,
-      kind: groupedRow ? "" : T(KIND_KEYS[entry.kind] || KIND_KEYS.other),
+      kind: groupedRow ? "" : T(KIND_KEYS[entry.resourceType] || KIND_KEYS.other),
       unidentified: entry.reason === "source_unknown",
       state: groupedRow ? [...new Set(group.entries.map(stateText))].join(listSeparator()) : stateText(entry),
       counts: P.merged && result ? group.counts : null,

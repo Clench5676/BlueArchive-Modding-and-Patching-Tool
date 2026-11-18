@@ -17,7 +17,7 @@ function run(failure) {
     info: { native: true },
     T,
     errorText,
-    Consent: { detectGame: (region) => env.rpc("settings.detectGame", { region }) },
+    Consent: { detectGame: (server) => env.rpc("settings.detectGame", { server }) },
     rpc: async (method) => {
       if (method === "settings.pickFolder") return "/picked";
       if (method === "settings.set") throw failure;
@@ -61,7 +61,7 @@ function screen({ native = false, detected = [] } = {}) {
     T,
     errorText,
     // consent.js detectGame with the consent given (its consent path is tested in popup.test.mjs)
-    Consent: { detectGame: (region) => env.rpc("settings.detectGame", { region }) },
+    Consent: { detectGame: (server) => env.rpc("settings.detectGame", { server }) },
     rpc: async (method) => (method === "settings.detectGame" ? detected : "/picked"),
     refreshConfiguration: async () => {},
     notify: (text, options) => notes.push({ text, options }),

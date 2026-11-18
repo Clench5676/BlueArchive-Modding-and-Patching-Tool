@@ -13,7 +13,7 @@ const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const PREPARE_TIMEOUT = 25000,
   TEXT_LIFETIME = 5000;
 const UNAVAILABLE_BACKOFF = 30000;
-const MISSING_DIALOGUE = new Set(["lines_unavailable", "catalog_variant_not_found", "variant_not_found"]);
+const MISSING_DIALOGUE = new Set(["lines_unavailable", "catalog_alt_not_found", "alt_not_found"]);
 // Common/Lobby_balloon's 136 x 146 atlas silhouette: the rounded body is [38,4]..[128,129] at half alpha.
 // Its left-pointing tail and translucent outer shadow are outside this rectangle. These are geometry, not pixels.
 const BALLOON_BODY = {
@@ -265,7 +265,7 @@ export function createDialogue({
   expressions = talkExpression,
   currentLanguage = language,
   bounds,
-  onDiagnostic = (error, entry) => console.warn("Portrait dialogue unavailable", entry.variant, error),
+  onDiagnostic = (error, entry) => console.warn("Portrait dialogue unavailable", entry.alt, error),
 } = {}) {
   const linesCache = memoryMemo(4 * 1024 * 1024, 128),
     audioCache = memoryMemo(),
@@ -373,8 +373,8 @@ export function createDialogue({
   }
   function applyExpression(row, player = null) {
     const elapsed = Number(player?.currentTime) || 0;
-    const cue = row.expressionCues?.filter((value) => Number.isFinite(value.time) && value.time <= elapsed).at(-1);
-    const expression = cue?.motion || cue?.expression || row.expression;
+    const cue = row.animationCues?.filter((value) => Number.isFinite(value.time) && value.time <= elapsed).at(-1);
+    const expression = cue?.motion || cue?.animationName || row.animationName;
     if (!expression || !speaker) return;
     const key = JSON.stringify(expression);
     if (key !== expressionKey) {
@@ -422,7 +422,7 @@ export function createDialogue({
     if (!template && (!layoutFlight || layoutFlight.signal?.aborted)) {
       const flight = { signal: requestSignal };
       flight.promise = Promise.resolve()
-        .then(() => call("hall.dialogueLayout", {}, { signal: requestSignal }))
+        .then(() => call("studentHall.dialogueLayout", {}, { signal: requestSignal }))
         .then((value) => {
           if (!requestSignal?.aborted) template = value;
           return value;
@@ -483,7 +483,7 @@ export function createDialogue({
   async function play(entry) {
     if (busy || disposed || signal?.aborted) return;
     const lang = LANGS[currentLanguage()] || "en",
-      cacheKey = `${entry.variant}:${lang}`;
+      cacheKey = `${entry.alt}:${lang}`;
     if ((unavailable.get(cacheKey) || 0) > Date.now()) return;
     unavailable.delete(cacheKey);
     busy = true;
@@ -515,7 +515,7 @@ export function createDialogue({
         try {
           response = await linesCache.get(
             cacheKey,
-            () => call("hall.lines", { variant: entry.variant, lang }, { signal: requestSignal }),
+            () => call("studentHall.lines", { alt: entry.alt, lang }, { signal: requestSignal }),
             undefined,
             requestSignal,
           );
@@ -573,9 +573,9 @@ export function createDialogue({
       let data;
       try {
         data = await audioCache.get(
-          `${entry.variant}:${clip}`,
+          `${entry.alt}:${clip}`,
           async () => {
-            const response = await call("hall.voice", { variant: entry.variant, clip }, { signal: requestSignal });
+            const response = await call("studentHall.voice", { alt: entry.alt, clip }, { signal: requestSignal });
             return { bytes: Uint8Array.from(atob(response.audio), (char) => char.charCodeAt(0)), mime: response.mime };
           },
           (value) => value.bytes.byteLength,
@@ -625,7 +625,7 @@ export function createDialogue({
               linesCache.forgetPending(cacheKey);
               const response = await linesCache.get(
                 cacheKey,
-                () => call("hall.lines", { variant: entry.variant, lang }, { signal: requestSignal }),
+                () => call("studentHall.lines", { alt: entry.alt, lang }, { signal: requestSignal }),
                 undefined,
                 requestSignal,
               );
@@ -683,8 +683,8 @@ export function createDialogue({
         await draw(shown.entry, shown.row, my, requestSignal);
         if (my !== token || disposed || requestSignal?.aborted || lang !== (LANGS[currentLanguage()] || "en")) return;
         const response = await linesCache.get(
-          `${shown.entry.variant}:${lang}`,
-          () => call("hall.lines", { variant: shown.entry.variant, lang }, { signal: requestSignal }),
+          `${shown.entry.alt}:${lang}`,
+          () => call("studentHall.lines", { alt: shown.entry.alt, lang }, { signal: requestSignal }),
           undefined,
           requestSignal,
         );
@@ -804,7 +804,7 @@ export function createLobbyDialogue({
     const value = text,
       language = lang,
       turn = version;
-    template ||= Promise.resolve(call("hall.dialogueLayout", {})).catch((error) => {
+    template ||= Promise.resolve(call("studentHall.dialogueLayout", {})).catch((error) => {
       template = null;
       throw error;
     });

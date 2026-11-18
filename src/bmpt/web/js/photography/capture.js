@@ -117,6 +117,6 @@ export async function captureScene(roots, stage) {
   ctx.globalCompositeOperation = "source-over";
   const png = canvas.toDataURL("image/png");
   if (!png.startsWith("data:image/png;base64,"))
-    throw Object.assign(new Error("PNG encoding failed"), { code: "photo_invalid" });
+    throw Object.assign(new Error("PNG encoding failed"), { code: "thumbnail_invalid" });
   return { png, width, height };
 }

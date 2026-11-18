@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING
 from urllib.parse import quote
 
 from ..core.errors import ServiceError
-from ..core import devmode
 from ..library.photographs import decode_capture
 from ..library.storage import sync_directory
 from .system import reveal
@@ -37,8 +36,8 @@ def _create_copy(source: Path, target: Path) -> None:
             raise
 
 
-class Photography:
-    """The student photographs behind the ``photography.*`` RPC methods and ``/asset/photography``.
+class Thumbnails:
+    """The student photographs behind the ``thumbnails.*`` RPC methods and ``/asset/thumbnails``.
 
     Photographs are captures of a student's portrait or lobby that the Mod library stores. One can be the App's own
     thumbnail of the student, and one can be applied to the game's Collection portrait.
@@ -52,13 +51,13 @@ class Photography:
         """
         self.services = services
 
-    def _variant(self, key: str):
+    def _alt(self, key: str):
         if not isinstance(key, str) or len(key) > 200:
             raise ServiceError("bad_params", key="variant")
         try:
             return self.services.catalog.variant(key)
         except (KeyError, ServiceError) as error:
-            if isinstance(error, ServiceError) and error.code != "catalog_variant_not_found":
+            if isinstance(error, ServiceError) and error.code != "catalog_alt_not_found":
                 raise
             resolve = getattr(self.services.library, "variant_metadata", None)
             if callable(resolve):
@@ -66,9 +65,9 @@ class Photography:
             raise
 
     def _target(self, key: str) -> dict:
-        variant = self._variant(key)
+        variant = self._alt(key)
         if not getattr(variant, "portrait", None):
-            raise ServiceError("photo_target_unavailable")
+            raise ServiceError("thumbnail_target_unavailable")
         return self.services.game.collection_target(variant.portrait)
 
     def default_url(self, variant: str, pin) -> str:
@@ -80,7 +79,7 @@ class Photography:
                 resource version ends it so that a game update loads the new picture.
         """
         revision = self.services.game.resource_version
-        return f"/asset/photography/default/{pin.id}/{quote(variant, safe='')}.png?revision={revision}"
+        return f"/asset/thumbnails/default/{pin.id}/{quote(variant, safe='')}.png?revision={revision}"
 
     def describe(self, result: dict) -> dict:
         """Add the names of the student to each photo of a listing.
@@ -94,7 +93,7 @@ class Photography:
         """
         for entry in result["photos"]:
             try:
-                entry["names"] = self._variant(entry["variant"]).names
+                entry["names"] = self._alt(entry["variant"]).names
             except (KeyError, ServiceError):
                 entry["names"] = {}
         return result
@@ -112,11 +111,11 @@ class Photography:
             ``applicable`` False when there is no game or the variant has no Collection portrait.
 
         Raises:
-            ServiceError: ``bad_params`` for a malformed key; ``catalog_variant_not_found`` for an unknown variant.
+            ServiceError: ``bad_params`` for a malformed key; ``catalog_alt_not_found`` for an unknown variant.
         """
-        self._variant(variant)
+        self._alt(variant)
         s = self.services
-        result = self.describe(s.photographs.list(variant))
+        result = self.describe(s.thumbnail_store.list(variant))
         try:
             pin = s.library.current_pin()
             if pin is None:
@@ -129,7 +128,7 @@ class Photography:
             if not key and game.get("known"):
                 game["id"] = "official"
         except ServiceError as error:
-            if error.code not in ("photo_target_unavailable", "game_not_found"):
+            if error.code not in ("thumbnail_target_unavailable", "game_not_found"):
                 raise
             game, default = {"id": None, "known": False}, None
         # Applied describes this skin's Collection target. Deletion checks independently include every target.
@@ -152,18 +151,18 @@ class Photography:
             The family's listing, which includes the new photo.
 
         Raises:
-            ServiceError: ``photo_invalid`` when ``png`` is not an acceptable PNG.
+            ServiceError: ``thumbnail_invalid`` when ``png`` is not an acceptable PNG.
         """
-        self._variant(variant)
+        self._alt(variant)
         # Persistence must not wait for an unrelated game writer's status scan, nor hold the services lock: the
-        # manifest has its own lock, and the only thing to keep out is a library move (photograph_writes), which
+        # manifest has its own lock, and the only thing to keep out is a library move (thumbnail_writes), which
         # is taken first so the store is resolved after a move that is under way.
-        with self.services.photograph_writes:
-            result = self.services.photographs.save(variant, png, mode, expression, action, source)
+        with self.services.thumbnail_writes:
+            result = self.services.thumbnail_store.save(variant, png, mode, expression, action, source)
         return self.describe(result)
 
     def select(self, variant: str, key: str | None) -> dict:
-        """Choose the photograph the App shows as the student's thumbnail and publish ``photography.changed``.
+        """Choose the photograph the App shows as the student's thumbnail and publish ``thumbnails.changed``.
 
         Args:
             variant: The variant key.
@@ -172,10 +171,10 @@ class Photography:
         Returns:
             The family's listing with the new choice.
         """
-        self._variant(variant)
-        with self.services.photograph_writes:
-            result = self.services.photographs.select(variant, key)
-        self.services.events.publish("photography.changed", {"variant": variant})
+        self._alt(variant)
+        with self.services.thumbnail_writes:
+            result = self.services.thumbnail_store.select(variant, key)
+        self.services.events.publish("thumbnails.changed", {"variant": variant})
         return self.describe(result)
 
     def removal_info(self, variant: str, key: str) -> dict:
@@ -188,11 +187,11 @@ class Photography:
         Returns:
             ``official``, ``used``, ``used_here``, ``used_elsewhere`` and the sorted ``targets`` (variant keys).
         """
-        self._variant(variant)
+        self._alt(variant)
         return self.services.library.photograph_removal_info(variant, key)
 
     def delete(self, variant: str, key: str, confirm: bool = False) -> str:
-        """Delete a photograph in a library writer job and publish ``photography.changed``.
+        """Delete a photograph in a library writer job and publish ``thumbnails.changed``.
 
         Args:
             variant: The variant key.
@@ -206,17 +205,17 @@ class Photography:
         Raises:
             ServiceError: ``asset_official`` for the official art, which cannot be deleted.
         """
-        self._variant(variant)
+        self._alt(variant)
         if key == "official":
             raise ServiceError("asset_official")
         s, library = self.services, self.services.library
 
         def run(log, progress):
             library.delete_photograph(variant, key, confirm=confirm, log=log)
-            s.events.publish("photography.changed", {"variant": variant})
+            s.events.publish("thumbnails.changed", {"variant": variant})
             return self.list(variant)
 
-        return s.submit("photography.delete", run, writes="library", library=library)
+        return s.submit("thumbnails.delete", run, writes="library", library=library)
 
     def apply(self, variant: str, key: str | None, *, png: str | None = None, restore_app: bool = False) -> str:
         """Write a photograph into the game's Collection portrait of a student, in a game writer job.
@@ -232,11 +231,11 @@ class Photography:
             The job's id; the job kind is ``restore`` for the official art and ``apply`` otherwise.
 
         Raises:
-            ServiceError: ``photo_target_unavailable`` when the variant has no Collection portrait;
-                ``photo_invalid`` for a bad ``png``; ``classic_open`` while a classic window is open and mods are
+            ServiceError: ``thumbnail_target_unavailable`` when the variant has no Collection portrait;
+                ``thumbnail_invalid`` for a bad ``png``; ``classic_open`` while a classic window is open and mods are
                 enabled.
         """
-        self._variant(variant)
+        self._alt(variant)
         s, library = self.services, self.services.library
         pin = s._current_pin(library)
         descriptor = self._target(variant)
@@ -253,7 +252,7 @@ class Photography:
             result = library.apply_photograph(variant, chosen, descriptor, pin=pin, log=log, progress=progress)
             if restore_app:
                 library.photographs.select(variant, chosen)
-                s.events.publish("photography.changed", {"variant": variant})
+                s.events.publish("thumbnails.changed", {"variant": variant})
             return replace(result, variant=variant)
 
         with s.classic.starting():
@@ -277,13 +276,13 @@ class Photography:
         try:
             self._target(variant)
         except ServiceError as error:
-            if error.code != "photo_target_unavailable":
+            if error.code != "thumbnail_target_unavailable":
                 raise
-            return self.services.jobs.submit("photography.restore", lambda log, progress: self.select(variant, None))
+            return self.services.jobs.submit("thumbnails.restore", lambda log, progress: self.select(variant, None))
         existing = next(
             (
                 entry["id"]
-                for entry in self.services.photographs.list(variant)["photos"]
+                for entry in self.services.thumbnail_store.list(variant)["photos"]
                 if entry["variant"] == variant and entry.get("builtin")
             ),
             None,
@@ -305,10 +304,10 @@ class Photography:
             ``path`` of the file and ``folder`` that holds it.
 
         Raises:
-            ServiceError: ``game_not_found`` when the official art is wanted without a game; ``photo_invalid``
+            ServiceError: ``game_not_found`` when the official art is wanted without a game; ``thumbnail_invalid``
                 for a bad ``png``.
         """
-        self._variant(variant)
+        self._alt(variant)
         if key == "generated":
             raw, _, _ = decode_capture(png)
         elif key in (None, "official"):
@@ -317,9 +316,9 @@ class Photography:
                 raise ServiceError("game_not_found")
             raw = self.asset(["default", pin.id, variant + ".png"]).body
         else:
-            raw = self.services.photographs.image(variant, key)
+            raw = self.services.thumbnail_store.image(variant, key)
         folder = Path(self.services.settings.get("output_dir")).expanduser().resolve()
-        devmode.check_write(folder)
+        self.services.check_output(folder)
         folder.mkdir(parents=True, exist_ok=True)
         stem = re.sub(r"[^a-zA-Z0-9_-]", "_", variant)[:100] + "-" + (key or "official")
         fd, name = tempfile.mkstemp(prefix=".photo-export-", dir=folder)
@@ -350,10 +349,10 @@ class Photography:
         return {"path": str(target), "folder": str(folder)}
 
     def asset(self, parts: list[str]) -> AssetResponse:
-        """Serve a photograph for ``/asset/photography/...``.
+        """Serve a photograph for ``/asset/thumbnails/...``.
 
         Args:
-            parts: The path after ``photography/``, split at slashes: ``[default, <install id>, <variant>.png]``
+            parts: The path after ``thumbnails/``, split at slashes: ``[default, <install id>, <variant>.png]``
                 for the official Collection portrait read from the game files, or ``[<variant>, <photo id>.png]``
                 for a saved photo.
 
@@ -376,47 +375,47 @@ class Photography:
             return AssetResponse(s.game.collection_portrait_from(descriptor["name"], paths), "image/png", False)
         if len(parts) == 2 and parts[1].endswith(".png"):
             variant, key = parts[0], parts[1][:-4]
-            self._variant(variant)
-            return AssetResponse(s.photographs.image(variant, key), "image/png", False)
-        raise KeyError("photography")
+            self._alt(variant)
+            return AssetResponse(s.thumbnail_store.image(variant, key), "image/png", False)
+        raise KeyError("thumbnails")
 
 
 def register(rpc, services: Services) -> None:
-    """Register the ``photography.*`` RPC methods.
+    """Register the ``thumbnails.*`` RPC methods.
 
     Args:
         rpc: The ``RpcRegistry`` to register on.
         services: The Services whose ``photography`` handles the calls.
     """
 
-    @rpc.method("photography.list")
-    def listing(variant: str):
-        return services.photography.list(variant)
+    @rpc.method("thumbnails.list")
+    def listing(alt: str):
+        return services.thumbnails.list(alt)
 
-    @rpc.method("photography.save")
-    def save(variant: str, png: str, mode: str, expression: str = "", action: str = "", source: str = ""):
-        return services.photography.save(variant, png, mode, expression, action, source)
+    @rpc.method("thumbnails.save")
+    def save(alt: str, png: str, mode: str, expression: str = "", action: str = "", source: str = ""):
+        return services.thumbnails.save(alt, png, mode, expression, action, source)
 
-    @rpc.method("photography.select")
-    def select(variant: str, id: str | None):
-        return services.photography.select(variant, id)
+    @rpc.method("thumbnails.select")
+    def select(alt: str, id: str | None):
+        return services.thumbnails.select(alt, id)
 
-    @rpc.method("photography.delete")
-    def delete(variant: str, id: str, confirm: bool = False):
-        return services.photography.delete(variant, id, confirm=confirm)
+    @rpc.method("thumbnails.delete")
+    def delete(alt: str, id: str, confirm: bool = False):
+        return services.thumbnails.delete(alt, id, confirm=confirm)
 
-    @rpc.method("photography.removalInfo")
-    def removal_info(variant: str, id: str):
-        return services.photography.removal_info(variant, id)
+    @rpc.method("thumbnails.removalInfo")
+    def removal_info(alt: str, id: str):
+        return services.thumbnails.removal_info(alt, id)
 
-    @rpc.method("photography.apply")
-    def apply(variant: str, id: str | None, png: str | None = None):
-        return services.photography.apply(variant, id, png=png)
+    @rpc.method("thumbnails.apply")
+    def apply(alt: str, id: str | None, png: str | None = None):
+        return services.thumbnails.apply(alt, id, png=png)
 
-    @rpc.method("photography.restore")
-    def restore(variant: str, png: str | None = None):
-        return services.photography.restore(variant, png)
+    @rpc.method("thumbnails.restore")
+    def restore(alt: str, png: str | None = None):
+        return services.thumbnails.restore(alt, png)
 
-    @rpc.method("photography.export")
-    def export(variant: str, id: str | None, png: str | None = None):
-        return services.photography.export(variant, id, png)
+    @rpc.method("thumbnails.export")
+    def export(alt: str, id: str | None, png: str | None = None):
+        return services.thumbnails.export(alt, id, png)

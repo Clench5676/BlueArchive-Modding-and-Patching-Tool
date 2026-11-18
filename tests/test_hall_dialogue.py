@@ -88,7 +88,7 @@ def test_global_ordinary_translation_reuses_memorial_table_download(monkeypatch)
     monkeypatch.setattr(source, "_get", lambda *args: (calls.append(args), json.dumps(table).encode())[1])
     assert source.dialogues(10005)["Talk_01_M"][0]["en"] == "Memorial"
     assert source.portrait_dialogues(10005) == {
-        1: [{"en": "Ordinary", "zh-TW": "Traditional Chinese", "ja": "Original", "expression": "02"}]
+        1: [{"en": "Ordinary", "zh-TW": "Traditional Chinese", "ja": "Original", "animationName": "02"}]
     }
     assert len(calls) == 1
     authored = globallines.portrait_dialogues([row(10005, 1, 2, "First\nSecond", category="UILobby")])
@@ -160,24 +160,24 @@ def dialogue_services(services, monkeypatch):
     monkeypatch.setattr(
         services.global_lines,
         "portrait_dialogues",
-        lambda character: {1: [{"en": "English text", "zh-TW": "TW text", "expression": "02"}]},
+        lambda character: {1: [{"en": "English text", "zh-TW": "TW text", "animationName": "02"}]},
     )
     return requests
 
 
 def test_hall_lines_localize_the_same_ordinary_clip_and_do_not_download_voice(app, services, dialogue_services):
-    result = rpc(app, "hall.lines", variant="hoshino", lang="zh-TW")
+    result = rpc(app, "studentHall.lines", alt="hoshino", lang="zh-TW")
     assert "error" not in result, result
     lines = result["result"]["lines"]
     assert list(lines) == ["hoshino_lobby_1"]
     assert lines["hoshino_lobby_1"]["zh-TW"] == "TW text"
     assert lines["hoshino_lobby_1"]["ja"] == "Original text"
     assert lines["hoshino_lobby_1"]["voiceSource"] == "kivo"
-    assert lines["hoshino_lobby_1"]["expression"] == "02"
+    assert lines["hoshino_lobby_1"]["animationName"] == "02"
     assert len(dialogue_services) == 1
-    voice = rpc(app, "hall.voice", variant="hoshino", clip="hoshino_lobby_1")["result"]
+    voice = rpc(app, "studentHall.voice", alt="hoshino", clip="hoshino_lobby_1")["result"]
     assert base64.b64decode(voice["audio"]) == b"OggS remote voice" and voice["mime"] == "audio/ogg"
-    rpc(app, "hall.voice", variant="hoshino", clip="hoshino_lobby_1")
+    rpc(app, "studentHall.voice", alt="hoshino", clip="hoshino_lobby_1")
     assert len(dialogue_services) == 2
 
 
@@ -186,36 +186,36 @@ def test_warm_line_metadata_uses_published_caches_without_false_pending_jobs(
 ):
     services.global_lines._table = {}
     services.global_lines._portraits = {10005: {1: [{"en": "Cached official text"}]}}
-    first = rpc(app, "hall.lines", variant="hoshino", lang="en")["result"]
+    first = rpc(app, "studentHall.lines", alt="hoshino", lang="en")["result"]
     assert first["lines"]["hoshino_lobby_1"]["en"] == "Cached official text"
     # Complete the same selected source's transport cache; no other student is prefetched.
-    rpc(app, "hall.voice", variant="hoshino", clip="hoshino_lobby_1")
+    rpc(app, "studentHall.voice", alt="hoshino", clip="hoshino_lobby_1")
 
     def forbidden(*args, **kwargs):
         pytest.fail("Published line metadata should not schedule another background job")
 
     monkeypatch.setattr("bmpt.webui.api_students._background", forbidden)
-    result = rpc(app, "hall.lines", variant="hoshino", lang="en")["result"]
+    result = rpc(app, "studentHall.lines", alt="hoshino", lang="en")["result"]
     assert result["pending"] is False and result["lines"]["hoshino_lobby_1"]["voice"]
 
 
 def test_hall_prefers_available_local_voice_over_remote_audio(app, services, dialogue_services, monkeypatch):
     monkeypatch.setattr(LocalPortraitVoices, "index", lambda self: {"hoshino_lobby_1": {}})
     monkeypatch.setattr(LocalPortraitVoices, "audio", lambda self, clip: b"RIFF local original")
-    lines = rpc(app, "hall.lines", variant="hoshino", lang="en")["result"]["lines"]
+    lines = rpc(app, "studentHall.lines", alt="hoshino", lang="en")["result"]["lines"]
     assert lines["hoshino_lobby_1"]["voiceSource"] == "local"
-    voice = rpc(app, "hall.voice", variant="hoshino", clip="hoshino_lobby_1")["result"]
+    voice = rpc(app, "studentHall.voice", alt="hoshino", clip="hoshino_lobby_1")["result"]
     assert voice["mime"] == "audio/wav" and base64.b64decode(voice["audio"]) == b"RIFF local original"
     assert all(not url.endswith(".ogg") for url in dialogue_services)
 
 
 def test_missing_audio_keeps_official_text_and_refuses_unrelated_clip(app, services, dialogue_services, monkeypatch):
     monkeypatch.setattr(PortraitVoices, "lines", lambda self, page: {})
-    lines = rpc(app, "hall.lines", variant="hoshino", lang="en")["result"]["lines"]
+    lines = rpc(app, "studentHall.lines", alt="hoshino", lang="en")["result"]["lines"]
     assert lines["hoshino_lobby_1"]["en"] == "English text"
     assert lines["hoshino_lobby_1"]["voice"] is False
-    assert rpc(app, "hall.voice", variant="hoshino", clip="other_lobby_1")["error"]["code"] == "lines_unavailable"
-    assert rpc(app, "hall.voice", variant="hoshino", clip="../../voice")["error"]["code"] == "bad_params"
+    assert rpc(app, "studentHall.voice", alt="hoshino", clip="other_lobby_1")["error"]["code"] == "lines_unavailable"
+    assert rpc(app, "studentHall.voice", alt="hoshino", clip="../../voice")["error"]["code"] == "bad_params"
 
 
 def test_viewed_order_is_per_source_and_does_not_mutate_hall_or_game(app, services, dialogue_services, monkeypatch):
@@ -226,12 +226,12 @@ def test_viewed_order_is_per_source_and_does_not_mutate_hall_or_game(app, servic
     ]
     monkeypatch.setattr(services.library, "mods", lambda: mods)
     initial = services.state.get("student_hall")
-    rpc(app, "hall.viewed", variant="hoshino", source="mod:one")
-    rpc(app, "hall.viewed", variant="hoshino", source="mod:two")
-    result = rpc(app, "hall.viewed", variant="hoshino", source="mod:one")["result"]
+    rpc(app, "studentHall.viewed", alt="hoshino", source="mod:one")
+    rpc(app, "studentHall.viewed", alt="hoshino", source="mod:two")
+    result = rpc(app, "studentHall.viewed", alt="hoshino", source="mod:one")["result"]
     assert result == ["hoshino:mod:one", "hoshino:mod:two"]
     assert services.state.get("student_hall") == initial and services.library.applied == []
-    assert rpc(app, "hall.viewed", variant="hoshino", source="mod:missing")["error"]["code"] == "bad_params"
+    assert rpc(app, "studentHall.viewed", alt="hoshino", source="mod:missing")["error"]["code"] == "bad_params"
 
 
 def test_last_memorial_cannot_be_removed_after_first_saved_entry(tmp_path):
@@ -245,7 +245,7 @@ def test_last_memorial_cannot_be_removed_after_first_saved_entry(tmp_path):
     kept = save_hall(state, initial, 1)
     previous = state.path.read_bytes()
     empty = {**kept, "memorials": [], "active": None}
-    with pytest.raises(ServiceError, match="hall_last_memorial"):
+    with pytest.raises(ServiceError, match="student_hall_last_memorial"):
         save_hall(state, empty, 2)
     assert state.path.read_bytes() == previous
     assert state.get("student_hall") == kept
@@ -258,11 +258,11 @@ def test_exact_portrait_source_duplicates_are_rejected_but_other_resources_and_m
     first = {"id": str(uuid4()), "variant": "hoshino", "source": "mod:one"}
     second = {**first, "id": str(uuid4())}
     value = {**empty_hall(), "portraits": [first, second]}
-    with pytest.raises(ServiceError, match="hall_duplicate_portrait"):
+    with pytest.raises(ServiceError, match="student_hall_duplicate_portrait"):
         validate_hall(value)
     second["source"] = "mod:two"
     value["memorials"] = [{**first, "id": str(uuid4())}, {**first, "id": str(uuid4())}]
-    with pytest.raises(ServiceError, match="hall_duplicate_memorial"):
+    with pytest.raises(ServiceError, match="student_hall_duplicate_memorial"):
         validate_hall(value)
     value["memorials"][1]["source"] = "mod:two"
     clean = validate_hall(value)
@@ -290,12 +290,21 @@ def test_legacy_duplicate_read_keeps_first_uuid_and_cas_revision_without_disk_mi
     legacy = {**empty_hall(), "revision": 7, "portraits": [first, duplicate, other]}
     services.state.set("student_hall", legacy)
     before = services.state.path.read_bytes()
-    snapshot = rpc(app, "hall.get")["result"]
-    assert snapshot["revision"] == 7 and snapshot["portraits"] == [first, other]
+    snapshot = rpc(app, "studentHall.get")["result"]
+    portraits = [
+        {"id": row["id"], "alt": row["variant"], "source": row["source"], "x": row["x"], "y": 1120, "scale": 1}
+        for row in (first, other)
+    ]
+    assert snapshot["revision"] == 7 and snapshot["portraits"] == portraits
     assert services.state.path.read_bytes() == before
-    saved = rpc(app, "hall.update", value={**snapshot, "mode": "memorial"}, revision=7)["result"]
-    assert saved["revision"] == 8 and saved["portraits"] == [{**entry, "mirror": False} for entry in (first, other)]
-    assert services.state.get("student_hall") == saved
+    saved = rpc(app, "studentHall.update", value={**snapshot, "mode": "memorialLobby"}, revision=7)["result"]
+    assert saved["revision"] == 8 and saved["portraits"] == [{**entry, "flipHorizontal": False} for entry in portraits]
+    assert services.state.get("student_hall") == {
+        **legacy,
+        "mode": "memorial",
+        "revision": 8,
+        "portraits": [{**entry, "mirror": False} for entry in (first, other)],
+    }
 
 
 def test_slow_kivo_does_not_gate_ready_official_text_and_finishes_in_the_existing_flight(
@@ -313,7 +322,7 @@ def test_slow_kivo_does_not_gate_ready_official_text_and_finishes_in_the_existin
 
     monkeypatch.setattr(PortraitVoices, "lines", delayed)
     with ThreadPoolExecutor(max_workers=1) as pool:
-        pending = pool.submit(rpc, app, "hall.lines", variant="hoshino", lang="en")
+        pending = pool.submit(rpc, app, "studentHall.lines", variant="hoshino", lang="en")
         assert entered.wait(2)
         try:
             result = pending.result(timeout=1)["result"]
@@ -323,7 +332,7 @@ def test_slow_kivo_does_not_gate_ready_official_text_and_finishes_in_the_existin
         finally:
             release.set()
     assert finished.wait(2)
-    next_result = rpc(app, "hall.lines", variant="hoshino", lang="en")["result"]
+    next_result = rpc(app, "studentHall.lines", alt="hoshino", lang="en")["result"]
     assert next_result["lines"]["hoshino_lobby_1"]["voice"] is True
     assert len(dialogue_services) == 1
 
@@ -339,40 +348,40 @@ def test_portrait_rows_preserve_timed_expression_changes_on_their_original_voice
     assert 200 not in groups
     lines = globallines.portrait_by_clip({str(key): value for key, value in groups.items()}, {"2": ["eimi_lobby_2"]})
     assert lines["eimi_lobby_2"]["en"] == "First Second"
-    assert lines["eimi_lobby_2"]["expressionCues"] == [
-        {"time": 0, "expression": "04"},
-        {"time": 4.75, "expression": "05"},
+    assert lines["eimi_lobby_2"]["animationCues"] == [
+        {"time": 0, "animationName": "04"},
+        {"time": 4.75, "animationName": "05"},
     ]
     separate = {
         "3": [
-            {"en": "One", "expression": "02", "voiceIds": [2788647851], "duration": 0},
-            {"en": "Two", "expression": "10", "voiceIds": [3452918145], "duration": 0},
+            {"en": "One", "animationName": "02", "voiceIds": [2788647851], "duration": 0},
+            {"en": "Two", "animationName": "10", "voiceIds": [3452918145], "duration": 0},
         ]
     }
     result = globallines.portrait_by_clip(separate, {"3": ["hoshino_lobby_3_1", "hoshino_lobby_3_2"]})
-    assert result["hoshino_lobby_3_1"]["expression"] == "02"
-    assert result["hoshino_lobby_3_2"]["expression"] == "10"
+    assert result["hoshino_lobby_3_1"]["animationName"] == "02"
+    assert result["hoshino_lobby_3_2"]["animationName"] == "10"
 
 
 def test_portrait_rows_do_not_invent_cue_times_without_authored_duration():
     values = {
         "1": [
-            {"en": "One", "expression": "02", "voiceIds": [1], "duration": 0},
-            {"en": "Two", "expression": "10", "voiceIds": [], "duration": 2},
+            {"en": "One", "animationName": "02", "voiceIds": [1], "duration": 0},
+            {"en": "Two", "animationName": "10", "voiceIds": [], "duration": 2},
         ]
     }
     line = globallines.portrait_by_clip(values, {"1": ["student_lobby_1"]})["student_lobby_1"]
     assert line["en"] == "One Two"
-    assert line["expressionCues"] == [{"time": 0, "expression": "02"}]
+    assert line["animationCues"] == [{"time": 0, "animationName": "02"}]
 
 
 def test_chinese_dialogue_retains_kivo_caption_and_receives_official_expression_metadata(
     app, services, dialogue_services
 ):
-    result = rpc(app, "hall.lines", variant="hoshino", lang="zh-CN")["result"]
+    result = rpc(app, "studentHall.lines", alt="hoshino", lang="zh-CN")["result"]
     line = result["lines"]["hoshino_lobby_1"]
     assert line["zh-CN"] == "Chinese text"
-    assert line["expressionCues"] == [{"time": 0, "expression": "02"}]
+    assert line["animationCues"] == [{"time": 0, "animationName": "02"}]
     assert result["animationPending"] is False
 
 
@@ -384,21 +393,21 @@ def test_chinese_dialogue_marks_late_animation_metadata_without_blocking_ready_v
     def delayed(character):
         entered.set()
         assert release.wait(5)
-        services.global_lines._portraits = {10005: {1: [{"expression": "02"}]}}
+        services.global_lines._portraits = {10005: {1: [{"animationName": "02"}]}}
         services.global_lines._table = {}
         completed.set()
         return services.global_lines._portraits[10005]
 
     monkeypatch.setattr(services.global_lines, "portrait_dialogues", delayed)
-    first = rpc(app, "hall.lines", variant="hoshino", lang="zh-CN")["result"]
+    first = rpc(app, "studentHall.lines", alt="hoshino", lang="zh-CN")["result"]
     assert entered.wait(1) and first["animationPending"] is True
     assert first["lines"]["hoshino_lobby_1"]["voice"] is True
     assert first["lines"]["hoshino_lobby_1"]["zh-CN"] == "Chinese text"
     release.set()
     assert completed.wait(1)
-    second = rpc(app, "hall.lines", variant="hoshino", lang="zh-CN")["result"]
+    second = rpc(app, "studentHall.lines", alt="hoshino", lang="zh-CN")["result"]
     assert second["animationPending"] is False
-    assert second["lines"]["hoshino_lobby_1"]["expression"] == "02"
+    assert second["lines"]["hoshino_lobby_1"]["animationName"] == "02"
     assert second["lines"]["hoshino_lobby_1"]["zh-CN"] == "Chinese text"
 
 
@@ -406,24 +415,24 @@ def test_missing_dialogue_catalog_mapping_is_normal_absence_but_unexpected_catal
     app, services, monkeypatch
 ):
     def missing(_):
-        raise ServiceError("catalog_variant_not_found")
+        raise ServiceError("catalog_alt_not_found")
 
     monkeypatch.setattr(services.library, "variant_metadata", missing, raising=False)
-    response = rpc(app, "hall.lines", variant="unmapped", lang="zh-CN")
+    response = rpc(app, "studentHall.lines", alt="unmapped", lang="zh-CN")
     assert "error" not in response and response["result"]["unavailable"] is True
 
     def broken(_):
         raise ServiceError("catalog_data_invalid")
 
     monkeypatch.setattr(services.library, "variant_metadata", broken)
-    assert rpc(app, "hall.lines", variant="unmapped")["error"]["code"] == "catalog_data_invalid"
+    assert rpc(app, "studentHall.lines", alt="unmapped")["error"]["code"] == "catalog_data_invalid"
 
 
 def test_native_expression_motion_retains_authored_tracks_and_omits_random_idle_sync():
     clips = {
-        "04": {"track": 1, "loop": True, "intro": 0, "outro": 0, "mode": 1, "sync": ["Eye_Close_01", "Speak"]},
+        "04": {"track": 1, "loop": True, "introMix": 0, "outroMix": 0, "mode": 1, "sync": ["Eye_Close_01", "Speak"]},
         "Eye_Close_01": {"mode": 2},
-        "Speak": {"track": 3, "loop": True, "intro": 0.1, "outro": 0.2, "mode": 1, "sync": ["04"]},
+        "Speak": {"track": 3, "loop": True, "introMix": 0.1, "outroMix": 0.2, "mode": 1, "sync": ["04"]},
     }
     motion = student_hall.expression_motion("04", clips)
     assert motion["track"] == 1 and motion["animation"] == "04"
@@ -485,7 +494,7 @@ def test_ready_official_rows_do_not_finish_a_chinese_request_before_its_ready_tr
     services.global_lines._table = {}
     services.global_lines._portraits = {10005: {1: [{"ja": "Original", "en": "English", "zh-TW": "Traditional"}]}}
     with ThreadPoolExecutor(max_workers=1) as pool:
-        pending = pool.submit(rpc, app, "hall.lines", variant="hoshino", lang="zh-CN")
+        pending = pool.submit(rpc, app, "studentHall.lines", variant="hoshino", lang="zh-CN")
         assert entered.wait(1)
         assert not pending.done()
         release.set()
@@ -500,14 +509,14 @@ def test_flat_voice_numbers_follow_voiced_rows_instead_of_dialogue_group_ids():
         1: [{"zh-TW": "First", "voiceIds": [4166716535]}],
         2: [{"zh-TW": "Second", "voiceIds": [1116629168]}],
         3: [
-            {"zh-TW": "Third", "voiceIds": [2788647851], "expression": "02"},
-            {"zh-TW": "Fourth", "voiceIds": [3452918145], "expression": "10"},
+            {"zh-TW": "Third", "voiceIds": [2788647851], "animationName": "02"},
+            {"zh-TW": "Fourth", "voiceIds": [3452918145], "animationName": "10"},
         ],
-        4: [{"zh-TW": "Fifth", "voiceIds": [2171344866], "expression": "16"}],
+        4: [{"zh-TW": "Fifth", "voiceIds": [2171344866], "animationName": "16"}],
     }
     rows = globallines.portrait_voice_lines(groups, [f"hoshino_lobby_{n}" for n in range(1, 6)])
     assert [rows[f"hoshino_lobby_{n}"]["zh-TW"] for n in range(1, 6)] == ["First", "Second", "Third", "Fourth", "Fifth"]
-    assert rows["hoshino_lobby_4"]["expression"] == "10"
+    assert rows["hoshino_lobby_4"]["animationName"] == "10"
     partial = globallines.portrait_voice_lines(groups, ["hoshino_lobby_4", "hoshino_lobby_5"])
     assert partial["hoshino_lobby_4"]["zh-TW"] == "Fourth"
     assert partial["hoshino_lobby_5"]["zh-TW"] == "Fifth"

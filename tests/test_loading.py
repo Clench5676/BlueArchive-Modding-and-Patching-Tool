@@ -26,9 +26,9 @@ def test_verified_loading_letters_define_progress_line(tmp_path):
     ink, lines = {}, []
 
     def walk(node, y=0):
-        y += node["pos"][1]
+        y += node["localPosition"][1]
         for widget in node["widgets"]:
-            name = widget.get("sprite", "")
+            name = widget.get("spriteName", "")
             if name.startswith("Loading_") and name not in (
                 "Loading_g",
                 "Loading_dot",
@@ -40,7 +40,9 @@ def test_verified_loading_letters_define_progress_line(tmp_path):
                 bottom = image.getchannel("A").getbbox()[3]
                 ink[name] = {"height": image.height, "bottom": bottom}
                 # Bottom-pivot letters, after upgrade's screen-bottom shift.
-                lines.append(1080 - (720 + y) * 1920 / 2960 - (1 - bottom / image.height) * widget["h_"] * 1920 / 2960)
+                lines.append(
+                    1080 - (720 + y) * 1920 / 2960 - (1 - bottom / image.height) * widget["height"] * 1920 / 2960
+                )
         for child in node.get("children", []):
             walk(child, y)
 
@@ -54,11 +56,15 @@ def test_verified_loading_letters_define_progress_line(tmp_path):
         "widgets": [{"text": "", "fontSize": 32, "effect": 3, "effectColor": "#29415a/0.76", "effectDistance": [3, 3]}],
     }
     module = Path(__file__).resolve().parents[1] / "src/bmpt/web/js/ui/ngui-label.js"
-    script = """import { loadingLabel, labelBaselineInset } from MODULE;
+    serializer = module.parent.parent / "core/serialized-fields.js"
+    script = """import { loadingLabel } from MODULE;
+import { readSerialized } from SERIALIZER;
 let input = ""; for await (const part of process.stdin) input += part;
 const {tree, style, ink} = JSON.parse(input), s = 1920/2960;
-const label = loadingLabel(tree, style, "Reading game files", s, ink), w = label.widgets[0];
-console.log(label.inkLine);""".replace("MODULE", json.dumps(module.as_uri()))
+const label = loadingLabel(readSerialized(tree), style, "Reading game files", s, ink);
+console.log(label.inkLine);""".replace("MODULE", json.dumps(module.as_uri())).replace(
+        "SERIALIZER", json.dumps(serializer.as_uri())
+    )
     run = subprocess.run(
         ["node", "--input-type=module", "-e", script],
         input=json.dumps({"tree": tree, "style": style, "ink": ink}),

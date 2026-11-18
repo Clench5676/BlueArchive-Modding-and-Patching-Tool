@@ -22,29 +22,29 @@ const v = (key, extra = {}) => ({
   key,
   fileId: key.toUpperCase(),
   names: { "zh-CN": { full: key }, en: { full: key } },
-  spr: `${key}_spr`,
+  portrait: `${key}_spr`,
   playable: true,
-  recruitable: true,
+  releasedOnServer: true,
   favorite: false,
   mods: 0,
   recent: null,
   replaced: null,
-  lobby: null,
-  model: null,
+  memorialLobby: null,
+  chibi: null,
   added: null,
   ...extra,
 });
-// three families in catalog order: hoshino (three variants), aru, citizen (an NPC without Idle_01)
+// three students in catalog order: hoshino (three alts), aru, citizen (an NPC without Idle_01)
 const data = () => ({
-  families: [
+  students: [
     {
       key: "hoshino",
-      base: { "zh-CN": "\u661f\u91ce", en: "Hoshino", ja: "\u30db\u30b7\u30ce" },
-      variants: [
+      studentNames: { "zh-CN": "\u661f\u91ce", en: "Hoshino", ja: "\u30db\u30b7\u30ce" },
+      alts: [
         v("hoshino", {
           names: { "zh-CN": { full: "\u661f\u91ce" }, en: { full: "Hoshino" }, ja: { full: "\u30db\u30b7\u30ce" } },
           recent: 2,
-          lobby: "hoshino_home",
+          memorialLobby: "hoshino_home",
         }),
         v("hoshino_swimsuit", {
           names: { "zh-CN": { full: "\u661f\u91ce\uff08\u6cf3\u88c5\uff09" }, en: { full: "Hoshino (Swimsuit)" } },
@@ -54,28 +54,28 @@ const data = () => ({
         v("np0045", {
           names: { "zh-CN": { full: "\u661f\u91ce\uff08\u5236\u670d\uff09" } },
           playable: false,
-          recruitable: false,
+          releasedOnServer: false,
         }),
       ],
     },
     {
       key: "aru",
-      base: { "zh-CN": "\u4e9a\u7559", en: "Aru" },
-      variants: [
+      studentNames: { "zh-CN": "\u4e9a\u7559", en: "Aru" },
+      alts: [
         v("aru", {
           names: { "zh-CN": { full: "\u4e9a\u7559" }, en: { full: "Aru" } },
           favorite: true,
           recent: 0,
           mods: 1,
           added: "2026-10-05T10:00:00+00:00",
-          model: "aru_original",
+          chibi: "aru_original",
         }),
       ],
     },
     {
       key: "citizen",
-      base: { "zh-CN": "\u8d44\u672c\u673a\u5668\u4eba" },
-      variants: [v("citizen_borot2", { playable: false, recruitable: false, recent: 1, replaced: "variant:x" })],
+      studentNames: { "zh-CN": "\u8d44\u672c\u673a\u5668\u4eba" },
+      alts: [v("citizen_borot2", { playable: false, releasedOnServer: false, recent: 1, replaced: "alt:x" })],
     },
   ],
 });
@@ -83,33 +83,33 @@ const label = (x) => x?.["zh-CN"] ?? x?.en;
 const keys = (list) => list.map((c) => c.key);
 const view = (extra = {}) => ({ ...normalizeView(DEFAULT_VIEW), ...extra });
 
-test("roster cards keep unseen mod marks per variant and across a merged family until all are seen", () => {
+test("roster cards keep unseen mod marks per alt and across a merged student until all are seen", () => {
   const d = data(),
-    variants = d.families[0].variants;
-  variants[0].fresh = true;
-  variants[1].fresh = true;
+    alts = d.students[0].alts;
+  alts[0].fresh = true;
+  alts[1].fresh = true;
   const marks = (merged) =>
-    order(d, view({ merged }), { label })
-      .filter((c) => c.family === "hoshino")
+    order(d, view({ groupAlts: merged }), { label })
+      .filter((c) => c.student === "hoshino")
       .map((c) => !!c.fresh);
   assert.deepEqual(marks(false), [true, true, false]);
   assert.deepEqual(marks(true), [true]);
-  variants[0].fresh = false;
+  alts[0].fresh = false;
   assert.deepEqual(marks(true), [true]);
-  variants[1].fresh = false;
+  alts[1].fresh = false;
   assert.deepEqual(marks(false), [false, false, false]);
   assert.deepEqual(marks(true), [false]);
 });
 
-test("separate library counts sum across a family and the matched variant keeps its configured preview", () => {
+test("separate library counts sum across a student and the matched alt keeps its configured preview", () => {
   const d = {
-    families: [
+    students: [
       {
         key: "f",
-        base: { en: "Family" },
-        variants: [
-          v("a", { mods: 3, modCounts: { spr: 3, lobby: 0 }, configured: { spr: "mod:a" } }),
-          v("b", { mods: 1, modCounts: { spr: 0, lobby: 1 }, configured: { spr: "mod:b" } }),
+        studentNames: { en: "Student" },
+        alts: [
+          v("a", { mods: 3, modCounts: { portrait: 3, memorialLobby: 0 }, configured: { portrait: "mod:a" } }),
+          v("b", { mods: 1, modCounts: { portrait: 0, memorialLobby: 1 }, configured: { portrait: "mod:b" } }),
         ],
       },
     ],
@@ -118,42 +118,42 @@ test("separate library counts sum across a family and the matched variant keeps 
   assert.deepEqual(
     separate.map((c) => c.modCounts),
     [
-      { spr: 3, lobby: 0 },
-      { spr: 0, lobby: 1 },
+      { portrait: 3, memorialLobby: 0 },
+      { portrait: 0, memorialLobby: 1 },
     ],
   );
-  const merged = order(d, view({ merged: true }), { label, query: "b" })[0];
+  const merged = order(d, view({ groupAlts: true }), { label, query: "b" })[0];
   assert.equal(merged.key, "b");
   assert.equal(merged.mods, 4);
-  assert.deepEqual(merged.modCounts, { spr: 3, lobby: 1 });
-  assert.deepEqual(merged.configured, { spr: "mod:b" });
+  assert.deepEqual(merged.modCounts, { portrait: 3, memorialLobby: 1 });
+  assert.deepEqual(merged.configured, { portrait: "mod:b" });
 });
 
 test("special backgrounds remain reachable and merged search keeps the matching scene's preview", () => {
   const day = v("special:arona_workpage_daytime", {
-    spr: null,
-    lobby: "arona_workpage_daytime",
+    portrait: null,
+    memorialLobby: "arona_workpage_daytime",
     spineCategory: "spinebackground",
     names: { en: { full: "Arona - Daytime" } },
-    configured: { lobby: "mod:day" },
+    configured: { memorialLobby: "mod:day" },
     state: { files: [] },
   });
   const night = {
     ...day,
     key: "special:arona_workpage_night",
-    lobby: "arona_workpage_night",
+    memorialLobby: "arona_workpage_night",
     names: { en: { full: "Arona - Night" } },
-    configured: { lobby: "mod:night" },
-    state: { files: [{ kind: "lobby", applied: "mod:night" }] },
+    configured: { memorialLobby: "mod:night" },
+    state: { files: [{ resourceType: "memorialLobby", applied: "mod:night" }] },
   };
-  const d = { families: [{ key: "arona", base: { en: "Arona" }, variants: [v("arona"), day, night] }] };
+  const d = { students: [{ key: "arona", studentNames: { en: "Arona" }, alts: [v("arona"), day, night] }] };
   const separate = order(d, view(), { label });
-  const next = neighbour(separate, separate, { family: "arona", variant: "arona", merged: false }, 1);
+  const next = neighbour(separate, separate, { student: "arona", alt: "arona", groupAlts: false }, 1);
   assert.equal(next.key, day.key);
-  const merged = order(d, view({ merged: true }), { label, query: "night" })[0];
+  const merged = order(d, view({ groupAlts: true }), { label, query: "night" })[0];
   assert.equal(merged.key, night.key);
-  assert.equal(merged.spr, null);
-  assert.equal(merged.lobby, night.lobby);
+  assert.equal(merged.portrait, null);
+  assert.equal(merged.memorialLobby, night.memorialLobby);
   assert.equal(merged.spineCategory, "spinebackground");
   assert.deepEqual(merged.configured, night.configured);
   assert.deepEqual(merged.state, night.state);
@@ -161,26 +161,26 @@ test("special backgrounds remain reachable and merged search keeps the matching 
 
 test("the view is normalised like the server does", () => {
   assert.deepEqual(normalizeView(null), {
-    merged: false,
+    groupAlts: false,
     mods: "all",
-    recruit: "all",
+    releaseStatus: "all",
     sort: "recent",
     order: "desc",
     filters: {},
   });
   const n = normalizeView({
-    merged: true,
+    groupAlts: true,
     mods: "x",
     sort: "name",
-    filters: { lobby: ["no", "maybe"], kind: [], bogus: ["yes"] },
+    filters: { memorialLobby: ["no", "maybe"], kind: [], bogus: ["yes"] },
   });
-  assert.equal(n.merged, true);
+  assert.equal(n.groupAlts, true);
   assert.equal(n.mods, "all");
   assert.equal(n.order, NATURAL.name);
-  assert.deepEqual(n.filters, { lobby: ["no"] });
+  assert.deepEqual(n.filters, { memorialLobby: ["no"] });
   assert.ok(SORTS.every((k) => k in NATURAL));
-  assert.equal(filtering({ lobby: ["yes", "no"] }), false); // every option on: nothing narrowed
-  assert.equal(filtering({ lobby: ["yes"] }), true);
+  assert.equal(filtering({ memorialLobby: ["yes", "no"] }), false); // every option on: nothing narrowed
+  assert.equal(filtering({ memorialLobby: ["yes"] }), true);
   assert.ok(Object.values(FILTERS).every((o) => o.length >= 2));
 });
 
@@ -204,33 +204,33 @@ test("the order button flips the sort but not the favourites first", () => {
   assert.deepEqual(keys(mods), ["aru", "hoshino_swimsuit"]); // aru is a favourite
 });
 
-test("a visit moves the variant to the front of the recently viewed, like the server records it", () => {
+test("a visit moves the alt to the front of the recently viewed, like the server records it", () => {
   const d = data();
   visit(d, "np0045"); // never viewed: first, the others one down
   assert.deepEqual(keys(order(d, view({ mods: "none" }), { label })), ["np0045", "citizen_borot2", "hoshino"]);
   visit(d, "hoshino"); // viewed before: first, only the ones before it move
-  const recent = Object.fromEntries(d.families.flatMap((f) => f.variants).map((x) => [x.key, x.recent]));
+  const recent = Object.fromEntries(d.students.flatMap((f) => f.alts).map((x) => [x.key, x.recent]));
   assert.deepEqual(recent, { hoshino: 0, hoshino_swimsuit: null, np0045: 1, aru: 2, citizen_borot2: 3 });
   assert.deepEqual(keys(order(d, view({ mods: "none" }), { label })), ["hoshino", "np0045", "citizen_borot2"]);
-  // merged: a family is as recent as its most recent variant
+  // merged: a student is as recent as its most recent alt
   visit(d, "citizen_borot2");
-  assert.equal(order(d, view({ merged: true }), { label }).find((c) => c.family === "hoshino").recent, 1);
+  assert.equal(order(d, view({ groupAlts: true }), { label }).find((c) => c.student === "hoshino").recent, 1);
   // the indexes the server gives after UiState.visit ([key, *others][:RECENT_MAX]), with keys of another install
-  // (not in this roster) among them; a variant viewed for the first time pushes the last one out
+  // (not in this roster) among them; an alt viewed for the first time pushes the last one out
   const server = Array.from({ length: RECENT_MAX }, (_, i) => `k${i}`);
   const many = {
-    families: [
+    students: [
       {
         key: "f",
-        base: {},
-        variants: [...server.filter((_, i) => i % 3).map((k) => v(k, { recent: server.indexOf(k) })), v("x1"), v("x2")],
+        studentNames: {},
+        alts: [...server.filter((_, i) => i % 3).map((k) => v(k, { recent: server.indexOf(k) })), v("x1"), v("x2")],
       },
     ],
   };
   for (const key of ["k20", "k7", "x1", "k47", "k49", "x2", "k1"]) {
     server.splice(0, server.length, ...[key, ...server.filter((k) => k !== key)].slice(0, RECENT_MAX));
     visit(many, key);
-    for (const x of many.families[0].variants)
+    for (const x of many.students[0].alts)
       assert.equal(x.recent, server.includes(x.key) ? server.indexOf(x.key) : null, `${key}: ${x.key}`);
   }
 });
@@ -249,17 +249,17 @@ test("name sort uses the collator of the UI language", () => {
 });
 
 test("segment and display filters narrow the cards", () => {
-  assert.deepEqual(keys(order(data(), view({ recruit: "no" }), { label })), ["citizen_borot2", "np0045"]);
+  assert.deepEqual(keys(order(data(), view({ releaseStatus: "no" }), { label })), ["citizen_borot2", "np0045"]);
   assert.deepEqual(keys(order(data(), view({ filters: { portrait: ["replaced"] } }), { label })), ["citizen_borot2"]);
-  assert.deepEqual(keys(order(data(), view({ filters: { lobby: ["yes"] } }), { label })), ["hoshino"]);
-  assert.deepEqual(keys(order(data(), view({ filters: { favorite: ["no"], model: ["yes"] } }), { label })), []);
+  assert.deepEqual(keys(order(data(), view({ filters: { memorialLobby: ["yes"] } }), { label })), ["hoshino"]);
+  assert.deepEqual(keys(order(data(), view({ filters: { favorite: ["no"], chibi: ["yes"] } }), { label })), []);
   // both options of a group: no narrowing
   assert.equal(order(data(), view({ filters: { favorite: ["yes", "no"] } }), { label }).length, 5);
 });
 
 test("retired type selections cannot hide cards or conflict with release filters after loading a saved view", () => {
   const d = data();
-  d.families[0].variants.push(v("not_on_global", { playable: true, recruitable: false }));
+  d.students[0].alts.push(v("not_on_global", { playable: true, releasedOnServer: false }));
   assert.equal(Object.hasOwn(FILTERS, "kind"), false);
   for (const merged of [false, true]) {
     const expected = merged
@@ -271,7 +271,7 @@ test("retired type selections cannot hide cards or conflict with release filters
         };
     for (const kind of [["student"], ["npc"], ["student", "npc"]]) {
       for (const recruit of ["all", "yes", "no"]) {
-        const saved = { merged, recruit, sort: "default", order: "asc", filters: { kind } };
+        const saved = { groupAlts: merged, releaseStatus: recruit, sort: "default", order: "asc", filters: { kind } };
         const loaded = normalizeView(saved);
         assert.deepEqual(loaded.filters, {});
         assert.equal(filtering(saved.filters), false);
@@ -288,9 +288,9 @@ test("retired type selections cannot hide cards or conflict with release filters
 
 test("migrating a type selection preserves the other display and segment filters", () => {
   const loaded = normalizeView({
-    merged: false,
+    groupAlts: false,
     mods: "none",
-    recruit: "no",
+    releaseStatus: "no",
     sort: "name",
     order: "asc",
     filters: { kind: ["student"], portrait: ["replaced"], favorite: ["no"] },
@@ -302,9 +302,9 @@ test("migrating a type selection preserves the other display and segment filters
 
 test("the search folds case, width, kana and separators across name languages and file ids", () => {
   const find = (q, extra = {}) => keys(order(data(), view(extra), { label, query: q }));
-  assert.deepEqual(find("HOSHINO"), ["hoshino_swimsuit", "hoshino", "np0045"]); // np0045 by its family's name
+  assert.deepEqual(find("HOSHINO"), ["hoshino_swimsuit", "hoshino", "np0045"]); // np0045 by its student's name
   assert.ok(find("\u307b\u3057\u306e").includes("hoshino")); // hiragana finds the katakana name
-  assert.deepEqual(find("\u6cf3\u88c5"), ["hoshino_swimsuit"]); // part of a variant name
+  assert.deepEqual(find("\u6cf3\u88c5"), ["hoshino_swimsuit"]); // part of an alt name
   assert.deepEqual(find("\uff2e\uff30\uff10\uff10\uff14\uff15"), ["np0045"]); // full-width file id
   assert.deepEqual(find("hoshino (swimsuit)"), ["hoshino_swimsuit"]); // every word must match
   assert.deepEqual(find("zzz"), []);
@@ -313,15 +313,15 @@ test("the search folds case, width, kana and separators across name languages an
 
 test("the marks inside official names are separators: found when typed without them", () => {
   const d = {
-    families: [
+    students: [
       {
         key: "shiroko_terror",
-        base: {
+        studentNames: {
           en: "Shiroko*Terror",
           ja: "\u30b7\u30ed\u30b3\uff0a\u30c6\u30e9\u30fc",
           "zh-CN": "\u767d\u5b50*\u6050\u6016",
         },
-        variants: [
+        alts: [
           v("ch0209", {
             names: { en: { full: "Shiroko*Terror" }, ja: { full: "\u30b7\u30ed\u30b3\uff0a\u30c6\u30e9\u30fc" } },
           }),
@@ -329,13 +329,17 @@ test("the marks inside official names are separators: found when typed without t
       },
       {
         key: "golconde",
-        base: {
+        studentNames: {
           en: "Golconde&Decalcomania",
           ja: "\u30b4\u30eb\u30b3\u30f3\u30c0\uff06\u30c7\u30ab\u30eb\u30b3\u30de\u30cb\u30fc",
         },
-        variants: [v("golconde", { names: { en: { full: "Golconde&Decalcomania" } } })],
+        alts: [v("golconde", { names: { en: { full: "Golconde&Decalcomania" } } })],
       },
-      { key: "president", base: { "zh-CN": "\u8054\u90a6\u5b66\u751f\u4f1a\u957f\uff1f" }, variants: [v("president")] },
+      {
+        key: "president",
+        studentNames: { "zh-CN": "\u8054\u90a6\u5b66\u751f\u4f1a\u957f\uff1f" },
+        alts: [v("president")],
+      },
     ],
   };
   const find = (q) => keys(order(d, view(), { label, query: q }));
@@ -352,12 +356,12 @@ test("the marks inside official names are separators: found when typed without t
 
 test("the aliases (the CN server's names) are found but never shown", () => {
   const d = {
-    families: [
+    students: [
       {
         key: "momoi",
-        base: { "zh-CN": "\u6843\u4e95", en: "Momoi" },
+        studentNames: { "zh-CN": "\u6843\u4e95", en: "Momoi" },
         aliases: ["\u6843"],
-        variants: [
+        alts: [
           v("momoi", { names: { "zh-CN": { full: "\u6843\u4e95" }, en: { full: "Momoi" } }, aliases: ["\u6843"] }),
           v("np0267", {
             names: { "zh-CN": { full: "\u6843\u4e95\uff08\u4e34\u6218\uff09" }, en: { full: "Momoi (Armed)" } },
@@ -368,9 +372,9 @@ test("the aliases (the CN server's names) are found but never shown", () => {
       },
       {
         key: "kanna",
-        base: { "zh-CN": "\u53f6\u6e1a", en: "Kanna" },
+        studentNames: { "zh-CN": "\u53f6\u6e1a", en: "Kanna" },
         aliases: ["\u5eb7\u5a1c"],
-        variants: [
+        alts: [
           v("ch0170", {
             names: { "zh-CN": { full: "\u53f6\u6e1a" }, en: { full: "Kanna" } },
             aliases: ["\u5eb7\u5a1c"],
@@ -383,10 +387,10 @@ test("the aliases (the CN server's names) are found but never shown", () => {
     ],
   };
   const find = (q, extra = {}) => order(d, view(extra), { label, query: q });
-  // a variant's alias: the server's costume word, typed alone or with the name, brackets left out
+  // an alt's alias: the server's costume word, typed alone or with the name, brackets left out
   assert.deepEqual(keys(find("\u6b66\u88c5")), ["np0267"]);
   assert.deepEqual(keys(find("\u6843\u6b66\u88c5")), ["np0267"]);
-  // the family's alias finds every variant, the ones whose own aliases do not repeat it too
+  // the student's alias finds every alt, the ones whose own aliases do not repeat it too
   assert.deepEqual(keys(find("\u5eb7\u5a1c")), ["ch0170", "ch0260"]);
   assert.deepEqual(keys(find("\u5eb7\u5a1c \u6cf3\u88c5")), ["ch0260"]);
   // the cards keep their names; nothing of the alias shows
@@ -394,122 +398,122 @@ test("the aliases (the CN server's names) are found but never shown", () => {
     find("\u6b66\u88c5").map((c) => c.name),
     ["\u6843\u4e95\uff08\u4e34\u6218\uff09"],
   );
-  // merged: the card is the variant the alias found
+  // merged: the card is the alt the alias found
   assert.deepEqual(
-    find("\u6b66\u88c5", { merged: true }).map((c) => [c.family, c.key, c.name]),
+    find("\u6b66\u88c5", { groupAlts: true }).map((c) => [c.student, c.key, c.name]),
     [["momoi", "np0267", "\u6843\u4e95\uff08\u4e34\u6218\uff09"]],
   );
   // the detail screen's arrows step through the same search
   const list = find("\u5eb7\u5a1c");
-  assert.equal(neighbour(list, null, { family: "kanna", variant: "ch0170", merged: false }, 1).key, "ch0260");
+  assert.equal(neighbour(list, null, { student: "kanna", alt: "ch0170", groupAlts: false }, 1).key, "ch0260");
   // malformed aliases (not strings) are ignored
-  const bad = { families: [{ key: "x", base: {}, aliases: [null, 3], variants: [v("x", { aliases: [{}] })] }] };
+  const bad = { students: [{ key: "x", studentNames: {}, aliases: [null, 3], alts: [v("x", { aliases: [{}] })] }] };
   assert.deepEqual(keys(order(bad, view(), { label, query: "x" })), ["x"]);
 });
 
-test("own aliases find only their variant, including merged cards, and edits update search", () => {
+test("own aliases find only their alt, including merged cards, and edits update search", () => {
   const d = data(),
-    skin = d.families[0].variants[1];
-  const find = (q, merged = false) => order(d, view({ merged }), { label, query: q });
-  skin.custom = ["Skin nickname", "Other spelling"];
+    skin = d.students[0].alts[1];
+  const find = (q, merged = false) => order(d, view({ groupAlts: merged }), { label, query: q });
+  skin.customAliases = ["Skin nickname", "Other spelling"];
   for (const merged of [false, true]) {
     assert.deepEqual(keys(find("Skin nickname", merged)), [skin.key]);
     assert.equal(find("Other spelling", merged)[0].name, "Skin nickname");
   }
-  skin.custom = ["New nickname"];
+  skin.customAliases = ["New nickname"];
   assert.deepEqual(find("Skin nickname"), []);
   assert.deepEqual(keys(find("New nickname")), [skin.key]);
   assert.equal(
     order(d, view(), { label }).find((v) => v.key === "hoshino").name,
-    label(d.families[0].variants[0].names).full,
+    label(d.students[0].alts[0].names).full,
   );
 });
 
-test("the first own alias names variant and merged cards, drives name order and clears immediately", () => {
+test("the first own alias names alt and merged cards, drives name order and clears immediately", () => {
   const d = {
-    families: [
+    students: [
       {
         key: "a",
-        base: { en: "Alpha" },
-        variants: [v("a", { custom: [null, "", "Zulu", "Other alias"] }), v("dress")],
+        studentNames: { en: "Alpha" },
+        alts: [v("a", { customAliases: [null, "", "Zulu", "Other alias"] }), v("dress")],
       },
-      { key: "b", base: { en: "Beta" }, variants: [v("b")] },
+      { key: "b", studentNames: { en: "Beta" }, alts: [v("b")] },
     ],
   };
   const collator = new Intl.Collator("en", { numeric: true });
   for (const merged of [false, true]) {
     const find = (query = "", orderBy = "asc") =>
-      order(d, view({ merged, sort: "name", order: orderBy }), { label, collator, query });
+      order(d, view({ groupAlts: merged, sort: "name", order: orderBy }), { label, collator, query });
     assert.deepEqual(
       find().map((c) => c.name),
       merged ? ["Beta", "Zulu"] : ["b", "dress", "Zulu"],
     );
     assert.equal(find("Other alias")[0].name, "Zulu");
-    assert.equal(find("Alpha").find((v) => v.key === "a").name, "Zulu", "the original family name still matches");
+    assert.equal(find("Alpha").find((v) => v.key === "a").name, "Zulu", "the original student name still matches");
     assert.equal(find("dress")[0].name, "dress", "another skin keeps its own name");
     assert.equal(find("", "desc")[0].name, "Zulu");
   }
-  d.families[0].variants[0].custom = [];
+  d.students[0].alts[0].customAliases = [];
   assert.deepEqual(
-    order(d, view({ merged: true, sort: "name", order: "asc" }), { label, collator }).map((c) => c.name),
+    order(d, view({ groupAlts: true, sort: "name", order: "asc" }), { label, collator }).map((c) => c.name),
     ["Alpha", "Beta"],
   );
   assert.deepEqual(order(d, view(), { label, query: "Zulu" }), []);
   assert.equal(order(d, view(), { label, query: "dress" })[0].name, "dress");
 });
 
-test("mod aliases, original cores and file names find their variant and merged card after edits", () => {
+test("mod aliases, original cores and file names find their alt and merged card after edits", () => {
   const d = data(),
-    variant = d.families[0].variants[1];
-  variant.modNames = ["Painted <summer>", "hoshino_swimsuit_spr", "2026-10-01_hoshino_swimsuit.bundle"];
+    alt = d.students[0].alts[1];
+  alt.modNames = ["Painted <summer>", "hoshino_swimsuit_spr", "2026-10-01_hoshino_swimsuit.bundle"];
   for (const merged of [false, true])
     for (const query of ["painted", "hoshino swimsuit spr", "2026-10-01_hoshino_swimsuit.bundle"]) {
-      assert.deepEqual(keys(order(d, view({ merged }), { label, query })), [variant.key]);
+      assert.deepEqual(keys(order(d, view({ groupAlts: merged }), { label, query })), [alt.key]);
     }
-  variant.modNames = ["Evening", ...variant.modNames.slice(1)];
+  alt.modNames = ["Evening", ...alt.modNames.slice(1)];
   assert.deepEqual(keys(order(d, view(), { label, query: "painted" })), []);
-  assert.deepEqual(keys(order(d, view(), { label, query: "evening" })), [variant.key]);
-  variant.modNames = variant.modNames.slice(1);
+  assert.deepEqual(keys(order(d, view(), { label, query: "evening" })), [alt.key]);
+  alt.modNames = alt.modNames.slice(1);
   assert.deepEqual(keys(order(d, view(), { label, query: "evening" })), []);
-  assert.deepEqual(keys(order(d, view(), { label, query: "hoshino swimsuit spr" })), [variant.key]);
+  assert.deepEqual(keys(order(d, view(), { label, query: "hoshino swimsuit spr" })), [alt.key]);
 });
 
-test("merged, a family is one card shown by its first variant or the first one the search found", () => {
-  const all = order(data(), view({ merged: true }), { label });
+test("merged, a student is one card shown by its first alt or the first one the search found", () => {
+  const all = order(data(), view({ groupAlts: true }), { label });
   assert.deepEqual(
-    all.map((c) => c.family),
+    all.map((c) => c.student),
     ["aru", "hoshino", "citizen"],
   );
-  assert.equal(all.find((c) => c.family === "hoshino").key, "hoshino");
-  assert.equal(all.find((c) => c.family === "hoshino").mods, 2);
-  const swim = order(data(), view({ merged: true }), { label, query: "\u6cf3\u88c5" });
+  assert.equal(all.find((c) => c.student === "hoshino").key, "hoshino");
+  assert.equal(all.find((c) => c.student === "hoshino").mods, 2);
+  const swim = order(data(), view({ groupAlts: true }), { label, query: "\u6cf3\u88c5" });
   assert.deepEqual(
-    swim.map((c) => [c.family, c.key]),
+    swim.map((c) => [c.student, c.key]),
     [["hoshino", "hoshino_swimsuit"]],
   );
-  // family attributes are any of its variants': hoshino has a recruitable variant, citizen has none
+  // student attributes are any of its alts': hoshino has a releasedOnServer alt, citizen has none
   assert.deepEqual(
-    order(data(), view({ merged: true, recruit: "no" }), { label }).map((c) => c.family),
+    order(data(), view({ groupAlts: true, releaseStatus: "no" }), { label }).map((c) => c.student),
     ["citizen"],
   );
 });
 
 test("the arrows step through the shown cards in order and wrap", () => {
   const d = data();
-  const list = order(d, view({ recruit: "yes" }), { label });
+  const list = order(d, view({ releaseStatus: "yes" }), { label });
   assert.deepEqual(keys(list), ["aru", "hoshino_swimsuit", "hoshino"]);
   const full = () => order(d, view(), { label, unfiltered: true });
-  const at = (variant, family) => ({ variant, family, merged: false });
+  const at = (alt, student) => ({ alt, student, groupAlts: false });
   assert.equal(neighbour(list, full, at("hoshino_swimsuit", "hoshino"), 1).key, "hoshino");
   assert.equal(neighbour(list, full, at("hoshino", "hoshino"), 1).key, "aru"); // wraps
   assert.equal(neighbour(list, full, at("aru", "aru"), -1).key, "hoshino"); // wraps back
-  // a variant the list hides steps from its place in the whole roster: np0045 comes after hoshino there
+  // an alt the list hides steps from its place in the whole roster: np0045 comes after hoshino there
   assert.equal(neighbour(list, full, at("np0045", "hoshino"), 1).key, "aru");
   assert.equal(neighbour(list, full, at("np0045", "hoshino"), -1).key, "hoshino");
   // the only card: nowhere to go
   assert.equal(neighbour(list.slice(0, 1), full, at("aru", "aru"), 1), null);
-  // merged: families
-  const merged = order(d, view({ merged: true }), { label });
-  assert.equal(neighbour(merged, null, { family: "hoshino", variant: "np0045", merged: true }, 1).family, "citizen");
+  // merged: students
+  const merged = order(d, view({ groupAlts: true }), { label });
+  assert.equal(neighbour(merged, null, { student: "hoshino", alt: "np0045", groupAlts: true }, 1).student, "citizen");
   assert.equal(neighbour([], full, at("aru", "aru"), 1), null);
 });

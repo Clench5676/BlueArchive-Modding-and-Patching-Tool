@@ -37,7 +37,7 @@ function harness() {
 
 test("a library-only add refreshes the open detail page with no game thumbnail eviction", async () => {
   const h = harness();
-  h.libraryChanged({ cores: [], kinds: [], mods: true });
+  h.libraryChanged({ cores: [], resourceTypes: [], mods: true });
   await h.applyChange();
   assert.deepEqual(h.refreshed, [null]);
   assert.equal(h.invalidated(), 1);
@@ -47,18 +47,18 @@ test("a library-only add refreshes the open detail page with no game thumbnail e
 test("coalescing an add with a switch still refreshes the mod list and evicts the changed core", async () => {
   for (const addFirst of [true, false]) {
     const h = harness();
-    const add = { cores: [], kinds: [], mods: true },
-      apply = { cores: ["dress_spr"], kinds: ["spr"] };
+    const add = { cores: [], resourceTypes: [], mods: true },
+      apply = { cores: ["dress_spr"], resourceTypes: ["portrait"] };
     for (const change of addFirst ? [add, apply] : [apply, add]) h.libraryChanged(change);
     await h.applyChange();
     assert.deepEqual(h.refreshed, [null]);
-    assert.deepEqual(h.forgotten, ["spr/dress_spr", "official-spr/dress_spr"]);
+    assert.deepEqual(h.forgotten, ["portrait/dress_spr", "official-portrait/dress_spr"]);
   }
 });
 
 test("an empty file change without a mod-list change still needs no refresh", async () => {
   const h = harness();
-  h.libraryChanged({ cores: [], kinds: [] });
+  h.libraryChanged({ cores: [], resourceTypes: [] });
   await h.applyChange();
   assert.equal(h.invalidated(), 0);
   assert.deepEqual(h.refreshed, []);
@@ -66,27 +66,27 @@ test("an empty file change without a mod-list change still needs no refresh", as
 
 test("a special scene's category decides cache eviction even when its core ends in spr", async () => {
   const h = harness();
-  h.libraryChanged({ cores: ["scene_spr"], kinds: ["lobby"] });
+  h.libraryChanged({ cores: ["scene_spr"], resourceTypes: ["memorialLobby"] });
   await h.applyChange();
-  assert.deepEqual(h.forgotten, ["lobby/scene_spr", "official-lobby/scene_spr"]);
+  assert.deepEqual(h.forgotten, ["memorialLobby/scene_spr", "official-memorialLobby/scene_spr"]);
   assert.deepEqual(h.refreshed, [{ cores: ["scene_spr"] }]);
 });
 
-test("a visit records the selected background alongside a portrait in its family", () => {
-  const fam = {
-    variants: [
-      { key: "arona", spr: "arona_spr" },
-      { key: "special:arona_workpage", spr: null, lobby: "arona_workpage" },
+test("a visit records the selected background alongside a portrait in its student", () => {
+  const shownStudent = {
+    alts: [
+      { key: "arona", portrait: "arona_spr" },
+      { key: "special:arona_workpage", portrait: null, memorialLobby: "arona_workpage" },
     ],
   };
-  const rosterData = { families: [fam] };
+  const rosterData = { students: [shownStudent] };
   const code = source.slice(source.indexOf("function visited("), source.indexOf("function showScreen("));
   const visited = new Function("rosterData", "hasAsset", "visit", `${code}; return visited;`)(
     rosterData,
     hasAsset,
     visit,
   );
-  visited(fam, "special:arona_workpage");
-  assert.equal(fam.variants[1].recent, 0);
-  assert.equal(fam.variants[0].recent, undefined);
+  visited(shownStudent, "special:arona_workpage");
+  assert.equal(shownStudent.alts[1].recent, 0);
+  assert.equal(shownStudent.alts[0].recent, undefined);
 });

@@ -76,7 +76,7 @@ async function harness(locale = "en-US", button = "cancel", accept = false) {
   const geometries = [],
     posed = [];
   let steps = {};
-  const saved = { mod: { id: "new-mod", repaired_from: "old-mod" } };
+  const saved = { mod: { id: "new-mod", repairSourceId: "old-mod" } };
   globalThis.compatibilityDeps = {
     jobProgress,
     isIdentity,
@@ -95,7 +95,7 @@ async function harness(locale = "en-US", button = "cancel", accept = false) {
       if (method === "actions.compatibilityStamp") return stamp;
       calls.push([method, params]);
       if (`rpc:${method}` in steps) return steps[`rpc:${method}`]; // a direct answer, not a job
-      if (["actions.remap", "actions.oldRig", "actions.acceptRemap"].includes(method))
+      if (["actions.useOfficialSkeleton", "actions.useRecordedRig", "actions.acceptRepair"].includes(method))
         assert.ok(held && covered && taskActive);
       return method;
     },
@@ -104,9 +104,9 @@ async function harness(locale = "en-US", button = "cancel", accept = false) {
       update({ current: 2, total: 3, label: "assets-raw.bundle", step: "import.step.replace" });
       if (id === "actions.compatibility") afterCheck();
       if (id in steps) return steps[id];
-      return ["actions.remap", "actions.oldRig"].includes(id)
+      return ["actions.useOfficialSkeleton", "actions.useRecordedRig"].includes(id)
         ? rebuilt
-        : id === "actions.acceptRemap"
+        : id === "actions.acceptRepair"
           ? saved
           : id === "actions.redrawn"
             ? redrawn
@@ -355,7 +355,12 @@ test("repair previews ask first in every locale; only Accept saves and refreshes
       assert.equal(changed, Number(accept));
       assert.deepEqual(
         h.calls.map(([method]) => method),
-        ["actions.compatibility", "actions.remap", ...(accept ? ["actions.acceptRemap"] : []), "actions.discardRemap"],
+        [
+          "actions.compatibility",
+          "actions.useOfficialSkeleton",
+          ...(accept ? ["actions.acceptRepair"] : []),
+          "actions.discardRepair",
+        ],
       );
       assert.deepEqual(
         h.labels,
@@ -418,7 +423,7 @@ test("an unchanged preview says no repair needed and creates no comparison or mo
   await h.mod.remap("old-mod", () => assert.fail("unchanged"));
   assert.deepEqual(
     h.calls.map(([m]) => m),
-    ["actions.remap"],
+    ["actions.useOfficialSkeleton"],
   );
   assert.equal(h.popups[0].lines[0], h.strings.remap.unneeded);
   assert.equal(h.comparisons.length, 0);
@@ -426,9 +431,9 @@ test("an unchanged preview says no repair needed and creates no comparison or mo
 
 test("persisted repair markers suppress both original and repaired actions after a fresh check", async () => {
   for (const marker of [
-    { repaired_from: "original" },
-    { repaired_id: "repaired" },
-    { repaired_from: "legacy-remap:orphan" },
+    { repairSourceId: "original" },
+    { repairedCopyId: "repaired" },
+    { repairSourceId: "legacy-remap:orphan" },
   ]) {
     const h = await harness(),
       r = { ...mixedReport(), ...marker };
@@ -515,11 +520,11 @@ test("model checks use bundle integrity without requesting the Spine runtime or 
   const h = await harness();
   h.license(false);
   const empty = { skeletons: {}, atlases: {}, textures: {} };
-  h.use({ kind: "model", official: empty, mod: empty, remappable: false });
-  await h.mod.check("model-mod", "Model", () => assert.fail("no atlas remap"), { kind: "model" });
+  h.use({ resourceType: "chibi", official: empty, mod: empty, remappable: false });
+  await h.mod.check("model-mod", "Model", () => assert.fail("no atlas remap"), { resourceType: "chibi" });
   assert.deepEqual(h.calls, [["actions.compatibility", { mod: "model-mod" }]]);
   assert.equal(h.confirms(), 0);
-  assert.equal(h.mod.eligible({ kind: "model" }), false);
+  assert.equal(h.mod.eligible({ resourceType: "chibi" }), false);
   assert.equal(h.mod.canRemap("model-mod"), false);
   assert.ok(h.popups.some((p) => p.title === h.strings.compatibility.result));
 });
@@ -675,7 +680,7 @@ test("regions of several atlases keep their atlas in the details", async () => {
 
 test("a portrait the game drew anew is named by the check and offers no remap", async () => {
   const h = await harness("zh-CN", "ok");
-  const portrait = () => ({ ...mixedReport(), kind: "spr" });
+  const portrait = () => ({ ...mixedReport(), resourceType: "portrait" });
   h.use(portrait());
   h.redraw({ redrawn: true, overlap: 0.52 });
   const checked = await h.mod.inspect("old-mod");
@@ -684,7 +689,7 @@ test("a portrait the game drew anew is named by the check and offers no remap", 
   assert.deepEqual(checked.redrawn, { redrawn: true, overlap: 0.52 });
   assert.deepEqual(checked.assessment.issues.map(({ key }) => key).includes("redrawn"), true);
   assert.equal(checked.assessment.remap, false);
-  assert.equal(h.mod.canRemap("old-mod", { kind: "spr" }), false);
+  assert.equal(h.mod.canRemap("old-mod", { resourceType: "portrait" }), false);
   assert.equal(h.strings.compatibility.redrawn, "官方原版立绘已重绘");
   // drawn as shipped: the remap posts the whole geometry
   h.use(portrait());
@@ -693,7 +698,7 @@ test("a portrait the game drew anew is named by the check and offers no remap", 
   assert.equal(fine.assessment.remap, true);
   h.build({ unchanged: true });
   await h.mod.remap("old-mod");
-  const posted = h.calls.filter(([method]) => method === "actions.remap").at(-1)[1];
+  const posted = h.calls.filter(([method]) => method === "actions.useOfficialSkeleton").at(-1)[1];
   assert.ok(posted.geometry["test.atlas"] && !posted.geometry.rest);
   // other kinds neither ask nor post geometry
   const before = h.calls.length;
@@ -705,7 +710,7 @@ test("a portrait the game drew anew is named by the check and offers no remap", 
 test("a portrait the game drew anew keeps the rig its textures were drawn for, unless the official one gained animations", async () => {
   for (const locale of ["zh-CN", "en-US", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
     const h = await harness(locale, "ok", true);
-    const portrait = (oldRig) => ({ ...mixedReport(), kind: "spr", oldRig });
+    const portrait = (oldRig) => ({ ...mixedReport(), resourceType: "portrait", oldRig });
     h.use(portrait({ atlases: ["test.atlas"], animations: {}, available: true }));
     h.redraw({ redrawn: true, overlap: 0.52 });
     h.build({
@@ -727,10 +732,10 @@ test("a portrait the game drew anew keeps the rig its textures were drawn for, u
     const first = await h.mod.inspect("old-mod");
     assert.equal(first.assessment.oldRig, true, locale);
     assert.equal(first.assessment.remap, false, locale);
-    assert.equal(h.mod.canRemap("old-mod", { kind: "spr" }), true, locale); // Update takes this way
+    assert.equal(h.mod.canRemap("old-mod", { resourceType: "portrait" }), true, locale); // Update takes this way
     h.calls.length = 0;
-    await h.mod.check("old-mod", "Mod", () => {}, { kind: "spr" });
-    assert.equal(h.mod.canRemap("old-mod", { kind: "spr" }), false, locale); // repaired: its copy is the one now
+    await h.mod.check("old-mod", "Mod", () => {}, { resourceType: "portrait" });
+    assert.equal(h.mod.canRemap("old-mod", { resourceType: "portrait" }), false, locale); // repaired: its copy is the one now
     const [popup] = h.popups,
       texts = popup.lines.map((line) => (typeof line === "string" ? line : line.text));
     // plain and left-aligned: what changed as list items, the dotted rule, then what Update does
@@ -755,7 +760,13 @@ test("a portrait the game drew anew keeps the rig its textures were drawn for, u
     // no geometry: the old rig is set up as a whole
     assert.deepEqual(
       h.calls.map(([method]) => method),
-      ["actions.compatibility", "actions.redrawn", "actions.oldRig", "actions.acceptRemap", "actions.discardRemap"],
+      [
+        "actions.compatibility",
+        "actions.redrawn",
+        "actions.useRecordedRig",
+        "actions.acceptRepair",
+        "actions.discardRepair",
+      ],
       locale,
     );
     assert.deepEqual(h.calls[2][1], { mod: "old-mod" }, locale);
@@ -771,7 +782,7 @@ test("a portrait the game drew anew keeps the rig its textures were drawn for, u
     g.redraw({ redrawn: true, overlap: 0.52 });
     const gained = await g.mod.inspect("old-mod");
     assert.equal(gained.assessment.oldRig, false, locale);
-    assert.equal(g.mod.canRemap("old-mod", { kind: "spr" }), false, locale);
+    assert.equal(g.mod.canRemap("old-mod", { resourceType: "portrait" }), false, locale);
     const issue = gained.assessment.issues.find(({ key }) => key === "oldRigAnimations");
     assert.deepEqual(
       issue.params,
@@ -809,13 +820,13 @@ test("a mod with its own skeleton the official one outgrew is offered the graft 
     const h = await harness(locale, "graft", true);
     const own = {
       ...mixedReport(),
-      kind: "spr",
+      resourceType: "portrait",
       graft: { kind: "own", animations: { "test.skel": ["17", "18"] }, available: true },
     };
     h.use(own);
     const rig = (atlas) => ({ atlas, skeleton: "c2tlbA==" });
     h.steps({
-      "actions.graft": {
+      "actions.addAnimations": {
         token: "t1",
         rigs: {
           "test.atlas": {
@@ -827,7 +838,7 @@ test("a mod with its own skeleton the official one outgrew is offered the graft 
           },
         },
       },
-      "actions.graftBuild": {
+      "actions.addAnimationsBuild": {
         rigs: {
           "test.atlas": {
             skeleton: "dGVzdA==",
@@ -838,7 +849,7 @@ test("a mod with its own skeleton the official one outgrew is offered the graft 
         },
         refused: {},
       },
-      "actions.graftCheck": {
+      "actions.addAnimationsCheck": {
         preview: "review",
         compare: { differences: [] },
         pages: [],
@@ -870,7 +881,7 @@ test("a mod with its own skeleton the official one outgrew is offered the graft 
       locale,
     );
     h.calls.length = 0;
-    await h.mod.check("old-mod", "Mod", () => {}, { kind: "spr" });
+    await h.mod.check("old-mod", "Mod", () => {}, { resourceType: "portrait" });
     const [popup] = h.popups,
       texts = popup.lines.map((line) => (typeof line === "string" ? line : line.text));
     const rule = popup.lines.findIndex((line) => line.rule);
@@ -894,11 +905,11 @@ test("a mod with its own skeleton the official one outgrew is offered the graft 
       [
         "actions.compatibility",
         "actions.redrawn",
-        "actions.graft",
-        "actions.graftBuild",
-        "actions.graftCheck",
-        "actions.acceptRemap",
-        "actions.discardRemap",
+        "actions.addAnimations",
+        "actions.addAnimationsBuild",
+        "actions.addAnimationsCheck",
+        "actions.acceptRepair",
+        "actions.discardRepair",
       ],
       locale,
     );
@@ -959,7 +970,7 @@ test("what the graft refused goes through the converter once it is fetched with 
     const h = await harness(locale, "ok", (n) => (n === 1 ? "convert" : true));
     h.use({
       ...mixedReport(),
-      kind: "spr",
+      resourceType: "portrait",
       graft: { kind: "own", animations: { "test.skel": ["17"] }, available: true },
     });
     const rig = (atlas) => ({ atlas, skeleton: "c2tlbA==" });
@@ -986,7 +997,7 @@ test("what the graft refused goes through the converter once it is fetched with 
       },
     });
     h.steps({
-      "actions.graft": {
+      "actions.addAnimations": {
         token: "t1",
         rigs: {
           "test.atlas": {
@@ -998,39 +1009,39 @@ test("what the graft refused goes through the converter once it is fetched with 
           },
         },
       },
-      "actions.graftBuild": {
+      "actions.addAnimationsBuild": {
         rigs: {
           "test.atlas": { skeleton: "dGVzdA==", atlas: "test", check: { 17: ["face"] }, official: { 17: ["face"] } },
         },
         refused: { 19: "bone hat" },
       },
-      "actions.graftCheck": review({ refused: { 19: "bone hat" } }),
+      "actions.addAnimationsCheck": review({ refused: { 19: "bone hat" } }),
       "rpc:actions.converterStatus": {
         installed: false,
         downloadable: true,
         home: "https://github.com/wang606/SpineSkeletonDataConverter",
       },
       "actions.converterDownload": { installed: true },
-      "actions.graftConvert": {
+      "actions.addAnimationsConvert": {
         rigs: { "test.atlas": { before: rig("mod"), after: rig("after"), check: { "00": ["face"] } } },
         refused: {},
       },
-      "actions.graftConvertCheck": review({ grafted: ["17", "19"], refused: {}, converter: true }),
+      "actions.addAnimationsConvertCheck": review({ grafted: ["17", "19"], refused: {}, converter: true }),
     });
-    await h.mod.check("old-mod", "Mod", () => {}, { kind: "spr" });
+    await h.mod.check("old-mod", "Mod", () => {}, { resourceType: "portrait" });
     const methods = h.calls.map(([method]) => method);
     assert.deepEqual(
-      methods.slice(methods.indexOf("actions.graftCheck")),
+      methods.slice(methods.indexOf("actions.addAnimationsCheck")),
       [
-        "actions.graftCheck",
-        "actions.discardRemap",
+        "actions.addAnimationsCheck",
+        "actions.discardRepair",
         "actions.converterStatus",
         "actions.converterDownload",
-        "actions.graft",
-        "actions.graftConvert",
-        "actions.graftConvertCheck",
-        "actions.acceptRemap",
-        "actions.discardRemap",
+        "actions.addAnimations",
+        "actions.addAnimationsConvert",
+        "actions.addAnimationsConvertCheck",
+        "actions.acceptRepair",
+        "actions.discardRepair",
       ],
       locale,
     );
@@ -1059,22 +1070,22 @@ test("on macOS the converter is the user's to compile: no download", async () =>
   const h = await harness("zh-CN", "ok", (n) => (n === 1 ? "convert" : true));
   h.use({
     ...mixedReport(),
-    kind: "spr",
+    resourceType: "portrait",
     graft: { kind: "own", animations: { "test.skel": ["17"] }, available: true },
   });
   const rig = (atlas) => ({ atlas, skeleton: "c2tlbA==" });
   h.steps({
-    "actions.graft": {
+    "actions.addAnimations": {
       token: "t1",
       rigs: {
         "test.atlas": { kind: "own", animations: ["17"], mod: rig("mod"), base: null, official: rig("official") },
       },
     },
-    "actions.graftBuild": {
+    "actions.addAnimationsBuild": {
       rigs: { "test.atlas": { skeleton: "dGVzdA==", atlas: "test", check: {}, official: {} } },
       refused: {},
     },
-    "actions.graftCheck": {
+    "actions.addAnimationsCheck": {
       preview: "review",
       compare: {},
       pages: [],
@@ -1095,7 +1106,7 @@ test("on macOS the converter is the user's to compile: no download", async () =>
     },
     "rpc:actions.converterStatus": { installed: false, downloadable: false },
   });
-  await h.mod.check("old-mod", "Mod", () => {}, { kind: "spr" });
+  await h.mod.check("old-mod", "Mod", () => {}, { resourceType: "portrait" });
   assert.ok(!h.calls.some(([method]) => method === "actions.converterDownload"));
   assert.deepEqual(h.popups.at(-1).lines, [h.strings.compatibility.converterMac]);
 });
@@ -1105,7 +1116,7 @@ test("a memorial lobby is offered its new animations with the ones it cannot tak
     const h = await harness(locale, "ok", true);
     h.use({
       ...report(),
-      kind: "lobby",
+      resourceType: "memorialLobby",
       remappable: false,
       graft: {
         kind: "own",
@@ -1115,12 +1126,12 @@ test("a memorial lobby is offered its new animations with the ones it cannot tak
       },
     });
     h.steps({
-      "actions.graft": {
+      "actions.addAnimations": {
         token: "t2",
         plain: true,
         rigs: { "test.atlas": { skeleton: "c2tlbA==", atlas: "grafted", animations: ["Talk_01", "Bad_01"] } },
       },
-      "actions.graftCheck": {
+      "actions.addAnimationsCheck": {
         preview: "review",
         compare: { differences: [] },
         pages: [],
@@ -1169,10 +1180,16 @@ test("a memorial lobby is offered its new animations with the ones it cannot tak
       locale,
     );
     h.calls.length = 0;
-    await h.mod.check("old-mod", "Mod", () => {}, { kind: "lobby" });
+    await h.mod.check("old-mod", "Mod", () => {}, { resourceType: "memorialLobby" });
     assert.deepEqual(
       h.calls.map(([method]) => method),
-      ["actions.compatibility", "actions.graft", "actions.graftCheck", "actions.acceptRemap", "actions.discardRemap"],
+      [
+        "actions.compatibility",
+        "actions.addAnimations",
+        "actions.addAnimationsCheck",
+        "actions.acceptRepair",
+        "actions.discardRepair",
+      ],
       locale,
     );
     assert.deepEqual(h.calls[2][1], { token: "t2", geometry: { "test.atlas": { failed: ["Bad_01"] } } }, locale);
@@ -1190,7 +1207,7 @@ test("a redrawn portrait whose official rig gained expressions is offered its ol
   const h = await harness("zh-CN", "ok", false);
   h.use({
     ...mixedReport(),
-    kind: "spr",
+    resourceType: "portrait",
     oldRig: { atlases: ["test.atlas"], animations: { "test.skel": ["11"] }, available: false },
     graft: { kind: "oldRig", animations: { "test.skel": ["11"] }, available: true },
   });
@@ -1204,7 +1221,7 @@ test("a redrawn portrait whose official rig gained expressions is offered its ol
     h.mod.repairs(checked.assessment).map(({ kind, text }) => [kind, text]),
     [["graft", h.strings.compatibility.graftOldRig]],
   );
-  assert.equal(h.mod.canRemap("old-mod", { kind: "spr" }), true);
+  assert.equal(h.mod.canRemap("old-mod", { resourceType: "portrait" }), true);
 });
 
 test("a repack no kept rig repairs is named, and Update is not offered for it", async () => {
@@ -1212,7 +1229,7 @@ test("a repack no kept rig repairs is named, and Update is not offered for it", 
     const h = await harness(locale, "ok");
     h.use({
       ...report(),
-      kind: "spr",
+      resourceType: "portrait",
       remappable: false,
       rig: { layout: ["test.atlas"], animations: {}, regions: {}, unknown: ["test.atlas"] },
     });
@@ -1220,7 +1237,7 @@ test("a repack no kept rig repairs is named, and Update is not offered for it", 
     const keys = checked.assessment.issues.map(({ key }) => key);
     assert.ok(keys.includes("atlasLayout") && keys.includes("rigUnknown"), locale);
     assert.equal(h.mod.rigUnknown("old-mod"), true, locale);
-    assert.equal(h.mod.canRemap("old-mod", { kind: "spr" }), false, locale);
+    assert.equal(h.mod.canRemap("old-mod", { resourceType: "portrait" }), false, locale);
     await h.mod.show(checked, { onRemap: () => assert.fail("nothing to repair") });
     const texts = h.popups[0].lines.map((line) => (typeof line === "string" ? line : line.text));
     assert.ok(
@@ -1229,7 +1246,11 @@ test("a repack no kept rig repairs is named, and Update is not offered for it", 
     );
     assert.equal(h.popups[0].ok, h.strings.picker.ok, locale);
     // a repack a kept rig repairs is not
-    h.use({ ...report(), kind: "spr", rig: { layout: ["test.atlas"], animations: {}, regions: {}, unknown: [] } });
+    h.use({
+      ...report(),
+      resourceType: "portrait",
+      rig: { layout: ["test.atlas"], animations: {}, regions: {}, unknown: [] },
+    });
     await h.mod.inspect("old-mod");
     assert.equal(h.mod.rigUnknown("old-mod"), false, locale);
   }

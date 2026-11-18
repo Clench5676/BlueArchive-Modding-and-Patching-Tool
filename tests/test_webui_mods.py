@@ -179,28 +179,30 @@ def test_preview_save_is_persistent_and_independent_of_game_intent(env, enabled)
     before = env.spr.read_bytes()
     intent = env.s.library.configured("test")
     source = f"mod:{mod.id}"
-    result = rpc(env.app, "ui.preview", variant="test", kind="spr", source=source)
-    assert result["result"] == {"spr": source}
+    result = rpc(env.app, "ui.preview", alt="test", resourceType="portrait", source=source)
+    assert result["result"] == {"portrait": source}
     assert env.spr.read_bytes() == before
     assert env.s.library.configured("test") == intent
     state = UiState(env.data / "webui.json")
     pin = env.s.library.current_pin()
     assert state.preview_sources(pin.key, "test") == {"spr": source}
     assert state.preview_sources("another-install", "test") == {}
-    assert rpc(env.app, "ui.preview", variant="test", kind="spr", source="official")["result"] == {"spr": "official"}
+    assert rpc(env.app, "ui.preview", alt="test", resourceType="portrait", source="official")["result"] == {
+        "portrait": "official"
+    }
     assert env.s.library.configured("test") == intent
     assert env.spr.read_bytes() == before
 
 
 def test_preview_save_refuses_foreign_missing_or_wrong_kind_sources(env):
     for kind, source in [
-        ("spr", "mod:missing"),
-        ("spr", "variant:other"),
-        ("model", "official"),
+        ("portrait", "mod:missing"),
+        ("portrait", "alt:other"),
+        ("chibi", "official"),
         ("other", "official"),
-        ("spr", "path:/outside"),
+        ("portrait", "path:/outside"),
     ]:
-        result = rpc(env.app, "ui.preview", variant="test", kind=kind, source=source)
+        result = rpc(env.app, "ui.preview", alt="test", resourceType=kind, source=source)
         assert "error" in result
     assert env.s.state.preview_sources(env.s.library.current_pin().key, "test") == {}
 
@@ -278,20 +280,20 @@ def test_mods_state_and_status_refresh_never_compute_sizes(env, monkeypatch):
     patch_everywhere(monkeypatch, ["bmpt.library.service"], "_folder_size", no_sizes)
     status = env.s.refresh_status()
     assert status is not None
-    assert "builtSize" not in status and "originalsSize" not in status
+    assert "builtSize" not in status and "officialsSize" not in status
     state = rpc(env.app, "mods.state")["result"]
-    assert "builtSize" not in state and "originalsSize" not in state
+    assert "builtSize" not in state and "officialsSize" not in state
     env.s.publish_state()
     assert events_named(env.drain(), "mods.state")
 
 
-@pytest.mark.parametrize("kind", ["built", "originals"])
-def test_mods_sizes_counts_only_the_requested_folder_on_demand(env, monkeypatch, kind):
+@pytest.mark.parametrize(("kind", "folder"), [("built", "built"), ("officials", "originals")])
+def test_mods_sizes_counts_only_the_requested_folder_on_demand(env, monkeypatch, kind, folder):
     from bmpt.library import service
 
     root = env.s.library.root
-    for folder, payload in (("built", b"generated"), ("originals", b"official")):
-        directory = root / folder
+    for storage, payload in (("built", b"generated"), ("originals", b"official")):
+        directory = root / storage
         directory.mkdir(parents=True, exist_ok=True)
         (directory / "first.bundle").write_bytes(payload)
         (directory / "second.bundle").write_bytes(payload)
@@ -305,8 +307,8 @@ def test_mods_sizes_counts_only_the_requested_folder_on_demand(env, monkeypatch,
     patch_everywhere(monkeypatch, [service], "_folder_size", measure)
     expected = 2 * len(b"generated" if kind == "built" else b"official")
     assert rpc(env.app, "mods.sizes", kind=kind)["result"] == {f"{kind}Size": expected}
-    assert measured == [root / kind]
-    (root / kind / "first.bundle").unlink()
+    assert measured == [root / folder]
+    (root / folder / "first.bundle").unlink()
     assert rpc(env.app, "mods.sizes", kind=kind)["result"] == {f"{kind}Size": expected // 2}
 
 
@@ -316,7 +318,7 @@ def test_mods_sizes_rejects_unknown_folders(env, kind):
 
 
 def test_mods_sizes_without_stored_bundles(env):
-    for kind in ("built", "originals"):
+    for kind in ("built", "officials"):
         assert rpc(env.app, "mods.sizes", kind=kind)["result"] == {f"{kind}Size": 0}
 
 
@@ -356,7 +358,7 @@ def test_the_reasons_of_an_unavailable_switch(env, monkeypatch):
     (root / "profiles.json.prev").write_text("[]")
     s.refresh_status()
     state = rpc(env.app, "mods.state")["result"]
-    assert state["reason"] == "profiles_unreadable" and state["reasonParams"]["file"].endswith("profiles.json")
+    assert state["reason"] == "mod_configuration_unreadable" and state["reasonParams"]["file"].endswith("profiles.json")
 
 
 def test_no_known_install_is_game_not_found(env):
@@ -424,7 +426,7 @@ def test_off_suppresses_every_scan_trigger_and_survives_restart(env, monkeypatch
     assert rpc(app, "mods.scan")["error"]["code"] == "scan_off"
     assert s.request_scan() is None
     mod = env.add(env.spr)
-    assert env.job("actions.apply", variant="test", source=f"mod:{mod.id}").state == "done"
+    assert env.job("actions.apply", alt="test", source=f"mod:{mod.id}").state == "done"
     s.after_classic()
     s.reload_game()
     s.start_watch(run=False)
@@ -484,7 +486,7 @@ def test_two_installs_of_one_server_are_labelled_by_their_folders(env):
     env.settings.set("game_resource_dir", str(steam))
     env.s.reload_game()
     mod = env.add(game_bundle(env.tmp / "src"))
-    assert env.job("actions.apply", variant="test", source=f"mod:{mod.id}").state == "done"
+    assert env.job("actions.apply", alt="test", source=f"mod:{mod.id}").state == "done"
     env.settings.set("game_resource_dir", str(blue))
     env.s.reload_game()
     installs = {i["key"]: i for i in rpc(env.app, "mods.state")["result"]["installs"]}
@@ -508,13 +510,13 @@ def test_without_a_current_install_the_switch_toggles_the_known_ones(env):
     job = rpc(app, "mods.toggle", enabled=False, expect=True)["result"]
     assert s.jobs.wait(job, 10) and s.jobs.get(job).state == "done", s.jobs.get(job).error
     assert env.spr.read_bytes() == OFFICIAL
-    assert rpc(app, "actions.apply", variant="test", source=f"mod:{mod.id}")["error"]["code"] == "game_not_found"
+    assert rpc(app, "actions.apply", alt="test", source=f"mod:{mod.id}")["error"]["code"] == "game_not_found"
 
 
 def test_the_data_directory_id_and_a_shared_library(env):
     mod = env.add(env.spr)
     a = env.s
-    assert env.job("actions.apply", variant="test", source=f"mod:{mod.id}").state == "done"
+    assert env.job("actions.apply", alt="test", source=f"mod:{mod.id}").state == "done"
     data_id = a.state.get("data_id")
     assert len(data_id) == 12 and a.library.data_id == data_id
     assert a.state.get("data_path") == data_path(env.data)
@@ -565,15 +567,15 @@ def test_another_data_directorys_toggle_shows_within_one_poll(env, monkeypatch):
 
 def test_the_toggle_job_its_events_and_the_snapshot(env):
     mod = env.add(env.spr)
-    applied = env.job("actions.apply", variant="test", source=f"mod:{mod.id}")
+    applied = env.job("actions.apply", alt="test", source=f"mod:{mod.id}")
     assert applied.state == "done" and env.spr.read_bytes() == mod.file.read_bytes()
-    assert events_named(env.drain(), "library.changed")[-1] == {"cores": ["test_spr"], "kinds": ["spr"]}
+    assert events_named(env.drain(), "library.changed")[-1] == {"cores": ["test_spr"], "resourceTypes": ["portrait"]}
     job = env.job("mods.toggle", enabled=False, expect=True)
     assert job.state == "done", job.error
     assert [item["core"] for item in job.result["done"]] == ["test_spr"]
     assert env.spr.read_bytes() == OFFICIAL
     events = env.drain()
-    assert {"cores": ["test_spr"], "kinds": ["spr"]} in events_named(events, "library.changed")
+    assert {"cores": ["test_spr"], "resourceTypes": ["portrait"]} in events_named(events, "library.changed")
     states = events_named(events, "mods.state")
     assert states[0]["busy"] is True and states[-1]["enabled"] is False and states[-1]["busy"] is False
     assert any(state["progress"] == {"done": 1, "total": 1} for state in states)
@@ -582,7 +584,7 @@ def test_the_toggle_job_its_events_and_the_snapshot(env):
     assert env.job("mods.toggle", enabled=False, expect=True).error["code"] == "state_changed"
     assert rpc(env.app, "mods.toggle", enabled="no", expect=False)["error"]["code"] == "bad_params"
     # apply while off is saved, not written
-    deferred = env.job("actions.apply", variant="test", source=f"mod:{mod.id}")
+    deferred = env.job("actions.apply", alt="test", source=f"mod:{mod.id}")
     assert deferred.result["deferred"] is True and env.spr.read_bytes() == OFFICIAL
 
 
@@ -610,15 +612,15 @@ def test_adding_mods_already_in_use_runs_while_the_game_runs(env, monkeypatch):
     assert env.s.state.seen_mods() == set()
     assert job.result["added"][0]["user_added"] is False, "scan adoption must not create a new-mod dot"
     assert not env.s.library.mods()[0].user_added
-    assert events_named(env.drain(), "library.changed")[-1] == {"cores": ["test_spr"], "kinds": ["spr"]}
+    assert events_named(env.drain(), "library.changed")[-1] == {"cores": ["test_spr"], "resourceTypes": ["portrait"]}
     assert rpc(env.app, "mods.adopt", entries=[{"core": 1}])["error"]["code"] == "bad_params"
 
 
 def test_every_writer_job_publishes_library_changed(env):
     mod = env.add(env.spr)
     for method, params in (
-        ("actions.apply", {"variant": "test", "source": f"mod:{mod.id}"}),
-        ("actions.restore", {"variant": "test"}),
+        ("actions.apply", {"alt": "test", "source": f"mod:{mod.id}"}),
+        ("actions.restore", {"alt": "test"}),
         ("mods.toggle", {"enabled": False, "expect": True}),
         ("mods.clearBuilt", {}),
     ):
@@ -626,7 +628,7 @@ def test_every_writer_job_publishes_library_changed(env):
         job = env.job(method, **params)
         assert job.state == "done", (method, job.error)
         changed = events_named(env.drain(), "library.changed")
-        assert changed and set(changed[-1]) == {"cores", "kinds"}, method
+        assert changed and set(changed[-1]) == {"cores", "resourceTypes"}, method
 
 
 def test_the_unfinished_list_is_judged_after_a_writer_job(env, monkeypatch):
@@ -659,12 +661,14 @@ def test_moving_the_library_takes_its_configuration_and_built_copies(env):
 def test_writes_are_refused_while_a_classic_window_is_open_and_can_be_queued(env):
     mod = env.add(env.spr)
     env.orphan()
-    assert rpc(env.app, "actions.apply", variant="test", source=f"mod:{mod.id}")["error"]["code"] == "classic_open"
+    assert rpc(env.app, "actions.apply", alt="test", source=f"mod:{mod.id}")["error"]["code"] == "classic_open"
     assert rpc(env.app, "mods.toggle", enabled=False, expect=True)["error"]["code"] == "classic_open"
     assert rpc(env.app, "mods.restoreDrift", entries=[])["error"]["code"] == "classic_open"
     status = rpc(env.app, "app.classic")["result"]
     assert (status["open"], status["orphan"], status["pid"], status["queued"]) == (True, True, 5555, 0)
-    queued = queue(env, "actions.apply", {"variant": "test", "source": f"mod:{mod.id}", "kind": "spr"})["result"]
+    queued = queue(env, "actions.apply", {"alt": "test", "source": f"mod:{mod.id}", "resourceType": "portrait"})[
+        "result"
+    ]
     assert queued == {"queued": 1}
     state = rpc(env.app, "mods.state")["result"]
     assert (state["queued"], state["busy"], state["reason"]) == (1, True, "classic_open")
@@ -691,7 +695,7 @@ def test_a_stale_classic_json_after_a_restart_is_removed_and_refuses_nothing(env
     mod = env.add(env.spr)
     env.orphan()
     env.processes.table = dict(table)
-    assert "result" in rpc(env.app, "actions.apply", variant="test", source=f"mod:{mod.id}")
+    assert "result" in rpc(env.app, "actions.apply", alt="test", source=f"mod:{mod.id}")
     assert not (env.data / cl.CLASSIC_JSON).exists()
 
 
@@ -704,7 +708,7 @@ def test_classic_json_naming_this_process_is_stale(env):
 
 def test_a_queued_toggle_runs_once_the_watched_classic_window_closes(env):
     mod = env.add(env.spr)
-    assert env.job("actions.apply", variant="test", source=f"mod:{mod.id}").state == "done"
+    assert env.job("actions.apply", alt="test", source=f"mod:{mod.id}").state == "done"
     s = env.s
     s.start_watch(run=False)
     env.orphan()
@@ -730,7 +734,7 @@ def test_the_queue_drops_what_no_longer_holds(env):
     mod = env.add(env.spr)
     s = env.s
     env.orphan()
-    queue(env, "actions.apply", {"variant": "test", "source": f"mod:{mod.id}"})
+    queue(env, "actions.apply", {"alt": "test", "source": f"mod:{mod.id}"})
     queue(env, "mods.toggle", {"enabled": False, "expect": True})
     # meanwhile the classic window changes the entry's file, and another place turns mods off
     env.spr.write_bytes(header_bundle(b"classic!"))
@@ -752,7 +756,7 @@ def test_the_queue_reports_a_toggle_it_cannot_check_against_unreadable_mod_setti
     s = env.s
     env.orphan()
     queue(env, "mods.toggle", {"enabled": False, "expect": True})
-    queue(env, "actions.apply", {"variant": "test", "source": f"mod:{mod.id}"})
+    queue(env, "actions.apply", {"alt": "test", "source": f"mod:{mod.id}"})
     root = s.library_dir()
     (root / "profiles.json").write_text("{broken")
     (root / "profiles.json.prev").write_text("[]")
@@ -760,7 +764,9 @@ def test_the_queue_reports_a_toggle_it_cannot_check_against_unreadable_mod_setti
     env.drain()
     s.after_classic()
     done = events_named(env.drain(), "classic.queueDone")[0]
-    assert [(d["method"], d["error"]["code"]) for d in done["dropped"]] == [("mods.toggle", "profiles_unreadable")]
+    assert [(d["method"], d["error"]["code"]) for d in done["dropped"]] == [
+        ("mods.toggle", "mod_configuration_unreadable")
+    ]
     assert [item["method"] for item in done["submitted"]] == ["actions.apply"]
     assert s.jobs.wait(done["submitted"][0]["job"], 10)
     assert rpc(env.app, "mods.state")["result"]["queued"] == 0
@@ -803,7 +809,7 @@ def test_a_queued_apply_survives_a_change_to_the_other_install(env):
     mod = env.add(env.spr)
     s = env.s
     env.orphan()
-    queue(env, "actions.apply", {"variant": "test", "source": f"mod:{mod.id}"})
+    queue(env, "actions.apply", {"alt": "test", "source": f"mod:{mod.id}"})
     japan = env.tmp / "japan"
     game_bundle(japan)
     env.settings.set("game_resource_dir_japan", str(japan))
@@ -819,34 +825,34 @@ def test_a_queued_apply_survives_a_change_to_the_other_install(env):
 
 def test_a_restore_while_off_that_writes_nothing_runs_while_the_classic_window_is_open(env):
     mod = env.add(env.spr)
-    assert env.job("actions.apply", variant="test", source=f"mod:{mod.id}").state == "done"
+    assert env.job("actions.apply", alt="test", source=f"mod:{mod.id}").state == "done"
     assert env.job("mods.toggle", enabled=False, expect=True).state == "done"
     env.orphan()
     # the files are official already: only the configuration is dropped
-    job = env.job("actions.restore", variant="test")
+    job = env.job("actions.restore", alt="test")
     assert job.state == "done", job.error
     assert env.s.library.configured("test")["spr"] is None
     # one that would write official bytes (a mod still in the game) is refused and can be queued
     env.processes.table.clear()
-    assert env.job("actions.apply", variant="test", source=f"mod:{mod.id}").state == "done"  # configured again
+    assert env.job("actions.apply", alt="test", source=f"mod:{mod.id}").state == "done"  # configured again
     env.s.library.profiles.update(lambda data: data.update(enabled=True))
-    assert env.job("actions.apply", variant="test", source=f"mod:{mod.id}").state == "done"  # in the game
+    assert env.job("actions.apply", alt="test", source=f"mod:{mod.id}").state == "done"  # in the game
     env.s.library.profiles.update(lambda data: data.update(enabled=False))
     env.orphan()
-    assert rpc(env.app, "actions.restore", variant="test")["error"]["code"] == "classic_open"
-    assert queue(env, "actions.restore", {"variant": "test"})["result"] == {"queued": 1}
+    assert rpc(env.app, "actions.restore", alt="test")["error"]["code"] == "classic_open"
+    assert queue(env, "actions.restore", {"alt": "test"})["result"] == {"queued": 1}
 
 
 def test_a_restore_that_turns_out_to_write_is_refused_at_write_time(env):
     """The cheap judgement takes an unfixed outside change of the official size for official, so the restore is
     allowed at submit; the write's full judgement finds it changed, and the write is refused."""
     mod = env.add(env.spr)
-    assert env.job("actions.apply", variant="test", source=f"mod:{mod.id}").state == "done"
+    assert env.job("actions.apply", alt="test", source=f"mod:{mod.id}").state == "done"
     assert env.job("mods.toggle", enabled=False, expect=True).state == "done"
     outside = header_bundle(b"external")  # the official size, no trailing bytes
     env.spr.write_bytes(outside)
     env.orphan()
-    job = env.job("actions.restore", variant="test")
+    job = env.job("actions.restore", alt="test")
     assert job.state == "failed" and job.error["code"] == "classic_open"
     assert env.spr.read_bytes() == outside
 
@@ -919,7 +925,7 @@ def test_the_classic_window_waits_for_a_job_writing_the_game_folder(env):
 
 def test_a_toggle_cannot_start_between_the_classic_busy_check_and_child_registration(env, monkeypatch):
     mod = env.add(env.spr)
-    assert env.job("actions.apply", variant="test", source=f"mod:{mod.id}").state == "done"
+    assert env.job("actions.apply", alt="test", source=f"mod:{mod.id}").state == "done"
     s, app = env.s, env.app
     library = s.library
     before = library.profiles.path.read_bytes()
@@ -990,7 +996,7 @@ def test_a_toggle_cannot_start_between_the_classic_busy_check_and_child_registra
 @pytest.mark.parametrize("method", ["mods.toggle", "mods.restoreDrift", "actions.apply", "actions.restore"])
 def test_game_writers_answer_while_the_classic_window_waits_for_ready(env, monkeypatch, method):
     mod = env.add(env.spr)
-    assert env.job("actions.apply", variant="test", source=f"mod:{mod.id}").state == "done"
+    assert env.job("actions.apply", alt="test", source=f"mod:{mod.id}").state == "done"
     waiting, release, answered = threading.Event(), threading.Event(), threading.Event()
     opening, submitting = {}, {}
     await_ready = env.s.classic._await_ready
@@ -1004,8 +1010,8 @@ def test_game_writers_answer_while_the_classic_window_waits_for_ready(env, monke
         params = {
             "mods.toggle": {"enabled": False, "expect": True},
             "mods.restoreDrift": {"entries": []},
-            "actions.apply": {"variant": "test", "source": f"mod:{mod.id}"},
-            "actions.restore": {"variant": "test"},
+            "actions.apply": {"alt": "test", "source": f"mod:{mod.id}"},
+            "actions.restore": {"alt": "test"},
         }[method]
         submitting.update(rpc(env.app, method, **params))
         answered.set()
@@ -1094,7 +1100,7 @@ def test_a_lobby_from_another_core_fails_and_the_next_switch_still_runs(env, ena
     before = base.read_bytes(), dress.read_bytes()
     if not enabled:
         assert env.job("mods.toggle", enabled=False, expect=True).state == "done"
-    job = env.job("actions.apply", variant="test", source=f"mod:{mod.id}", kind="lobby")
+    job = env.job("actions.apply", alt="test", source=f"mod:{mod.id}", resourceType="memorialLobby")
     assert job.state == "failed" and job.error["code"] == "mod_target_mismatch"
     assert rpc(env.app, "jobs.get", id=job.id)["result"]["state"] == "failed"
     assert not env.s.jobs.busy()
@@ -1102,8 +1108,8 @@ def test_a_lobby_from_another_core_fails_and_the_next_switch_still_runs(env, ena
     assert (base.read_bytes(), dress.read_bytes()) == before
     assert not env.s.library.configured("test")["lobby"]
     # A different worker thread can acquire the library lock after failure.
-    assert env.job("actions.restore", variant="test", kind="lobby").state == "done"
-    assert env.job("actions.apply", variant="dress", source=f"mod:{mod.id}", kind="lobby").state == "done"
+    assert env.job("actions.restore", alt="test", resourceType="memorialLobby").state == "done"
+    assert env.job("actions.apply", alt="dress", source=f"mod:{mod.id}", resourceType="memorialLobby").state == "done"
 
 
 @pytest.mark.parametrize("failure", ["result", "exception"])
@@ -1122,14 +1128,14 @@ def test_failed_build_finishes_the_apply_and_releases_its_locks(env, monkeypatch
 
     patch_everywhere(monkeypatch, [service], "install_staged", fail)
     monkeypatch.setattr(env.s.library, "_needs_crc_fix", lambda *args: True)
-    job = env.job("actions.apply", variant="test", source=f"mod:{mod.id}")
+    job = env.job("actions.apply", alt="test", source=f"mod:{mod.id}")
     assert job.state == "failed"
     assert job.error["code"] in ("mod_apply_failed", "library_operation_failed")
     assert env.spr.read_bytes() == original and not env.s.jobs.busy()
     patch_everywhere(monkeypatch, [service], "install_staged", execute)
     monkeypatch.setattr(env.s.library, "_needs_crc_fix", needs_fix)
-    assert env.job("actions.apply", variant="test", source=f"mod:{mod.id}").state == "done"
-    assert env.job("actions.restore", variant="test").state == "done"
+    assert env.job("actions.apply", alt="test", source=f"mod:{mod.id}").state == "done"
+    assert env.job("actions.restore", alt="test").state == "done"
 
 
 def test_background_add_switches_and_rescans_with_durable_file_progress(env, monkeypatch):
@@ -1155,8 +1161,8 @@ def test_background_add_switches_and_rescans_with_durable_file_progress(env, mon
     assert env.s.library.configured("test")["spr"] == f"mod:{job.result['added'][0]['id']}"
     assert scans
     changed = events_named(env.drain(), "library.changed")
-    assert changed[-1] == {"cores": ["test_spr"], "kinds": ["spr"], "mods": True}
-    restored = env.job("actions.restore", variant="test")
+    assert changed[-1] == {"cores": ["test_spr"], "resourceTypes": ["portrait"], "mods": True}
+    restored = env.job("actions.restore", alt="test")
     assert restored.state == "done"
     assert restored.to_json()["progress"] == {
         "id": restored.id,
@@ -1221,7 +1227,7 @@ def test_apply_rescans_other_cores_changed_by_global_pruning(env, monkeypatch):
     env.s.set_scan_consent(True)
     assert env.s.scanner.wait_idle(5)
     mod_b = env.add(other)
-    assert env.job("actions.apply", variant="other", source=f"mod:{mod_b.id}").state == "done"
+    assert env.job("actions.apply", alt="other", source=f"mod:{mod_b.id}").state == "done"
     assert env.s.scanner.wait_idle(5)
     before = {e.core: e for e in env.s.snapshot.entries()}
     assert before["other_spr"].state == "ok"
@@ -1236,7 +1242,7 @@ def test_apply_rescans_other_cores_changed_by_global_pruning(env, monkeypatch):
 
     monkeypatch.setattr(env.s.library, "scan", measured)
     mod_a = env.add(env.spr)
-    assert env.job("actions.apply", variant="test", source=f"mod:{mod_a.id}").state == "done"
+    assert env.job("actions.apply", alt="test", source=f"mod:{mod_a.id}").state == "done"
     assert env.s.scanner.wait_idle(5)
     assert scopes == [{"test_spr", "other_spr"}]
     after = {e.core: e for e in env.s.snapshot.entries()}
@@ -1264,7 +1270,7 @@ def test_switch_rescans_only_changed_cores_and_preserves_other_snapshot_entries(
 
     monkeypatch.setattr(env.s.library, "scan", measured)
     mod = env.add(env.spr)
-    job = env.job("actions.apply", variant="test", source=f"mod:{mod.id}")
+    job = env.job("actions.apply", alt="test", source=f"mod:{mod.id}")
     assert job.state == "done"
     assert env.s.scanner.wait_idle(5)
     assert scopes == [{"test_spr"}]
@@ -1277,7 +1283,7 @@ def test_unchanged_apply_rescans_only_the_variants_cores(env, monkeypatch):
     env.s.set_scan_consent(True)
     assert env.s.scanner.wait_idle(5)
     mod = env.add(env.spr)
-    assert env.job("actions.apply", variant="test", source=f"mod:{mod.id}").state == "done"
+    assert env.job("actions.apply", alt="test", source=f"mod:{mod.id}").state == "done"
     assert env.s.scanner.wait_idle(5)
     scopes = []
     scan = env.s.library.scan
@@ -1287,7 +1293,7 @@ def test_unchanged_apply_rescans_only_the_variants_cores(env, monkeypatch):
         return scan(*args, **kwargs)
 
     monkeypatch.setattr(env.s.library, "scan", measured)
-    job = env.job("actions.apply", variant="test", source=f"mod:{mod.id}")
+    job = env.job("actions.apply", alt="test", source=f"mod:{mod.id}")
     assert job.state == "done" and job.result["unchanged"]
     assert env.s.scanner.wait_idle(5)
     assert scopes == [{"test_spr"}]
@@ -1295,7 +1301,7 @@ def test_unchanged_apply_rescans_only_the_variants_cores(env, monkeypatch):
 
 def test_delete_rpc_is_a_library_writer_and_retains_source_when_classic_is_open(env):
     mod = env.add(env.spr)
-    assert env.job("actions.apply", variant="test", source=f"mod:{mod.id}").state == "done"
+    assert env.job("actions.apply", alt="test", source=f"mod:{mod.id}").state == "done"
     env.s.library._write_check = lambda pin: (_ for _ in ()).throw(ServiceError("classic_open"))
     info = rpc(env.app, "mods.removalInfo", id=mod.id)["result"]
     assert info == {"name": mod.label, "used": True}
@@ -1349,7 +1355,7 @@ def test_first_add_baselines_existing_mods_before_storing_new_ones(env, monkeypa
             return RemapResult(rebuilt, {}, CompareResult(rebuilt.id, []))
 
         monkeypatch.setattr("bmpt.library.ModLibrary.accept_remap", accept_remap)
-        job = env.job("actions.acceptRemap", preview="review")
+        job = env.job("actions.acceptRepair", preview="review")
         assert job.state == "done", job.error
     mods = env.s.library.mods()
     assert len(mods) == 2 and old.id in {m.id for m in mods}
@@ -1406,7 +1412,7 @@ def test_seen_rpc_writes_only_ui_state_and_preserves_seen_duplicates(env, monkey
     env.drain()
     assert rpc(env.app, "mods.seen", ids=[mod["id"]]) == {"result": None}
     assert UiState(env.data / "webui.json").seen_mods() == {mod["id"]}
-    assert events_named(env.drain(), "library.changed") == [{"cores": [], "kinds": [], "mods": True}]
+    assert events_named(env.drain(), "library.changed") == [{"cores": [], "resourceTypes": [], "mods": True}]
     after = {p.relative_to(library.root): p.read_bytes() for p in library.root.rglob("*") if p.is_file()}
     assert after == before
     duplicate = rpc(env.app, "mods.add", paths=[str(path)])["result"]
@@ -1423,13 +1429,19 @@ def test_add_rpc_uses_the_normal_switch_for_both_kinds_and_respects_mods_off(env
     before = [path.read_bytes() for path in (env.spr, lobby)]
     sources = [make_mod(path, env.tmp / "upload", payload=path.name.encode()) for path in (env.spr, lobby)]
     params = {"paths": [str(path) for path in sources], "background": background}
-    result = env.job("mods.add", **params).result if background else rpc(env.app, "mods.add", **params)["result"]
+    if background:
+        job = env.job("mods.add", **params)
+        result = rpc(env.app, "jobs.get", id=job.id)["result"]["result"]
+    else:
+        result = rpc(env.app, "mods.add", **params)["result"]
     assert len(result["added"]) == 2 and not result["failed"]
     assert all(m["user_added"] for m in result["added"])
     assert env.s.state.seen_mods() == set(), "both add modes establish an empty baseline before adding"
     assert result["applied" if enabled else "configured"] == result["added"]
+    configured = env.s.library.configured("test")
+    library_kind = {"portrait": "spr", "memorialLobby": "lobby"}
     for entry in result["added"]:
-        assert env.s.library.configured("test")[entry["kind"]] == f"mod:{entry['id']}"
+        assert configured[library_kind[entry["resourceType"]]] == f"mod:{entry['id']}"
     assert [path.read_bytes() for path in (env.spr, lobby)] == (
         [path.read_bytes() for path in sources] if enabled else before
     )
@@ -1474,15 +1486,15 @@ def test_mod_alias_rpc_returns_the_saved_name_and_publishes_metadata_change(env)
     before = {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in (env.spr, entry.file)}
     env.drain()
     for alias in ("My portrait", ""):
-        saved = rpc(env.app, "mods.rename", id=entry.id, label=alias)["result"]
+        saved = rpc(env.app, "mods.setAlias", id=entry.id, alias=alias)["result"]
         assert saved["id"] == entry.id
         assert saved["alias"] == alias
-        assert saved["label"] == (alias or entry.label)
+        assert saved["name"] == (alias or entry.label)
         assert saved["file"] == str(entry.file)
-        assert events_named(env.drain(), "library.changed") == [{"cores": [], "kinds": [], "mods": True}]
+        assert events_named(env.drain(), "library.changed") == [{"cores": [], "resourceTypes": [], "mods": True}]
     assert all((path.read_bytes(), path.stat().st_mtime_ns) == stamp for path, stamp in before.items())
-    assert rpc(env.app, "mods.rename", id=entry.id, label=None)["error"]["code"] == "bad_params"
-    assert rpc(env.app, "mods.rename", id="missing", label="Alias")["error"]["code"] == "mod_not_found"
+    assert rpc(env.app, "mods.setAlias", id=entry.id, alias=None)["error"]["code"] == "bad_params"
+    assert rpc(env.app, "mods.setAlias", id="missing", alias="Alias")["error"]["code"] == "mod_not_found"
 
 
 def test_remap_rpc_is_read_only_and_accept_publishes_a_new_library_mod(env, monkeypatch):
@@ -1500,7 +1512,7 @@ def test_remap_rpc_is_read_only_and_accept_publishes_a_new_library_mod(env, monk
 
     monkeypatch.setattr(env.s.library, "remap", remap)
     geometry = {"test.atlas": {"source": {"slots": [], "poses": {"": []}}, "target": {"slots": [], "poses": {"": []}}}}
-    job = env.job("actions.remap", mod=entry.id, geometry=geometry)
+    job = env.job("actions.useOfficialSkeleton", mod=entry.id, geometry=geometry)
     assert job.state == "done" and job.writes is None
     assert job.result == {"preview": "review", "report": result.report}
     assert calls == [(entry.id, env.s.library.current_pin(), geometry)]
@@ -1515,7 +1527,7 @@ def test_remap_rpc_is_read_only_and_accept_publishes_a_new_library_mod(env, monk
     assert calls[-1] == ("redrawn", entry.id, geometry)
     del calls[1:]
     monkeypatch.setattr(env.s.library, "accept_remap", lambda preview: result if preview == "review" else None)
-    job = env.job("actions.acceptRemap", preview="review")
+    job = env.job("actions.acceptRepair", preview="review")
     assert job.state == "done" and job.writes == "library"
     assert job.result == result.to_json()
     from bmpt.webui.services_jobs import _changed_of
@@ -1537,7 +1549,7 @@ def test_extract_rpc_forwards_step_progress(env, monkeypatch):
         return out_dir / "test_spr"
 
     monkeypatch.setattr(env.s.library, "extract", extract)
-    job = env.job("actions.extract", target="variant:test")
+    job = env.job("actions.extract", target="alt:test")
     assert job.state == "done"
     assert job.progress == {"id": job.id, "current": 2, "total": 3, "step": "import.step.extract", "sequence": 1}
 

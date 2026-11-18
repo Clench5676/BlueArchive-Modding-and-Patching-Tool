@@ -130,7 +130,7 @@ class GraftMixin:
         Return rigs to pose, per official atlas name the mod's rig, the
         official rig it was made from (``base``, or None) and the official rig, each as ``atlas`` text and base64
         ``skeleton``; kept under a ``token`` for ``graft_build`` and ``graft_check``. Refused with
-        ``graft_unavailable`` when no rig gains animations a graft could carry (``_graft_rigs``).
+        ``add_animations_unavailable`` when no rig gains animations a graft could carry (``_graft_rigs``).
 
         Args:
             mod_id: Unrepaired stored portrait or lobby mod ID receiving official animations.
@@ -154,7 +154,7 @@ class GraftMixin:
         paths = self._paths(record)
         kind = kind_of_file(paths[0].name)
         if kind not in ("spr", "lobby"):
-            raise ServiceError("graft_unavailable")
+            raise ServiceError("add_animations_unavailable")
         identity = self._identity({path.name: path for path in paths})
         targets = self._spine_parts(core_of(paths[0].name), pin)
         if not targets:
@@ -174,7 +174,7 @@ class GraftMixin:
                     "atlas_remap_invalid", file=", ".join(path.name for path in paths), reason=str(error)
                 ) from error
         if not rigs:
-            raise ServiceError("graft_unavailable")
+            raise ServiceError("add_animations_unavailable")
         official = inputs["official"]
         token = uuid.uuid4().hex
 
@@ -185,7 +185,7 @@ class GraftMixin:
             # built at once (``graft.plain``); the page poses each carried animation and graft_check takes the result
             built = self._graft_plain(rigs, inputs)
             if not built:
-                raise ServiceError("graft_unavailable")
+                raise ServiceError("add_animations_unavailable")
             self._grafts[token] = {
                 "source": mod_id,
                 "identity": identity,
@@ -413,11 +413,23 @@ class GraftMixin:
 
     def converter_root(self) -> Path:
         """Return the settings directory where downloaded helper programs are kept."""
-        return Path(self.settings.path).parent
+        artifacts = getattr(self.settings, "artifacts", None)
+        return artifacts if artifacts is not None else Path(self.settings.path).parent
 
     def converter_status(self) -> dict:
         """Report availability and installation status of the optional converter beside the settings."""
-        return spine_converter.status(self.converter_root())
+        status = spine_converter.status(self.converter_root())
+        if self._converter_executable() is not None:
+            status["installed"] = True
+        return status
+
+    def _converter_executable(self) -> Path | None:
+        found = spine_converter.located(self.converter_root())
+        if found is not None:
+            return found
+        if getattr(self.settings, "artifacts", None) is not None:
+            return spine_converter.located(self.converter_root().parent.parent)
+        return None
 
     def converter_download(self, consented: bool, progress: Callable[[dict], None] | None = None) -> dict:
         """Fetch the pinned Windows converter release with the user's licence consent.
@@ -464,7 +476,7 @@ class GraftMixin:
         state = self._graft_state(token)
         if not isinstance(geometry, dict):
             raise ServiceError("bad_params", key="geometry")
-        exe = spine_converter.located(self.converter_root())
+        exe = self._converter_executable()
         if exe is None:
             raise ServiceError("converter_missing")
         official = state["inputs"]["official"]
@@ -654,7 +666,7 @@ class GraftMixin:
                     wanted,
                 )
             except grafting.GraftError as error:
-                if error.code != "graft_refused":
+                if error.code != "add_animations_refused":
                     raise ServiceError(error.code, **error.params) from error
             except atlas_remap.RemapError as error:
                 raise ServiceError(error.code, **error.params) from error
@@ -697,7 +709,7 @@ class GraftMixin:
             )
             if not prepared:
                 self._grafts.pop(token, None)
-                raise ServiceError("graft_refused", names=", ".join(sorted(refused)) or "—")
+                raise ServiceError("add_animations_refused", names=", ".join(sorted(refused)) or "—")
         self._grafts.pop(token, None)
         record = self._record(state["source"])
         targets = self._spine_parts(core_of(paths[0].name), pin)
@@ -809,6 +821,6 @@ class GraftMixin:
             patch[texts[rig["skeleton"]]] = result.skeleton
             for key, image in result.pages.items():
                 if key not in official.keys:
-                    raise ServiceError("graft_page_missing", page=key)
+                    raise ServiceError("add_animations_page_missing", page=key)
                 patch[official.keys[key]] = image
         return patch

@@ -14,12 +14,12 @@ import { controls, insert } from "./control_prefabs.mjs";
 // A popup.js imported with a query is a fresh copy of the popups: the modules split from it import one another
 // with the same query, so the copy's list and message popups read the copy's prefabs.
 register(
-  `data:text/javascript,${encodeURIComponent(`const FAMILY = ${JSON.stringify(POPUP_MODULES)};
+  `data:text/javascript,${encodeURIComponent(`const STUDENT = ${JSON.stringify(POPUP_MODULES)};
 export async function resolve(spec, ctx, next) {
   const resolved = await next(spec, ctx);
-  if (!ctx.parentURL?.includes("/web/js/ui/") || !FAMILY.includes(spec.replace(/^\\.\\//, ""))) return resolved;
+  if (!ctx.parentURL?.includes("/web/js/ui/") || !STUDENT.includes(spec.replace(/^\\.\\//, ""))) return resolved;
   const parent = new URL(ctx.parentURL);
-  if (!parent.search || !FAMILY.some((name) => parent.pathname.endsWith("/ui/" + name))) return resolved;
+  if (!parent.search || !STUDENT.some((name) => parent.pathname.endsWith("/ui/" + name))) return resolved;
   const url = new URL(resolved.url);
   url.search = parent.search;
   return { ...resolved, url: url.href };
@@ -688,7 +688,7 @@ test("photo deletion warnings fit the UIPopup_Sort frame in all six locales", as
         readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8"),
       ).webui;
       setStrings(locale, Object.fromEntries(strings(ui)));
-      for (const warning of [ui.error.asset_delete_confirm, ui.error.photo_delete_other_variant]) {
+      for (const warning of [ui.error.asset_delete_confirm, ui.error.thumbnail_delete_other_alt]) {
         const pending = Popup.message({
           title: ui.photo.delete,
           lines: [warning],
@@ -1434,7 +1434,7 @@ test("update progress stays in NGUI, blocks buttons and Escape, and completion w
   release();
   await until(() => calls.slice(start).includes("jobs.get"));
   const progress = async (current, total, p) => {
-    events.emit("job.progress", { id: "download", current, total, label: "build.dmg" });
+    events.emit("job.progress", { id: "download", current, total, name: "build.dmg" });
     await until(() => part("Status")?.textContent === `Downloading ${p}%`);
     return part("Progress/Fill");
   };
@@ -1917,7 +1917,7 @@ test("portrait and memorial lobby mods share the localized Mod chip under the na
   for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
     const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
     setStrings(lang, { "webui.type.added": ui.type.added, "webui.popup.inUse": ui.popup.inUse });
-    for (const kind of ["spr", "lobby"]) {
+    for (const kind of ["portrait", "memorialLobby"]) {
       await Popup.listPopup({
         host: prompt,
         title: kind,
@@ -1948,9 +1948,9 @@ import { setupScreenTest } from "./detail-screen.js";
 import { setupChipsTest } from "./detail-chips.js";
 import { setupStripTest } from "./detail-strip.js";
 export function setupPreviewTest(data, kind, onLeft = async () => {}) {
-  fam = data; variantKey = data.variants[0].key; ctx = { invalidateRoster() {} };
-  open = true; setupActionsTest(); tab = kind === "lobby" ? "lobby" : "portrait";
-  setupSwitchersTest(kind, () => { pending = shownSource(variant(), kind); }, pageToken);
+  shownStudent = data; altId = data.alts[0].key; ctx = { invalidateRoster() {} };
+  open = true; setupActionsTest(); tab = kind === "memorialLobby" ? "lobby" : "portrait";
+  setupSwitchersTest(kind, () => { pending = shownSource(alt(), kind); }, pageToken);
   previewEnabled = modsOn();
   expression = "03"; mainPlayer = { cached: true }; lobbyShot = "cached";
   lobbySeq = "talk"; lobbyAll = true; lobbyStale = false; shownLeft = tab; shownKey = "cached";
@@ -2002,18 +2002,18 @@ const Detail = Object.assign({}, ...(await Promise.all(Object.keys(detailTest).m
 const Mods = await import("../../src/bmpt/web/js/mods/mod-switch.js");
 const Thumbs = await import(THUMBS);
 const switchHost = host("popup");
-const previewFamily = () => ({
+const previewStudent = () => ({
   key: "a",
   version: "rv1",
-  variants: [
+  alts: [
     {
       key: "a",
-      spr: "a_spr",
-      lobby: "a_home",
-      configured: { spr: "mod:p", lobby: "mod:l" },
+      portrait: "a_spr",
+      memorialLobby: "a_home",
+      configured: { portrait: "mod:p", memorialLobby: "mod:l" },
       state: {
-        files: ["spr", "lobby"].map((kind) => ({
-          kind,
+        files: ["portrait", "memorialLobby"].map((kind) => ({
+          resourceType: kind,
           file: `/game/${kind}.bundle`,
           applied: "official",
           official: true,
@@ -2021,14 +2021,14 @@ const previewFamily = () => ({
         })),
       },
       modList: [
-        { id: "p", target: "a", kind: "spr", label: "Portrait mod" },
-        { id: "l", target: "a", kind: "lobby", label: "Lobby mod" },
+        { id: "p", targetAlt: "a", resourceType: "portrait", name: "Portrait mod" },
+        { id: "l", targetAlt: "a", resourceType: "memorialLobby", name: "Lobby mod" },
       ],
     },
     {
       key: "b",
-      spr: "b_spr",
-      state: { files: [{ kind: "spr", applied: "mod:leftover", official: false }] },
+      portrait: "b_spr",
+      state: { files: [{ resourceType: "portrait", applied: "mod:leftover", official: false }] },
       modList: [],
     },
   ],
@@ -2038,14 +2038,17 @@ async function modsEnabled(enabled) {
   await Mods.refresh();
 }
 
-test("detail variant candidates preview official assets independently of the source's live mod", () => {
-  const fam = previewFamily(),
-    source = fam.variants[1];
+test("detail alt candidates preview official assets independently of the source's live mod", () => {
+  const shownStudent = previewStudent(),
+    source = shownStudent.alts[1];
   assert.equal(
-    Detail.baseOf({ kind: "variant", core: source.spr, variant: source }),
-    "/asset/spine/official-spr/b_spr/skeleton",
+    Detail.baseOf({ kind: "alt", core: source.portrait, alt: source }),
+    "/asset/spine/official-portrait/b_spr/skeleton",
   );
-  assert.equal(Detail.baseOf({ kind: "self", core: fam.variants[0].spr }), "/asset/spine/official-spr/a_spr/skeleton");
+  assert.equal(
+    Detail.baseOf({ kind: "self", core: shownStudent.alts[0].portrait }),
+    "/asset/spine/official-portrait/a_spr/skeleton",
+  );
 });
 
 test("Update reloads a configured portrait or lobby rebuilt under the same mod id while mods are off", async () => {
@@ -2053,13 +2056,13 @@ test("Update reloads a configured portrait or lobby rebuilt under the same mod i
   const inputs = { skeletons: {}, atlases: {}, textures: {} };
   handlers.set("actions.compatibility", () => ({ result: "compatibility" }));
   for (const [kind, id] of [
-    ["spr", "p"],
-    ["lobby", "l"],
+    ["portrait", "p"],
+    ["memorialLobby", "l"],
   ]) {
-    const fam = previewFamily(),
+    const shownStudent = previewStudent(),
       draws = [];
     handlers.set("actions.compatibilityStamp", ({ mod }) => ({ result: `stamp-${mod}` }));
-    Detail.setupPreviewTest(fam, kind, async () => draws.push(Detail.previewTestState()));
+    Detail.setupPreviewTest(shownStudent, kind, async () => draws.push(Detail.previewTestState()));
     handlers.set("actions.update", (params) => {
       assert.deepEqual(params, { mod: id });
       return { result: "rebuild" };
@@ -2067,7 +2070,7 @@ test("Update reloads a configured portrait or lobby rebuilt under the same mod i
     handlers.set("jobs.get", ({ id }) => ({
       result: { state: "done", result: id === "compatibility" ? { official: inputs, mod: inputs } : {} },
     }));
-    handlers.set("family.get", () => ({ result: structuredClone(fam) }));
+    handlers.set("student.get", () => ({ result: structuredClone(shownStudent) }));
     Thumbs.forgotten.length = 0;
     const updating = Detail.runUpdate();
     (await drawn(dialog, "ok")).click();
@@ -2075,8 +2078,8 @@ test("Update reloads a configured portrait or lobby rebuilt under the same mod i
     await new Promise(setImmediate);
     for (const layer of [...dialog.children].reverse()) (await drawn(layer, "close")).click();
     assert.deepEqual(Thumbs.forgotten, [`/asset/spine/mod/${id}`]);
-    assert.equal(draws.length, 1, `${kind} reloads even when family.get has no changed source key or game file`);
-    if (kind === "spr") {
+    assert.equal(draws.length, 1, `${kind} reloads even when student.get has no changed source key or game file`);
+    if (kind === "portrait") {
       assert.equal(draws[0].mainPlayer, null);
       assert.equal(draws[0].expression, "00");
       assert.equal(draws[0].lobbyShot, "cached", "the other preview stays cached");
@@ -2088,7 +2091,7 @@ test("Update reloads a configured portrait or lobby rebuilt under the same mod i
       assert.equal(draws[0].shownKey, null);
       assert.deepEqual(draws[0].mainPlayer, { cached: true }, "the portrait stays cached");
     }
-    Detail.setupPreviewTest(fam, kind, async () => assert.fail("a failed update must keep the player"));
+    Detail.setupPreviewTest(shownStudent, kind, async () => assert.fail("a failed update must keep the player"));
     handlers.set("actions.compatibilityStamp", () => ({ result: "failed-inputs" }));
     handlers.set("jobs.get", () => ({ result: { state: "failed", error: { code: "internal" } } }));
     Thumbs.forgotten.length = 0;
@@ -2105,8 +2108,8 @@ test("Update reloads a configured portrait or lobby rebuilt under the same mod i
 test("a compatibility check never updates an existing mod even when its bundle date differs", async () => {
   setStrings("en-US", Object.fromEntries(strings(english)));
   await modsEnabled(false);
-  const fam = previewFamily();
-  Detail.setupPreviewTest(fam, "spr");
+  const shownStudent = previewStudent();
+  Detail.setupPreviewTest(shownStudent, "portrait");
   const inputs = { skeletons: {}, atlases: {}, textures: {} };
   handlers.set("actions.compatibility", () => ({ result: "compatibility" }));
   handlers.set("actions.update", () => assert.fail("compatibility cannot overwrite the mod"));
@@ -2121,8 +2124,8 @@ test("a compatibility check never updates an existing mod even when its bundle d
 test("Update of a portrait drawn on a rig the App no longer has shows why and changes nothing", async () => {
   setStrings("en-US", Object.fromEntries(strings(english)));
   await modsEnabled(false);
-  const fam = previewFamily();
-  Detail.setupPreviewTest(fam, "spr");
+  const shownStudent = previewStudent();
+  Detail.setupPreviewTest(shownStudent, "portrait");
   const inputs = { skeletons: {}, atlases: {}, textures: {} };
   handlers.set("actions.compatibilityStamp", () => "stamp");
   handlers.set("actions.compatibility", () => ({ result: "compatibility" }));
@@ -2131,7 +2134,7 @@ test("Update of a portrait drawn on a rig the App no longer has shows why and ch
     result: {
       state: "done",
       result: {
-        kind: "spr",
+        resourceType: "portrait",
         official: inputs,
         mod: inputs,
         remappable: false,
@@ -2153,8 +2156,8 @@ test("Update of a portrait drawn on a rig the App no longer has shows why and ch
 test("the impact list's Fix leaves a portrait drawn on a rig the App no longer has held, with no update", async () => {
   setStrings("en-US", Object.fromEntries(strings(english)));
   await modsEnabled(false);
-  const fam = previewFamily();
-  Detail.setupPreviewTest(fam, "spr");
+  const shownStudent = previewStudent();
+  Detail.setupPreviewTest(shownStudent, "portrait");
   const Impact = await import("../../src/bmpt/web/js/app/update-impact.js");
   const inputs = { skeletons: {}, atlases: {}, textures: {} };
   handlers.set("actions.compatibilityStamp", () => "stamp-impact");
@@ -2164,7 +2167,7 @@ test("the impact list's Fix leaves a portrait drawn on a rig the App no longer h
     result: {
       state: "done",
       result: {
-        kind: "spr",
+        resourceType: "portrait",
         official: inputs,
         mod: inputs,
         remappable: false,
@@ -2174,7 +2177,7 @@ test("the impact list's Fix leaves a portrait drawn on a rig the App no longer h
   }));
   const before = calls.length;
   const fixed = await Impact.repair([
-    { id: "unknown-rig", target: "hina", core: "hina_spr", kind: "spr", label: "Old", configured: true },
+    { id: "unknown-rig", targetAlt: "hina", core: "hina_spr", resourceType: "portrait", name: "Old", configured: true },
   ]);
   assert.deepEqual(fixed, []);
   assert.ok(!calls.slice(before).includes("actions.update"));
@@ -2184,11 +2187,11 @@ test("each mod card exposes a read-only compatibility check for its own mod", as
   setStrings("en-US", Object.fromEntries(strings(english)));
   await modsEnabled(false);
   for (const [kind, id] of [
-    ["spr", "p"],
-    ["lobby", "l"],
+    ["portrait", "p"],
+    ["memorialLobby", "l"],
   ]) {
-    const fam = previewFamily();
-    Detail.setupPreviewTest(fam, kind);
+    const shownStudent = previewStudent();
+    Detail.setupPreviewTest(shownStudent, kind);
     let checks = 0;
     handlers.set("actions.compatibility", (params) => {
       assert.deepEqual(params, { mod: id });
@@ -2221,27 +2224,27 @@ test("switch cards and details label manifest choices Applied with either switch
       ),
     );
     for (const [kind, source] of [
-      ["spr", "mod:p"],
-      ["lobby", "mod:l"],
-      ["spr", "variant:b"],
+      ["portrait", "mod:p"],
+      ["memorialLobby", "mod:l"],
+      ["portrait", "alt:b"],
     ]) {
       for (const enabled of [false, true]) {
         await modsEnabled(enabled);
-        const fam = previewFamily();
-        fam.variants[0].configured[kind] = source;
-        fam.variants[0].selection = { [kind]: { source, installed: enabled } };
+        const shownStudent = previewStudent();
+        shownStudent.alts[0].configured[kind] = source;
+        shownStudent.alts[0].selection = { [kind]: { source, installed: enabled } };
         if (enabled)
           Object.assign(
-            fam.variants[0].state.files.find((f) => f.kind === kind),
+            shownStudent.alts[0].state.files.find((f) => f.resourceType === kind),
             { applied: source, official: false },
           );
-        Detail.setupPreviewTest(fam, kind);
+        Detail.setupPreviewTest(shownStudent, kind);
         await Detail.renderPopup();
         const captions = walk(switchHost).map((el) => el.textContent);
         const caption = ui.status.applied;
         // the card's badge and the details' chip; the details have no State row
         assert.equal(captions.filter((c) => c === caption).length, 2, `${lang} ${kind} ${source}: badge and chip`);
-        const key = source.startsWith("mod:") ? `m:${source.slice(4)}` : `v:${source.slice(8)}`;
+        const key = source.startsWith("mod:") ? `m:${source.slice(4)}` : `v:${source.slice(4)}`;
         assert.ok(walk(switchHost).some((el) => el.dataset.path === `Card_${key}/Select/AppliedBadge`));
         assert.equal(
           walk(switchHost).find((el) => el.dataset.path === `Card_${key}/Select/AppliedLabel`).textContent,
@@ -2290,7 +2293,7 @@ test("switch popup fields fit a long file independently in portrait and lobby de
     for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
       const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
       setStrings(lang, Object.fromEntries(strings(ui)));
-      for (const kind of ["portrait", "lobby"]) {
+      for (const kind of ["portrait", "memorialLobby"]) {
         const snapshots = [];
         for (const file of ["ibuki_spr.bundle", `${"azusa_swimsuit_spr".repeat(4)}.bundle`]) {
           const fields = [
@@ -2424,12 +2427,12 @@ test("repair review displays both pages and warnings; Accept alone stores the re
   let saved = 0,
     discarded = 0,
     refreshed = 0;
-  handlers.set("actions.remap", () => ({ result: "remap-job" }));
-  handlers.set("actions.acceptRemap", () => {
+  handlers.set("actions.useOfficialSkeleton", () => ({ result: "remap-job" }));
+  handlers.set("actions.acceptRepair", () => {
     saved++;
     return { result: "accept-job" };
   });
-  handlers.set("actions.discardRemap", () => {
+  handlers.set("actions.discardRepair", () => {
     discarded++;
     return { result: null };
   });
@@ -2466,11 +2469,11 @@ test("repair review displays both pages and warnings; Accept alone stores the re
 test("repaired names carry their localized tag and originals jump to their repaired card", async () => {
   setStrings("en-US", Object.fromEntries(strings(english)));
   await modsEnabled(false);
-  const fam = previewFamily(),
-    mods = fam.variants[0].modList;
-  mods[0].repaired_id = "fixed";
-  mods.push({ ...mods[0], id: "fixed", repaired_from: mods[0].id, repaired_id: "" });
-  Detail.setupPreviewTest(fam, "spr");
+  const shownStudent = previewStudent(),
+    mods = shownStudent.alts[0].modList;
+  mods[0].repairedCopyId = "fixed";
+  mods.push({ ...mods[0], id: "fixed", repairSourceId: mods[0].id, repairedCopyId: "" });
+  Detail.setupPreviewTest(shownStudent, "portrait");
   await Detail.renderPopup();
   assert.ok(walk(switchHost).some((el) => el.textContent.includes(english.remap.repaired)));
   const jump = walk(switchHost).find((el) => el.getAttribute("aria-label") === english.remap.go);
@@ -2485,15 +2488,15 @@ test("repaired names carry their localized tag and originals jump to their repai
 test("Go To from the update summary opens the switch on its mod once the student page of its kind is in", async () => {
   setStrings("en-US", Object.fromEntries(strings(english)));
   await modsEnabled(false);
-  const fam = previewFamily();
-  fam.variants[0].modList.push({ id: "q", target: "a", kind: "spr", label: "Second portrait mod" });
-  // another variant, another kind's tab, a request the page did not reach soon: the switch stays closed
+  const shownStudent = previewStudent();
+  shownStudent.alts[0].modList.push({ id: "q", targetAlt: "a", resourceType: "portrait", name: "Second portrait mod" });
+  // another alt, another kind's tab, a request the page did not reach soon: the switch stays closed
   for (const [request, at] of [
-    [{ id: "p", variant: "b", kind: "spr" }, 0],
-    [{ id: "l", variant: "a", kind: "lobby" }, 0],
-    [{ id: "p", variant: "a", kind: "spr" }, 31000],
+    [{ id: "p", alt: "b", resourceType: "portrait" }, 0],
+    [{ id: "l", alt: "a", resourceType: "memorialLobby" }, 0],
+    [{ id: "p", alt: "a", resourceType: "portrait" }, 31000],
   ]) {
-    Detail.setupPreviewTest(fam, "spr");
+    Detail.setupPreviewTest(shownStudent, "portrait");
     switchHost.hidden = true;
     const now = Date.now;
     Detail.want(request);
@@ -2505,15 +2508,15 @@ test("Go To from the update summary opens the switch on its mod once the student
     }
     assert.equal(switchHost.hidden, true, JSON.stringify(request));
   }
-  Detail.setupPreviewTest(fam, "spr");
+  Detail.setupPreviewTest(shownStudent, "portrait");
   switchHost.hidden = true;
-  Detail.want({ id: "q", variant: "a", kind: "spr" });
+  Detail.want({ id: "q", alt: "a", resourceType: "portrait" });
   await Detail.takeWanted();
   assert.equal(switchHost.hidden, false);
   assert.equal(Detail.previewTestState().pending, "m:q", "the mod's card selected, its details with Update");
   assert.ok(walk(switchHost).some((el) => el.getAttribute("aria-label") === english.act.update));
   // taken once
-  Detail.setupPreviewTest(fam, "spr");
+  Detail.setupPreviewTest(shownStudent, "portrait");
   await Detail.takeWanted();
   assert.notEqual(Detail.previewTestState().pending, "m:q");
   switchHost.hidden = true;
@@ -2600,8 +2603,8 @@ test("the single Update action checks fresh inputs and routes a mixed page misma
     },
   };
   try {
-    const fam = previewFamily();
-    Detail.setupPreviewTest(fam, "spr");
+    const shownStudent = previewStudent();
+    Detail.setupPreviewTest(shownStudent, "portrait");
     await Detail.renderPopup();
     assert.equal(walk(switchHost).filter((el) => el.getAttribute("aria-label") === english.act.update).length, 1);
     const inputs = {
@@ -2622,12 +2625,12 @@ test("the single Update action checks fresh inputs and routes a mixed page misma
       return { result: "unified-check" };
     });
     handlers.set("actions.update", () => assert.fail("remap must not run the classic port"));
-    handlers.set("actions.remap", () => {
+    handlers.set("actions.useOfficialSkeleton", () => {
       methods.push("remap");
       return { result: "unified-remap" };
     });
-    handlers.set("actions.acceptRemap", () => assert.fail("Discard must not store a result"));
-    handlers.set("actions.discardRemap", () => {
+    handlers.set("actions.acceptRepair", () => assert.fail("Discard must not store a result"));
+    handlers.set("actions.discardRepair", () => {
       methods.push("discard");
       return { result: null };
     });
@@ -2700,7 +2703,7 @@ test("clean Update asks Cancel / Update and reuses the checked report; problems 
   setStrings("en-US", Object.fromEntries(strings(english)));
   await modsEnabled(false);
   const inputs = { skeletons: {}, atlases: {}, textures: {} },
-    fam = previewFamily();
+    shownStudent = previewStudent();
   let stamp = "force-current",
     checks = 0,
     updates = 0,
@@ -2714,7 +2717,7 @@ test("clean Update asks Cancel / Update and reuses the checked report; problems 
     updates++;
     return { result: "force-update" };
   });
-  handlers.set("family.get", () => ({ result: structuredClone(fam) }));
+  handlers.set("student.get", () => ({ result: structuredClone(shownStudent) }));
   handlers.set("jobs.get", ({ id }) => ({
     result: {
       state: "done",
@@ -2724,7 +2727,7 @@ test("clean Update asks Cancel / Update and reuses the checked report; problems 
           : {},
     },
   }));
-  Detail.setupPreviewTest(fam, "spr");
+  Detail.setupPreviewTest(shownStudent, "portrait");
   let work = Detail.runCompatibility();
   (await drawn(dialog, "ok")).click();
   await work;
@@ -2765,7 +2768,7 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
     setStrings(locale, Object.fromEntries(strings(ui)));
     await modsEnabled(false);
     const inputs = { skeletons: {}, atlases: {}, textures: {} },
-      fam = previewFamily();
+      shownStudent = previewStudent();
     let updates = 0;
     handlers.set("actions.compatibilityStamp", () => ({ result: `unchecked-${locale}` }));
     handlers.set("actions.compatibility", () => ({ result: "unchecked-check" }));
@@ -2773,14 +2776,14 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
       updates++;
       return { result: "unchecked-update" };
     });
-    handlers.set("family.get", () => ({ result: structuredClone(fam) }));
+    handlers.set("student.get", () => ({ result: structuredClone(shownStudent) }));
     handlers.set("jobs.get", ({ id }) => ({
       result: {
         state: "done",
         result: id === "unchecked-check" ? { official: inputs, mod: inputs, unavailable: true } : {},
       },
     }));
-    Detail.setupPreviewTest(fam, "spr");
+    Detail.setupPreviewTest(shownStudent, "portrait");
     try {
       let work = Detail.runUpdate();
       await drawn(dialog, "cancel");
@@ -2806,7 +2809,7 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
     const previous = navigator.clipboard,
       copied = [];
     setStrings(locale, Object.fromEntries(strings(ui)));
-    Detail.setupPreviewTest(previewFamily(), "spr");
+    Detail.setupPreviewTest(previewStudent(), "portrait");
     try {
       navigator.clipboard = {
         writeText: async (name) => {
@@ -2916,7 +2919,7 @@ test("switch geometry: per-kind columns, aspects, card bounds, labels and portra
     for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
       const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
       setStrings(lang, Object.fromEntries(strings(ui)));
-      for (const kind of ["spr", "lobby", "model"]) {
+      for (const kind of ["portrait", "memorialLobby", "chibi"]) {
         // the columns the list's paper holds (the L class)
         const { columns } = (await import("../../src/bmpt/web/js/mods/switch-layout.js")).switchGrid(
           kind,
@@ -2951,16 +2954,16 @@ test("switch geometry: per-kind columns, aspects, card bounds, labels and portra
         });
         const cards = items.map((it) => box(`Card_${it.key}`));
         const ratio = cards[0][2] / cards[0][3];
-        if (kind === "spr") {
+        if (kind === "portrait") {
           box("Details/Picture/Texture");
           assert.ok(Math.abs(1 / ratio - 2.2) < 0.01, "portrait height follows the latest 2.2:1 sketch");
         }
-        if (kind === "lobby") assert.ok(Math.abs(ratio - 16 / 9) < 0.02);
-        if (kind === "model") {
+        if (kind === "memorialLobby") assert.ok(Math.abs(ratio - 16 / 9) < 0.02);
+        if (kind === "chibi") {
           assert.equal(ratio, 1);
           assert.ok(cards[0][2] > 180);
         }
-        const rowSize = kind === "spr" ? items.length : columns;
+        const rowSize = kind === "portrait" ? items.length : columns;
         for (let i = 0; i < cards.length; i++) {
           if (i % rowSize) assert.ok(cards[i][0] > cards[i - 1][0] + cards[i - 1][2] + 8, `${kind}: column gap`);
           if (i >= rowSize)
@@ -2995,7 +2998,7 @@ test("switch geometry: per-kind columns, aspects, card bounds, labels and portra
             assert.ok(el("/Select/Check").style.backgroundImage, "shared check sprite renders");
           }
         }
-        if (kind === "spr") {
+        if (kind === "portrait") {
           const picture = box("Details/Picture/Texture"),
             name = box("Details/Name"),
             buttons = box("Details/Act_0/Body");
@@ -3031,7 +3034,7 @@ test("switch geometry: per-kind columns, aspects, card bounds, labels and portra
 test("portrait spacing fits four tall cards at the standard width and selects horizontal scrolling", async () => {
   const { switchGrid } = await import("../../src/bmpt/web/js/mods/switch-layout.js");
   for (const width of [1300, 1818, 2200]) {
-    const { card, columns, pitch, overhang } = switchGrid("spr", width);
+    const { card, columns, pitch, overhang } = switchGrid("portrait", width);
     assert.ok(Math.abs(card.h / card.w - 2.2) < 1e-9);
     assert.equal(
       pitch[0] - card.w,
@@ -3042,11 +3045,11 @@ test("portrait spacing fits four tall cards at the standard width and selects ho
     assert.ok(columns <= 4);
     assert.ok((columns - 1) * pitch[0] + card.w + overhang <= width - 80 + 0.001);
   }
-  assert.equal(switchGrid("spr").columns, 4);
-  assert.equal(switchGrid("spr").horizontal, true);
+  assert.equal(switchGrid("portrait").columns, 4);
+  assert.equal(switchGrid("portrait").horizontal, true);
   for (const [kind, columns] of [
-    ["lobby", 2],
-    ["model", 4],
+    ["memorialLobby", 2],
+    ["chibi", 4],
   ]) {
     assert.equal(switchGrid(kind).horizontal, false);
     assert.equal(switchGrid(kind).columns, columns);
@@ -3075,7 +3078,7 @@ test("every kind left-aligns outer corners, with compact portrait gaps and balan
   const mark = (path) => /\/(Select|Dot)(\/|$)/.test(path);
   const headerInsets = [],
     leftInsets = [];
-  for (const kind of ["spr", "lobby", "model"]) {
+  for (const kind of ["portrait", "memorialLobby", "chibi"]) {
     const { columns } = switchGrid(kind, Popup.listCardBox(Popup.listLayout(false, kind)).w); // the list's paper
     let grow = null; // the chosen card's envelope beyond its body, measured on the first chosen card drawn
     for (const count of new Set([0, 1, 2, columns, columns + 1, 2 * columns, 19])) {
@@ -3121,7 +3124,7 @@ test("every kind left-aligns outer corners, with compact portrait gaps and balan
           selected,
           items.map((it) => [body(it.key).left, body(it.key).top].map((v) => Math.round(v * 1000))),
         );
-        const rowSize = kind === "spr" ? Math.max(1, count) : columns;
+        const rowSize = kind === "portrait" ? Math.max(1, count) : columns;
         for (let start = 0; start < count; start += rowSize) {
           const row = items.slice(start, start + rowSize).map((it) => body(it.key));
           const ink = union(row),
@@ -3140,11 +3143,11 @@ test("every kind left-aligns outer corners, with compact portrait gaps and balan
           );
           // a full row of two or more spreads edge to edge; a single column stays at the left (the lobby in the L
           // class)
-          if (kind !== "spr" && row.length === columns && columns > 1)
+          if (kind !== "portrait" && row.length === columns && columns > 1)
             assert.ok(Math.abs(left - right) <= 1, `${kind}: equal insets for a full row`);
-          if (kind !== "spr" || count <= columns)
+          if (kind !== "portrait" || count <= columns)
             assert.ok(right >= left - 1, "short rows leave spare space on the right");
-          if (kind === "spr") {
+          if (kind === "portrait") {
             assert.ok(envelope.top >= 0, "the row starts inside the viewport");
             assert.ok(
               envelope.bottom <= parseFloat(area.style.height),
@@ -3262,7 +3265,7 @@ test("portrait horizontal input handles wheel units, scaled drags, touch and key
 test("switch captures begin on visibility and retain selection and rename offsets on either axis", async () => {
   const { lazyThumbnail } = await import("../../src/bmpt/web/js/ui/lazy-thumbnail.js");
   const { rect } = await import("../../src/bmpt/web/js/ui/ngui.js");
-  for (const kind of ["spr", "lobby", "model"]) {
+  for (const kind of ["portrait", "memorialLobby", "chibi"]) {
     const captured = [],
       selections = [],
       aliases = [];
@@ -3293,7 +3296,7 @@ test("switch captures begin on visibility and retain selection and rename offset
     };
     await Popup.listPopup(options);
     const area = walk(prompt).find((e) => e.className === "popup-cards"),
-      horizontal = kind === "spr";
+      horizontal = kind === "portrait";
     const axis = horizontal ? "scrollLeft" : "scrollTop",
       index = horizontal ? 0 : 1;
     const visible = parseFloat(area.style[horizontal ? "width" : "height"]);
@@ -3658,7 +3661,7 @@ test("a still being made shows the game's loading ring, the placeholder text onl
   }
 });
 
-for (const kind of ["spr", "model"])
+for (const kind of ["portrait", "model"])
   test(`${kind} card and info panel remove placeholders after their shared still succeeds`, async () => {
     let finish;
     const picture = Object.assign(
@@ -3684,7 +3687,7 @@ for (const kind of ["spr", "model"])
     });
     const paths = [
       ...items.map((it) => `Card_${it.key}/Thumb`),
-      kind === "spr" ? "Details/Picture/Texture" : "Details/Picture/Thumb",
+      kind === "portrait" ? "Details/Picture/Texture" : "Details/Picture/Thumb",
     ];
     const element = (path) => walk(prompt).find((el) => el.dataset.path === path);
     const geometry = paths.map((path) => {
@@ -3737,7 +3740,7 @@ test("portrait search uses the prefab header without reducing the row height or 
   try {
     await Fresh.listPopup({
       host: prompt,
-      layoutKind: "spr",
+      layoutKind: "portrait",
       title: "Portraits",
       items,
       selected: "7",
@@ -4436,7 +4439,7 @@ test("automatic tours wait for consents, update dialogs and jobs without checkin
 test("source frame replacement preserves card envelopes, list placement and hit targets", async () => {
   const { cardInkBounds, switchGrid, placeSwitchCards } = await import("../../src/bmpt/web/js/mods/switch-layout.js");
   await Popup.selectionReady();
-  for (const kind of ["spr", "lobby", "model", null]) {
+  for (const kind of ["portrait", "lobby", "model", null]) {
     const grid = switchGrid(kind),
       base = { key: "choice", label: "Source", full: "Source" };
     for (const selected of [false, true])
@@ -4455,7 +4458,7 @@ test("source frame replacement preserves card envelopes, list placement and hit 
   await Popup.listPopup({
     host: prompt,
     title: "Sources",
-    layoutKind: "spr",
+    layoutKind: "portrait",
     selected: "preview",
     items: [
       { key: "applied", label: "Applied source", full: "Applied source", applied: true },
@@ -4495,7 +4498,7 @@ test("source cards use the state badge and fitted locale caption in every picker
       assert.equal(captions.applied.text, ui.status.applied);
       assert.equal(captions.preview.text, ui.status.selected);
       assert.equal(captions.applied.fontSize, captions.preview.fontSize);
-      for (const kind of ["spr", "lobby", "model", null]) {
+      for (const kind of ["portrait", "lobby", "model", null]) {
         const captions = Popup.selectionCaptions(switchGrid(kind).card);
         for (const applied of [false, true])
           for (const previewed of [false, true]) {
@@ -5455,7 +5458,7 @@ test("Settings is on the popup stack: Escape and the backdrop close it, and a po
 const layers = () => dialog.children.filter((el) => el.className === "popup-layer");
 test("Mod Alias is a layer of its own: a failed save's message draws above it, and Escape closes the visible layer", async () => {
   const ModAlias = await import("../../src/bmpt/web/js/mods/mod-alias.js");
-  handlers.set("mods.rename", () => ({ error: { code: "library_io_error", params: { file: "x.bundle" } } }));
+  handlers.set("mods.setAlias", () => ({ error: { code: "library_io_error", params: { file: "x.bundle" } } }));
   try {
     const saved = [];
     const opening = ModAlias.open({ mod: { id: "m1", alias: "" }, onSaved: async (value) => saved.push(value) });
@@ -5499,7 +5502,7 @@ test("Mod Alias is a layer of its own: a failed save's message draws above it, a
 
 test("closing Mod Alias leaves the other layers of the host, and a saved name closes only its own layer", async () => {
   const ModAlias = await import("../../src/bmpt/web/js/mods/mod-alias.js");
-  handlers.set("mods.rename", () => ({ result: { id: "m1", label: "Name" } }));
+  handlers.set("mods.setAlias", () => ({ result: { id: "m1", name: "Name" } }));
   try {
     const saved = [];
     const opening = ModAlias.open({ mod: { id: "m1", alias: "Old" }, onSaved: async (value) => saved.push(value) });
@@ -5522,7 +5525,7 @@ test("closing Mod Alias leaves the other layers of the host, and a saved name cl
     await again;
     ok.click();
     await until(() => saved.length === 1);
-    assert.deepEqual(saved, [{ id: "m1", label: "Name" }]);
+    assert.deepEqual(saved, [{ id: "m1", name: "Name" }]);
     assert.equal(layers().length, 0);
     assert.equal(dialog.hidden, true);
     // opening it again while one is open replaces that one only
@@ -5782,7 +5785,7 @@ test("a search that matches nothing blocks the primary button until the match is
   try {
     await Fresh.listPopup({
       host: prompt,
-      layoutKind: "spr",
+      layoutKind: "portrait",
       title: "Portraits",
       items,
       selected: "3",
@@ -5901,7 +5904,7 @@ async function openSound(prefs = {}, tabName = "sound") {
       languages: [{ code: "en-US", name: "English" }],
       voiceVolume: 80,
       voiceMuted: false,
-      lobbyZoom: { mode: "custom", custom: 2 },
+      memorialLobbyZoomOut: { mode: "custom", custom: 2 },
       ...prefs,
     };
   handlers.set("settings.get", () => ({ result: state }));
@@ -6067,7 +6070,7 @@ test("the custom zoom-out limit's slider is a range input with the value as its 
     );
     fire(range, "change");
     await tick();
-    assert.deepEqual(saved, [["lobbyZoomCustom", 3.5]]);
+    assert.deepEqual(saved, [["memorialLobbyZoomOutCustomLimit", 3.5]]);
   } finally {
     press("Escape");
     handlers.clear();
@@ -6263,7 +6266,7 @@ test("a 3D model's details fit the panel without scrolling", async () => {
   for (const n of [3, 4, 6])
     for (const rows of [fields, fields.map(([c]) => [c, "-"])]) {
       // the switch popups' values on one line, as the narrower L-class panel needs
-      const tree = Popup.detailsTree(it, "Chibi Info", rows, actions.slice(0, n), null, "model", panel, {
+      const tree = Popup.detailsTree(it, "Chibi Info", rows, actions.slice(0, n), null, "chibi", panel, {
         truncate: true,
       });
       assert.ok(tree.contentHeight <= height + 1e-6, `${n} actions: ${tree.contentHeight} > ${height}`);
@@ -6312,7 +6315,7 @@ for (const lang of ["en-US", "zh-CN", "th-TH"])
         nameEdit: { label: "Alias", fn: () => {} },
       };
       for (const [kind, tex] of [
-        ["spr", texture],
+        ["portrait", texture],
         ["lobby", null],
         ["model", null],
       ])
@@ -6355,7 +6358,7 @@ for (const lang of ["en-US", "zh-CN", "th-TH"])
             chipY.every((y) => Math.abs(y - chipY[0]) < 1e-6),
             `${what}: the chips on one row`,
           );
-          if (kind === "model")
+          if (kind === "chibi")
             assert.ok(NGUI.find(tree, "Name").pos[1] > chipY[0] + 1, `${what}: the model's chips under its name`);
           // the chips are the S chip and the actions are tagged as buttons
           // XS where S would not fit
@@ -6930,7 +6933,7 @@ test("the portrait panel's chips (the S chip) stay in the right half and 20 abov
         host: prompt,
         title: "Portrait",
         selected: "a",
-        layoutKind: "spr",
+        layoutKind: "portrait",
         items: [{ key: "a", label: "Hoshino", full: "Hoshino", chips, thumb: null, big: null }],
         details: () => ({
           title: "Portrait",
@@ -7130,7 +7133,7 @@ test("portrait and ordinary detail scroll areas keep the complete last field and
   const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
   const fields = Array.from({ length: 12 }, (_, i) => [`Field ${i}`, `value_${i}_`.repeat(12)]);
   try {
-    for (const kind of [null, "spr"]) {
+    for (const kind of [null, "portrait"]) {
       await Popup.listPopup({
         host: prompt,
         title: "Sources",
@@ -7372,7 +7375,7 @@ test("scrolling text viewer and picker heights retain their pre-fit viewports", 
   // every list popup as high as the Hall's editors (POPUP_FRAME.panelH)
   for (const [kind, height] of [
     [null, 1450],
-    ["spr", 1450],
+    ["portrait", 1450],
     ["lobby", 1450],
     ["model", 1450],
   ])
@@ -7416,7 +7419,7 @@ test("model search appends cross cards, drawn like any card, through the shared 
   try {
     await Fresh.listPopup({
       host: prompt,
-      layoutKind: "model",
+      layoutKind: "chibi",
       title: "Models",
       items: own,
       selected: "self",
@@ -7538,7 +7541,7 @@ const rectOf = (el) => ["left", "top", "width", "height"].map((k) => parseFloat(
 async function toolbarOf(Fresh, tools, items) {
   await Fresh.listPopup({
     host: prompt,
-    layoutKind: "model",
+    layoutKind: "chibi",
     title: "Models",
     items,
     selected: "a",
@@ -7627,7 +7630,7 @@ test("the list reports the cards in view, and those a scroll brings in", async (
   try {
     await Fresh.listPopup({
       host: prompt,
-      layoutKind: "model",
+      layoutKind: "chibi",
       title: "Models",
       items,
       selected: "k0",
@@ -7714,8 +7717,8 @@ test("the held entries' Details fit their wide frame with four mods, Go To and F
       const entries = [1, 2, 3, 4].map((i) => ({
         install: "/g",
         core: "hoshino_swimsuit_spr",
-        variant: "hoshino_swimsuit",
-        kind: "spr",
+        alt: "hoshino_swimsuit",
+        resourceType: "portrait",
         source: `mod:${i}`,
         label: `Swimsuit Hoshino v${i}`,
       }));

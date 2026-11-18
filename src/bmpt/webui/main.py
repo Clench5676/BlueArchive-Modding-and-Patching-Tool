@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+import tempfile
 import threading
 import time
 import webbrowser
@@ -15,11 +16,17 @@ from ..core.localization import register_locales
 register_locales()
 
 from ..core import devmode
+from ..host.data_upgrade import DataUpgrade
+from ..host.format_manifest import DATA_MANIFEST
+from ..host.store_formats import NAMESPACE
 from bmpt.engine import EXE_DIR, i18n_manager, t
 from .api import build_api
-from .instance import InstanceLock, raise_running
+from .instance import InstanceLock, raise_running, read_info
 from .server import Server, WebApp
 from .services import Services
+from .events import EventBus
+from .rpc import RpcRegistry
+from .upgrade import UpgradeBootstrap
 from .session_log import RedactingFormatter, open_run_log
 from .diagnostics import Reports, install_exception_hooks
 
@@ -35,6 +42,7 @@ def build(
     *,
     safe_mode: bool = False,
     reports: Reports | None = None,
+    upgrade: DataUpgrade | None = None,
 ) -> tuple[Services, Server]:
     """Wire the services, the RPC methods and the HTTP server; the server is not started.
 
@@ -43,13 +51,14 @@ def build(
         services: Services to serve, for tests and tools; None creates them.
         token: The session token the page must send; None picks a random one (a fixed one is for development).
         safe_mode: Start without game assets, Spine or restored pages. Applies only to the services created here.
+        upgrade: Coordinator supplying the committed paths.
         reports: The run's crash reports, which take over the services' report state and secrets so that the log
             hides them; None keeps the services' own.
 
     Returns:
         The services and the server.
     """
-    s = services or Services(safe_mode=safe_mode)
+    s = services or Services(safe_mode=safe_mode, upgrade=upgrade)
     if reports is not None:
         reports.services = s
         reports.game = s.reports.game
@@ -60,6 +69,12 @@ def build(
         lang = s.settings.get("language")
         if lang and lang != i18n_manager.lang:
             i18n_manager.set_language(lang)  # the language chosen in either GUI
+        if upgrade is not None:
+            try:
+                s.library
+            except BaseException:
+                s.close()
+                raise
         app = WebApp(
             build_api(s),
             s.events,
@@ -71,6 +86,11 @@ def build(
             classic=s.classic.wsgi,
             raise_window=s.raise_window,
             on_exception=s.reports.backend_exception,
+            upgrade=UpgradeBootstrap(
+                upgrade, language=lambda: i18n_manager.lang, ready=lambda: None, quit_app=s.quit, opened=True
+            ).dispatch
+            if upgrade
+            else None,
         )
         s.log_secrets.update((app.token, app.raise_token))
         server = Server(app, port)
@@ -130,15 +150,39 @@ def main(argv: list[str] | None = None) -> None:
         level=logging.DEBUG if args.debug else logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
 
-    devmode.check_read(EXE_DIR)
-    instance = InstanceLock(EXE_DIR)
-    if not instance.acquire():
-        raise SystemExit(second_start(EXE_DIR, serve=args.serve))
+    data = Path(EXE_DIR)
+    devmode.check_read(data)
+    runtime = data / NAMESPACE / "runtime"
+    instance = InstanceLock(data, runtime=runtime)
+    try:
+        acquired = instance.acquire(strict=True)
+    except OSError as error:
+        logger.error("Cannot lock the data directory: %s", error)
+        raise SystemExit(1) from error
+    if not acquired:
+        raise SystemExit(second_start(data, serve=args.serve))
+
+    upgrade = None
     restart = False
     try:
-        restart = _run(args, instance)
+        upgrade = DataUpgrade(data)
+        upgrade.take_instance_lock(instance)
+        if not args.serve and not (data / DATA_MANIFEST).exists():
+            restart = _serve_bootstrap(args, instance, upgrade, start_upgrade=True)
+        else:
+            state = upgrade.run()
+            if state["status"] == "ready":
+                restart = _run(args, instance, upgrade)
+            elif args.serve:
+                logger.error("Data upgrade %s. Log folder %s", state["status"], state["logFolder"])
+                raise SystemExit(1)
+            else:
+                restart = _serve_bootstrap(args, instance, upgrade)
     finally:
-        instance.release()
+        if upgrade is not None:
+            upgrade.close()
+        if instance.held:
+            instance.release()
     if restart:
         import subprocess
         from .system import safe_restart_command
@@ -162,7 +206,8 @@ def second_start(data_dir: Path, *, serve: bool) -> int:
     if serve:
         logger.error("another instance of the web UI runs on the data directory %s", data_dir)
         return 1
-    if raise_running(data_dir):
+    runtime = data_dir / NAMESPACE / "runtime"
+    if (read_info(runtime) is not None and raise_running(runtime)) or raise_running(data_dir):
         logger.info("brought the running instance on %s to the front", data_dir)
         return 0
     logger.error("another instance holds %s but did not answer", data_dir)
@@ -191,25 +236,36 @@ def recovery_config(s: Services) -> dict:
         "strings": {
             k.removeprefix("webui."): v
             for k, v in strings.items()
-            if k.startswith("webui.recovery.")
+            if k.startswith(("webui.recovery.", "webui.upgrade."))
             or k in ("webui.settings.button", "webui.settings.log.open", "webui.picker.ok")
         },
     }
 
 
-def _run(args: argparse.Namespace, instance: InstanceLock) -> bool:
+def _run(args: argparse.Namespace, instance: InstanceLock, upgrade: DataUpgrade) -> bool:
     safe_mode = getattr(args, "safe_mode", False)
-    reports = Reports(EXE_DIR, safe_mode=safe_mode)
+    runtime = upgrade.paths.runtime
+    reports = Reports(runtime, safe_mode=safe_mode)
     if args.token:
         reports.secrets.add(args.token)
     handler = None
     restore = install_exception_hooks(reports)
     try:
-        handler = open_run_log(EXE_DIR / "webui.log", reports.secrets, safe_mode=safe_mode)
+        handler = open_run_log(runtime / "webui.log", reports.secrets, safe_mode=safe_mode)
         reports.log_path = Path(handler.baseFilename) if hasattr(handler, "baseFilename") else None
         logging.getLogger().addHandler(handler)
-        return _serve(args, instance, reports, handler)
+        return _serve(args, instance, reports, handler, upgrade)
     except Exception as error:
+        if getattr(error, "code", None) in (
+            "library_recovery_pending",
+            "official_unavailable",
+            "folder_changed",
+            "library_io_error",
+        ):
+            upgrade.open_failed()
+            if args.serve:
+                raise SystemExit(1) from error
+            return _serve_bootstrap(args, instance, upgrade)
         logger.exception("Startup failed")
         reports.backend_exception(type(error), error, error.__traceback__)
         if not args.serve:
@@ -225,8 +281,8 @@ def _run(args: argparse.Namespace, instance: InstanceLock) -> bool:
             handler.close()
 
 
-def _serve(args: argparse.Namespace, instance: InstanceLock, reports: Reports, handler) -> bool:
-    s, server = build(args.port, token=args.token, safe_mode=reports.safe_mode, reports=reports)
+def _serve(args: argparse.Namespace, instance: InstanceLock, reports: Reports, handler, upgrade: DataUpgrade) -> bool:
+    s, server = build(args.port, token=args.token, safe_mode=reports.safe_mode, reports=reports, upgrade=upgrade)
     s.serve_only = args.serve
     s.log_path = reports.log_path
     handler.setFormatter(RedactingFormatter(s.log_secrets))
@@ -237,7 +293,7 @@ def _serve(args: argparse.Namespace, instance: InstanceLock, reports: Reports, h
     stop = threading.Event()
     try:
         if args.debug:
-            _trace_to_file(s.data_dir / "input-trace.log")
+            _trace_to_file(s.runtime / "input-trace.log")
         with s.timings.measure("server.start"):
             server.start()
         instance.publish(server.port, server.app.raise_token)
@@ -408,7 +464,9 @@ def _run_window(s: Services, server: Server, debug: bool) -> None:
     window.events.loaded += on_loaded
     window.events.closing += on_closing
     window.events.closed += on_closed
-    storage = s.data_dir / "webview"  # never next to the program in a compiled build: data_dir follows EXE_DIR rules
+    storage = (
+        s.committed.runtime if s.committed else s.data_dir
+    ) / "webview"  # never next to the program in a compiled build: data_dir follows EXE_DIR rules
     try:
         # the tray starts on a thread of its own once the GUI loop runs
         native_started = time.perf_counter()
@@ -444,5 +502,165 @@ def _run_window(s: Services, server: Server, debug: bool) -> None:
         logger.info("Native lifecycle: cleanup complete")
 
 
+def _serve_bootstrap(
+    args: argparse.Namespace,
+    instance: InstanceLock,
+    upgrade: DataUpgrade,
+    *,
+    classic: bool = False,
+    start_upgrade: bool = False,
+) -> bool:
+    stop = threading.Event()
+    window = None
+    services = None
+
+    def quit_app() -> None:
+        stop.set()
+        if window is not None:
+            window.destroy()
+
+    def pick() -> Path | None:
+        if window is None:
+            return None
+        import webview
+
+        selected = window.create_file_dialog(webview.FileDialog.FOLDER)
+        return Path(selected[0]) if selected else None
+
+    def ready() -> None:
+        nonlocal services
+        if stop.is_set():
+            return
+        if classic:
+            _recover_for_classic(upgrade)
+            threading.Timer(0.1, quit_app).start()
+            return
+        candidate = Services(safe_mode=args.safe_mode, upgrade=upgrade)
+        try:
+            candidate.library
+            candidate.mute, candidate.debug = args.mute, args.debug
+            candidate.origin = f"http://127.0.0.1:{server.port}"
+            candidate.window = window
+            candidate.quit_handle = quit_app
+            if args.browser:
+                candidate.browser_url = server.url
+            registry = build_api(candidate)
+            candidate.start()
+        except BaseException:
+            candidate.close()
+            raise
+        app.rpc = registry
+        app.events = candidate.events
+        app.assets = candidate.asset
+        app.consent = lambda: candidate.state.consent
+        app.recovery = lambda: recovery_config(candidate)
+        app.classic = candidate.classic.wsgi
+        app.raise_window = candidate.raise_window
+        app.on_exception = candidate.reports.backend_exception
+        services = candidate
+        threading.Thread(target=_watch_config, args=(candidate, stop), name="bamt-config", daemon=True).start()
+        app.services_ready = True
+        instance.publish(server.port, app.raise_token)
+
+    def schedule_quit() -> None:
+        threading.Timer(0.1, quit_app).start()
+
+    bootstrap = UpgradeBootstrap(
+        upgrade, language=lambda: i18n_manager.lang, ready=ready, quit_app=schedule_quit, pick=pick
+    )
+
+    def bootstrap_config() -> dict:
+        return {
+            "language": i18n_manager.lang,
+            "strings": bootstrap.state()["strings"],
+            "canRelocateUpgrade": not args.browser,
+            "upgradeHandoff": "classic" if classic else "safeMode" if args.safe_mode else None,
+        }
+
+    app = WebApp(
+        RpcRegistry(),
+        EventBus(),
+        token=args.token,
+        upgrade=bootstrap.dispatch,
+        recovery=bootstrap_config,
+        services_ready=False,
+    )
+    server = Server(app, args.port)
+    server.start()
+    try:
+        if args.browser:
+            app.raise_window = lambda: webbrowser.open(server.url)
+            instance.publish(server.port, app.raise_token)
+            if start_upgrade:
+                threading.Thread(target=bootstrap.dispatch, args=("retry",), daemon=True).start()
+            webbrowser.open(server.url)
+            print(server.url, flush=True)
+            stop.wait()
+        else:
+            import webview
+
+            window = webview.create_window(
+                t("ui.app_title"), server.url, width=1200, height=760, background_color="#000000"
+            )
+            app.raise_window = lambda: (window.show(), window.restore())
+            instance.publish(server.port, app.raise_token)
+            if start_upgrade:
+                window.events.shown += lambda: threading.Thread(
+                    target=bootstrap.dispatch, args=("retry",), daemon=True
+                ).start()
+            with tempfile.TemporaryDirectory(prefix="bmpt-upgrade-webview-") as storage:
+                webview.start(
+                    debug=args.debug,
+                    private_mode=True,
+                    storage_path=storage,
+                    gui="edgechromium" if sys.platform == "win32" else None,
+                )
+    except KeyboardInterrupt:
+        pass
+    finally:
+        stop.set()
+        server.stop()
+        if services is not None:
+            services.close()
+    return bool(services and services.restart_requested)
+
+
+def _recover_for_classic(upgrade: DataUpgrade) -> None:
+    paths = upgrade.paths
+    if paths is None:
+        return
+    if not any(paths.library_epoch.glob("*/**/journal.json")):
+        return
+    service = Services(upgrade=upgrade, safe_mode=True)
+    try:
+        service.library
+    finally:
+        service.close()
+
+
+def open_classic_upgrade(upgrade: DataUpgrade) -> bool:
+    """Show the same gated notice for standalone Classic until the generation opens."""
+    runtime = upgrade.data_dir / NAMESPACE / "runtime"
+    instance = InstanceLock(upgrade.data_dir, runtime=runtime)
+    try:
+        if not instance.acquire(strict=True):
+            second_start(upgrade.data_dir, serve=False)
+            return False
+    except OSError as error:
+        logger.error("Cannot lock the data directory: %s", error)
+        return False
+    upgrade.take_instance_lock(instance)
+    if upgrade.run()["status"] == "ready":
+        try:
+            _recover_for_classic(upgrade)
+        except Exception:
+            upgrade.open_failed()
+        else:
+            return True
+    options = argparse.Namespace(port=0, token=None, browser=False, debug=False)
+    _serve_bootstrap(options, instance, upgrade, classic=True)
+    return upgrade.paths is not None
+
+
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    main()

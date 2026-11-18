@@ -10,6 +10,7 @@ import { clipButtonPatterns, tagOf, tagBox, overlaps, inkBox } from "./button-la
 import { spriteUrl, uiExportUrl, setAssetContext } from "../core/api.js";
 import { decodeAll, imageUrls, imageDecoder } from "../core/image-decode.js";
 import { withTimeout } from "../core/async.js";
+import { readSerialized } from "../core/serialized-fields.js";
 import { canvasFailed, encodedPicture } from "../core/canvas-failure.js";
 import { spriteBorders, sliceAxis } from "./sprite-slices.js";
 import { renderFrameEffect } from "./ngui-frame-fx.js";
@@ -139,7 +140,7 @@ async function assetJson(url, cache, label = url) {
   try {
     const response = await fetch(uiExportUrl(url), { cache });
     if (!response.ok) throw new Error(`${label}: HTTP ${response.status}`);
-    return await response.json();
+    return readSerialized(await response.json());
   } finally {
     endRequest?.();
   }

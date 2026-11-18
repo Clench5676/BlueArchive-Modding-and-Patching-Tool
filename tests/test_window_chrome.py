@@ -1071,7 +1071,7 @@ def test_windows_installs_aspect_policy_before_show_without_waiting_for_webview(
     monkeypatch.setattr(Tray, "supported", staticmethod(lambda: False))
     monkeypatch.setattr(window_chrome, "WindowChrome", Chrome)
     monkeypatch.setitem(sys.modules, "webview", NS(settings={}, create_window=create, start=start))
-    services = NS(window=None, data_dir=tmp_path, timings=Timings(), events=EventBus())
+    services = NS(window=None, data_dir=tmp_path, timings=Timings(), events=EventBus(), committed=None)
     main._run_window(services, NS(url="http://127.0.0.1:1/"), False)
     assert calls == ["before-show", "install", "shown", "dispose"]
 

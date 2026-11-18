@@ -108,9 +108,9 @@ def test_the_services_test_the_folder_at_start(tmp_path):
 
 @posix_permissions
 def test_writes_into_a_read_only_data_folder_answer_data_dir_readonly(app, services, readonly):
-    rpc(app, "ui.visit", variant="hoshino")  # writes fine while the folder takes files
+    rpc(app, "ui.visit", alt="hoshino")  # writes fine while the folder takes files
     readonly()
-    answer = rpc(app, "ui.visit", variant="shiroko")
+    answer = rpc(app, "ui.visit", alt="shiroko")
     assert answer["error"] == {"code": "data_dir_readonly", "ref": "E1005", "params": {"path": str(services.data_dir)}}
     assert rpc(app, "app.info")["result"]["dataDir"] == str(services.data_dir)  # reads go on working
     assert UiState_recent(services) == ["hoshino"]
@@ -143,7 +143,7 @@ def test_a_failure_elsewhere_stays_internal(app, services, tmp_path):
         raise PermissionError(errno.EACCES, "denied", str(tmp_path.parent / "elsewhere" / "file"))
 
     services.state.visit = broken
-    answer = rpc(app, "ui.visit", variant="hoshino")
+    answer = rpc(app, "ui.visit", alt="hoshino")
     assert answer["error"]["code"] == "internal"
 
 

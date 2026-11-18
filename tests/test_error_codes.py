@@ -18,30 +18,28 @@ PACKAGE = Path(__file__).parents[1] / "src" / "bmpt"
 REGISTRY = json.loads((PACKAGE / "web" / "error-codes.json").read_text(encoding="utf-8"))
 LANGUAGES = ("en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH")
 INTERNAL_CODES = {
-    "capture_not_ready",  # photography/shoot.js translates exhausted retries to photo_capture_unavailable.
+    "capture_not_ready",  # photography/shoot.js translates exhausted retries to thumbnail_capture_unavailable.
 }
 # These assignments are permanent. Append a new name within its block; never renumber an old one.
 BLOCKS = (
     (
         "bad_params busy classic_failed classic_open data_dir_readonly dev_path_outside failed folder_changed "
         "internal job_not_found lines_unavailable native_only native_unavailable not_enough_space path_not_found "
-        "profiles_unreadable reveal_failed safe_restart_unavailable scan_off state_changed unknown_method "
+        "mod_configuration_unreadable reveal_failed safe_restart_unavailable scan_off state_changed unknown_method "
     ).split(),
     (
-        "catalog_data_invalid catalog_family_not_found catalog_variant_not_found game_directory_missing "
-        "game_file_locked game_file_not_found game_file_outside_resources game_not_found game_running "
-        "game_status_unavailable original_invalid original_unavailable steam_busy variant_incompatible "
-        "variant_not_found untested_build game_file_denied game_app_denied game_disk_full "
-        "game_file_write_failed "
+        "catalog_data_invalid catalog_student_not_found catalog_alt_not_found game_directory_missing game_file_locked "
+        "game_file_not_found game_file_outside_resources game_not_found game_running game_status_unavailable "
+        "official_invalid official_unavailable steam_busy alt_incompatible alt_not_found untested_build "
+        "game_file_denied game_app_denied game_disk_full game_file_write_failed "
     ).split(),
     (
         "bundle_invalid conflict conversion_failed conversion_names game_file_conflict mod_parts_missing "
         "mod_platform_mismatch mod_platform_unknown mod_release_mismatch mod_target_ambiguous mod_target_mismatch "
         "mod_target_unknown mod_unity_version_mismatch mod_unsupported no_matching_assets no_target "
-        "platform_unsupported required_asset_apply_failed required_asset_extract_failed "
-        "required_asset_stream_missing required_assets_unmatched source_conflict source_unknown "
-        "source_unsupported spine_version target_unknown unreadable unsupported "
-        "archive_invalid "
+        "platform_unsupported required_asset_apply_failed required_asset_extract_failed required_asset_stream_missing "
+        "required_assets_unmatched source_conflict source_unknown source_unsupported spine_version target_unknown "
+        "unreadable unsupported archive_invalid "
     ).split(),
     (
         "asset_delete_confirm asset_official crc_fix_failed entry_changed export_empty export_target_unavailable "
@@ -53,20 +51,22 @@ BLOCKS = (
         "asset_extraction_failed asset_load_failed atlas_remap_asset_ambiguous atlas_remap_atlas_missing "
         "atlas_remap_bounds atlas_remap_invalid atlas_remap_page_ambiguous atlas_remap_page_missing "
         "atlas_remap_property atlas_remap_region_ambiguous atlas_remap_regions_missing atlas_remap_source_missing "
-        "atlas_remap_structure atlas_remap_target_mismatch atlas_remap_redrawn old_rig_animations "
-        "old_rig_unavailable graft_unavailable graft_refused graft_page_missing graft_region_too_large "
-        "graft_spine_licence converter_consent converter_unavailable converter_download_failed converter_mismatch "
-        "converter_failed converter_unreadable converter_missing converter_drift "
+        "atlas_remap_structure atlas_remap_target_mismatch atlas_remap_redrawn recorded_rig_animations "
+        "recorded_rig_unavailable add_animations_unavailable add_animations_refused add_animations_page_missing "
+        "add_animations_region_too_large add_animations_spine_licence converter_consent converter_unavailable "
+        "converter_download_failed converter_mismatch converter_failed converter_unreadable converter_missing "
+        "converter_drift "
     ).split(),
     (
-        "alias_too_long alias_too_many hall_conflict hall_duplicate_memorial hall_duplicate_portrait "
-        "hall_last_memorial hall_last_portrait photo_apply_failed photo_capture_unavailable "
-        "photo_delete_other_variant photo_in_use photo_invalid photo_library_invalid photo_missing "
-        "photo_target_unavailable lobby_camera_failed lobby_camera_unsupported "
+        "alias_too_long alias_too_many student_hall_conflict student_hall_duplicate_memorial "
+        "student_hall_duplicate_portrait student_hall_last_memorial student_hall_last_portrait thumbnail_apply_failed "
+        "thumbnail_capture_unavailable thumbnail_delete_other_alt thumbnail_in_use thumbnail_invalid "
+        "thumbnail_library_invalid thumbnail_missing thumbnail_target_unavailable lobby_camera_failed "
+        "lobby_camera_unsupported "
     ).split(),
     (
-        "update_check_failed update_checksum_mismatch update_download_failed update_restart_failed "
-        "update_unavailable update_unsupported "
+        "update_check_failed update_checksum_mismatch update_download_failed update_restart_failed update_unavailable "
+        "update_unsupported "
     ).split(),
 )
 

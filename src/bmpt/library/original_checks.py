@@ -16,12 +16,13 @@ screens trusts a record whose size and modification time still match the file.
 
 from __future__ import annotations
 
-import json
 import logging
 import threading
 from pathlib import Path
 from typing import Literal
 
+from ..host.store_formats import read_runtime, runtime_store
+from ..host.upgrade_files import digest
 from .storage import Fingerprint, atomic_json
 
 logger = logging.getLogger(__name__)
@@ -44,23 +45,28 @@ class OriginalChecks:
         """
         self.path = root / FILE
         self._lock = threading.Lock()
-        self._cache: tuple[tuple[int, int] | None, dict[str, dict]] | None = None
+        self._extra: dict = {}
+        self._cache: tuple[tuple[int, int, int] | None, dict[str, dict]] | None = None
+        self.managed = runtime_store(self.path) is not None
 
     def _read(self) -> dict[str, dict]:
         try:
             stat = self.path.stat()
-            signature: tuple[int, int] | None = (stat.st_size, stat.st_mtime_ns)
+            signature: tuple[int, int, int] | None = (stat.st_size, stat.st_mtime_ns, stat.st_ino)
         except OSError:
             signature = None
         if self._cache is not None and self._cache[0] == signature:
             return self._cache[1]
         records: dict[str, dict] = {}
+        self._extra = {}
         if signature is not None:
             try:
-                data = json.loads(self.path.read_text(encoding="utf-8"))
+                data = read_runtime(self.path)
             except (OSError, ValueError):
                 data = None
             entries = data.get("originals") if isinstance(data, dict) and data.get("version") == VERSION else None
+            if entries is not None:
+                self._extra = {key: value for key, value in data.items() if key not in ("version", "originals")}
             for name, record in (entries or {}).items():
                 if (
                     isinstance(name, str)
@@ -77,6 +83,40 @@ class OriginalChecks:
         """Return a bundle filename's recorded verdict and fingerprint, or None if absent."""
         with self._lock:
             return self._read().get(name)
+
+    def matches_digest(self, original: Path, *, name: str | None = None) -> bool:
+        """Check a kept file against its recorded baseline with a fresh full-file read."""
+        if not self.managed:
+            return True
+        with self._lock:
+            records = self._read()
+            name = name or original.name
+            expected = self._extra.get("digests", {}).get(name)
+            verdict = records.get(name)
+        if not isinstance(expected, str):
+            return False
+        try:
+            if digest(original) != expected:
+                return False
+            return verdict is None or digest(original, "sha1") == verdict["sha1"]
+        except (OSError, ValueError):
+            return False
+
+    def remember_digest(self, original: Path, verified_sha1: str) -> None:
+        """Record the SHA-256 of bytes that match an independently verified SHA-1."""
+        if not self.managed:
+            return
+        expected = digest(original)
+        if digest(original, "sha1") != verified_sha1:
+            raise OSError(f"Kept official bytes changed: {original}")
+        with self._lock:
+            records = self._read()
+            digests = {**self._extra.get("digests", {}), original.name: expected}
+            self._write(records, {**self._extra, "digests": digests})
+
+    def _write(self, records: dict, extra: dict) -> None:
+        atomic_json(self.path, {**extra, "version": VERSION, "originals": dict(sorted(records.items()))})
+        self._cache = None
 
     def of_bytes(self, name: str, fingerprint: Fingerprint) -> Verdict | None:
         """Find the recorded verdict for exact bytes using write-strength verification.
@@ -103,7 +143,7 @@ class OriginalChecks:
             The verdict, or None if the file or matching record is unavailable.
         """
         record = self.record(original.name)
-        if record is None:
+        if record is None or not self.matches_digest(original):
             return None
         try:
             stat = original.stat()
@@ -124,18 +164,26 @@ class OriginalChecks:
         """
         try:
             mtime = original.stat().st_mtime_ns
-        except OSError:
+            confirmed_digest = None
+            if self.managed and by == "steam":
+                confirmed_digest = digest(original)
+                if digest(original, "sha1") != fingerprint.sha1:
+                    return
+        except (OSError, ValueError):
             return
         entry = {"by": by, "sha1": fingerprint.sha1, "size": fingerprint.size, "mtime": mtime}
         with self._lock:
             records = dict(self._read())
-            if records.get(original.name) == entry:
+            extra = self._extra
+            if confirmed_digest is not None:
+                extra = {**extra, "digests": {**extra.get("digests", {}), original.name: confirmed_digest}}
+            if records.get(original.name) == entry and extra == self._extra:
                 return
             records[original.name] = entry
             if keep is not None:
                 records = {name: value for name, value in records.items() if name in keep or name == original.name}
             try:
-                atomic_json(self.path, {"version": VERSION, "originals": dict(sorted(records.items()))})
+                self._write(records, extra)
             except OSError as error:
                 logger.warning("Could not save the check of a kept original: %s", error)
                 return

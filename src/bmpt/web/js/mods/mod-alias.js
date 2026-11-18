@@ -95,7 +95,7 @@ export async function open({ mod, onSaved }) {
     saving = true;
     input.disabled = true;
     try {
-      const saved = await rpc("mods.rename", { id: mod.id, label: input.value });
+      const saved = await rpc("mods.setAlias", { id: mod.id, alias: input.value });
       if (my === token) finish();
       await onSaved(saved);
     } catch (err) {

@@ -8,9 +8,23 @@ import { SPACE, POPUP_FRAME, POPUP_TYPE } from "../ui/ui-tokens.js";
 import { stack as layoutStack, container } from "../ui/ui-grid.js";
 import { ROW_W as OPTION_WIDTH, rowBase, radioRow } from "../settings/settings-rows.js";
 import { importGroups } from "./import-groups.js";
-import { RESOURCE_TYPES } from "./import-state.js";
+import { ASSET_TYPES } from "./import-state.js";
 import { el, place } from "./import-controls.js";
 import { KIND_KEYS } from "./import-list.js";
+
+// the locale key under import.options of each import option
+const OPTION_LABELS = Object.freeze({
+  skipUnchanged: "skipUnchanged",
+  createBackup: "backup",
+  matchStrategy: "strategy",
+  crcCorrection: "crc",
+  compression: "compression",
+  extraBytes: "extraBytes",
+  threads: "workers",
+  outputFolder: "output",
+});
+// the locale key under import.strategy of a match strategy whose value differs from it
+const STRATEGY_LABELS = Object.freeze({ containerNameType: "cont_name_type" });
 
 // The dialogs' scrolling area [left, top, width, height] (px in the stage; app.css .import-dialog-content has
 // the same numbers) and their frame's height: the area 83.5 px under the frame's top, and the XS footer every
@@ -184,7 +198,7 @@ export function createImportDialogs(P, page) {
 
   async function openOptions() {
     if (model.busy() || !(await model.loadOptions())) return;
-    const draft = { ...model.state.options, types: [...model.state.options.types] };
+    const draft = { ...model.state.options, assetTypes: [...model.state.options.assetTypes] };
     let error;
     // The L frame (POPUP_FRAME.L: UIPopup_Option_PC's) with its content in a container padded SPACE.xl on each side
     // (panels in a popup).
@@ -196,10 +210,10 @@ export function createImportDialogs(P, page) {
         width: POPUP_FRAME.L.w,
         padding: SPACE.xl,
         onAction: async () => {
-          if (!draft.types.length || !Number.isSafeInteger(draft.workers) || draft.workers < 1) {
+          if (!draft.assetTypes.length || !Number.isSafeInteger(draft.threads) || draft.threads < 1) {
             textWidget(
               error,
-              T(!draft.types.length ? "import.options.typesRequired" : "import.options.workersInvalid"),
+              T(!draft.assetTypes.length ? "import.options.typesRequired" : "import.options.workersInvalid"),
               "error",
               { origin: [(OPTION_WIDTH * S) / 2, 35] },
             );
@@ -291,10 +305,10 @@ export function createImportDialogs(P, page) {
             },
           );
         }
-        for (const key of ["skipUnchanged", "backup"]) {
+        for (const key of ["skipUnchanged", "createBackup"]) {
           choice(
             key,
-            T(`import.options.${key}`),
+            T(`import.options.${OPTION_LABELS[key]}`),
             onOff,
             () => draft[key],
             (value) => {
@@ -305,7 +319,7 @@ export function createImportDialogs(P, page) {
         const radio = (key, values) =>
           choice(
             key,
-            T(`import.options.${key}`),
+            T(`import.options.${OPTION_LABELS[key]}`),
             values,
             () => draft[key],
             (value) => {
@@ -313,10 +327,13 @@ export function createImportDialogs(P, page) {
             },
           );
         radio(
-          "strategy",
-          ["cont_name_type", "path_id", "name_type"].map((key) => [key, T(`import.strategy.${key}`)]),
+          "matchStrategy",
+          ["containerNameType", "path_id", "name_type"].map((key) => [
+            key,
+            T(`import.strategy.${STRATEGY_LABELS[key] || key}`),
+          ]),
         );
-        radio("crc", [
+        radio("crcCorrection", [
           ["auto", T("import.auto")],
           ["on", T("settings.post.on")],
           ["off", T("settings.post.off")],
@@ -327,45 +344,49 @@ export function createImportDialogs(P, page) {
           ["original", T("import.original")],
           ["none", T("import.uncompressed")],
         ]);
-        const types = el("fieldset", "import-resource-types");
+        const types = el("fieldset", "import-asset-types");
         types.setAttribute("aria-label", T("import.options.types"));
         choice(
-          "types",
+          "assetTypes",
           T("import.options.types"),
-          RESOURCE_TYPES.map((type) => [type, type === "ALL" ? T("import.options.allTypes") : type]),
-          () => new Set(draft.types),
+          ASSET_TYPES.map((type) => [type, type === "ALL" ? T("import.options.allTypes") : type]),
+          () => new Set(draft.assetTypes),
           (type, checked) => {
-            const values = new Set(draft.types);
+            const values = new Set(draft.assetTypes);
             if (checked) values.add(type);
             else values.delete(type);
             if (checked && type === "ALL") {
               values.clear();
               values.add("ALL");
             } else if (checked) values.delete("ALL");
-            draft.types = [...values];
+            draft.assetTypes = [...values];
           },
           { multiple: true, parent: types },
         );
-        for (const key of ["extraBytes", "workers", "output"]) {
+        for (const key of ["extraBytes", "threads", "outputFolder"]) {
           const group = add(key, 240);
-          paint(group, rowBase(`Option_${key}`, 0, 240, T(`import.options.${key}`), POPUP_TYPE.card), {
+          paint(group, rowBase(`Option_${key}`, 0, 240, T(`import.options.${OPTION_LABELS[key]}`), POPUP_TYPE.card), {
             scale: S,
             origin: [(OPTION_WIDTH * S) / 2, 120 * S],
           });
-          const control = inputControl(T(`import.options.${key}`), draft[key] ?? "", {
-            type: key === "workers" ? "number" : "text",
+          const control = inputControl(T(`import.options.${OPTION_LABELS[key]}`), draft[key] ?? "", {
+            type: key === "threads" ? "number" : "text",
             width: (OPTION_WIDTH - 110) * S,
           });
           place(control.wrap, 55 * S, 120 * S, (OPTION_WIDTH - 110) * S, 112 * S);
           group.appendChild(control.wrap);
           const input = control.input;
-          if (key === "workers") {
+          if (key === "threads") {
             input.min = "1";
             input.step = "1";
           }
           input.addEventListener("input", () => {
             draft[key] =
-              key === "workers" ? Number(input.value) : key === "output" ? input.value.trim() || null : input.value;
+              key === "threads"
+                ? Number(input.value)
+                : key === "outputFolder"
+                  ? input.value.trim() || null
+                  : input.value;
           });
         }
         const note = el("div", "import-option-note");
@@ -427,15 +448,15 @@ export function createImportDialogs(P, page) {
         place(go, 1115 * k, 86 * k, 225 * k, 65 * k);
         const navigate = (item) => {
           P.dialogClose?.();
-          const variant = identified(item).variant;
-          if (item.kind === "other" || !variant) P.context?.goOther?.();
-          else P.context?.go?.(variant.family.key, variant.key, item.kind === "spr" ? "portrait" : item.kind);
+          const alt = identified(item).alt;
+          if (item.resourceType === "other" || !alt) P.context?.goOther?.();
+          else P.context?.go?.(alt.student.key, alt.key, item.resourceType);
         };
         go.addEventListener("click", () => navigate(entry));
         if (P.merged)
           drawing.then((view) => {
             for (const kind of Object.keys(group.counts).filter((kind) => group.counts[kind])) {
-              const item = group.entries.find((item) => item.kind === kind);
+              const item = group.entries.find((item) => item.resourceType === kind);
               const path = `List_01/Label_From/${kind}`;
               const boxes = ["Count", "Icon"].map((part) => Popup.nodeRect(view, `${path}/${part}`)).filter(Boolean);
               const x = Math.min(...boxes.map(([x]) => x)),

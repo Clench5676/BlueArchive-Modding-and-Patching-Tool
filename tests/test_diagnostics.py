@@ -419,7 +419,8 @@ def test_pywebview_failure_is_caught_by_startup_wrapper(reports, monkeypatch):
     calls = []
     monkeypatch.setattr(native, "startup_failure", lambda r, error: calls.append(str(error)))
     args = SimpleNamespace(safe_mode=False, token=None, serve=False)
-    assert main._run(args, SimpleNamespace()) is False
+    upgrade = SimpleNamespace(paths=SimpleNamespace(runtime=reports.data_dir))
+    assert main._run(args, SimpleNamespace(), upgrade) is False
     assert calls == ["pywebview missing"]
     assert list(reports.data_dir.glob("BAMT-report-*.zip"))
 
@@ -481,10 +482,26 @@ def test_restart_safe_refuses_writers_and_restarts_only_after_lock_release(monke
     order = []
     monkeypatch.setattr(main, "EXE_DIR", tmp_path)
     monkeypatch.setattr(main.devmode, "check_read", lambda _: None)
-    monkeypatch.setattr(
-        main, "InstanceLock", lambda _: SimpleNamespace(acquire=lambda: True, release=lambda: order.append("released"))
-    )
-    monkeypatch.setattr(main, "_run", lambda args, instance: args.safe_mode)
+    from bmpt.host.data_upgrade import DataUpgrade
+
+    def upgrade(data):
+        return DataUpgrade(data, qualify=lambda _: "apfs")
+
+    prepared = upgrade(tmp_path)
+    try:
+        assert prepared.run()["status"] == "ready"
+    finally:
+        prepared.close()
+
+    class TrackingLock(main.InstanceLock):
+        def release(self):
+            if self.held:
+                order.append("released")
+            super().release()
+
+    monkeypatch.setattr(main, "DataUpgrade", upgrade)
+    monkeypatch.setattr(main, "InstanceLock", TrackingLock)
+    monkeypatch.setattr(main, "_run", lambda args, instance, upgrade: args.safe_mode)
     from bmpt.webui import system
 
     monkeypatch.setattr(system, "program_command", lambda: ["test-app"])
@@ -698,7 +715,7 @@ def test_review_unwritable_logging_keeps_hooks_reports_and_native_alert(reports,
     monkeypatch.setattr(main, "open_run_log", open_log)
     entered, messages = [], []
 
-    def serve(args, instance, r, handler):
+    def serve(args, instance, r, handler, upgrade):
         entered.append(handler)
         handler.emit(
             logging.makeLogRecord({"msg": "fallback log works", "levelno": logging.ERROR, "levelname": "ERROR"})
@@ -707,7 +724,8 @@ def test_review_unwritable_logging_keeps_hooks_reports_and_native_alert(reports,
 
     monkeypatch.setattr(main, "_serve", serve)
     monkeypatch.setattr(native, "message_box", lambda *args: messages.append(args))
-    assert main._run(SimpleNamespace(safe_mode=False, token=None, serve=False), SimpleNamespace()) is False
+    upgrade = SimpleNamespace(paths=SimpleNamespace(runtime=reports.data_dir))
+    assert main._run(SimpleNamespace(safe_mode=False, token=None, serve=False), SimpleNamespace(), upgrade) is False
     assert entered and messages and sys.excepthook is previous_hook
     assert list(desktop.glob("BAMT-report-*.zip"))
     if getattr(entered[0], "baseFilename", None):
@@ -953,9 +971,9 @@ def test_game_names_stay_and_log_heads_survive_asset_redaction():
         "2026-11-06 19:20:13,123 WARNING bmpt.gameassets.service: [asset].wav not found"
     )
     text = diagnostics.private_text(
-        f'Preview failed: {{"url": "/asset/model/ch0258.glb", "file": "{official}"}}', set()
+        f'Preview failed: {{"url": "/asset/chibi/ch0258.glb", "file": "{official}"}}', set()
     )
-    assert "/asset/model/ch0258.glb" in text and official in text
+    assert "/asset/chibi/ch0258.glb" in text and official in text
 
 
 @pytest.mark.parametrize(

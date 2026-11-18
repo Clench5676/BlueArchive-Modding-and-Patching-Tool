@@ -33,9 +33,9 @@ export function lobbySuffix(core) {
 
 /** The kind chip: Portrait, Memorial Lobby, or the memorial lobby of an alternate core with its suffix. */
 export function kindLabel(entry) {
-  const kind = entry?.kind || (/_spr$/i.test(entry?.core || "") ? "spr" : "lobby");
+  const kind = entry?.resourceType || (/_spr$/i.test(entry?.core || "") ? "portrait" : "memorialLobby");
   if (kind === "other") return T("settings.mods.other");
-  if (kind !== "lobby") return T(kind === "model" ? "tab.model" : "tab.portrait");
+  if (kind !== "memorialLobby") return T(kind === "chibi" ? "tab.model" : "tab.portrait");
   const suffix = lobbySuffix(entry?.core);
   return suffix ? `${T("tab.lobby")} ${suffix}` : T("tab.lobby");
 }
@@ -56,9 +56,13 @@ export function installId(state, key) {
  * the same name; null for kinds without a skeleton.
  */
 export const entryBase = (entry, state) =>
-  ["model", "other"].includes(entry?.kind)
+  ["chibi", "other"].includes(entry?.resourceType)
     ? null
-    : spineBase(entry?.kind === "lobby" ? "lobby" : "spr", entry?.core, installId(state, entry?.install));
+    : spineBase(
+        entry?.resourceType === "memorialLobby" ? "memorialLobby" : "portrait",
+        entry?.core,
+        installId(state, entry?.install),
+      );
 
 /**
  * The entries a prompt lists, from the last scan (mods.entries), leaving out the dismissed ones unless asked
@@ -127,18 +131,18 @@ export function crcText(entry) {
 export const sizeText = (bytes) => ModSwitch.sizeText(bytes);
 
 /**
- * One card of a prompt, for popup.js listPopup (its thumbnail is added by the page): the variant's name (the
+ * One card of a prompt, for popup.js listPopup (its thumbnail is added by the page): the alt's name (the
  * kind is a chip of the details panel, not part of the label), the kind and install chips (the install only
  * when more than one is known), "No Official Copy" on an overwritten entry; damaged and stuck entries cannot be
  * ticked and are drawn dim with their state.
  * @param {object} entry The scan entry.
  * @param {object} [options]
  * @param {object|null} [options.state] mods.state.
- * @param {(entry: object) => string} [options.nameOf] Names the entry's variant.
+ * @param {(entry: object) => string} [options.nameOf] Names the entry's alt.
  * @param {string} [options.which] The prompt, "untracked" or "drift".
  */
-export function card(entry, { state = null, nameOf = (e) => e?.variant || e?.core || "", which = "untracked" } = {}) {
-  const name = nameOf(entry) || entry?.variant || entry?.core || "";
+export function card(entry, { state = null, nameOf = (e) => e?.alt || e?.core || "", which = "untracked" } = {}) {
+  const name = nameOf(entry) || entry?.alt || entry?.core || "";
   // the card's label is the name alone, at the most room the card has; the kind is the details panel's first chip
   const label = name;
   const installs = state?.installs || [];
@@ -160,7 +164,7 @@ export function card(entry, { state = null, nameOf = (e) => e?.variant || e?.cor
     key: entryKey(entry),
     label,
     full: name,
-    kind: entry.kind,
+    resourceType: entry.resourceType,
     size: apart ? 0 : entry.size || 0,
     chips,
     disabled: apart,
@@ -256,12 +260,12 @@ export function overwrittenKind(files) {
   const modded = (files || []).filter(
     (f) => !(typeof f.official === "boolean" ? f.official : f.applied === "official"),
   );
-  return modded.length && modded.every((f) => /^(mod|variant):/.test(f.applied || "")) ? "overwritten" : "addFirst";
+  return modded.length && modded.every((f) => /^(mod|alt):/.test(f.applied || "")) ? "overwritten" : "addFirst";
 }
 
 // --- the page ---
 
-let names = async () => (e) => e?.variant || e?.core || "";
+let names = async () => (e) => e?.alt || e?.core || "";
 const shown = { drift: new Set(), untracked: new Set() }; // entry|state shown by each prompt in this page
 let busy = false; // a prompt is open (or its action runs)
 let started = false; // the start sequence reached its prompts: later scans may show them
@@ -390,9 +394,9 @@ async function cardsOf(entries, state, which) {
   const nameOf = await names().catch(() => undefined);
   return entries.map((e) => {
     const base = entryBase(e, state),
-      lobby = e?.kind === "lobby";
+      lobby = e?.resourceType === "memorialLobby";
     // a portrait's details show it upright, as the portrait switch popup does
-    const big = e?.kind === "spr" ? () => thumb(base, "portrait") : () => thumb(base, "bust", null, lobby);
+    const big = e?.resourceType === "portrait" ? () => thumb(base, "portrait") : () => thumb(base, "bust", null, lobby);
     return { ...card(e, { state, nameOf, which }), thumb: thumb(base, "card", null, lobby), big };
   });
 }
@@ -420,7 +424,7 @@ function listPrompt({ title, items, buttons, hint, check, closable, which, untic
         focus,
         keepScroll: scroll,
         hint,
-        detailKind: (it) => it.entry?.kind,
+        detailKind: (it) => it.entry?.resourceType,
         alignStart: true,
         slimBand: true,
         footer: footer(items, selection, { size: which === "untracked" }),
@@ -617,7 +621,7 @@ export async function adopt(entries) {
 
 /**
  * The message for an overwritten entry of the current install (the switch popup's greyed cards, an
- * original_unavailable refusal): Add First, whose Add to Library adopts this entry, or the Overwritten message
+ * official_unavailable refusal): Add First, whose Add to Library adopts this entry, or the Overwritten message
  * with the repair lines of its install.
  * @returns {Promise<boolean>} Resolves once it closes: true when the entry was added.
  */

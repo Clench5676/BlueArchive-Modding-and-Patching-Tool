@@ -153,7 +153,7 @@ export function detailsTree(
   // A 3D model's picture spans the panel, its name, chips and fields under it, one size for every candidate
   // (model); a photograph's square the same (photo), its picture filling the window (cover) where a model's still
   // is shown whole (contain).
-  const model = !portraitTexture && (kind === "model" || kind === "photo");
+  const model = !portraitTexture && (kind === "chibi" || kind === "photo");
   const columns = grid(content),
     pictureColumn = portraitTexture ? columns.span(5) : content;
   const infoColumn = portraitTexture ? columns.span(7, 5) : content;
@@ -402,7 +402,7 @@ export function detailsTree(
   const texture = portraitTexture && clone(portraitTexture),
     native = texture?.widgets.find((widget) => "texture" in widget);
   // the portrait card keeps its native aspect in its preview column
-  const portraitCard = texture && switchGrid("spr").card;
+  const portraitCard = texture && switchGrid("portrait").card;
   const aspect = portraitCard ? portraitCard.w / portraitCard.h : model ? 1 : 16 / 9;
   let pictureW;
   if (portraitTexture) pictureW = Math.max(0, Math.min(pictureColumn.w, roomFor(0, 0) * aspect));
@@ -457,7 +457,7 @@ export function detailsTree(
             incline: 10,
             radius: 22,
             color: "#ffffff/1.00",
-            imgSize: kind === "model" ? "contain" : "cover",
+            imgSize: kind === "chibi" ? "contain" : "cover",
             imgPosition: "center 18%",
           },
         ],

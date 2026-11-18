@@ -36,7 +36,7 @@ for (const locale of LOCALES)
       {
         key: "hina",
         names: { en: { full: "Hina", short: "Original" } },
-        family: { key: "hina", base: { en: "Hina" } },
+        student: { key: "hina", studentNames: { en: "Hina" } },
       },
       T("tab.model"),
     );
@@ -100,7 +100,7 @@ for (const locale of LOCALES)
     let widest = { width: 0, line: "" };
     for (const [key, entry] of Object.entries(catalog.variants)) {
       const student = catalog.students[entry.student_id];
-      const variant = { key, names: entry.names, family: { key: student.base, base: student.names } };
+      const alt = { key, names: entry.names, student: { key: student.base, studentNames: student.names } };
       for (const action of [
         "progress.actionOptimize",
         "progress.actionApply",
@@ -109,7 +109,7 @@ for (const locale of LOCALES)
       ]) {
         const line = jobProgress({
           action,
-          name: progressName(variant, T("tab.model")),
+          name: progressName(alt, T("tab.model")),
           current: 10,
           total: 10,
           fraction: 0.99,

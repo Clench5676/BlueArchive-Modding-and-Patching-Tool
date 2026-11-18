@@ -35,14 +35,14 @@ const stage = () => document.getElementById("stage");
 /**
  * Show the framing button beside the photography button: in the fullscreen lobby only, and not in a lobby
  * without a prefab (nothing to keep the camera in).
- * @param {object} [bridge] The detail screen's hooks (lobby(), the shown variant and the actions the camera
+ * @param {object} [bridge] The detail screen's hooks (lobby(), the shown alt and the actions the camera
  *     needs); the last given ones are kept.
  * @returns {Promise<void>} Settles when the button is drawn.
  */
 export async function entry(on, bridge) {
   document.getElementById("camera-launcher")?.remove();
   hooks = bridge || hooks;
-  if (!on || active || !hooks || !hooks.lobby() || Lobby.cameraState()?.prefab === false) return;
+  if (!on || active || !hooks || !hooks.memorialLobby() || Lobby.cameraState()?.prefab === false) return;
   const my = ++generation;
   const layout = await NGUI.layout("UICharacterVisualMode"),
     corner = NGUI.find(layout, "Inventory_ListControl_PC/RightBottom");
@@ -190,16 +190,16 @@ async function save() {
     // choice's still (its Switch Memorial Lobby card, framed by the camera) starts drawing behind it. Its line:
     // Saving, the student and the memorial lobby (job-progress.js modJob).
     const line = modJob(
-      { variant: hooks.variant(), kind: "lobby" },
-      { nameOf: Loading.variantName, action: "progress.actionSave" },
+      { alt: hooks.alt(), resourceType: "memorialLobby" },
+      { nameOf: Loading.altName, action: "progress.actionSave" },
     );
     await Loading.task(
       async (update) => {
         update(line());
         const saved = await waitJob(
-          await rpc("lobby.camera.save", {
-            variant: hooks.variant(),
-            lobby: hooks.lobby(),
+          await rpc("memorialLobby.camera.save", {
+            alt: hooks.alt(),
+            memorialLobby: hooks.memorialLobby(),
             source: hooks.source(),
             view: state.view,
             scale,

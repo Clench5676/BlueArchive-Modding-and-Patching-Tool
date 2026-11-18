@@ -84,10 +84,10 @@ const TOOLBAR = Object.freeze({
 const current = () => store.current();
 const editing = () => store?.kind() === "layout";
 const arranging = () => editing() && !fullscreen?.active();
-const choiceOf = (entry, kind = "spr") =>
-  options.choices.find((choice) => choice.kind === kind && sourceKey(choice) === sourceKey(entry));
+const choiceOf = (entry, kind = "portrait") =>
+  options.choices.find((choice) => choice.resourceType === kind && sourceKey(choice) === sourceKey(entry));
 const titleOf = (choice) =>
-  choice ? [L(choice.names)?.full || choice.variant, choice.label].filter(Boolean).join(" - ") : T("hall.missing");
+  choice ? [L(choice.names)?.full || choice.alt, choice.name].filter(Boolean).join(" - ") : T("hall.missing");
 const fail = (error) => {
   if (root && error?.name !== "AbortError") Popup.notify(errorText(error), { kind: "error", error });
 };
@@ -155,7 +155,7 @@ async function persist(value, owner = store) {
     .catch(() => {})
     .then(async () => {
       const revision = revisions.get(owner) ?? owner.saved().revision;
-      const result = await rpc("hall.update", { value: snapshot, revision });
+      const result = await rpc("studentHall.update", { value: snapshot, revision });
       revisions.set(owner, result.revision);
       return result;
     });
@@ -238,7 +238,7 @@ function controls() {
     portraitMode ? "hall.memorial" : "hall.portraits",
     modeBox.x,
     width,
-    () => setMode(portraitMode ? "memorial" : "portraits"),
+    () => setMode(portraitMode ? "memorialLobby" : "portraits"),
   ]);
   actions.push(["Fullscreen", "lobby.fullscreen", fullBox.x, width, () => fullscreen?.enter()]);
   if (editing()) {
@@ -382,7 +382,7 @@ async function renderChrome({ publish = true } = {}) {
     });
     if (button) button.disabled = enabled === false || pendingWrites > 0;
   }
-  if (mode === "memorial" && current().memorials.length) {
+  if (mode === "memorialLobby" && current().memorialLobbies.length) {
     const arrows = await NGUI.render(
       NGUI.node("Hall", [0, 0], [], [clone(NGUI.find(layouts.lobby, "Front/Btn_Arrow"))]),
       destination,
@@ -438,7 +438,7 @@ async function step(delta) {
   if (!root || pendingWrites || store.kind()) return;
   const gen = page,
     next = clone(store.saved()),
-    list = next.memorials;
+    list = next.memorialLobbies;
   if (!list.length) return;
   const at = Math.max(
     0,
@@ -657,8 +657,8 @@ function renderHits(host = hits) {
 }
 
 function viewed(choice) {
-  if (!choice || choice.kind !== "lobby") return;
-  rpc("hall.viewed", { variant: choice.variant, source: choice.source })
+  if (!choice || choice.resourceType !== "memorialLobby") return;
+  rpc("studentHall.viewed", { alt: choice.alt, source: choice.source })
     .then((keys) => {
       if (!options || !Array.isArray(keys)) return;
       for (const source of options.choices) {
@@ -671,9 +671,9 @@ function viewed(choice) {
 function configureMemorial(player, prefs = ctx?.prefs) {
   player.setDialogueFullscreen(!!fullscreen?.active());
   player.setVolume((prefs?.voiceVolume ?? 80) / 100, ctx?.info?.mute || prefs?.voiceMuted);
-  player.setZoomLimit(prefs?.lobbyZoom);
-  player.setPostProcessing(prefs?.lobbyPost !== false);
-  player.setIntro(prefs?.lobbyIntro !== false);
+  player.setZoomLimit(prefs?.memorialLobbyZoomOut);
+  player.setPostProcessing(prefs?.memorialLobbyPostProcessing !== false);
+  player.setIntro(prefs?.memorialLobbyIntro !== false);
 }
 function refreshMemorialCaptions(player, source = memorialCaptions.get(player)) {
   if (!source || source.signal.aborted) return Promise.resolve();
@@ -684,8 +684,8 @@ function refreshMemorialCaptions(player, source = memorialCaptions.get(player)) 
   player.setLines(undefined, pick);
   // Chinese requests also load the official Chinese script while Kivo's preferred text is being retrieved.
   return rpc(
-    "lobby.lines",
-    { variant: source.variant, talks: source.talks, lang: lang === "zh-CN" ? "zh-TW" : lang },
+    "memorialLobby.lines",
+    { alt: source.alt, talks: source.talks, lang: lang === "zh-CN" ? "zh-TW" : lang },
     { signal: source.signal },
   ).then((lines) => {
     if (!source.signal.aborted && request === source.request && memorialCaptions.get(player) === source)
@@ -694,7 +694,7 @@ function refreshMemorialCaptions(player, source = memorialCaptions.get(player)) 
 }
 async function memorial(choice, host, signal, player) {
   configureMemorial(player);
-  const meta = await player.show(choice.core, host, choice.variant, {
+  const meta = await player.show(choice.core, host, choice.alt, {
     mod: choice.source.startsWith("mod:") ? choice.source.slice(4) : null,
     official: choice.source === "official",
     deferPlayback: true,
@@ -709,7 +709,7 @@ async function memorial(choice, host, signal, player) {
   const talks = Object.fromEntries(
     meta.sequences.map((sequence) => [sequence.anim, sequence.cues.map((cue) => cue.clip)]),
   );
-  refreshMemorialCaptions(player, { variant: choice.variant, talks, signal }).catch(() => {});
+  refreshMemorialCaptions(player, { alt: choice.alt, talks, signal }).catch(() => {});
   return true;
 }
 async function renderScene() {
@@ -722,12 +722,12 @@ async function renderScene() {
     value = current(),
     mode = value.mode,
     previousMode = sceneMode;
-  const entry = mode === "memorial" && value.memorials.find((item) => item.id === value.active),
-    choice = entry && choiceOf(entry, "lobby");
+  const entry = mode === "memorialLobby" && value.memorialLobbies.find((item) => item.id === value.active),
+    choice = entry && choiceOf(entry, "memorialLobby");
   const background = Backgrounds.backgroundChoice(value.background, options.backgrounds),
     name = background?.name || "";
   const portraitCold = mode === "portraits" && !portraits?.allowed;
-  const memoryChanged = mode === "memorial" && choice && memorials.current()?.key !== sourceKey(choice);
+  const memoryChanged = mode === "memorialLobby" && choice && memorials.current()?.key !== sourceKey(choice);
   const resourcesChanged =
     mode !== previousMode ||
     portraitCold ||
@@ -923,7 +923,7 @@ function changePortrait(entry) {
   closeEditor();
   const gen = page;
   editor = openPicker({
-    kind: "spr",
+    kind: "portrait",
     choices,
     draft: store,
     onError: fail,
@@ -942,7 +942,7 @@ function addPortraits() {
   closeEditor();
   const gen = page;
   editor = openPicker({
-    kind: "spr",
+    kind: "portrait",
     choices: options.choices,
     draft: store,
     onError: fail,
@@ -957,10 +957,10 @@ function addPortraits() {
 }
 function adjustMemorials() {
   if (!root) return;
-  store.begin("memorial");
+  store.begin("memorialLobby");
   closeEditor();
   editor = openPicker({
-    kind: "lobby",
+    kind: "memorialLobby",
     choices: options.choices,
     draft: store,
     onError: fail,
@@ -1213,8 +1213,8 @@ export async function show(context, data = null) {
   subtitle = layer(root, "layer-host", 4);
   chrome = layer(root, "layer-host hall-chrome", 5);
   const [saved, available, lobby, slot] = await Promise.all([
-    data?.mode ? data : rpc("hall.get"),
-    rpc("hall.options"),
+    data?.mode ? data : rpc("studentHall.get"),
+    rpc("studentHall.options"),
     NGUI.layout("UILobby"),
     NGUI.layout("UILobbyCharacterSelectPopup_Slot"),
     UI.ready(),
@@ -1263,7 +1263,7 @@ function onKey(event) {
   }
   if (
     !root ||
-    current().mode !== "memorial" ||
+    current().mode !== "memorialLobby" ||
     Popup.anyOpen() ||
     !["ArrowLeft", "ArrowRight"].includes(event.key) ||
     event.repeat

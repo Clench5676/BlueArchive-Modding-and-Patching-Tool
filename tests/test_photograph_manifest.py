@@ -86,11 +86,11 @@ def test_a_bad_photo_record_costs_that_record_only_and_is_written_back_unchanged
 def test_a_held_record_cannot_be_used(gallery):
     data = base(photos={BAD: {"id": BAD, "variant": "student:a", "sha256": "bad"}})
     put(gallery, data)
-    with pytest.raises(ServiceError, match="photo_missing"):
+    with pytest.raises(ServiceError, match="thumbnail_missing"):
         gallery.image("student:a", BAD)
-    with pytest.raises(ServiceError, match="photo_missing"):
+    with pytest.raises(ServiceError, match="thumbnail_missing"):
         gallery.select("student:a", BAD)
-    with pytest.raises(ServiceError, match="photo_missing"):
+    with pytest.raises(ServiceError, match="thumbnail_missing"):
         gallery.delete("student:a", BAD)
     assert gallery.list("student:a")["photos"] == []
 
@@ -146,7 +146,7 @@ def test_deleting_a_photo_a_kept_row_names_is_refused(tmp_path):
     data = manifest(gallery)
     data["photos"][BAD] = {"id": key, "variant": "student:a"}  # a held record that names this photo's file
     put(gallery, data)
-    with pytest.raises(ServiceError, match="photo_in_use"):
+    with pytest.raises(ServiceError, match="thumbnail_in_use"):
         gallery.delete("student:a", key)
     assert file.is_file() and manifest(gallery)["photos"][BAD] == data["photos"][BAD]
     del data["photos"][BAD]
@@ -155,14 +155,14 @@ def test_deleting_a_photo_a_kept_row_names_is_refused(tmp_path):
     del families["student:z"]
     data["selected"]["student:z"] = key  # a selection that cannot be used now but names it
     put(gallery, data)
-    with pytest.raises(ServiceError, match="photo_in_use"):
+    with pytest.raises(ServiceError, match="thumbnail_in_use"):
         gallery.delete("student:a", key)
     assert file.is_file() and manifest(gallery)["selected"]["student:z"] == key
     # protected files stay protected, and ordinary selections are still reset
     del data["selected"]["student:z"], data["selected"]["gone-student"]
     data["selected"]["student:b"] = key
     put(gallery, data)
-    with pytest.raises(ServiceError, match="photo_in_use"):
+    with pytest.raises(ServiceError, match="thumbnail_in_use"):
         gallery.delete("student:a", key, {key})
     gallery.delete("student:a", key)
     assert manifest(gallery)["selected"]["student:b"] is None and not file.exists()
@@ -186,7 +186,7 @@ def test_deleting_a_photo_a_kept_row_names_is_refused(tmp_path):
 def test_an_unreadable_manifest_is_left_alone_and_every_write_refuses(gallery, content):
     gallery.root.mkdir()
     gallery.index.write_bytes(content)
-    with pytest.raises(ServiceError, match="photo_library_invalid"):
+    with pytest.raises(ServiceError, match="thumbnail_library_invalid"):
         gallery.selection("student:a")
     for call in (
         lambda: gallery.list("student:a"),
@@ -196,12 +196,12 @@ def test_an_unreadable_manifest_is_left_alone_and_every_write_refuses(gallery, c
         lambda: gallery.select("student:a", None),
         lambda: gallery.delete("student:a", "a" * 32),
     ):
-        with pytest.raises(ServiceError, match="photo_library_invalid"):
+        with pytest.raises(ServiceError, match="thumbnail_library_invalid"):
             call()
     assert gallery.index.read_bytes() == content
     assert sorted(path.name for path in gallery.root.iterdir() if path.name != "index.lock") == ["index.json"]
     # a second instance (the next launch) refuses the same way
-    with pytest.raises(ServiceError, match="photo_library_invalid"):
+    with pytest.raises(ServiceError, match="thumbnail_library_invalid"):
         store(gallery.root.parent).save("student:a", capture()[0], "portrait")
     assert gallery.index.read_bytes() == content
 
@@ -211,7 +211,7 @@ def test_a_symlinked_manifest_is_refused_and_not_followed(gallery, tmp_path):
     target = tmp_path / "elsewhere.json"
     target.write_text(json.dumps(base()))
     gallery.index.symlink_to(target)
-    with pytest.raises(ServiceError, match="photo_library_invalid"):
+    with pytest.raises(ServiceError, match="thumbnail_library_invalid"):
         gallery.save("student:a", capture()[0], "portrait")
     assert gallery.index.is_symlink() and json.loads(target.read_text()) == base()
 
@@ -236,68 +236,68 @@ def catalog_with_dropped_alt(services):
 
 def test_a_stale_selection_keeps_family_get_and_roster_list_answering(app, services, caplog):
     catalog_with_dropped_alt(services)
-    gallery = services.photographs
+    gallery = services.thumbnail_store
     key = gallery.save("dropped-alt", capture()[0], "portrait")["saved"]  # photo of an alt that left the catalog
     data = manifest(gallery)
     data["selected"]["hoshino"] = key  # selected for student A while the alt still resolved
     put(gallery, data)
     raw = gallery.index.read_bytes()
     with caplog.at_level(logging.WARNING):
-        family = rpc(app, "family.get", key="hoshino")
-        roster = rpc(app, "roster.list")
+        family = rpc(app, "student.get", key="hoshino")
+        roster = rpc(app, "students.list")
     assert "error" not in family and "error" not in roster
-    entries = [variant for item in roster["result"]["families"] for variant in item["variants"]]
+    entries = [variant for item in roster["result"]["students"] for variant in item["alts"]]
     assert entries and all("thumbnail" not in variant for variant in entries)
-    assert all("thumbnail" not in variant for variant in family["result"]["variants"])
+    assert all("thumbnail" not in variant for variant in family["result"]["alts"])
     assert gallery.index.read_bytes() == raw
-    assert rpc(app, "photography.list", variant="hoshino")["result"]["app"] is None
+    assert rpc(app, "thumbnails.list", alt="hoshino")["result"]["app"] is None
     assert not [r for r in caplog.records if "Photograph lookup failed" in r.getMessage()]
 
 
 def test_a_corrupt_manifest_leaves_every_student_list_working_and_the_file_unchanged(app, services, caplog):
-    gallery = services.photographs
+    gallery = services.thumbnail_store
     gallery.root.mkdir(parents=True, exist_ok=True)
     gallery.index.write_bytes(b"{ not json")
     with caplog.at_level(logging.WARNING):
         for _ in range(3):
-            family = rpc(app, "family.get", key="hoshino")
-            roster = rpc(app, "roster.list")
+            family = rpc(app, "student.get", key="hoshino")
+            roster = rpc(app, "students.list")
             assert "error" not in family and "error" not in roster
-    assert all("thumbnail" not in variant for item in roster["result"]["families"] for variant in item["variants"])
+    assert all("thumbnail" not in variant for item in roster["result"]["students"] for variant in item["alts"])
     assert (
         len([r for r in caplog.records if "Photograph lookup failed" in r.getMessage()]) == 1
     )  # once, not per student
     # the photograph features themselves refuse, and nothing overwrites the file
-    assert rpc(app, "photography.list", variant="hoshino")["error"]["code"] == "photo_library_invalid"
-    assert rpc(app, "photography.select", variant="hoshino", id=None)["error"]["code"] == "photo_library_invalid"
+    assert rpc(app, "thumbnails.list", alt="hoshino")["error"]["code"] == "thumbnail_library_invalid"
+    assert rpc(app, "thumbnails.select", alt="hoshino", id=None)["error"]["code"] == "thumbnail_library_invalid"
     png = capture()[0]
     assert (
-        rpc(app, "photography.save", variant="hoshino", png=png, mode="portrait")["error"]["code"]
-        == "photo_library_invalid"
+        rpc(app, "thumbnails.save", alt="hoshino", png=png, mode="portrait")["error"]["code"]
+        == "thumbnail_library_invalid"
     )
     assert gallery.index.read_bytes() == b"{ not json"
     assert sorted(path.name for path in gallery.root.iterdir() if path.name != "index.lock") == ["index.json"]
 
 
 def test_variant_json_logs_again_only_after_the_lookup_recovered(app, services, caplog):
-    gallery = services.photographs
+    gallery = services.thumbnail_store
     gallery.root.mkdir(parents=True, exist_ok=True)
     gallery.index.write_bytes(b"bad")
     with caplog.at_level(logging.WARNING):
-        rpc(app, "roster.list")
-        rpc(app, "roster.list")
+        rpc(app, "students.list")
+        rpc(app, "students.list")
         gallery.index.write_bytes(json.dumps(base()).encode())
-        assert "error" not in rpc(app, "roster.list")
+        assert "error" not in rpc(app, "students.list")
         gallery.index.write_bytes(b"bad again")
-        rpc(app, "roster.list")
+        rpc(app, "students.list")
     assert len([r for r in caplog.records if "Photograph lookup failed" in r.getMessage()]) == 2
 
 
 def test_a_valid_selection_still_gives_the_thumbnail(app, services):
-    gallery = services.photographs
+    gallery = services.thumbnail_store
     key = gallery.save("hoshino", capture()[0], "portrait")["saved"]
     gallery.select("hoshino", key)
-    variants = [v for item in rpc(app, "roster.list")["result"]["families"] for v in item["variants"]]
+    variants = [v for item in rpc(app, "students.list")["result"]["students"] for v in item["alts"]]
     assert variants[0]["thumbnail"].endswith(f"{key}.png")
 
 

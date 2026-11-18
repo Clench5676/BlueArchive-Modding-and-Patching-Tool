@@ -97,9 +97,12 @@ class OriginalsMixin:
         kept original also records which rule it passed, and one a Steam list rejected stays rejected without the list
         (``_judge_original``).
         """
+        kept = self._is_kept(path) and path.name == name
+        if kept and not self._original_checks.matches_digest(path):
+            return False
         fingerprint = self._hashes.get(path)
         steam = self._steam_official(name, path)
-        if self._is_kept(path) and path.name == name:
+        if kept:
             return self._judge_original(path, fingerprint, steam) in ("steam", "crc")
         if steam is not None:
             return fingerprint.size == steam.size and fingerprint.sha1 == steam.sha1
@@ -125,7 +128,7 @@ class OriginalsMixin:
 
         The result is ``steam`` (Steam's list gives its size and SHA-1, now or when it was recorded), ``crc`` (no list
         names it, the CRC rule alone) or ``failed`` (a Steam list gave other bytes: never official again, list or not).
-        None when it fails the CRC rule (damaged, ``original_invalid``).
+        None when it fails the CRC rule (damaged, ``official_invalid``).
         """
         if steam is not None:
             verdict: Verdict = "steam" if (fingerprint.size, fingerprint.sha1) == (steam.size, steam.sha1) else "failed"
@@ -147,6 +150,8 @@ class OriginalsMixin:
         """
         try:
             if full:
+                if not self._original_checks.matches_digest(original):
+                    return False
                 return (
                     self._judge_original(
                         original, self._hashes.get(original), self._steam_official(original.name, original)
@@ -205,7 +210,8 @@ class OriginalsMixin:
                 continue
             preview_gate.yield_to_previews(cancel)
             try:
-                verdict = self._judge_original(original, self._hashes.get(original), steam)
+                fingerprint = self._hashes.get(original, fresh=self._managed)
+                verdict = self._judge_original(original, fingerprint, steam)
             except OSError:
                 continue  # released meanwhile
             if verdict == "failed":
@@ -249,10 +255,10 @@ class OriginalsMixin:
         """Find an official copy of a game file.
 
         The candidates come in this order: the library's kept original (it was verified when it was kept;
-        ``original_invalid`` when it fails, never overwritten), the game file itself, its .backup beside it (the classic
+        ``official_invalid`` when it fails, never overwritten), the game file itself, its .backup beside it (the classic
         GUI's; judged by the name without .backup), a file of its name in another game folder. At write strength each
         candidate is verified by the CRC32 of its whole content; else (previews) by the cheap rule.
-        ``original_unavailable`` when there is none. Read-only checks may prefer the current official game file with
+        ``official_unavailable`` when there is none. Read-only checks may prefer the current official game file with
         ``game_first``; an invalid kept original must still block writes.
         """
         check_resource_path(game_file, list(pin.dirs))
@@ -272,8 +278,8 @@ class OriginalsMixin:
         original = self._original_path(game_file)
         # a kept original a Steam list rejected is a mod's bytes: never an official copy, skipped
         if original.exists() and not self._original_failed(original, full):
-            if full and not self._is_official(original):
-                raise ServiceError("original_invalid", file=original)
+            if not self._original_checks.matches_digest(original) or (full and not self._is_official(original)):
+                raise ServiceError("official_invalid", file=original)
             return original
         if official(game_file):
             return game_file
@@ -283,7 +289,7 @@ class OriginalsMixin:
         for other in self._elsewhere(game_file):
             if official(other):
                 return other
-        raise ServiceError("original_unavailable", file=game_file)
+        raise ServiceError("official_unavailable", file=game_file)
 
     def _keep_original(self, game_file: Path, pin: Pin, *, moving: bool = False) -> Path:
         """Keep verified official bytes, cloning where possible.
@@ -301,11 +307,22 @@ class OriginalsMixin:
                 else:
                     atomic_copy(official, original)
             verify_file(original, sha1)
+            self._original_checks.remember_digest(original, sha1)
             if not self._is_official(original):
                 if official.exists():
                     original.unlink()
-                raise ServiceError("original_invalid", file=game_file)
+                raise ServiceError("official_invalid", file=game_file)
         return official
+
+    def _copy_verified_official(self, source: Path, output: Path) -> None:
+        """Detach a kept official input and verify the staged bytes before they can be used."""
+        if not self._original_checks.matches_digest(source):
+            raise ServiceError("official_invalid", file=source)
+        if not atomic_clone(source, output):
+            atomic_copy(source, output)
+        # Use the source's name to find the baseline even when the caller stages it elsewhere.
+        if not self._original_checks.matches_digest(output, name=source.name):
+            raise ServiceError("official_invalid", file=source)
 
     def _official_or_current(self, game_file: Path, pin: Pin) -> Path:
         """An omitted mod part uses official bytes when available, otherwise the current game bytes.
@@ -315,7 +332,7 @@ class OriginalsMixin:
         try:
             return self._official_for(game_file, pin)
         except ServiceError as error:
-            if error.code != "original_unavailable":
+            if error.code != "official_unavailable":
                 raise
             return game_file
 

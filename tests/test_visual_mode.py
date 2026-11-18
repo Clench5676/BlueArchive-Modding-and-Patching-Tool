@@ -47,7 +47,7 @@ def test_real_visual_mode_layout(tmp_path):
     pc = game.layout("UICharacterVisualMode", "Inventory_ListControl_PC")
     # the background and its two breathing light patterns
     bg = subtree(pc, "BG")
-    assert any(w.get("cls") == "UITexture" for w in bg["widgets"])
+    assert any(w.get("className") == "UITexture" for w in bg["widgets"])
     for name in ("Bg_Pt_1", "Bg_Pt_2"):
         assert any(str(w.get("texture", "")).startswith("UITex_BGPoliLight") for w in subtree(bg, name)["widgets"])
     # the corners the buttons hang on are anchored to the screen's edges
@@ -94,19 +94,29 @@ def test_real_fullscreen_control_geometry(tmp_path):
             ("RightBottom", ("Btn_RefreshPos", "Btn_RefreshPos_Disable")),
         ):
             actual_corner, expected_corner = subtree(pc, corner), subtree(fixture, corner)
-            assert actual_corner["pos"] == expected_corner["pos"]
+            assert actual_corner["localPosition"] == expected_corner["pos"]
             actual_widget = next(w for w in actual_corner["widgets"] if w.get("anchors"))
-            assert {k: actual_widget[k] for k in expected_corner["widgets"][0]} == expected_corner["widgets"][0]
+            expected_widget = expected_corner["widgets"][0]
+            assert actual_widget["className"] == expected_widget["cls"]
+            assert actual_widget["width"] == expected_widget["w_"]
+            assert actual_widget["height"] == expected_widget["h_"]
+            assert actual_widget["pivot"] == expected_widget["pivot"]
+            assert actual_widget["anchors"] == expected_widget["anchors"]
             for name in names:
                 for suffix in ("", "/Icon"):
                     path = f"{corner}/{name}{suffix}"
                     actual, expected = subtree(pc, path), subtree(fixture, path)
-                    assert actual["pos"] == expected["pos"], path
+                    assert actual["localPosition"] == expected["pos"], path
                     assert actual["scale"] == expected["scale"], path
-                    aw = next(w for w in actual["widgets"] if "sprite" in w)
+                    aw = next(w for w in actual["widgets"] if "spriteName" in w)
                     ew = next(w for w in expected["widgets"] if "sprite" in w)
-                    for key in ("sprite", "w_", "h_", "pivot"):
-                        assert aw[key] == ew[key], (path, key)
+                    for field, reference in (
+                        ("spriteName", "sprite"),
+                        ("width", "w_"),
+                        ("height", "h_"),
+                        ("pivot", "pivot"),
+                    ):
+                        assert aw[field] == ew[reference], (path, field)
         names = {obj.path_id: obj.read().m_Name for obj in env.objects if obj.type.name == "GameObject"}
         colliders = {}
         for obj in env.objects:

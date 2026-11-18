@@ -791,7 +791,7 @@ export function chibiMaterial(ex, textures, mouth) {
     uniforms.specColor = { value: new THREE.Vector4(s.x, s.y, s.z, floatOf(ex, "_SpecStrong", 0.1)) };
     glowUniforms(ex, uniforms, defines);
   } else if (kind === "transparent" || kind === "simple") {
-    // MX/C-Simple and its alpha-blended variants: one light term, a sharp edge, rim
+    // MX/C-Simple and its alpha-blended alts: one light term, a sharp edge, rim
     defines.KIND_TRANSPARENT = "";
     defines.CODE_COLORS = "";
   } else if (kind === "eyemouth") {

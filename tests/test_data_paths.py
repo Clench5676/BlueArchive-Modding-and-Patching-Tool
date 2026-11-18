@@ -470,9 +470,12 @@ def test_older_standalone_classic_without_record_prevents_migration(folders, mon
     assert migrate_data_dir(old.parent) == new
 
 
-def test_migration_precedes_addons_copy(folders, tmp_path, monkeypatch):
-    old, new = folders
-    (old / "Addons").mkdir()
+def test_legacy_addons_seed_classic_artifacts_without_moving_the_data_directory(tmp_path, monkeypatch):
+    from bmpt.host.addons import prepare_classic_addons
+
+    parent = tmp_path / "home" / "Library" / "Application Support"
+    old, new = parent / OLD_APP_DIR_NAME, parent / APP_DIR_NAME
+    (old / "Addons").mkdir(parents=True)
     (old / "Addons/map.csv").write_text("user map")
     bundled = tmp_path / "bundle/Addons"
     bundled.mkdir(parents=True)
@@ -485,9 +488,13 @@ def test_migration_precedes_addons_copy(folders, tmp_path, monkeypatch):
     )
     monkeypatch.setattr(Path, "home", lambda: tmp_path / "home")
     monkeypatch.setattr(sys, "executable", str(bundled.parent / "tool"))
-    monkeypatch.setattr(utils_paths, "migrate_data_dir", lambda parent: migrate_data_dir(old.parent))
-    assert utils._get_exe_dir() == new
-    assert (new / "Addons/map.csv").read_text() == "user map"
+    data = utils._get_exe_dir()
+    assert data == old and not new.exists()
+    artifacts = data / ".bmpt-upgrade" / "artifacts"
+    artifacts.mkdir(parents=True)
+    prepare_classic_addons(data, artifacts)
+    assert (artifacts / "Addons/map.csv").read_text() == "user map"
+    assert (old / "Addons/map.csv").read_text() == "user map" and not new.exists()
 
 
 @pytest.mark.parametrize("system", ["win32", "darwin", "linux"])

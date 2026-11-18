@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
-import json
 import logging
 import re
 import shutil
@@ -25,6 +24,7 @@ from bmpt.engine import (
     parse_filename,
     t,
 )
+from ...host.store_formats import read_runtime
 from ...core.errors import ServiceError
 from ...core.filelock import file_lock
 from ...core.logging_utils import log_failure
@@ -314,7 +314,7 @@ class UpdatingMixin:
         path = self._state_path
         with file_lock(self.root / "state.json.lock"):
             try:
-                state = json.loads(path.read_text(encoding="utf-8"))
+                state = read_runtime(path)
             except FileNotFoundError:
                 state = None
             if state is not None:

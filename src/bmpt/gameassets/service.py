@@ -42,7 +42,7 @@ from .service_base import _MODEL_LOCK, _SCHEMA, _FxResolver
 
 logger = logging.getLogger(__name__)
 # Bump the layout schema when export_layout changes so only incompatible layout entries are rebuilt.
-_LAYOUT = "layout-v6/"
+_LAYOUT = "layout-v7/"
 _ATLASES = "atlases-v2/"
 
 
@@ -791,10 +791,10 @@ class GameAssets(ModelsMixin):
             name: Exact Student_Portrait_ texture name present in the collection index.
 
         Raises:
-            ServiceError: The texture is not an available roster portrait (photo_target_unavailable).
+            ServiceError: The texture is not an available roster portrait (thumbnail_target_unavailable).
         """
         if not isinstance(name, str) or not name.startswith("Student_Portrait_") or name not in self._collection():
-            raise ServiceError("photo_target_unavailable")
+            raise ServiceError("thumbnail_target_unavailable")
         return dict(self._collection()[name])
 
     def collection_portrait_from(self, name: str, paths: list[Path]) -> bytes:
@@ -821,7 +821,7 @@ class GameAssets(ModelsMixin):
                         if obj.type.name == "Texture2D" and obj.peek_name() == name:
                             found.append(png_bytes(texture_image(obj.read(), path.name)))
             if len(found) != 1 or spine_stamps(paths) != stamps:
-                raise ServiceError("photo_target_unavailable")
+                raise ServiceError("thumbnail_target_unavailable")
             return found[0]
 
         return self._preview_bytes("photography/default/" + name + json.dumps(stamps), build)

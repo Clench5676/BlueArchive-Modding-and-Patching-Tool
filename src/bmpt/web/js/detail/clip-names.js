@@ -204,7 +204,7 @@ export function actionsOf(names, dev) {
     const k = `${p.slot}|${p.form}|${p.index}`;
     if (!named.has(k)) named.set(k, p.name); // the first clip of a slot wins, as the export picks it
   }
-  const variants = (slot) =>
+  const alts = (slot) =>
     parsed
       .filter((p) => p.slot === slot)
       .map((p) => [p.form, p.index])
@@ -212,10 +212,10 @@ export function actionsOf(names, dev) {
       .sort((a, b) => a[0] - b[0] || a[1] - b[1]);
   const out = [];
   for (const def of ACTION_DEFS) {
-    const lead = def.pick ? def.pick.find((s) => variants(s).length) : def.play[0];
+    const lead = def.pick ? def.pick.find((s) => alts(s).length) : def.play[0];
     if (!lead) continue;
     const found = [];
-    for (const [form, index] of variants(lead)) {
+    for (const [form, index] of alts(lead)) {
       const at = (slot) => named.get(`${slot}|${form}|${index}`);
       const clips = (def.pick ? [lead] : def.play).map(at).filter(Boolean);
       found.push({ id: def.id, group: def.group, section: def.section || def.group, form, index, clips });

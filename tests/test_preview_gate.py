@@ -163,12 +163,13 @@ def test_entries_under_the_library_lock_never_pause(monkeypatch):
     assert read == ["a", "b"]
 
 
-@pytest.mark.parametrize("source", ["live", "official", "mod:1", "import:1", "variant:other"])
+@pytest.mark.parametrize("source", ["live", "official", "mod:1", "import:1", "alt:other"])
 @pytest.mark.parametrize("fails", [False, True])
 def test_model_asset_gate_covers_each_source_and_releases_on_failure(source, fails):
     def export(core, target, selected, path, clip=None):
         assert preview_gate._count == 1
-        assert (core, target, selected) == ("hero", "hero", source)
+        expected_source = "variant:other" if source == "alt:other" else source
+        assert (core, target, selected) == ("hero", "hero", expected_source)
         if fails:
             raise ValueError("export failed")
         return b"glTF"
@@ -181,9 +182,9 @@ def test_model_asset_gate_covers_each_source_and_releases_on_failure(source, fai
     services._asset = lambda path, query: Services._asset(services, path, query)
     if fails:
         with pytest.raises(ValueError, match="export failed"):
-            Services.asset(services, "model/hero.glb", {"source": source})
+            Services.asset(services, "chibi/hero.glb", {"source": source})
     else:
-        Services.asset(services, "model/hero.glb", {"source": source})
+        Services.asset(services, "chibi/hero.glb", {"source": source})
     assert preview_gate._count == 0
 
 

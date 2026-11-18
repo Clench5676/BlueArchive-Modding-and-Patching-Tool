@@ -41,7 +41,7 @@ import {
   thumbnailWork,
   picturesReady,
   fillPictures,
-  variant,
+  alt,
   currentBase,
   costumeRun,
   costumesWanted,
@@ -294,7 +294,7 @@ function toggleGroup(item) {
 // An action picked on the bar plays at once when its clips are there (the model's GLB carries today's actions).
 // Otherwise they are fetched (model.js loadClips: the model route's ?clip=) while its group card shows the
 // loading ring, then it plays. The fetch counts only its own foreground time (withPreviewTimeout); leaving the
-// 3D tab, the variant or the screen gives it up. A failure leaves the previous action playing and says the
+// 3D tab, the alt or the screen gives it up. A failure leaves the previous action playing and says the
 // preview is unavailable.
 const CLIP_CAP = 15000;
 async function pickAction(a) {
@@ -306,7 +306,7 @@ async function pickAction(a) {
     renderExpressions();
     return;
   }
-  const v = variant(),
+  const v = alt(),
     run = costumeRun,
     before = M.current() ?? modelAction,
     abort = new AbortController();

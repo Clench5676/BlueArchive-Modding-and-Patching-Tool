@@ -139,7 +139,7 @@ const template = () => ({
 });
 const find = (tree, path) =>
   path.split("/").reduce((node, key) => node.children.find((child) => child.name === key), tree);
-const entry = (id = "one", variant = "hoshino") => ({ id, variant, x: 600, y: 1120, scale: 1 });
+const entry = (id = "one", alt = "hoshino") => ({ id, alt, x: 600, y: 1120, scale: 1 });
 function fixture(extra = {}) {
   timers = new Map();
   timerDelays = new Map();
@@ -168,8 +168,8 @@ function fixture(extra = {}) {
       const result = extra.call(method, params, options);
       if (result !== undefined) return result;
     }
-    if (method === "hall.dialogueLayout") return template();
-    if (method === "hall.lines")
+    if (method === "studentHall.dialogueLayout") return template();
+    if (method === "studentHall.lines")
       return {
         lines: {
           hoshino_lobby_1: {
@@ -178,7 +178,7 @@ function fixture(extra = {}) {
           },
         },
       };
-    if (method === "hall.voice") return { audio: btoa("original audio"), mime: "audio/ogg" };
+    if (method === "studentHall.voice") return { audio: btoa("original audio"), mime: "audio/ogg" };
     assert.fail(method);
   };
   const controller = createDialogue({
@@ -259,9 +259,9 @@ test("repeated clicks are ignored during audio and the next finished turn reuses
   h.players[0].onended();
   await h.controller.play(entry());
   assert.equal(h.players[1].played, 1);
-  assert.equal(h.calls.filter((call) => call.method === "hall.lines").length, 1);
-  assert.equal(h.calls.filter((call) => call.method === "hall.voice").length, 1);
-  assert.equal(h.calls.filter((call) => call.method === "hall.dialogueLayout").length, 1);
+  assert.equal(h.calls.filter((call) => call.method === "studentHall.lines").length, 1);
+  assert.equal(h.calls.filter((call) => call.method === "studentHall.voice").length, 1);
+  assert.equal(h.calls.filter((call) => call.method === "studentHall.dialogueLayout").length, 1);
   assert.equal(h.rendered[0].tree.children[1].widgets[0].text, h.rendered[1].tree.children[1].widgets[0].text);
   h.controller.dispose();
   assert.equal(h.host.children.length, 0);
@@ -271,7 +271,7 @@ test("repeated clicks are ignored during audio and the next finished turn reuses
 test("duplicate actors keep independent dialogue turns", async () => {
   const h = fixture({
     call: (method) =>
-      method === "hall.lines"
+      method === "studentHall.lines"
         ? {
             lines: {
               hoshino_lobby_1: { "zh-TW": "First", voice: false },
@@ -295,7 +295,7 @@ test("duplicate actors keep independent dialogue turns", async () => {
 test("the first pending text request owns the turn and ignored clicks never fetch or advance", async () => {
   const first = deferred();
   const h = fixture({
-    call: (method, params) => (method === "hall.lines" && params.variant === "old" ? first.promise : undefined),
+    call: (method, params) => (method === "studentHall.lines" && params.alt === "old" ? first.promise : undefined),
   });
   const old = h.controller.play(entry("old", "old"));
   await flush();
@@ -319,10 +319,10 @@ test("the first pending text request owns the turn and ignored clicks never fetc
 
 test("page exit aborts pending voice fetch and cannot start late audio", async () => {
   const voice = deferred();
-  const h = fixture({ call: (method) => (method === "hall.voice" ? voice.promise : undefined) });
+  const h = fixture({ call: (method) => (method === "studentHall.voice" ? voice.promise : undefined) });
   const pending = h.controller.play(entry());
   await flush();
-  const request = h.calls.find((call) => call.method === "hall.voice");
+  const request = h.calls.find((call) => call.method === "studentHall.voice");
   assert.ok(request);
   h.signal.abort();
   assert.equal(request.signal.aborted, true);
@@ -365,7 +365,9 @@ test("cancelled staged rendering cannot append an old balloon", async () => {
 });
 
 test("voice failure keeps readable text and ends its expression without an error popup", async () => {
-  const h = fixture({ call: (method) => (method === "hall.voice" ? Promise.reject(new Error("offline")) : undefined) });
+  const h = fixture({
+    call: (method) => (method === "studentHall.voice" ? Promise.reject(new Error("offline")) : undefined),
+  });
   await h.controller.play(entry());
   assert.equal(h.host.children.length, 1);
   assert.equal(h.errors.length, 0);
@@ -382,7 +384,7 @@ test("mute blocks audio and muting an active stream leaves a bounded text-only l
   await h.controller.play(entry());
   assert.equal(h.players.length, 0);
   assert.equal(
-    h.calls.some((call) => call.method === "hall.voice"),
+    h.calls.some((call) => call.method === "studentHall.voice"),
     false,
   );
   h.settings.voiceMuted = false;
@@ -402,7 +404,7 @@ test("failed balloon metadata is retried on the next click", async () => {
   let reads = 0;
   const h = fixture({
     call: (method) =>
-      method === "hall.dialogueLayout" && ++reads === 1 ? Promise.reject(new Error("temporary")) : undefined,
+      method === "studentHall.dialogueLayout" && ++reads === 1 ? Promise.reject(new Error("temporary")) : undefined,
   });
   await h.controller.play(entry());
   assert.equal(h.errors.length, 1);
@@ -479,7 +481,7 @@ test("a pending first click retries automatically and eventually displays and pl
   let reads = 0;
   const h = fixture({
     call: (method) =>
-      method === "hall.lines"
+      method === "studentHall.lines"
         ? ++reads === 1
           ? { lines: {}, pending: true }
           : {
@@ -500,13 +502,13 @@ test("a pending first click retries automatically and eventually displays and pl
   assert.equal(reads, 2);
   assert.equal(h.host.children[0].attrs["aria-label"], "First");
   assert.equal(h.players.length, 1);
-  const requests = h.calls.filter((call) => call.method === "hall.lines");
+  const requests = h.calls.filter((call) => call.method === "studentHall.lines");
   assert.equal(requests[0].signal, requests[1].signal);
   h.players[0].onended();
   await h.controller.play(entry());
   assert.equal(h.host.children[0].attrs["aria-label"], "Second");
   assert.deepEqual(
-    h.calls.filter((call) => call.method === "hall.voice").map((call) => call.params.clip),
+    h.calls.filter((call) => call.method === "studentHall.voice").map((call) => call.params.clip),
     ["hoshino_lobby_1", "hoshino_lobby_2"],
   );
   h.controller.dispose();
@@ -516,7 +518,7 @@ test("pending voice metadata preserves immediate text and attaches voice to the 
   let reads = 0;
   const h = fixture({
     call: (method) =>
-      method === "hall.lines"
+      method === "studentHall.lines"
         ? {
             lines: {
               hoshino_lobby_1: { "zh-TW": "First", voice: ++reads > 1 },
@@ -536,7 +538,7 @@ test("pending voice metadata preserves immediate text and attaches voice to the 
   await pending;
   assert.equal(h.players.length, 1);
   assert.equal(h.rendered.length, 1, "Voice-only metadata changes keep the displayed native balloon");
-  assert.equal(h.calls.find((call) => call.method === "hall.voice").params.clip, "hoshino_lobby_1");
+  assert.equal(h.calls.find((call) => call.method === "studentHall.voice").params.clip, "hoshino_lobby_1");
   h.players[0].onended();
   await h.controller.play(entry());
   assert.equal(h.host.children[0].attrs["aria-label"], "Second");
@@ -544,7 +546,7 @@ test("pending voice metadata preserves immediate text and attaches voice to the 
 });
 
 test("cancelling a pending metadata retry clears its delay and issues no follow-up request", async () => {
-  const h = fixture({ call: (method) => (method === "hall.lines" ? { lines: {}, pending: true } : undefined) });
+  const h = fixture({ call: (method) => (method === "studentHall.lines" ? { lines: {}, pending: true } : undefined) });
   const pending = h.controller.play(entry());
   await flush();
   assert.equal(pendingTimers().length, 1);
@@ -553,7 +555,7 @@ test("cancelling a pending metadata retry clears its delay and issues no follow-
   await pending;
   assert.equal(request.signal.aborted, true);
   assert.equal(timers.size, 0);
-  assert.equal(h.calls.filter((call) => call.method === "hall.lines").length, 1);
+  assert.equal(h.calls.filter((call) => call.method === "studentHall.lines").length, 1);
   assert.equal(h.host.children.length, 0);
   assert.equal(h.players.length, 0);
   h.controller.dispose();
@@ -563,7 +565,7 @@ test("pending retries are bounded and a later metadata failure keeps the existin
   let reads = 0;
   const h = fixture({
     call: (method) =>
-      method === "hall.lines"
+      method === "studentHall.lines"
         ? ++reads === 1
           ? { lines: { hoshino_lobby_1: { "zh-TW": "Readable", voice: false } }, pending: true }
           : Promise.reject(new Error("metadata unavailable"))
@@ -577,7 +579,9 @@ test("pending retries are bounded and a later metadata failure keeps the existin
   assert.equal(h.host.children[0].attrs["aria-label"], "Readable");
   assert.equal(h.errors.length, 0);
   h.controller.dispose();
-  const forever = fixture({ call: (method) => (method === "hall.lines" ? { lines: {}, pending: true } : undefined) });
+  const forever = fixture({
+    call: (method) => (method === "studentHall.lines" ? { lines: {}, pending: true } : undefined),
+  });
   const waiting = forever.controller.play(entry());
   for (let i = 0; i < 4; i++) {
     await flush();
@@ -585,7 +589,7 @@ test("pending retries are bounded and a later metadata failure keeps the existin
     fireTimer(Math.min(...[...timers.keys()].map((id) => timerDelays.get(id))));
   }
   await waiting;
-  assert.equal(forever.calls.filter((call) => call.method === "hall.lines").length, 5);
+  assert.equal(forever.calls.filter((call) => call.method === "studentHall.lines").length, 5);
   assert.equal(timers.size, 0);
   assert.equal(forever.errors.length, 0);
   forever.controller.dispose();
@@ -593,15 +597,15 @@ test("pending retries are bounded and a later metadata failure keeps the existin
 
 test("a pending voice download blocks all portraits without interrupting the current balloon", async () => {
   const voice = deferred();
-  const h = fixture({ call: (method) => (method === "hall.voice" ? voice.promise : undefined) });
+  const h = fixture({ call: (method) => (method === "studentHall.voice" ? voice.promise : undefined) });
   const playing = h.controller.play(entry());
   await flush();
   const firstBubble = h.host.children[0],
-    request = h.calls.find(({ method }) => method === "hall.voice");
+    request = h.calls.find(({ method }) => method === "studentHall.voice");
   await h.controller.play(entry("two", "other"));
   assert.equal(request.signal.aborted, false);
   assert.equal(h.host.children[0], firstBubble);
-  assert.equal(h.calls.filter(({ method }) => method === "hall.lines").length, 1);
+  assert.equal(h.calls.filter(({ method }) => method === "studentHall.lines").length, 1);
   voice.resolve({ audio: btoa("voice"), mime: "audio/ogg" });
   await playing;
   await h.controller.play(entry("two", "other"));
@@ -611,7 +615,7 @@ test("a pending voice download blocks all portraits without interrupting the cur
   h.players[0].onended();
   await h.controller.play(entry("two", "other"));
   assert.equal(h.players.length, 2);
-  assert.equal(h.calls.at(-1).params.variant, "other");
+  assert.equal(h.calls.at(-1).params.alt, "other");
   h.controller.dispose();
 });
 
@@ -653,7 +657,8 @@ test("an audio error cannot allow a second bubble until its text fallback expire
 test("stalled setup expires with no caption and a late completion cannot steal the next turn", async () => {
   const stalled = deferred();
   const h = fixture({
-    call: (method, params) => (method === "hall.lines" && params.variant === "stalled" ? stalled.promise : undefined),
+    call: (method, params) =>
+      method === "studentHall.lines" && params.alt === "stalled" ? stalled.promise : undefined,
   });
   const pending = h.controller.play(entry("one", "stalled"));
   await flush();
@@ -674,7 +679,7 @@ test("stalled voice or autoplay setup preserves the obtained caption for exactly
     const stalled = deferred();
     const h = fixture(
       stage === "voice"
-        ? { call: (method) => (method === "hall.voice" ? stalled.promise : undefined) }
+        ? { call: (method) => (method === "studentHall.voice" ? stalled.promise : undefined) }
         : { play: () => stalled.promise },
     );
     const pending = h.controller.play(entry());
@@ -699,7 +704,7 @@ test("stalled voice or autoplay setup preserves the obtained caption for exactly
 
 test("zero volume during voice download cancels late sound and retains one bounded readable caption", async () => {
   const voice = deferred();
-  const h = fixture({ call: (method) => (method === "hall.voice" ? voice.promise : undefined) });
+  const h = fixture({ call: (method) => (method === "studentHall.voice" ? voice.promise : undefined) });
   const pending = h.controller.play(entry());
   await flush();
   h.settings.voiceVolume = 0;
@@ -742,7 +747,7 @@ test("disposing a text-only fallback also aborts its in-flight translation reque
   const h = fixture({
     language: () => language,
     call: (method, params) =>
-      method === "hall.lines"
+      method === "studentHall.lines"
         ? params.lang === "en"
           ? translation.promise
           : { lines: { hoshino_lobby_1: { "zh-TW": "Original", voice: false } } }
@@ -768,11 +773,11 @@ test("ordinary dialogue absence and missing catalog mappings are silent, throttl
     { lines: {}, unavailable: true },
     { lines: { missing_lobby_1: { voice: false } } },
     Object.assign(new Error("missing"), { code: "lines_unavailable" }),
-    Object.assign(new Error("missing"), { code: "catalog_variant_not_found" }),
+    Object.assign(new Error("missing"), { code: "catalog_alt_not_found" }),
   ]) {
     const h = fixture({
       call: (method, params) =>
-        method === "hall.lines" && params.variant === "missing"
+        method === "studentHall.lines" && params.alt === "missing"
           ? response instanceof Error
             ? Promise.reject(response)
             : response
@@ -792,7 +797,7 @@ test("ordinary dialogue absence and missing catalog mappings are silent, throttl
 
 test("unexpected dialogue failures retain their diagnostic error path", async () => {
   const fault = new TypeError("broken metadata adapter");
-  const h = fixture({ call: (method) => (method === "hall.lines" ? Promise.reject(fault) : undefined) });
+  const h = fixture({ call: (method) => (method === "studentHall.lines" ? Promise.reject(fault) : undefined) });
   await h.controller.play(entry());
   assert.equal(h.errors[0], fault);
   assert.equal(timers.size, 0);
@@ -804,7 +809,7 @@ test("late exact expression metadata enriches the active voice without another b
   const h = fixture({
     language: () => "zh-CN",
     call: (method) =>
-      method === "hall.lines"
+      method === "studentHall.lines"
         ? {
             lines: {
               hoshino_lobby_1: {
@@ -812,15 +817,15 @@ test("late exact expression metadata enriches the active voice without another b
                 voice: true,
                 ...(++reads > 1
                   ? {
-                      expression: "02",
-                      expressionCues: [
-                        { time: 0, expression: "02" },
-                        { time: 2.5, expression: "14" },
+                      animationName: "02",
+                      animationCues: [
+                        { time: 0, animationName: "02" },
+                        { time: 2.5, animationName: "14" },
                       ],
                     }
                   : {}),
               },
-              hoshino_lobby_2: { "zh-CN": "Second", voice: true, expression: "10" },
+              hoshino_lobby_2: { "zh-CN": "Second", voice: true, animationName: "10" },
             },
             pending: reads === 1,
             animationPending: reads === 1,
@@ -854,16 +859,16 @@ test("late exact expression metadata enriches the active voice without another b
 test("authored expression cues follow audio time, and late metadata cannot touch a finished voice", async () => {
   const h = fixture({
     call: (method) =>
-      method === "hall.lines"
+      method === "studentHall.lines"
         ? {
             lines: {
               hoshino_lobby_1: {
                 "zh-TW": "Caption",
                 voice: true,
-                expression: "02",
-                expressionCues: [
-                  { time: 0, expression: "02" },
-                  { time: 2.5, expression: "04" },
+                animationName: "02",
+                animationCues: [
+                  { time: 0, animationName: "02" },
+                  { time: 2.5, animationName: "04" },
                 ],
               },
             },
@@ -890,7 +895,7 @@ test("authored expression cues follow audio time, and late metadata cannot touch
   let reads = 0;
   const stopped = fixture({
     call: (method) =>
-      method === "hall.lines"
+      method === "studentHall.lines"
         ? ++reads === 1
           ? {
               lines: { hoshino_lobby_1: { "zh-TW": "Caption", voice: true } },
@@ -905,7 +910,7 @@ test("authored expression cues follow audio time, and late metadata cannot touch
   await flush();
   stopped.players[0].onended();
   late.resolve({
-    lines: { hoshino_lobby_1: { "zh-TW": "Late", voice: true, expression: "14" } },
+    lines: { hoshino_lobby_1: { "zh-TW": "Late", voice: true, animationName: "14" } },
     animationPending: false,
   });
   await flush();
@@ -934,7 +939,7 @@ test("late Chinese metadata updates the current balloon without replaying or adv
   const h = fixture({
     language: () => "zh-CN",
     call: (method) =>
-      method === "hall.lines"
+      method === "studentHall.lines"
         ? {
             lines: {
               hoshino_lobby_1: {
@@ -958,7 +963,7 @@ test("late Chinese metadata updates the current balloon without replaying or adv
   assert.equal(h.host.children[0].attrs["aria-label"], "Simplified");
   assert.equal(h.players.length, 1);
   assert.equal(h.players[0].played, 1);
-  assert.equal(h.calls.filter((value) => value.method === "hall.voice").length, 1);
+  assert.equal(h.calls.filter((value) => value.method === "studentHall.voice").length, 1);
   h.players[0].onended();
   await h.controller.play(entry());
   assert.equal(h.host.children[0].attrs["aria-label"], "Second");
@@ -971,7 +976,7 @@ test("switching into Chinese immediately clears a foreign balloon while the requ
   const h = fixture({
     language: () => locale,
     call: (method, params) =>
-      method === "hall.lines"
+      method === "studentHall.lines"
         ? params.lang === "zh-CN"
           ? translated.promise
           : { lines: { hoshino_lobby_1: { ja: "Original", voice: true } } }
@@ -998,7 +1003,7 @@ test("a late render from the old language cannot overwrite a newer Chinese ballo
     language: () => locale,
     render: () => (++draws === 1 ? delayed.promise : undefined),
     call: (method, params) =>
-      method === "hall.lines"
+      method === "studentHall.lines"
         ? {
             lines: {
               hoshino_lobby_1: { [params.lang]: params.lang === "ja" ? "Original" : "Translated", voice: true },
@@ -1195,7 +1200,7 @@ test("camera motion repositions an existing Talk drawing, flips when needed and 
   g = { ...g, full: true };
   h.reposition();
   await flush();
-  assert.deepEqual(reads, [["hall.dialogueLayout", {}]], "fullscreen keeps the same Talk template");
+  assert.deepEqual(reads, [["studentHall.dialogueLayout", {}]], "fullscreen keeps the same Talk template");
   const shown = host.children[0],
     left = parseFloat(shown.style.left);
   g = { ...g, view: { ...g.view, x: g.view.x + 50 } };
@@ -1235,7 +1240,7 @@ test("Now Loading over the Hall pauses its voice and caption lifetime, and both 
 
   const text = fixture({
     call: (method) =>
-      method === "hall.lines" ? { lines: { hoshino_lobby_1: { "zh-TW": "Text", voice: false } } } : undefined,
+      method === "studentHall.lines" ? { lines: { hoshino_lobby_1: { "zh-TW": "Text", voice: false } } } : undefined,
   });
   await text.controller.play(entry());
   assert.equal(timerDelays.size, 1);

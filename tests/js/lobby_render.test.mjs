@@ -775,14 +775,14 @@ test("ported pages draw with their programs and blends; dark colours and fallen-
   assert.ok(
     M.attach(p, layer, {
       screen: () => ({ x: -100, y: -50, width: 200, height: 100 }),
-      base: "/lobby/x/",
+      base: "/memorialLobby/x/",
       load: async (url) => {
         loads.push(url);
         return {};
       },
     }),
   );
-  assert.deepEqual(loads, ["/lobby/x/fx_cab-s_1.png"], "the material's own textures, from the lobby's route");
+  assert.deepEqual(loads, ["/memorialLobby/x/fx_cab-s_1.png"], "the material's own textures, from the lobby's route");
   await new Promise((r) => setTimeout(r, 0));
   const from = gl.calls.length;
   const log = p.frame();

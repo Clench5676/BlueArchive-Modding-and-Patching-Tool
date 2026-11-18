@@ -71,12 +71,12 @@ function harness(locale, { native = true, sourceValue = "windows_global", error 
     // Popup.notice is message() with the notice caption and Confirm only (popup.js, tested in refusal_notice.test.mjs)
     Popup: { notice: async (text) => messages.push({ title: T("quit.title"), lines: [text], ok: T("picker.ok") }) },
     // consent.js detectGame with the consent given (its consent path is tested in popup.test.mjs)
-    Consent: { detectGame: (region) => deps.rpc("settings.detectGame", { region }) },
+    Consent: { detectGame: (server) => deps.rpc("settings.detectGame", { server }) },
     ModSwitch: { askScan: async () => true },
     rpc: async (method, args) => {
       requests.push([method, args]);
       if (error && method === "settings.set") throw error;
-      if (method === "settings.detectGame") return [`/detected/${args.region}`];
+      if (method === "settings.detectGame") return [`/detected/${args.server}`];
       if (method === "settings.pickFolder") return `/chosen${args.start}`;
       return prefs;
     },
@@ -105,7 +105,7 @@ for (const locale of locales) {
         assert.equal(NGUI.find(row.tree, "Title").widgets[0].text, h.T(`settings.gameDirLabel.${region}`));
         await row.hits[0].fn();
         await row.hits[1].fn();
-        assert.ok(h.requests.some(([method, p]) => method === "settings.detectGame" && p.region === region));
+        assert.ok(h.requests.some(([method, p]) => method === "settings.detectGame" && p.server === region));
         assert.ok(
           h.requests.some(([method, p]) => method === "settings.pickFolder" && p.start === h.prefs.gameDirs[region]),
         );

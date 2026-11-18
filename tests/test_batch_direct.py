@@ -49,7 +49,7 @@ from test_mod_origin import unity_bundle
                 "game_file_conflict",
                 "library_io_error",
                 "no_matching_assets",
-                "original_unavailable",
+                "official_unavailable",
                 "entry_changed",
             )
         ],
@@ -134,7 +134,7 @@ def test_model_direct_replacement_never_transfers_assets(batch_model_env, monkey
     patch_batch(monkeypatch, "rebuild", forbidden)
     (entry,) = analyze(env, [source])["entries"]
     assert (entry["state"], entry["reason"], entry["files"][0]["target"]) == ("ready", None, target.name)
-    (result,) = run(env, [entry], crc="auto", extraBytes="", types=["Texture2D"], backup=True)
+    (result,) = run(env, [entry], crcCorrection="auto", extraBytes="", assetTypes=["Texture2D"], createBackup=True)
     assert result["outcome"] == "imported" and result["applied"], result
     installed = target.read_bytes()
     assert installed == original_source if fixed else installed[:-4] == original_source
@@ -162,7 +162,7 @@ def test_direct_replacement_stages_in_a_short_folder(batch_model_env, monkeypatc
         return result
 
     monkeypatch.setattr(env.services.batch_import, "_prepare", record)
-    (result,) = run(env, [entry], crc="auto", types=["Texture2D"], backup=True)
+    (result,) = run(env, [entry], crcCorrection="auto", assetTypes=["Texture2D"], createBackup=True)
     assert result["outcome"] == "imported", result
     assert [path.name for path in staged] == [target.name]
     assert staged[0].parent.name == "direct" and staged[0].parent.parent.name == entry["id"][:16]
@@ -192,7 +192,7 @@ def test_direct_replacement_honours_the_crc_and_extra_bytes_options(
     patch_batch(monkeypatch, "install_needs_crc", lambda source: install_needs)
     (entry,) = analyze(env, [source])["entries"]
     assert entry["state"] == "ready" and entry["files"][0]["target"] == target.name
-    (result,) = run(env, [entry], crc=crc, extraBytes=extra, types=["Texture2D"])
+    (result,) = run(env, [entry], crcCorrection=crc, extraBytes=extra, assetTypes=["Texture2D"])
     assert result["outcome"] == "imported" and result["applied"], result
     installed = target.read_bytes()
     if crc == "off" or (crc == "auto" and not install_needs):
@@ -265,7 +265,7 @@ def test_current_npc_without_roster_entry_imports_applies_and_restores(env, monk
     if crc_name:
         source = rename_crc(source)
     (entry,) = analyze(env, [source])["entries"]
-    assert (entry["state"], entry["kind"], entry["variant"]) == ("ready", "model", "en0002")
+    assert (entry["state"], entry["resourceType"], entry["alt"]) == ("ready", "chibi", "en0002")
     (result,) = run(env, [entry])
     assert result["outcome"] == "imported" and result["applied"], result
     assert target.read_bytes() == source.read_bytes()
@@ -380,7 +380,7 @@ def test_verified_modified_model_part_imports_whole(verified_model, monkeypatch,
     monkeypatch.setattr(resolver, "sharing_keys", forbidden)
     (entry,) = analyze(env, [source])["entries"]
     assert (entry["state"], entry["reason"]) == ("ready", None), entry
-    (result,) = run(env, [entry], types=["Texture2D"])
+    (result,) = run(env, [entry], assetTypes=["Texture2D"])
     assert result["outcome"] == "imported" and result["applied"], result
     installed = env.original.read_bytes()
     assert installed == before or (
@@ -444,7 +444,7 @@ def test_current_name_rebuilds_foreign_or_older_spine_instead_of_copying(env, mo
     with pytest.raises(ServiceError):
         env.library.add_files("spr", [source], direct=True)
     assert not env.library.mods()
-    (result,) = run(env, [entry], types=["TextAsset"])
+    (result,) = run(env, [entry], assetTypes=["TextAsset"])
     assert result["outcome"] == "updated" and result["applied"], result
     contents = inspect_bundle(target)
     assert "cab-fixture" in contents.files and "cab-older" not in contents.files

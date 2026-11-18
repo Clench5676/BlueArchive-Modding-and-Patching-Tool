@@ -16,7 +16,7 @@ globalThis.addEventListener = () => {};
 const Prompts = await import("../../src/bmpt/web/js/app/prompts.js");
 const ModSwitch = await import("../../src/bmpt/web/js/mods/mod-switch.js");
 const main = readFileSync(new URL("../../src/bmpt/web/js/app/main.js", import.meta.url), "utf8");
-const code = main.slice(main.indexOf("async function variantNames()"), main.indexOf("// --- library.changed"));
+const code = main.slice(main.indexOf("async function altNames()"), main.indexOf("// --- library.changed"));
 const flatten = (obj, prefix = "", out = {}) => {
   for (const [key, value] of Object.entries(obj)) {
     if (value && typeof value === "object") flatten(value, `${prefix}${key}.`, out);
@@ -25,23 +25,23 @@ const flatten = (obj, prefix = "", out = {}) => {
   return out;
 };
 
-test("main's shared resolver supplies variant aliases to global prompts and Mod Switch in every locale", async () => {
+test("main's shared resolver supplies alt aliases to global prompts and Mod Switch in every locale", async () => {
   const names = Object.fromEntries(
     ["en", "zh-CN", "zh-TW", "ja", "ko", "th"].map((lang) => [lang, { full: `Original ${lang}` }]),
   );
-  const variants = [
-    { key: "base", custom: ["Base alias"], names },
-    { key: "skin", custom: ["Skin alias"], names },
-    { key: "plain", custom: [], names },
+  const alts = [
+    { key: "base", customAliases: ["Base alias"], names },
+    { key: "skin", customAliases: ["Skin alias"], names },
+    { key: "plain", customAliases: [], names },
   ];
-  const data = { families: [{ variants }] };
+  const data = { students: [{ alts }] };
   for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
     setStrings(
       lang,
       flatten(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url), "utf8"))),
     );
     for (const cached of [false, true]) {
-      const resolver = new Function("roster", "rosterData", "L", "studentName", `${code}; return variantNames;`)(
+      const resolver = new Function("roster", "rosterData", "L", "studentName", `${code}; return altNames;`)(
         cached
           ? async () => {
               throw new Error("offline");
@@ -57,20 +57,20 @@ test("main's shared resolver supplies variant aliases to global prompts and Mod 
         ["skin", "Skin alias"],
         ["plain", L(names).full],
       ]) {
-        const entry = { variant: key, core: `${key}_spr`, kind: "spr", state: "untracked" };
+        const entry = { alt: key, core: `${key}_spr`, resourceType: "portrait", state: "untracked" };
         assert.equal(nameOf(entry), expected);
         assert.equal(Prompts.card(entry, { nameOf }).full, expected);
         assert.ok(ModSwitch.entryLabel(entry, nameOf).includes(expected));
       }
-      assert.equal(nameOf({ names }), L(names).full, "unknown variants retain shipped names");
+      assert.equal(nameOf({ names }), L(names).full, "unknown alts retain shipped names");
       assert.equal(nameOf({ core: "unknown_spr" }), "unknown_spr");
     }
   }
 });
 
 test("cached repaired Mod names relocalize from stable source labels without changing user aliases", () => {
-  const source = { id: "source", label: "Initial", label_base: "Initial", alias: "Source alias" };
-  const repaired = { id: "fixed", repaired_from: "source", label: "Cached repair suffix", label_base: "Initial" };
+  const source = { id: "source", name: "Initial", baseName: "Initial", alias: "Source alias" };
+  const repaired = { id: "fixed", repairSourceId: "source", name: "Cached repair suffix", baseName: "Initial" };
   for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH", "en-US"]) {
     const table = flatten(
       JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url), "utf8")),
@@ -93,11 +93,11 @@ test("cached repaired Mod names relocalize from stable source labels without cha
 
 test("legacy labels remain usable and malformed repair cycles stay bounded", () => {
   assert.equal(
-    modName({ id: "legacy", repaired_from: "missing", label: "Existing repaired label" }, [], T),
+    modName({ id: "legacy", repairSourceId: "missing", name: "Existing repaired label" }, [], T),
     "Existing repaired label",
   );
-  const a = { id: "a", repaired_from: "b", label_base: "A" },
-    b = { id: "b", repaired_from: "a", label_base: "B" };
+  const a = { id: "a", repairSourceId: "b", baseName: "A" },
+    b = { id: "b", repairSourceId: "a", baseName: "B" };
   assert.equal(
     modName(a, [a, b], (_key, { name }) => `${name} repaired`),
     "B repaired",
@@ -105,7 +105,7 @@ test("legacy labels remain usable and malformed repair cycles stay bounded", () 
 });
 
 test("an Optimize Physics copy is named after its costume in every language, its alias first", () => {
-  const copy = { id: "c", optimized_from: "variant:np0009", label_base: "Hina (Pajamas)", label: "stale" };
+  const copy = { id: "c", optimized_from: "alt:np0009", baseName: "Hina (Pajamas)", name: "stale" };
   for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
     const table = flatten(
       JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url), "utf8")),

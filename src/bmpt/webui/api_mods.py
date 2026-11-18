@@ -43,9 +43,9 @@ def register(rpc: RpcRegistry, s: Services) -> None:
     def import_catalog() -> dict[str, Any]:
         return s.batch_import.assignment_catalog()
 
-    @rpc.method("import.assignCharacter")
-    def import_assign_character(id: str, variant: str) -> str:
-        return s.batch_import.assign_character(id, variant)
+    @rpc.method("import.assignAlt")
+    def import_assign_alt(id: str, alt: str) -> str:
+        return s.batch_import.assign_alt(id, alt)
 
     @rpc.method("import.run")
     def import_run(ids: list[str], options: dict[str, Any], revision: int) -> str:
@@ -57,29 +57,29 @@ def register(rpc: RpcRegistry, s: Services) -> None:
 
     @rpc.method("import.setOptions")
     def import_set_options(
-        strategy: str,
-        types: list[str],
+        matchStrategy: str,
+        assetTypes: list[str],
         skipUnchanged: bool,
-        crc: str,
+        crcCorrection: str,
         compression: str,
         extraBytes: str,
-        backup: bool,
-        workers: int,
-        output: str | None,
+        createBackup: bool,
+        threads: int,
+        outputFolder: str | None,
         enableAfterImport: bool,
         previewAfterImport: bool = False,
     ) -> dict[str, Any]:
         return s.batch_import.set_options(
             {
-                "strategy": strategy,
-                "types": types,
+                "matchStrategy": matchStrategy,
+                "assetTypes": assetTypes,
                 "skipUnchanged": skipUnchanged,
-                "crc": crc,
+                "crcCorrection": crcCorrection,
                 "compression": compression,
                 "extraBytes": extraBytes,
-                "backup": backup,
-                "workers": workers,
-                "output": output,
+                "createBackup": createBackup,
+                "threads": threads,
+                "outputFolder": outputFolder,
                 "enableAfterImport": enableAfterImport,
                 "previewAfterImport": previewAfterImport,
             }
@@ -170,9 +170,9 @@ def register(rpc: RpcRegistry, s: Services) -> None:
 
         return s.submit("mods.remove", remove, writes="library", library=library)
 
-    @rpc.method("mods.rename")
-    def mods_rename(id: str, label: str) -> dict[str, Any]:
-        entry = s.library.rename(id, label)
+    @rpc.method("mods.setAlias")
+    def mods_set_alias(id: str, alias: str) -> dict[str, Any]:
+        entry = s.library.rename(id, alias)
         s.events.publish("library.changed", {"cores": [], "kinds": [], "mods": True})
         return entry.to_json()
 
@@ -403,18 +403,18 @@ def register(rpc: RpcRegistry, s: Services) -> None:
     # --- actions (jobs) ---
 
     @rpc.method("actions.apply")
-    def actions_apply(variant: str, source: str, kind: str = "spr") -> str:
+    def actions_apply(alt: str, source: str, resource_type: str = "spr") -> str:
         """Switch what the game shows: write a source into the variant's game files, and configure it.
 
         The files are the portrait ("spr") or memorial lobby ("lobby") ones of the current install, pinned at
         submit. The library keeps what it replaces (``ModLibrary._commit``). While mods are off it only configures
         the source (``deferred``).
         """
-        return s.submit_apply(variant, source, kind)
+        return s.submit_apply(alt, source, resource_type)
 
     @rpc.method("actions.restore")
-    def actions_restore(variant: str, kind: str = "spr") -> str:
-        return s.submit_restore(variant, kind)
+    def actions_restore(alt: str, resource_type: str = "spr") -> str:
+        return s.submit_restore(alt, resource_type)
 
     @rpc.method("actions.update")
     def actions_update(mod: str) -> str:
@@ -443,16 +443,16 @@ def register(rpc: RpcRegistry, s: Services) -> None:
     def actions_compare(mod: str) -> Any:
         return s.library.compare(mod)
 
-    @rpc.method("actions.remap")
-    def actions_remap(mod: str, geometry: Any = None) -> str:
+    @rpc.method("actions.useOfficialSkeleton")
+    def actions_use_official_skeleton(mod: str, geometry: Any = None) -> str:
         library = s.library
         pin = s._current_pin(library)
         return s.submit(
             "remap", lambda log, progress: library.remap(mod, log=log, progress=progress, pin=pin, geometry=geometry)
         )
 
-    @rpc.method("actions.oldRig")
-    def actions_old_rig(mod: str) -> str:
+    @rpc.method("actions.useRecordedRig")
+    def actions_use_recorded_rig(mod: str) -> str:
         """Start the repair review of a texture-only portrait with the rig it was drawn for.
 
         See ``ModLibrary.old_rig``; it is accepted or discarded as a remap's.
@@ -464,10 +464,10 @@ def register(rpc: RpcRegistry, s: Services) -> None:
     def spine_licensed() -> None:
         # the graft writes skeletons with code derived from the Spine runtime: only after the user's licence answer
         if s.state.spine_consent is not True:
-            raise ServiceError("graft_spine_licence")
+            raise ServiceError("add_animations_spine_licence")
 
-    @rpc.method("actions.graft")
-    def actions_graft(mod: str) -> str:
+    @rpc.method("actions.addAnimations")
+    def actions_add_animations(mod: str) -> str:
         """Start the first step of a graft of the official rig's new animations into a mod's own rig.
 
         See ``ModLibrary.graft``; the result is the rigs for the page to pose.
@@ -477,8 +477,8 @@ def register(rpc: RpcRegistry, s: Services) -> None:
         pin = s._current_pin(library)
         return s.submit("remap", lambda log, progress: library.graft(mod, log=log, progress=progress, pin=pin))
 
-    @rpc.method("actions.graftBuild")
-    def actions_graft_build(token: str, geometry: Any = None) -> str:
+    @rpc.method("actions.addAnimationsBuild")
+    def actions_add_animations_build(token: str, geometry: Any = None) -> str:
         spine_licensed()
         library = s.library
 
@@ -488,8 +488,8 @@ def register(rpc: RpcRegistry, s: Services) -> None:
 
         return s.submit("remap", build)
 
-    @rpc.method("actions.graftCheck")
-    def actions_graft_check(token: str, geometry: Any = None) -> str:
+    @rpc.method("actions.addAnimationsCheck")
+    def actions_add_animations_check(token: str, geometry: Any = None) -> str:
         """The last step: the review of the grafted copy, accepted or discarded as a remap's."""
         spine_licensed()
         library = s.library
@@ -498,8 +498,8 @@ def register(rpc: RpcRegistry, s: Services) -> None:
             "remap", lambda log, progress: library.graft_check(token, geometry, log=log, progress=progress, pin=pin)
         )
 
-    @rpc.method("actions.discardGraft")
-    def actions_discard_graft(token: str) -> None:
+    @rpc.method("actions.discardAddAnimations")
+    def actions_discard_add_animations(token: str) -> None:
         s.library.discard_graft(token)
 
     # the converter route (bmpt.spine.converter): the optional helper for what the graft refuses
@@ -516,9 +516,9 @@ def register(rpc: RpcRegistry, s: Services) -> None:
         library = s.library
         return s.submit("remap", lambda log, progress: library.converter_download(True, progress))
 
-    @rpc.method("actions.graftConvert")
-    def actions_graft_convert(token: str, geometry: Any = None) -> str:
-        """Start the converter route after ``actions.graft``: the rigs rewritten through the converter.
+    @rpc.method("actions.addAnimationsConvert")
+    def actions_add_animations_convert(token: str, geometry: Any = None) -> str:
+        """Start the converter route after ``actions.addAnimations``: the rigs rewritten through the converter.
 
         The result is the rigs before and after, to pose.
         """
@@ -531,8 +531,8 @@ def register(rpc: RpcRegistry, s: Services) -> None:
 
         return s.submit("remap", convert)
 
-    @rpc.method("actions.graftConvertCheck")
-    def actions_graft_convert_check(token: str, geometry: Any = None) -> str:
+    @rpc.method("actions.addAnimationsConvertCheck")
+    def actions_add_animations_convert_check(token: str, geometry: Any = None) -> str:
         """The converter route's last step: the pose check and the review, accepted or discarded as a remap's."""
         spine_licensed()
         library = s.library
@@ -560,8 +560,8 @@ def register(rpc: RpcRegistry, s: Services) -> None:
 
         return s.submit("compatibility", check)
 
-    @rpc.method("actions.acceptRemap")
-    def actions_accept_remap(preview: str) -> str:
+    @rpc.method("actions.acceptRepair")
+    def actions_accept_repair(preview: str) -> str:
         library = s.library
 
         def accept(log: Any, progress: Any) -> Any:
@@ -570,8 +570,8 @@ def register(rpc: RpcRegistry, s: Services) -> None:
 
         return s.submit("remap.accept", accept, writes="library", library=library)
 
-    @rpc.method("actions.discardRemap")
-    def actions_discard_remap(preview: str) -> None:
+    @rpc.method("actions.discardRepair")
+    def actions_discard_repair(preview: str) -> None:
         s.library.discard_remap(preview)
 
     @rpc.method("actions.compatibilityStamp")

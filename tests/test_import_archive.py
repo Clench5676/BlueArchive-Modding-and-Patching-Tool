@@ -51,7 +51,12 @@ def test_zip_bundles_import_like_files_and_nested_archives_stay_packed(env):
     result = analyze(env, [archive])
     (entry,) = result["entries"]
     assert result["skipped"] == 3
-    assert (entry["variant"], entry["core"], entry["kind"], entry["state"]) == ("test", "test_spr", "spr", "ready")
+    assert (entry["alt"], entry["core"], entry["resourceType"], entry["state"]) == (
+        "test",
+        "test_spr",
+        "portrait",
+        "ready",
+    )
     (folder,) = unpacked(env)
     assert entry["paths"] == [str(folder / "Mod folder" / source.name)]
     # nothing of the nested archive was unpacked
@@ -75,7 +80,7 @@ def test_zip_and_loose_files_are_taken_together(env):
     archive = write_zip(env.tmp / "drop" / "lobby.zip", {lobby.name: lobby.read_bytes()})
     result = analyze(env, [loose, archive])
     assert result["skipped"] == 0
-    assert sorted(entry["kind"] for entry in result["entries"]) == ["lobby", "spr"]
+    assert sorted(entry["resourceType"] for entry in result["entries"]) == ["memorialLobby", "portrait"]
 
 
 def test_member_names_never_leave_the_unpacked_folder(env):
@@ -159,9 +164,8 @@ def test_archives_inside_a_chosen_folder_stay_packed(env):
 def test_an_exported_archive_imports_back(env):
     source = make_mod(env.original, env.tmp / "made")
     (mod,) = env.library.add([source])
-    services = SimpleNamespace(settings=env.settings, library=env.library, state=SimpleNamespace(get=lambda *_: {}))
     exported = export_service.export_zip(
-        services,
+        env.services,
         env.library,
         env.library.current_pin(),
         scope="library",
@@ -178,7 +182,7 @@ def test_an_exported_archive_imports_back(env):
     result = analyze(env, [exported["archive"]])
     (entry,) = result["entries"]
     assert result["skipped"] == 1  # manifest.json
-    assert (entry["core"], entry["kind"], entry["state"]) == ("test_spr", "spr", "ready")
+    assert (entry["core"], entry["resourceType"], entry["state"]) == ("test_spr", "portrait", "ready")
     (outcome,) = run(env, result["entries"], enableAfterImport=False)
     assert outcome["outcome"] == "imported"
 

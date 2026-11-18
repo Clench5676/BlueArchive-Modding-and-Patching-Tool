@@ -19,6 +19,7 @@ from typing import Any
 
 from bmpt.engine import Bundle
 from ..core.filelock import replace as replace_file
+from ..host.store_formats import managed_bytes, runtime_store
 
 logger = logging.getLogger(__name__)
 
@@ -65,9 +66,12 @@ def atomic_json(path: Path, data: dict[str, Any]) -> None:
     fd, name = tempfile.mkstemp(prefix=".state-", dir=path.parent)
     temporary = Path(name)
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as stream:
-            json.dump(data, stream, ensure_ascii=True, indent=2)
-            stream.write("\n")
+        with os.fdopen(fd, "wb") as stream:
+            store = runtime_store(path)
+            raw = (
+                managed_bytes(store, data) if store else (json.dumps(data, ensure_ascii=True, indent=2) + "\n").encode()
+            )
+            stream.write(raw)
             stream.flush()
             os.fsync(stream.fileno())
         replace_file(temporary, path)
@@ -277,11 +281,12 @@ class Fingerprints:
         self._values: dict[Path, tuple[tuple[int, int, int], Fingerprint]] = {}
         self._lock = threading.Lock()
 
-    def get(self, path: Path) -> Fingerprint:
+    def get(self, path: Path, *, fresh: bool = False) -> Fingerprint:
         """Read a header and hashes once for each observed file version.
 
         Args:
             path: Bundle whose resolved path, file times, and size identify the cache entry.
+            fresh: Hash the file even when its cached stat signature matches.
 
         Returns:
             The file's SHA-1, CRC, trailing-byte count, and byte size.
@@ -291,7 +296,7 @@ class Fingerprints:
         signature = (stat.st_mtime_ns, stat.st_size, stat.st_ctime_ns)
         with self._lock:
             cached = self._values.get(path)
-        if cached and cached[0] == signature:
+        if not fresh and cached and cached[0] == signature:
             return cached[1]
         sha1, crc = hashlib.sha1(), 0
         with path.open("rb") as stream:

@@ -29,15 +29,15 @@ def test_popup_keeps_the_official_sort_source_branches(request, tmp_path):
     cache = AssetCache(root=tmp_path / "memory-only", allowed=False)
     tree = GameAssets(official.resource_dirs, cache).layout("UIPopup_Sort")
     background = subtree(tree, "Center/Popup/Base/BG")
-    sprite = next(w for w in background["widgets"] if "sprite" in w)
-    assert background["pos"] == [0, 8]
-    assert [sprite[k] for k in ("sprite", "w_", "h_", "pivot")] == ["Common_Popup_Bg", 2458, 1355, 4]
+    sprite = next(w for w in background["widgets"] if "spriteName" in w)
+    assert background["localPosition"] == [0, 8]
+    assert [sprite[k] for k in ("spriteName", "width", "height", "pivot")] == ["Common_Popup_Bg", 2458, 1355, 4]
     for name, x in [("Btn_Ok", 292), ("Btn_Cancel", -292)]:
         button = subtree(tree, f"Center/Popup/Btn/{name}")
         body = subtree(button, "BG (1)")
-        sprite = next(w for w in body["widgets"] if "sprite" in w)
-        assert button["pos"] == [x, 0] and body["pos"] == [0, -4]
-        assert [sprite[k] for k in ("sprite", "w_", "h_", "pivot")] == ["Common_Btn_BG", 496, 177, 4]
+        sprite = next(w for w in body["widgets"] if "spriteName" in w)
+        assert button["localPosition"] == [x, 0] and body["localPosition"] == [0, -4]
+        assert [sprite[k] for k in ("spriteName", "width", "height", "pivot")] == ["Common_Btn_BG", 496, 177, 4]
     assert not cache.root.exists()
 
 
@@ -52,36 +52,36 @@ def test_review_controls_use_official_popup_and_settings_nodes(request, tmp_path
     game = GameAssets(official.resource_dirs, cache)
     official.require_layout("UIPopup_Sort")
     tree = game.layout("UIPopup_Sort")
-    assert subtree(tree, "Center/Popup/Base")["pos"] == [0, -20]
-    assert subtree(tree, "Center/Popup/Btn")["pos"] == [0, -499]
+    assert subtree(tree, "Center/Popup/Base")["localPosition"] == [0, -20]
+    assert subtree(tree, "Center/Popup/Btn")["localPosition"] == [0, -499]
     close = subtree(tree, "Center/Popup/Base/BG/Btn_Close")
-    assert close["pos"] == [1144, 616]
-    icon = next(w for w in close["widgets"] if "sprite" in w)
-    assert [icon[k] for k in ("sprite", "w_", "h_", "pivot")] == ["Common_Icon_Close", 60, 60, 4]
+    assert close["localPosition"] == [1144, 616]
+    icon = next(w for w in close["widgets"] if "spriteName" in w)
+    assert [icon[k] for k in ("spriteName", "width", "height", "pivot")] == ["Common_Icon_Close", 60, 60, 4]
     title = subtree(tree, "Center/Popup/Base/BG/Label_Title_Locale")
-    assert title["pos"] == [0, 611]
-    assert [title["widgets"][0][k] for k in ("w_", "h_", "fontSize", "pivot")] == [146, 72, 72, 4]
+    assert title["localPosition"] == [0, 611]
+    assert [title["widgets"][0][k] for k in ("width", "height", "fontSize", "pivot")] == [146, 72, 72, 4]
     for name in ("Btn_Cancel", "Btn_Ok"):
         caption = subtree(tree, f"Center/Popup/Btn/{name}/Label_Locale")
-        assert caption["pos"] == [0, 2]
-        assert [caption["widgets"][0][k] for k in ("w_", "h_", "fontSize", "pivot")] == [400, 180, 72, 4]
+        assert caption["localPosition"] == [0, 2]
+        assert [caption["widgets"][0][k] for k in ("width", "height", "fontSize", "pivot")] == [400, 180, 72, 4]
     official.require_layout("UIPopup_Option_PC")
     option = game.layout("UIPopup_Option_PC")
     row_path = "Center/Popup/List/Sound_Setting/Sound_Scroll View/Grid_2/Master/Type_3"
     row_body = subtree(option, f"{row_path}/BG")
-    row_sprite = next(w for w in row_body["widgets"] if "sprite" in w)
-    assert [row_sprite[k] for k in ("sprite", "w_", "pivot")] == ["Common_Bg_Raius5px", 1552, 4]
+    row_sprite = next(w for w in row_body["widgets"] if "spriteName" in w)
+    assert [row_sprite[k] for k in ("spriteName", "width", "pivot")] == ["Common_Bg_Raius5px", 1552, 4]
     row_title = subtree(option, f"{row_path}/Label_Locale_OptionTitle")
-    assert [row_title["widgets"][0][k] for k in ("h_", "fontSize", "pivot")] == [76, 50, 3]
+    assert [row_title["widgets"][0][k] for k in ("height", "fontSize", "pivot")] == [76, 50, 3]
     tag = subtree(row_title, "TagDeco")
-    assert tag["pos"] == [-13, 5.2]
-    assert [tag["widgets"][0][k] for k in ("sprite", "w_", "h_", "pivot")] == ["Common_Square_Bg", 6, 45, 4]
+    assert tag["localPosition"] == [-13, 5.2]
+    assert [tag["widgets"][0][k] for k in ("spriteName", "width", "height", "pivot")] == ["Common_Square_Bg", 6, 45, 4]
     button = subtree(option, "Center/Popup/List/Sound_Setting/ETCSetting/ButtonBg")
-    body = next(w for w in button["widgets"] if "sprite" in w)
-    assert [body[k] for k in ("sprite", "w_", "h_", "pivot")] == ["Common_Btn_BG", 402, 136, 4]
+    body = next(w for w in button["widgets"] if "spriteName" in w)
+    assert [body[k] for k in ("spriteName", "width", "height", "pivot")] == ["Common_Btn_BG", 402, 136, 4]
     caption = subtree(button, "Label_Locale")
-    assert caption["pos"] == [0, 4]
-    assert [caption["widgets"][0][k] for k in ("w_", "h_", "fontSize", "pivot")] == [337, 72, 48, 4]
+    assert caption["localPosition"] == [0, 4]
+    assert [caption["widgets"][0][k] for k in ("width", "height", "fontSize", "pivot")] == [337, 72, 48, 4]
     assert not cache.root.exists()
 
 

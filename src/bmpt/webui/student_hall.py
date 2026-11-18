@@ -86,8 +86,8 @@ def validate_hall(value: Any) -> dict:
         The clean hall at revision 0, with ``active`` set to the memorial asked for or else the first one.
 
     Raises:
-        ServiceError: ``bad_params`` naming the invalid field; ``hall_duplicate_portrait`` or
-            ``hall_duplicate_memorial`` for the same variant and source twice in a group.
+        ServiceError: ``bad_params`` naming the invalid field; ``student_hall_duplicate_portrait`` or
+            ``student_hall_duplicate_memorial`` for the same variant and source twice in a group.
     """
     if not isinstance(value, dict) or value.get("mode") not in ("portraits", "memorial"):
         raise ServiceError("bad_params", key="hall")
@@ -130,7 +130,9 @@ def validate_hall(value: Any) -> dict:
             item = {"id": uid, "variant": variant, "source": source}
             key = (variant, source)
             if key in sources:
-                raise ServiceError("hall_duplicate_portrait" if group == "portraits" else "hall_duplicate_memorial")
+                raise ServiceError(
+                    "student_hall_duplicate_portrait" if group == "portraits" else "student_hall_duplicate_memorial"
+                )
             sources.add(key)
             if group == "portraits":
                 mirror = entry.get("mirror", False)
@@ -173,8 +175,8 @@ def save_hall(state: Any, value: dict, revision: int) -> dict:
         A copy of the saved hall, whose revision is one more.
 
     Raises:
-        ServiceError: ``bad_params`` for an invalid hall or revision; ``hall_conflict`` when the stored revision
-            differs; ``hall_last_portrait`` or ``hall_last_memorial`` when the save would empty a group.
+        ServiceError: ``bad_params`` for an invalid hall or revision; ``student_hall_conflict`` when the stored revision
+            differs; ``student_hall_last_portrait`` or ``student_hall_last_memorial`` when the save would empty a group.
     """
     clean = validate_hall(value)
     if isinstance(revision, bool) or not isinstance(revision, int) or revision < 0:
@@ -184,13 +186,20 @@ def save_hall(state: Any, value: dict, revision: int) -> dict:
         prefs = data.setdefault("prefs", {})
         current = prefs.get("student_hall", empty_hall())
         if current.get("revision", 0) != revision:
-            raise ServiceError("hall_conflict")
+            raise ServiceError("student_hall_conflict")
         if current.get("portraits") and not clean["portraits"]:
-            raise ServiceError("hall_last_portrait")
+            raise ServiceError("student_hall_last_portrait")
         if current.get("memorials") and not clean["memorials"]:
-            raise ServiceError("hall_last_memorial")
+            raise ServiceError("student_hall_last_memorial")
         clean["revision"] = revision + 1
-        prefs["student_hall"] = clean
+        for group in ("portraits", "memorials"):
+            previous = {
+                row["id"]: row
+                for row in current.get(group, [])
+                if isinstance(row, dict) and isinstance(row.get("id"), str)
+            }
+            clean[group] = [{**previous.get(row["id"], {}), **row} for row in clean[group]]
+        prefs["student_hall"] = {**current, **clean}
 
     state._update(change)
     return copy.deepcopy(clean)
@@ -503,7 +512,7 @@ def dialogue_layout(game: Any) -> dict:
         with open_bundle(path) as env:
             tree = export_layout(env, "LobbyCommon", game._atlas_index()["names"])
         talk = subtree(tree, "DialogPanel/ChatDialog/Talk")
-        talk["pos"] = [0, 0]
+        talk["localPosition"] = [0, 0]
         return json.dumps(talk).encode()
 
     return json.loads(game._cached("hall/dialogue-v1/" + json.dumps(spine_stamps([path])), read))
@@ -562,8 +571,8 @@ def expression_motion(name: str, clips: dict, seen: frozenset = frozenset()) -> 
         "animation": name,
         "track": clip["track"],
         "loop": clip["loop"],
-        "mix": clip["intro"],
-        "outro": clip["outro"],
+        "mix": clip["introMix"],
+        "outro": clip["outroMix"],
         "sync": [
             motion for child in clip.get("sync", []) if (motion := expression_motion(child, clips, seen | {name}))
         ],
@@ -573,10 +582,9 @@ def expression_motion(name: str, clips: dict, seen: frozenset = frozenset()) -> 
 def register_api(rpc: Any, s: Any) -> None:
     """Register the Student Hall RPC methods.
 
-    ``hall.get`` returns the stored hall, which a first call fills with Shiroko when the game has her; ``hall.update``
-    saves it; ``hall.options`` lists what the hall can show (official and mod portraits and lobbies, backgrounds);
-    ``hall.viewed`` records a viewed choice; ``hall.dialogueLayout`` gives the dialogue balloon; ``hall.lines`` and
-    ``hall.voice`` give a portrait's dialogue lines and voice audio.
+    ``studentHall.get`` reads the hall and fills an empty one with Shiroko when available. The update and viewed
+    methods save the snapshot and viewed choices, and the options method lists portraits, scenes and backgrounds.
+    The dialogue methods return the layout, lines and voice audio.
 
     Args:
         rpc: The ``RpcRegistry`` to register on.
@@ -655,16 +663,16 @@ def register_api(rpc: Any, s: Any) -> None:
             value["voiceSource"] = "local" if clip in installed else "kivo" if remote else None
         motion = (
             portrait_motion_layout(s.game, getattr(v, "spr", None))
-            if any(row.get("expression") for row in result.values())
+            if any(row.get("animationName") for row in result.values())
             else {}
         )
         for row in result.values():
-            for cue in row.get("expressionCues", []):
-                if authored := expression_motion(cue["expression"], motion):
+            for cue in row.get("animationCues", []):
+                if authored := expression_motion(cue["animationName"], motion):
                     cue["motion"] = authored
         return result, waiting, animation_pending
 
-    @rpc.method("hall.get")
+    @rpc.method("studentHall.get")
     def get() -> dict:
         value = s.state.get("student_hall")
         if value is None:
@@ -700,7 +708,7 @@ def register_api(rpc: Any, s: Any) -> None:
                 value = s.state.get("student_hall")
         return normalize_hall(value)
 
-    @rpc.method("hall.options")
+    @rpc.method("studentHall.options")
     def options() -> dict:
         if not s.game_found():
             raise ServiceError("game_directory_missing")
@@ -766,7 +774,7 @@ def register_api(rpc: Any, s: Any) -> None:
                             "core": core,
                             "names": v.names,
                             "label": "",
-                            "portrait": f"/asset/art/portrait/{v.portrait}.png" if v.portrait else None,
+                            "portrait": f"/asset/art/officialThumbnail/{v.portrait}.png" if v.portrait else None,
                             **metadata(v, "official"),
                         }
                     )
@@ -788,7 +796,7 @@ def register_api(rpc: Any, s: Any) -> None:
                     "core": getattr(v, mod.kind, None),
                     "names": v.names,
                     "label": mod.alias or mod.label,
-                    "portrait": f"/asset/art/portrait/{v.portrait}.png" if v.portrait else None,
+                    "portrait": f"/asset/art/officialThumbnail/{v.portrait}.png" if v.portrait else None,
                     **metadata(v, "mod:" + mod.id, mod),
                 }
             )
@@ -796,25 +804,25 @@ def register_api(rpc: Any, s: Any) -> None:
         office = getattr(s.game, "office_backgrounds", lambda: [])()
         return {
             "choices": choices,
-            "backgrounds": [*office, *({"name": n, "url": "/asset/art/bg/" + n} for n in backgrounds)],
+            "backgrounds": [*office, *({"name": n, "url": "/asset/art/background/" + n} for n in backgrounds)],
         }
 
-    @rpc.method("hall.update")
+    @rpc.method("studentHall.update")
     def update(value: dict, revision: int) -> dict:
         return save_hall(s.state, value, revision)
 
-    @rpc.method("hall.viewed")
-    def viewed(variant: str, source: str) -> list[str]:
-        v = s.library.variant_metadata(variant)
+    @rpc.method("studentHall.viewed")
+    def viewed(alt: str, source: str) -> list[str]:
+        v = s.library.variant_metadata(alt)
         if source == "official":
             valid = bool(v.lobby)
         else:
             valid = isinstance(source, str) and any(
-                "mod:" + mod.id == source and mod.target == variant and mod.kind == "lobby" for mod in s.library.mods()
+                "mod:" + mod.id == source and mod.target == alt and mod.kind == "lobby" for mod in s.library.mods()
             )
         if not valid:
             raise ServiceError("bad_params", key="source")
-        key = f"{variant}:{source}"
+        key = f"{alt}:{source}"
 
         def change(data: dict) -> None:
             prefs = data.setdefault("prefs", {})
@@ -823,20 +831,20 @@ def register_api(rpc: Any, s: Any) -> None:
         s.state._update(change)
         return s.state.get("hall_viewed", [])
 
-    @rpc.method("hall.dialogueLayout")
+    @rpc.method("studentHall.dialogueLayout")
     def balloon() -> dict:
         return dialogue_layout(s.game)
 
-    @rpc.method("hall.lines")
-    def lines(variant: str, lang: str = "ja") -> dict:
+    @rpc.method("studentHall.lines")
+    def lines(alt: str, lang: str = "ja") -> dict:
         if lang not in ("en", "zh-CN", "zh-TW", "ja", "ko", "th"):
             raise ServiceError("bad_params", key="lang")
         try:
-            v = s.library.variant_metadata(variant)
+            v = s.library.variant_metadata(alt)
         except ServiceError as error:
-            if error.code not in ("catalog_variant_not_found", "variant_not_found"):
+            if error.code not in ("catalog_alt_not_found", "alt_not_found"):
                 raise
-            logger.debug("Portrait dialogue has no catalog mapping: %s", variant)
+            logger.debug("Portrait dialogue has no catalog mapping: %s", alt)
             return {"lines": {}, "pending": False, "unavailable": True, "animationPending": False}
         rows, waiting, animation_pending = rows_for(v, lang)
         return {
@@ -846,9 +854,9 @@ def register_api(rpc: Any, s: Any) -> None:
             "animationPending": animation_pending,
         }
 
-    @rpc.method("hall.voice")
-    def voice(variant: str, clip: str) -> dict:
-        v = s.library.variant_metadata(variant)
+    @rpc.method("studentHall.voice")
+    def voice(alt: str, clip: str) -> dict:
+        v = s.library.variant_metadata(alt)
         if not isinstance(clip, str) or not re.fullmatch(r"[a-z0-9_]+_lobby_\d+(?:_\d+)?", clip):
             raise ServiceError("bad_params", key="clip")
         rows, _, _ = rows_for(v, "zh-CN")

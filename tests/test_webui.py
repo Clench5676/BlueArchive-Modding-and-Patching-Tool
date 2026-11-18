@@ -21,7 +21,7 @@ from bmpt.webui.events import EventBus
 from bmpt.webui.jobs import JobRunner
 from bmpt.webui.server import WebApp
 from bmpt.webui.services import Services
-from bmpt.webui.state import ALIAS_LENGTH, ALIAS_MAX, UiState, roster_view
+from bmpt.webui.state import ALIAS_LENGTH, ALIAS_MAX, UiState, student_list_view
 from bmpt.webui.timing import Timings
 
 
@@ -94,14 +94,14 @@ class FakeCatalog:
 
     def family(self, key):
         if key != "hoshino":
-            raise ServiceError("family_not_found", key=key)
+            raise ServiceError("student_not_found", key=key)
         return self.f
 
     def variant(self, key):
         for variant in self.f.variants:
             if variant.key == key:
                 return variant
-        raise ServiceError("catalog_variant_not_found", key=key)
+        raise ServiceError("catalog_alt_not_found", key=key)
 
 
 @dataclass
@@ -346,25 +346,25 @@ def test_host_header_checked_when_serving(app):
 
 def test_rpc_errors_are_codes(app):
     assert rpc(app, "nope")["error"]["code"] == "unknown_method"
-    assert rpc(app, "family.get")["error"]["code"] == "bad_params"
-    assert rpc(app, "family.get", key="x")["error"] == {"code": "family_not_found", "params": {"key": "x"}}
+    assert rpc(app, "student.get")["error"]["code"] == "bad_params"
+    assert rpc(app, "student.get", key="x")["error"] == {"code": "student_not_found", "params": {"key": "x"}}
 
 
 def test_roster_and_family(app, services):
-    roster = rpc(app, "roster.list")["result"]
-    v = roster["families"][0]["variants"][0]
+    roster = rpc(app, "students.list")["result"]
+    v = roster["students"][0]["alts"][0]
     assert v["key"] == "hoshino" and v["mods"] == 1 and v["fresh"] is False
     assert v["added"] == "2026-10-01T08:00:00+00:00"  # the newest own mod, for the "recently added" sort
-    assert v["replaced"] == "variant:hoshino_swimsuit"
-    assert v["bg"] == "/asset/art/bg/BG_Test_Collection"
-    assert v["playable"] is True and v["recruitable"] is True
-    rpc(app, "favorites.set", variant="hoshino", on=True)
+    assert v["replaced"] == "alt:hoshino_swimsuit"
+    assert v["background"] == "/asset/art/background/BG_Test_Collection"
+    assert v["playable"] is True and v["releasedOnServer"] is True
+    rpc(app, "favorites.set", alt="hoshino", on=True)
     services.catalog.v.recruitable = False  # playable on another server only
-    fam = rpc(app, "family.get", key="hoshino")["result"]
-    assert fam["variants"][0]["playable"] is True and fam["variants"][0]["recruitable"] is False
-    assert fam["variants"][0]["favorite"] is True
-    assert fam["variants"][0]["state"] == {"applied": "official", "crc": "ok"}
-    assert fam["variants"][0]["modList"] == [{"id": "m1", "target": "hoshino", "fresh": False}]
+    fam = rpc(app, "student.get", key="hoshino")["result"]
+    assert fam["alts"][0]["playable"] is True and fam["alts"][0]["releasedOnServer"] is False
+    assert fam["alts"][0]["favorite"] is True
+    assert fam["alts"][0]["state"] == {"applied": "official", "crc": "ok"}
+    assert fam["alts"][0]["modList"] == [{"id": "m1", "target": "hoshino", "fresh": False}]
     assert fam["version"] == "rv1"  # the install the parts come from
 
 
@@ -378,10 +378,10 @@ def test_mod_search_keeps_alias_core_and_file_names_in_roster_and_family(app, se
         mod.alias = alias
         mod.label = alias or mod.core
         for result in (
-            rpc(app, "roster.list")["result"]["families"][0],
-            rpc(app, "family.get", key="hoshino")["result"],
+            rpc(app, "students.list")["result"]["students"][0],
+            rpc(app, "student.get", key="hoshino")["result"],
         ):
-            assert result["variants"][0]["modNames"] == list(
+            assert result["alts"][0]["modNames"] == list(
                 dict.fromkeys(name for name in (alias, mod.core, mod.file.name) if name)
             )
 
@@ -395,18 +395,18 @@ def test_library_counts_and_configured_sources_reach_roster_and_family(app, serv
         services.library.enabled = enabled
         selection = {"spr": {"source": "mod:p1", "installed": enabled, "error": None}}
         monkeypatch.setattr(services.library, "selection", lambda key: selection)
-        roster = rpc(app, "roster.list")["result"]["families"][0]
-        family = rpc(app, "family.get", key="hoshino")["result"]
+        roster = rpc(app, "students.list")["result"]["students"][0]
+        family = rpc(app, "student.get", key="hoshino")["result"]
         for data in (roster, family):
-            v = data["variants"][0]
+            v = data["alts"][0]
             assert v["mods"] == 4
-            assert v["modCounts"] == {"spr": 3, "lobby": 1}
-            assert v["configured"] == configured
-        assert "selection" not in roster["variants"][0]
-        assert family["variants"][0]["selection"] == selection
+            assert v["modCounts"] == {"portrait": 3, "memorialLobby": 1}
+            assert v["configured"] == {"portrait": "mod:p1", "memorialLobby": "mod:l1"}
+        assert "selection" not in roster["alts"][0]
+        assert family["alts"][0]["selection"] == {"portrait": {"source": "mod:p1", "installed": enabled, "error": None}}
     monkeypatch.setattr(services.library, "mods", lambda: [])
-    v = rpc(app, "roster.list")["result"]["families"][0]["variants"][0]
-    assert v["mods"] == 0 and v["modCounts"] == {"spr": 0, "lobby": 0}
+    v = rpc(app, "students.list")["result"]["students"][0]["alts"][0]
+    assert v["mods"] == 0 and v["modCounts"] == {"portrait": 0, "memorialLobby": 0}
 
 
 def test_roster_uses_one_snapshot_and_validates_saved_previews_without_library_reads(app, services, monkeypatch):
@@ -455,14 +455,19 @@ def test_roster_uses_one_snapshot_and_validates_saved_previews_without_library_r
         return preview_snapshot(install)
 
     monkeypatch.setattr(services.state, "preview_snapshot", previews)
-    result = rpc(app, "roster.list")["result"]["families"][0]["variants"]
+    result = rpc(app, "students.list")["result"]["students"][0]["alts"]
     assert calls == [[v.key for v in variants]] and reads == ["current"]
-    assert all(v["configured"] == choices[v["key"]] and "selection" not in v for v in result)
-    assert result[0]["previewSources"] == {"spr": "mod:m0", "lobby": "mod:lobby", "model": "mod:model"}
-    assert result[1]["previewSources"] == {"spr": "mod:m1"} and result[1]["favorite"]
-    assert result[2]["previewSources"] == {"spr": "variant:v3"} and result[2]["replaced"] == "mod:m2"
-    assert result[3]["previewSources"] == {} and result[4]["previewSources"] == {"spr": "official"}
-    assert result[99]["previewSources"] == {"spr": "mod:m99"}
+    resource_types = {"spr": "portrait", "lobby": "memorialLobby", "model": "chibi"}
+    for variant in result:
+        assert variant["configured"] == {
+            resource_types[kind]: source for kind, source in choices[variant["key"]].items()
+        }
+        assert "selection" not in variant
+    assert result[0]["previewSources"] == {"portrait": "mod:m0", "memorialLobby": "mod:lobby", "chibi": "mod:model"}
+    assert result[1]["previewSources"] == {"portrait": "mod:m1"} and result[1]["favorite"]
+    assert result[2]["previewSources"] == {"portrait": "alt:v3"} and result[2]["replaced"] == "mod:m2"
+    assert result[3]["previewSources"] == {} and result[4]["previewSources"] == {"portrait": "official"}
+    assert result[99]["previewSources"] == {"portrait": "mod:m99"}
 
 
 def test_preview_snapshot_filters_malformed_choices_and_does_not_share_state(tmp_path):
@@ -492,13 +497,13 @@ def test_preview_snapshot_filters_malformed_choices_and_does_not_share_state(tmp
 
 
 def mod_marks(app):
-    roster = rpc(app, "roster.list")["result"]["families"][0]["variants"][0]
-    variant = rpc(app, "family.get", key="hoshino")["result"]["variants"][0]
+    roster = rpc(app, "students.list")["result"]["students"][0]["alts"][0]
+    variant = rpc(app, "student.get", key="hoshino")["result"]["alts"][0]
     assert roster["fresh"] == variant["fresh"]
     return roster["fresh"], {m["id"]: m["fresh"] for m in variant["modList"]}
 
 
-@pytest.mark.parametrize("first", ["roster.list", "family.get"])
+@pytest.mark.parametrize("first", ["students.list", "student.get"])
 @pytest.mark.parametrize("state", ["missing", "older"])
 def test_mod_marks_first_run_baselines_the_whole_library(app, services, monkeypatch, first, state):
     mods = [
@@ -511,7 +516,7 @@ def test_mod_marks_first_run_baselines_the_whole_library(app, services, monkeypa
         services.state.set("voice_volume", 20)  # an older UI state, without seen_mods
     else:
         services.state.path.unlink(missing_ok=True)
-    params = {"key": "hoshino"} if first == "family.get" else {}
+    params = {"key": "hoshino"} if first == "student.get" else {}
     assert "result" in rpc(app, first, **params)
     assert mod_marks(app) == (False, {"portrait": False, "lobby": False})
     assert UiState(services.state.path).seen_mods() == {m.id for m in mods}
@@ -612,7 +617,7 @@ def test_mod_marks_follow_ui_state_per_mod_and_survive_restart(app, services, mo
     mods = [FakeMod("portrait", "hoshino", fresh=False), FakeMod("lobby", "hoshino", kind="lobby")]
     monkeypatch.setattr(services.library, "mods", lambda: mods)
     assert mod_marks(app) == (True, {"portrait": True, "lobby": True})
-    rpc(app, "ui.visit", variant="hoshino")
+    rpc(app, "ui.visit", alt="hoshino")
     assert mod_marks(app) == (True, {"portrait": True, "lobby": True})
     assert rpc(app, "mods.seen", id="portrait") == {"result": None}
     assert mod_marks(app) == (True, {"portrait": False, "lobby": True})
@@ -638,33 +643,36 @@ def test_mods_seen_rejects_invalid_ids(app, services, params):
 def test_roster_and_family_carry_the_aliases_the_search_matches(app, services):
     services.catalog.f.aliases = ["\u5c0f\u661f"]
     services.catalog.v.aliases = ["\u5c0f\u661f\uff08x\uff09"]
-    for result in (rpc(app, "roster.list")["result"]["families"][0], rpc(app, "family.get", key="hoshino")["result"]):
+    for result in (
+        rpc(app, "students.list")["result"]["students"][0],
+        rpc(app, "student.get", key="hoshino")["result"],
+    ):
         assert result["aliases"] == ["\u5c0f\u661f"]
-        assert result["variants"][0]["aliases"] == ["\u5c0f\u661f\uff08x\uff09"]
+        assert result["alts"][0]["aliases"] == ["\u5c0f\u661f\uff08x\uff09"]
 
 
 def test_own_aliases_are_kept_and_listed(app, services, tmp_path):
-    assert rpc(app, "roster.list")["result"]["families"][0]["variants"][0]["custom"] == []
-    kept = rpc(app, "aliases.set", family="hoshino", aliases=[" Oji  san ", "oji san", "", "<i>x</i>"])["result"]
+    assert rpc(app, "students.list")["result"]["students"][0]["alts"][0]["customAliases"] == []
+    kept = rpc(app, "aliases.set", student="hoshino", aliases=[" Oji  san ", "oji san", "", "<i>x</i>"])["result"]
     assert kept == ["Oji san", "<i>x</i>"]
-    assert rpc(app, "roster.list")["result"]["families"][0]["variants"][0]["custom"] == kept
-    assert rpc(app, "family.get", key="hoshino")["result"]["variants"][0]["custom"] == kept
+    assert rpc(app, "students.list")["result"]["students"][0]["alts"][0]["customAliases"] == kept
+    assert rpc(app, "student.get", key="hoshino")["result"]["alts"][0]["customAliases"] == kept
     # kept across launches, in the user's data folder
     assert UiState(tmp_path / "webui.json").aliases() == {"hoshino": kept}
     # past the limits nothing changes
-    too_long = rpc(app, "aliases.set", family="hoshino", aliases=["x" * (ALIAS_LENGTH + 1)])["error"]
+    too_long = rpc(app, "aliases.set", student="hoshino", aliases=["x" * (ALIAS_LENGTH + 1)])["error"]
     assert too_long == {"code": "alias_too_long", "ref": "E6001", "params": {"max": ALIAS_LENGTH}}
-    too_many = rpc(app, "aliases.set", family="hoshino", aliases=[f"a{i}" for i in range(ALIAS_MAX + 1)])["error"]
+    too_many = rpc(app, "aliases.set", student="hoshino", aliases=[f"a{i}" for i in range(ALIAS_MAX + 1)])["error"]
     assert too_many == {"code": "alias_too_many", "ref": "E6002", "params": {"max": ALIAS_MAX}}
     # repeats count once
-    assert rpc(app, "aliases.set", family="hoshino", aliases=["a"] * (ALIAS_MAX + 1))["result"] == ["a"]
-    assert rpc(app, "aliases.set", family="hoshino", aliases=kept)["result"] == kept
+    assert rpc(app, "aliases.set", student="hoshino", aliases=["a"] * (ALIAS_MAX + 1))["result"] == ["a"]
+    assert rpc(app, "aliases.set", student="hoshino", aliases=kept)["result"] == kept
     for bad in ("x", [1], None):
-        assert rpc(app, "aliases.set", family="hoshino", aliases=bad)["error"]["code"] == "bad_params"
-    assert rpc(app, "aliases.set", family="nobody", aliases=["x"])["error"]["code"] == "family_not_found"
-    assert rpc(app, "family.get", key="hoshino")["result"]["variants"][0]["custom"] == kept
+        assert rpc(app, "aliases.set", student="hoshino", aliases=bad)["error"]["code"] == "bad_params"
+    assert rpc(app, "aliases.set", student="nobody", aliases=["x"])["error"]["code"] == "student_not_found"
+    assert rpc(app, "student.get", key="hoshino")["result"]["alts"][0]["customAliases"] == kept
     # none: the student's entry goes
-    assert rpc(app, "aliases.set", family="hoshino", aliases=[])["result"] == []
+    assert rpc(app, "aliases.set", student="hoshino", aliases=[])["result"] == []
     assert UiState(tmp_path / "webui.json").aliases() == {}
 
 
@@ -677,23 +685,23 @@ def test_legacy_family_aliases_migrate_to_original_only_and_skins_save_independe
     services.catalog.f.variants.append(skin)
 
     def names(method):
-        result = rpc(app, method, **({"key": "hoshino"} if method == "family.get" else {}))["result"]
-        family = result["families"][0] if method == "roster.list" else result
+        result = rpc(app, method, **({"key": "hoshino"} if method == "student.get" else {}))["result"]
+        family = result["students"][0] if method == "students.list" else result
         assert "custom" not in family
-        return {v["key"]: v["custom"] for v in family["variants"]}
+        return {v["key"]: v["customAliases"] for v in family["alts"]}
 
-    for method in ("roster.list", "family.get"):
+    for method in ("students.list", "student.get"):
         assert names(method) == {"hoshino": ["Original nickname"], skin.key: []}
     assert path.read_bytes() == before  # Reinterpreting the stable base key needs no disk rewrite.
-    assert rpc(app, "aliases.set", variant=skin.key, aliases=["Skin nickname"])["result"] == ["Skin nickname"]
-    for method in ("roster.list", "family.get"):
+    assert rpc(app, "aliases.set", alt=skin.key, aliases=["Skin nickname"])["result"] == ["Skin nickname"]
+    for method in ("students.list", "student.get"):
         assert names(method) == {"hoshino": ["Original nickname"], skin.key: ["Skin nickname"]}
-    assert rpc(app, "aliases.set", variant="hoshino", aliases=[])["result"] == []
+    assert rpc(app, "aliases.set", alt="hoshino", aliases=[])["result"] == []
     assert UiState(path).aliases() == {skin.key: ["Skin nickname"]}
     services.catalog.f.variants = [skin]  # A missing original must not transfer its alias to an installed skin.
     path.write_text(json.dumps(legacy), encoding="utf-8")
-    assert names("roster.list") == {skin.key: []}
-    assert rpc(app, "aliases.set", variant="missing", aliases=["x"])["error"]["code"] == "catalog_variant_not_found"
+    assert names("students.list") == {skin.key: []}
+    assert rpc(app, "aliases.set", alt="missing", aliases=["x"])["error"]["code"] == "catalog_alt_not_found"
     assert json.loads(path.read_text())["prefs"] == legacy["prefs"]
 
 
@@ -714,23 +722,23 @@ def test_special_only_family_alias_migrates_once_to_one_scene(
     path.write_text(json.dumps(legacy), encoding="utf-8")
 
     def names(method):
-        result = rpc(app, method, **({"key": family_key} if method == "family.get" else {}))["result"]
-        family = result["families"][0] if method == "roster.list" else result
-        return {v["key"]: v["custom"] for v in family["variants"]}
+        result = rpc(app, method, **({"key": family_key} if method == "student.get" else {}))["result"]
+        family = result["students"][0] if method == "students.list" else result
+        return {v["key"]: v["customAliases"] for v in family["alts"]}
 
     kept = aliases.get(scene.key, aliases[family_key])
-    for method in ("roster.list", "family.get"):
+    for method in ("students.list", "student.get"):
         assert names(method) == {scene.key: kept, sibling.key: []}
     assert UiState(path).aliases() == {scene.key: kept}
     assert json.loads(path.read_text())["prefs"] == legacy["prefs"]
     # A new earlier scene or a different install's ordering cannot move a migrated name.
     earlier = replace(scene, key="special:aardvark", order=-1)
     services.catalog.f.variants.insert(0, earlier)
-    assert names("roster.list") == {earlier.key: [], scene.key: kept, sibling.key: []}
-    assert rpc(app, "aliases.set", variant=scene.key, aliases=[])["result"] == []
-    assert names("family.get") == {earlier.key: [], scene.key: [], sibling.key: []}
+    assert names("students.list") == {earlier.key: [], scene.key: kept, sibling.key: []}
+    assert rpc(app, "aliases.set", alt=scene.key, aliases=[])["result"] == []
+    assert names("student.get") == {earlier.key: [], scene.key: [], sibling.key: []}
     # Older callers using the family argument also write a usable variant key.
-    assert rpc(app, "aliases.set", family=family_key, aliases=["New name"])["result"] == ["New name"]
+    assert rpc(app, "aliases.set", student=family_key, aliases=["New name"])["result"] == ["New name"]
     assert UiState(path).aliases() == {earlier.key: ["New name"]}
 
 
@@ -753,17 +761,17 @@ def test_family_lists_the_model_prefab_bundles(app, services, monkeypatch, tmp_p
         FakeGame, "_model_index", lambda self: {"hoshino_original": [str(old), str(new), str(broken)]}, raising=False
     )
     services.catalog.v.model = "hoshino_original"
-    files = rpc(app, "family.get", key="hoshino")["result"]["variants"][0]["modelFiles"]
+    files = rpc(app, "student.get", key="hoshino")["result"]["alts"][0]["chibiFiles"]
     # newest first, each with the date and CRC state the info panel shows, judged from the header only:
     # no switch writes model bundles, so a name whose CRC does not match without trailing bytes shows ok
-    assert [(Path(f["file"]), f["date"], f["crc"], f["kind"]) for f in files] == [
-        (broken, "2025-08-01", "ok", "model"),
-        (new, "2025-07-25", "fixed", "model"),
-        (old, "2024-11-18", "ok", "model"),
+    assert [(Path(f["file"]), f["date"], f["crc"], f["resourceType"]) for f in files] == [
+        (broken, "2025-08-01", "ok", "chibi"),
+        (new, "2025-07-25", "fixed", "chibi"),
+        (old, "2024-11-18", "ok", "chibi"),
     ]
     assert files[2]["size"] == old.stat().st_size
     services.catalog.v.model = None
-    assert rpc(app, "family.get", key="hoshino")["result"]["variants"][0]["modelFiles"] == []
+    assert rpc(app, "student.get", key="hoshino")["result"]["alts"][0]["chibiFiles"] == []
 
 
 def test_catalog_follows_the_selected_server(tmp_path: Path):
@@ -792,16 +800,16 @@ def test_consent_controls_cache_headers(app, services):
     services.state.set_consent(True)
     assert call(app, "/asset/ui/sprite/Common/Common_Icon_Back.png")[1]["Cache-Control"].startswith("private")
     # heavy assets are never cacheable
-    assert call(app, "/asset/art/portrait/X.png")[1]["Cache-Control"] == "no-store"
+    assert call(app, "/asset/art/officialThumbnail/X.png")[1]["Cache-Control"] == "no-store"
 
 
 def test_asset_routes(app):
     assert call(app, "/asset/ui/sprite/Common/Missing.png")[0] == "404 Not Found"
     assert json.loads(call(app, "/asset/ui/textures.json")[2]) == {"UITex_A": "/asset/ui/texture/UITex_A.png"}
     assert json.loads(call(app, "/asset/ui/layout/UIRoot.json?path=A/B")[2])["name"] == "B"
-    assert call(app, "/asset/spine/spr/hoshino_spr/hoshino_spr.atlas")[2] == b"atlas"
-    assert call(app, "/asset/spine/spr/hoshino_spr/skeleton.skel")[2] == b"skel"
-    assert call(app, "/asset/spine/spr/hoshino_spr/other.png")[0] == "404 Not Found"
+    assert call(app, "/asset/spine/portrait/hoshino_spr/hoshino_spr.atlas")[2] == b"atlas"
+    assert call(app, "/asset/spine/portrait/hoshino_spr/skeleton.skel")[2] == b"skel"
+    assert call(app, "/asset/spine/portrait/hoshino_spr/other.png")[0] == "404 Not Found"
 
 
 def test_preview_failures_are_logged_in_release_sessions(app, services, caplog):
@@ -809,7 +817,7 @@ def test_preview_failures_are_logged_in_release_sessions(app, services, caplog):
     result = rpc(
         app,
         "preview.failed",
-        url="/asset/spine/lobby/shun_home/revision/home.skel",
+        url="/asset/spine/memorialLobby/shun_home/revision/home.skel",
         step="draw",
         error="Unsupported lobby Spine version: 3.8.75\n" + "x" * 9000,
     )
@@ -839,13 +847,13 @@ def test_another_installs_skeleton_is_read_from_its_own_files(app, services, mon
 
     monkeypatch.setattr(services, "_make_game", OtherGame)
     # the core in another install: that install's own files, its GameAssets made once
-    assert json.loads(call(app, f"/asset/spine/spr/hoshino_spr@{other.id}/files.json")[2]) == ["hoshino_spr.skel"]
-    assert call(app, f"/asset/spine/spr/hoshino_spr@{other.id}/skeleton.skel")[2] == b"japan skel"
+    assert json.loads(call(app, f"/asset/spine/portrait/hoshino_spr@{other.id}/files.json")[2]) == ["hoshino_spr.skel"]
+    assert call(app, f"/asset/spine/portrait/hoshino_spr@{other.id}/skeleton.skel")[2] == b"japan skel"
     assert made == [[tmp_path / "japan"]]
     # the same path without the id, or with the current install's: the current install's files
-    assert call(app, "/asset/spine/spr/hoshino_spr/skeleton.skel")[2] == b"skel"
-    assert call(app, f"/asset/spine/spr/hoshino_spr@{current.id}/skeleton.skel")[2] == b"skel"
-    assert call(app, "/asset/spine/spr/hoshino_spr@000000000000/files.json")[0] == "404 Not Found"
+    assert call(app, "/asset/spine/portrait/hoshino_spr/skeleton.skel")[2] == b"skel"
+    assert call(app, f"/asset/spine/portrait/hoshino_spr@{current.id}/skeleton.skel")[2] == b"skel"
+    assert call(app, "/asset/spine/portrait/hoshino_spr@000000000000/files.json")[0] == "404 Not Found"
 
 
 def test_mod_skeleton_is_the_one_named_by_the_mods_core(app, services, monkeypatch):
@@ -890,20 +898,20 @@ def test_official_skeleton_route_reads_the_librarys_official_parts(app, services
         ("skeleton.atlas", b"official atlas"),
         ("hoshino_spr.png", b"official png"),
     ]:
-        status, headers, body = call(app, f"/asset/spine/official-spr/hoshino_spr/{name}")
+        status, headers, body = call(app, f"/asset/spine/official-portrait/hoshino_spr/{name}")
         assert status == "200 OK" and body == expected
         assert headers["Cache-Control"] == "no-store"
     assert requested and set(requested) == {"hoshino_spr"}
-    assert json.loads(call(app, "/asset/spine/official-spr/hoshino_spr/files.json")[2]) == [
+    assert json.loads(call(app, "/asset/spine/official-portrait/hoshino_spr/files.json")[2]) == [
         "hoshino_spr.atlas",
         "hoshino_spr.png",
         "hoshino_spr.skel",
     ]
-    assert call(app, "/asset/spine/spr/hoshino_spr/skeleton.skel")[2] == b"skel"
+    assert call(app, "/asset/spine/portrait/hoshino_spr/skeleton.skel")[2] == b"skel"
     assert call(app, "/asset/spine/official/hoshino_spr/skeleton.skel")[0] == "404 Not Found"
 
 
-@pytest.mark.parametrize("kind", ["spr", "lobby", "mod", "official-spr", "official-lobby"])
+@pytest.mark.parametrize("kind", ["portrait", "memorialLobby", "mod", "official-portrait", "official-memorialLobby"])
 def test_spine_revision_routes_reject_switched_files(app, services, monkeypatch, tmp_path, kind, caplog):
     bundle = _bundle(tmp_path, "assets-_mx-spinecharacters-hoshino_spr-_mxdependency-2026-01-01_assets_all")
     monkeypatch.setattr(services.game, "spine_cores", lambda kind: {"hoshino_spr": [bundle]}, raising=False)
@@ -934,7 +942,7 @@ def test_spine_revision_routes_reject_switched_files(app, services, monkeypatch,
         status, headers, body = call(app, f"{prefix}/{after}/{name}")
         assert status == "200 OK" and body == bundle.read_bytes()
         assert headers["Cache-Control"] == "no-store"
-    if kind == "lobby":
+    if kind == "memorialLobby":
         assert json.loads(call(app, f"{prefix}/{after}/lobby.json")[2])["content"] == bundle.read_bytes().hex()
 
 
@@ -979,9 +987,9 @@ def test_a_texture_only_mod_previews_on_the_rig_its_textures_were_drawn_for(app,
     assert call(app, f"{prefix}/{drawn}/skeleton.skel")[2] == b"new skeleton"
 
 
-@pytest.mark.parametrize("kind", ["spr", "lobby"])
+@pytest.mark.parametrize("kind", ["portrait", "memorialLobby"])
 def test_live_spine_files_are_read_in_the_librarys_order(app, services, monkeypatch, tmp_path, kind):
-    name = "hoshino_spr" if kind == "spr" else "hoshino_home"
+    name = "hoshino_spr" if kind == "portrait" else "hoshino_home"
     official = _bundle(tmp_path, "assets-_mx-spinelobbies-b-_mxdependency-2026-01-01_assets_all")
     mod = _bundle(tmp_path, "assets-_mx-spinelobbies-a-_mxdependency-2026-01-01_assets_all", b"x")
     monkeypatch.setattr(services.game, "spine_cores", lambda k: {name: [mod, official]}, raising=False)
@@ -1034,7 +1042,7 @@ def test_live_portrait_survives_cache_clear(app, services, monkeypatch, tmp_path
 
     monkeypatch.setattr(services.library, "preview_bundles", no_preview, raising=False)
     monkeypatch.setattr(services.library, "official_bundles", no_preview, raising=False)
-    prefix = "/asset/spine/spr/ibuki_spr"
+    prefix = "/asset/spine/portrait/ibuki_spr"
     revision = json.loads(call(app, prefix + "/manifest.json")[2])["revision"]
     for clear in (False, True):
         if clear:
@@ -1064,7 +1072,7 @@ def test_asset_failures_log_the_request_and_cause(app, services, monkeypatch, ca
         raise failure
 
     monkeypatch.setattr(services.library, "live_bundles", refused)
-    assert call(app, "/asset/spine/spr/ibuki_spr/manifest.json")[0] == status
+    assert call(app, "/asset/spine/portrait/ibuki_spr/manifest.json")[0] == status
     assert str(failure) in caplog.text and "ibuki_spr/manifest.json" in caplog.text
     if isinstance(failure, ServiceError):
         assert failure.params["path"] in caplog.text
@@ -1083,15 +1091,15 @@ def test_atlas_route_revalidates_and_reports_failure(app, services, monkeypatch,
 
 def test_missing_official_spine_returns_404(app, services, monkeypatch):
     def missing(core, pin=None):
-        raise ServiceError("original_unavailable", file=core)
+        raise ServiceError("official_unavailable", file=core)
 
     monkeypatch.setattr(services.library, "official_bundles", missing, raising=False)
     for name in ("manifest.json", "skeleton.skel", "skeleton.atlas", "portrait.png"):
-        status, headers, _ = call(app, f"/asset/spine/official-spr/hoshino_spr/{name}")
+        status, headers, _ = call(app, f"/asset/spine/official-portrait/hoshino_spr/{name}")
         # the page learns the refusal's code, never its parameters
-        assert status == "404 Not Found" and headers["X-BAMT-Error"] == "original_unavailable"
+        assert status == "404 Not Found" and headers["X-BAMT-Error"] == "official_unavailable"
         assert "hoshino_spr" not in json.dumps(headers)
-    status, headers, _ = call(app, "/asset/model/hoshino.png")  # no such route: no refusal to explain
+    status, headers, _ = call(app, "/asset/chibi/hoshino.png")  # no such route: no refusal to explain
     assert status == "404 Not Found" and "X-BAMT-Error" not in headers
 
 
@@ -1102,7 +1110,7 @@ def test_current_mod_and_ui_routes_do_not_wait_for_library_preview(app, services
     def preview(mod_id):
         entered.set()
         assert release.wait(5), "Test did not release the preview"
-        raise ServiceError("original_unavailable", file="missing original")
+        raise ServiceError("official_unavailable", file="missing original")
 
     monkeypatch.setattr(services.library, "preview_bundles", preview, raising=False)
     monkeypatch.setattr(
@@ -1114,14 +1122,15 @@ def test_current_mod_and_ui_routes_do_not_wait_for_library_preview(app, services
         pending = pool.submit(call, app, "/asset/spine/mod/m1/skeleton.skel")
         try:
             assert entered.wait(1)
+            resource_type = {"spr": "portrait", "lobby": "memorialLobby"}[kind]
             for path in (
-                f"/asset/spine/{kind}/{core}/skeleton.skel",
+                f"/asset/spine/{resource_type}/{core}/skeleton.skel",
                 "/asset/ui/atlases.json",
                 "/asset/ui/sprite/Common/Common_Icon_Back.png",
             ):
                 assert pool.submit(call, app, path).result(timeout=1)[0] == "200 OK"
-            data = pool.submit(rpc, app, "family.get", key="hoshino").result(timeout=1)
-            assert data["result"]["variants"][0]["state"]["files"][0]["applied"] == "mod:m1"
+            data = pool.submit(rpc, app, "student.get", key="hoshino").result(timeout=1)
+            assert data["result"]["alts"][0]["state"]["files"][0]["applied"] == "mod:m1"
         finally:
             release.set()
         assert pending.result(timeout=1)[0] == "404 Not Found"
@@ -1339,21 +1348,21 @@ def test_lobby_warm_builds_the_prefab_index_once_per_game(app, services, monkeyp
     )
     first = services.game
     # answered at once while the index is built in the background; a second call does not start another build
-    assert "error" not in rpc(app, "lobby.warm") and "error" not in rpc(app, "lobby.warm")
+    assert "error" not in rpc(app, "memorialLobby.warm") and "error" not in rpc(app, "memorialLobby.warm")
     release.set()
     for thread in [t for t in threading.enumerate() if t.name == "lobby-warm"]:
         thread.join(5)
     assert calls == [first] and cabs == []
     # another game (a new game folder or file source) is warmed again
     services._game = FakeGame()
-    rpc(app, "lobby.warm")
+    rpc(app, "memorialLobby.warm")
     for thread in [t for t in threading.enumerate() if t.name == "lobby-warm"]:
         thread.join(5)
     assert calls == [first, services._game]
     # without a game nothing is started
     monkeypatch.setattr(services, "game_found", lambda: False)
     services._game = FakeGame()
-    assert "error" not in rpc(app, "lobby.warm")
+    assert "error" not in rpc(app, "memorialLobby.warm")
     assert len(calls) == 2
 
 
@@ -1449,7 +1458,7 @@ def test_non_ascii_token_is_refused_not_crashed(app):
 
 
 def test_roster_view_keeps_only_valid_fields():
-    assert roster_view(None) == {
+    assert student_list_view(None) == {
         "merged": False,
         "mods": "all",
         "recruit": "all",
@@ -1457,7 +1466,7 @@ def test_roster_view_keeps_only_valid_fields():
         "order": "desc",
         "filters": {},
     }
-    view = roster_view(
+    view = student_list_view(
         {
             "merged": True,
             "mods": "none",
@@ -1475,16 +1484,23 @@ def test_roster_view_keeps_only_valid_fields():
         "order": "asc",
         "filters": {"lobby": ["no"]},
     }
-    assert roster_view({"sort": "mods", "order": "asc"})["order"] == "asc"
+    assert student_list_view({"sort": "mods", "order": "asc"})["order"] == "asc"
 
 
 def test_roster_view_is_kept_across_launches(app, services, tmp_path):
-    assert rpc(app, "settings.get")["result"]["roster"]["sort"] == "recent"
-    sent = {"merged": True, "recruit": "yes", "sort": "added", "order": "asc", "filters": {"portrait": ["replaced"]}}
-    saved = rpc(app, "settings.set", key="roster", value=sent)["result"]["roster"]
-    assert saved == {**roster_view(None), **sent}
+    assert rpc(app, "settings.get")["result"]["studentList"]["sort"] == "recent"
+    sent = {
+        "groupAlts": True,
+        "releaseStatus": "yes",
+        "sort": "added",
+        "order": "asc",
+        "filters": {"portrait": ["replaced"]},
+    }
+    saved = rpc(app, "settings.set", key="studentList", value=sent)["result"]["studentList"]
+    assert saved == {"mods": "all", **sent}
     # a new launch reads the same file
-    assert roster_view(UiState(tmp_path / "webui.json").get("roster")) == saved
+    legacy = {"merged": True, "recruit": "yes", "sort": "added", "order": "asc", "filters": {"portrait": ["replaced"]}}
+    assert student_list_view(UiState(tmp_path / "webui.json").get("roster")) == {"mods": "all", **legacy}
 
 
 @pytest.mark.parametrize("kind", [["student"], ["npc"], ["student", "npc"]])
@@ -1502,8 +1518,15 @@ def test_saved_roster_type_filter_is_dropped_on_load_and_save(app, services, tmp
     services.state.set("roster", legacy)
     services.state.set("voice_volume", 35)
     services.state = UiState(tmp_path / "webui.json")
-    assert rpc(app, "settings.get")["result"]["roster"] == kept
-    assert rpc(app, "settings.set", key="roster", value=legacy)["result"]["roster"] == kept
+    sent = {key: value for key, value in kept.items() if key not in ("merged", "recruit")}
+    sent.update(groupAlts=True, releaseStatus=recruit)
+    assert rpc(app, "settings.get")["result"]["studentList"] == sent
+    assert (
+        rpc(app, "settings.set", key="studentList", value={**sent, "filters": legacy["filters"]})["result"][
+            "studentList"
+        ]
+        == sent
+    )
     reloaded = UiState(tmp_path / "webui.json")
     assert reloaded.get("roster") == kept
     assert reloaded.get("voice_volume") == 35
@@ -1946,7 +1969,7 @@ def test_the_window_leaves_the_pointer_and_text_selection_to_the_page(monkeypatc
 
     monkeypatch.setattr(Tray, "supported", staticmethod(lambda platform=sys.platform: False))  # tests/test_tray.py
     main._run_window(
-        SimpleNamespace(window=None, data_dir=tmp_path, timings=Timings(), events=EventBus()),
+        SimpleNamespace(window=None, data_dir=tmp_path, timings=Timings(), events=EventBus(), committed=None),
         SimpleNamespace(url="http://127.0.0.1:1/"),
         False,
     )
@@ -2032,14 +2055,14 @@ def test_original_and_repaired_versions_share_roster_and_band_counts(app, servic
         fixed.repaired_from = original.id
     for mods in (originals + repaired, repaired, originals):
         monkeypatch.setattr(services.library, "mods", lambda: mods)
-        for method, params in (("roster.list", {}), ("family.get", {"key": "hoshino"})):
+        for method, params in (("students.list", {}), ("student.get", {"key": "hoshino"})):
             result = rpc(app, method, **params)["result"]
-            family = result["families"][0] if method == "roster.list" else result
-            variant = family["variants"][0]
+            family = result["students"][0] if method == "students.list" else result
+            variant = family["alts"][0]
             assert variant["mods"] == 2
-            assert variant["modCounts"] == {"spr": 1, "lobby": 1}
+            assert variant["modCounts"] == {"portrait": 1, "memorialLobby": 1}
             assert variant["fresh"] is (unread and any(mod.user_added for mod in mods))
-            if method == "family.get":
+            if method == "student.get":
                 assert {mod["id"]: mod["fresh"] for mod in variant["modList"]} == {
                     mod.id: unread and mod.user_added for mod in mods
                 }
@@ -2060,19 +2083,19 @@ def test_migrated_020_library_supplies_repair_labels_markers_and_counts(app, ser
     write_legacy_state(root, [repaired] if orphan else [original, repaired])
     library = ModLibrary(root, LibraryCatalog(LibraryVariant("hoshino", "hoshino_spr")))
     monkeypatch.setattr(services.library, "mods", library.mods)
-    for method, params in (("roster.list", {}), ("family.get", {"key": "hoshino"})):
+    for method, params in (("students.list", {}), ("student.get", {"key": "hoshino"})):
         result = rpc(app, method, **params)["result"]
-        family = result["families"][0] if method == "roster.list" else result
-        variant = family["variants"][0]
-        assert variant["mods"] == 1 and variant["modCounts"] == {"spr": 1, "lobby": 0}
-        if method == "family.get":
+        family = result["students"][0] if method == "students.list" else result
+        variant = family["alts"][0]
+        assert variant["mods"] == 1 and variant["modCounts"] == {"portrait": 1, "memorialLobby": 0}
+        if method == "student.get":
             mods = {mod["id"]: mod for mod in variant["modList"]}
             fixed = mods[repaired["id"]]
-            assert fixed["label"] == I18n().t("webui.remap.name", name="hoshino_spr" if orphan else "My painting")
-            assert fixed["repaired_from"]
+            assert fixed["name"] == I18n().t("webui.remap.name", name="hoshino_spr" if orphan else "My painting")
+            assert fixed["repairSourceId"]
             if not orphan:
-                assert fixed["repaired_from"] == original["id"]
-                assert mods[original["id"]]["repaired_id"] == repaired["id"]
+                assert fixed["repairSourceId"] == original["id"]
+                assert mods[original["id"]]["repairedCopyId"] == repaired["id"]
 
 
 @pytest.mark.parametrize("copy", ["gone", "held"])
@@ -2100,10 +2123,10 @@ def test_a_repaired_id_reaches_the_web_ui_only_while_its_copy_exists_or_is_held(
     library = ModLibrary(root, LibraryCatalog(LibraryVariant("hoshino", "hoshino_spr")))
     assert library._held_ids() == (frozenset() if copy == "gone" else {fixed["id"]})
     monkeypatch.setattr(services.library, "mods", library.mods)
-    result = rpc(app, "family.get", key="hoshino")["result"]
-    mods = {mod["id"]: mod for mod in result["variants"][0]["modList"]}
+    result = rpc(app, "student.get", key="hoshino")["result"]
+    mods = {mod["id"]: mod for mod in result["alts"][0]["modList"]}
     assert list(mods) == [original["id"]]
-    assert mods[original["id"]]["repaired_id"] == ("" if copy == "gone" else fixed["id"])
+    assert mods[original["id"]]["repairedCopyId"] == ("" if copy == "gone" else fixed["id"])
 
 
 def test_release_page_snapshot_survives_another_check(app, services, update_env, monkeypatch):
@@ -2362,9 +2385,9 @@ def test_lobby_camera_save_checks_its_params_before_any_job(app, services):
         ({"scale": 0}, "bad_params"),
         ({"offset": [0, float("1e9")]}, "bad_params"),
     ):
-        assert rpc(app, "lobby.camera.save", **{**good, **change})["error"]["code"] == code
+        assert rpc(app, "memorialLobby.camera.save", **{**good, **change})["error"]["code"] == code
     # a lobby without a prefab cannot keep a camera
-    assert rpc(app, "lobby.camera.save", **good)["error"]["code"] == "lobby_camera_unsupported"
+    assert rpc(app, "memorialLobby.camera.save", **good)["error"]["code"] == "lobby_camera_unsupported"
 
 
 @pytest.mark.parametrize("version, enabled", [("0.7.0-rc.2", True), ("0.7.0-dev", True), ("0.7.0", False)])

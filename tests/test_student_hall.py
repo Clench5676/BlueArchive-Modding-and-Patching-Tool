@@ -68,7 +68,7 @@ def test_cas_retains_other_settings_and_prevents_lost_updates(tmp_path):
     second = UiState(first.path)
     first.set("voice_volume", 35)
     save_hall(first, empty_hall(), 0)
-    with pytest.raises(ServiceError, match="hall_conflict"):
+    with pytest.raises(ServiceError, match="student_hall_conflict"):
         save_hall(second, empty_hall(), 0)
     assert second.get("voice_volume") == 35
     assert second.get("student_hall")["revision"] == 1
@@ -155,21 +155,23 @@ def test_library_only_cross_server_entries_are_available_without_local_core(tmp_
         library=SimpleNamespace(mods=lambda: [mod], variant_metadata=lambda key: variant),
         game=SimpleNamespace(collection_names=lambda: {"bg": ["BG_School_Collection"]}),
     )
-    registry = RpcRegistry()
+    registry = RpcRegistry(current=True)
     register_api(registry, service)
-    result = registry.call("hall.options", {})["result"]
+    result = registry.call("studentHall.options", {})["result"]
     (choice,) = result["choices"]
-    assert {key: choice[key] for key in ("variant", "source", "kind", "core", "names", "label", "portrait")} == {
-        "variant": "unreleased",
+    assert {
+        key: choice[key] for key in ("alt", "source", "resourceType", "core", "names", "name", "officialThumbnail")
+    } == {
+        "alt": "unreleased",
         "source": "mod:future-mod",
-        "kind": "lobby",
+        "resourceType": "memorialLobby",
         "core": None,
         "names": variant.names,
-        "label": "Future lobby",
-        "portrait": None,
+        "name": "Future lobby",
+        "officialThumbnail": None,
     }
-    assert choice["localKinds"] == [] and choice["released"] is False
-    assert choice["modCounts"] == {"lobby": 1} and choice["mods"] == 1
+    assert choice["localResourceTypes"] == [] and choice["releasedOnServer"] is False
+    assert choice["modCounts"] == {"memorialLobby": 1} and choice["mods"] == 1
 
 
 def test_global_portrait_scale_defaults_read_and_persistence_leave_entries_unchanged(tmp_path):
@@ -230,7 +232,7 @@ def test_duplicate_memorial_resource_is_rejected_without_replacing_saved_state(t
     saved = save_hall(state, value, 0)
     duplicated = deepcopy(saved)
     duplicated["memorials"].append(entry(source="official"))
-    with pytest.raises(ServiceError, match="hall_duplicate_memorial"):
+    with pytest.raises(ServiceError, match="student_hall_duplicate_memorial"):
         save_hall(state, duplicated, saved["revision"])
     assert UiState(state.path).get("student_hall") == saved
 

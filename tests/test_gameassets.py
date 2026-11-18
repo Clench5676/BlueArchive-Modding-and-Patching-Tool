@@ -456,14 +456,14 @@ def test_layout_exports_state_controller_nodes():
     craft = subtree(tree, "Craft")
     assert craft["widgets"] == [
         {
-            "cls": "OpenConditionButtonController",
+            "className": "OpenConditionButtonController",
             "states": {"Enable": "Able", "Disable": "Disable", "Prohibited": "BlockEntry"},
         }
     ]
     disabled = subtree(craft, craft["widgets"][0]["states"]["Disable"])
     assert not disabled["active"] and subtree(craft, "Able")["active"]
     icon = subtree(disabled, "Icon")["widgets"][0]
-    assert (icon["sprite"], icon["color"]) == ("Common_Icon_Craft", "#797979/1.00")
+    assert (icon["spriteName"], icon["color"]) == ("Common_Icon_Craft", "#797979/1.00")
     activator, button = subtree(tree, "Entry")["widgets"]
     assert activator["states"] == {
         "activeObject": "Locked/Cover",
@@ -471,9 +471,9 @@ def test_layout_exports_state_controller_nodes():
         "button": "",
         "contentsLockObject": None,
     }
-    assert button == {"cls": "MXButton"}
+    assert button == {"className": "MXButton"}
     assert tree["widgets"][0]["states"] == {"enableButton": "Craft/Able", "disableButton": None}
-    assert _without_states(tree)["widgets"] == [{"cls": "UIButtonEnableSwitch"}]
+    assert _without_states(tree)["widgets"] == [{"className": "UIButtonEnableSwitch"}]
 
 
 def test_layout_cache_key_carries_the_export_format(tmp_path, monkeypatch):
@@ -481,7 +481,7 @@ def test_layout_cache_key_carries_the_export_format(tmp_path, monkeypatch):
     the old entry and every other cached entry stay."""
     game = GameAssets([tmp_path], AssetCache(root=tmp_path / "cache", allowed=True))
     version = game.cache_version
-    stale = json.dumps({"name": "Root", "widgets": [{"cls": "OpenConditionButtonController"}]}).encode()
+    stale = json.dumps({"name": "Root", "widgets": [{"className": "OpenConditionButtonController"}]}).encode()
     game.cache.put(service._SCHEMA + "layout/Root", stale, version=version)
     game.cache.put(service._SCHEMA + "atlases", b"{}", version=version)
     fresh = {
@@ -489,7 +489,7 @@ def test_layout_cache_key_carries_the_export_format(tmp_path, monkeypatch):
         "active": True,
         "widgets": [
             {
-                "cls": "OpenConditionButtonController",
+                "className": "OpenConditionButtonController",
                 "states": {"Enable": "Able", "Disable": "Disable", "Prohibited": None},
             }
         ],
@@ -1426,7 +1426,7 @@ def test_real_detail_layout_places_the_portrait(real_game):
     detail = real_game.layout("UICharacterDetail")
     content = next(c for c in detail["children"] if c["name"] == "Inventory_ListControl")
     node = next(c for c in content["children"] if c["name"] == "CharacterPos")
-    assert len(node["pos"]) == 2 and node["scale"][0] == node["scale"][1] > 0
+    assert len(node["localPosition"]) == 2 and node["scale"][0] == node["scale"][1] > 0
 
 
 @real_install
@@ -1437,14 +1437,18 @@ def test_real_lobby_menu_disabled_look(real_game):
     grid = real_game.layout("UILobby", "Front/Bottom/Menu/BG/Grid")
     for name in ("Cafe", "Craft", "Shop", "Gacha"):
         entry = subtree(grid, name)
-        controller = next(w for w in entry["widgets"] if w["cls"] == "OpenConditionButtonController")
+        controller = next(w for w in entry["widgets"] if w["className"] == "OpenConditionButtonController")
         assert (controller["states"]["Enable"], controller["states"]["Disable"]) == ("Able", "Disable"), name
         able, disabled = subtree(entry, "Able"), subtree(entry, "Disable")
         assert able["active"] and not disabled["active"]
-        normal = next(w for w in able["widgets"] if "sprite" in w)
+        normal = next(w for w in able["widgets"] if "spriteName" in w)
         icon = subtree(disabled, "Icon")["widgets"][0]
-        assert (icon["sprite"], icon["color"], normal["color"]) == (normal["sprite"], "#797979/1.00", "#ffffff/1.00")
-        assert subtree(disabled, "Lock")["widgets"][0]["sprite"] == "Common_Icon_Lock"
+        assert (icon["spriteName"], icon["color"], normal["color"]) == (
+            normal["spriteName"],
+            "#797979/1.00",
+            "#ffffff/1.00",
+        )
+        assert subtree(disabled, "Lock")["widgets"][0]["spriteName"] == "Common_Icon_Lock"
         assert "text" in subtree(entry, "Label")["widgets"][0]
 
 
@@ -1471,7 +1475,7 @@ def test_layout_exports_loading_label_effect_colour_and_distance():
         {},
     )
     label = subtree(tree, "Tip")["widgets"][0]
-    assert label["effect"] == 2
+    assert label["effectStyle"] == 2
     assert label["effectColor"] == "#1a334c/0.90"
     assert label["effectDistance"] == [2, -3]
 
@@ -1493,7 +1497,7 @@ def test_a_tweener_exports_what_it_animates_and_how():
     }
     widget = _widget(obj, tree, {}, {7: "TweenRotation"})
     assert widget == {
-        "cls": "TweenRotation",
+        "className": "TweenRotation",
         "tween": {
             "from": [-0.0, 0.0, 180.0],
             "to": [-0.0, 0.0, -180.0],

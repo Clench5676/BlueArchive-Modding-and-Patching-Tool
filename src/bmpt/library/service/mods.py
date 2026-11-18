@@ -54,7 +54,7 @@ class ModsMixin:
         try:
             return self.catalog.variant(key)
         except (KeyError, ServiceError) as error:
-            if isinstance(error, ServiceError) and error.code != "catalog_variant_not_found":
+            if isinstance(error, ServiceError) and error.code != "catalog_alt_not_found":
                 raise
             if callable(getattr(self.catalog, "assignment_variant", None)) and any(
                 (record.get("assignment") or record.get("target")) == key for record in self._records.values()
@@ -62,7 +62,7 @@ class ModsMixin:
                 try:
                     return self.catalog.assignment_variant(key)
                 except (KeyError, ServiceError) as lookup:
-                    if isinstance(lookup, ServiceError) and lookup.code != "catalog_variant_not_found":
+                    if isinstance(lookup, ServiceError) and lookup.code != "catalog_alt_not_found":
                         raise
             # Current NPC bundles may have no roster entry. Their stored filename owns the model slot.
             record = next(
@@ -92,7 +92,7 @@ class ModsMixin:
                     model=key,
                 )
             if isinstance(error, KeyError):
-                raise ServiceError("variant_not_found", variant=key) from error
+                raise ServiceError("alt_not_found", variant=key) from error
             raise
 
     def _record(self, mod_id: str) -> dict[str, Any]:
@@ -368,7 +368,7 @@ class ModsMixin:
 
         target = self._variant(variant)
         if not getattr(target, "portrait", None) or target.portrait != descriptor.get("name"):
-            raise ServiceError("photo_target_unavailable")
+            raise ServiceError("thumbnail_target_unavailable")
         png = self.photographs.image(variant, key) if key is not None else None
         return portrait_edit.apply(self, variant, key, png, descriptor, self._current(pin), log, progress)
 

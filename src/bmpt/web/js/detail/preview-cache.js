@@ -79,17 +79,17 @@ export function createPreviewCache({
         return null;
       }
     },
-    async modelTicket(key, variant, source) {
+    async modelTicket(key, alt, source) {
       const current = ticket(key, "model");
       if (!current) return null;
       try {
-        const reply = await call("preview.modelRevision", { variant, source });
+        const reply = await call("preview.chibiRevision", { alt, source });
         if (!valid(current)) return null;
         observe(reply);
         if (!valid(current) || !/^[a-f0-9]{64}$/.test(reply?.revision || "")) return null;
         return {
           ...ticket(JSON.stringify([key, reply.revision]), "model"),
-          model: { variant, source },
+          chibi: { alt, source },
           modelRevision: reply.revision,
         };
       } catch {
@@ -130,10 +130,10 @@ export function createPreviewCache({
         if (!valid(current) || blob.type !== "image/png" || !blob.size || blob.size > MAX_PNG) return false;
         const data = encode(new Uint8Array(await blob.arrayBuffer()));
         if (!valid(current)) return false;
-        if (current.dependencies || current.model) {
+        if (current.dependencies || current.chibi) {
           const reply = await call(
-            current.model ? "preview.modelRevision" : "preview.assetRevision",
-            current.model || { paths: current.dependencies },
+            current.chibi ? "preview.chibiRevision" : "preview.assetRevision",
+            current.chibi || { paths: current.dependencies },
           );
           if (
             !valid(current) ||

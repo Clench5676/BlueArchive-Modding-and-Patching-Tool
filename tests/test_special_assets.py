@@ -257,21 +257,21 @@ def test_special_rpc_and_preview_use_existing_lobby_routes(setup_library, monkey
     services = Services(env.settings, env.tmp / "ui", game=game, catalog=catalog, library=env.library)
     try:
         api = build_api(services)
-        family = api.call("family.get", {"key": "arona"})["result"]
-        (v,) = family["variants"]
-        assert (v["key"], v["spineCategory"], v["spr"], v["lobby"]) == (
+        family = api.call("student.get", {"key": "arona"})["result"]
+        (v,) = family["alts"]
+        assert (v["key"], v["spineCategory"], v["portrait"], v["memorialLobby"]) == (
             "special:arona_workpage_daytime",
             "spinebackground",
             None,
             "arona_workpage_daytime",
         )
-        assert v["state"]["files"][0]["kind"] == "lobby"
+        assert v["state"]["files"][0]["resourceType"] == "memorialLobby"
         (entry,) = env.library.add([make_mod(target, env.tmp / "input")])
         env.library.apply(v["key"], f"mod:{entry.id}", kind="lobby")
         for kind, key, expected in [
-            ("lobby", v["lobby"], entry.file.read_bytes()),
+            ("memorialLobby", v["memorialLobby"], entry.file.read_bytes()),
             ("mod", entry.id, entry.file.read_bytes()),
-            ("official-lobby", v["lobby"], (env.root / "originals" / target.name).read_bytes()),
+            ("official-memorialLobby", v["memorialLobby"], (env.root / "originals" / target.name).read_bytes()),
         ]:
             prefix = f"spine/{kind}/{key}"
             revision = json.loads(services.asset(f"{prefix}/manifest.json", {}).body)["revision"]

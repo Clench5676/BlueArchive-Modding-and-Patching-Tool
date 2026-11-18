@@ -317,5 +317,5 @@ def test_generic_missing_official_import_and_apply_keep_the_outside_slot(other_e
     assert target.read_bytes() == mod.file.read_bytes()
     assert next(row for row in env.library.other_mods() if row["id"] == mod.id)["overwritten"]
     assert not (env.root / "originals" / target.name).exists()
-    with pytest.raises(ServiceError, match="original_unavailable"):
+    with pytest.raises(ServiceError, match="official_unavailable"):
         env.library.restore(mod.target, kind="other")

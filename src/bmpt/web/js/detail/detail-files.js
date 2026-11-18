@@ -14,12 +14,12 @@ import {
   node,
   sprite,
   label,
-  fam,
+  shownStudent,
   tab,
   fullName,
   shortName,
-  variant,
-  familyMods,
+  alt,
+  studentMods,
   modLabel,
   tabKind,
   current,
@@ -31,7 +31,7 @@ import { LOCAL_FRAME } from "./detail-strip.js";
 import { reveal, editModName, shownMod } from "./detail-actions.js";
 
 // --- details (the info bar's Details button): the shown tab's game files on the popup frame. A summary (the folder,
-// what the files carry and, for a mod, its file and the variant it was made for), then one row per bundle: name,
+// what the files carry and, for a mod, its file and the alt it was made for), then one row per bundle: name,
 // size, date, CRC and what it carries ---
 const DT = DETAILS;
 const DT_COLS = [
@@ -47,21 +47,21 @@ const crcLabel = (state) =>
     : state === "needs_fix"
       ? [T("crc.needed"), COLOUR.warning]
       : [T("crc.original"), "#000000"];
-// what a game file carries, as a label: the original, a mod's name, another variant's name, or "replaced"
+// what a game file carries, as a label: the original, a mod's name, another alt's name, or "replaced"
 function carriedLabel(applied) {
   if (!applied || applied === "official") return T("status.original");
   if (applied.startsWith("mod:")) {
-    const m = familyMods().find((x) => x.id === applied.slice(4));
+    const m = studentMods().find((x) => x.id === applied.slice(4));
     if (m) return modLabel(m);
   }
-  if (applied.startsWith("variant:")) {
-    const o = fam.variants.find((x) => x.key === applied.slice(8));
+  if (applied.startsWith("alt:")) {
+    const o = shownStudent.alts.find((x) => x.key === applied.slice(4));
     if (o) return shortName(o);
   }
   return T("status.replaced");
 }
 function detailsInfo() {
-  const v = variant(),
+  const v = alt(),
     kind = tabKind(),
     parts = partsOf(v, kind);
   const first = parts[0]?.file || null;
@@ -71,11 +71,11 @@ function detailsInfo() {
     [T("field.folder"), folder],
     [T("info.current"), tab === "portrait" ? current().label : sourceLabel(v, kind), shownMod()?.mod],
   ];
-  const mod = applied.startsWith("mod:") ? familyMods().find((m) => m.id === applied.slice(4)) : null;
+  const mod = applied.startsWith("mod:") ? studentMods().find((m) => m.id === applied.slice(4)) : null;
   const from = mod
-    ? fam.variants.find((o) => o.key === mod.target)
-    : applied.startsWith("variant:")
-      ? fam.variants.find((o) => o.key === applied.slice(8))
+    ? shownStudent.alts.find((o) => o.key === mod.targetAlt)
+    : applied.startsWith("alt:")
+      ? shownStudent.alts.find((o) => o.key === applied.slice(4))
       : null;
   if (mod) fields.push([T("field.modFile"), mod.file || "—"]);
   if (from) fields.push([T("field.source"), fullName(from)]);

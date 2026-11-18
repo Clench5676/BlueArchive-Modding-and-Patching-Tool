@@ -7,7 +7,6 @@ import binascii
 import copy
 import hashlib
 import io
-import json
 import logging
 import os
 import re
@@ -20,6 +19,7 @@ from urllib.parse import quote
 from PIL import Image
 
 from ..core import devmode
+from ..host.store_formats import epoch_root, read_runtime
 from ..core.errors import ServiceError
 from ..core.filelock import file_lock
 from .storage import atomic_json, sync_directory
@@ -43,10 +43,10 @@ def decode_capture(value: str) -> tuple[bytes, int, int]:
         Original PNG bytes, width, and height in pixels.
 
     Raises:
-        ServiceError: The encoding, dimensions, mode, or PNG payload is invalid (photo_invalid).
+        ServiceError: The encoding, dimensions, mode, or PNG payload is invalid (thumbnail_invalid).
     """
     if not isinstance(value, str) or len(value) > MAX_ENCODED or not value.startswith("data:image/png;base64,"):
-        raise ServiceError("photo_invalid")
+        raise ServiceError("thumbnail_invalid")
     try:
         raw = base64.b64decode(value.split(",", 1)[1], validate=True)
         with Image.open(io.BytesIO(raw)) as image:
@@ -61,7 +61,7 @@ def decode_capture(value: str) -> tuple[bytes, int, int]:
         with Image.open(io.BytesIO(raw)) as image:
             image.load()
     except (ValueError, OSError, binascii.Error, Image.DecompressionBombError):
-        raise ServiceError("photo_invalid") from None
+        raise ServiceError("thumbnail_invalid") from None
     return raw, width, height
 
 
@@ -139,7 +139,7 @@ class Photographs:
             family_of: Resolves a variant key to its student family; None treats each variant as its own family.
         """
         self.family_of = family_of or (lambda variant: variant)
-        self.root = Path(library_root) / "photographs"
+        self.root = Path(library_root) / ("thumbnails" if epoch_root(Path(library_root), "library") else "photographs")
         devmode.check_write(self.root)
         self.index = self.root / "index.json"
         self._lock = threading.RLock()
@@ -194,11 +194,7 @@ class Photographs:
                 return self._cached
             if self.index.is_symlink():
                 raise ValueError("Symlinked photograph manifest")
-            data = (
-                json.loads(self.index.read_text(encoding="utf-8"))
-                if stamp
-                else {"version": 1, "photos": {}, "selected": {}, "next": 1}
-            )
+            data = read_runtime(self.index) if stamp else {"version": 1, "photos": {}, "selected": {}, "next": 1}
             # The file as a whole: anything wrong here leaves it untouched and unusable, never repaired or replaced.
             if (
                 not isinstance(data, dict)
@@ -216,7 +212,7 @@ class Photographs:
                 raise ValueError("Invalid photograph counters")
         except (OSError, ValueError, TypeError, RecursionError) as error:
             self._warn("manifest", str(error) if isinstance(error, ValueError) else type(error).__name__, "")
-            raise ServiceError("photo_library_invalid") from error
+            raise ServiceError("thumbnail_library_invalid") from error
         photos, held_photos = {}, {}
         for key, entry in data["photos"].items():
             reason = self._unusable_photo(key, entry)
@@ -257,17 +253,17 @@ class Photographs:
 
     def _path(self, key: str) -> Path:
         if not isinstance(key, str) or not _ID.fullmatch(key):
-            raise ServiceError("photo_missing")
+            raise ServiceError("thumbnail_missing")
         path = self.root / "images" / f"{key}.png"
         if path.is_symlink() or path.parent.is_symlink() or self.root.is_symlink():
-            raise ServiceError("photo_invalid")
+            raise ServiceError("thumbnail_invalid")
         return path
 
     def _entry(self, variant: str, key: str) -> dict:
         self._path(key)
         entry = self._read()["photos"].get(key)
         if entry is None or self.family(entry["variant"]) != self.family(variant):
-            raise ServiceError("photo_missing")
+            raise ServiceError("thumbnail_missing")
         return entry
 
     @staticmethod
@@ -278,7 +274,7 @@ class Photographs:
             variant: Variant key escaped into the asset route for family validation.
             key: Photograph ID identifying the PNG within the library.
         """
-        return f"/asset/photography/{quote(variant, safe='')}/{key}.png"
+        return f"/asset/thumbnails/{quote(variant, safe='')}/{key}.png"
 
     def list(self, variant: str) -> dict:
         """List a variant's family photographs with URLs, provenance, and its app selection."""
@@ -341,7 +337,7 @@ class Photographs:
         if mode not in ("portrait", "lobby") or not all(
             isinstance(value, str) and len(value) <= 500 for value in (variant, expression, action, source)
         ):
-            raise ServiceError("photo_invalid")
+            raise ServiceError("thumbnail_invalid")
         raw, width, height = decode_capture(png)
         key = uuid.uuid4().hex
         path = self._path(key)
@@ -466,7 +462,7 @@ class Photographs:
                 if chosen not in (None, "official") and self._chosen(data, chosen_for) is None
             }
             if key in protected or key in data.named() or key in stale:
-                raise ServiceError("photo_in_use")
+                raise ServiceError("thumbnail_in_use")
             before = copy.deepcopy(data)
             raw = self.image(variant, key)
             del data["photos"][key]
@@ -504,7 +500,7 @@ class Photographs:
             try:
                 raw = self._path(key).read_bytes()
             except FileNotFoundError:
-                raise ServiceError("photo_missing") from None
+                raise ServiceError("thumbnail_missing") from None
             if hashlib.sha256(raw).hexdigest() != entry["sha256"]:
-                raise ServiceError("photo_invalid")
+                raise ServiceError("thumbnail_invalid")
             return raw

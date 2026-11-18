@@ -16,8 +16,11 @@ from typing import Any, Callable
 
 from ..host import steam_records
 from ..core import devmode, preview_gate, spans
+from ..host.data_upgrade import DataUpgrade, UpgradeBlocked
+from ..host.store_formats import InvalidStore
 from ..host.config import APP_DIR_NAME, Settings, managed_cache_dir
 from ..host.data_paths import OLD_APP_DIR_NAME
+from ..host.addons import character_map_path
 from ..lines.global_lines import GlobalLines
 from ..lines.kivo import Kivo
 from ..core.errors import ServiceError
@@ -220,6 +223,7 @@ class Services(JobsMixin, WindowMixin, AssetsMixin):
         library: Any = None,
         classic_options: dict[str, Any] | None = None,
         safe_mode: bool = False,
+        upgrade: DataUpgrade | None = None,
     ):
         """Create the container; game-backed services are built when first used.
 
@@ -235,18 +239,28 @@ class Services(JobsMixin, WindowMixin, AssetsMixin):
             library: A mod library to use instead of the built one; for tests.
             classic_options: Options of the ``ClassicWindow``, such as a fake ``popen``; for tests.
             safe_mode: Start without game assets, Spine or restored pages.
+            upgrade: Coordinator holding the live data and library paths.
         """
+        self.upgrade = upgrade
+        self.committed = upgrade.paths if upgrade else None
+        if upgrade and self.committed is None:
+            raise ValueError("Services need a committed data generation")
+        if self.committed:
+            data_dir = self.committed.data_root
         devmode.check_read(data_dir)
         self.timings = Timings()
         spans.install(self.timings)  # game assets and the library record their waits here
         with self.timings.measure("settings.load-detect"):
-            self.settings = settings or Settings()
+            self.settings = settings or (
+                Settings(self.committed.config, artifacts=self.committed.artifacts) if self.committed else Settings()
+            )
         self.data_dir = Path(data_dir)
         # tested at start (a real temporary file); app.info reports it and the page shows one notice when it is False
         self.data_dir_writable = folder_writable(self.data_dir)
         if not self.data_dir_writable:
             logger.error("The data folder cannot be written, state and settings cannot be saved")
-        self.log_path = self.data_dir / "webui.log"
+        self.runtime = self.committed.runtime if self.committed else self.data_dir
+        self.log_path = self.runtime / "webui.log"
         self.log_secrets: set[str] = set()
         self.safe_mode = safe_mode
         self.restart_requested = False
@@ -254,7 +268,7 @@ class Services(JobsMixin, WindowMixin, AssetsMixin):
         self.steam_files = steam_records.OfficialFiles()
         from .diagnostics import Reports
 
-        self.reports = Reports(self.data_dir, services=self, safe_mode=safe_mode)
+        self.reports = Reports(self.runtime, services=self, safe_mode=safe_mode)
         self.reports.secrets = self.log_secrets
         game_dir = self.settings.game_dir()
         self.reports.game = {
@@ -269,7 +283,7 @@ class Services(JobsMixin, WindowMixin, AssetsMixin):
         preview_gate.on_wait = lambda busy: events_bus.publish("preview.waiting", {"busy": busy})
         self.jobs = jobs or JobRunner(self.events)
         with self.timings.measure("settings.ui-state"):
-            self.state = state or UiState(self.data_dir / "webui.json")
+            self.state = state or UiState(self.committed.ui_state if self.committed else self.data_dir / "webui.json")
         self.chrome = None
         self.close_coordinator = None
         self.window: Any = None  # the pywebview window, when there is one (see native.py)
@@ -291,8 +305,8 @@ class Services(JobsMixin, WindowMixin, AssetsMixin):
         self._lock = threading.RLock()
         # Held by photograph saves and selections and by a library move, so a save never lands in the folder a move is
         # leaving. Taken before ``_lock`` and before the photograph store's own lock, never while holding either.
-        self.photograph_writes = threading.RLock()
-        self._photographs_catalog: Any = None
+        self.thumbnail_writes = threading.RLock()
+        self._thumbnail_catalog: Any = None
         self._cache, self._game, self._catalog, self._library = cache, game, catalog, library
         self._preview_cache = None
         self._injected = {k for k, v in (("game", game), ("catalog", catalog), ("library", library)) if v is not None}
@@ -310,11 +324,14 @@ class Services(JobsMixin, WindowMixin, AssetsMixin):
         self.snapshot = ModsSnapshot()
         self.queue = ClassicQueue()
         self.classic = ClassicWindow(
-            self.data_dir,
+            self.committed.runtime if self.committed else self.data_dir,
             origin=lambda: self.origin,
             publish=self.events.publish,
             **{
                 "native": _WindowOps(self),
+                "committed": lambda: self.committed,
+                "read_only": lambda: bool(self.upgrade and self.upgrade.classic_read_only()),
+                "protected": lambda: self.upgrade.classic_protected_destinations() if self.upgrade else [],
                 **(classic_options or {}),
                 "on_change": self._classic_changed,
                 "on_closed": self._classic_closed,
@@ -539,7 +556,7 @@ class Services(JobsMixin, WindowMixin, AssetsMixin):
             if self._catalog is None:
                 from ..catalog import Catalog
 
-                csv = Path(self.settings.get("bacii_map_path"))
+                csv = character_map_path(Path(self.settings.get("bacii_map_path")), self.data_dir)
                 # recruitable follows the server of the selected game folder
                 with self.timings.measure("catalog.open"):
                     self._catalog = Catalog(
@@ -556,6 +573,8 @@ class Services(JobsMixin, WindowMixin, AssetsMixin):
         It is built without a current install too (ADB mode, the selected folder missing): the switch then works
         over the other known installs. A new library gets its ``library.prune`` job and the start scan.
         """
+        if self.upgrade and self.upgrade.paths is None:
+            raise ServiceError("library_recovery_pending")
         self._refresh_if_idle()
         built = None
         with self._lock:
@@ -574,6 +593,7 @@ class Services(JobsMixin, WindowMixin, AssetsMixin):
                         data_id=self.state.data_id(self.data_dir),
                         write_check=self._write_check,
                         steam_files=self.steam_files,
+                        game_write_gate=self.upgrade.game_write if self.upgrade else None,
                     )
                 lock = getattr(built, "_lock", None)
                 if lock is not None and hasattr(lock, "on_wait"):
@@ -597,7 +617,7 @@ class Services(JobsMixin, WindowMixin, AssetsMixin):
         return library
 
     @property
-    def photographs(self):
+    def thumbnail_store(self):
         """The photograph store of the library folder in use.
 
         Its family lookup is bound to the catalog resolved here, never reached through the services lock: the
@@ -610,18 +630,18 @@ class Services(JobsMixin, WindowMixin, AssetsMixin):
         root = self.library_dir()
         with self._lock:
             store = getattr(self, "_photographs", None)
-            if store is None or store.root.parent != root or self._photographs_catalog is not catalog:
-                self._photographs_catalog = catalog
+            if store is None or store.root.parent != root or self._thumbnail_catalog is not catalog:
+                self._thumbnail_catalog = catalog
                 self._photographs = store = Photographs(root, lambda key: student_family(catalog, key))
             return store
 
     @property
-    def photography(self):
+    def thumbnails(self):
         """The student photography operations, made on first use."""
-        from .photography import Photography
+        from .thumbnails import Thumbnails
 
         if not hasattr(self, "_photography"):
-            self._photography = Photography(self)
+            self._photography = Thumbnails(self)
         return self._photography
 
     def _start_prune(self, library: Any) -> None:
@@ -637,7 +657,13 @@ class Services(JobsMixin, WindowMixin, AssetsMixin):
         That is a ``cache`` folder of the App's own inside the chosen folder, else the default user cache folder.
         It is always a folder of its own, so clearing it never touches anything else.
         """
-        return managed_cache_dir(self.state.get("cache_parent"))
+        parent = self.state.get("cache_parent")
+        if self.committed is None:
+            return managed_cache_dir(parent)
+        from ..host.data_paths import legacy_cache_path
+
+        legacy = Path(parent) / APP_DIR_NAME / "cache" if parent else legacy_cache_path(self.data_dir)
+        return self.committed.cache(legacy)
 
     def set_cache_parent(self, parent: Path) -> Path:
         """Move the cache to another folder; the cache left behind is removed and rebuilt from the game files on demand.
@@ -672,23 +698,39 @@ class Services(JobsMixin, WindowMixin, AssetsMixin):
                 preview_cache.relocate(new / "previews", clear_old)
         return new
 
+    def check_output(self, destination: Path, *, writing: bool = True) -> None:
+        """Verify that an export destination cannot modify a managed store.
+
+        Args:
+            destination: Folder chosen for output.
+            writing: Whether the caller is about to create an output file.
+        """
+        if writing:
+            devmode.check_write(destination)
+        else:
+            devmode.check_read(destination)
+        if self.upgrade:
+            self.upgrade.check_output(destination)
+
     def library_dir(self) -> Path:
         """Return where the mod library lives: the user's choice, else the data directory's ``library`` folder."""
+        if self.committed:
+            return self.committed.library_epoch
         chosen = self.state.get("library_dir")
         return Path(chosen) if chosen else self.data_dir / "library"
 
-    def move_library(self, target: Path) -> Path:
+    def selected_library_dir(self) -> Path:
+        """Return the library location shown in Settings."""
+        return self.committed.library_root if self.committed else self.library_dir()
+
+    def move_library(self, target: Path, *, adopt: bool = False) -> Path:
         """Use another folder for the mod library.
 
-        The current library moves there when the target holds none: its mods, kept originals, built copies, pending
-        journals, photographs, state.json and profiles.json (each with its .prev and .bad). The items are copied
-        into the target and checked, published there, and only then is the library switched to the target and the
-        source folder cleared (``library.relocate``). A failure before the switch removes the copies and leaves the
-        library where it was, so the move can be tried again at once. A failure clearing the source folder is logged
-        and leaves the library at the target, complete, with the source folder keeping the items it could not remove.
+        A verified snapshot is published at the destination before the active route changes.
 
         Args:
-            target: The new library folder; one that already holds a library is adopted as it is.
+            target: The desired library folder.
+            adopt: The caller explicitly chose to open the existing destination library.
 
         Returns:
             The resolved target.
@@ -700,13 +742,30 @@ class Services(JobsMixin, WindowMixin, AssetsMixin):
         """
         target = Path(target).expanduser().resolve()
         devmode.check_read(target)
-        current = self.library_dir().resolve()
+        current = self.selected_library_dir().resolve()
         if target == current:
             return target
         if target.exists() and not target.is_dir():
             raise ServiceError("path_not_found", path=str(target))
         if self.jobs.busy():
             raise ServiceError("busy")  # a running job still writes through the current library
+
+        if self.upgrade:
+            self.check_classic()
+            self.scanner.cancel()
+            self.scanner.wait_idle(5.0)
+            with self.thumbnail_writes, self._lock:
+                try:
+                    self.committed = self.upgrade.relocate(target, adopt=adopt)
+                except (UpgradeBlocked, InvalidStore, OSError) as error:
+                    raise ServiceError("library_io_error", file=target) from error
+                self._library = None
+                self._profiles_signature = None
+            self.preview_cache.clear()
+            self.snapshot.clear_entries()
+            self.events.publish("library.changed")
+            self.refresh_status()
+            return self.committed.library_root
 
         def has_library(folder: Path) -> bool:
             return (
@@ -717,7 +776,7 @@ class Services(JobsMixin, WindowMixin, AssetsMixin):
 
         self.scanner.cancel()  # a running scan reads the current library
         self.scanner.wait_idle(5.0)
-        with self.photograph_writes, self._lock:  # a photograph save or selection waits, then uses the new folder
+        with self.thumbnail_writes, self._lock:  # a photograph save or selection waits, then uses the new folder
             if has_library(current) and not has_library(target):
                 clashes = [item for item in LIBRARY_ITEMS if (target / item).exists()]
                 if clashes:

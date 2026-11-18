@@ -36,14 +36,14 @@ function startIdle(player) {
 /**
  * Pose a portrait's skeleton at its entry's stage coordinates: this keeps the game's absolute framing and never
  * fits to art bounds.
- * @param {{x: number, y: number, mirror?: boolean}} entry
+ * @param {{x: number, y: number, flipHorizontal?: boolean}} entry
  * @param {object} skeleton The spine skeleton; its position and scale are set.
  */
 export function pose(entry, skeleton, globalScale = 1) {
   skeleton.x = entry.x;
   skeleton.y = 1080 - entry.y;
   skeleton.scaleY = portraitScale(entry, globalScale);
-  skeleton.scaleX = skeleton.scaleY * (entry.mirror ? -1 : 1);
+  skeleton.scaleX = skeleton.scaleY * (entry.flipHorizontal ? -1 : 1);
 }
 
 /**
@@ -84,7 +84,7 @@ export async function createPortraits(
     return (
       choice &&
       spineBase(
-        choice.source.startsWith("mod:") ? "mod" : "official-spr",
+        choice.source.startsWith("mod:") ? "mod" : "official-portrait",
         choice.source.startsWith("mod:") ? choice.source.slice(4) : choice.core,
       )
     );
@@ -253,7 +253,7 @@ export async function createPortraits(
     }
     // Cache canonical local bounds once; mirror and scale transform those same bounds everywhere.
     startIdle(player);
-    pose({ ...entry, mirror: false }, player.skeleton, globalScale);
+    pose({ ...entry, flipHorizontal: false }, player.skeleton, globalScale);
     player.animationState.apply(player.skeleton);
     player.skeleton.updateWorldTransform(spine.Physics.update);
     let bounds = null;

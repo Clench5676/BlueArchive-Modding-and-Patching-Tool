@@ -297,3 +297,19 @@ def default_cache_dir(override: Path | None = None, data_dir: Path | None = None
         parent = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
     tail = Path("cache") if sys.platform in ("win32", "darwin") else Path()
     return migrate_cache_dir(parent / OLD_APP_DIR_NAME / tail, parent / APP_DIR_NAME / tail)
+
+
+def legacy_cache_path(data_dir: Path) -> Path:
+    """Resolve the platform cache location without clearing any cache."""
+    override = devmode.data_dir()
+    if override is not None:
+        return override / "cache"
+    if sys.platform == "win32":
+        root = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local")
+        return root / APP_DIR_NAME / "cache"
+    if sys.platform == "darwin":
+        root = Path.home() / "Library" / "Application Support"
+        if data_dir in (root / APP_DIR_NAME, root / OLD_APP_DIR_NAME):
+            return data_dir / "cache"
+        return root / APP_DIR_NAME / "cache"
+    return Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / APP_DIR_NAME

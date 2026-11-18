@@ -95,14 +95,14 @@ let sortKeys = SORTS,
 const optionLabel = {
   favorite: { yes: () => T("fav.on"), no: () => T("display.fav.off") },
   portrait: { official: () => T("status.original"), replaced: () => T("status.replaced") },
-  lobby: { yes: () => T("model.has"), no: () => T("model.none") },
-  model: { yes: () => T("model.has"), no: () => T("model.none") },
+  memorialLobby: { yes: () => T("model.has"), no: () => T("model.none") },
+  chibi: { yes: () => T("model.has"), no: () => T("model.none") },
 };
 const groupTitle = {
   favorite: () => T("fav.label"),
   portrait: () => T("tab.portrait"),
-  lobby: () => T("tab.lobby"),
-  model: () => T("tab.model"),
+  memorialLobby: () => T("tab.lobby"),
+  chibi: () => T("tab.model"),
 };
 
 const setText = (n, text, fsMax, fsMin, w) =>

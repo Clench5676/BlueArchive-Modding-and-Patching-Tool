@@ -6,8 +6,8 @@ import { rpc } from "../core/api.js";
 import { language } from "../core/i18n.js";
 import { $ } from "../core/util.js";
 import {
-  variantKey,
-  fam,
+  altId,
+  shownStudent,
   tab,
   fullscreen,
   lobbyShot,
@@ -35,28 +35,31 @@ const LINE_LANG = { "zh-CN": "zh-CN", "zh-TW": "zh-TW", "en-US": "en", "ja-JP": 
 // the memorial lobby: every layer in and drawn, the still for the switch card, the dialogue strip; the lines when
 // they come in time (later ones re-render the strip)
 export async function showLobby(v, my, alive = () => true) {
-  const still = () => alive() && open && my === leftToken && tab === "lobby" && variantKey === v.key;
+  const still = () => alive() && open && my === leftToken && tab === "lobby" && altId === v.key;
   if (!(await ensureSpine())) {
     if (still()) Lobby.hide($("lobby"));
     return;
   }
   if (!still()) return;
-  if (lobbyFrom !== fam.version || lobbyStale) Lobby.hide($("lobby"));
-  setLobbyFrom(fam.version);
+  if (lobbyFrom !== shownStudent.version || lobbyStale) Lobby.hide($("lobby"));
+  setLobbyFrom(shownStudent.version);
   setLobbyStale(false);
-  const c = current("lobby");
+  const c = current("memorialLobby");
   const options = {
     framing: specialFraming(v),
-    mod: c.kind === "mod" && (!!v.previewSources?.lobby || !!v.configured || !modsOn() || !v.lobby) ? c.id : null,
+    mod:
+      c.kind === "mod" && (!!v.previewSources?.memorialLobby || !!v.configured || !modsOn() || !v.memorialLobby)
+        ? c.id
+        : null,
     camera: !!c.mod?.camera,
-    official: c.kind === "self" && (!!v.configured || !!v.previewSources?.lobby || !modsOn()),
+    official: c.kind === "self" && (!!v.configured || !!v.previewSources?.memorialLobby || !modsOn()),
   };
-  let m = await Lobby.show(v.lobby, $("lobby"), v.key, options);
+  let m = await Lobby.show(v.memorialLobby, $("lobby"), v.key, options);
   if (!still()) return;
   // A cancelled attempt is not a ready preview. The newest detail render owns one fresh attempt.
-  if (!m) m = await Lobby.show(v.lobby, $("lobby"), v.key, options);
+  if (!m) m = await Lobby.show(v.memorialLobby, $("lobby"), v.key, options);
   if (!still()) return;
-  if (!m) throw new Error(`Lobby load superseded without a replacement: ${v.lobby}`);
+  if (!m) throw new Error(`Lobby load superseded without a replacement: ${v.memorialLobby}`);
   if (fullscreen) {
     Lobby.frame("full");
     Lobby.interactive(true);
@@ -89,14 +92,14 @@ export function refreshLobbyLines(v, meta, alive = () => true) {
     alive() &&
     open &&
     tab === "lobby" &&
-    variantKey === v.key &&
+    altId === v.key &&
     language() === lang &&
     Lobby.meta() === meta;
   const talks = Object.fromEntries(meta.sequences.map((sq) => [sq.anim, sq.cues.map((cue) => cue.clip)]));
   // Change the subtitle picker immediately, retaining voice metadata while the
   // next language's table is fetched. Pending voice cues must keep playing.
   Lobby.setLines(undefined, (line) => line?.[key] || "");
-  return (isSpecial(v) ? Promise.resolve({}) : rpc("lobby.lines", { variant: v.key, talks, lang: key }))
+  return (isSpecial(v) ? Promise.resolve({}) : rpc("memorialLobby.lines", { alt: v.key, talks, lang: key }))
     .then((table) => {
       if (!still()) return;
       Lobby.setLines(table, (line) => line?.[key] || "");
@@ -110,9 +113,9 @@ export function refreshLobbyLines(v, meta, alive = () => true) {
 // the lobby's switch card: a camera choice shows the view its camera keeps (the still of its Switch Memorial Lobby
 // card); any other lobby the still below
 export function lobbyCard(v) {
-  const c = current("lobby");
+  const c = current("memorialLobby");
   return c?.mod?.camera
-    ? thumb(baseOf(c, "lobby"), "landscape", null, true, specialFraming(v), (c.origin || v).bg)
+    ? thumb(baseOf(c, "memorialLobby"), "landscape", null, true, specialFraming(v), (c.origin || v).background)
     : lobbyShot;
 }
 // a still of the lobby for the switch card, framed on the face: lobby.js picks the crop inside the left view, which

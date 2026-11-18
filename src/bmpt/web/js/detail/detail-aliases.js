@@ -1,4 +1,4 @@
-// The alias editor (the nameplate's pencil): the user's own aliases of the variant on the popup frame.
+// The alias editor (the nameplate's pencil): the user's own aliases of the alt on the popup frame.
 import * as NGUI from "../ui/ngui.js";
 import * as Loading from "../app/loading.js";
 import { rpc } from "../core/api.js";
@@ -6,22 +6,11 @@ import { T } from "../core/i18n.js";
 import { closable, closed as popupClosed, frameReady, hit as hitNode, popupFrame } from "../ui/popup.js";
 import { ALIAS, aliasFrame } from "../ui/popup-frames.js";
 import { $, S, hitButton } from "../core/util.js";
-import {
-  find,
-  sprite,
-  node,
-  variantKey,
-  ctx,
-  open,
-  ALIAS_MAX,
-  ALIAS_LENGTH,
-  customAliases,
-  variant,
-} from "./detail.js";
+import { find, sprite, node, altId, ctx, open, ALIAS_MAX, ALIAS_LENGTH, customAliases, alt } from "./detail.js";
 import { renderScreen } from "./detail-screen.js";
 import { call } from "./detail-actions.js";
 
-// --- the alias editor (the nameplate's pencil) --- The user's own aliases of the variant on the popup frame,
+// --- the alias editor (the nameplate's pencil) --- The user's own aliases of the alt on the popup frame,
 // one input row each (like UIPopup_Input's Input_NickName), a cross removing it, then an empty row with the
 // pencil to add one while there is room. OK keeps them (aliases.set); Cancel, the close button, the backdrop and
 // Escape drop the changes. Enter in the empty row adds what it holds, in another row goes to the next one, in an
@@ -32,10 +21,10 @@ export let aliasToken = 0;
 // draft: the rows; focusAt: the row to focus (the empty one when null); carry: the empty row of the editor drawn
 // before, which keeps the focus while this one is drawn: what is typed there meanwhile goes into the new empty
 // row
-export async function openAliases(draft = customAliases(), focusAt = null, key = variantKey, carry = null) {
+export async function openAliases(draft = customAliases(), focusAt = null, key = altId, carry = null) {
   const my = ++aliasToken;
   await Loading.wait(frameReady(), { immediate: true, cap: null });
-  if (my !== aliasToken || !open || variantKey !== key) return;
+  if (my !== aliasToken || !open || altId !== key) return;
   const host = $("popup");
   const names = draft.slice(0, ALIAS_MAX);
   const adding = names.length < ALIAS_MAX;
@@ -74,8 +63,8 @@ export async function openAliases(draft = customAliases(), focusAt = null, key =
     host.innerHTML = "";
     popupClosed(host);
   };
-  // the screen was left or shows another variant meanwhile
-  if (!open || variantKey !== key) {
+  // the screen was left or shows another alt meanwhile
+  if (!open || altId !== key) {
     close();
     return;
   }
@@ -84,12 +73,12 @@ export async function openAliases(draft = customAliases(), focusAt = null, key =
   const rows = () => inputs.slice(0, names.length).map((el) => el.value);
   const typed = () => (adding ? inputs[n - 1].value : "");
   const keep = async () => {
-    const saved = await call(() => rpc("aliases.set", { variant: key, aliases: [...rows(), typed()] }));
+    const saved = await call(() => rpc("aliases.set", { alt: key, aliases: [...rows(), typed()] }));
     if (!saved || my !== aliasToken) return; // an error is shown and the editor stays
     close();
     ctx.invalidateRoster();
-    if (variantKey !== key) return;
-    variant().custom = saved;
+    if (altId !== key) return;
+    alt().customAliases = saved;
     renderScreen();
   };
   ys.forEach((y, i) => {

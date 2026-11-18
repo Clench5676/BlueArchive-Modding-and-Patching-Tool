@@ -457,7 +457,7 @@ def test_the_old_rig_is_refused_where_the_official_one_gained_animations(real):
     assert report["oldRig"] == {"atlases": ["test.atlas"], "animations": {"test.skel": ["01"]}, "available": False}
     with pytest.raises(ServiceError) as caught:
         library.old_rig(entry.id)
-    assert (caught.value.code, caught.value.params) == ("old_rig_animations", {"names": "01"})
+    assert (caught.value.code, caught.value.params) == ("recorded_rig_animations", {"names": "01"})
     assert not library._remap_previews and len(library.mods()) == 1
 
 
@@ -469,7 +469,7 @@ def test_the_old_rig_is_refused_without_the_recorded_skeleton(real):
     sidecar(env, entry.id).write_text(json.dumps(record))
     library = reload_library(env)
     assert not library.compatibility(entry.id)["oldRig"]["available"]
-    with pytest.raises(ServiceError, match="old_rig_unavailable"):
+    with pytest.raises(ServiceError, match="recorded_rig_unavailable"):
         library.old_rig(entry.id)
     assert not library._remap_previews
 

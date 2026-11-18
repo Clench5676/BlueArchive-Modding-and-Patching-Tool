@@ -141,17 +141,17 @@ test("an expression cancels blinking immediately, stale blinks cannot replace it
   assert.equal(timers.size, 1);
 });
 
-test("merging uses variants rather than families and leaves unidentified and generic Mods separate", async () => {
+test("merging uses alts rather than students and leaves unidentified and generic Mods separate", async () => {
   const { importGroups } = await import("../../src/bmpt/web/js/mods/import-groups.js");
   const entries = [
-    { id: "p1", kind: "spr", variant: "base" },
-    { id: "l1", kind: "lobby", variant: "base" },
-    { id: "p2", kind: "spr", variant: "dress" },
-    { id: "m1", kind: "model", variant: "dress" },
-    { id: "other", kind: "other", variant: "base" },
-    { id: "unknown", kind: "spr" },
+    { id: "p1", resourceType: "portrait", alt: "base" },
+    { id: "l1", resourceType: "memorialLobby", alt: "base" },
+    { id: "p2", resourceType: "portrait", alt: "dress" },
+    { id: "m1", resourceType: "chibi", alt: "dress" },
+    { id: "other", resourceType: "other", alt: "base" },
+    { id: "unknown", resourceType: "portrait" },
   ];
-  const identify = (entry) => ({ variant: entry.variant && { key: entry.variant, family: { key: "student" } } });
+  const identify = (entry) => ({ alt: entry.alt && { key: entry.alt, student: { key: "student" } } });
   assert.equal(importGroups(entries, false, identify).length, entries.length);
   const groups = importGroups(entries, true, identify);
   assert.deepEqual(

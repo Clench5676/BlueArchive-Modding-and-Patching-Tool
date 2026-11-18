@@ -11,8 +11,8 @@ import { T } from "../core/i18n.js";
 import { $ } from "../core/util.js";
 import {
   stage,
-  variantKey,
-  fam,
+  altId,
+  shownStudent,
   layouts,
   ctx,
   tab,
@@ -23,7 +23,7 @@ import {
   thumbnailWork,
   thumb,
   settleImages,
-  variant,
+  alt,
   currentBase,
   shownSource,
   previewAvailable,
@@ -51,12 +51,12 @@ export let photoLastAction = "",
 export const photoFaces = new Map();
 async function photoPreload() {
   if (photoPrepared) return photoPrepared;
-  photoOrigin = variantKey;
+  photoOrigin = altId;
   photoSession = true;
   photoPrepared = (async () => {
-    const v = variant(),
-      portraitAvailable = previewAvailable(v, "spr"),
-      lobbyAvailable = previewAvailable(v, "lobby"),
+    const v = alt(),
+      portraitAvailable = previewAvailable(v, "portrait"),
+      lobbyAvailable = previewAvailable(v, "memorialLobby"),
       portrait = $("portrait"),
       lobby = $("lobby");
     if (!mainPlayer) {
@@ -74,17 +74,20 @@ async function photoPreload() {
       })(),
       (async () => {
         if (!lobbyAvailable) return;
-        const c = current("lobby"),
+        const c = current("memorialLobby"),
           options = {
             framing: specialFraming(v),
             deferPlayback: true,
             mod:
-              c.kind === "mod" && (!!v.previewSources?.lobby || !!v.configured || !modsOn() || !v.lobby) ? c.id : null,
+              c.kind === "mod" && (!!v.previewSources?.memorialLobby || !!v.configured || !modsOn() || !v.memorialLobby)
+                ? c.id
+                : null,
             camera: !!c.mod?.camera,
-            official: c.kind === "self" && (!!v.configured || !!v.previewSources?.lobby || !modsOn()),
+            official: c.kind === "self" && (!!v.configured || !!v.previewSources?.memorialLobby || !modsOn()),
           };
-        if (!(await Lobby.show(v.lobby, lobby, v.key, options))) throw new Error("Memorial renderer is not ready");
-        setLobbyFrom(fam.version);
+        if (!(await Lobby.show(v.memorialLobby, lobby, v.key, options)))
+          throw new Error("Memorial renderer is not ready");
+        setLobbyFrom(shownStudent.version);
         setLobbyStale(false);
         Lobby.suspend();
         Lobby.frame("full");
@@ -93,12 +96,12 @@ async function photoPreload() {
         await Lobby.prepareFrame();
       })(),
     ]);
-    if (photoOrigin !== variantKey || !open) throw new DOMException("Photography source changed", "AbortError");
+    if (photoOrigin !== altId || !open) throw new DOMException("Photography source changed", "AbortError");
     if (portraitAvailable && !Visual.isOpen()) {
       const layout = await (layouts.visual ||= NGUI.layout("UICharacterVisualMode"));
       const parts = await Visual.prepare({
         layout,
-        bg: v.bg,
+        bg: v.background,
         strings: { reset: T("visual.reset"), back: T("lobby.exit") },
       });
       await Visual.open({
@@ -110,7 +113,7 @@ async function photoPreload() {
         uiHost: $("visual-ui"),
         players: () => [...portrait.querySelectorAll(".layer")].map((layer) => layer.player).filter(Boolean),
         onBack: () => setFullscreen(false),
-        alive: () => open && photoOrigin === variantKey,
+        alive: () => open && photoOrigin === altId,
       });
     }
     if (portraitAvailable) {
@@ -146,11 +149,11 @@ function photoVisibility(mode) {
 }
 export const photoBridge = {
   info: () => ({
-    variant: variantKey,
+    alt: altId,
     mode: tab,
-    source: tab === "portrait" ? currentBase() : shownSource(variant(), "lobby"),
-    hasPortrait: previewAvailable(variant(), "spr"),
-    hasLobby: previewAvailable(variant(), "lobby"),
+    source: tab === "portrait" ? currentBase() : shownSource(alt(), "memorialLobby"),
+    hasPortrait: previewAvailable(alt(), "portrait"),
+    hasLobby: previewAvailable(alt(), "memorialLobby"),
   }),
   async full(mode) {
     await photoPreload();
@@ -178,7 +181,7 @@ export const photoBridge = {
   async leave() {
     Lobby.suspend();
     setShownLeft(tab);
-    setShownKey(leftKey(tab, variant()));
+    setShownKey(leftKey(tab, alt()));
     await setFullscreen(false);
     await renderAll();
     await settleImages();
@@ -219,9 +222,10 @@ export const photoBridge = {
     }
   },
   generatedThumbnail: async () =>
-    variant().spr ? await thumbnailWork.thumb(currentBase(), "roster") : variant().portrait,
+    alt().portrait ? await thumbnailWork.thumb(currentBase(), "roster") : alt().officialThumbnail,
   defaultThumbnail: async () =>
-    variant().portrait || (variant().spr ? await thumb(spineBase("official-spr", variant().spr), "roster") : null),
+    alt().officialThumbnail ||
+    (alt().portrait ? await thumb(spineBase("official-portrait", alt().portrait), "roster") : null),
   thumbnailChanged() {
     ctx?.invalidateRoster();
   },

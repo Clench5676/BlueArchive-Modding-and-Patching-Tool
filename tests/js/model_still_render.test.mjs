@@ -114,7 +114,7 @@ test("a source-specific model uses the detail shaders and redraws its visible bo
     view = createStillView({ renderer }),
     controller = new AbortController();
   try {
-    await view.load("/asset/model/hina.glb?source=mod%3Apink", { signal: controller.signal });
+    await view.load("/asset/chibi/hina.glb?source=mod%3Apink", { signal: controller.signal });
     const url = await view.renderStill(controller.signal);
     assert.match(url, /^blob:3d-/);
     assert.equal(draws.at(-1), renderer.domElement, "freeze the validated GPU canvas before encoding");
@@ -163,7 +163,7 @@ for (const mode of ["blank", "lost", "encoder", "blankAfterFit", "lostAfterFit"]
     const renderer = gpu({ [mode]: true }),
       view = createStillView({ renderer });
     try {
-      await view.load("/asset/model/pajamas.glb?source=official", { signal: new AbortController().signal });
+      await view.load("/asset/chibi/pajamas.glb?source=official", { signal: new AbortController().signal });
       encode = mode === "encoder" ? "failed" : "ready";
       await assert.rejects(
         view.renderStill(new AbortController().signal),

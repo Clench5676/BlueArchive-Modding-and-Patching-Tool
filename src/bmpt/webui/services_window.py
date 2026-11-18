@@ -163,7 +163,7 @@ class WindowMixin:
             try:
                 found = self.catalog.variant(variant)
             except KeyError as error:
-                raise ServiceError("variant_not_found", variant=variant) from error
+                raise ServiceError("alt_not_found", variant=variant) from error
             core = getattr(found, kind, None) or ""
             files = [str(f.file) for f in library.state(variant, pin=pin).files if f.kind == kind]
             entry = (pin.key, core.lower())

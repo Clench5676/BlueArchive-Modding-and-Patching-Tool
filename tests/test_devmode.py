@@ -57,11 +57,11 @@ def test_source_checkout_data_dir_unchanged_without_override():
 def test_source_checkout_uses_the_override(tmp_path):
     target = tmp_path / "data" / "profile"
     assert utils._get_exe_dir(target) == target
-    assert target.is_dir()
+    assert not target.exists()
 
 
 @pytest.mark.parametrize("macos", [False, True])
-def test_compiled_build_copies_its_addons_into_the_override(tmp_path, monkeypatch, macos):
+def test_compiled_data_dir_discovery_leaves_addons_in_the_bundle(tmp_path, monkeypatch, macos):
     portable, extracted, target = tmp_path / "portable", tmp_path / "extracted", tmp_path / "profile"
     portable.mkdir()
     (extracted / "Addons").mkdir(parents=True)
@@ -76,7 +76,8 @@ def test_compiled_build_copies_its_addons_into_the_override(tmp_path, monkeypatc
     monkeypatch.setattr(sys, "executable", str(extracted / "Tool" if macos else portable / "Tool.exe"))
     monkeypatch.setattr(Path, "home", lambda: tmp_path / "home")
     assert utils._get_exe_dir(target) == target
-    assert (target / "Addons" / "BA-Characters-Internal-ID.csv").read_text() == "bundled map"
+    assert not target.exists()
+    assert (extracted / "Addons" / "BA-Characters-Internal-ID.csv").read_text() == "bundled map"
     # the released app's data folder and the portable folder stay untouched
     assert not (tmp_path / "home").exists()
     assert list(portable.iterdir()) == []
@@ -116,7 +117,7 @@ def test_data_dir_is_read_on_import(tmp_path):
     )
     profile = (tmp_path / "profile").resolve()
     assert out.splitlines() == [str(profile), str(profile / "config.toml"), str(profile / "cache")]
-    assert profile.is_dir()
+    assert not profile.exists()
 
 
 # --- BAMT_GAME_DIRS_GLOBAL / BAMT_GAME_DIRS_JAPAN ---
@@ -343,9 +344,9 @@ def test_web_ui_refuses_paths_outside_the_roots(dev, dev_services):
     assert reply["error"]["code"] == "dev_path_outside"
     assert dev_services.library.added == []
     # finding the game reads Steam's records: refused without the Check Game Files consent, never searched in dev mode
-    assert api.call("settings.detectGame", {"region": "global"})["error"]["code"] == "scan_off"
+    assert api.call("settings.detectGame", {"server": "global"})["error"]["code"] == "scan_off"
     dev_services.state.set_scan_consent(True)
-    assert api.call("settings.detectGame", {"region": "global"}) == {"result": []}
+    assert api.call("settings.detectGame", {"server": "global"}) == {"result": []}
     # inside the roots the same calls go through
     assert "result" in api.call("settings.set", {"key": "gameDir.global", "value": str(game)})
     assert "result" in api.call("settings.set", {"key": "outputDir", "value": str(dev.root / "output")})

@@ -166,7 +166,7 @@ def test_profiles_fallback_failures_redact_paths(tmp_path, monkeypatch, caplog):
         raise PermissionError(errno.EACCES, "Permission denied", str(path))
 
     monkeypatch.setattr(profiles, "_parse", fail)
-    with pytest.raises(ServiceError, match="profiles_unreadable"):
+    with pytest.raises(ServiceError, match="mod_configuration_unreadable"):
         config.read()
     assert len(caplog.records) == 2
     assert all(

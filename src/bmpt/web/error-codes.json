@@ -1,4 +1,24 @@
 {
+  "add_animations_page_missing": {
+    "code": "E5020",
+    "level": "failed"
+  },
+  "add_animations_refused": {
+    "code": "E5019",
+    "level": "failed"
+  },
+  "add_animations_region_too_large": {
+    "code": "E5021",
+    "level": "failed"
+  },
+  "add_animations_spine_licence": {
+    "code": "E5022",
+    "level": "failed"
+  },
+  "add_animations_unavailable": {
+    "code": "E5018",
+    "level": "failed"
+  },
   "alias_too_long": {
     "code": "E6001",
     "level": "notice"
@@ -6,6 +26,14 @@
   "alias_too_many": {
     "code": "E6002",
     "level": "notice"
+  },
+  "alt_incompatible": {
+    "code": "E2014",
+    "level": "failed"
+  },
+  "alt_not_found": {
+    "code": "E2015",
+    "level": "failed"
   },
   "archive_invalid": {
     "code": "E3029",
@@ -91,16 +119,16 @@
     "code": "E1002",
     "level": "notice"
   },
+  "catalog_alt_not_found": {
+    "code": "E2003",
+    "level": "failed"
+  },
   "catalog_data_invalid": {
     "code": "E2001",
     "level": "failed"
   },
-  "catalog_family_not_found": {
+  "catalog_student_not_found": {
     "code": "E2002",
-    "level": "failed"
-  },
-  "catalog_variant_not_found": {
-    "code": "E2003",
     "level": "failed"
   },
   "classic_failed": {
@@ -235,46 +263,6 @@
     "code": "E2010",
     "level": "failed"
   },
-  "graft_page_missing": {
-    "code": "E5020",
-    "level": "failed"
-  },
-  "graft_refused": {
-    "code": "E5019",
-    "level": "failed"
-  },
-  "graft_region_too_large": {
-    "code": "E5021",
-    "level": "failed"
-  },
-  "graft_spine_licence": {
-    "code": "E5022",
-    "level": "failed"
-  },
-  "graft_unavailable": {
-    "code": "E5018",
-    "level": "failed"
-  },
-  "hall_conflict": {
-    "code": "E6003",
-    "level": "notice"
-  },
-  "hall_duplicate_memorial": {
-    "code": "E6004",
-    "level": "notice"
-  },
-  "hall_duplicate_portrait": {
-    "code": "E6005",
-    "level": "notice"
-  },
-  "hall_last_memorial": {
-    "code": "E6006",
-    "level": "notice"
-  },
-  "hall_last_portrait": {
-    "code": "E6007",
-    "level": "notice"
-  },
   "internal": {
     "code": "E1009",
     "level": "failed"
@@ -317,6 +305,10 @@
   },
   "mod_apply_failed": {
     "code": "E4012",
+    "level": "failed"
+  },
+  "mod_configuration_unreadable": {
+    "code": "E1016",
     "level": "failed"
   },
   "mod_in_use": {
@@ -395,19 +387,11 @@
     "code": "E1014",
     "level": "failed"
   },
-  "old_rig_animations": {
-    "code": "E5016",
-    "level": "failed"
-  },
-  "old_rig_unavailable": {
-    "code": "E5017",
-    "level": "failed"
-  },
-  "original_invalid": {
+  "official_invalid": {
     "code": "E2011",
     "level": "failed"
   },
-  "original_unavailable": {
+  "official_unavailable": {
     "code": "E2012",
     "level": "failed"
   },
@@ -415,44 +399,16 @@
     "code": "E1015",
     "level": "failed"
   },
-  "photo_apply_failed": {
-    "code": "E6008",
-    "level": "failed"
-  },
-  "photo_capture_unavailable": {
-    "code": "E6009",
-    "level": "failed"
-  },
-  "photo_delete_other_variant": {
-    "code": "E6010",
-    "level": "failed"
-  },
-  "photo_in_use": {
-    "code": "E6011",
-    "level": "notice"
-  },
-  "photo_invalid": {
-    "code": "E6012",
-    "level": "failed"
-  },
-  "photo_library_invalid": {
-    "code": "E6013",
-    "level": "failed"
-  },
-  "photo_missing": {
-    "code": "E6014",
-    "level": "failed"
-  },
-  "photo_target_unavailable": {
-    "code": "E6015",
-    "level": "failed"
-  },
   "platform_unsupported": {
     "code": "E3017",
     "level": "failed"
   },
-  "profiles_unreadable": {
-    "code": "E1016",
+  "recorded_rig_animations": {
+    "code": "E5016",
+    "level": "failed"
+  },
+  "recorded_rig_unavailable": {
+    "code": "E5017",
     "level": "failed"
   },
   "required_asset_apply_failed": {
@@ -507,8 +463,60 @@
     "code": "E2013",
     "level": "notice"
   },
+  "student_hall_conflict": {
+    "code": "E6003",
+    "level": "notice"
+  },
+  "student_hall_duplicate_memorial": {
+    "code": "E6004",
+    "level": "notice"
+  },
+  "student_hall_duplicate_portrait": {
+    "code": "E6005",
+    "level": "notice"
+  },
+  "student_hall_last_memorial": {
+    "code": "E6006",
+    "level": "notice"
+  },
+  "student_hall_last_portrait": {
+    "code": "E6007",
+    "level": "notice"
+  },
   "target_unknown": {
     "code": "E3026",
+    "level": "failed"
+  },
+  "thumbnail_apply_failed": {
+    "code": "E6008",
+    "level": "failed"
+  },
+  "thumbnail_capture_unavailable": {
+    "code": "E6009",
+    "level": "failed"
+  },
+  "thumbnail_delete_other_alt": {
+    "code": "E6010",
+    "level": "failed"
+  },
+  "thumbnail_in_use": {
+    "code": "E6011",
+    "level": "notice"
+  },
+  "thumbnail_invalid": {
+    "code": "E6012",
+    "level": "failed"
+  },
+  "thumbnail_library_invalid": {
+    "code": "E6013",
+    "level": "failed"
+  },
+  "thumbnail_missing": {
+    "code": "E6014",
+    "level": "failed"
+  },
+  "thumbnail_target_unavailable": {
+    "code": "E6015",
     "level": "failed"
   },
   "unknown_method": {
@@ -549,14 +557,6 @@
   },
   "update_unsupported": {
     "code": "E7006",
-    "level": "failed"
-  },
-  "variant_incompatible": {
-    "code": "E2014",
-    "level": "failed"
-  },
-  "variant_not_found": {
-    "code": "E2015",
     "level": "failed"
   }
 }

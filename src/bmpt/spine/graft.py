@@ -847,8 +847,8 @@ def pack(
         official atlas lacks.
 
     Raises:
-        GraftError: ``graft_page_missing`` without a mod page image, or the official page of a placed region;
-            ``graft_region_too_large`` when a page would pass ``MAX_PAGE_PIXELS`` or a region fits nowhere.
+        GraftError: ``add_animations_page_missing`` without a mod page image, or the official page of a placed region;
+            ``add_animations_region_too_large`` when a page would pass ``MAX_PAGE_PIXELS`` or a region fits nowhere.
     """
     mod_atlas = atlas_remap.parse_atlas(mod_text, "mod")
     official_atlas = atlas_remap.parse_atlas(official_text, "official")
@@ -869,7 +869,7 @@ def pack(
         if image is None or not page.size[0] or not page.size[1]:
             continue
         if page.size[0] * page.size[1] > MAX_PAGE_PIXELS:
-            raise GraftError("graft_region_too_large", region=page.name)
+            raise GraftError("add_animations_region_too_large", region=page.name)
         scales[page.name] = (image.size[0] / page.size[0], image.size[1] / page.size[1])
         occupancy[page.name] = (
             sampled(mod_setup, key, page.size)
@@ -877,7 +877,7 @@ def pack(
             else packed_regions(mod_atlas, page.name, page.size)
         )
     if not occupancy:
-        raise GraftError("graft_page_missing", page=", ".join(p.name for p in pages) or "—")
+        raise GraftError("add_animations_page_missing", page=", ".join(p.name for p in pages) or "—")
     placed: dict[str, Placed] = {}
     grown: dict[str, int] = {}
     order = sorted(wanted, key=lambda n: -packed(by_name[n])[0] * packed(by_name[n])[1])
@@ -892,13 +892,13 @@ def pack(
             page_name = next(iter(occupancy))
             occupied = occupancy[page_name]
             if (occupied.shape[0] + h + 2 * PAD + ROWS) * occupied.shape[1] > MAX_PAGE_PIXELS:
-                raise GraftError("graft_region_too_large", region=name)
+                raise GraftError("add_animations_region_too_large", region=name)
             taller = np.zeros((occupied.shape[0] + h + 2 * PAD + ROWS, occupied.shape[1]), dtype=bool)
             taller[: occupied.shape[0]] = occupied
             occupancy[page_name] = occupied = taller
             spot = free_spot(occupied, w, h)
             if spot is None:
-                raise GraftError("graft_region_too_large", region=name)
+                raise GraftError("add_animations_region_too_large", region=name)
         x, y = spot
         occupancy[page_name][y - PAD : y + h + PAD, x - PAD : x + w + PAD] = True
         placed[name] = Placed(page_name, (x, y), by_name[name])
@@ -930,7 +930,7 @@ def pack(
             source_page = official_atlas.pages[region.page]
             source = official_pages.get(atlas_remap.texture_key(region.page))
             if source is None:
-                raise GraftError("graft_page_missing", page=region.page)
+                raise GraftError("add_animations_page_missing", page=region.page)
             ox, oy = (source.size[0] / source_page.size[0], source.size[1] / source_page.size[1])
             w, h = packed(region)
             x, y = region.xy
@@ -1183,12 +1183,12 @@ def prepare(
             carried attachment as if the mod had not moved the face, and lists its slot as unanchored.
 
     Raises:
-        GraftError: ``graft_refused`` when no animation can be carried, ``pack``'s errors, or ``bad_params`` when a
-            carried slot has no bone in a setup.
+        GraftError: ``add_animations_refused`` when no animation can be carried, ``pack``'s errors, or
+            ``bad_params`` when a carried slot has no bone in a setup.
     """
     graft = SkeletonGraft(mod_skeleton, official_skeleton)
     if not graft.animations:
-        raise GraftError("graft_refused", names=", ".join(sorted(graft.refused)) or "—")
+        raise GraftError("add_animations_refused", names=", ".join(sorted(graft.refused)) or "—")
     regions = [c.region for c in graft.carried.values() if c.region]
     pages = pack(mod_atlas, official_atlas, regions, mod_pages, official_pages, mod_setup)
     anchors, unanchored = {}, []
@@ -1433,15 +1433,15 @@ def plain(
         only: The official animations to carry; None carries every one the mod lacks.
 
     Raises:
-        GraftError: ``graft_refused`` when no animation can be carried, ``graft_page_missing`` when the official
-            atlas lacks a region to carry, and ``pack``'s errors.
+        GraftError: ``add_animations_refused`` when no animation can be carried, ``add_animations_page_missing``
+            when the official atlas lacks a region to carry, and ``pack``'s errors.
     """
     graft = SkeletonGraft(mod_skeleton, official_skeleton, only)
     if not graft.animations:
-        raise GraftError("graft_refused", names=", ".join(sorted(graft.refused)) or "—")
+        raise GraftError("add_animations_refused", names=", ".join(sorted(graft.refused)) or "—")
     regions = [c.region for c in graft.carried.values() if c.region]
     pages = pack(mod_atlas, official_atlas, regions, mod_pages, official_pages, None)
     if pages.missing:
-        raise GraftError("graft_page_missing", page=", ".join(pages.missing))
+        raise GraftError("add_animations_page_missing", page=", ".join(pages.missing))
     results = {an["name"]: {"off": 0.0, "candidate": None, "fixed": True} for an in graft.animations}
     return Plain(graft.build(), atlas_text(mod_atlas, pages), pages.images, results, graft, pages.grown)

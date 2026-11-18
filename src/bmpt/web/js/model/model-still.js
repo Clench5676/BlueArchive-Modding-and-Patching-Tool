@@ -8,18 +8,18 @@ import { previewCache } from "../detail/preview-cache.js";
 import { onCapturePriorityChange, popupCapturesOpen, popupItem, captureEligible } from "../core/capture-priority.js";
 
 /**
- * The version of a variant's 3D stills: it changes when the model's files or any model mod of the family
+ * The version of an alt's 3D stills: it changes when the model's files or any model mod of the student
  * change.
  * @param {number} [generation] A number the caller raises to make every still new.
  */
-export const modelStillVersion = (family, variant, generation = 0) =>
+export const modelStillVersion = (student, alt, generation = 0) =>
   JSON.stringify([
-    family.version,
-    variant.model,
-    partsOf(variant, "model"),
-    family.variants
+    student.version,
+    alt.chibi,
+    partsOf(alt, "chibi"),
+    student.alts
       .flatMap((v) => v.modList || [])
-      .filter((m) => m.kind === "model")
+      .filter((m) => m.resourceType === "chibi")
       .map(({ alias, label, fresh, ...source }) => source),
     generation,
   ]);
@@ -38,8 +38,8 @@ export const modelStillKey = (key, source, version) => JSON.stringify([key, sour
  * @param {(error: Error, source: string, kind: string) => void} [options.report]
  * @param {number} [options.timeout] The most milliseconds one still may take.
  * @returns
- *     {(variant: object, source: string, options?: {version?: string|null, signal?: AbortSignal}) => Promise<string|null>}
- *     Asks for a variant's still: a promise of its URL, with `thumbnail`, `signal`, `failure()` and `bump()`
+ *     {(alt: object, source: string, options?: {version?: string|null, signal?: AbortSignal}) => Promise<string|null>}
+ *     Asks for an alt's still: a promise of its URL, with `thumbnail`, `signal`, `failure()` and `bump()`
  *     for the screen's scheduling; null when it fails or is cancelled.
  */
 export function createModelStills({
@@ -108,7 +108,7 @@ export function createModelStills({
         const capture = (async () => {
           item.persistent = await persistent.modelTicket(
             JSON.stringify(["model-square-640-v3", globalThis.devicePixelRatio || 1]),
-            item.variant,
+            item.alt,
             item.source,
           );
           signal.throwIfAborted();
@@ -157,13 +157,13 @@ export function createModelStills({
       }
     }
   }
-  function thumbnail(variant, source, { version = null, signal } = {}) {
+  function thumbnail(alt, source, { version = null, signal } = {}) {
     if (signal?.aborted) return Object.assign(Promise.resolve(null), { thumbnail: true, signal });
     if (!unwatch) unwatch = onCapturePriorityChange(focusQueue);
-    const key = modelStillKey(variant, source, version);
+    const key = modelStillKey(alt, source, version);
     let item = cache.get(key);
     if (!item) {
-      item = { key, variant, source, urlSource: modelUrl(variant, source), clients: new Set(), done: false };
+      item = { key, alt, source, urlSource: modelUrl(alt, source), clients: new Set(), done: false };
       cache.set(key, item);
       queue.push(item);
       queueMicrotask(pump);
