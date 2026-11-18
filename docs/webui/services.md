@@ -26,10 +26,9 @@
   Spine skeletons, lobbies, 3D models): memory, plus the default-on **Preview Cache** setting, which permits lossless
   exports and generated PNG thumbnails in the user cache directory. Browser responses remain
   `Cache-Control: no-store`; voices remain memory-only.
-- **Disk cache.** `user_cache_dir()/<resource_version>/...` (the platform's user cache directory for
-  `bluearchive-modding-patching-tool`), clearable from the UI. It keeps the three most recently used resource-version
-  folders; a new version's first successful write deletes the other version folders, never links or the `previews/`
-  store. The old `BA-Modding-Toolkit` user folder is renamed automatically on first start.
+- **Disk cache.** Generation 2 uses a sibling with the `-bmpt-g2` suffix beside the platform or configured cache
+  directory. It keeps the three most recently used resource-version directories and stores persistent previews
+  separately under `previews/`.
 - **Preview cache.** On by default, preserving an explicitly saved off setting, independent of the light-asset
   consent. Stored under the cache directory's `previews/`, bounded to 2 GiB with least-recently-used eviction.
   Entries are keyed by installation/resource/export identity, source revisions and model dependencies; stills
@@ -51,14 +50,10 @@
 - **Read-only data folder.** The services test the data folder at start by writing and removing a real temporary
   file (`app.info.dataDirWritable`); no fallback folder. A write refused while that folder cannot be written answers
   `data_dir_readonly` (through `Services.translate_error`) instead of `internal`.
-- **User data.** The mod library and UI state live in `utils.EXE_DIR` (the portable data directory). Several
-  instances may share it: a change to `webui.json` is applied to the file as it is at that moment, read again under
-  the shared `webui.json.lock`, so no instance erases another's keys. On Windows a replace that meets another
-  program's handle is retried for up to a second. The last good file stays as `webui.json.prev` before every write;
-  an unreadable file is read from that copy and kept as `webui.json.bad`. `config.toml` never stops the start: a
-  group of the wrong type reads as missing, an unparsable file starts on defaults (copied to `config.toml.bad`
-  first), and the 2-second poll for the classic GUI's saves never applies a read that failed. The user's own aliases
-  of the students are kept there too (`aliases`), never in the program folder.
+- **User data.** The upgrade coordinator resolves `data.json` and `library.json` before services open. Preferences,
+  including `aliases`, are saved under the data epoch's `webui.json` lock. The last good file stays as a `.prev`
+  copy and unreadable content can be retained as `.bad`. Unreadable input that cannot be recovered pauses the
+  upgrade. The config poll applies successful reads of Classic saves from the committed `config.toml`.
 
 ## gameassets
 
@@ -92,21 +87,18 @@ class GameAssets:
 
 The collection art is read where the game loads it (CostumeExcel's texture paths, the
 `uis-01_common-14_charactercollect-*` bundles); the index holds names and bundle locations only, in memory.
-`/asset/art/bg/` serves only names starting with `BG_`, `/asset/art/portrait/` only `Student_Portrait_`.
+`/asset/art/background/` serves only names starting with `BG_`, `/asset/art/officialThumbnail/` only `Student_Portrait_`.
 
-`model_glb` reads prefab bundles and resolves their external CABs on demand. Model, memorial and office graphs share
+`model_glb` reads prefab bundles and resolves their external CABs on demand. Chibi, memorial lobby and office graphs share
 the revision-checked `gameassets/cabs.py` resolver; the optional preview cache persists bounded, checksummed CAB
 metadata, confined to the installation and checked by device, inode, size, mtime and ctime. The shared
 `unity/unityfs.py` parser reads only header/block info and uses the declared bundle length to ignore CRC-correction
-tails. The GLB
-carries what the game's shaders need (materials, constants, keywords, outline, blend state, samplers, clip toggles);
-`web/js/model/chibi-materials.js` ports the game's shaders from their compiled programs, and `model.js` opens at the
-formation screen's view (its camera in `model-camera.js`) with the formation screen's light, both read from the game's
-own data and checked against in-game screenshots. Input is wheel/pinch zoom, pan and orbit with eased framing
-(`attachInput`).
+tails. The GLB carries material, sampler, outline, blend and clip-toggle data. `chibi-materials.js` applies that
+data when rendering a chibi. `model-camera.js` supplies the initial framing. The view accepts zoom, pan and orbit
+with eased framing (`attachInput`).
 
 `AssetNotFound` (a `KeyError`) when a name is unknown. Layout nodes use the schema
-`{name, active, pos[x, y], scale[x, y], rotZ, widgets[], children?}`; atlas and texture references are resolved to
+`{name, active, localPosition, scale, localRotationZDegrees, widgets, children?}`. Atlas and texture references resolve to
 names.
 
 **Button states.** The game's buttons carry no NGUI button colours: a disabled or locked button is a node of its own
@@ -124,8 +116,8 @@ The lobby's bottom menu (`UILobby`, `Front/Bottom/Menu/BG/Grid/<entry>`) holds t
 greyed navigation: `Disable` shows the icon sprite at `#797979` with `Common_Icon_Lock` over it; the label is outside
 both states.
 
-Cached layouts carry the export's format in their key (`layout-v2/<root>`, `_LAYOUT` in `service.py`); a change to
-the export raises it, so older cached layouts are exported again and no other cached asset is dropped.
+Cached layouts carry the export's format in their key (`_LAYOUT` in `service.py`). Generation-2 caches use a
+separate namespace.
 
 ## catalog
 
@@ -168,33 +160,32 @@ class Catalog:
 ```
 
 `core_map` runs the roster's own core rules on another install's core names, so the library keys a core the same way
-in every game folder: a portrait core's key is the core less `_spr`; a lobby core belongs to the installed variant
+in every game folder: a portrait core's key is the core less `_spr`; a lobby core belongs to the installed alt
 whose key or core alias plus `_home`, `_home_gl` or `_home_teen` names it, a direct file-id match first. The shipped
 data and the character map are parsed once and kept; every build works on a copy, and `reload()` keeps the old parse
 when the data is invalid.
 
 Special Spine slots use `special:<lower-case core>` keys and the lobby workflow. Discovery accepts named
 `spinebackground` bundles and nonstandard cores in `spinelobbies` and `spinecharacters`; shared `_mxcommon` bundles
-are excluded. The category is retained on the variant (`spineCategory` in RPC data) and kept separate from student
+are excluded. The category is retained on the alt (`spineCategory` in RPC data) and kept separate from student
 portraits and memorial lobbies; import, apply, restore, configuration, the global toggle and entry scans classify
 these files by category as well as core, while parts still match by prefix and resource type. Roster cards, chips,
-the picker and search include lobby-only variants; container paths under `SpineBackground/<core>/` identify the
+the picker and search include lobby-only alts; container paths under `SpineBackground/<core>/` identify the
 owning scene, and conflicting scene containers are refused. Known role tokens (workpage, daytime, night, task, cafe)
 have locale labels; unknown names keep their exact core.
 
 Sources: the character map CSV the app already downloads (`BA-Characters-Internal-ID.csv`), the curated data file
 shipped in the package (names, backgrounds and portrait names, generated by `scripts/build_catalog_data.py`), and the
-game scan (which skeletons exist, dates). Skeletons missing from the map become their own family, named by file id.
+game scan (which skeletons exist, dates). Skeletons missing from the map become their own student, named by file id.
 Playable students take SchaleDB's names per server; NPCs and story sprites the character map's columns and
 `catalog/data/naming.json` (its name table and glossary give each language's word, from the game where it names it,
 else a translation, and say which). zh-CN shows Kivo's community wording; the CN server's replaced wording stays
-findable through `aliases` (never shown). Names follow the variant name format: base name plus the variant in
+findable through `aliases` (never shown). Names follow the alt name format: base name plus the alt in
 brackets, never a middle dot.
 
-Recruitable follows the server of the selected game folder: a playable variant is recruitable when its collection
-portrait is installed; without one, the data file's `released` flags (from SchaleDB `IsReleased`) decide; with no
-flag either, the variant is recruitable only when the install has no collection portraits at all. Not-recruitable
-playables stay in the roster and sort after the recruitable variants of their family.
+`releasedOnServer` follows the selected server. An installed Collection portrait establishes availability for a
+playable alt. Otherwise the catalog's `released` flags apply. If there is no flag, the absence of a Collection
+portrait index permits the alt. All playable alts remain in the student list.
 
 ## Languages
 
@@ -209,7 +200,7 @@ playables stay in the roster and sort after the recruitable variants of their fa
   other language, Traditional Chinese included, to en-US (a Simplified string in a Traditional screen reads as a
   wrong translation, an English one as an untranslated one).
 - Names come with the data per language (`i18n.js` `NAME_LANG`: zh-CN, zh-TW, en, ja, ko, th); the catalog names
-  every variant in those languages. The lobby's lines follow the UI language (`LINE_LANGS`).
+  every alt in those languages. The lobby's lines follow the UI language (`LINE_LANGS`).
 - Text fitting (`ngui.fitText`) shrinks, then wraps at separators and between words (`Intl.Segmenter` in the text's
   language), keeping the CJK line-breaking rules; `ngui.fitLabel` also widens the label to the fitted width. A
   control's caption is never ellipsized. Options side by side share one size (`ngui.fitGroup`), each option measured

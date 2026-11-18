@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "transactions-v2.schema.json",
+  "title": "Game write journal",
+  "type": "object",
+  "properties": {
+    "version": {
+      "const": 2
+    },
+    "phase": {
+      "enum": [
+        "preparing",
+        "writing",
+        "committed"
+      ]
+    },
+    "pin": {
+      "type": "object"
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "target": {
+            "type": "string"
+          },
+          "before": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{40}$"
+          },
+          "after": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{40}$"
+          },
+          "official": {
+            "type": "boolean"
+          },
+          "kept_now": {
+            "type": "boolean"
+          },
+          "rollback": {
+            "type": "string"
+          },
+          "restore": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "target",
+          "before",
+          "after",
+          "official",
+          "kept_now",
+          "rollback",
+          "restore"
+        ]
+      }
+    },
+    "kept": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{32}$"
+      }
+    },
+    "old_applied": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "version",
+    "phase",
+    "pin",
+    "files",
+    "kept",
+    "old_applied"
+  ]
+}

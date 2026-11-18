@@ -2,9 +2,9 @@
 
 ## One instance per data directory
 
-`main()` takes an OS lock on `<data dir>/instance.lock` for the process lifetime (`webui/instance.py`) and names
-itself in `instance.json` (`{pid, port, raise_token}`). A second start finds the lock held, posts
-`/api/instance/raise` with the raise token (header `X-BAMT-Raise`, never the session token) and exits: the first
+The coordinator holds `<data dir>/instance.lock` for the open session. The Web process publishes
+`.bmpt-upgrade/runtime/instance.json` with `{pid, port, raise_token}`. A second start can post
+`/api/instance/raise` with the `X-BAMT-Raise` token and exit. The first
 instance shows and raises its window. With `--serve` a second start refuses with a message. `app.quit` is refused
 with `busy` while a writer job is queued or running, the same rule as the window's close button.
 
@@ -22,13 +22,14 @@ pywebview both need the main thread on macOS, and a crash in a classic tab never
   the writer is pending first and the window is refused, or the child is registered first and the writer checked
   against it.
 - **The channel** is the web UI's own HTTP server, not stdio: `BAMT_CLASSIC_URL` and a one-time `BAMT_CLASSIC_TOKEN`
-  go to the child, which long-polls `GET /api/classic/control` for its lines (`place`, `raise`, `tab`, `settings`)
-  and posts `POST /api/classic/report` (`ready`, `shown`, `busy`), both with the child's token in `X-BAMT-Classic`.
+  go to the child. It obtains committed paths from `GET /api/classic/session`, long-polls
+  `GET /api/classic/control` for `place`, `raise`, `tab`, and `settings`, and posts its status to
+  `POST /api/classic/report`. These requests use the child's token in `X-BAMT-Classic`.
 - **Placement.** The child starts transparent; after `ready` the parent places it centred on the BAMT window inside
   the work area, hands the foreground over, then raises. With no raise 5 s after `ready`, the child shows itself.
 - **Exit.** A watcher thread waits for the process and publishes `classic.closed {code}`. The child's stdout and
-  stderr go to `classic.log` in the data directory.
-- **`classic.json`** (`{pid, exe, hwnd, created}`) names the open window, so an instance started later still refuses
+  stderr go to `classic.log` under `.bmpt-upgrade/runtime/`.
+- **`classic.json`** (`{pid, exe, hwnd, created}`) under `.bmpt-upgrade/runtime/` names the open window, so the App refuses
   game-folder writes and can raise it. `find_classic()` takes the pid only while it is alive with that creation time,
   runs this program's classic GUI and is neither this process nor its parent; any other file is stale and removed.
 - **The queue** (`ClassicQueue`): in memory only; at most one toggle and one action per entry (the latest wins). Each
@@ -52,8 +53,7 @@ icon goes with it.
 - **macOS** (`CocoaTray`): an `NSStatusItem` on pywebview's own loop, touched on the main thread only; the image is a
   vector template the menu bar tints. **Windows** (`WinFormsTray`): a `NotifyIcon` on pywebview's WinForms thread;
   the icon is loaded at the small icon size and disposed when the form closes.
-- **The icons** (`assets/tray`, the project's own art, never a game asset) are built by `scripts/tray_icons.py` from
-  their SVGs (`--check` reports drift, also a test).
+- **The icons** use the App art in `assets/tray`.
 
 ## Local error reports and startup recovery
 
@@ -73,12 +73,14 @@ Game Files consent, `gameFiles` compares each install against Steam's file list 
 `missing`, `notListed`, bounded; stat only, no hashing). Backend exceptions create a report in the data directory at
 most once per minute, retaining three automatic archives.
 
-Recovery code, its locale strings and a built-in stylesheet are embedded before the module graph. During boot,
+The [data upgrade notice](api.md#data-upgrade-notice) uses the existing recovery overlay and runs before normal
+services open. Recovery code, its locale strings and a built-in stylesheet are embedded before the module graph. During boot,
 uncaught errors and failed scripts show a built-in recovery page immediately; the watchdog fails after 45 seconds
 without phase progress (pending requests keep it waiting up to 180 s, and `hold()` stops its clock while the user's
 part runs). A later `ready()` removes the failure page. `--safe-mode` is a launch-only option: it omits the normal
-module graph, refuses game-asset requests, never creates Spine/WebGL renderers, and opens built-in Settings, report
-and log controls; the safe restart action (`app.restartSafe`) releases the single-instance lock first and is refused
+module graph after the generation opens, refuses game-asset requests, and opens built-in Settings, report and log
+controls. When the upgrade notice is needed, the ready response reloads the safe-mode page. The safe restart
+action (`app.restartSafe`) releases the single-instance lock first and is refused
 where unavailable. Windows checks the WebView2 Evergreen runtime (floor: 105) before importing pywebview and shows a
 native localized message with the download URL; macOS uses a native alert. Each launch rotates the log through `.1`
 and `.2`; failed rotation falls back to a temporary log, then stderr.

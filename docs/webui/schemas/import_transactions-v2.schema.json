@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "import_transactions-v2.schema.json",
+  "title": "Import and update journal",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 2
+        },
+        "operation": {
+          "const": "import"
+        },
+        "phase": {
+          "enum": [
+            "preparing",
+            "publishing",
+            "rollback"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{32}$"
+        },
+        "record": {
+          "type": "object"
+        },
+        "hashes": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{40}$"
+          }
+        }
+      },
+      "required": [
+        "version",
+        "phase",
+        "id",
+        "record",
+        "hashes"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 2
+        },
+        "operation": {
+          "const": "update"
+        },
+        "phase": {
+          "enum": [
+            "copying",
+            "replacing"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{32}$"
+        },
+        "old": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{40}$"
+          }
+        },
+        "new": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{40}$"
+          }
+        },
+        "previous": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{32}$"
+        }
+      },
+      "required": [
+        "version",
+        "operation",
+        "phase",
+        "id",
+        "old",
+        "new",
+        "previous"
+      ]
+    }
+  ]
+}

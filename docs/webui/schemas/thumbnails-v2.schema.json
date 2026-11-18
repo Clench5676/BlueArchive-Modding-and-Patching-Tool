@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "thumbnails-v2.schema.json",
+  "title": "Thumbnail manifest and held records",
+  "type": "object",
+  "properties": {
+    "version": {
+      "const": 2
+    },
+    "thumbnails": {
+      "type": "object"
+    },
+    "selected": {
+      "type": "object"
+    },
+    "next": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "next_by_alt": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 1
+      }
+    }
+  },
+  "required": [
+    "version",
+    "thumbnails",
+    "selected",
+    "next"
+  ]
+}

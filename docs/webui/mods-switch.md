@@ -6,7 +6,7 @@ The services hold what the Enable Mods switch, the prompts and the classic hand-
 
 - **The snapshot** (`ModsSnapshot`). `mods.state` answers from it, never through the library lock: the library's
   `status()` (names and `profiles.json` only, without walking storage), the last scan's entries and a running
-  toggle's progress; its lock is a leaf lock. `reason`, first match: `game_not_found`, `profiles_unreadable`, the
+  toggle's progress; its lock is a leaf lock. `reason`, first match: `game_not_found`, `mod_configuration_unreadable`, the
   game watch's answer, this instance's classic window. With the scan consent, `pending` and `stuck` count the last
   scan's entries; without it, the `unfinished` list by `why`. `held` always counts the held entries.
 - **The library** is built without a current install too, with `scan_allowed` read at each use and `write_check`,
@@ -16,13 +16,12 @@ The services hold what the Enable Mods switch, the prompts and the classic hand-
 - **The scanner** (`webui/scanner.py`) runs the scan on a daemon thread of its own, only with the scan consent: one
   scan at a time, requests meanwhile served by one scan after it, `cancel()` on a game folder change or a library
   move. A stale result (the library wrote while the files were read) is scanned again once while no writer job runs.
-  Startup prune and scan begin after the first screen reveals, while the startup-check setting is On. With consent,
+  Startup maintenance waits for the first screen. The scan requires consent. With consent,
   scans also run after a game folder change, after every writer job, when the game stops or Steam turns idle, after a
   classic window closed, when consent is granted, on Settings' Check (which lists dismissed entries again) and when
   the page asks (the window back in front after 30 s).
-- **Another data directory** sharing the library: the game watch asks `profiles_seen()`, which reads `profiles.json`
-  again only when its size or date changed; a change publishes `mods.state`, requests a scan and judges the
-  `unfinished` list, so the red dot and Retry follow with or without scan consent.
+- **Shared libraries.** Data directories use the same committed library under its session lock. The UI refreshes
+  its snapshot when the profile signature changes.
 - **The classic queue.** While a classic window is open, `actions.apply`, `actions.restore` (when it would write),
   `mods.toggle` and `mods.restoreDrift` are refused at submit with `classic_open`. The classic modal queues the
   refused call (`classic.queue`) with its pins and the size and date of its entries' files. Once the classic window
@@ -31,7 +30,7 @@ The services hold what the Enable Mods switch, the prompts and the classic hand-
 
 ## Enable Mods switch
 
-One kill switch for every game folder (`mod-switch.js`; the pure parts tested in Node). It never changes the
+One kill switch for every game folder (`mod-switch.js`). It never changes the
 configuration: Off puts every entry of every known install back to official, On writes the configured sources again
 (see [library](library.md#library)). It is in the top bar of the student list and the detail screen, and in Settings' Mods tab.
 
@@ -55,8 +54,8 @@ configuration: Off puts every entry of every known install back to official, On 
   box "Apply automatically once it closes" (queued through `classic.queue`), Bring to Front and Confirm. When the
   queue has run, one popup lists the dropped calls.
 - **What a writer job switched** (`library.changed`): the roster is read again, thumbnails under the changed cores
-  are forgotten, and the detail screen reloads the shown kind under a still of the old one, waiting while a popup or
-  fullscreen view is open. The screen's reads of `family.get` have no client deadline (a writer job can hold the
+  are forgotten, and the detail screen reloads the current resource type under a still of the scene, waiting while a popup or
+  fullscreen view is open. The screen's reads of `student.get` have no client deadline (a writer job can hold the
   library lock); a read that finishes after the screen was read anew is dropped.
 - **While mods are off** an apply only saves the choice (the apply job's `deferred`); the switch popup reads Save.
 - **The tray's events** are followed like the page's own toggle (see [Tray](desktop.md#tray)).
@@ -71,11 +70,11 @@ SHA-1.
 
 ## Mods already in use
 
-The prompts and messages around files already modded (`prompts.js`; the pure parts tested in Node). The lists come
+The prompts and messages around files already modded (`prompts.js`). The lists come
 from the last scan, so the prompts exist only with the scan consent; the messages of an overwritten entry need none.
 
 - **Mods Not in the Library** (`#prompt`): the `untracked` and configured `changed` entries of every known install,
-  every card ticked, each with its own install's picture, the variant's name, kind and install chips and "No Official
+  every card ticked, each with its own install's picture, the alt's name, kind and install chips and "No Official
   Copy" where it holds. Add to Library (`mods.adopt`), with mods off also Add and Turn On Mods, Later, and Don't Ask
   Again (`mods.dismiss untracked`). Damaged entries are listed apart, dim and never ticked.
 - **Costume builds of an older rule** (`update-impact.js gate`, before the first screen): what the App built under an
