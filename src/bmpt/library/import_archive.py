@@ -9,6 +9,7 @@ inside the archive is kept, so mods in separate folders of one archive stay sepa
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import os
 import shutil
@@ -31,11 +32,28 @@ SUFFIX = ".zip"
 BUNDLE_SUFFIXES = (".bundle", ".bundle.backup")
 DIGITS = 16  # a short folder name, as for the import staging folders (Windows path length)
 SPACE_MARGIN = 512 * 1024 * 1024
+_LEGACY_MANIFEST_MAX_BYTES = 1024 * 1024
 
 
 def is_archive(path: Path) -> bool:
     """Return whether the filename has a case-insensitive ZIP extension."""
     return path.name.lower().endswith(SUFFIX)
+
+
+def _is_legacy_export_manifest(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> bool:
+    if info.file_size > _LEGACY_MANIFEST_MAX_BYTES:
+        return False
+    try:
+        with archive.open(info) as stream:
+            data = stream.read(_LEGACY_MANIFEST_MAX_BYTES + 1)
+        if len(data) > _LEGACY_MANIFEST_MAX_BYTES:
+            return False
+        manifest = json.loads(data)
+    except Exception:  # Unreadable optional metadata counts as a skipped member.
+        return False
+    return (
+        isinstance(manifest, dict) and type(manifest.get("version")) is int and isinstance(manifest.get("mods"), list)
+    )
 
 
 def _members(archive: zipfile.ZipFile, file: Path) -> tuple[list[tuple[zipfile.ZipInfo, tuple[str, ...]]], int]:
@@ -47,6 +65,8 @@ def _members(archive: zipfile.ZipFile, file: Path) -> tuple[list[tuple[zipfile.Z
     taken, keys, skipped = [], set(), 0
     for info in archive.infolist():
         if info.is_dir():
+            continue
+        if info.orig_filename == "manifest.json" and _is_legacy_export_manifest(archive, info):
             continue
         name = info.filename.replace("\\", "/")
         parts = PurePosixPath(name).parts

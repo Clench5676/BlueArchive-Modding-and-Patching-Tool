@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 import re
 import shutil
@@ -115,31 +114,23 @@ def _target_pin(library: Any, settings: Any, server: str, platform: str) -> Any:
     raise ServiceError("export_target_unavailable")
 
 
-def _sources(library: Any, scope: str, target: str | None) -> tuple[list[str], list[dict]]:
-    assignments = []
+def _sources(library: Any, scope: str, target: str | None) -> list[str]:
     if scope == "single":
         if not isinstance(target, str) or not target.startswith(("mod:", "variant:")):
             raise ServiceError("bad_params", key="target")
-        return [target], assignments
+        return [target]
     if scope == "library":
-        return [f"mod:{key}" for key in sorted(library._records)], assignments
+        return [f"mod:{key}" for key in sorted(library._records)]
     if scope != "applied":
         raise ServiceError("bad_params", key="scope")
+    sources = set()
     profiles = library.profiles.read() or {}
     for folder in profiles.get("folders", {}).values():
-        for core, entry in sorted(folder.get("configured", {}).items()):
+        for entry in folder.get("configured", {}).values():
             source = entry.get("source", "")
             if source.startswith("mod:"):
-                assignments.append(
-                    {
-                        "server": folder.get("server", "global"),
-                        "core": core,
-                        "variant": entry.get("variant"),
-                        "kind": entry.get("kind"),
-                        "source": source,
-                    }
-                )
-    return sorted({entry["source"] for entry in assignments}), assignments
+                sources.add(source)
+    return sorted(sources)
 
 
 def _prepare(
@@ -152,7 +143,7 @@ def _prepare(
     log: Any,
     progress: Any,
     kind: str | None = None,
-) -> tuple[list[Path], dict]:
+) -> list[Path]:
     if source.startswith("variant:"):
         variant = source[8:]
         targets = library._game_files(variant, kind, pin)
@@ -171,7 +162,7 @@ def _prepare(
             output = directory / _member_name(live)
             shutil.copy2(original, output)
             prepared.append(output)
-        return prepared, {"source": source, "variant": variant, "kind": kind}
+        return prepared
     record = library._record(source[4:])
     paths = library._paths(record)
     entry = {
@@ -200,12 +191,7 @@ def _prepare(
     library._check_group(
         {path.name: path for path in prepared}, pin, compatibility=False, variant_key=library._target_of(record)
     )
-    return prepared, {
-        "source": source,
-        "variant": library._target_of(record),
-        "kind": record["kind"],
-        "name": library._label(record),
-    }
+    return prepared
 
 
 def _member_path(directory: str, name: str) -> str:
@@ -378,9 +364,10 @@ def export_zip(
 ) -> dict:
     """Export mods as a ZIP archive that is published only after every member is verified.
 
-    The library stays locked from the snapshot until the ZIP is verified and moved into place. The archive holds, per
-    mod, its bundle files, the official files a Spine package needs, and a ``ba-mod.json``; ``manifest.json`` lists
-    them all. A single mod sits at the archive's root; several get a folder each.
+    The library stays locked from the snapshot until the ZIP is verified and moved into place. Each mod carries its
+    bundles, the official files a Spine package needs, and its sole metadata file, ``ba-mod.json``. Single exports
+    place these files at the archive root. Library and applied exports give each mod a folder. The importer ignores
+    the root ``manifest.json`` of older exports.
 
     Args:
         services: The Services; their settings decide how a mod's target is recognized.
@@ -413,16 +400,11 @@ def export_zip(
     temporary_zip = None
     with library._lock:
         library._refresh_state()
-        sources, assignments = _sources(library, scope, target)
+        sources = _sources(library, scope, target)
         if not sources:
             raise ServiceError("export_empty")
-        manifest = {
-            "version": 1,
-            "scope": scope,
-            "target": {"server": server, "platform": platform},
-            "mods": [],
-            "assignments": assignments,
-        }
+        export_target = {"server": server, "platform": platform}
+        written: list[tuple[str, list[dict]]] = []
         live = {path.name: path for group in library._index(pin).values() for path in group} if pin else {}
         release = ba_mod.release_of(list(pin.dirs), server, platform) if pin else {}
         from ..host.updater import current_version
@@ -445,19 +427,18 @@ def export_zip(
                             core=core_of(record["files"][0]) if record and record.get("files") else "",
                             step=mod_progress.STEP_EXPORT,
                         )
-                        paths, metadata = _prepare(
+                        paths = _prepare(
                             services,
                             library,
                             source,
                             pin,
-                            manifest["target"],
+                            export_target,
                             Path(staging),
                             log,
                             lambda p: line.step(p["step"]),
                             kind,
                         )
                         line.done()
-                        # one mod per archive sits at its root, beside its ba-mod.json; several get a folder each
                         directory = "" if scope == "single" else _safe_name(source)
                         names = [_member_name(path) for path in paths]
                         package = _Package(library, pin, live, record, paths, kind)
@@ -470,13 +451,13 @@ def export_zip(
                                 "game_file_conflict",
                                 file=next(name for name, key in zip(names, keys) if keys.count(key) > 1),
                             )
-                        members, described = [], []
+                        files, described = [], []
                         for index, (path, name) in enumerate(zip(sources_, names)):
                             before = path.stat()
                             digest = _sha256(path)
                             archive.write(path, _member_path(directory, name))
                             role = ba_mod.OFFICIAL if index >= len(paths) else package.role(path, digest)
-                            members.append({"name": name, "size": path.stat().st_size, "sha256": digest, "role": role})
+                            files.append({"path": name, "sha256": digest, "role": role})
                             described.append((path, name, role))
                             after = path.stat()
                             if (before.st_ino, before.st_size, before.st_mtime_ns, before.st_ctime_ns) != (
@@ -493,21 +474,17 @@ def export_zip(
                             server=server,
                             platform=platform,
                             release=release,
-                            files=[
-                                {"path": member["name"], "sha256": member["sha256"], "role": member["role"]}
-                                for member in members
-                            ],
+                            files=files,
                             skeletons=package.skeletons(described),
                         )
                         archive.writestr(_member_path(directory, ba_mod.FILE_NAME), ba_mod.dumps(document))
-                        manifest["mods"].append({**metadata, "directory": directory, "files": members})
-                    archive.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
+                        written.append((directory, files))
             with zipfile.ZipFile(temporary_zip) as archive:
                 if archive.testzip() is not None:
                     raise ServiceError("library_io_error", file=str(destination))
-                for mod in manifest["mods"]:
-                    for member in mod["files"]:
-                        with archive.open(_member_path(mod["directory"], member["name"])) as stream:
+                for directory, files in written:
+                    for member in files:
+                        with archive.open(_member_path(directory, member["path"])) as stream:
                             if hashlib.file_digest(stream, "sha256").hexdigest() != member["sha256"]:
                                 raise ServiceError("entry_changed")
             with temporary_zip.open("rb") as stream:

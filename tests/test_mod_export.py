@@ -2,7 +2,7 @@
 
 import json
 import zipfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from types import SimpleNamespace
 from dataclasses import replace
 
@@ -10,7 +10,7 @@ import pytest
 
 from bmpt.core.errors import ServiceError
 from ba_modding_toolkit.bundle import Bundle
-from bmpt.library import integrity
+from bmpt.library import ba_mod, integrity
 from bmpt.library import targets as resolver
 from bmpt.webui import batch_import
 from bmpt.webui import export_service
@@ -47,8 +47,15 @@ def run(env, scope="library", target=None, progress=lambda *_: None):
 
 def contents(result):
     with zipfile.ZipFile(result["archive"]) as archive:
-        manifest = json.loads(archive.read("manifest.json"))
-        return manifest, {name: archive.read(name) for name in archive.namelist()}
+        files = {name: archive.read(name) for name in archive.namelist()}
+    # ba-mod.json is the only metadata file an export writes
+    assert not any(PurePosixPath(name).name == "manifest.json" for name in files)
+    packages = {
+        name.rpartition("/")[0]: json.loads(data)
+        for name, data in files.items()
+        if PurePosixPath(name).name == ba_mod.FILE_NAME
+    }
+    return packages, files
 
 
 def test_library_export_prepares_existing_mods_without_mutating_library_or_game(setup_library):
@@ -59,12 +66,12 @@ def test_library_export_prepares_existing_mods_without_mutating_library_or_game(
     state = (env.root / "state.json").read_bytes()
     game = env.original.read_bytes()
     result = run(env)
-    manifest, files = contents(result)
+    packages, files = contents(result)
     assert result["count"] == 1
-    assert manifest["target"] == {"server": "global", "platform": "windows"}
-    (entry,) = manifest["mods"]
-    assert entry["source"] == f"mod:{mod.id}"
-    assert files[export_service._member_path(entry["directory"], source.name)] == source.read_bytes()
+    directory = export_service._safe_name(f"mod:{mod.id}")
+    assert set(packages) == {directory}
+    assert packages[directory]["target"] == {"server": "global", "platform": "windows"}
+    assert files[f"{directory}/{source.name}"] == source.read_bytes()
     assert (env.root / "state.json").read_bytes() == state
     assert env.original.read_bytes() == game
     assert sorted(path.suffix for path in (env.tmp / "exports").iterdir()) == [".zip"]
@@ -91,20 +98,21 @@ def test_an_export_names_each_mod_and_its_step_on_the_progress_line(setup_librar
 
 def test_applied_uses_desired_manifest_while_disabled(setup_library):
     env = setup_library
-    source = make_mod(env.original, env.tmp / "upload")
+    source = make_mod(env.original, env.tmp / "upload", fixed=True)
     (mod,) = env.library.add([source])
     other = make_mod(env.original, env.tmp / "other", payload=b"other mod")
     env.library.add([other])
     env.library.profiles.update(lambda data: data.update(enabled=False))
     result = env.library.apply("test", f"mod:{mod.id}")
     assert result.deferred
-    manifest, _ = contents(run(env, "applied"))
-    assert [entry["source"] for entry in manifest["mods"]] == [f"mod:{mod.id}"]
-    assert manifest["assignments"][0]["source"] == f"mod:{mod.id}"
+    packages, files = contents(run(env, "applied"))
+    directory = export_service._safe_name(f"mod:{mod.id}")
+    assert set(packages) == {directory}
+    assert files[f"{directory}/{source.name}"] == source.read_bytes()
     assert not env.library.profiles.read()["enabled"]
 
 
-@pytest.mark.parametrize("stage", ["prepare", "write", "verify", "publish"])
+@pytest.mark.parametrize("stage", ["prepare", "write", "verify", "hash", "publish"])
 def test_failed_export_never_publishes_partial_archive(setup_library, monkeypatch, stage):
     env = setup_library
     for i in range(2):
@@ -127,6 +135,8 @@ def test_failed_export_never_publishes_partial_archive(setup_library, monkeypatc
         monkeypatch.setattr(export_service, "_prepare", fail_second)
     elif stage == "verify":
         monkeypatch.setattr(zipfile.ZipFile, "testzip", lambda _: "damaged.bundle")
+    elif stage == "hash":
+        monkeypatch.setattr(zipfile.ZipFile, "write", lambda archive, path, name: archive.writestr(name, b"changed"))
     else:
 
         def fail(*args, **kwargs):
@@ -172,9 +182,8 @@ def test_single_original_variant_archive_uses_current_bundle_names(setup_library
     if backup:
         env.original.with_name(env.original.name + ".backup").write_bytes(expected)
         env.original.write_bytes(make_mod(env.original, env.tmp / "external").read_bytes())
-    manifest, files = contents(run(env, "single", "variant:test"))
-    (entry,) = manifest["mods"]
-    assert files[export_service._member_path(entry["directory"], env.original.name)] == expected
+    _, files = contents(run(env, "single", "variant:test"))
+    assert files[env.original.name] == expected
 
 
 @pytest.mark.parametrize("source_platform", [13, 9])
@@ -195,10 +204,9 @@ def test_foreign_platform_mod_is_rebuilt_with_real_unity_payload(setup_library, 
     record = env.library._store({source.name: source}, "foreign", "test", "spr", user_added=True)
     original_bytes = env.original.read_bytes()
     source_bytes = source.read_bytes()
-    manifest, files = contents(run(env, "single", f"mod:{record['id']}"))
-    (entry,) = manifest["mods"]
+    _, files = contents(run(env, "single", f"mod:{record['id']}"))
     output = env.tmp / "prepared.bundle"
-    output.write_bytes(files[export_service._member_path(entry["directory"], env.original.name)])
+    output.write_bytes(files[env.original.name])
     bundle = Bundle.load(output)
     assert bundle.platform_info[0] == "StandaloneWindows64"
     assert bundle.env.objects[0].read().m_Script == "modded"
@@ -234,10 +242,9 @@ def test_cross_server_mod_is_prepared_against_selected_target(setup_library, mon
         log=lambda *_: None,
         progress=lambda *_: None,
     )
-    manifest, files = contents(result)
-    (entry,) = manifest["mods"]
+    _, files = contents(result)
     output = env.tmp / "japan.bundle"
-    output.write_bytes(files[export_service._member_path(entry["directory"], env.original.name)])
+    output.write_bytes(files[env.original.name])
     bundle = Bundle.load(output)
     assert bundle.env.objects[0].read().m_Script == "global mod"
     inspection = integrity.Inspection()
@@ -277,12 +284,8 @@ def test_source_change_during_archive_write_cannot_publish(setup_library, monkey
 ATLAS = b"test_spr.png\nsize:4,4\nfilter:Linear,Linear\nface\nbounds:0,0,2,2\n"
 
 
-def package(result, directory=""):
-    with zipfile.ZipFile(result["archive"]) as archive:
-        return json.loads(archive.read(export_service._member_path(directory, "ba-mod.json")))
-
-
-def test_each_exported_mod_carries_a_package_manifest(setup_library):
+@pytest.mark.parametrize("scope", ["single", "library"])
+def test_each_exported_mod_carries_only_its_package_manifest(setup_library, scope):
     env = setup_library
     catalog = env.game_dir / "Catalog"
     (catalog / "Windows").mkdir(parents=True)
@@ -290,10 +293,11 @@ def test_each_exported_mod_carries_a_package_manifest(setup_library):
     (catalog / "Windows" / "catalog_Windows.hash").write_text("01a02066e18c3b4540fbb2278c8d7b06")
     source = make_mod(env.original, env.tmp / "upload", fixed=True)
     (mod,) = env.library.add([source])
-    result = run(env)
-    manifest, files = contents(result)
-    (entry,) = manifest["mods"]
-    data = package(result, entry["directory"])
+    source_id = f"mod:{mod.id}"
+    directory = "" if scope == "single" else export_service._safe_name(source_id)
+    packages, files = contents(run(env, scope, source_id if scope == "single" else None))
+    assert set(files) == {export_service._member_path(directory, name) for name in (source.name, ba_mod.FILE_NAME)}
+    data = packages[directory]
     assert data["format_version"] == "1.0" and data["created_by"]["tool"] == "BMPT"
     assert (data["kind"], data["core"]) == ("portrait", "test_spr")
     assert data["target"] == {
@@ -302,14 +306,14 @@ def test_each_exported_mod_carries_a_package_manifest(setup_library):
         "release": {"bundle_revision": 478339, "catalog_hash": "01a02066e18c3b4540fbb2278c8d7b06"},
     }
     (item,) = data["files"]
-    assert item == {"path": source.name, "sha256": entry["files"][0]["sha256"], "role": "mod"}
+    assert item == {"path": source.name, "sha256": ba_mod.sha256(source), "role": "mod"}
     assert "skeletons" not in data  # nothing of the header-only test bundles reads as Spine
 
 
 def test_an_official_variant_export_marks_its_files_official(setup_library):
     env = setup_library
-    result = run(env, "single", "variant:test")
-    data = package(result)
+    packages, _ = contents(run(env, "single", "variant:test"))
+    data = packages[""]
     assert [item["role"] for item in data["files"]] == ["official"]
     assert "release" not in data["target"]
 
@@ -326,15 +330,11 @@ def test_a_portrait_export_carries_the_official_skel_and_atlas_it_lacks(setup_li
         return integrity.Contents(textures={"test_spr": (4, 4)})
 
     monkeypatch.setattr(export_service, "_contents", read)
-    result = run(env, "single", f"mod:{mod.id}")
-    _, files = contents(result)
+    packages, files = contents(run(env, "single", f"mod:{mod.id}"))
     assert files[rig.name] == rig.read_bytes()
-    data = package(result)
+    data = packages[""]
     assert {item["path"]: item["role"] for item in data["files"]} == {source.name: "mod", rig.name: "official"}
     assert data["skeletons"] == [{"name": "test_spr", "atlas": "official", "skel": "official", "textures": "mod"}]
-    # the verification step reads the carried bundle back like the mod's own
-    manifest, _ = contents(result)
-    assert [member["name"] for member in manifest["mods"][0]["files"]] == [source.name, rig.name]
 
 
 def test_a_mod_with_its_own_atlas_carries_no_official_one(setup_library, monkeypatch):
@@ -353,7 +353,8 @@ def test_a_mod_with_its_own_atlas_carries_no_official_one(setup_library, monkeyp
         return integrity.Contents(textures={"test_spr": (4, 4)})
 
     monkeypatch.setattr(export_service, "_contents", read)
-    data = package(run(env, "single", f"mod:{mod.id}"))
+    packages, _ = contents(run(env, "single", f"mod:{mod.id}"))
+    data = packages[""]
     assert sorted(item["path"] for item in data["files"]) == sorted([texture.name, rig.name])
     assert data["skeletons"] == [{"name": "test_spr", "atlas": "mod", "skel": "official", "textures": "mod"}]
 

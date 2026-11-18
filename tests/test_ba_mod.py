@@ -178,7 +178,7 @@ def test_an_exported_package_imports_with_its_manifest_trusted(env):
         names = set(archive.namelist())
     assert ba_mod.FILE_NAME in names and env.original.name in names
     analyzed = analyze(env, [result["archive"]])
-    assert analyzed["skipped"] == 1  # the export's own manifest.json; ba-mod.json is never counted
+    assert analyzed["skipped"] == 0
     (entry,) = analyzed["entries"]
     candidate = env.services.batch_import._latest[entry["id"]]
     assert candidate.package is not None and candidate.package["kind"] == "portrait"

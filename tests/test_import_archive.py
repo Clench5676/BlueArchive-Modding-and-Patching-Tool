@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from bmpt.library import import_archive, staging
+from bmpt.library import ba_mod, import_archive, staging
 from bmpt.webui import export_service
 
 from test_batch_import import analyze, batch_model_env, env, rpc, run  # noqa: F401 - fixtures
@@ -161,6 +161,71 @@ def test_archives_inside_a_chosen_folder_stay_packed(env):
     assert not unpacked(env)
 
 
+@pytest.mark.parametrize("with_package", [False, True])
+def test_an_older_export_imports_without_counting_its_manifest(env, with_package):
+    source = make_mod(env.original, env.tmp / "made")
+    members = {source.name: source.read_bytes(), "manifest.json": b'{"version": 1, "mods": []}'}
+    if with_package:
+        package = ba_mod.document(
+            created_by={},
+            kind="portrait",
+            core="test_spr",
+            server="global",
+            platform="windows",
+            release={},
+            files=[{"path": source.name, "sha256": ba_mod.sha256(source), "role": "mod"}],
+            skeletons=[],
+        )
+        members[ba_mod.FILE_NAME] = ba_mod.dumps(package)
+    archive = write_zip(env.tmp / "drop" / "mod.zip", members)
+    result = analyze(env, [archive])
+    assert result["skipped"] == 0
+    (entry,) = result["entries"]
+    candidate = env.services.batch_import._latest[entry["id"]]
+    assert (candidate.package is not None) == with_package
+    (folder,) = unpacked(env)
+    assert not (folder / "manifest.json").exists()
+    (outcome,) = run(env, result["entries"], enableAfterImport=False)
+    assert outcome["outcome"] == "imported"
+
+
+@pytest.mark.parametrize(
+    "name, data",
+    [
+        ("manifest.json", b'{"foo": 1}'),
+        ("manifest.json", b"{"),
+        ("manifest.json", b'{"version": true, "mods": []}'),
+        ("manifest.json", b'{"version": 1, "mods": {}}'),
+        ("manifest.json", b'{"version": 1, "mods": []}' + b" " * (1024 * 1024)),
+        ("subfolder/manifest.json", b'{"version": 1, "mods": []}'),
+        ("./manifest.json", b'{"version": 1, "mods": []}'),
+    ],
+)
+def test_an_unrecognized_export_manifest_is_counted_as_skipped(env, name, data):
+    source = make_mod(env.original, env.tmp / "made")
+    archive = write_zip(env.tmp / "drop" / "mod.zip", {source.name: source.read_bytes(), name: data})
+    result = analyze(env, [archive])
+    assert result["skipped"] == 1
+    (entry,) = result["entries"]
+    assert entry["state"] == "ready"
+
+
+def test_an_unreadable_export_manifest_is_counted_as_skipped(env):
+    source = make_mod(env.original, env.tmp / "made")
+    archive = write_zip(
+        env.tmp / "drop" / "mod.zip",
+        {source.name: source.read_bytes(), "manifest.json": b'{"version": 1, "mods": []}'},
+    )
+    data = bytearray(archive.read_bytes())
+    central = data.rindex(b"PK\x01\x02")
+    data[central + 16] ^= 1  # invalidate the last member's CRC
+    archive.write_bytes(data)
+    result = analyze(env, [archive])
+    assert result["skipped"] == 1
+    (entry,) = result["entries"]
+    assert entry["state"] == "ready"
+
+
 def test_an_exported_archive_imports_back(env):
     source = make_mod(env.original, env.tmp / "made")
     (mod,) = env.library.add([source])
@@ -181,7 +246,7 @@ def test_an_exported_archive_imports_back(env):
     assert not env.library.mods()
     result = analyze(env, [exported["archive"]])
     (entry,) = result["entries"]
-    assert result["skipped"] == 1  # manifest.json
+    assert result["skipped"] == 0
     assert (entry["core"], entry["resourceType"], entry["state"]) == ("test_spr", "portrait", "ready")
     (outcome,) = run(env, result["entries"], enableAfterImport=False)
     assert outcome["outcome"] == "imported"
