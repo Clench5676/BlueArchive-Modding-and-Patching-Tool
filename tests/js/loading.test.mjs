@@ -904,6 +904,36 @@ test("overlapping holds retain one indicator until the last task and accept acti
   assert.equal(h.loading.active(), false);
 });
 
+test("a newer hold without progress keeps an older job's line instead of the generic text", async () => {
+  const h = await harness({ consent: false }),
+    job = deferred(),
+    screen = deferred();
+  let update;
+  const older = h.loading.hold(
+    (report) => {
+      update = report;
+      return job.promise;
+    },
+    { all: true },
+  );
+  await flush();
+  update({ label: "Updating", current: 2, total: 40 });
+  const line = () => h.stage.children[0].querySelector(".loading-progress").textContent;
+  assert.equal(line(), "Updating (2/40)");
+  // a screen reloading beneath the job (the hall's scene) holds input with no line of its own
+  const newer = h.loading.hold(() => screen.promise);
+  await flush();
+  assert.equal(line(), "Updating (2/40)");
+  update({ label: "Updating", current: 3, total: 40 });
+  assert.equal(line(), "Updating (3/40)");
+  screen.resolve();
+  await newer;
+  job.resolve();
+  await older;
+  await flush();
+  assert.equal(h.loading.held(), false);
+});
+
 test("a writer under the start cover shows its progress only, and its own indicator once the cover is gone", async () => {
   const h = await harness({ boot: true }),
     boot = deferred(),

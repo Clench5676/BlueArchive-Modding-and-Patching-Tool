@@ -262,20 +262,24 @@ function libraryChanged(data) {
   clearTimeout(changeTimer);
   changeTimer = setTimeout(applyChange, 150); // the events of one job come together
 }
-async function applyChange() {
+// now: the end of the write itself (refreshAfterToggle), drawn at once
+async function applyChange({ now = false } = {}) {
   const change = heldChange;
   heldChange = undefined;
   if (change === undefined) return;
   const my = changeRoute;
   if (!$("screen-detail").hidden) return Detail.filesChanged(change);
+  // The Hall and the list are drawn again once no popup is open and no write the user watches is under way: a
+  // switch that flips midway (Enable Mods turned on or off) keeps the shown screen under Now Loading, and the
+  // write's own end draws it, unless a route came meanwhile (it reads the list itself).
+  const idle = () => Popup.whenIdle(200, () => !now && Loading.writing());
   if (!$("screen-hall").hidden) {
-    await Popup.whenIdle();
+    await idle();
     if (my === routeToken && !$("screen-hall").hidden) await route();
     return;
   }
   if ($("screen-roster").hidden) return;
-  // the list is built again once no popup is open, unless a route came meanwhile (it reads the list itself)
-  await Popup.whenIdle();
+  await idle();
   if (my === routeToken && !$("screen-roster").hidden) await route();
 }
 
@@ -283,7 +287,7 @@ async function applyChange() {
 async function refreshAfterToggle() {
   libraryChanged(null);
   clearTimeout(changeTimer);
-  await applyChange();
+  await applyChange({ now: true });
 }
 
 // the window back in front after 30 s or more: the server checks again with scan consent
