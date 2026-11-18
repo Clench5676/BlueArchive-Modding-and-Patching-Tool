@@ -19,7 +19,7 @@ from ..core import devmode, preview_gate, spans
 from ..host.data_upgrade import DataUpgrade, UpgradeBlocked
 from ..host.store_formats import InvalidStore
 from ..host.config import APP_DIR_NAME, Settings, managed_cache_dir
-from ..host.data_paths import OLD_APP_DIR_NAME
+from ..host.data_paths import OLD_APP_DIR_NAME, legacy_cache_path
 from ..host.addons import character_map_path
 from ..lines.global_lines import GlobalLines
 from ..lines.kivo import Kivo
@@ -309,6 +309,7 @@ class Services(JobsMixin, WindowMixin, AssetsMixin):
         self._thumbnail_catalog: Any = None
         self._cache, self._game, self._catalog, self._library = cache, game, catalog, library
         self._preview_cache = None
+        self._legacy_cache_enabled = self.committed is not None
         self._injected = {k for k, v in (("game", game), ("catalog", catalog), ("library", library)) if v is not None}
         self._other_games: dict[str, Any] = {}  # other installs' GameAssets by install key, for <core>@<id> URLs
         self._install_stamps: tuple | None = (
@@ -385,7 +386,9 @@ class Services(JobsMixin, WindowMixin, AssetsMixin):
             if self._cache is None:
                 from ..gameassets import AssetCache
 
-                self._cache = AssetCache(allowed=self.state.consent is True, root=self.cache_dir())
+                self._cache = AssetCache(
+                    allowed=self.state.consent is True, root=self.cache_dir(), fallback=self._cache_fallback()
+                )
             return self._cache
 
     @property
@@ -395,7 +398,12 @@ class Services(JobsMixin, WindowMixin, AssetsMixin):
             if self._preview_cache is None:
                 from ..gameassets.cache import PreviewCache
 
-                self._preview_cache = PreviewCache(self.cache_dir() / "previews", allowed=self.state.preview_cache)
+                fallback = self._cache_fallback()
+                self._preview_cache = PreviewCache(
+                    self.cache_dir() / "previews",
+                    allowed=self.state.preview_cache,
+                    fallback=fallback / "previews" if fallback is not None else None,
+                )
             return self._preview_cache
 
     def set_preview_cache(self, enabled: bool) -> None:
@@ -475,6 +483,7 @@ class Services(JobsMixin, WindowMixin, AssetsMixin):
     def clear_cache(self) -> None:
         """Empty the asset cache and the preview store, and drop the game assets built from the game files."""
         with self._lock:
+            self._drop_legacy_cache()
             self.preview_cache.clear_with(self.cache.clear)
             for game in [self._game, *self._other_games.values()]:
                 if game is not None and hasattr(game, "clear_memory"):
@@ -508,7 +517,9 @@ class Services(JobsMixin, WindowMixin, AssetsMixin):
             # The separately consented preview store includes the install identity in every key.
             return GameAssets(
                 dirs,
-                AssetCache(allowed=False, max_bytes=128 * 1024 * 1024, root=self.cache_dir()),
+                AssetCache(
+                    allowed=False, max_bytes=128 * 1024 * 1024, root=self.cache_dir(), fallback=self._cache_fallback()
+                ),
                 preview_cache=self.preview_cache,
             )
         return GameAssets(dirs, self.cache, preview_cache=self.preview_cache)
@@ -657,13 +668,43 @@ class Services(JobsMixin, WindowMixin, AssetsMixin):
         That is a ``cache`` folder of the App's own inside the chosen folder, else the default user cache folder.
         It is always a folder of its own, so clearing it never touches anything else.
         """
-        parent = self.state.get("cache_parent")
         if self.committed is None:
-            return managed_cache_dir(parent)
-        from ..host.data_paths import legacy_cache_path
+            return managed_cache_dir(self.state.get("cache_parent"))
+        return self.committed.cache(self._legacy_cache_dir())
 
-        legacy = Path(parent) / APP_DIR_NAME / "cache" if parent else legacy_cache_path(self.data_dir)
-        return self.committed.cache(legacy)
+    def _legacy_cache_dir(self) -> Path:
+        parent = self.state.get("cache_parent")
+        return Path(parent) / APP_DIR_NAME / "cache" if parent else legacy_cache_path(self.data_dir)
+
+    def _cache_fallback(self) -> Path | None:
+        if not self._legacy_cache_enabled:
+            return None
+        legacy = self._legacy_cache_dir()
+        return legacy if devmode.allows_read(legacy) and legacy.is_dir() else None
+
+    @staticmethod
+    def _remove_managed_cache(path: Path) -> None:
+        if (
+            path.name == "cache"
+            and path.parent.name in (APP_DIR_NAME, OLD_APP_DIR_NAME)
+            and devmode.allows_read(path)
+            and not path.parent.is_symlink()
+            and not path.parent.is_junction()
+            and path.is_dir()
+        ):
+            shutil.rmtree(path, ignore_errors=True)
+
+    def _drop_legacy_cache(self, legacy: Path | None = None) -> None:
+        if self.committed is None:
+            return
+        self._legacy_cache_enabled = False
+        if self._cache is not None:
+            self._cache.drop_fallback()
+        if self._preview_cache is not None:
+            self._preview_cache.drop_fallback()
+        for game in self._other_games.values():
+            game.cache.drop_fallback()
+        self._remove_managed_cache(legacy if legacy is not None else self._legacy_cache_dir())
 
     def set_cache_parent(self, parent: Path) -> Path:
         """Move the cache to another folder; the cache left behind is removed and rebuilt from the game files on demand.
@@ -683,8 +724,10 @@ class Services(JobsMixin, WindowMixin, AssetsMixin):
             raise ServiceError("path_not_found", path=str(parent))
         with self._lock:
             old = self.cache_dir()
+            legacy = self._legacy_cache_dir() if self.committed is not None else None
             preview_cache = self.preview_cache
             self.state.set("cache_parent", str(parent))
+            self._drop_legacy_cache(legacy)
             new = self.cache_dir()
             if new != old:
                 # A cache relocation must invalidate pending writes to the previous generation too.
@@ -692,7 +735,9 @@ class Services(JobsMixin, WindowMixin, AssetsMixin):
                     if self._cache is not None:
                         self._cache.clear()
                         self._cache.root = new
-                    elif old.is_dir() and old.name == "cache" and old.parent.name in (APP_DIR_NAME, OLD_APP_DIR_NAME):
+                    elif self.committed is None:
+                        self._remove_managed_cache(old)
+                    else:
                         shutil.rmtree(old, ignore_errors=True)
 
                 preview_cache.relocate(new / "previews", clear_old)
