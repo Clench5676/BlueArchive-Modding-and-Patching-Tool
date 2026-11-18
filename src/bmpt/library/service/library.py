@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from bmpt.host import steam_records
 from ...catalog.models import CoreMap
-from ...host.store_formats import FutureFormat, epoch_root, read_runtime
+from ...host.store_formats import FutureFormat, StateEncoder, epoch_root, read_runtime
 from ...core.errors import ServiceError
 from ...core.filelock import file_lock
 from ...gameassets.cabs import CabIndex
@@ -25,6 +25,7 @@ from ..models import Pin
 from ..profiles import Profiles
 from ..storage import (
     Fingerprints,
+    atomic_bytes,
     atomic_copy,
     atomic_json,
 )
@@ -110,6 +111,7 @@ class ModLibrary(
         self._managed = epoch_root(self.root, "library") is not None
         self.cache_root = self.root.parent.parent.parent / "cache" / "g2" if self._managed else self.root
         self._state_extra: dict = {}
+        self._state_encoder = StateEncoder() if self._managed else None
         self._state_path = self.root / "state.json"
         self._prev_path = self.root / "state.json.prev"  # the last good state.json, kept before every write
         self._bad_path = self.root / "state.json.bad"  # an unreadable state.json, kept at the next write
@@ -482,13 +484,21 @@ class ModLibrary(
                 "migrations": sorted(merged[3]),
             }
             self._keep_state_file(reading.kind)
-            atomic_json(path, payload)
+            if self._state_encoder is None:
+                atomic_json(path, payload)
+            else:
+                atomic_bytes(path, self._state_encoder.encode(payload))
             self._seen = self._state_signature()
         self._records, self._favorites, self._applied, self._migrations = merged
         self._held = held
         self._state_good, self._state_error, self._reread = True, None, False
         self._migration_pending = False
-        self._base = copy.deepcopy(merged)
+        self._base = (
+            _snapshot_records(merged[0], base[0]),
+            set(merged[1]),
+            _snapshot_records(merged[2], base[2]),
+            set(merged[3]),
+        )
         self._version += 1
 
     def _keep_state_file(self, kind: str) -> None:
@@ -506,3 +516,10 @@ class ModLibrary(
                 log_failure(logger, logging.WARNING, "Could not keep the unreadable library state", error)
 
     supports_kind = staticmethod(supports_kind)
+
+
+def _snapshot_records(records: dict, previous: dict) -> dict:
+    return {
+        key: previous[key] if key in previous and previous[key] == record else copy.deepcopy(record)
+        for key, record in records.items()
+    }

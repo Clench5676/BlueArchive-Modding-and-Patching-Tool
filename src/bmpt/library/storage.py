@@ -62,15 +62,18 @@ def atomic_json(path: Path, data: dict[str, Any]) -> None:
         path: Destination file, whose parent directories are created if needed.
         data: JSON document to serialize with ASCII escapes and two-space indentation.
     """
+    store = runtime_store(path)
+    raw = managed_bytes(store, data) if store else (json.dumps(data, ensure_ascii=True, indent=2) + "\n").encode()
+    atomic_bytes(path, raw)
+
+
+def atomic_bytes(path: Path, raw: bytes) -> None:
+    """Replace a document only after flushing its complete contents."""
     _make_parents(path)
     fd, name = tempfile.mkstemp(prefix=".state-", dir=path.parent)
     temporary = Path(name)
     try:
         with os.fdopen(fd, "wb") as stream:
-            store = runtime_store(path)
-            raw = (
-                managed_bytes(store, data) if store else (json.dumps(data, ensure_ascii=True, indent=2) + "\n").encode()
-            )
             stream.write(raw)
             stream.flush()
             os.fsync(stream.fileno())

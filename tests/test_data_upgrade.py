@@ -10,6 +10,7 @@ import pytest
 
 from bmpt.core.errors import ServiceError
 from bmpt.host import upgrade_files
+from bmpt.host import store_formats
 from bmpt.host.data_upgrade import DataUpgrade
 from bmpt.host.store_formats import (
     FutureFormat,
@@ -244,6 +245,34 @@ def test_strict_documents(tmp_path):
         translate("S", {"version": 1, "mods": [{"label": "a", "name": "b"}]})
     with pytest.raises(FutureFormat):
         load_document("S", _write(tmp_path / "state.json", {"version": 3}))
+
+
+def test_runtime_state_reuses_validated_records_and_preserves_opaque_numbers(monkeypatch):
+    encoder = store_formats.StateEncoder()
+    document = parse_json(
+        '{"version":1,"mods":[{"kind":"spr","label":"one","opaque":0.1234567890123456789}],'
+        '"applied":{"a":{"source":"variant:a","sha1":"old"},"b":{"source":"official","sha1":"kept"}}}'
+    )
+    assert parse_json(encoder.encode(document)) == parse_json(store_formats.managed_bytes("S", document))
+    checked = []
+    original = store_formats._check_applied
+
+    def check(record):
+        checked.append(record)
+        return original(record)
+
+    monkeypatch.setattr(store_formats, "_check_applied", check)
+    document["applied"]["a"]["sha1"] = "new"
+    encoded = encoder.encode(document)
+    assert checked == [document["applied"]["a"]]
+    assert parse_json(encoded)["applied"] == {
+        "a": {"source": "alt:a", "sha1": "new"},
+        "b": {"source": "official", "sha1": "kept"},
+    }
+    assert b"0.1234567890123456789" in encoded
+    document["applied"]["a"].pop("sha1")
+    with pytest.raises(InvalidStore, match="Invalid applied entry"):
+        encoder.encode(document)
 
 
 def test_publication_and_retained_sources(tmp_path, monkeypatch):
