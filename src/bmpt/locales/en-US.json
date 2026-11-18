@@ -1256,6 +1256,7 @@
 		},
 		"upgrade": {
 			"title": "Data Upgrade",
+			"subject": "Upgrading: Mod Library, Settings, Thumbnails, Student Hall",
 			"paused": "Data Upgrade Paused",
 			"retry": "Retry",
 			"openLog": "Open Log Folder",
@@ -1268,6 +1269,14 @@
 			"affected": "Affected Data Folders",
 			"relocate": "Choose Another Mod Library",
 			"upgradedWarning": "Data format upgraded. Do not open older versions",
+			"count": " ({done}/{total})",
+			"step": {
+				"check": "Check Old Data",
+				"settings": "Convert Settings",
+				"library": "Convert Mod Library",
+				"verify": "Verify New Data",
+				"open": "Open New Data"
+			},
 			"reason": {
 				"busy": "Mod Library in Use",
 				"olderVersion": "Close Older Version",

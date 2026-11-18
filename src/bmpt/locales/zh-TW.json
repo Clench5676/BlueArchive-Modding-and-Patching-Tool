@@ -1256,6 +1256,7 @@
 		},
 		"upgrade": {
 			"title": "資料升級",
+			"subject": "升級內容：Mod 倉庫、設定、縮圖、學生大廳",
 			"paused": "資料升級已暫停",
 			"retry": "重試",
 			"openLog": "開啟記錄資料夾",
@@ -1268,6 +1269,14 @@
 			"affected": "受影響的資料目錄",
 			"relocate": "選擇其他 Mod 倉庫",
 			"upgradedWarning": "資料格式已升級，請勿再開啟舊版本",
+			"count": "（{done}/{total}）",
+			"step": {
+				"check": "檢查舊資料",
+				"settings": "轉換設定",
+				"library": "轉換 Mod 倉庫",
+				"verify": "驗證新資料",
+				"open": "啟用新資料"
+			},
 			"reason": {
 				"busy": "Mod 倉庫正在使用",
 				"olderVersion": "關閉舊版本",

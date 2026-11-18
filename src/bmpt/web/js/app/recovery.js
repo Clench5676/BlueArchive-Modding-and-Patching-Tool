@@ -111,13 +111,54 @@
     document.body.appendChild(panel);
     return true;
   }
-  // The data upgrade notice (data-upgrade.js) in the same overlay: its title and hint, its lines, and one button
-  // per action, each answering choose(id) once.
+  // An upgrade under way: its step lines, the spinner and the percentage. Each poll updates these nodes in place, so
+  // the spinner keeps turning and the alert is not announced again.
+  let busy = null;
+  const percentText = (view) => `${Math.round(view.progress?.percent || 0)}%`;
+  function stepItem(item, line) {
+    item.className = line.state;
+    item.textContent = line.text;
+    return item;
+  }
+  function updateBusy(view) {
+    const lines = view.lines || [];
+    if (!busy || busy.panel !== panel || !view.busy || view.actions?.length || busy.title !== view.title) return false;
+    if (busy.items.length !== lines.length || !lines.every((line) => line.state)) return false;
+    busy.hint.textContent = view.hint || "";
+    lines.forEach((line, i) => {
+      stepItem(busy.items[i], line);
+    });
+    busy.percent.textContent = percentText(view);
+    return true;
+  }
+  // The data upgrade notice (data-upgrade.js) in the same overlay: its title and hint, its lines (a bulleted list of
+  // steps when they carry a state), the spinner of an upgrade under way, and one button per action, each answering
+  // choose(id) once.
   function notice(view, choose) {
+    if (updateBusy(view)) return true;
+    busy = null;
     if (!shell(view.title, view.hint || "")) return false;
     const stage = document.getElementById?.("stage");
     if (stage) stage.inert = true;
-    for (const line of view.lines || []) panel.insertBefore(el("p", line.text), status);
+    const lines = view.lines || [];
+    let items = [];
+    if (lines.some((line) => line.state)) {
+      const list = el("ul");
+      items = lines.map((line) => list.appendChild(stepItem(el("li"), { state: "", ...line })));
+      panel.insertBefore(list, status);
+    } else for (const line of lines) panel.insertBefore(el("p", line.text), status);
+    if (view.busy) {
+      const row = el("div"),
+        spinner = el("span"),
+        percent = el("span", percentText(view));
+      row.className = "upgrade-busy";
+      spinner.className = "spinner";
+      spinner.setAttribute("aria-hidden", "true");
+      percent.className = "percent";
+      row.append(spinner, percent);
+      panel.insertBefore(row, status);
+      busy = { panel, title: view.title, hint: panel.children[1], items, percent }; // children: shell's title, hint
+    }
     for (const action of view.actions || []) {
       const b = el("button", action.label);
       b.type = "button";
@@ -131,6 +172,7 @@
     return true;
   }
   function closeNotice() {
+    busy = null;
     panel?.remove();
     panel = null;
     status = null;

@@ -119,3 +119,53 @@
   overflow: auto;
   text-align: left;
 }
+/* the steps of a data upgrade under way: a bulleted list, left-aligned in the centred panel; the running step in the
+   title ink, the others in the hint ink, the done ones struck through */
+#bamt-recovery ul {
+  display: inline-block;
+  max-width: 100%;
+  padding: 0 0 0 1.2em;
+  text-align: left;
+  font: var(--w) 32px / 1.4 var(--font);
+  color: #5b6f86;
+}
+#bamt-recovery li.running {
+  color: #2d4664;
+}
+#bamt-recovery li.done {
+  text-decoration: line-through;
+}
+/* its spinner and percentage; a plain ring, since this overlay shows before any game asset is loaded */
+#bamt-recovery .upgrade-busy {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  font: var(--w) 32px / 1.4 var(--font);
+  color: #2d4664;
+}
+#bamt-recovery .spinner {
+  width: 40px;
+  height: 40px;
+  box-sizing: border-box;
+  border: 5px solid #8de4ff;
+  border-top-color: #5b6f86;
+  border-radius: 50%;
+  animation: bamt-recovery-spin 0.9s linear infinite;
+}
+/* the percentage keeps its width, so the spinner beside it does not move as the digits change */
+#bamt-recovery .percent {
+  min-width: 4ch;
+  text-align: start;
+  font-variant-numeric: tabular-nums;
+}
+@keyframes bamt-recovery-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  #bamt-recovery .spinner {
+    display: none;
+  }
+}

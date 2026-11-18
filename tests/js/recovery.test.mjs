@@ -7,6 +7,7 @@ import { rpc } from "../../src/bmpt/web/js/core/api.js";
 const source = readFileSync(new URL("../../src/bmpt/web/js/app/recovery.js", import.meta.url), "utf8");
 class El {
   children = [];
+  dataset = {};
   style = {};
   textContent = "";
   constructor(tag) {
@@ -17,6 +18,11 @@ class El {
   }
   appendChild(child) {
     this.children.push(child);
+    child.parent = this;
+    return child;
+  }
+  insertBefore(child, anchor) {
+    this.children.splice(this.children.indexOf(anchor), 0, child);
     child.parent = this;
     return child;
   }
@@ -419,4 +425,106 @@ test("boot RPC tracks the response body and releases grace on every failure", as
     await h.advance(45000);
     assert.ok(h.panel(), `${mode} must release its request`);
   }
+});
+
+const fallbackCss = readFileSync(new URL("../../src/bmpt/web/css/fallback.css", import.meta.url), "utf8");
+const steps = (running, count = "") =>
+  ["Check", "Convert", "Verify"].map((text, i) => ({
+    text: i === running ? `${text}${count}` : text,
+    state: i < running ? "done" : i === running ? "running" : "pending",
+  }));
+const busyView = (running, percent, count) => ({
+  title: "Data Upgrade",
+  hint: "Upgrading: Mod Library",
+  lines: steps(running, count),
+  actions: [],
+  poll: true,
+  busy: true,
+  progress: { percent },
+});
+
+test("a notice with stepped lines draws a bulleted list, the spinner and the percentage", () => {
+  const h = harness();
+  h.api.notice(busyView(1, 37, " (3/8)"), () => {});
+  const panel = h.panel();
+  const [title, hint, list, busy] = panel.children;
+  assert.deepEqual(
+    [title.tag, title.textContent, hint.tag, hint.textContent],
+    ["h1", "Data Upgrade", "p", "Upgrading: Mod Library"],
+  );
+  assert.equal(list.tag, "ul");
+  assert.deepEqual(
+    list.children.map((item) => [item.tag, item.className, item.textContent]),
+    [
+      ["li", "done", "Check"],
+      ["li", "running", "Convert (3/8)"],
+      ["li", "pending", "Verify"],
+    ],
+  );
+  assert.equal(busy.className, "upgrade-busy");
+  assert.deepEqual(
+    busy.children.map((part) => [part.className, part.textContent]),
+    [
+      ["spinner", ""],
+      ["percent", "37%"],
+    ],
+  );
+  assert.equal(panel.children.filter((child) => child.tag === "button").length, 0);
+});
+
+test("each poll of a running upgrade updates the same nodes, so the spinner is not restarted", () => {
+  const h = harness();
+  h.api.notice(busyView(1, 37, " (3/8)"), () => {});
+  const panel = h.panel(),
+    [, , list, busy] = panel.children,
+    items = [...list.children];
+  h.api.notice(busyView(2, 81), () => {});
+  assert.equal(h.panel(), panel);
+  assert.equal(panel.children[2], list);
+  assert.equal(panel.children[3], busy);
+  assert.deepEqual(
+    list.children.map((item) => [item.className, item.textContent]),
+    [
+      ["done", "Check"],
+      ["done", "Convert"],
+      ["running", "Verify"],
+    ],
+  );
+  assert.ok(list.children.every((item, i) => item === items[i]));
+  assert.equal(busy.children[1].textContent, "81%");
+  h.api.notice({ title: "Paused", hint: "", lines: [], actions: [{ id: "retry", label: "Retry" }] }, () => {});
+  assert.notEqual(h.panel(), panel, "a notice with actions is drawn anew");
+  h.api.notice(busyView(0, 0), () => {});
+  assert.notEqual(h.panel().children[2].children[0], items[0]);
+});
+
+test("plain lines keep their paragraphs, and a busy notice without steps shows the spinner and 0%", () => {
+  const h = harness();
+  h.api.notice({ title: "Changed", hint: "", lines: [{ text: "/data/a" }], actions: [] }, () => {});
+  assert.deepEqual(
+    h
+      .panel()
+      .children.slice(2, 3)
+      .map((child) => [child.tag, child.textContent]),
+    [["p", "/data/a"]],
+  );
+  h.api.notice({ ...busyView(0, 0), lines: [], progress: undefined }, () => {});
+  assert.equal(
+    h.panel().children.some((child) => child.tag === "ul"),
+    false,
+  );
+  assert.equal(h.panel().children[2].children[1].textContent, "0%");
+});
+
+test("the fallback styles strike done steps through and stop the spinner for reduced motion", () => {
+  const rule = (selector) =>
+    fallbackCss.match(new RegExp(`${selector.replace(/[.#]/g, "\\$&")} \\{([^}]*)\\}`))?.[1] ?? "";
+  assert.match(rule("#bamt-recovery li.done"), /text-decoration: line-through/);
+  assert.match(rule("#bamt-recovery li.running"), /color: #2d4664/);
+  assert.match(rule("#bamt-recovery ul"), /color: #5b6f86/);
+  assert.match(rule("#bamt-recovery .spinner"), /animation: bamt-recovery-spin/);
+  assert.match(
+    fallbackCss,
+    /@media \(prefers-reduced-motion: reduce\) \{\s*#bamt-recovery \.spinner \{\s*display: none;/,
+  );
 });

@@ -1256,6 +1256,7 @@
 		},
 		"upgrade": {
 			"title": "数据升级",
+			"subject": "升级内容：Mod 仓库、设置、缩略图、学生大厅",
 			"paused": "数据升级已暂停",
 			"retry": "重试",
 			"openLog": "打开日志文件夹",
@@ -1268,6 +1269,14 @@
 			"affected": "受影响的数据目录",
 			"relocate": "选择其他 Mod 仓库",
 			"upgradedWarning": "数据格式已升级，请勿再打开旧版本",
+			"count": "（{done}/{total}）",
+			"step": {
+				"check": "检查旧数据",
+				"settings": "转换设置",
+				"library": "转换 Mod 仓库",
+				"verify": "校验新数据",
+				"open": "启用新数据"
+			},
 			"reason": {
 				"busy": "Mod 仓库正在使用",
 				"olderVersion": "关闭旧版本",
